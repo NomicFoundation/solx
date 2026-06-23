@@ -1,10 +1,10 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @{{.*id_u.*}}: ui256) -> ui256
-// CHECK: sol.func @{{.*id_s.*}}: si8) -> si8
-// CHECK: sol.func @{{.*id_a.*}}: !sol.address) -> !sol.address
-// CHECK: sol.func @{{.*id_b.*}}: i1) -> i1
+// CHECK-DAG: sol.func @{{.*id_u.*}}: ui256) -> ui256
+// CHECK-DAG: sol.func @{{.*id_s.*}}: si8) -> si8
+// CHECK-DAG: sol.func @{{.*id_a.*}}: !sol.address) -> !sol.address
+// CHECK-DAG: sol.func @{{.*id_b.*}}: i1) -> i1
 
 contract C {
     type U is uint256;

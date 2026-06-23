@@ -4,22 +4,22 @@
 
 use std::collections::HashMap;
 
-use melior::ir::Type;
+use melior::ir::BlockRef;
+use melior::ir::Type as MlirType;
 use melior::ir::Value;
+use slang_solidity_v2::ast::NodeId;
 
-/// Tracks variable bindings (alloca'd pointers) for lexical scoping.
+use crate::Builder;
+use crate::Pointer;
+use crate::Type;
+
+/// Tracks variable places (alloca'd pointers) for lexical scoping.
 ///
-/// Each variable stores the alloca'd pointer and the element type of that
-/// pointer (e.g. `ui64` for a `uint64` variable). Reads produce `sol.load`
-/// with the declared element type; writes produce `sol.store`.
-///
-/// Implements lexical scoping: variable lookups search from the innermost
-/// scope outward. `enter_scope()` / `exit_scope()` bracket blocks that
-/// introduce new variables.
+/// Bindings are keyed by the declaration's Slang `NodeId`, not its textual name, so same-named
+/// locals across scopes (shadowing) are distinct. Lookups search from the innermost scope outward.
 pub struct Environment<'context, 'block> {
-    /// Stack of scopes, each mapping variable names to `(pointer, element_type)`.
-    /// The outermost scope (index 0) holds function parameters.
-    scopes: Vec<HashMap<String, (Value<'context, 'block>, Type<'context>)>>,
+    /// Stack of scopes, each mapping a declaration's `NodeId` to its place (scope 0 holds parameters).
+    scopes: Vec<HashMap<NodeId, Value<'context, 'block>>>,
 }
 
 impl<'context, 'block> Default for Environment<'context, 'block> {
@@ -42,47 +42,54 @@ impl<'context, 'block> Environment<'context, 'block> {
     }
 
     /// Pops the innermost lexical scope.
-    ///
-    /// # Panics
-    ///
-    /// Panics if called when only the root scope remains.
     pub fn exit_scope(&mut self) {
-        assert!(self.scopes.len() > 1, "cannot exit the root scope");
         self.scopes.pop();
     }
 
-    /// Registers a variable with its alloca'd pointer and element type in the current scope.
-    pub fn define_variable(
-        &mut self,
-        name: String,
-        pointer: Value<'context, 'block>,
-        element_type: Type<'context>,
-    ) {
+    /// Registers a variable's place in the current scope, keyed by its declaration's `NodeId`.
+    pub fn define_variable(&mut self, declaration: NodeId, pointer: Value<'context, 'block>) {
         self.scopes
             .last_mut()
             .expect("at least one scope exists")
-            .insert(name, (pointer, element_type));
+            .insert(declaration, pointer);
     }
 
-    /// Looks up a variable's alloca'd pointer and element type by name.
-    ///
-    /// Searches from the innermost scope outward.
-    ///
-    /// # Panics
-    ///
-    /// Panics if no binding exists. Slang's semantic pass guarantees every
-    /// emitted identifier reference resolves, so a miss here is a solx-internal
-    /// invariant failure rather than a user error.
-    ///
-    // TODO: key on the Slang `NodeId` of the declaration instead of the textual
-    // name to disambiguate same-named locals across scopes without relying on
-    // `enter_scope`/`exit_scope` discipline at the call sites.
-    pub fn variable_with_type(&self, name: &str) -> (Value<'context, 'block>, Type<'context>) {
+    /// Coerces `value` to `parameter_type`, spills it to a fresh stack slot, and binds `declaration` to it.
+    pub fn bind_parameter(
+        &mut self,
+        declaration: NodeId,
+        parameter_type: MlirType<'context>,
+        value: Value<'context, 'block>,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) {
+        let cast = crate::Value::new(value).cast(Type::new(parameter_type), builder, block);
+        let pointer = Pointer::stack_slot(Type::new(parameter_type), builder, block);
+        pointer.store(cast, builder, block);
+        self.define_variable(declaration, pointer.into_mlir());
+    }
+
+    /// Spills the entry block's argument at `argument_index` into a fresh stack slot and binds `declaration` to it.
+    pub fn bind_block_argument(
+        &mut self,
+        declaration: NodeId,
+        mlir_type: MlirType<'context>,
+        argument_index: usize,
+        entry_block: &BlockRef<'context, 'block>,
+        builder: &Builder<'context>,
+    ) {
+        let pointer =
+            Pointer::from_argument(Type::new(mlir_type), argument_index, entry_block, builder);
+        self.define_variable(declaration, pointer.into_mlir());
+    }
+
+    /// Looks up a variable's place by its declaration's `NodeId`, searching from the innermost scope outward.
+    pub fn variable(&self, declaration: NodeId) -> Value<'context, 'block> {
         for scope in self.scopes.iter().rev() {
-            if let Some(entry) = scope.get(name) {
-                return *entry;
+            if let Some(pointer) = scope.get(&declaration) {
+                return *pointer;
             }
         }
-        unreachable!("unregistered local variable: {name}");
+        unreachable!("unregistered local variable: {declaration:?}");
     }
 }

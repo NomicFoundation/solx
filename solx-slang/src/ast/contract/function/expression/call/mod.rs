@@ -1,287 +1,625 @@
 //!
-//! Function call and member access expression lowering.
+//! Function call and member access expression emission.
 //!
 
-pub mod built_in;
-pub mod type_conversion;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
+pub mod positional_arguments;
 
-use anyhow::Context as _;
+use melior::ir::Attribute;
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::attribute::StringAttribute;
+use num_bigint::BigInt;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
+use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
-use slang_solidity_v2::ast::FunctionDefinition;
-use slang_solidity_v2::ast::MemberAccessExpression;
-use slang_solidity_v2::ast::PositionalArguments;
-use slang_solidity_v2::ast::StructDefinition;
+use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::Type as SlangType;
+use solx_mlir::ods::sol::AddModOperation;
+use solx_mlir::ods::sol::AssertOperation;
+use solx_mlir::ods::sol::DecodeOperation;
+use solx_mlir::ods::sol::EcrecoverOperation;
+use solx_mlir::ods::sol::MulModOperation;
+use solx_mlir::ods::sol::PopOperation;
+use solx_mlir::ods::sol::RequireOperation;
+use solx_mlir::ods::sol::Ripemd160Operation;
+use solx_mlir::ods::sol::SendOperation;
+use solx_mlir::ods::sol::Sha256Operation;
+use solx_mlir::ods::sol::TransferOperation;
 use solx_utils::DataLocation;
 
-use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::BlockAnd;
+use crate::ast::EmitAs;
+use crate::ast::EmitExpression;
+use crate::ast::LocationPolicy;
+use crate::ast::Pointer;
+use crate::ast::contract::function::expression::ExpressionContext;
 
-use self::type_conversion::TypeConversion;
+impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCallExpression {
+    type Output = BlockAnd<'context, 'block, Vec<Value<'context, 'block>>>;
 
-/// Lowers function call and member access expressions to MLIR.
-pub struct CallEmitter<'emitter, 'state, 'context, 'block> {
-    /// The parent expression emitter for recursive subexpression emission.
-    expression_emitter: &'emitter ExpressionEmitter<'state, 'context, 'block>,
-}
-
-impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
-    /// Creates a new call emitter.
-    pub fn new(expression_emitter: &'emitter ExpressionEmitter<'state, 'context, 'block>) -> Self {
-        Self { expression_emitter }
-    }
-
-    /// Emits a function call expression.
-    ///
-    /// Handles type conversions and built-in dispatch, then resolves
-    /// user-defined callees through slang's binder to a function definition
-    /// node id and looks up the registered MLIR signature.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the callee is unsupported, arguments contain
-    /// unsupported constructs, or the callee does not resolve to a registered
-    /// function definition.
-    pub fn emit_function_call(
+    /// Emits a function call, yielding its result values in declaration order (none for a void callee,
+    /// one common, several for a tuple-returning call). The resolved callee selects the shape directly.
+    fn emit<'state>(
         &self,
-        call: &FunctionCallExpression,
+        context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
-        else {
-            anyhow::bail!("only positional arguments supported");
+    ) -> Self::Output {
+        let callee = self.operand();
+        let arguments = self.arguments();
+
+        // `T(x)` / `bytesN("…")`: an explicit 1-argument type conversion coerces
+        // the argument to the call's own type.
+        if self.is_type_conversion()
+            && let ArgumentsDeclaration::PositionalArguments(positional) = &arguments
+            && positional.len() == 1
+        {
+            let first = positional.iter().next().expect("slang validated");
+            let target_type = AstType::resolve_optional(self.get_type(), &context.state.builder)
+                .expect("slang validated");
+            let BlockAnd { value, block } = first.emit_as(target_type, context, block);
+            return BlockAnd {
+                value: vec![value.into_mlir()],
+                block,
+            };
+        }
+
+        // A bare-identifier callee resolving to a struct definition is a struct constructor
+        // (`S(a, b)`): allocate the struct in memory, order field initialisers by declaration,
+        // store each coerced.
+        let struct_callee = match &callee {
+            Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+            _ => None,
         };
-
-        let callee = call.operand();
-
-        if call.is_type_conversion() && positional_arguments.len() == 1 {
-            let first = positional_arguments
+        if let Some(Definition::Struct(struct_definition)) = struct_callee {
+            let result_type = AstType::resolve_optional(self.get_type(), &context.state.builder)
+                .expect("slang validated");
+            let member_ids: Vec<NodeId> = struct_definition
+                .members()
                 .iter()
-                .next()
-                .expect("len checked to be 1 above");
-            let (value, block) = self.expression_emitter.emit_value(&first, block)?;
-            let builder = &self.expression_emitter.state.builder;
-
-            let target_type = self
-                .expression_emitter
-                .resolve_slang_type(call.get_type())
-                .ok_or_else(|| anyhow::anyhow!("unresolved type conversion target"))?;
-
-            let result =
-                TypeConversion::from_target_type(target_type, builder).emit(value, builder, &block);
-            return Ok((Some(result), block));
-        }
-
-        if let Some((value, block)) =
-            self.try_emit_built_in_call(&callee, positional_arguments, block)?
-        {
-            return Ok((value, block));
-        }
-
-        if let Some((value, block)) =
-            self.try_emit_built_in_call_expression(call, positional_arguments, block)?
-        {
-            return Ok((Some(value), block));
-        }
-
-        if let Expression::MemberAccessExpression(access) = &callee {
-            return self.emit_built_in_member_access(access, Some(positional_arguments), block);
-        }
-
-        let Expression::Identifier(callee_identifier) = &callee else {
-            anyhow::bail!("unsupported callee expression");
-        };
-        let function_definition = match callee_identifier.resolve_to_definition() {
-            Some(Definition::Function(function_definition)) => function_definition,
-            Some(Definition::Struct(struct_definition)) => {
-                let result_type = self
-                    .expression_emitter
-                    .resolve_slang_type(call.get_type())
-                    .ok_or_else(|| anyhow::anyhow!("unresolved struct constructor type"))?;
-                return self
-                    .emit_struct_constructor(
-                        &struct_definition,
-                        result_type,
-                        positional_arguments,
-                        block,
-                    )
-                    .map(|(value, block)| (Some(value), block));
+                .map(|member| member.node_id())
+                .collect();
+            let ArgumentsDeclaration::PositionalArguments(_) = &arguments else {
+                unimplemented!("named arguments are not yet supported");
+            };
+            let arguments = arguments.ordered_by(&member_ids);
+            let builder = &context.state.builder;
+            let struct_address =
+                AstValue::malloc(result_type, None, false, builder, &block).into_mlir();
+            let struct_pointer = Pointer::new(struct_address);
+            let mut block = block;
+            for (index, (member, argument)) in struct_definition
+                .members()
+                .iter()
+                .zip(arguments.iter())
+                .enumerate()
+            {
+                let field_slang_type = member.get_type().expect("slang validated");
+                let field_type = AstType::resolve(
+                    &field_slang_type,
+                    LocationPolicy::Declared(Some(DataLocation::Memory)),
+                    builder,
+                );
+                let index_value = AstValue::constant(
+                    index as i64,
+                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
+                    builder,
+                    &block,
+                );
+                let field_address =
+                    struct_pointer.gep(index_value, AstType::new(field_type), builder, &block);
+                let BlockAnd {
+                    value: argument_value,
+                    block: next_block,
+                } = argument.emit(context, block);
+                block = next_block;
+                let stored = argument_value.cast(AstType::new(field_type), builder, &block);
+                field_address.store(stored, builder, &block);
             }
-            _ => anyhow::bail!(
-                "callee '{}' does not resolve to a function",
-                callee_identifier.name()
-            ),
-        };
-
-        let (mlir_name, argument_values, return_types, current_block) = self
-            .emit_call_setup(&function_definition, positional_arguments, block)
-            .with_context(|| format!("resolving callee '{}'", callee_identifier.name()))?;
-
-        if return_types.is_empty() {
-            self.expression_emitter.state.builder.emit_sol_call(
-                mlir_name,
-                &argument_values,
-                &[],
-                &current_block,
-            )?;
-            Ok((None, current_block))
-        } else {
-            let result = self
-                .expression_emitter
-                .state
-                .builder
-                .emit_sol_call(mlir_name, &argument_values, return_types, &current_block)?
-                .expect("function call always produces at least one result");
-            Ok((Some(result), current_block))
+            return BlockAnd {
+                value: vec![struct_address],
+                block,
+            };
         }
-    }
 
-    /// Emits a struct-literal constructor `S(a, b, c)` in memory.
-    fn emit_struct_constructor(
-        &self,
-        struct_definition: &StructDefinition,
-        result_type: Type<'context>,
-        positional_arguments: &PositionalArguments,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let builder = &self.expression_emitter.state.builder;
-        let struct_address = builder.emit_sol_malloc(result_type, &block);
-
-        let mut block = block;
-        for (index, (member, argument)) in struct_definition
-            .members()
-            .iter()
-            .zip(positional_arguments.iter())
-            .enumerate()
+        // An identifier-callee built-in (`keccak256`, `require`, …).
+        if let Expression::Identifier(identifier) = &callee
+            && let Some(built_in) = identifier.resolve_to_built_in()
+            && matches!(
+                built_in,
+                BuiltIn::Assert
+                    | BuiltIn::Require
+                    | BuiltIn::Gasleft
+                    | BuiltIn::Keccak256
+                    | BuiltIn::Sha256
+                    | BuiltIn::Ripemd160
+                    | BuiltIn::Ecrecover
+                    | BuiltIn::Addmod
+                    | BuiltIn::Mulmod
+            )
         {
-            let field_slang_type = member.get_type().expect("slang types every struct member");
-            let field_type = TypeConversion::resolve_slang_type(
-                &field_slang_type,
-                Some(DataLocation::Memory),
-                builder,
-            );
-            let index_value = builder.emit_sol_constant(index as i64, builder.types.ui64, &block);
-            let field_address =
-                builder.emit_sol_gep(struct_address, index_value, field_type, &block);
-
-            let (argument_value, next_block) =
-                self.expression_emitter.emit_value(&argument, block)?;
-            block = next_block;
-            let stored = TypeConversion::from_target_type(field_type, builder).emit(
-                argument_value,
-                builder,
-                &block,
-            );
-            builder.emit_sol_store(stored, field_address, &block);
+            let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                unimplemented!("a built-in takes positional arguments only");
+            };
+            // Only handled built-ins with a matching argument count reach here, so
+            // the per-built-in argument expectations hold; `assert` / `require` are
+            // statement-style and yield no value.
+            return match built_in {
+                BuiltIn::Assert => {
+                    let condition = positional.iter().next().expect("assert has one argument");
+                    let BlockAnd {
+                        value: condition_value,
+                        block,
+                    } = condition.emit(context, block);
+                    let condition_boolean = condition_value
+                        .is_nonzero(&context.state.builder, &block)
+                        .into_mlir();
+                    mlir_op_void!(
+                        &context.state.builder,
+                        &block,
+                        AssertOperation.cond(condition_boolean)
+                    );
+                    BlockAnd {
+                        value: vec![],
+                        block,
+                    }
+                }
+                BuiltIn::Require => {
+                    let mut iter = positional.iter();
+                    let condition = iter.next().expect("require has a condition argument");
+                    let message = iter.next();
+                    let BlockAnd {
+                        value: condition_value,
+                        block,
+                    } = condition.emit(context, block);
+                    let condition_boolean = condition_value
+                        .is_nonzero(&context.state.builder, &block)
+                        .into_mlir();
+                    let builder = &context.state.builder;
+                    let block = match message {
+                        // A literal string message lowers to `sol.require %cond, "msg"`.
+                        Some(Expression::StringExpression(string_expression)) => {
+                            let bytes = string_expression.value();
+                            let literal =
+                                String::from_utf8(bytes).expect("require message is valid UTF-8");
+                            mlir_op_void!(
+                                builder,
+                                &block,
+                                RequireOperation
+                                    .cond(condition_boolean)
+                                    .args(&[])
+                                    .msg(StringAttribute::new(builder.context, &literal))
+                            );
+                            block
+                        }
+                        Some(expression) => {
+                            // A runtime message expression is ABI-encoded under the
+                            // `Error(string)` selector via the `call` form of `sol.require`.
+                            let BlockAnd {
+                                value: message_value,
+                                block,
+                            } = expression.emit(context, block);
+                            let string_memory_type = AstType::string(
+                                builder.context,
+                                solx_utils::DataLocation::Memory,
+                            )
+                            .into_mlir();
+                            let message_value = message_value
+                                .cast(AstType::new(string_memory_type), builder, &block)
+                                .into_mlir();
+                            mlir_op_void!(
+                                builder,
+                                &block,
+                                RequireOperation
+                                    .cond(condition_boolean)
+                                    .args(&[message_value])
+                                    .msg(StringAttribute::new(builder.context, "Error(string)"))
+                                    .call(Attribute::unit(builder.context))
+                            );
+                            block
+                        }
+                        None => {
+                            mlir_op_void!(
+                                builder,
+                                &block,
+                                RequireOperation.cond(condition_boolean).args(&[])
+                            );
+                            block
+                        }
+                    };
+                    BlockAnd {
+                        value: vec![],
+                        block,
+                    }
+                }
+                BuiltIn::Gasleft => BlockAnd {
+                    value: vec![AstValue::gas_left(&context.state.builder, &block).into_mlir()],
+                    block,
+                },
+                BuiltIn::Keccak256 => {
+                    let BlockAnd {
+                        value: values,
+                        block,
+                    } = positional.emit(context, block);
+                    let value = AstValue::keccak256(
+                        AstValue::from(values[0]),
+                        &context.state.builder,
+                        &block,
+                    )
+                    .into_mlir();
+                    BlockAnd {
+                        value: vec![value],
+                        block,
+                    }
+                }
+                BuiltIn::Sha256 => {
+                    let BlockAnd {
+                        value: values,
+                        block,
+                    } = positional.emit(context, block);
+                    let builder = &context.state.builder;
+                    let value = mlir_op!(
+                        builder,
+                        block,
+                        Sha256Operation
+                            .data(values[0])
+                            .result(AstType::fixed_bytes(builder.context, 32))
+                    );
+                    BlockAnd {
+                        value: vec![value],
+                        block,
+                    }
+                }
+                BuiltIn::Ripemd160 => {
+                    let BlockAnd {
+                        value: values,
+                        block,
+                    } = positional.emit(context, block);
+                    let builder = &context.state.builder;
+                    let value = mlir_op!(
+                        builder,
+                        block,
+                        Ripemd160Operation
+                            .data(values[0])
+                            .result(AstType::fixed_bytes(builder.context, 20))
+                    );
+                    BlockAnd {
+                        value: vec![value],
+                        block,
+                    }
+                }
+                BuiltIn::Ecrecover => {
+                    let BlockAnd {
+                        value: values,
+                        block,
+                    } = positional.emit(context, block);
+                    let builder = &context.state.builder;
+                    let value = mlir_op!(
+                        builder,
+                        block,
+                        EcrecoverOperation
+                            .hash(values[0])
+                            .v(values[1])
+                            .r(values[2])
+                            .s(values[3])
+                            .result(AstType::address(builder.context, false))
+                    );
+                    BlockAnd {
+                        value: vec![value],
+                        block,
+                    }
+                }
+                BuiltIn::Addmod | BuiltIn::Mulmod => {
+                    let BlockAnd {
+                        value: values,
+                        block,
+                    } = positional.emit(context, block);
+                    let builder = &context.state.builder;
+                    let value = if matches!(built_in, BuiltIn::Addmod) {
+                        mlir_op!(
+                            builder,
+                            block,
+                            AddModOperation.x(values[0]).y(values[1]).r#mod(values[2])
+                        )
+                    } else {
+                        mlir_op!(
+                            builder,
+                            block,
+                            MulModOperation.x(values[0]).y(values[1]).r#mod(values[2])
+                        )
+                    };
+                    BlockAnd {
+                        value: vec![value],
+                        block,
+                    }
+                }
+                _ => unreachable!("only emittable identifier built-ins are gated into this arm"),
+            };
         }
 
-        Ok((struct_address, block))
-    }
+        // A member-access callee: a call-position built-in, a namespace-qualified
+        // struct constructor, or a member call `x.f(...)`.
+        if let Expression::MemberAccessExpression(access) = &callee {
+            match access.member().resolve_to_built_in() {
+                // `abi.decode(payload, (T))` — `sol.decode` to the result types the
+                // call's slang type resolves to (one per requested type).
+                Some(BuiltIn::AbiDecode) => {
+                    let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                        unimplemented!("abi.decode takes positional arguments only");
+                    };
+                    let payload_expression = positional.iter().next().expect("slang validated");
+                    let BlockAnd {
+                        value: payload_value,
+                        block,
+                    } = payload_expression.emit(context, block);
+                    // A single MLIR result type resolved from the call's binder-assigned type.
+                    let result_types: Vec<Type> = AstType::resolve_result_types(
+                        &self.get_type().expect("slang validated"),
+                        &context.state.builder,
+                    );
+                    if result_types.len() > 1 {
+                        unimplemented!("abi.decode returning multiple values is not yet supported");
+                    }
+                    let result_type = result_types
+                        .into_iter()
+                        .next()
+                        .expect("abi.decode yields at least one result type");
+                    let builder = &context.state.builder;
+                    let operation = block.append_operation(
+                        DecodeOperation::builder(builder.context, builder.unknown_location)
+                            .addr(payload_value.into_mlir())
+                            .outs(&[result_type])
+                            .build()
+                            .into(),
+                    );
+                    let value = operation
+                        .result(0)
+                        .expect("sol.decode yields one result")
+                        .into();
+                    return BlockAnd {
+                        value: vec![value],
+                        block,
+                    };
+                }
+                // Any other member built-in in call position: an ABI encode, a
+                // dynamic-array `push`/`pop`, an address value transfer, or a
+                // `string`/`bytes` concat — dispatched on slang's typed
+                // classification of the member.
+                Some(member_built_in) => {
+                    let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                        unimplemented!("a built-in member takes positional arguments only");
+                    };
+                    let (value, block) = match member_built_in {
+                        BuiltIn::AddressSend => {
+                            // `address.send(value)` → `sol.send`, yielding the success flag.
+                            let builder = &context.state.builder;
+                            let BlockAnd { value: addr, block } =
+                                access.operand().emit(context, block);
+                            let BlockAnd {
+                                value: values,
+                                block,
+                            } = positional.emit(context, block);
+                            let value = mlir_op!(
+                                builder,
+                                block,
+                                SendOperation
+                                    .addr(addr)
+                                    .val(values[0])
+                                    .status(AstType::signless(
+                                        builder.context,
+                                        solx_utils::BIT_LENGTH_BOOLEAN
+                                    ))
+                            );
+                            (Some(value), block)
+                        }
+                        BuiltIn::AddressTransfer => {
+                            // `address.transfer(value)` → `sol.transfer` (no result).
+                            let builder = &context.state.builder;
+                            let BlockAnd { value: addr, block } =
+                                access.operand().emit(context, block);
+                            let BlockAnd {
+                                value: values,
+                                block,
+                            } = positional.emit(context, block);
+                            mlir_op_void!(
+                                builder,
+                                block,
+                                TransferOperation.addr(addr).val(values[0])
+                            );
+                            (None, block)
+                        }
+                        BuiltIn::AbiEncode => {
+                            // `abi.encode(args)` → a standard `sol.encode`.
+                            let BlockAnd {
+                                value: values,
+                                block,
+                            } = positional.emit(context, block);
+                            let builder = &context.state.builder;
+                            let result =
+                                AstValue::abi_encode(&values, None, false, builder, &block)
+                                    .into_mlir();
+                            (Some(result), block)
+                        }
+                        BuiltIn::AbiEncodePacked => {
+                            // `abi.encodePacked(args)` → a packed `sol.encode`.
+                            let BlockAnd {
+                                value: values,
+                                block,
+                            } = positional.emit(context, block);
+                            let builder = &context.state.builder;
+                            let result = AstValue::abi_encode(&values, None, true, builder, &block)
+                                .into_mlir();
+                            (Some(result), block)
+                        }
+                        BuiltIn::AbiEncodeWithSelector => {
+                            // `abi.encodeWithSelector(selector, args)`: cast the first
+                            // argument to `bytes4` and prepend it to the payload.
+                            let BlockAnd {
+                                value: mut values,
+                                block,
+                            } = positional.emit(context, block);
+                            let builder = &context.state.builder;
+                            let selector = AstValue::from(values.remove(0))
+                                .cast(AstType::fixed_bytes(builder.context, 4), builder, &block)
+                                .into_mlir();
+                            let result = AstValue::abi_encode(
+                                &values,
+                                Some(selector),
+                                false,
+                                builder,
+                                &block,
+                            )
+                            .into_mlir();
+                            (Some(result), block)
+                        }
+                        BuiltIn::AbiEncodeWithSignature => {
+                            // `abi.encodeWithSignature(sig, args)`: hash the signature to a 4-byte
+                            // selector and prepend it (a literal hashes at compile time, a runtime one via `keccak256`).
+                            let mut iter = positional.iter();
+                            let signature_expression = iter.next().expect("slang validated");
+                            let (selector_value, mut current) = match &signature_expression {
+                                Expression::StringExpression(string_expression) => {
+                                    let signature_bytes = string_expression.value();
+                                    let hash =
+                                        solx_utils::Keccak256Hash::from_slice(&signature_bytes);
+                                    let selector_bytes: [u8; 4] = hash.as_bytes()[..4]
+                                        .try_into()
+                                        .expect("keccak256 always yields 32 bytes");
+                                    let selector_word = u32::from_be_bytes(selector_bytes);
+                                    let selector_value = AstValue::selector_constant(
+                                        &BigInt::from(selector_word),
+                                        4,
+                                        &context.state.builder,
+                                        &block,
+                                    )
+                                    .into_mlir();
+                                    (selector_value, block)
+                                }
+                                _ => {
+                                    unimplemented!(
+                                        "abi.encodeWithSignature with a non-literal signature is not yet supported"
+                                    )
+                                }
+                            };
+                            let mut values = Vec::with_capacity(positional.len() - 1);
+                            for argument in iter {
+                                let BlockAnd { value, block: next } =
+                                    argument.emit(context, current);
+                                values.push(value.into_mlir());
+                                current = next;
+                            }
+                            let builder = &context.state.builder;
+                            let result = AstValue::abi_encode(
+                                &values,
+                                Some(selector_value),
+                                false,
+                                builder,
+                                &current,
+                            )
+                            .into_mlir();
+                            (Some(result), current)
+                        }
+                        BuiltIn::ArrayPop => {
+                            // `arr.pop()` / `bytes.pop()` → `sol.pop`.
+                            let BlockAnd {
+                                value: array_value,
+                                block,
+                            } = access.operand().emit(context, block);
+                            mlir_op_void!(
+                                &context.state.builder,
+                                &block,
+                                PopOperation.inp(array_value)
+                            );
+                            (None, block)
+                        }
+                        BuiltIn::ArrayPush => {
+                            let base = access.operand();
+                            let base_slang_type = base.get_type().expect("slang validated");
+                            let value_argument = positional.iter().next();
+                            if value_argument.is_some()
+                                && matches!(&base_slang_type, SlangType::Bytes(_))
+                            {
+                                unimplemented!(
+                                    "bytes.push(x) lowers to sol.push_string, which is not yet wired"
+                                );
+                            }
+                            let BlockAnd {
+                                value: array_value,
+                                block,
+                            } = access.operand().emit(context, block);
+                            let (new_slot, element_type) = array_value.push_slot(
+                                &base_slang_type,
+                                &context.state.builder,
+                                &block,
+                            );
+                            let new_slot = new_slot.into_mlir();
+                            let Some(value_argument) = value_argument else {
+                                // `arr.push()` in value position yields the raw push slot.
+                                return BlockAnd {
+                                    value: vec![new_slot],
+                                    block,
+                                };
+                            };
+                            let BlockAnd { value, block } =
+                                value_argument.emit_as(element_type, context, block);
+                            Pointer::new(new_slot).store(value, &context.state.builder, &block);
+                            (None, block)
+                        }
+                        _ => unimplemented!(
+                            "unsupported call-position member built-in: {}",
+                            access.member().name()
+                        ),
+                    };
+                    return BlockAnd {
+                        value: value.into_iter().collect(),
+                        block,
+                    };
+                }
+                None => {}
+            }
 
-    /// Emits a direct, named function call and returns all of its result
-    /// values in declaration order.
-    ///
-    /// Unlike [`Self::emit_function_call`], this entry point does not handle
-    /// explicit type conversions or built-in dispatch — it is intended for
-    /// callers that need the full result tuple (e.g. tuple deconstruction).
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the call uses non-positional arguments, if the
-    /// callee is not a named identifier, or if name resolution fails.
-    pub fn emit_function_call_results(
-        &self,
-        call: &FunctionCallExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
-        else {
-            anyhow::bail!("only positional arguments supported");
-        };
+            unimplemented!("unsupported member call");
+        }
 
-        let Expression::Identifier(callee_identifier) = call.operand() else {
-            anyhow::bail!("multi-result calls only support direct named function callees");
+        let Expression::Identifier(identifier) = &callee else {
+            unimplemented!("unsupported callee expression");
         };
-        let Some(Definition::Function(function_definition)) =
-            callee_identifier.resolve_to_definition()
-        else {
-            anyhow::bail!(
+        match identifier.resolve_to_definition() {
+            // A direct call passes its arguments by position; ordering them against
+            // the parameter ids drives the call.
+            Some(Definition::Function(function_definition)) => {
+                let parameter_ids: Vec<NodeId> = function_definition
+                    .parameters()
+                    .iter()
+                    .map(|parameter| parameter.node_id())
+                    .collect();
+                let ArgumentsDeclaration::PositionalArguments(_) = &arguments else {
+                    unimplemented!("named arguments are not yet supported");
+                };
+                let ordered = arguments.ordered_by(&parameter_ids);
+                // Virtual dispatch: a bare internal call resolving to an overridden base function is
+                // routed to the most-derived override (a non-virtual callee passes through unchanged).
+                let call_id = context.state.resolve_virtual(function_definition.node_id());
+                let function = context.state.resolve_function(call_id);
+                let BlockAnd {
+                    value: argument_values,
+                    block,
+                } = ordered.emit_as(&function.parameter_types, context, block);
+                let results = function.call(&argument_values, &context.state.builder, &block);
+                BlockAnd {
+                    value: results,
+                    block,
+                }
+            }
+            _ => unimplemented!(
                 "callee '{}' does not resolve to a function",
-                callee_identifier.name()
-            );
-        };
-
-        let (mlir_name, argument_values, return_types, current_block) = self
-            .emit_call_setup(&function_definition, positional_arguments, block)
-            .with_context(|| format!("resolving callee '{}'", callee_identifier.name()))?;
-
-        let results = self
-            .expression_emitter
-            .state
-            .builder
-            .emit_sol_call_results(mlir_name, &argument_values, return_types, &current_block)?;
-        Ok((results, current_block))
-    }
-
-    /// Emits argument values for a named call, resolves the callee's MLIR
-    /// signature, and casts each argument to its declared parameter type.
-    ///
-    /// Returns the resolved MLIR name, the cast argument values, the
-    /// declared return types, and the block in which the call should be
-    /// emitted.
-    fn emit_call_setup<'a>(
-        &'a self,
-        function_definition: &FunctionDefinition,
-        positional_arguments: &PositionalArguments,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
-        &'a str,
-        Vec<Value<'context, 'block>>,
-        &'a [melior::ir::Type<'context>],
-        BlockRef<'context, 'block>,
-    )> {
-        let mut argument_values = Vec::new();
-        let mut current_block = block;
-        for argument in positional_arguments.iter() {
-            let (value, next_block) = self
-                .expression_emitter
-                .emit_value(&argument, current_block)?;
-            argument_values.push(value);
-            current_block = next_block;
+                identifier.name()
+            ),
         }
-
-        let (mlir_name, parameter_types, return_types) = self
-            .expression_emitter
-            .state
-            .resolve_function(function_definition.node_id())?;
-
-        let builder = &self.expression_emitter.state.builder;
-        for (value, &param_type) in argument_values.iter_mut().zip(parameter_types) {
-            let conversion = TypeConversion::from_target_type(param_type, builder);
-            *value = conversion.emit(*value, builder, &current_block);
-        }
-
-        Ok((mlir_name, argument_values, return_types, current_block))
-    }
-
-    /// Emits a bare member access expression (e.g. `tx.origin`, `msg.sender`).
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the member access is not a recognized EVM intrinsic.
-    pub fn emit_member_access(
-        &self,
-        access: &MemberAccessExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let (value, block) = self.emit_built_in_member_access(access, None, block)?;
-        Ok((
-            value.expect("bare member access always produces a value"),
-            block,
-        ))
     }
 }

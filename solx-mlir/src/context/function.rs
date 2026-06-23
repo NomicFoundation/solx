@@ -2,7 +2,26 @@
 //! Function call resolution metadata.
 //!
 
+use melior::ir::Block;
+use melior::ir::BlockLike;
+use melior::ir::BlockRef;
+use melior::ir::Region;
+use melior::ir::RegionLike;
 use melior::ir::Type;
+use melior::ir::Value;
+use melior::ir::attribute::FlatSymbolRefAttribute;
+use melior::ir::attribute::IntegerAttribute;
+use melior::ir::attribute::StringAttribute;
+use melior::ir::attribute::TypeAttribute;
+use melior::ir::operation::OperationLike;
+use melior::ir::r#type::FunctionType;
+use melior::ir::r#type::IntegerType;
+
+use crate::Builder;
+use crate::FunctionKind;
+use crate::StateMutability;
+use crate::ods::sol::CallOperation;
+use crate::ods::sol::FuncOperation;
 
 /// Function call resolution metadata for the MLIR builder.
 #[derive(Clone)]
@@ -27,5 +46,100 @@ impl<'context> Function<'context> {
             parameter_types,
             return_types,
         }
+    }
+
+    /// Emits a `sol.call` to this function (an internal call by symbol), returning its results in order.
+    pub fn call<'block, B>(
+        &self,
+        operands: &[Value<'context, 'block>],
+        builder: &Builder<'context>,
+        block: &B,
+    ) -> Vec<Value<'context, 'block>>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let operation = block.append_operation(mlir_op_build!(
+            builder,
+            CallOperation
+                .callee(FlatSymbolRefAttribute::new(
+                    builder.context,
+                    &self.mlir_name
+                ))
+                .outs(&self.return_types)
+                .operands(operands)
+        ));
+        (0..self.return_types.len())
+            .map(|index| {
+                operation
+                    .result(index)
+                    .expect("sol.call produces its declared result count")
+                    .into()
+            })
+            .collect()
+    }
+
+    /// Emits this function's `sol.func` definition with an empty entry block, returned for the body.
+    /// `selector` / `kind` / `id` are the optional dispatch attributes.
+    pub fn define<'block>(
+        &self,
+        selector: Option<u32>,
+        state_mutability: StateMutability,
+        kind: Option<FunctionKind>,
+        id: Option<i64>,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> BlockRef<'context, 'block> {
+        let function_type =
+            FunctionType::new(builder.context, &self.parameter_types, &self.return_types);
+        let body_region = Region::new();
+        let entry_block = Block::new(
+            &self
+                .parameter_types
+                .iter()
+                .map(|parameter_type| (*parameter_type, builder.unknown_location))
+                .collect::<Vec<_>>(),
+        );
+        body_region.append_block(entry_block);
+
+        let mut operation_builder =
+            FuncOperation::builder(builder.context, builder.unknown_location)
+                .sym_name(StringAttribute::new(builder.context, &self.mlir_name))
+                .function_type(TypeAttribute::new(function_type.into()))
+                .state_mutability(state_mutability.attribute(builder.context))
+                .body(body_region);
+        if let Some(function_kind) = kind {
+            operation_builder = operation_builder.kind(function_kind.attribute(builder.context));
+        }
+        if let Some(selector_value) = selector {
+            operation_builder = operation_builder.selector(IntegerAttribute::new(
+                IntegerType::new(builder.context, crate::Type::SELECTOR_BIT_WIDTH).into(),
+                selector_value as i64,
+            ));
+        }
+        // A referenceable function carries a unique `id`: `sol.icall` dispatch switches over it.
+        if let Some(function_id) = id {
+            operation_builder = operation_builder.id(IntegerAttribute::new(
+                IntegerType::new(builder.context, 64).into(),
+                function_id,
+            ));
+        }
+        // A selector-bearing function, constructor, or fallback carries `orig_fn_type`:
+        // the SolToYul fallback dispatcher reads it to recover the pre-conversion Sol signature.
+        if selector.is_some()
+            || matches!(
+                kind,
+                Some(FunctionKind::Constructor | FunctionKind::Fallback)
+            )
+        {
+            operation_builder =
+                operation_builder.orig_fn_type(TypeAttribute::new(function_type.into()));
+        }
+        let operation = block.append_operation(operation_builder.build().into());
+        operation
+            .region(0)
+            .expect("func has one region")
+            .first_block()
+            .expect("func body has entry block")
     }
 }

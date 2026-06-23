@@ -1,160 +1,109 @@
 //!
-//! Contract definition lowering to Sol dialect MLIR.
+//! Contract definition emission to Sol dialect MLIR.
 //!
 
-/// Function definition lowering to Sol dialect MLIR.
+pub mod constructor;
 pub mod function;
+pub mod storage_layout;
 
-use std::collections::HashMap;
-
+use melior::ir::Attribute;
+use melior::ir::BlockLike;
+use melior::ir::attribute::IntegerAttribute;
+use melior::ir::attribute::StringAttribute;
+use melior::ir::attribute::TypeAttribute;
+use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::ContractDefinition;
-use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
-use slang_solidity_v2::ast::NodeId;
 
 use solx_mlir::Context;
+use solx_mlir::ods::sol::StateVarOperation;
 
-use self::function::FunctionEmitter;
-use self::function::expression::call::type_conversion::TypeConversion;
-use self::function::storage_slot::StorageSlot;
+use self::function::FunctionScope;
+use self::function::mlir_symbol_name::MlirSymbolName;
+use crate::ast::EmitFunction;
+use crate::ast::EmitObject;
+use crate::ast::Type as AstType;
+use crate::ast::emit::EmitConstructor;
+use crate::ast::analysis::query::StorageLayout;
 
-/// Lowers a Solidity contract to Sol dialect MLIR.
-///
-/// Emits `sol.contract` wrapping `sol.func` definitions. The
-/// `convert-sol-to-yul` pass generates the entry-point dispatcher
-/// from the function selectors.
-pub struct ContractEmitter<'state, 'context> {
-    /// The shared MLIR context.
-    state: &'state mut Context<'context>,
-}
+impl EmitObject for ContractDefinition {
+    fn emit(&self, context: &mut Context) {
+        let contract_name = self.name().name();
 
-impl<'state, 'context> ContractEmitter<'state, 'context> {
-    /// Creates a new contract emitter.
-    pub fn new(state: &'state mut Context<'context>) -> Self {
-        Self { state }
-    }
+        // Pre-register the contract's own functions so a call by bare name resolves to its
+        // registered symbol before any body is emitted.
+        self.register_signatures(
+            context,
+            self.functions()
+                .into_iter()
+                .filter(|function| !matches!(function.kind(), FunctionKind::Modifier))
+                .map(|function| {
+                    let symbol = function.mlir_function_name();
+                    (function, symbol)
+                }),
+        );
 
-    /// Returns whether `contract` is payable (declares a `receive()` function or
-    /// a `payable` `fallback()` function). Single source of truth for payability
-    /// derivation — used both when emitting the `sol.contract` op and when
-    /// resolving `SlangType::Contract` to a `Sol_ContractType`.
-    // TODO: walk the inheritance tree like solc does (`receiveFunction` /
-    // `fallbackFunction` on `ContractDefinition`, `ContractType::isPayable`)
-    // and move this helper into Slang.
-    pub fn is_contract_payable(contract: &ContractDefinition) -> bool {
-        contract.functions().iter().any(|function| {
+        let storage_layout = self.storage_layout();
+        let is_payable = self.functions().iter().any(|function| {
             matches!(function.kind(), FunctionKind::Receive)
                 || (matches!(function.kind(), FunctionKind::Fallback)
                     && matches!(function.mutability(), FunctionMutability::Payable))
-        })
-    }
+        });
+        let contract_type =
+            AstType::contract(context.builder.context, &contract_name, is_payable).into_mlir();
 
-    /// Emits a `sol.contract` containing all function definitions.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any function body or constructor initializer
-    /// contains unsupported constructs.
-    pub fn emit(&mut self, contract: &ContractDefinition) -> anyhow::Result<()> {
-        let contract_name = contract.name().name();
-
-        self.pre_register_functions(contract);
-        let storage_layout = Self::compute_storage_layout(contract);
-
-        let contract_type = self
-            .state
-            .builder
-            .types
-            .contract(&contract_name, Self::is_contract_payable(contract));
-
-        // Emit sol.contract and functions.
-        let module_body = self.state.module.body();
-        let contract_body = self.state.builder.emit_sol_contract(
+        let module_body = context.module.body();
+        let contract_body = self.emit_contract_shell(
+            context,
             &contract_name,
-            // TODO: investigate how other contract kinds (e.g. interface, library) should be represented in MLIR
             solx_mlir::ContractKind::Contract,
             &module_body,
         );
 
-        // TODO: emit declarations for inherited state variables once derived
-        // contracts compile through this path.
-        for member in contract.members().iter() {
-            let ContractMember::StateVariableDefinition(state_variable) = member else {
-                continue;
-            };
+        // Declare the contract's own state variables; each body / getter addresses its slot by symbol.
+        for state_variable in self.state_variables() {
             let Some(slot) = storage_layout.get(&state_variable.node_id()) else {
                 continue;
             };
-            let element_type =
-                TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder)?;
-            self.state.builder.emit_sol_state_var(
-                &slot.name,
-                slot.slot,
-                slot.byte_offset,
-                element_type,
-                &contract_body,
+            let element_type = AstType::resolve_state_variable(
+                &state_variable.get_type().expect("slang validated"),
+                &context.builder,
             );
+            let builder = &context.builder;
+            let slot_attribute: IntegerAttribute =
+                Attribute::parse(builder.context, &format!("{} : i256", slot.slot))
+                    .expect("valid slot literal")
+                    .try_into()
+                    .expect("slot literal is an integer attribute");
+            let byte_offset_attribute = IntegerAttribute::new(
+                IntegerType::new(builder.context, solx_utils::BIT_LENGTH_X32 as u32).into(),
+                slot.byte_offset.into(),
+            );
+            let operation =
+                StateVarOperation::builder(builder.context, builder.unknown_location)
+                    .sym_name(StringAttribute::new(builder.context, &slot.name))
+                    .r#type(TypeAttribute::new(element_type))
+                    .slot(slot_attribute)
+                    .byte_offset(byte_offset_attribute);
+            contract_body.append_operation(operation.build().into());
         }
 
-        self.state.current_contract_type = Some(contract_type);
-        FunctionEmitter::new(self.state, contract, &storage_layout)
-            .emit_constructor(&contract_body)?;
-        self.state.current_contract_type = None;
+        context.current_contract_type = Some(contract_type);
+        self.emit_constructor(
+            &FunctionScope::new(context, Some(self), &storage_layout),
+            &contract_body,
+        );
+        context.current_contract_type = None;
 
         // Slang's `functions()` filters out Constructor and Modifier kinds.
-        for function in contract.functions() {
-            self.state.current_contract_type = Some(contract_type);
-            FunctionEmitter::new(self.state, contract, &storage_layout)
-                .emit_sol(&function, &contract_body)?;
-            self.state.current_contract_type = None;
-        }
-
-        Ok(())
-    }
-
-    /// Pre-registers all function signatures for call resolution before bodies
-    /// are emitted.
-    fn pre_register_functions(&mut self, contract: &ContractDefinition) {
-        for function in contract.functions() {
-            if matches!(function.kind(), FunctionKind::Modifier) {
-                continue;
-            }
-            let mlir_name = FunctionEmitter::mlir_function_name(&function);
-            let (parameter_types, return_types) =
-                TypeConversion::resolve_function_types(&function, &self.state.builder);
-
-            self.state.register_function_signature(
-                function.node_id(),
-                mlir_name,
-                parameter_types,
-                return_types,
+        for function in self.functions() {
+            context.current_contract_type = Some(contract_type);
+            function.emit(
+                &FunctionScope::new(context, Some(self), &storage_layout),
+                &contract_body,
             );
+            context.current_contract_type = None;
         }
-    }
-
-    /// Computes the storage layout using slang-solidity's ABI computation.
-    ///
-    /// Returns a mapping from state variable node ID to its storage slot
-    /// (slot index and byte offset within the slot). Returns an empty map
-    /// if the ABI is unavailable.
-    fn compute_storage_layout(contract: &ContractDefinition) -> HashMap<NodeId, StorageSlot> {
-        let Some(abi) = contract.compute_abi() else {
-            return HashMap::new();
-        };
-        abi.storage_layout()
-            .iter()
-            .map(|item| {
-                (
-                    item.node_id(),
-                    StorageSlot::new(
-                        item.slot(),
-                        item.offset() as u32,
-                        item.label(),
-                        item.node_id(),
-                    ),
-                )
-            })
-            .collect()
     }
 }

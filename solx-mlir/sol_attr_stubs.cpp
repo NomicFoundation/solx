@@ -9,6 +9,7 @@
  */
 
 #include "mlir/Dialect/Sol/Sol.h"
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir-c/BuiltinAttributes.h"
 #include "mlir-c/IR.h"
@@ -126,6 +127,133 @@ MlirType solxCreateStructType(MlirContext ctx, const MlirType *member_types,
 MlirType solxCreateEnumType(MlirContext ctx, uint32_t max) {
     auto *context = unwrap(ctx);
     return wrap(mlir::sol::EnumType::get(context, max));
+}
+
+MlirType solxCreateFuncRefType(MlirContext ctx, const MlirType *param_types,
+                               size_t param_count, const MlirType *result_types,
+                               size_t result_count) {
+    auto *context = unwrap(ctx);
+    std::vector<mlir::Type> params;
+    params.reserve(param_count);
+    for (size_t i = 0; i < param_count; i++) {
+        params.push_back(unwrap(param_types[i]));
+    }
+    std::vector<mlir::Type> results;
+    results.reserve(result_count);
+    for (size_t i = 0; i < result_count; i++) {
+        results.push_back(unwrap(result_types[i]));
+    }
+    auto fnTy = mlir::FunctionType::get(context, params, results);
+    return wrap(mlir::sol::FuncRefType::get(context, fnTy));
+}
+
+MlirType solxCreateExtFuncRefType(MlirContext ctx, const MlirType *param_types,
+                                  size_t param_count,
+                                  const MlirType *result_types,
+                                  size_t result_count) {
+    auto *context = unwrap(ctx);
+    std::vector<mlir::Type> params;
+    params.reserve(param_count);
+    for (size_t i = 0; i < param_count; i++) {
+        params.push_back(unwrap(param_types[i]));
+    }
+    std::vector<mlir::Type> results;
+    results.reserve(result_count);
+    for (size_t i = 0; i < result_count; i++) {
+        results.push_back(unwrap(result_types[i]));
+    }
+    auto fnTy = mlir::FunctionType::get(context, params, results);
+    return wrap(mlir::sol::ExtFuncRefType::get(context, fnTy));
+}
+
+/*
+ * Type predicates.
+ *
+ * Typed `isa<>` introspection for Sol-dialect types — never textual AsmPrinter
+ * matching (which silently miscompiles if the type printer drifts). One
+ * predicate per Sol type; the Rust side composes categories (reference,
+ * address-like).
+ */
+
+bool solxIsEnumType(MlirType ty) {
+    return mlir::isa<mlir::sol::EnumType>(unwrap(ty));
+}
+
+bool solxIsAddressType(MlirType ty) {
+    return mlir::isa<mlir::sol::AddressType>(unwrap(ty));
+}
+
+bool solxIsContractType(MlirType ty) {
+    return mlir::isa<mlir::sol::ContractType>(unwrap(ty));
+}
+
+bool solxIsFixedBytesType(MlirType ty) {
+    return mlir::isa<mlir::sol::FixedBytesType>(unwrap(ty));
+}
+
+uint32_t solxFixedBytesTypeSize(MlirType ty) {
+    return mlir::cast<mlir::sol::FixedBytesType>(unwrap(ty)).getSize();
+}
+
+bool solxIsByteType(MlirType ty) {
+    return mlir::isa<mlir::sol::ByteType>(unwrap(ty));
+}
+
+bool solxIsStringType(MlirType ty) {
+    return mlir::isa<mlir::sol::StringType>(unwrap(ty));
+}
+
+bool solxIsArrayType(MlirType ty) {
+    return mlir::isa<mlir::sol::ArrayType>(unwrap(ty));
+}
+
+bool solxIsStructType(MlirType ty) {
+    return mlir::isa<mlir::sol::StructType>(unwrap(ty));
+}
+
+bool solxIsMappingType(MlirType ty) {
+    return mlir::isa<mlir::sol::MappingType>(unwrap(ty));
+}
+
+bool solxIsExtFuncRefType(MlirType ty) {
+    return mlir::isa<mlir::sol::ExtFuncRefType>(unwrap(ty));
+}
+
+bool solxIsFuncRefType(MlirType ty) {
+    return mlir::isa<mlir::sol::FuncRefType>(unwrap(ty));
+}
+
+bool solxIsPointerType(MlirType ty) {
+    return mlir::isa<mlir::sol::PointerType>(unwrap(ty));
+}
+
+/*
+ * Pointer type accessors.
+ *
+ * A `!sol.ptr<T, Loc>` carries its pointee type and data location; the Rust
+ * `Pointer` entity reads both from its own type instead of threading them
+ * alongside the value. The caller must ensure `ty` is a pointer type.
+ */
+
+MlirType solxPointerTypePointeeType(MlirType ty) {
+    return wrap(mlir::cast<mlir::sol::PointerType>(unwrap(ty)).getPointeeType());
+}
+
+uint32_t solxPointerTypeDataLocation(MlirType ty) {
+    return static_cast<uint32_t>(
+        mlir::cast<mlir::sol::PointerType>(unwrap(ty)).getDataLocation());
+}
+
+// A string/array/struct carries its own data location; a mapping carries none.
+uint32_t solxReferenceTypeDataLocation(MlirType ty) {
+    auto type = unwrap(ty);
+    if (auto string = mlir::dyn_cast<mlir::sol::StringType>(type))
+        return static_cast<uint32_t>(string.getDataLocation());
+    if (auto array = mlir::dyn_cast<mlir::sol::ArrayType>(type))
+        return static_cast<uint32_t>(array.getDataLocation());
+    if (auto structure = mlir::dyn_cast<mlir::sol::StructType>(type))
+        return static_cast<uint32_t>(structure.getDataLocation());
+    abort();
 }
 
 } /* extern "C" */

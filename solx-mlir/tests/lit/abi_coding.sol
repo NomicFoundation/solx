@@ -1,26 +1,26 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s --check-prefixes=CHECK,CHECK-SOLX
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s --check-prefixes=CHECK,CHECK-SOLC
 
-// CHECK-SOLX: sol.func @"encode(uint256,address)"
-// CHECK-SOLC: sol.func @encode_{{[0-9]+}}
-// CHECK:   sol.encode {{.*}} : ui256, !sol.address : !sol.string<Memory>
-// CHECK-SOLX: sol.func @"encodePacked(uint256,address)"
-// CHECK-SOLC: sol.func @encodePacked_{{[0-9]+}}
-// CHECK:   sol.encode {{.*}} : ui256, !sol.address : !sol.string<Memory> {packed}
-// CHECK-SOLX: sol.func @"encodeWithSelector(bytes4,uint256)"
-// CHECK-SOLC: sol.func @encodeWithSelector_{{[0-9]+}}
-// CHECK:   sol.encode selector(%{{.*}}) %{{.*}} : !sol.fixedbytes<4> ui256 : !sol.string<Memory>
-// CHECK-SOLX: sol.func @"encodeWithSelectorTwo(bytes4,uint256,address)"
-// CHECK-SOLC: sol.func @encodeWithSelectorTwo_{{[0-9]+}}
-// CHECK:   sol.encode selector(%{{.*}}) %{{.*}}, %{{.*}} : !sol.fixedbytes<4> ui256, !sol.address : !sol.string<Memory>
-// CHECK-SOLX: sol.func @"encodeWithSignature(uint256)"
-// CHECK-SOLC: sol.func @encodeWithSignature_{{[0-9]+}}
-// CHECK:   sol.constant 801029432 : ui32
-// CHECK:   sol.bytes_cast %{{.*}} : ui32 to !sol.fixedbytes<4>
-// CHECK:   sol.encode selector(%{{.*}}) %{{.*}} : !sol.fixedbytes<4> ui256 : !sol.string<Memory>
-// CHECK-SOLX: sol.func @"decode(bytes)"
-// CHECK-SOLC: sol.func @decode_{{[0-9]+}}
-// CHECK:   sol.decode {{.*}} : !sol.string<Memory> -> ui256
+// CHECK-SOLX-DAG: sol.func @"encode(uint256,address)"
+// CHECK-SOLC-DAG: sol.func @encode_{{[0-9]+}}
+// CHECK-DAG:   sol.encode {{.*}} : ui256, !sol.address : !sol.string<Memory>
+// CHECK-SOLX-DAG: sol.func @"encodePacked(uint256,address)"
+// CHECK-SOLC-DAG: sol.func @encodePacked_{{[0-9]+}}
+// CHECK-DAG:   sol.encode {{.*}} : ui256, !sol.address : !sol.string<Memory> {packed}
+// CHECK-SOLX-DAG: sol.func @"encodeWithSelector(bytes4,uint256)"
+// CHECK-SOLC-DAG: sol.func @encodeWithSelector_{{[0-9]+}}
+// CHECK-DAG:   sol.encode selector(%{{.*}}) %{{.*}} : !sol.fixedbytes<4> ui256 : !sol.string<Memory>
+// CHECK-SOLX-DAG: sol.func @"encodeWithSelectorTwo(bytes4,uint256,address)"
+// CHECK-SOLC-DAG: sol.func @encodeWithSelectorTwo_{{[0-9]+}}
+// CHECK-DAG:   sol.encode selector(%{{.*}}) %{{.*}}, %{{.*}} : !sol.fixedbytes<4> ui256, !sol.address : !sol.string<Memory>
+// CHECK-SOLX-DAG: sol.func @"encodeWithSignature(uint256)"
+// CHECK-SOLC-DAG: sol.func @encodeWithSignature_{{[0-9]+}}
+// CHECK-DAG:   sol.constant 801029432 : ui32
+// CHECK-DAG:   sol.bytes_cast %{{.*}} : ui32 to !sol.fixedbytes<4>
+// CHECK-DAG:   sol.encode selector(%{{.*}}) %{{.*}} : !sol.fixedbytes<4> ui256 : !sol.string<Memory>
+// CHECK-SOLX-DAG: sol.func @"decode(bytes)"
+// CHECK-SOLC-DAG: sol.func @decode_{{[0-9]+}}
+// CHECK-DAG:   sol.decode {{.*}} : !sol.string<Memory> -> ui256
 
 contract C {
     function encode(uint256 x, address y) public pure returns (bytes memory) { return abi.encode(x, y); }

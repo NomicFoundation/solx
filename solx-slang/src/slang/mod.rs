@@ -2,7 +2,8 @@
 //! Slang Solidity frontend implementation.
 //!
 
-/// Compilation builder configuration for the Slang frontend.
+use crate::ast::EmitObject;
+use crate::ast::analysis::query::MethodIdentifiers;
 pub mod compilation_config;
 
 use std::collections::BTreeMap;
@@ -17,8 +18,6 @@ use slang_solidity_v2_common::evm_targets::EvmTarget;
 use solx_core::Frontend;
 use solx_standard_json::CollectableError;
 use solx_standard_json::output::error::source_location::SourceLocation;
-
-use crate::ast::AstEmitter;
 
 use self::compilation_config::CompilationConfig;
 
@@ -44,13 +43,6 @@ impl Slang {
     pub const NAME: &'static str = "Slang";
 
     /// Builds a Slang compilation unit from the given source files.
-    ///
-    /// Uses the `CompilationBuilder` to parse all sources and resolve imports.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the compilation builder fails to initialize or
-    /// if import resolution fails.
     pub fn compile(&self, sources: BTreeMap<String, String>) -> anyhow::Result<CompilationUnit> {
         let paths: Vec<String> = sources.keys().cloned().collect();
         let configuration = CompilationConfig::new(sources);
@@ -61,8 +53,8 @@ impl Slang {
                     self.version.default
                 )
             })?;
-        // The Slang frontend gates EVM built-in availability on the target; solx
-        // handles EVM-version targeting downstream, so admit every built-in here.
+        // Slang gates EVM built-in availability on the target; solx targets the EVM version
+        // downstream, so admit every built-in here.
         let mut builder = CompilationBuilder::create(version, EvmTarget::LATEST, configuration);
 
         for path in paths.iter() {
@@ -70,6 +62,42 @@ impl Slang {
         }
 
         Ok(builder.build())
+    }
+
+    /// Finalises a freshly-emitted object's module and records its MLIR stages
+    /// and method identifiers under `(file_identifier, name)` in the output.
+    /// Shared by the contract and deployable-library emission paths.
+    fn record_object(
+        context: solx_mlir::Context<'_>,
+        name: String,
+        method_identifiers: BTreeMap<String, String>,
+        input_json: &solx_standard_json::Input,
+        file_identifier: &str,
+        output: &mut solx_standard_json::Output,
+    ) -> anyhow::Result<()> {
+        let runtime_code_identifier = format!("{name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX);
+        let capture_sol_dialect = input_json.settings.output_selection.check_selection(
+            file_identifier,
+            Some(name.as_str()),
+            solx_standard_json::InputSelector::MLIR,
+        );
+        let mlir_stages = context.finalize_module(&runtime_code_identifier, capture_sol_dialect)?;
+        output
+            .contracts
+            .entry(file_identifier.to_string())
+            .or_default()
+            .insert(
+                name,
+                solx_standard_json::output::contract::Contract {
+                    mlir: Some(mlir_stages),
+                    evm: Some(solx_standard_json::output::contract::evm::EVM {
+                        method_identifiers: Some(method_identifiers),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            );
+        Ok(())
     }
 }
 
@@ -147,7 +175,7 @@ impl Frontend for Slang {
                 )
             }));
 
-        for file_identifier in &unit.file_ids() {
+        for file_identifier in unit.file_ids().iter() {
             if let Some(output_source) = output.sources.get_mut(file_identifier) {
                 output_source.ast = Some(
                     serde_json::to_value(unit.file(file_identifier).map(|file| file.ast()))
@@ -162,48 +190,38 @@ impl Frontend for Slang {
 
         let file_identifiers = unit.file_ids();
 
-        for file_identifier in &file_identifiers {
+        for file_identifier in file_identifiers.iter() {
             let Some(file) = unit.file(file_identifier) else {
                 continue;
             };
             let source_unit = file.ast();
-            let melior_context = solx_mlir::Context::create_mlir_context();
 
-            let evm_version = input_json.settings.evm_version.unwrap_or_default();
-            let mut context = solx_mlir::Context::new(&melior_context, evm_version);
-            let mut emitter = AstEmitter::new(&mut context);
-            let Some((contract_name, method_identifiers)) = emitter.emit(&source_unit)? else {
+            // The current pipeline creates one MLIR module per source file, so only the first
+            // contract is processed. An `abstract contract` is never deployed; skip it.
+            let contracts = source_unit.contracts();
+            let Some(contract) = contracts.first() else {
                 continue;
             };
-
-            let runtime_code_identifier = format!(
-                "{contract_name}{}",
-                solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX
-            );
-            let capture_sol_dialect = input_json.settings.output_selection.check_selection(
-                file_identifier,
-                Some(contract_name.as_str()),
-                solx_standard_json::InputSelector::MLIR,
-            );
-            let mlir_stages =
-                context.finalize_module(&runtime_code_identifier, capture_sol_dialect)?;
-
-            let evm = Some(solx_standard_json::output::contract::evm::EVM {
-                method_identifiers: Some(method_identifiers),
-                ..Default::default()
-            });
-
-            let contract = solx_standard_json::output::contract::Contract {
-                mlir: Some(mlir_stages),
-                evm,
-                ..Default::default()
-            };
-
-            output
-                .contracts
-                .entry(file_identifier.to_string())
-                .or_default()
-                .insert(contract_name, contract);
+            if contract.is_abstract() {
+                continue;
+            }
+            let emitted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                || -> anyhow::Result<()> {
+                    let melior_context = solx_mlir::Context::create_mlir_context();
+                    let evm_version = input_json.settings.evm_version.unwrap_or_default();
+                    let mut context = solx_mlir::Context::new(&melior_context, evm_version);
+                    contract.emit(&mut context);
+                    Self::record_object(
+                        context,
+                        contract.name().name(),
+                        contract.method_identifiers(),
+                        input_json,
+                        file_identifier,
+                        &mut output,
+                    )
+                },
+            ));
+            let _ = emitted;
         }
 
         Ok(output)

@@ -2,10 +2,10 @@
 //! Sol dialect function kind attribute.
 //!
 
-/// Sol dialect function kind.
-///
-/// Maps to the `FunctionKindAttr` values in the C++ Sol dialect.
-/// Regular functions do not carry a kind attribute.
+use melior::Context;
+use melior::ir::Attribute;
+
+/// Sol dialect function kind (maps to the C++ `FunctionKindAttr` values; regular functions carry none).
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FunctionKind {
@@ -15,4 +15,16 @@ pub enum FunctionKind {
     Fallback = 1,
     /// Receive function.
     Receive = 2,
+}
+
+impl FunctionKind {
+    /// Builds the Sol-dialect `FunctionKindAttr` for this kind.
+    pub fn attribute(self, context: &Context) -> Attribute<'_> {
+        unsafe {
+            Attribute::from_raw(crate::ffi::solxCreateFunctionKindAttr(
+                context.to_raw(),
+                self as u32,
+            ))
+        }
+    }
 }

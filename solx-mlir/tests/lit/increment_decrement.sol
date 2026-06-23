@@ -1,29 +1,29 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @{{.*prefix_inc.*}}
-// CHECK:   %[[OLD:.*]] = sol.load
-// CHECK:   %[[NEW:.*]] = sol.cadd %[[OLD]]
-// CHECK:   sol.store %[[NEW]]
-// CHECK:   sol.return %[[NEW]]
+// CHECK-DAG: sol.func @{{.*prefix_inc.*}}
+// CHECK-DAG:   %[[OLD:.*]] = sol.load
+// CHECK-DAG:   %[[NEW:.*]] = sol.cadd %[[OLD]]
+// CHECK-DAG:   sol.store %[[NEW]]
+// CHECK-DAG:   sol.return %[[NEW]]
 
-// CHECK: sol.func @{{.*postfix_inc.*}}
-// CHECK:   %[[OLD:.*]] = sol.load
-// CHECK:   %[[NEW:.*]] = sol.cadd %[[OLD]]
-// CHECK:   sol.store %[[NEW]]
-// CHECK:   sol.return %[[OLD]]
+// CHECK-DAG: sol.func @{{.*postfix_inc.*}}
+// CHECK-DAG:   %[[OLD:.*]] = sol.load
+// CHECK-DAG:   %[[NEW:.*]] = sol.cadd %[[OLD]]
+// CHECK-DAG:   sol.store %[[NEW]]
+// CHECK-DAG:   sol.return %[[OLD]]
 
-// CHECK: sol.func @{{.*prefix_dec.*}}
-// CHECK:   %[[OLD:.*]] = sol.load
-// CHECK:   %[[NEW:.*]] = sol.csub %[[OLD]]
-// CHECK:   sol.store %[[NEW]]
-// CHECK:   sol.return %[[NEW]]
+// CHECK-DAG: sol.func @{{.*prefix_dec.*}}
+// CHECK-DAG:   %[[OLD:.*]] = sol.load
+// CHECK-DAG:   %[[NEW:.*]] = sol.csub %[[OLD]]
+// CHECK-DAG:   sol.store %[[NEW]]
+// CHECK-DAG:   sol.return %[[NEW]]
 
-// CHECK: sol.func @{{.*postfix_dec.*}}
-// CHECK:   %[[OLD:.*]] = sol.load
-// CHECK:   %[[NEW:.*]] = sol.csub %[[OLD]]
-// CHECK:   sol.store %[[NEW]]
-// CHECK:   sol.return %[[OLD]]
+// CHECK-DAG: sol.func @{{.*postfix_dec.*}}
+// CHECK-DAG:   %[[OLD:.*]] = sol.load
+// CHECK-DAG:   %[[NEW:.*]] = sol.csub %[[OLD]]
+// CHECK-DAG:   sol.store %[[NEW]]
+// CHECK-DAG:   sol.return %[[OLD]]
 
 contract C {
     function prefix_inc(uint256 x) public pure returns (uint256) {

@@ -37,15 +37,7 @@ impl CompilationBuilderConfig for CompilationConfig {
         source_file_identifier: &str,
         import_path: &str,
     ) -> Result<String, UnresolvedImport> {
-        let path = import_path
-            .strip_prefix('"')
-            .and_then(|stripped| stripped.strip_suffix('"'))
-            .or_else(|| {
-                import_path
-                    .strip_prefix('\'')
-                    .and_then(|stripped| stripped.strip_suffix('\''))
-            })
-            .unwrap_or(import_path);
+        let path = import_path;
 
         // Try exact match first.
         if self.sources.contains_key(path) {

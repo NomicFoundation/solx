@@ -1,9 +1,5 @@
 //!
-//! FFI bindings for Sol and Yul dialect C API functions.
-//!
-//! These functions are provided by the `libMLIRCAPISol`, `libMLIRSolTransforms`,
-//! `libMLIRSolToYul`, `libMLIRYulToStandard`, and `libMLIRCAPIYul` static
-//! libraries built from solx-llvm.
+//! FFI bindings for the Sol and Yul dialect C API, provided by the solx-llvm static libraries.
 //!
 
 use mlir_sys::MlirBlock;
@@ -14,38 +10,27 @@ use mlir_sys::MlirPass;
 use mlir_sys::MlirRegion;
 
 unsafe extern "C" {
-    // ---- Sol dialect registration ----
 
     /// Returns the dialect handle for the Sol dialect.
     pub fn mlirGetDialectHandle__sol__() -> MlirDialectHandle;
 
-    // ---- Yul dialect registration ----
-
     /// Returns the dialect handle for the Yul dialect.
     pub fn mlirGetDialectHandle__yul__() -> MlirDialectHandle;
-
-    // ---- Sol dialect passes ----
 
     /// Registers all Sol dialect passes.
     pub fn mlirRegisterSolPasses();
 
-    // ---- Canonicalization ----
-
     /// Creates the `canonicalize` pass.
     pub fn mlirCreateTransformsCanonicalizer() -> MlirPass;
 
-    /// Creates the `sol-modifier-op-lowering` pass.
+    /// Creates the Sol modifier-op pass.
     pub fn mlirCreateSolModifierOpLoweringPass() -> MlirPass;
-
-    // ---- Sol-to-Yul conversion ----
 
     /// Creates the `convert-sol-to-yul` pass.
     pub fn mlirCreateConversionConvertSolToYulPass() -> MlirPass;
 
     /// Creates the `convert-yul-to-std` pass.
     pub fn mlirCreateConversionConvertYulToStandardPass() -> MlirPass;
-
-    // ---- Standard-to-LLVM conversion passes ----
 
     /// Creates the `convert-func-to-llvm` pass.
     pub fn mlirCreateConversionConvertFuncToLLVMPass() -> MlirPass;
@@ -62,12 +47,8 @@ unsafe extern "C" {
     /// Creates the `reconcile-unrealized-casts` pass.
     pub fn mlirCreateConversionReconcileUnrealizedCastsPass() -> MlirPass;
 
-    // ---- Dialect loading ----
-
     /// Loads a dialect into the context by handle.
     pub fn mlirDialectHandleInsertDialect(handle: MlirDialectHandle, registry: MlirDialectRegistry);
-
-    // ---- Sol attribute constructors (from sol_attr_stubs.cpp) ----
 
     /// Creates a `ContractKindAttr` (0=Interface, 1=Contract, 2=Library).
     pub fn solxCreateContractKindAttr(context: MlirContext, kind: u32) -> mlir_sys::MlirAttribute;
@@ -94,8 +75,6 @@ unsafe extern "C" {
         num_words: usize,
         magnitude: *const u64,
     ) -> mlir_sys::MlirAttribute;
-
-    // ---- Sol type constructors (from sol_attr_stubs.cpp) ----
 
     /// Creates a `sol::PointerType` with the given element type and data location.
     ///
@@ -155,7 +134,27 @@ unsafe extern "C" {
     /// (one less than the number of enum members).
     pub fn solxCreateEnumType(context: MlirContext, max: u32) -> mlir_sys::MlirType;
 
-    // ---- Sol type inference ----
+    /// Creates a `sol::FuncRefType` (internal function pointer) over the
+    /// function signature `param_types -> result_types`. Used as the callee
+    /// of a `sol.icall`.
+    pub fn solxCreateFuncRefType(
+        context: MlirContext,
+        param_types: *const mlir_sys::MlirType,
+        param_count: usize,
+        result_types: *const mlir_sys::MlirType,
+        result_count: usize,
+    ) -> mlir_sys::MlirType;
+
+    /// Creates a `sol::ExtFuncRefType` (external function reference: callee
+    /// address + selector) over the function signature
+    /// `param_types -> result_types`. Used as the callee of an external call.
+    pub fn solxCreateExtFuncRefType(
+        context: MlirContext,
+        param_types: *const mlir_sys::MlirType,
+        param_count: usize,
+        result_types: *const mlir_sys::MlirType,
+        result_count: usize,
+    ) -> mlir_sys::MlirType;
 
     /// Returns the element type of a non-mapping reference type. For
     /// struct types, `struct_field_idx` selects the member.
@@ -168,21 +167,53 @@ unsafe extern "C" {
         element_type: mlir_sys::MlirType,
     ) -> mlir_sys::MlirType;
 
-    // ---- MLIR core (not in mlir-sys) ----
+    /// Whether `ty` is a `!sol.enum<N>`.
+    pub fn solxIsEnumType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is the `!sol.address`.
+    pub fn solxIsAddressType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.contract<…>`.
+    pub fn solxIsContractType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.fixedbytes<N>`.
+    pub fn solxIsFixedBytesType(ty: mlir_sys::MlirType) -> bool;
+    /// The byte width `N` of a `!sol.fixedbytes<N>` (the caller must ensure `ty`
+    /// is a fixed-bytes type).
+    pub fn solxFixedBytesTypeSize(ty: mlir_sys::MlirType) -> u32;
+    /// Whether `ty` is the single `!sol.byte` (the `bytes`/`string` element).
+    pub fn solxIsByteType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.string<…>` (`bytes` and `string` share it).
+    pub fn solxIsStringType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.array<…>`.
+    pub fn solxIsArrayType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.struct<…>`.
+    pub fn solxIsStructType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.mapping<…>`.
+    pub fn solxIsMappingType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.ext_func_ref<…>` (external function reference).
+    pub fn solxIsExtFuncRefType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.func_ref<…>` (internal function reference).
+    pub fn solxIsFuncRefType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.ptr<…>` (a typed place / address).
+    pub fn solxIsPointerType(ty: mlir_sys::MlirType) -> bool;
+
+    /// The pointee type `T` of a `!sol.ptr<T, Loc>` (the caller must ensure `ty`
+    /// is a pointer type).
+    pub fn solxPointerTypePointeeType(ty: mlir_sys::MlirType) -> mlir_sys::MlirType;
+    /// The data location `Loc` of a `!sol.ptr<T, Loc>` as a `mlir::sol::DataLocation`
+    /// ordinal (0=Storage, 1=CallData, 2=Memory, 3=Stack, 4=Immutable, 5=Transient);
+    /// the caller must ensure `ty` is a pointer type.
+    pub fn solxPointerTypeDataLocation(ty: mlir_sys::MlirType) -> u32;
+    /// The data location ordinal of a `!sol.string` / `!sol.array` / `!sol.struct`.
+    pub fn solxReferenceTypeDataLocation(ty: mlir_sys::MlirType) -> u32;
 
     /// Returns the region that owns the given block.
     pub fn mlirBlockGetParentRegion(block: MlirBlock) -> MlirRegion;
 }
 
 /// Returns the parent region of a block as a `RegionRef`.
-///
-/// # Safety
-///
-/// The block must be attached to a region (i.e., not detached).
 pub fn block_parent_region<'context, 'block>(
     block: &melior::ir::BlockRef<'context, 'block>,
 ) -> melior::ir::RegionRef<'context, 'block> {
-    // SAFETY: The block is attached (guaranteed by melior's ownership model).
+    // The block is attached (guaranteed by melior's ownership model).
     // `mlirBlockGetParentRegion` returns a non-owning handle to the parent.
     unsafe {
         melior::ir::RegionRef::from_raw(mlirBlockGetParentRegion(melior::ir::BlockLike::to_raw(

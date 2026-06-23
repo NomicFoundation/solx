@@ -1,4 +1,6 @@
-//! Tuple deconstruction statement lowering.
+//!
+//! Variable declaration statement emission.
+//!
 
 use melior::ir::BlockRef;
 
@@ -8,154 +10,122 @@ use slang_solidity_v2::ast::SingleTypedDeclaration;
 use slang_solidity_v2::ast::VariableDeclarationStatement;
 use slang_solidity_v2::ast::VariableDeclarationTarget;
 
-use crate::ast::contract::function::expression::ExpressionEmitter;
-use crate::ast::contract::function::expression::call::CallEmitter;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
-use crate::ast::contract::function::statement::StatementEmitter;
+use crate::ast::BlockAnd;
+use crate::ast::EmitAs;
+use crate::ast::EmitExpression;
+use crate::ast::EmitStatement;
+use crate::ast::LocationPolicy;
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::statement::StatementContext;
 
-impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
-    /// Emits a variable declaration with optional initializer.
-    pub(super) fn emit_variable_declaration(
-        &mut self,
-        declaration: &VariableDeclarationStatement,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        match declaration.target() {
-            VariableDeclarationTarget::SingleTypedDeclaration(single_typed_declaration) => {
-                self.emit_single_typed_declaration(&single_typed_declaration, block)
-            }
-            VariableDeclarationTarget::MultiTypedDeclaration(multi_typed_declaration) => {
-                self.emit_multi_typed_declaration(&multi_typed_declaration, block)
-            }
+statement_emit!(VariableDeclarationStatement; |node, context, block| {
+    match node.target() {
+        VariableDeclarationTarget::SingleTypedDeclaration(single_typed_declaration) => {
+            single_typed_declaration.emit(context, block)
+        }
+        VariableDeclarationTarget::MultiTypedDeclaration(multi_typed_declaration) => {
+            multi_typed_declaration.emit(context, block)
         }
     }
+});
 
-    fn emit_single_typed_declaration(
-        &mut self,
-        declaration: &SingleTypedDeclaration,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let name = declaration.declaration().name().name();
-        let declared_type = declaration
-            .declaration()
-            .get_type()
-            .map(|slang_type| {
-                TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
-            })
-            .unwrap_or_else(|| self.state.builder.types.ui256);
+statement_emit!(SingleTypedDeclaration; |node, context, block| {
+    let slang_declared_type = node.declaration().get_type().expect("slang validated");
+    let declared_type = AstType::resolve(
+        &slang_declared_type,
+        LocationPolicy::Declared(None),
+        &context.state.builder,
+    );
 
-        let emitter = ExpressionEmitter::new(
-            self.state,
-            self.environment,
-            self.storage_layout,
-            self.checked,
+    let emitter = ExpressionContext::from(&*context);
+
+    // Explicit initializers evaluate and cast before alloca, matching solc's order (cast → alloca → store).
+    let (block, initial_value) = if let Some(ref initializer_expression) = node.value() {
+        let BlockAnd { value, block } =
+            initializer_expression.emit_as(declared_type, &emitter, block);
+        (block, Some(value.into_mlir()))
+    } else {
+        (block, None)
+    };
+
+    let pointer = if let Some(value) = initial_value {
+        let pointer = Pointer::stack_slot(
+            AstType::new(declared_type),
+            &context.state.builder,
+            &block,
         );
+        pointer.store(AstValue::new(value), &context.state.builder, &block);
+        pointer.into_mlir()
+    } else {
+        Pointer::default_initialized(
+            AstType::new(declared_type),
+            &context.state.builder,
+            &block,
+        )
+        .into_mlir()
+    };
 
-        // For explicit initializers, evaluate and cast before alloca to match
-        // solc's emission order (constant → cast → alloca → store).
-        // For implicit zero-initialization, alloca is emitted first.
-        let (block, initial_value) = if let Some(ref initializer_expression) = declaration.value() {
-            let (initial_value, block) = emitter.emit_value(initializer_expression, block)?;
-            let cast_value = TypeConversion::from_target_type(
-                declared_type,
-                &emitter.state.builder,
-            )
-            .emit(initial_value, &emitter.state.builder, &block);
-            (block, Some(cast_value))
-        } else {
-            (block, None)
-        };
+    context
+        .environment
+        .define_variable(node.declaration().node_id(), pointer);
+    Some(block)
+});
 
-        let pointer = emitter.state.builder.emit_sol_alloca(declared_type, &block);
+statement_emit!(MultiTypedDeclaration; |node, context, block| {
+    let expression = node.value();
+    let elements = node.elements();
 
-        if let Some(value) = initial_value {
-            emitter.state.builder.emit_sol_store(value, pointer, &block);
-        } else if melior::ir::r#type::IntegerType::try_from(declared_type).is_ok() {
-            let zero = self
-                .state
-                .builder
-                .emit_sol_constant(0, declared_type, &block);
-            emitter.state.builder.emit_sol_store(zero, pointer, &block);
-        } else {
-            unimplemented!("zero-initialization for non-integer type {declared_type}");
+    let emitter = ExpressionContext::from(&*context);
+
+    let (values, current) = match &expression {
+        Expression::TupleExpression(tuple) => {
+            let items = tuple.items();
+            let mut values = Vec::with_capacity(items.len());
+            let mut current = block;
+            for item in items.iter() {
+                let inner = item
+                    .expression()
+                    .expect("slang validated");
+                let BlockAnd { value, block: next } = inner.emit(&emitter, current);
+                values.push(value.into_mlir());
+                current = next;
+            }
+            (values, current)
         }
+        Expression::FunctionCallExpression(call) => {
+            let BlockAnd { value, block } = call.emit(&emitter, block);
+            (value, block)
+        }
+        _ => unimplemented!(
+            "tuple deconstruction with this right-hand side shape is not yet supported"
+        ),
+    };
 
-        self.environment
-            .define_variable(name, pointer, declared_type);
-        Ok(Some(block))
-    }
-
-    fn emit_multi_typed_declaration(
-        &mut self,
-        declaration: &MultiTypedDeclaration,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let expression = declaration.value();
-        let elements = declaration.elements();
-
-        let emitter = ExpressionEmitter::new(
-            self.state,
-            self.environment,
-            self.storage_layout,
-            self.checked,
+    for (member, value) in elements.iter().zip(values) {
+        let Some(declaration) = member.member() else {
+            continue;
+        };
+        let builder = &context.state.builder;
+        let declared_type = AstType::resolve(
+            &declaration.get_type().expect("slang validated"),
+            LocationPolicy::Declared(None),
+            builder,
         );
-
-        let (values, current) = match &expression {
-            Expression::TupleExpression(tuple) => {
-                let items = tuple.items();
-                anyhow::ensure!(
-                    items.len() == elements.len(),
-                    "tuple deconstruction arity mismatch: {} LHS slots vs {} RHS values",
-                    elements.len(),
-                    items.len(),
-                );
-                let mut values = Vec::with_capacity(items.len());
-                let mut current = block;
-                for item in items.iter() {
-                    let inner = item.expression().ok_or_else(|| {
-                        anyhow::anyhow!("empty tuple element on RHS of deconstruction")
-                    })?;
-                    let (value, next) = emitter.emit_value(&inner, current)?;
-                    values.push(value);
-                    current = next;
-                }
-                (values, current)
-            }
-            Expression::FunctionCallExpression(call) => {
-                let call_emitter = CallEmitter::new(&emitter);
-                let (values, current) = call_emitter.emit_function_call_results(call, block)?;
-                anyhow::ensure!(
-                    values.len() == elements.len(),
-                    "tuple deconstruction arity mismatch: {} LHS slots vs {} call results",
-                    elements.len(),
-                    values.len(),
-                );
-                (values, current)
-            }
-            _ => anyhow::bail!(
-                "tuple deconstruction with this right-hand side shape is not yet supported"
-            ),
-        };
-
-        for (member, value) in elements.iter().zip(values) {
-            let Some(declaration) = member.member() else {
-                // Discard the value; nothing to bind.
-                continue;
-            };
-            let name = declaration.name().name();
-            let builder = &self.state.builder;
-            let declared_type = declaration
-                .get_type()
-                .map(|slang_type| TypeConversion::resolve_slang_type(&slang_type, None, builder))
-                .unwrap_or_else(|| builder.types.ui256);
-            let cast = TypeConversion::from_target_type(declared_type, builder)
-                .emit(value, builder, &current);
-            let pointer = builder.emit_sol_alloca(declared_type, &current);
-            builder.emit_sol_store(cast, pointer, &current);
-            self.environment
-                .define_variable(name, pointer, declared_type);
-        }
-
-        Ok(Some(current))
+        let cast = AstValue::from(value).cast(
+            AstType::new(declared_type),
+            builder,
+            &current,
+        );
+        let pointer =
+            Pointer::stack_slot(AstType::new(declared_type), builder, &current);
+        pointer.store(cast, builder, &current);
+        context
+            .environment
+            .define_variable(declaration.node_id(), pointer.into_mlir());
     }
-}
+
+    Some(current)
+});

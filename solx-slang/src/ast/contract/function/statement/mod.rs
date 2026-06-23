@@ -1,53 +1,88 @@
 //!
-//! Statement lowering to MLIR operations.
+//! Statement emission to MLIR operations.
 //!
 
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 pub mod control_flow;
 pub mod event;
+pub mod expression_statement_kind;
 pub mod revert;
 pub mod variable_declaration;
 
 use std::collections::HashMap;
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Region;
 use melior::ir::Type;
+use melior::ir::Value;
+use melior::ir::attribute::StringAttribute;
+use melior::ir::r#type::IntegerType;
+use slang_solidity_v2::ast::ArgumentsDeclaration;
+use slang_solidity_v2::ast::Block;
+use slang_solidity_v2::ast::BreakStatement;
+use slang_solidity_v2::ast::ContinueStatement;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::ExpressionStatement;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::ReturnStatement;
 use slang_solidity_v2::ast::Statement;
-use slang_solidity_v2::ast::Statements;
+use slang_solidity_v2::ast::UncheckedBlock;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
+use solx_mlir::ods::sol::BreakOperation;
+use solx_mlir::ods::sol::ContinueOperation;
+use solx_mlir::ods::sol::ReturnOperation;
+use solx_mlir::ods::sol::RevertOperation;
 
-use crate::ast::contract::function::expression::ExpressionEmitter;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
-use crate::ast::contract::function::storage_slot::StorageSlot;
+use self::expression_statement_kind::ExpressionStatementKind;
+use crate::ast::BlockAnd;
+use crate::ast::EmitAs;
+use crate::ast::EmitExpression;
+use crate::ast::EmitForEffect;
+use crate::ast::EmitStatement;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
+use crate::ast::contract::storage_layout::StorageSlot;
 
-/// Lowers Solidity statements to MLIR operations with control flow.
-///
-/// Returns `Some(block)` as the continuation block, or `None` when control
-/// flow has been terminated (by `return`, `break`, or `continue`).
-pub struct StatementEmitter<'state, 'context, 'block> {
+/// Lowers Solidity statements to MLIR operations; threads `Some(block)` or `None` when control diverges.
+pub struct StatementContext<'state, 'context, 'block> {
     /// The shared MLIR context.
-    state: &'state Context<'context>,
+    pub state: &'state Context<'context>,
     /// Variable environment (mutable for new declarations and loop targets).
-    environment: &'state mut Environment<'context, 'block>,
-    /// The current region for creating new blocks.
-    /// Stored as a raw pointer to allow switching between Sol op regions
-    /// without lifetime conflicts.
-    region_pointer: *const Region<'context>,
+    pub environment: &'state mut Environment<'context, 'block>,
+    /// The current region for new blocks. A raw pointer to switch between Sol op regions without
+    /// lifetime conflicts; re-pointed by direct assignment.
+    pub region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
-    storage_layout: &'state HashMap<NodeId, StorageSlot>,
+    pub storage_layout: &'state HashMap<NodeId, StorageSlot>,
     /// The function's declared return types, for `emit_return` to cast to.
-    return_types: &'state [Type<'context>],
-    /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
-    ///
-    /// `true` by default. Set to `false` inside `unchecked {}` blocks.
-    checked: bool,
+    pub return_types: &'state [Type<'context>],
+    /// The function's return slots, parallel to `return_types` (`None` for an unnamed return); a bare
+    /// `return;` and the epilogue load these so the `sol.return` arity matches.
+    pub return_slots: &'state [Option<Value<'context, 'block>>],
+    /// Arithmetic overflow-checking mode (Checked by default, Unchecked inside `unchecked {}`).
+    pub arithmetic_mode: ArithmeticMode,
 }
 
-impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
+/// Builds an [`ExpressionContext`] from a statement context (propagating its arithmetic mode).
+impl<'state, 'context, 'block> From<&'state StatementContext<'_, 'context, 'block>>
+    for ExpressionContext<'state, 'context, 'block>
+{
+    fn from(statement: &'state StatementContext<'_, 'context, 'block>) -> Self {
+        ExpressionContext::new(
+            statement.state,
+            statement.environment,
+            statement.storage_layout,
+            statement.arithmetic_mode,
+        )
+    }
+}
+
+impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Creates a new statement emitter.
     pub fn new(
         state: &'state Context<'context>,
@@ -55,6 +90,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         region: &Region<'context>,
         storage_layout: &'state HashMap<NodeId, StorageSlot>,
         return_types: &'state [Type<'context>],
+        return_slots: &'state [Option<Value<'context, 'block>>],
     ) -> Self {
         Self {
             state,
@@ -62,185 +98,203 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             region_pointer: region as *const Region<'context>,
             storage_layout,
             return_types,
-            checked: true,
+            return_slots,
+            arithmetic_mode: ArithmeticMode::Checked,
         }
     }
+}
 
-    /// Returns a reference to the current region.
-    ///
-    /// # Safety
-    ///
-    /// The region pointer is valid as long as the MLIR module exists,
-    /// which outlives all emitters.
-    pub fn region(&self) -> &Region<'context> {
-        // SAFETY: The region is owned by the MLIR module and outlives this emitter.
-        unsafe { &*self.region_pointer }
-    }
-
-    /// Switches the current region for emitting into Sol op regions.
-    pub fn set_region(&mut self, region: &Region<'context>) {
-        self.region_pointer = region as *const Region<'context>;
-    }
-
-    /// Emits MLIR for a statement.
-    ///
-    /// Returns `Some(block)` as the continuation block for the next statement,
-    /// or `None` if control flow was terminated.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the statement contains unsupported constructs.
-    pub fn emit(
-        &mut self,
-        statement: &Statement,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        match statement {
-            Statement::VariableDeclarationStatement(declaration) => {
-                self.emit_variable_declaration(declaration, block)
-            }
-            Statement::ExpressionStatement(expression_statement) => {
-                let expression = expression_statement.expression();
-                if let Expression::FunctionCallExpression(call) = &expression
-                    && let Expression::Identifier(identifier) = call.operand()
-                    && identifier.name() == revert::IDENTIFIER
-                {
-                    return self.emit_revert_call(call, block);
-                }
-                let emitter = ExpressionEmitter::new(
-                    self.state,
-                    self.environment,
-                    self.storage_layout,
-                    self.checked,
-                );
-                let (_, block) = emitter.emit(&expression, block)?;
-                Ok(Some(block))
-            }
-            Statement::ReturnStatement(return_statement) => {
-                self.emit_return(return_statement, block)
-            }
-            Statement::IfStatement(if_statement) => self.emit_if(if_statement, block),
-            Statement::ForStatement(for_statement) => self.emit_for(for_statement, block),
-            Statement::WhileStatement(while_statement) => self.emit_while(while_statement, block),
-            Statement::DoWhileStatement(do_while) => self.emit_do_while(do_while, block),
-            Statement::BreakStatement(_) => self.emit_break(block),
-            Statement::ContinueStatement(_) => self.emit_continue(block),
-            Statement::Block(inner) => self.emit_block(inner.statements(), block),
-            Statement::UncheckedBlock(inner) => {
-                let saved_checked = self.checked;
-                self.checked = false;
-                let result = self.emit_block(inner.block().statements(), block);
-                self.checked = saved_checked;
-                result
-            }
-            Statement::RevertStatement(revert) => self.emit_revert(revert, block),
-            Statement::EmitStatement(emit_statement) => self.emit_event(emit_statement, block),
-            _ => anyhow::bail!(
-                "unsupported statement: {:?}",
-                std::mem::discriminant(statement)
-            ),
-        }
-    }
-
-    /// Emits a sequence of statements inside a new lexical scope.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any statement contains unsupported constructs.
-    pub fn emit_block(
-        &mut self,
-        statements: Statements,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        self.environment.enter_scope();
-        let mut current = block;
-        for statement in statements.iter() {
-            match self.emit(&statement, current)? {
-                Some(next) => current = next,
-                None => {
-                    self.environment.exit_scope();
-                    return Ok(None);
-                }
-            }
-        }
-        self.environment.exit_scope();
-        Ok(Some(current))
-    }
-
-    /// Emits a `sol.break` terminator.
-    fn emit_break(
-        &self,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        self.state.builder.emit_sol_break(&block);
-        Ok(None)
-    }
-
-    /// Emits a `sol.continue` terminator.
-    fn emit_continue(
-        &self,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        self.state.builder.emit_sol_continue(&block);
-        Ok(None)
-    }
-
-    /// Emits a return statement.
-    ///
-    /// A multi-element tuple expression in the return position is unpacked
-    /// into one value per declared return slot; any other expression yields
-    /// a single value. Each value is cast to its corresponding declared
-    /// return type before being emitted as a `sol.return` operand.
-    fn emit_return(
-        &mut self,
-        return_statement: &slang_solidity_v2::ast::ReturnStatement,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let Some(expression) = return_statement.expression() else {
-            self.state.builder.emit_sol_return(&[], &block);
-            return Ok(None);
-        };
-
-        let emitter = ExpressionEmitter::new(
-            self.state,
-            self.environment,
-            self.storage_layout,
-            self.checked,
-        );
-
-        let (values, block) = if let Expression::TupleExpression(tuple) = &expression
-            && tuple.items().len() > 1
-        {
-            let items = tuple.items();
-            let mut values = Vec::with_capacity(items.len());
-            let mut current = block;
-            for item in items.iter() {
-                let inner = item
-                    .expression()
-                    .ok_or_else(|| anyhow::anyhow!("empty tuple element in return"))?;
-                let (value, next) = emitter.emit_value(&inner, current)?;
-                values.push(value);
-                current = next;
-            }
-            (values, current)
-        } else {
-            let (value, block) = emitter.emit_value(&expression, block)?;
-            (vec![value], block)
-        };
-
-        let cast_values: Vec<_> = values
-            .into_iter()
-            .zip(self.return_types.iter())
-            .map(|(value, &return_type)| {
-                TypeConversion::from_target_type(return_type, &self.state.builder).emit(
-                    value,
-                    &self.state.builder,
+// A multi-element tuple return is unpacked into one value per declared slot; any other expression
+// yields a single value. Each is cast to its declared return type before the `sol.return`.
+statement_emit!(ReturnStatement; |node, context, block| {
+    let Some(expression) = node.expression() else {
+        // A bare `return;` returns the current return-slot values (zero for an unset slot) so the
+        // `sol.return` arity matches the function — a 0-operand return would otherwise fail verification.
+        let builder = &context.state.builder;
+        let mut values = Vec::with_capacity(context.return_types.len());
+        for (index, &return_type) in context.return_types.iter().enumerate() {
+            let value = match context.return_slots.get(index).copied().flatten() {
+                Some(pointer) => Pointer::new(pointer)
+                    .load(AstType::new(return_type), builder, &block)
+                    .into_mlir(),
+                // A typed zero only materialises for an integer return; `constant(0, …)` on a
+                // non-integer type hits an MLIR integer-attr assertion (a C++ crash).
+                None if IntegerType::try_from(return_type).is_ok() => AstValue::constant(
+                    0,
+                    AstType::new(return_type),
+                    builder,
                     &block,
                 )
-            })
-            .collect();
+                .into_mlir(),
+                None => {
+                    unimplemented!("zero-init of a non-integer unnamed return is not yet supported")
+                }
+            };
+            values.push(value);
+        }
+        mlir_op_void!(builder, &block, ReturnOperation.operands(&values));
+        return None;
+    };
 
-        self.state.builder.emit_sol_return(&cast_values, &block);
-        Ok(None)
+    let emitter = ExpressionContext::from(&*context);
+
+    let (values, block) = if let Expression::TupleExpression(tuple) = &expression
+        && tuple.items().len() > 1
+    {
+        let items = tuple.items();
+        let mut values = Vec::with_capacity(items.len());
+        let mut current = block;
+        for item in items.iter() {
+            let inner = item
+                .expression()
+                .expect("slang validated");
+            let BlockAnd { value, block: next } = inner.emit(&emitter, current);
+            values.push(value);
+            current = next;
+        }
+        (values, current)
+    } else {
+        // A single-value return materialises a string literal toward the declared return type
+        // (a `bytesN`/`byte` constant), not a runtime string the cast would reject.
+        let return_type = context.return_types[0];
+        let BlockAnd { value, block } = expression.emit_as(return_type, &emitter, block);
+        (vec![value], block)
+    };
+
+    let cast_values: Vec<_> = values
+        .into_iter()
+        .zip(context.return_types.iter())
+        .map(|(value, &return_type)| {
+            value
+                .cast(
+                    AstType::new(return_type),
+                    &context.state.builder,
+                    &block,
+                )
+                .into_mlir()
+        })
+        .collect();
+
+    mlir_op_void!(
+        &context.state.builder,
+        &block,
+        ReturnOperation.operands(&cast_values)
+    );
+    None
+});
+
+statement_emit!(Block; |node, context, block| {
+    // A `{ … }` block emits its statements in a fresh lexical scope, threading the
+    // continuation block and short-circuiting the moment control diverges.
+    context.environment.enter_scope();
+    let result = node
+        .statements()
+        .iter()
+        .try_fold(block, |block, statement| statement.emit(context, block));
+    context.environment.exit_scope();
+    result
+});
+
+statement_emit!(BreakStatement; |context, block| {
+    mlir_op_void!(&context.state.builder, &block, BreakOperation);
+    None
+});
+
+statement_emit!(ContinueStatement; |context, block| {
+    mlir_op_void!(&context.state.builder, &block, ContinueOperation);
+    None
+});
+
+// A bare expression statement discards its value but keeps its side effects, classified once
+// ([`ExpressionStatementKind`]) and emitted by kind.
+statement_emit!(ExpressionStatement; |node, context, block| {
+    match ExpressionStatementKind::from_statement(node) {
+        ExpressionStatementKind::RevertCall(call) => {
+            let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
+            else {
+                unimplemented!("only positional arguments supported");
+            };
+            // `sol.revert` is not a terminator; the block stays live for the
+            // caller (an enclosing yield or the epilogue default return).
+            let block = match positional_arguments.iter().next() {
+                // `revert()` — a no-data revert.
+                None => {
+                    let builder = &context.state.builder;
+                    mlir_op_void!(
+                        builder,
+                        &block,
+                        RevertOperation
+                            .signature(StringAttribute::new(builder.context, ""))
+                            .args(&[])
+                    );
+                    block
+                }
+                // A string literal bakes the message into the op as the
+                // `Error(string)` payload (no runtime encoding).
+                Some(Expression::StringExpression(string_expression)) => {
+                    let message = String::from_utf8(string_expression.value())
+                        .expect("revert message is valid UTF-8");
+                    // `revert("")` would emit ambiguous bytecode under the current Sol dialect;
+                    // a no-data revert must be written as `revert()`.
+                    if message.is_empty() {
+                        unimplemented!(
+                            "revert(\"\") is not supported; use revert() for a no-data revert"
+                        );
+                    }
+                    let builder = &context.state.builder;
+                    mlir_op_void!(
+                        builder,
+                        &block,
+                        RevertOperation
+                            .signature(StringAttribute::new(builder.context, &message))
+                            .args(&[])
+                    );
+                    block
+                }
+                // A non-literal runtime message is not yet supported.
+                Some(_) => unimplemented!("runtime revert message is not yet supported"),
+            };
+            Some(block)
+        }
+        ExpressionStatementKind::Value(expression) => {
+            let emitter = ExpressionContext::from(&*context);
+            Some(expression.emit_for_effect(&emitter, block))
+        }
+    }
+});
+
+statement_emit!(UncheckedBlock; |node, context, block| {
+    let saved_mode = context.arithmetic_mode;
+    context.arithmetic_mode = ArithmeticMode::Unchecked;
+    let result = node.block().emit(context, block);
+    context.arithmetic_mode = saved_mode;
+    result
+});
+
+impl<'context: 'block, 'block> EmitStatement<'context, 'block> for Statement {
+    /// Dispatches a statement to its variant's emission, threading the
+    /// continuation block (`None` when control diverged).
+    fn emit<'state>(
+        &self,
+        context: &mut StatementContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> Option<BlockRef<'context, 'block>> {
+        match self {
+            Statement::VariableDeclarationStatement(inner) => inner.emit(context, block),
+            Statement::ExpressionStatement(inner) => inner.emit(context, block),
+            Statement::ReturnStatement(inner) => inner.emit(context, block),
+            Statement::IfStatement(inner) => inner.emit(context, block),
+            Statement::ForStatement(inner) => inner.emit(context, block),
+            Statement::WhileStatement(inner) => inner.emit(context, block),
+            Statement::DoWhileStatement(inner) => inner.emit(context, block),
+            Statement::BreakStatement(inner) => inner.emit(context, block),
+            Statement::ContinueStatement(inner) => inner.emit(context, block),
+            Statement::Block(inner) => inner.emit(context, block),
+            Statement::UncheckedBlock(inner) => inner.emit(context, block),
+            Statement::RevertStatement(inner) => inner.emit(context, block),
+            Statement::EmitStatement(inner) => inner.emit(context, block),
+            Statement::AssemblyStatement(_) => unimplemented!("inline assembly is not yet supported"),
+            Statement::TryStatement(_) => unimplemented!("try/catch is not yet supported"),
+        }
     }
 }

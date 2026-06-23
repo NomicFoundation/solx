@@ -2,12 +2,7 @@
 //! Length parameter for `sol::ArrayType`.
 //!
 
-/// Length of a `sol::ArrayType`.
-///
-/// The dialect's TableGen definition encodes the length as `int64_t`, with
-/// `-1` reserved as the sentinel for dynamic length. This enum keeps that
-/// encoding inside `solx-mlir` so call sites name the kind they want instead
-/// of passing a magic number.
+/// Length of a `sol::ArrayType` — the dialect encodes this as `int64_t` with `-1` for dynamic length.
 pub enum ArraySize {
     /// Dynamic-length array (Solidity `T[]`).
     Dynamic,

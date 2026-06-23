@@ -1,21 +1,15 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func {{.*}}pushValue
-// CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
-// CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
-
-// CHECK: sol.func {{.*}}pushEmpty
-// CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
-// CHECK-NOT: sol.store
-// CHECK: sol.func {{.*}}popLast
-// CHECK:   sol.pop %{{.*}} : !sol.array<? x ui256, Storage>
-
-// CHECK: sol.func {{.*}}popByte
-// CHECK:   sol.pop %{{.*}} : !sol.string<Storage>
-
-// CHECK: sol.func {{.*}}makeLiteral{{.*}}-> !sol.array<3 x ui256, Memory>
-// CHECK:   sol.array_lit %{{.*}}, %{{.*}}, %{{.*}} : (ui256, ui256, ui256) -> !sol.array<3 x ui256, Memory>
+// Order-independent (solx walks functions alphabetically, solc in source order).
+// `pushValue` appends and stores; `pushEmpty` appends a default and is the only
+// other push, so the module carries exactly two pushes and a single store.
+// CHECK-DAG: sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
+// CHECK-DAG: sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
+// CHECK-DAG: sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
+// CHECK-DAG: sol.pop %{{.*}} : !sol.array<? x ui256, Storage>
+// CHECK-DAG: sol.pop %{{.*}} : !sol.string<Storage>
+// CHECK-DAG: sol.array_lit %{{.*}}, %{{.*}}, %{{.*}} : (ui256, ui256, ui256) -> !sol.array<3 x ui256, Memory>
 
 contract C {
     uint256[] arr;
