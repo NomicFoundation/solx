@@ -147,6 +147,24 @@ statement_emit!(ReturnStatement; |node, context, block| {
             current = next;
         }
         (values, current)
+    } else if context.return_types.len() > 1 {
+        // A single expression yielding multiple values (a tuple-returning call or a tuple-branch
+        // conditional) expands its full result list so the `sol.return` arity matches.
+        let BlockAnd { value: values, block } = match &expression {
+            Expression::FunctionCallExpression(call) => {
+                call.emit(&emitter, block)
+            }
+            Expression::ConditionalExpression(conditional) => {
+                conditional.emit(&emitter, block)
+            }
+            _ => {
+                unimplemented!("multi-value return of a non-call expression is not supported")
+            }
+        };
+        (
+            values.into_iter().map(AstValue::from).collect(),
+            block,
+        )
     } else {
         // A single-value return materialises a string literal toward the declared return type
         // (a `bytesN`/`byte` constant), not a runtime string the cast would reject.
