@@ -231,7 +231,7 @@ impl<'context, 'block> Value<'context, 'block> {
                 Self::malloc(mlir_type, None, true, builder, block)
             }
             Some(SlangType::Struct(structure)) if is_memory(structure.location()) => {
-                unimplemented!("default for a memory struct is not yet supported")
+                Self::malloc(mlir_type, None, true, builder, block)
             }
             Some(SlangType::Array(array)) if is_memory(array.location()) => {
                 Self::malloc(mlir_type, None, true, builder, block)

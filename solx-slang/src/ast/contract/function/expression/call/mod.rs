@@ -55,27 +55,11 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
         let callee = self.operand();
         let arguments = self.arguments();
 
-        // `T(x)` / `bytesN("…")`: an explicit 1-argument type conversion coerces
-        // the argument to the call's own type.
-        if self.is_type_conversion()
-            && let ArgumentsDeclaration::PositionalArguments(positional) = &arguments
-            && positional.len() == 1
-        {
-            let first = positional.iter().next().expect("slang validated");
-            let target_type = AstType::resolve_optional(self.get_type(), &context.state.builder)
-                .expect("slang validated");
-            let BlockAnd { value, block } = first.emit_as(target_type, context, block);
-            return BlockAnd {
-                value: vec![value.into_mlir()],
-                block,
-            };
-        }
-
-        // A bare-identifier callee resolving to a struct definition is a struct constructor
-        // (`S(a, b)`): allocate the struct in memory, order field initialisers by declaration,
-        // store each coerced.
+        // A callee resolving to a struct definition is a struct constructor (`S(a, b)` / `Lib.S(...)`):
+        // allocate the struct in memory, order field initialisers by declaration, store each coerced.
         let struct_callee = match &callee {
             Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+            Expression::MemberAccessExpression(access) => access.member().resolve_to_definition(),
             _ => None,
         };
         if let Some(Definition::Struct(struct_definition)) = struct_callee {
@@ -125,6 +109,22 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             }
             return BlockAnd {
                 value: vec![struct_address],
+                block,
+            };
+        }
+
+        // `T(x)` / `bytesN("…")`: an explicit 1-argument type conversion coerces
+        // the argument to the call's own type.
+        if self.is_type_conversion()
+            && let ArgumentsDeclaration::PositionalArguments(positional) = &arguments
+            && positional.len() == 1
+        {
+            let first = positional.iter().next().expect("slang validated");
+            let target_type = AstType::resolve_optional(self.get_type(), &context.state.builder)
+                .expect("slang validated");
+            let BlockAnd { value, block } = first.emit_as(target_type, context, block);
+            return BlockAnd {
+                value: vec![value.into_mlir()],
                 block,
             };
         }
