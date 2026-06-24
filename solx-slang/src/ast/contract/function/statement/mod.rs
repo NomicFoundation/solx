@@ -13,6 +13,7 @@ pub mod variable_declaration;
 
 use std::collections::HashMap;
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Region;
@@ -241,18 +242,13 @@ statement_emit!(ExpressionStatement; |node, context, block| {
                     );
                     block
                 }
-                // A string literal bakes the message into the op as the
+                // A non-empty string literal bakes the message into the op as the
                 // `Error(string)` payload (no runtime encoding).
-                Some(Expression::StringExpression(string_expression)) => {
+                Some(Expression::StringExpression(string_expression))
+                    if !string_expression.value().is_empty() =>
+                {
                     let message = String::from_utf8(string_expression.value())
                         .expect("revert message is valid UTF-8");
-                    // `revert("")` would emit ambiguous bytecode under the current Sol dialect;
-                    // a no-data revert must be written as `revert()`.
-                    if message.is_empty() {
-                        unimplemented!(
-                            "revert(\"\") is not supported; use revert() for a no-data revert"
-                        );
-                    }
                     let builder = &context.state.builder;
                     mlir_op_void!(
                         builder,
@@ -263,8 +259,31 @@ statement_emit!(ExpressionStatement; |node, context, block| {
                     );
                     block
                 }
-                // A non-literal runtime message is not yet supported.
-                Some(_) => unimplemented!("runtime revert message is not yet supported"),
+                // A non-literal message or empty literal is evaluated at runtime and ABI-encoded
+                // under the `Error(string)` selector.
+                Some(expression) => {
+                    let emitter = ExpressionContext::from(&*context);
+                    let BlockAnd {
+                        value: message_value,
+                        block,
+                    } = expression.emit(&emitter, block);
+                    let builder = &context.state.builder;
+                    let string_memory_type =
+                        AstType::string(builder.context, solx_utils::DataLocation::Memory)
+                            .into_mlir();
+                    let message_value = message_value
+                        .cast(AstType::new(string_memory_type), builder, &block)
+                        .into_mlir();
+                    mlir_op_void!(
+                        builder,
+                        &block,
+                        RevertOperation
+                            .signature(StringAttribute::new(builder.context, "Error(string)"))
+                            .args(&[message_value])
+                            .call(Attribute::unit(builder.context))
+                    );
+                    block
+                }
             };
             Some(block)
         }

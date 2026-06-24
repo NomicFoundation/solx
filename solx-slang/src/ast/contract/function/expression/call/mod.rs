@@ -200,30 +200,91 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             block
                         }
                         Some(expression) => {
-                            // A runtime message expression is ABI-encoded under the
-                            // `Error(string)` selector via the `call` form of `sol.require`.
-                            let BlockAnd {
-                                value: message_value,
-                                block,
-                            } = expression.emit(context, block);
-                            let string_memory_type = AstType::string(
-                                builder.context,
-                                solx_utils::DataLocation::Memory,
-                            )
-                            .into_mlir();
-                            let message_value = message_value
-                                .cast(AstType::new(string_memory_type), builder, &block)
+                            // `require(cond, CustomError(args))` (Solidity ≥ 0.8.26)
+                            // lowers to the `call` form of `sol.require` carrying the
+                            // error's canonical signature and its ABI-encoded
+                            // arguments — the same payload `revert CustomError(args)`
+                            // builds, but guarded by the condition. Any other runtime
+                            // expression is ABI-encoded under the `Error(string)`
+                            // selector.
+                            if let Expression::FunctionCallExpression(error_call) = &expression
+                                && let Some(Definition::Error(error_definition)) =
+                                    (match error_call.operand() {
+                                        Expression::Identifier(identifier) => {
+                                            identifier.resolve_to_definition()
+                                        }
+                                        Expression::MemberAccessExpression(access) => {
+                                            access.member().resolve_to_definition()
+                                        }
+                                        _ => None,
+                                    })
+                            {
+                                let signature = error_definition
+                                    .compute_canonical_signature()
+                                    .expect("slang validated");
+                                let parameters = error_definition.parameters();
+                                let ArgumentsDeclaration::PositionalArguments(error_arguments) =
+                                    error_call.arguments()
+                                else {
+                                    unimplemented!(
+                                        "named arguments in a require custom error are not yet supported"
+                                    );
+                                };
+                                let parameter_types: Vec<_> = parameters
+                                    .iter()
+                                    .map(|parameter| {
+                                        AstType::resolve(
+                                            &parameter.get_type().expect("slang validated"),
+                                            LocationPolicy::Declared(None),
+                                            &context.state.builder,
+                                        )
+                                    })
+                                    .collect();
+                                let error_argument_expressions: Vec<Expression> =
+                                    error_arguments.iter().collect();
+                                let BlockAnd {
+                                    value: argument_values,
+                                    block: current_block,
+                                } = error_argument_expressions.emit_as(
+                                    &parameter_types,
+                                    context,
+                                    block,
+                                );
+                                let builder = &context.state.builder;
+                                mlir_op_void!(
+                                    builder,
+                                    &current_block,
+                                    RequireOperation
+                                        .cond(condition_boolean)
+                                        .args(&argument_values)
+                                        .msg(StringAttribute::new(builder.context, &signature))
+                                        .call(Attribute::unit(builder.context))
+                                );
+                                current_block
+                            } else {
+                                let BlockAnd {
+                                    value: message_value,
+                                    block,
+                                } = expression.emit(context, block);
+                                let string_memory_type = AstType::string(
+                                    builder.context,
+                                    solx_utils::DataLocation::Memory,
+                                )
                                 .into_mlir();
-                            mlir_op_void!(
-                                builder,
-                                &block,
-                                RequireOperation
-                                    .cond(condition_boolean)
-                                    .args(&[message_value])
-                                    .msg(StringAttribute::new(builder.context, "Error(string)"))
-                                    .call(Attribute::unit(builder.context))
-                            );
-                            block
+                                let message_value = message_value
+                                    .cast(AstType::new(string_memory_type), builder, &block)
+                                    .into_mlir();
+                                mlir_op_void!(
+                                    builder,
+                                    &block,
+                                    RequireOperation
+                                        .cond(condition_boolean)
+                                        .args(&[message_value])
+                                        .msg(StringAttribute::new(builder.context, "Error(string)"))
+                                        .call(Attribute::unit(builder.context))
+                                );
+                                block
+                            }
                         }
                         None => {
                             mlir_op_void!(
