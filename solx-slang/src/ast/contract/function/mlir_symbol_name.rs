@@ -15,6 +15,10 @@ pub trait MlirSymbolName {
 
     /// The base identifier of this function's MLIR symbol (a synthesised name for fallback / receive / constructor).
     fn mlir_base_name(&self) -> String;
+
+    /// This function's MLIR symbol qualified by its node id, so two free functions of the same
+    /// signature (reachable together via an alias) do not collide.
+    fn node_id_qualified_symbol(&self) -> String;
 }
 
 impl MlirSymbolName for FunctionDefinition {
@@ -40,5 +44,9 @@ impl MlirSymbolName for FunctionDefinition {
             FunctionKind::Constructor => "constructor".to_owned(),
             FunctionKind::Modifier => unreachable!("modifiers are not emitted as functions"),
         }
+    }
+
+    fn node_id_qualified_symbol(&self) -> String {
+        format!("{}#{:?}", self.mlir_function_name(), self.node_id())
     }
 }
