@@ -99,6 +99,12 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
             let BlockAnd { value, block } = call.emit(&emitter, block);
             (value, block)
         }
+        Expression::ConditionalExpression(conditional) => {
+            // `(a, b) = cond ? (x, y) : (z, w)` — the conditional yields one
+            // value per tuple element through its own Emit.
+            let BlockAnd { value, block } = conditional.emit(&emitter, block);
+            (value, block)
+        }
         _ => unimplemented!(
             "tuple deconstruction with this right-hand side shape is not yet supported"
         ),
