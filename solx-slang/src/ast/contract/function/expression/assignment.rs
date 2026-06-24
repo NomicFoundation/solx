@@ -11,6 +11,7 @@ use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::AssignmentExpression;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::TupleExpression;
 use solx_mlir::ods::sol::DeleteOperation;
 
 use crate::ast::BlockAnd;
@@ -167,6 +168,88 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         }
     }
 
+    /// Collects the `(lvalue, value)` bindings of a destructuring assignment `(a, b, …) = rhs`,
+    /// evaluating every value before any store (so `(a, b) = (b, a)` swaps). A blank slot discards its RHS.
+    fn destructure<'state>(
+        context: &ExpressionContext<'state, 'context, 'block>,
+        lhs: &TupleExpression,
+        rhs: &Expression,
+        mut block: BlockRef<'context, 'block>,
+    ) -> (
+        Vec<(Expression, Value<'context, 'block>)>,
+        BlockRef<'context, 'block>,
+    ) {
+        let mut bindings = Vec::new();
+        match rhs {
+            Expression::TupleExpression(rhs) => {
+                for (lvalue, rhs) in lhs.items().iter().zip(rhs.items().iter()) {
+                    let rhs = rhs.expression().expect("slang validated");
+                    match (lvalue.expression(), &rhs) {
+                        (
+                            Some(Expression::TupleExpression(lvalue)),
+                            Expression::TupleExpression(_),
+                        ) => {
+                            let (nested, next) = Self::destructure(context, &lvalue, &rhs, block);
+                            bindings.extend(nested);
+                            block = next;
+                        }
+                        (Some(lvalue), _) => {
+                            let BlockAnd { value, block: next } = rhs.emit(context, block);
+                            bindings.push((lvalue, value.into_mlir()));
+                            block = next;
+                        }
+                        (None, Expression::TupleExpression(_)) => {}
+                        (None, _) => block = rhs.emit(context, block).block,
+                    }
+                }
+            }
+            _ => {
+                let BlockAnd {
+                    value: values,
+                    block: next,
+                } = match rhs {
+                    Expression::FunctionCallExpression(call) => call.emit(context, block),
+                    Expression::ConditionalExpression(conditional) => {
+                        conditional.emit(context, block)
+                    }
+                    _ => unimplemented!(
+                        "tuple assignment with this right-hand side shape is not yet supported"
+                    ),
+                };
+                block = next;
+                for (lvalue, value) in lhs.items().iter().zip(values) {
+                    if let Some(lvalue) = lvalue.expression() {
+                        bindings.push((lvalue, value));
+                    }
+                }
+            }
+        }
+        (bindings, block)
+    }
+
+    /// Resolves each lvalue left-to-right against the pre-assignment state, then stores RIGHT-TO-LEFT
+    /// so the leftmost write to an aliased destination wins. Returns the last stored value, or zero if all blank.
+    fn store_all<'state>(
+        context: &ExpressionContext<'state, 'context, 'block>,
+        bindings: Vec<(Expression, Value<'context, 'block>)>,
+        mut block: BlockRef<'context, 'block>,
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
+        let mut targets = Vec::with_capacity(bindings.len());
+        for (lvalue, value) in bindings {
+            let (target, next) = Self::new(context, &lvalue, block);
+            block = next;
+            targets.push((target, value));
+        }
+        let result = targets
+            .into_iter()
+            .rev()
+            .fold(None, |_, (target, value)| {
+                Some(target.store(context, value, &block))
+            })
+            .unwrap_or_else(|| AstValue::uint256(0, &context.state.builder, &block).into_mlir());
+        (result, block)
+    }
+
     /// Emits `delete x` — resets the lvalue to its zero. A storage aggregate is deep-cleared via
     /// `sol.delete`; a memory aggregate resets to a zero-filled buffer; a value lvalue to its typed zero.
     pub fn delete<'state>(
@@ -233,8 +316,15 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
 
 // An assignment expression (`=`, `+=`, `-=`, `*=`, …).
 expression_emit!(AssignmentExpression; |node, context, block| {
-    let left = node.left_operand();
+    // `(x) = v` is the scalar `x = v`; a multi-element (or blank-bearing) tuple
+    // on the left is a destructuring assignment.
+    let left = node.left_operand().unwrap_parentheses();
     let right = node.right_operand();
+    if let Expression::TupleExpression(tuple) = &left {
+        let (bindings, block) = AssignmentTarget::destructure(context, tuple, &right, block);
+        let (value, block) = AssignmentTarget::store_all(context, bindings, block);
+        return BlockAnd { block, value: value.into() };
+    }
 
     let (target, block) = AssignmentTarget::new(context, &left, block);
     let (value, block) = if matches!(node.operator(), ast::AssignmentExpressionOperator::Equal(_)) {
