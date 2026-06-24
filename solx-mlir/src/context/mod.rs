@@ -7,8 +7,12 @@ pub mod environment;
 pub mod function;
 pub mod pointer;
 pub mod r#type;
+pub mod user_defined_operator;
 pub mod value;
 
+pub use self::user_defined_operator::UserDefinedOperator;
+
+use std::cell::Cell;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Once;
@@ -41,10 +45,16 @@ pub struct Context<'context> {
     pub function_signatures: HashMap<NodeId, Function<'context>>,
     /// MLIR type of the contract being emitted (types `this`); set by the frontend before bodies.
     pub current_contract_type: Option<Type<'context>>,
+    /// User-defined operator bindings, keyed by `(udvt_definition_id, operator)` → bound function id.
+    pub operator_bindings: HashMap<(NodeId, UserDefinedOperator), NodeId>,
+    /// `super` call redirect (member-access node id → C3-linearised target); frontend pre-resolves diamonds.
+    pub super_redirect: HashMap<NodeId, NodeId>,
     /// Virtual dispatch redirect: overridden base function id → most-derived override.
     pub virtual_redirect: HashMap<NodeId, NodeId>,
     /// Cross-contract references in encounter order, drained into the linker output.
     pub dependencies: RefCell<Vec<String>>,
+    /// Monotonic internal-function-pointer dispatch tag; starts at 1 (0 is the null pointer).
+    function_id_counter: Cell<i64>,
 }
 
 impl<'context> Context<'context> {
@@ -123,8 +133,26 @@ impl<'context> Context<'context> {
             function_signatures: HashMap::new(),
             builder: Builder::new(context),
             current_contract_type: None,
+            operator_bindings: HashMap::new(),
+            super_redirect: HashMap::new(),
             virtual_redirect: HashMap::new(),
             dependencies: RefCell::new(Vec::new()),
+            function_id_counter: Cell::new(1),
+        }
+    }
+
+    /// Allocates the next internal-function-pointer dispatch tag.
+    pub fn next_function_id(&self) -> i64 {
+        let id = self.function_id_counter.get();
+        self.function_id_counter.set(id + 1);
+        id
+    }
+
+    /// Records a cross-contract reference (object name); duplicates ignored.
+    pub fn add_dependency(&self, name: String) {
+        let mut dependencies = self.dependencies.borrow_mut();
+        if !dependencies.iter().any(|existing| existing == &name) {
+            dependencies.push(name);
         }
     }
 

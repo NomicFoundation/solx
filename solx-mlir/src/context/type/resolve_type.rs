@@ -173,8 +173,16 @@ impl<'context> Type<'context> {
                 let target_type = udvt.target_type().expect("slang validated");
                 Type::resolve(&target_type, policy, builder)
             }
-            SlangType::Function(_) => {
-                unimplemented!("function pointer types are not yet supported")
+            SlangType::Function(function_type) => {
+                // A function pointer lowers to `!sol.func_ref<fnTy>` (internal)
+                // or `!sol.ext_func_ref<fnTy>` (external — address + selector).
+                let (parameter_types, result_types) =
+                    Type::function_pointer_signature(slang_type, builder);
+                if function_type.is_externally_visible() {
+                    Type::ext_func_ref(builder.context, &parameter_types, &result_types).into_mlir()
+                } else {
+                    Type::func_ref(builder.context, &parameter_types, &result_types).into_mlir()
+                }
             }
             _ => unimplemented!("unsupported Slang type"),
         }
@@ -232,6 +240,25 @@ impl<'context> Type<'context> {
                 builder,
             )],
         }
+    }
+
+    /// Resolves a function-pointer callee type's `(parameter_types, result_types)` from Slang to MLIR.
+    pub fn function_pointer_signature(
+        callee_type: &SlangType,
+        builder: &Builder<'context>,
+    ) -> (Vec<MlirType<'context>>, Vec<MlirType<'context>>) {
+        let SlangType::Function(function_type) = callee_type else {
+            unreachable!("an indirect-call callee is always a function type");
+        };
+        let parameter_types = function_type
+            .parameter_types()
+            .iter()
+            .map(|parameter_type| {
+                Type::resolve(parameter_type, LocationPolicy::Declared(None), builder)
+            })
+            .collect();
+        let result_types = Type::resolve_result_types(&function_type.return_type(), builder);
+        (parameter_types, result_types)
     }
 
     /// Resolves a parameter's declared MLIR type from its Slang type.

@@ -203,6 +203,44 @@ impl<'context> Type<'context> {
         })
     }
 
+    /// A `sol::FuncRefType` — an internal function pointer over `parameter_types -> result_types`.
+    pub fn func_ref(
+        context: &'context melior::Context,
+        parameter_types: &[MlirType<'context>],
+        result_types: &[MlirType<'context>],
+    ) -> Self {
+        let parameters: Vec<_> = parameter_types.iter().map(|t| t.to_raw()).collect();
+        let results: Vec<_> = result_types.iter().map(|t| t.to_raw()).collect();
+        Self::new(unsafe {
+            MlirType::from_raw(crate::ffi::solxCreateFuncRefType(
+                context.to_raw(),
+                parameters.as_ptr(),
+                parameters.len(),
+                results.as_ptr(),
+                results.len(),
+            ))
+        })
+    }
+
+    /// A `sol::ExtFuncRefType` — an external function reference (address + selector) over `parameter_types -> result_types`.
+    pub fn ext_func_ref(
+        context: &'context melior::Context,
+        parameter_types: &[MlirType<'context>],
+        result_types: &[MlirType<'context>],
+    ) -> Self {
+        let parameters: Vec<_> = parameter_types.iter().map(|t| t.to_raw()).collect();
+        let results: Vec<_> = result_types.iter().map(|t| t.to_raw()).collect();
+        Self::new(unsafe {
+            MlirType::from_raw(crate::ffi::solxCreateExtFuncRefType(
+                context.to_raw(),
+                parameters.as_ptr(),
+                parameters.len(),
+                results.as_ptr(),
+                results.len(),
+            ))
+        })
+    }
+
     /// Whether this is a Sol enum type (`!sol.enum<N>`).
     pub fn is_enum(self) -> bool {
         unsafe { crate::ffi::solxIsEnumType(self.inner.to_raw()) }

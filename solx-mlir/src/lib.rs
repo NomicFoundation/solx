@@ -21,6 +21,7 @@ pub use self::attributes::contract_kind::ContractKind;
 pub use self::attributes::function_kind::FunctionKind;
 pub use self::attributes::state_mutability::StateMutability;
 pub use self::context::Context;
+pub use self::context::UserDefinedOperator;
 pub use self::context::builder::Builder;
 pub use self::context::environment::Environment;
 pub use self::context::function::Function;
