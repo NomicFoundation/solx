@@ -4,6 +4,7 @@
 
 pub mod constructor;
 pub mod function;
+pub mod getter;
 pub mod object_scope;
 pub mod storage_layout;
 
