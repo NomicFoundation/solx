@@ -34,6 +34,8 @@ use slang_solidity_v2::ast::Expression;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
+use crate::ast::EmitPlace;
+use crate::ast::Place;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
@@ -195,6 +197,11 @@ impl Operator {
         operand: &Expression,
         block: BlockRef<'context, 'block>,
     ) -> (AstValue<'context, 'block>, BlockRef<'context, 'block>) {
+        if let Some((old, _new, block)) =
+            self.emit_increment_decrement_indexed(context, operand, block)
+        {
+            return (old.into(), block);
+        }
         let (old, _) = self.emit_increment_decrement(context, operand, &block);
         (old.into(), block)
     }
@@ -210,6 +217,11 @@ impl Operator {
     ) -> (AstValue<'context, 'block>, BlockRef<'context, 'block>) {
         match self {
             Operator::Increment | Operator::Decrement => {
+                if let Some((_old, new_value, block)) =
+                    self.emit_increment_decrement_indexed(context, operand, block)
+                {
+                    return (new_value.into(), block);
+                }
                 let (_old, new_value) = self.emit_increment_decrement(context, operand, &block);
                 (new_value.into(), block)
             }
@@ -304,6 +316,51 @@ impl Operator {
                 unimplemented!("unsupported operand for {self:?}: {:?}", other.node_id())
             }
         }
+    }
+
+    /// Emits `++` / `--` on a *computed* lvalue (`a[i]` or a struct field); `None` for any other operand.
+    fn emit_increment_decrement_indexed<'context, 'block>(
+        self,
+        context: &ExpressionContext<'_, 'context, 'block>,
+        operand: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> Option<(
+        Value<'context, 'block>,
+        Value<'context, 'block>,
+        BlockRef<'context, 'block>,
+    )> {
+        let (address, element_type, block) = match operand {
+            Expression::IndexAccessExpression(index_access) => {
+                let BlockAnd {
+                    value:
+                        Place {
+                            address,
+                            element_type,
+                        },
+                    block,
+                } = index_access.emit_place(context, block);
+                (address, element_type, block)
+            }
+            Expression::MemberAccessExpression(access) => {
+                let BlockAnd {
+                    value:
+                        Place {
+                            address,
+                            element_type,
+                        },
+                    block,
+                } = access.emit_place(context, block);
+                (address, element_type, block)
+            }
+            _ => return None,
+        };
+        let pointer = Pointer::new(address);
+        let old = pointer
+            .load(AstType::new(element_type), &context.state.builder, &block)
+            .into_mlir();
+        let new_value = self.emit_step(context, old, element_type, &block);
+        pointer.store(AstValue::new(new_value), &context.state.builder, &block);
+        Some((old, new_value, block))
     }
 
     /// Applies the `++` / `--` step to a loaded value: adds or subtracts a typed `1`, honoring the arithmetic mode.
