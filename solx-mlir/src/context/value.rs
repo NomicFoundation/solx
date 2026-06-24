@@ -171,8 +171,14 @@ impl<'context, 'block> Value<'context, 'block> {
             // address(0) reinterpreted as the contract (solc: ui160 -> address -> contract).
             let address = Self::zero(Type::address(builder.context, false), builder, block);
             address.cast(r#type, builder, block)
-        } else if r#type.fixed_bytes_or_byte_width().is_some() {
-            unimplemented!("zero-init of fixed-bytes type is not yet supported")
+        } else if let Some(width) = r#type.fixed_bytes_or_byte_width() {
+            let bits = Self::constant(
+                0,
+                Type::unsigned(builder.context, (width * 8) as usize),
+                builder,
+                block,
+            );
+            bits.cast(r#type, builder, block)
         } else if r#type.is_enum() {
             unimplemented!("zero-init of enum type is not yet supported")
         } else if r#type.is_ext_function_ref() {
@@ -231,7 +237,8 @@ impl<'context, 'block> Value<'context, 'block> {
                 Self::malloc(mlir_type, None, true, builder, block)
             }
             Some(SlangType::String(_) | SlangType::Bytes(_)) => {
-                unimplemented!("default for a string / bytes value is not yet supported")
+                // A fresh zero-length buffer (plain `sol.malloc`), not a sized `new bytes(0)`.
+                Self::malloc(mlir_type, None, false, builder, block)
             }
             Some(
                 SlangType::Address(_)

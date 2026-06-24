@@ -15,6 +15,7 @@ use slang_solidity_v2::ast::TupleExpression;
 use solx_mlir::ods::sol::DeleteOperation;
 
 use crate::ast::BlockAnd;
+use crate::ast::EmitAs;
 use crate::ast::EmitExpression;
 use crate::ast::EmitPlace;
 use crate::ast::LocationPolicy;
@@ -82,6 +83,33 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                     block,
                 } = access.emit_place(context, block);
                 (Self::from_address(address, element_type), block)
+            }
+            Expression::FunctionCallExpression(call)
+                if matches!(
+                    &call.operand(),
+                    Expression::MemberAccessExpression(access)
+                        if matches!(
+                            access.member().resolve_to_built_in(),
+                            Some(ast::BuiltIn::ArrayPush)
+                        )
+                ) =>
+            {
+                // `arr.push() = v` — `push` appends a default element and returns a
+                // reference to it; that reference is the lvalue (like `arr.push(v)`).
+                let Expression::MemberAccessExpression(access) = call.operand() else {
+                    unreachable!("guarded by the match arm");
+                };
+                let base_slang_type = access.operand().get_type().expect("slang validated");
+                let BlockAnd {
+                    value: array_value,
+                    block,
+                } = access.operand().emit(context, block);
+                let (new_slot, element_type) =
+                    array_value.push_slot(&base_slang_type, &context.state.builder, &block);
+                (
+                    Self::from_address(new_slot.into_mlir(), element_type),
+                    block,
+                )
             }
             _ => unimplemented!(
                 "assignment target {:?} is not yet supported",
@@ -328,8 +356,20 @@ expression_emit!(AssignmentExpression; |node, context, block| {
 
     let (target, block) = AssignmentTarget::new(context, &left, block);
     let (value, block) = if matches!(node.operator(), ast::AssignmentExpressionOperator::Equal(_)) {
-        let BlockAnd { value, block } = right.emit(context, block);
-        (value, block)
+        // A string literal assigned to a `bytesN` / `byte` value lvalue is a
+        // fixed-bytes constant; emit it toward the target's element type so it
+        // does not become a runtime `sol.string` the store would reject.
+        match &target {
+            AssignmentTarget::Pointer(_, element_type)
+            | AssignmentTarget::Storage(_, element_type) => {
+                let BlockAnd { value, block } = right.emit_as(*element_type, context, block);
+                (value, block)
+            }
+            AssignmentTarget::ReferenceCopy(_) => {
+                let BlockAnd { value, block } = right.emit(context, block);
+                (value, block)
+            }
+        }
     } else {
         let operator = match node.operator() {
             ast::AssignmentExpressionOperator::AmpersandEqual(_) => Operator::BitwiseAnd,
@@ -367,6 +407,8 @@ expression_emit!(AssignmentExpression; |node, context, block| {
             ),
         };
         let BlockAnd { value: rhs, block } = right.emit(context, block);
+        // Shares the binary-operation emitter with `a op b` so a compound bitwise assignment
+        // on a `bytesN` / `byte` lvalue gets the same fixed-bytes bridge.
         let result = operator.emit_value_binary(
             context.arithmetic_mode,
             &context.state.builder,

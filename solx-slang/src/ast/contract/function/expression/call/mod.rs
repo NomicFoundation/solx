@@ -22,10 +22,12 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::AssertOperation;
+use solx_mlir::ods::sol::ConcatOperation;
 use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
 use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::PopOperation;
+use solx_mlir::ods::sol::PushStringOperation;
 use solx_mlir::ods::sol::RequireOperation;
 use solx_mlir::ods::sol::Ripemd160Operation;
 use solx_mlir::ods::sol::SendOperation;
@@ -541,34 +543,93 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             let base = access.operand();
                             let base_slang_type = base.get_type().expect("slang validated");
                             let value_argument = positional.iter().next();
-                            if value_argument.is_some()
-                                && matches!(&base_slang_type, SlangType::Bytes(_))
+                            if let (SlangType::Bytes(_), Some(value_argument)) =
+                                (&base_slang_type, &value_argument)
                             {
-                                unimplemented!(
-                                    "bytes.push(x) lowers to sol.push_string, which is not yet wired"
-                                );
-                            }
-                            let BlockAnd {
-                                value: array_value,
-                                block,
-                            } = access.operand().emit(context, block);
-                            let (new_slot, element_type) = array_value.push_slot(
-                                &base_slang_type,
-                                &context.state.builder,
-                                &block,
-                            );
-                            let new_slot = new_slot.into_mlir();
-                            let Some(value_argument) = value_argument else {
-                                // `arr.push()` in value position yields the raw push slot.
-                                return BlockAnd {
-                                    value: vec![new_slot],
+                                // `bytes.push(x)` appends a single byte in place via `sol.push_string`;
+                                // the packed element is not separately addressable, so there is no returned slot.
+                                let BlockAnd {
+                                    value: bytes_reference,
                                     block,
+                                } = base.emit(context, block);
+                                let byte_target =
+                                    AstType::fixed_bytes(context.state.builder.context, 1)
+                                        .into_mlir();
+                                let BlockAnd { value, block } =
+                                    value_argument.emit_as(byte_target, context, block);
+                                let builder = &context.state.builder;
+                                let byte_value = value.into_mlir();
+                                mlir_op_void!(
+                                    builder,
+                                    &block,
+                                    PushStringOperation.addr(bytes_reference).value(byte_value)
+                                );
+                                (None, block)
+                            } else {
+                                let base_slang_type =
+                                    access.operand().get_type().expect("slang validated");
+                                let BlockAnd {
+                                    value: array_value,
+                                    block,
+                                } = access.operand().emit(context, block);
+                                let (new_slot, element_type) = array_value.push_slot(
+                                    &base_slang_type,
+                                    &context.state.builder,
+                                    &block,
+                                );
+                                let new_slot = new_slot.into_mlir();
+                                let Some(value_argument) = value_argument else {
+                                    // `arr.push()` in value position yields the freshly-appended element via
+                                    // `sol.load` (a value element as a fresh default, a reference as its storage reference).
+                                    let builder = &context.state.builder;
+                                    let loaded = Pointer::new(new_slot)
+                                        .load(AstType::new(element_type), builder, &block)
+                                        .into_mlir();
+                                    return BlockAnd {
+                                        value: vec![loaded],
+                                        block,
+                                    };
                                 };
-                            };
-                            let BlockAnd { value, block } =
-                                value_argument.emit_as(element_type, context, block);
-                            Pointer::new(new_slot).store(value, &context.state.builder, &block);
-                            (None, block)
+                                if AstType::new(element_type).is_reference() {
+                                    // A reference-typed element is appended by copying the source memory
+                                    // aggregate into the storage slot `push` returns (a memory→storage `sol.copy`).
+                                    let BlockAnd { value, block } =
+                                        value_argument.emit(context, block);
+                                    Pointer::new(new_slot).copy_from(
+                                        value,
+                                        &context.state.builder,
+                                        &block,
+                                    );
+                                    (None, block)
+                                } else {
+                                    let BlockAnd { value, block } =
+                                        value_argument.emit_as(element_type, context, block);
+                                    Pointer::new(new_slot).store(
+                                        value,
+                                        &context.state.builder,
+                                        &block,
+                                    );
+                                    (None, block)
+                                }
+                            }
+                        }
+                        BuiltIn::StringConcat | BuiltIn::BytesConcat => {
+                            // `string.concat(...)` / `bytes.concat(...)` → `sol.concat` over the variadic
+                            // values, yielding a fresh memory string.
+                            let BlockAnd {
+                                value: values,
+                                block,
+                            } = positional.emit(context, block);
+                            let builder = &context.state.builder;
+                            let result_type =
+                                AstType::string(builder.context, solx_utils::DataLocation::Memory)
+                                    .into_mlir();
+                            let value = mlir_op!(
+                                builder,
+                                block,
+                                ConcatOperation.args(&values).result(result_type)
+                            );
+                            (Some(value), block)
                         }
                         _ => unimplemented!(
                             "unsupported call-position member built-in: {}",
