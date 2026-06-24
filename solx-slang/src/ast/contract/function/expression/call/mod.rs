@@ -46,6 +46,7 @@ use crate::ast::EmitExpression;
 use crate::ast::LocationPolicy;
 use crate::ast::Pointer;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call_options::CallOptions;
 
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCallExpression {
     type Output = BlockAnd<'context, 'block, Vec<Value<'context, 'block>>>;
@@ -57,10 +58,15 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> Self::Output {
-        let callee = self.operand();
-        // `{value, salt}` call options are extracted by C20b; until then no value/salt is forwarded.
-        let call_value: Option<Value<'context, 'block>> = None;
-        let salt: Option<Value<'context, 'block>> = None;
+        // `recv.f{value: v}(args)` / `new C{value, salt}(args)`: evaluate the option list (in source
+        // order) before the arguments, forwarding `value` as msg.value and `salt` as the CREATE2 salt.
+        let (call_value, salt, block, callee) = match self.operand().unwrap_parentheses() {
+            Expression::CallOptionsExpression(options) => {
+                let (value, salt, block) = CallOptions(&options).capture(context, block);
+                (value, salt, block, options.operand().unwrap_parentheses())
+            }
+            other => (None, None, block, other),
+        };
         let arguments = self.arguments();
 
         // A callee resolving to a struct definition is a struct constructor (`S(a, b)` / `Lib.S(...)`):
@@ -183,7 +189,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             let results = callee_value.call_indirect(
                 &argument_values,
                 &result_types,
-                None,
+                call_value,
                 false,
                 &context.state.builder,
                 &block,
@@ -511,7 +517,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             .into_mlir();
                     let operation = match kind {
                         BuiltIn::AddressCall => {
-                            let value = None.unwrap_or_else(|| {
+                            let value = call_value.unwrap_or_else(|| {
                                 AstValue::uint256(0, builder, &block).into_mlir()
                             });
                             mlir_op_build!(

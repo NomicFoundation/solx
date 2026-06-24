@@ -8,6 +8,7 @@ pub mod arithmetic;
 pub mod arithmetic_mode;
 pub mod assignment;
 pub mod call;
+pub mod call_options;
 pub mod comparison;
 pub mod conditional;
 pub mod identifier;
@@ -117,9 +118,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
             Expression::ArrayExpression(inner) => inner.emit(context, block),
             Expression::MemberAccessExpression(inner) => inner.emit(context, block),
             Expression::IndexAccessExpression(inner) => inner.emit(context, block),
-            Expression::CallOptionsExpression(_) => {
-                unimplemented!("call options are not yet supported")
-            }
+            Expression::CallOptionsExpression(inner) => inner.emit(context, block),
             Expression::NewExpression(_)
             | Expression::TypeExpression(_)
             | Expression::ElementaryType(_)
