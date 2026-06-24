@@ -70,9 +70,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 .iter()
                 .map(|member| member.node_id())
                 .collect();
-            let ArgumentsDeclaration::PositionalArguments(_) = &arguments else {
-                unimplemented!("named arguments are not yet supported");
-            };
             let arguments = arguments.ordered_by(&member_ids);
             let builder = &context.state.builder;
             let struct_address =
@@ -720,9 +717,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     .iter()
                     .map(|parameter| parameter.node_id())
                     .collect();
-                let ArgumentsDeclaration::PositionalArguments(_) = &arguments else {
-                    unimplemented!("named arguments are not yet supported");
-                };
                 let ordered = arguments.ordered_by(&parameter_ids);
                 // Virtual dispatch: a bare internal call resolving to an overridden base function is
                 // routed to the most-derived override (a non-virtual callee passes through unchanged).
