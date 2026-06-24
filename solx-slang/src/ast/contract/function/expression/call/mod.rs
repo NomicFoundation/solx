@@ -15,6 +15,7 @@ use melior::ir::attribute::StringAttribute;
 use num_bigint::BigInt;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::BuiltIn;
+use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
@@ -578,32 +579,45 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         value: payload_value,
                         block,
                     } = payload_expression.emit(context, block);
-                    // A single MLIR result type resolved from the call's binder-assigned type.
+                    // One MLIR result type per requested type, resolved from the call's binder-assigned type.
                     let result_types: Vec<Type> = AstType::resolve_result_types(
                         &self.get_type().expect("slang validated"),
                         &context.state.builder,
                     );
-                    if result_types.len() > 1 {
-                        unimplemented!("abi.decode returning multiple values is not yet supported");
-                    }
-                    let result_type = result_types
-                        .into_iter()
-                        .next()
-                        .expect("abi.decode yields at least one result type");
                     let builder = &context.state.builder;
+                    // `sol.decode` requires a memory / calldata buffer; a storage `bytes` / `string`
+                    // is a reference, so copy it to memory first (memory / calldata pass through).
+                    let payload_value = if matches!(
+                        payload_expression
+                            .get_type()
+                            .and_then(|payload_type| payload_type.data_location()),
+                        Some(SlangDataLocation::Storage)
+                    ) {
+                        payload_value.cast(
+                            AstType::string(builder.context, solx_utils::DataLocation::Memory),
+                            builder,
+                            &block,
+                        )
+                    } else {
+                        payload_value
+                    };
                     let operation = block.append_operation(
                         DecodeOperation::builder(builder.context, builder.unknown_location)
                             .addr(payload_value.into_mlir())
-                            .outs(&[result_type])
+                            .outs(&result_types)
                             .build()
                             .into(),
                     );
-                    let value = operation
-                        .result(0)
-                        .expect("sol.decode yields one result")
-                        .into();
+                    let values = (0..result_types.len())
+                        .map(|index| {
+                            operation
+                                .result(index)
+                                .expect("sol.decode yields one result per requested type")
+                                .into()
+                        })
+                        .collect();
                     return BlockAnd {
-                        value: vec![value],
+                        value: values,
                         block,
                     };
                 }
@@ -722,9 +736,24 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                     (selector_value, block)
                                 }
                                 _ => {
-                                    unimplemented!(
-                                        "abi.encodeWithSignature with a non-literal signature is not yet supported"
-                                    )
+                                    let BlockAnd {
+                                        value: signature_value,
+                                        block: current,
+                                    } = signature_expression.emit(context, block);
+                                    let hash = AstValue::keccak256(
+                                        signature_value,
+                                        &context.state.builder,
+                                        &current,
+                                    );
+                                    let builder = &context.state.builder;
+                                    let selector_value = hash
+                                        .cast(
+                                            AstType::fixed_bytes(builder.context, 4),
+                                            builder,
+                                            &current,
+                                        )
+                                        .into_mlir();
+                                    (selector_value, current)
                                 }
                             };
                             let mut values = Vec::with_capacity(positional.len() - 1);
@@ -735,6 +764,93 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 current = next;
                             }
                             let builder = &context.state.builder;
+                            let result = AstValue::abi_encode(
+                                &values,
+                                Some(selector_value),
+                                false,
+                                builder,
+                                &current,
+                            )
+                            .into_mlir();
+                            (Some(result), current)
+                        }
+                        BuiltIn::AbiEncodeCall => {
+                            // `abi.encodeCall(callee, args)`: the callee's 4-byte selector prepended to its
+                            // ABI-encoded arguments. A static reference folds the selector to a constant; a
+                            // runtime pointer reads it via `sol.ext_func_selector`. Arguments are coerced to
+                            // the callee's parameter types, encoded from `Memory` (the external-call ABI).
+                            let mut iter = positional.iter();
+                            let function_expression = iter.next().expect("slang validated");
+                            let call_arguments = iter.next().expect("slang validated");
+                            let definition = match &function_expression {
+                                Expression::MemberAccessExpression(access) => {
+                                    access.member().resolve_to_definition()
+                                }
+                                Expression::Identifier(identifier) => {
+                                    identifier.resolve_to_definition()
+                                }
+                                _ => None,
+                            };
+                            let builder = &context.state.builder;
+                            let (selector_value, parameter_types, current) = match definition {
+                                Some(Definition::Function(function)) => {
+                                    let selector =
+                                        function.compute_selector().expect("slang validated");
+                                    let selector_value = AstValue::selector_constant(
+                                        &BigInt::from(selector),
+                                        4,
+                                        &context.state.builder,
+                                        &block,
+                                    )
+                                    .into_mlir();
+                                    let (parameter_types, _) = AstType::resolve_signature(
+                                        &function,
+                                        LocationPolicy::ForceMemory,
+                                        builder,
+                                    );
+                                    (selector_value, parameter_types, block)
+                                }
+                                _ => {
+                                    let BlockAnd {
+                                        value: function_value,
+                                        block: current,
+                                    } = function_expression.emit(context, block);
+                                    let selector_value = function_value
+                                        .ext_func_selector(builder, &current)
+                                        .into_mlir();
+                                    let SlangType::Function(function_type) =
+                                        function_expression.get_type().expect("slang validated")
+                                    else {
+                                        unreachable!(
+                                            "a non-static abi.encodeCall callee is a function pointer"
+                                        )
+                                    };
+                                    let parameter_types = function_type
+                                        .parameter_types()
+                                        .iter()
+                                        .map(|parameter_type| {
+                                            AstType::resolve(
+                                                parameter_type,
+                                                LocationPolicy::ForceMemory,
+                                                builder,
+                                            )
+                                        })
+                                        .collect();
+                                    (selector_value, parameter_types, current)
+                                }
+                            };
+                            let argument_expressions: Vec<Expression> = match call_arguments {
+                                Expression::TupleExpression(tuple) => tuple
+                                    .items()
+                                    .iter()
+                                    .filter_map(|item| item.expression())
+                                    .collect(),
+                                other => vec![other],
+                            };
+                            let BlockAnd {
+                                value: values,
+                                block: current,
+                            } = argument_expressions.emit_as(&parameter_types, context, current);
                             let result = AstValue::abi_encode(
                                 &values,
                                 Some(selector_value),
