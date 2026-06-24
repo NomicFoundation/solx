@@ -22,6 +22,9 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::AssertOperation;
+use solx_mlir::ods::sol::BareCallOperation;
+use solx_mlir::ods::sol::BareDelegateCallOperation;
+use solx_mlir::ods::sol::BareStaticCallOperation;
 use solx_mlir::ods::sol::ConcatOperation;
 use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
@@ -466,6 +469,93 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
         // struct constructor, or a member call `x.f(...)`.
         if let Expression::MemberAccessExpression(access) = &callee {
             match access.member().resolve_to_built_in() {
+                // `addr.call/delegatecall/staticcall(data)` → (success, returndata).
+                Some(
+                    kind @ (BuiltIn::AddressCall
+                    | BuiltIn::AddressDelegatecall
+                    | BuiltIn::AddressStaticcall),
+                ) => {
+                    let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                        unimplemented!("a bare low-level call takes positional arguments only");
+                    };
+                    let BlockAnd {
+                        value: address,
+                        block,
+                    } = access.operand().emit(context, block);
+                    let argument = positional.iter().next().expect("slang validated");
+                    let BlockAnd {
+                        value: input,
+                        block,
+                    } = argument.emit(context, block);
+                    let builder = &context.state.builder;
+                    // `sol.bare_call`'s input rejects a non-memory operand, so an
+                    // argument sourced from storage / calldata is copied into memory first.
+                    let input = input
+                        .cast(
+                            AstType::string(builder.context, solx_utils::DataLocation::Memory),
+                            builder,
+                            &block,
+                        )
+                        .into_mlir();
+                    let address = address.into_mlir();
+                    let status_type =
+                        AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN)
+                            .into_mlir();
+                    let ret_data_type =
+                        AstType::string(builder.context, solx_utils::DataLocation::Memory)
+                            .into_mlir();
+                    let operation = match kind {
+                        BuiltIn::AddressCall => {
+                            let value = None.unwrap_or_else(|| {
+                                AstValue::uint256(0, builder, &block).into_mlir()
+                            });
+                            mlir_op_build!(
+                                builder,
+                                BareCallOperation
+                                    .addr(address)
+                                    .gas(AstValue::gas_left(builder, &block))
+                                    .val(value)
+                                    .inp(input)
+                                    .status(status_type)
+                                    .ret_data(ret_data_type)
+                            )
+                        }
+                        BuiltIn::AddressDelegatecall => mlir_op_build!(
+                            builder,
+                            BareDelegateCallOperation
+                                .addr(address)
+                                .gas(AstValue::gas_left(builder, &block))
+                                .inp(input)
+                                .status(status_type)
+                                .ret_data(ret_data_type)
+                        ),
+                        BuiltIn::AddressStaticcall => mlir_op_build!(
+                            builder,
+                            BareStaticCallOperation
+                                .addr(address)
+                                .gas(AstValue::gas_left(builder, &block))
+                                .inp(input)
+                                .status(status_type)
+                                .ret_data(ret_data_type)
+                        ),
+                        _ => {
+                            unreachable!("bare call kind must be Call, Delegatecall, or Staticcall")
+                        }
+                    };
+                    let operation = block.append_operation(operation);
+                    let status = operation
+                        .result(0)
+                        .expect("a bare call always produces a status")
+                        .into();
+                    let ret_data = operation
+                        .result(1)
+                        .expect("a bare call always produces return data")
+                        .into();
+                    return BlockAnd {
+                        value: vec![status, ret_data],
+                        block,
+                    };
+                }
                 // `abi.decode(payload, (T))` — `sol.decode` to the result types the
                 // call's slang type resolves to (one per requested type).
                 Some(BuiltIn::AbiDecode) => {

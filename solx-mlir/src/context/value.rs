@@ -351,6 +351,20 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
+    /// The `!sol.ext_func_ref<…>` callee of an external interaction: `receiver` cast to `address`, packed with `selector`.
+    pub fn external_callee(
+        receiver: Self,
+        selector: u32,
+        parameter_types: &[MlirType<'context>],
+        return_types: &[MlirType<'context>],
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        let address = receiver.cast(Type::address(builder.context, false), builder, block);
+        let ext_func_ref_type = Type::ext_func_ref(builder.context, parameter_types, return_types);
+        Self::ext_func_constant(address, selector, ext_func_ref_type, builder, block)
+    }
+
     /// `sol.func_constant` — an internal function pointer (`!sol.func_ref<…>`) to the symbol `name`.
     pub fn function_constant(
         name: &str,
