@@ -110,8 +110,6 @@ impl<'context, 'block> Pointer<'context, 'block> {
             unimplemented!("default-init of a memory aggregate place is not yet supported")
         } else if !pointee.is_reference() {
             slot.store(Value::zero(pointee, builder, block), builder, block);
-        } else {
-            unimplemented!("default-init of a storage / calldata reference place is not yet supported")
         }
         slot
     }

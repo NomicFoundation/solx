@@ -160,9 +160,17 @@ impl<'context, 'block> Value<'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> Self {
         if r#type.is_address() {
-            unimplemented!("zero-init of address type is not yet supported")
+            let bits = Self::constant(
+                0,
+                Type::unsigned(builder.context, solx_utils::BIT_LENGTH_ETH_ADDRESS),
+                builder,
+                block,
+            );
+            bits.cast(r#type, builder, block)
         } else if r#type.is_contract() {
-            unimplemented!("zero-init of contract type is not yet supported")
+            // address(0) reinterpreted as the contract (solc: ui160 -> address -> contract).
+            let address = Self::zero(Type::address(builder.context, false), builder, block);
+            address.cast(r#type, builder, block)
         } else if r#type.fixed_bytes_or_byte_width().is_some() {
             unimplemented!("zero-init of fixed-bytes type is not yet supported")
         } else if r#type.is_enum() {
@@ -233,7 +241,7 @@ impl<'context, 'block> Value<'context, 'block> {
                 | SlangType::Function(_)
                 | SlangType::Contract(_)
                 | SlangType::Interface(_),
-            ) => unimplemented!("default for a non-integer scalar value type is not yet supported"),
+            ) => Self::zero(Type::new(mlir_type), builder, block),
             _ => Self::constant(0, Type::new(mlir_type), builder, block),
         }
     }
