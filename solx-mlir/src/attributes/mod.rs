@@ -6,3 +6,4 @@ pub mod cmp_predicate;
 pub mod contract_kind;
 pub mod function_kind;
 pub mod state_mutability;
+pub mod yul_cmp_predicate;

@@ -17,6 +17,7 @@ pub use self::emit::EmitFunction;
 pub use self::emit::EmitObject;
 pub use self::emit::EmitPlace;
 pub use self::emit::EmitStatement;
+pub use self::emit::EmitYul;
 pub use self::place::Place;
 pub use solx_mlir::LocationPolicy;
 pub use solx_mlir::Pointer;

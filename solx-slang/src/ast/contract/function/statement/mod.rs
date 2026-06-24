@@ -5,6 +5,7 @@
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
+pub mod assembly;
 pub mod control_flow;
 pub mod event;
 pub mod expression_statement_kind;
@@ -354,7 +355,7 @@ impl<'context: 'block, 'block> EmitStatement<'context, 'block> for Statement {
             Statement::UncheckedBlock(inner) => inner.emit(context, block),
             Statement::RevertStatement(inner) => inner.emit(context, block),
             Statement::EmitStatement(inner) => inner.emit(context, block),
-            Statement::AssemblyStatement(_) => unimplemented!("inline assembly is not yet supported"),
+            Statement::AssemblyStatement(inner) => inner.emit(context, block),
             Statement::TryStatement(inner) => inner.emit(context, block),
         }
     }

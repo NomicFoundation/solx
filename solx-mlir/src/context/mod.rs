@@ -9,6 +9,7 @@ pub mod pointer;
 pub mod r#type;
 pub mod user_defined_operator;
 pub mod value;
+pub mod yul_value;
 
 pub use self::user_defined_operator::UserDefinedOperator;
 

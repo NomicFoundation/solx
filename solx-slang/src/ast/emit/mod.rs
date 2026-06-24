@@ -12,6 +12,7 @@ pub mod emit_modifier_chain;
 pub mod emit_object;
 pub mod emit_place;
 pub mod emit_statement;
+pub mod emit_yul;
 
 pub use self::emit_as::EmitAs;
 pub use self::emit_constructor::EmitConstructor;
@@ -22,3 +23,4 @@ pub use self::emit_modifier_chain::EmitModifierChain;
 pub use self::emit_object::EmitObject;
 pub use self::emit_place::EmitPlace;
 pub use self::emit_statement::EmitStatement;
+pub use self::emit_yul::EmitYul;

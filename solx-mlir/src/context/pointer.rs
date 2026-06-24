@@ -103,7 +103,8 @@ impl<'context, 'block> Pointer<'context, 'block> {
     ) -> Self {
         let slot = Self::stack_slot(pointee, builder, block);
         if pointee.is_string() {
-            unimplemented!("default-init of a string / bytes place is not yet supported")
+            let buffer = Value::malloc(pointee.into_mlir(), None, false, builder, block);
+            slot.store(buffer, builder, block);
         } else if (pointee.is_array() || pointee.is_struct())
             && matches!(pointee.data_location(), DataLocation::Memory)
         {
