@@ -19,7 +19,6 @@ use melior::ir::Region;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::attribute::StringAttribute;
-use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Block;
 use slang_solidity_v2::ast::BreakStatement;
@@ -117,18 +116,13 @@ statement_emit!(ReturnStatement; |node, context, block| {
                 Some(pointer) => Pointer::new(pointer)
                     .load(AstType::new(return_type), builder, &block)
                     .into_mlir(),
-                // A typed zero only materialises for an integer return; `constant(0, …)` on a
-                // non-integer type hits an MLIR integer-attr assertion (a C++ crash).
-                None if IntegerType::try_from(return_type).is_ok() => AstValue::constant(
+                None => AstValue::constant(
                     0,
                     AstType::new(return_type),
                     builder,
                     &block,
                 )
                 .into_mlir(),
-                None => {
-                    unimplemented!("zero-init of a non-integer unnamed return is not yet supported")
-                }
             };
             values.push(value);
         }
