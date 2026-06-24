@@ -74,6 +74,13 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                 (Self::from_address(address, element_type), block)
             }
             Expression::MemberAccessExpression(access) => {
+                // A namespace-qualified state-variable lvalue (`C.x = v`) is not a struct field;
+                // resolve it like the bare `x = v`. A genuine struct field falls through below.
+                if let Some(Definition::StateVariable(state_variable)) =
+                    access.member().resolve_to_definition()
+                {
+                    return Self::from_state_variable(context, &state_variable, block);
+                }
                 let BlockAnd {
                     value:
                         Place {
@@ -118,7 +125,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         }
     }
 
-    /// Resolves a state-variable lvalue (bare `x`) to its target. Reference-typed storage
+    /// Resolves a state-variable lvalue (bare `x` or `C.x`) to its target. Reference-typed storage
     /// is copied via `sol.copy` ([`Self::ReferenceCopy`]); value-typed storage stores the scalar directly.
     fn from_state_variable<'state>(
         context: &ExpressionContext<'state, 'context, 'block>,
