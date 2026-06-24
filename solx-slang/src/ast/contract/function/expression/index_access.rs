@@ -2,11 +2,15 @@
 //! Index access expression emission: `a[i]`, `m[k]`, `s[i]`.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
+use melior::ir::Value;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::IndexAccessExpression;
+use slang_solidity_v2::ast::IndexAccessKind;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use solx_mlir::ods::sol::SliceOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
@@ -16,6 +20,7 @@ use crate::ast::LocationPolicy;
 use crate::ast::Place;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpression {
@@ -93,8 +98,74 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
     }
 }
 
-// `a[i]` / `m[k]` address the element and `sol.load` it.
+// `a[i]` / `m[k]` address the element and `sol.load` it; a slice `a[start:end]` instead produces
+// a sub-array VALUE via `sol.slice`. A dynamic-`bytes` element widens `!sol.byte` to `bytes1`.
 expression_emit!(IndexAccessExpression; |node, context, block| {
+    // A slice `a[start:end]` produces a sub-array VALUE via `sol.slice`, distinguished by `kind()`
+    // (an open-ended `a[i:]` is indistinguishable from `a[i]` by `end()` alone). Omitted `start` is
+    // `0`, omitted `end` the operand's length; both indices widen to `ui256`.
+    if matches!(node.kind(), IndexAccessKind::Slice) {
+        let base = node.operand();
+        let BlockAnd {
+            value: base_value,
+            block,
+        } = base.emit(context, block);
+        let ui256 =
+            AstType::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
+                .into_mlir();
+        let (start_value, block) = match node.start() {
+            Some(start_expression) => {
+                let BlockAnd { value, block } = start_expression.emit(context, block);
+                let value = value
+                    .cast(AstType::new(ui256), &context.state.builder, &block)
+                    .into_mlir();
+                (value, block)
+            }
+            None => {
+                let zero = AstValue::constant(
+                    0,
+                    AstType::new(ui256),
+                    &context.state.builder,
+                    &block,
+                )
+                .into_mlir();
+                (zero, block)
+            }
+        };
+        let (end_value, block) = match node.end() {
+            Some(end_expression) => {
+                let BlockAnd { value, block } = end_expression.emit(context, block);
+                let value = value
+                    .cast(AstType::new(ui256), &context.state.builder, &block)
+                    .into_mlir();
+                (value, block)
+            }
+            None => {
+                let length = base_value
+                    .length(&context.state.builder, &block)
+                    .into_mlir();
+                (length, block)
+            }
+        };
+        let result_type = AstType::resolve(
+            &node
+                .get_type()
+                .expect("slang validated"),
+            LocationPolicy::Declared(None),
+            &context.state.builder,
+        );
+        let builder = &context.state.builder;
+        let value: Value<'context, 'block> = mlir_op!(
+            builder,
+            block,
+            SliceOperation
+                .arr(base_value)
+                .start(start_value)
+                .end(end_value)
+                .res(result_type)
+        );
+        return BlockAnd { block, value: value.into() };
+    }
     let BlockAnd {
         value: Place {
             address,
@@ -107,8 +178,12 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
         &context.state.builder,
         &block,
     );
-    // A loaded element is cast to its slang-declared type (a scalar may need a fixed-bytes
-    // re-alignment).
+    // A scalar element may need a fixed-bytes re-alignment to its declared type. A reference-typed
+    // element is loaded as its canonical reference and is authoritative (slang can mis-type the
+    // result of indexing an array literal of calldata references, so trust the loaded value's type).
+    if value.r#type().is_reference() {
+        return BlockAnd { block, value };
+    }
     let result_type = node
         .get_type()
         .expect("slang validated");

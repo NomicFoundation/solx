@@ -6,7 +6,6 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
-use slang_solidity_v2::ast::Expression;
 
 use solx_mlir::Environment;
 use solx_mlir::Function;
@@ -70,9 +69,6 @@ impl EmitConstructor for ContractDefinition {
             let Some(initializer) = state_variable.value() else {
                 continue;
             };
-            if matches!(initializer, Expression::ArrayExpression(_)) {
-                unimplemented!("array-literal state variable initializers are not yet supported");
-            }
             let declared_type = state_variable.get_type().expect("slang validated");
             let builder = &scope.state.builder;
             let element_type =

@@ -202,8 +202,8 @@ expression_emit!(ArrayExpression; |node, context, block| {
     };
     let builder = &context.state.builder;
     let element_type =
-        AstType::resolve(&element_slang_type, LocationPolicy::Declared(None), builder);
-    let array_type = AstType::resolve(&result_slang_type, LocationPolicy::Declared(None), builder);
+        AstType::resolve(&element_slang_type, LocationPolicy::ForceMemory, builder);
+    let array_type = AstType::resolve(&result_slang_type, LocationPolicy::ForceMemory, builder);
     let mut element_values = Vec::new();
     let mut current = block;
     for item in node.items().iter() {

@@ -222,13 +222,13 @@ impl<'context, 'block> Value<'context, 'block> {
         let is_memory = |location| matches!(location, DataLocation::Memory);
         match slang_type {
             Some(SlangType::FixedSizeArray(array)) if is_memory(array.location()) => {
-                unimplemented!("default for a memory fixed-size array is not yet supported")
+                Self::malloc(mlir_type, None, true, builder, block)
             }
             Some(SlangType::Struct(structure)) if is_memory(structure.location()) => {
                 unimplemented!("default for a memory struct is not yet supported")
             }
             Some(SlangType::Array(array)) if is_memory(array.location()) => {
-                unimplemented!("default for a memory dynamic array is not yet supported")
+                Self::malloc(mlir_type, None, true, builder, block)
             }
             Some(SlangType::String(_) | SlangType::Bytes(_)) => {
                 unimplemented!("default for a string / bytes value is not yet supported")

@@ -107,7 +107,8 @@ impl<'context, 'block> Pointer<'context, 'block> {
         } else if (pointee.is_array() || pointee.is_struct())
             && matches!(pointee.data_location(), DataLocation::Memory)
         {
-            unimplemented!("default-init of a memory aggregate place is not yet supported")
+            let buffer = Value::malloc(pointee.into_mlir(), None, true, builder, block);
+            slot.store(buffer, builder, block);
         } else if !pointee.is_reference() {
             slot.store(Value::zero(pointee, builder, block), builder, block);
         }
