@@ -62,19 +62,41 @@ pub fn get_last_contract(
                     continue;
                 };
                 match last_contract_name(source) {
-                    Ok(name) => return Ok(format!("{path}:{name}")),
+                    Ok(name) => {
+                        return Ok(
+                            solx_utils::ContractName::new(path.clone(), Some(name)).full_path
+                        );
+                    }
                     Err(_error) => continue,
                 }
             }
 
-            // TODO: Slang frontend produces a CST instead of the solc AST, so
-            // `last_contract_name` cannot extract the name from the AST
-            // `nodes` array. Fall back to the contracts map directly.
             #[cfg(feature = "slang-ast")]
-            for (path, _source) in sources.iter().rev() {
-                if let Some(contracts) = output.contracts.get(path) {
-                    if let Some((name, _)) = contracts.last_key_value() {
-                        return Ok(format!("{path}:{name}"));
+            {
+                for (path, _source) in sources.iter().rev() {
+                    if let Some(contracts) = output.contracts.get(path)
+                        && let Some(ast) = output
+                            .sources
+                            .get(path)
+                            .and_then(|source| source.ast.as_ref())
+                        && let Some(name) = slang_contract_names_in_source_order(ast)
+                            .into_iter()
+                            .rev()
+                            .find(|name| contracts.contains_key(name.as_str()))
+                    {
+                        return Ok(
+                            solx_utils::ContractName::new(path.clone(), Some(name)).full_path
+                        );
+                    }
+                }
+                for (path, _source) in sources.iter().rev() {
+                    if let Some(contracts) = output.contracts.get(path)
+                        && let Some((name, _)) = contracts.last_key_value()
+                    {
+                        return Ok(
+                            solx_utils::ContractName::new(path.clone(), Some(name.clone()))
+                                .full_path,
+                        );
                     }
                 }
             }
@@ -89,9 +111,9 @@ pub fn get_last_contract(
                 .contracts
                 .first_key_value()
                 .and_then(|(path, contracts)| {
-                    contracts
-                        .first_key_value()
-                        .map(|(name, _contract)| format!("{path}:{name}"))
+                    contracts.first_key_value().map(|(name, _contract)| {
+                        solx_utils::ContractName::new(path.clone(), Some(name.clone())).full_path
+                    })
                 })
                 .ok_or_else(|| {
                     anyhow::anyhow!("The sources are empty. Found errors: {:?}", output.errors)
@@ -176,4 +198,15 @@ fn last_contract_name(
         )
         .next_back()
         .ok_or_else(|| anyhow::anyhow!("The last contract not found in the AST"))
+}
+
+#[cfg(feature = "slang-ast")]
+fn slang_contract_names_in_source_order(ast: &serde_json::Value) -> Vec<String> {
+    ast["members"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|member| member["type"] == "ContractDefinition")
+        .filter_map(|member| member["name"]["text"].as_str().map(str::to_owned))
+        .collect()
 }
