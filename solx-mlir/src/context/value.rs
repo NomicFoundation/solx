@@ -10,6 +10,7 @@ use melior::ir::Type as MlirType;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
 use melior::ir::attribute::DenseI32ArrayAttribute;
+use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationMutLike;
@@ -26,8 +27,15 @@ use crate::Type;
 use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ConvCastOperation;
+use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::EncodeOperation;
+use crate::ods::sol::ExtFuncAddrOperation;
+use crate::ods::sol::ExtFuncConstantOperation;
+use crate::ods::sol::ExtFuncSelectorOperation;
+use crate::ods::sol::ExtICallOperation;
+use crate::ods::sol::FuncConstantOperation;
 use crate::ods::sol::GasLeftOperation;
+use crate::ods::sol::ICallOperation;
 use crate::ods::sol::Keccak256Operation;
 use crate::ods::sol::LengthOperation;
 use crate::ods::sol::MallocOperation;
@@ -182,9 +190,16 @@ impl<'context, 'block> Value<'context, 'block> {
         } else if r#type.is_enum() {
             unimplemented!("zero-init of enum type is not yet supported")
         } else if r#type.is_ext_function_ref() {
-            unimplemented!("zero-init of external function-pointer type is not yet supported")
+            // A zero address + zero selector packed into the ext func ref.
+            let address = Self::zero(Type::address(builder.context, false), builder, block);
+            Self::ext_func_constant(address, 0, r#type, builder, block)
         } else if r#type.is_function_ref() {
-            unimplemented!("zero-init of function-pointer type is not yet supported")
+            // An internal pointer's zero reverts when called.
+            Self::new(mlir_op!(
+                builder,
+                block,
+                DefaultFuncConstantOperation.addr(r#type.into_mlir())
+            ))
         } else if IntegerType::try_from(r#type.into_mlir()).is_ok() {
             Self::constant(0, r#type, builder, block)
         } else {
@@ -281,6 +296,77 @@ impl<'context, 'block> Value<'context, 'block> {
         )
     }
 
+    /// `sol.ext_func_constant` packing a callee `address` and 4-byte `selector` into an `!sol.ext_func_ref<…>`.
+    pub fn ext_func_constant<B>(
+        address: Self,
+        selector: u32,
+        result_type: Type<'context>,
+        builder: &Builder<'context>,
+        block: &B,
+    ) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        Self::new(mlir_op!(
+            builder,
+            block,
+            ExtFuncConstantOperation
+                .addr(address.inner)
+                .selector(IntegerAttribute::new(
+                    IntegerType::new(builder.context, Type::SELECTOR_BIT_WIDTH).into(),
+                    selector as i64,
+                ))
+                .result(result_type.into_mlir())
+        ))
+    }
+
+    /// The 4-byte selector of this external function-pointer value, via `sol.ext_func_selector` (`f.selector`).
+    pub fn ext_func_selector(
+        self,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            builder,
+            block,
+            ExtFuncSelectorOperation
+                .func(self.inner)
+                .result(Type::fixed_bytes(builder.context, 4).into_mlir())
+        ))
+    }
+
+    /// The `address` component of this external function-pointer value, via `sol.ext_func_addr` (`f.address`).
+    pub fn ext_func_address(
+        self,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            builder,
+            block,
+            ExtFuncAddrOperation
+                .func(self.inner)
+                .result(Type::address(builder.context, false).into_mlir())
+        ))
+    }
+
+    /// `sol.func_constant` — an internal function pointer (`!sol.func_ref<…>`) to the symbol `name`.
+    pub fn function_constant(
+        name: &str,
+        result_type: Type<'context>,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            builder,
+            block,
+            FuncConstantOperation
+                .addr(result_type.into_mlir())
+                .sym(FlatSymbolRefAttribute::new(builder.context, name))
+        ))
+    }
+
     /// `sol.keccak256` over a byte buffer, yielding the 32-byte hash.
     pub fn keccak256(
         buffer: Self,
@@ -374,6 +460,62 @@ impl<'context, 'block> Value<'context, 'block> {
             PushOperation.inp(self.into_mlir()).addr(push_result_type)
         ));
         (new_slot, element_type)
+    }
+
+    /// Calls this function-pointer value, returning the decoded results. Dispatch is on the value's
+    /// reference kind: an internal `func_ref` through `sol.icall`, an external `ext_func_ref` through
+    /// `sol.ext_icall` (forwarding `call_value` as `msg.value` and dropping the status).
+    pub fn call_indirect(
+        self,
+        argument_values: &[MlirValue<'context, 'block>],
+        result_types: &[MlirType<'context>],
+        call_value: Option<MlirValue<'context, 'block>>,
+        is_static: bool,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Vec<MlirValue<'context, 'block>> {
+        if self.r#type().is_ext_function_ref() {
+            let value = call_value.unwrap_or_else(|| Self::uint256(0, builder, block).into_mlir());
+            let mut out_types = Vec::with_capacity(result_types.len() + 1);
+            out_types
+                .push(Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
+            out_types.extend_from_slice(result_types);
+            let mut operation_builder =
+                ExtICallOperation::builder(builder.context, builder.unknown_location)
+                    .outs(&out_types)
+                    .callee(self.into_mlir())
+                    .callee_operands(argument_values)
+                    .gas(Self::gas_left(builder, block).into_mlir())
+                    .value(value);
+            if is_static {
+                operation_builder = operation_builder.static_call(Attribute::unit(builder.context));
+            }
+            let operation = block.append_operation(operation_builder.build().into());
+            (0..result_types.len())
+                .map(|index| {
+                    operation
+                        .result(index + 1)
+                        .expect("sol.ext_icall produces a status plus its declared results")
+                        .into()
+                })
+                .collect()
+        } else {
+            let operation = block.append_operation(mlir_op_build!(
+                builder,
+                ICallOperation
+                    .outs(result_types)
+                    .callee(self.into_mlir())
+                    .callee_operands(argument_values)
+            ));
+            (0..result_types.len())
+                .map(|index| {
+                    operation
+                        .result(index)
+                        .expect("sol.icall produces its declared result count")
+                        .into()
+                })
+                .collect()
+        }
     }
 
     /// Casts to `target_type` via the target type's cast router ([`Type::cast`]); a no-op when already that type.

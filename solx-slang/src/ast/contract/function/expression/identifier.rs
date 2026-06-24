@@ -65,6 +65,18 @@ expression_emit!(Identifier; |node, context, block| {
                 .expect("slang validated");
             initializer.emit(context, block)
         }
+        Some(Definition::Function(function_definition)) => {
+            // A bare function name binds the most-derived override (virtual dispatch); an explicit
+            // `Base.f` skips this redirect.
+            let target_id = context
+                .state
+                .resolve_virtual(function_definition.node_id());
+            let value = context
+                .state
+                .resolve_function(target_id)
+                .pointer_constant(&context.state.builder, &block);
+            BlockAnd { block, value }
+        }
         None => unreachable!("slang resolves every identifier reference"),
         Some(other) => {
             unimplemented!("unsupported identifier reference {:?}", other.node_id())

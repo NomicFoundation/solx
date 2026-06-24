@@ -8,6 +8,7 @@ use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArrayExpression;
 use slang_solidity_v2::ast::ConditionalExpression;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::TupleExpression;
 use slang_solidity_v2::ast::Type as SlangType;
@@ -136,13 +137,26 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
             };
         }
 
-        // A scalar ternary yields a single value, typed from the conditional's own type
-        // (defaulting to `ui256` when slang leaves it untyped).
-        let result_type = AstType::resolve_optional(self.get_type(), &context.state.builder)
-            .unwrap_or_else(|| {
-                AstType::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
-                    .into_mlir()
-            });
+        // A scalar ternary yields a single value. A branch of bare function names yields an internal
+        // `func_ref`, but slang types it from the function's visibility, not the pointer type — so
+        // recover the internal-pointer type from a branch when present, else use the conditional's own type.
+        let func_ref_type = |expression: &Expression| {
+            let Expression::Identifier(identifier) = expression else {
+                return None;
+            };
+            let Definition::Function(function_definition) = identifier.resolve_to_definition()?
+            else {
+                return None;
+            };
+            let function = context
+                .state
+                .resolve_function(function_definition.node_id());
+            Some(function.func_ref_type(&context.state.builder).into_mlir())
+        };
+        let result_type = func_ref_type(&true_expression)
+            .or_else(|| func_ref_type(&false_expression))
+            .or_else(|| AstType::resolve_optional(self.get_type(), &context.state.builder))
+            .expect("slang validated");
         let BlockAnd {
             value: condition_value,
             block,
@@ -201,9 +215,13 @@ expression_emit!(ArrayExpression; |node, context, block| {
         ),
     };
     let builder = &context.state.builder;
-    let element_type =
+    // An array literal is always a memory aggregate, so resolve element and result types in their
+    // memory representation — the per-element coercion is then a `data_loc_cast` into memory (matching solc).
+    let declared_element_type =
         AstType::resolve(&element_slang_type, LocationPolicy::ForceMemory, builder);
-    let array_type = AstType::resolve(&result_slang_type, LocationPolicy::ForceMemory, builder);
+    // Emit element values before fixing the element type: for a function-pointer array literal the
+    // emitted values are authoritative (slang types the literal from visibility, which can disagree),
+    // so adopt the value's function-ref type when it differs and rebuild the array type to match.
     let mut element_values = Vec::new();
     let mut current = block;
     for item in node.items().iter() {
@@ -211,6 +229,27 @@ expression_emit!(ArrayExpression; |node, context, block| {
         element_values.push(value);
         current = next;
     }
+    let element_type = match element_values.first() {
+        Some(&first)
+            if first.r#type().is_function_ref()
+                && first.r#type().into_mlir() != declared_element_type =>
+        {
+            first.r#type().into_mlir()
+        }
+        _ => declared_element_type,
+    };
+    let array_type = match &result_slang_type {
+        SlangType::FixedSizeArray(fixed_array_type) if element_type != declared_element_type => {
+            AstType::array(
+                builder.context,
+                solx_mlir::ArraySize::Fixed(fixed_array_type.size() as u64),
+                element_type,
+                solx_utils::DataLocation::Memory,
+            )
+            .into_mlir()
+        }
+        _ => AstType::resolve(&result_slang_type, LocationPolicy::ForceMemory, builder),
+    };
     let element_values: Vec<_> = element_values
         .into_iter()
         .map(|value| {
