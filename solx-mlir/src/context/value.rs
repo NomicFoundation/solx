@@ -189,7 +189,13 @@ impl<'context, 'block> Value<'context, 'block> {
             );
             bits.cast(r#type, builder, block)
         } else if r#type.is_enum() {
-            unimplemented!("zero-init of enum type is not yet supported")
+            let bits = Self::constant(
+                0,
+                Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                builder,
+                block,
+            );
+            bits.cast(r#type, builder, block)
         } else if r#type.is_ext_function_ref() {
             // A zero address + zero selector packed into the ext func ref.
             let address = Self::zero(Type::address(builder.context, false), builder, block);

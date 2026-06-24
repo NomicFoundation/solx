@@ -12,6 +12,7 @@ use melior::ir::r#type::IntegerType;
 
 use solx_mlir::Builder;
 use solx_mlir::CmpPredicate;
+use solx_mlir::UserDefinedOperator;
 use solx_mlir::ods::sol::AddOperation;
 use solx_mlir::ods::sol::AndOperation;
 use solx_mlir::ods::sol::CAddOperation;
@@ -32,6 +33,8 @@ use solx_mlir::ods::sol::XorOperation;
 
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
@@ -42,6 +45,7 @@ use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
+use crate::ast::operator_binding::OperatorBindings;
 
 /// Solidity operator, bridged from slang's typed per-expression operator enums (never parsed from text).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,6 +86,46 @@ pub enum Operator {
 }
 
 impl Operator {
+    /// The function bound to `user_operator` for `operand`'s user-defined value type, or `None` if unbound.
+    fn user_defined_operator<'context, 'block>(
+        context: &ExpressionContext<'_, 'context, 'block>,
+        operand: &Expression,
+        user_operator: UserDefinedOperator,
+    ) -> Option<NodeId> {
+        let SlangType::UserDefinedValue(udvt_type) = operand.get_type()? else {
+            return None;
+        };
+        let Definition::UserDefinedValueType(udvt_definition) = udvt_type.definition() else {
+            return None;
+        };
+        context
+            .state
+            .operator_bindings
+            .get(&(udvt_definition.node_id(), user_operator))
+            .copied()
+    }
+
+    /// Calls the bound user-defined-operator function `function_id`, coercing each argument to its parameter type.
+    fn emit_operator_call<'context, 'block>(
+        context: &ExpressionContext<'_, 'context, 'block>,
+        function_id: NodeId,
+        argument_values: Vec<AstValue<'context, 'block>>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        let function = context.state.resolve_function(function_id);
+        let argument_values: Vec<_> = argument_values
+            .into_iter()
+            .zip(&function.parameter_types)
+            .map(|(value, &parameter_type)| {
+                value
+                    .cast(AstType::new(parameter_type), &context.state.builder, block)
+                    .into_mlir()
+            })
+            .collect();
+        let results = function.call(&argument_values, &context.state.builder, block);
+        results.into_iter().next().expect("slang validated")
+    }
+
     /// Builds a Sol dialect binary operation. Checked mode uses the `sol.c*` arithmetic variants;
     /// modulo, bitwise, and shift are always unchecked.
     pub fn emit_sol_binary_operation<'context>(
@@ -144,6 +188,15 @@ impl Operator {
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
     ) -> (AstValue<'context, 'block>, BlockRef<'context, 'block>) {
+        if let Some(function_id) = OperatorBindings::binary_operator(self)
+            .and_then(|user_operator| Self::user_defined_operator(context, left, user_operator))
+        {
+            let BlockAnd { value: lhs, block } = left.emit(context, block);
+            let BlockAnd { value: rhs, block } = right.emit(context, block);
+            let result = Self::emit_operator_call(context, function_id, vec![lhs, rhs], &block);
+            return (result.into(), block);
+        }
+
         let BlockAnd { value: rhs, block } = right.emit(context, block);
         let BlockAnd { value: lhs, block } = left.emit(context, block);
         let result_type = target_type.unwrap_or_else(|| {
@@ -254,6 +307,14 @@ impl Operator {
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
     ) -> (AstValue<'context, 'block>, BlockRef<'context, 'block>) {
+        if let Some(function_id) = OperatorBindings::unary_operator(self)
+            .and_then(|user_operator| Self::user_defined_operator(context, operand, user_operator))
+        {
+            let BlockAnd { value, block } = operand.emit(context, block);
+            let result = Self::emit_operator_call(context, function_id, vec![value], &block);
+            return (result.into(), block);
+        }
+
         match self {
             Operator::Increment | Operator::Decrement => {
                 if let Some((_old, new_value, block)) =

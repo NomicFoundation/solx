@@ -5,6 +5,7 @@
 pub mod block_and;
 pub mod contract;
 pub mod emit;
+pub mod operator_binding;
 pub mod analysis;
 pub mod place;
 

@@ -622,6 +622,25 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         block,
                     };
                 }
+                // `T.wrap(x)` / `T.unwrap(x)`: a single conversion to the result type.
+                Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
+                    let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                        unimplemented!("a UDVT wrap/unwrap takes one positional argument");
+                    };
+                    let argument = positional.iter().next().expect("slang validated");
+                    let BlockAnd { value, block } = argument.emit(context, block);
+                    let result =
+                        match AstType::resolve_optional(self.get_type(), &context.state.builder) {
+                            Some(result_type) => value
+                                .cast(AstType::new(result_type), &context.state.builder, &block)
+                                .into_mlir(),
+                            None => value.into_mlir(),
+                        };
+                    return BlockAnd {
+                        value: vec![result],
+                        block,
+                    };
+                }
                 // Any other member built-in in call position: an ABI encode, a
                 // dynamic-array `push`/`pop`, an address value transfer, or a
                 // `string`/`bytes` concat — dispatched on slang's typed
