@@ -39,6 +39,7 @@ use crate::ods::sol::ICallOperation;
 use crate::ods::sol::Keccak256Operation;
 use crate::ods::sol::LengthOperation;
 use crate::ods::sol::MallocOperation;
+use crate::ods::sol::NewOperation;
 use crate::ods::sol::PushOperation;
 use crate::ods::sol::StringLitOperation;
 
@@ -379,6 +380,44 @@ impl<'context, 'block> Value<'context, 'block> {
                 .addr(result_type.into_mlir())
                 .sym(FlatSymbolRefAttribute::new(builder.context, name))
         ))
+    }
+
+    /// `sol.new` — contract creation embedding `obj_name`'s deploy bytecode. `val`
+    /// is the forwarded wei; a `salt` selects CREATE2. `operand_segment_sizes` is
+    /// set by hand (melior's ODS builder doesn't synthesize it); the salt must be
+    /// appended before the variadic ctor args or the two transpose.
+    pub fn create_contract(
+        obj_name: &str,
+        val: Self,
+        salt: Option<Self>,
+        ctor_args: &[MlirValue<'context, 'block>],
+        result_type: Type<'context>,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        let mut new_builder = NewOperation::builder(builder.context, builder.unknown_location)
+            .obj_name(StringAttribute::new(builder.context, obj_name))
+            .val(val.inner);
+        if let Some(salt) = salt {
+            new_builder = new_builder.salt(salt.inner);
+        }
+        let new_builder = new_builder
+            .ctor_args(ctor_args)
+            .out(result_type.into_mlir());
+        let mut operation: Operation = new_builder.build().into();
+        let ctor_args_count =
+            i32::try_from(ctor_args.len()).expect("constructor argument count fits in i32");
+        let salt_segment = i32::from(salt.is_some());
+        let segment_sizes =
+            DenseI32ArrayAttribute::new(builder.context, &[1, salt_segment, ctor_args_count]);
+        operation.set_inherent_attribute("operand_segment_sizes", segment_sizes.into());
+        Self::new(
+            block
+                .append_operation(operation)
+                .result(0)
+                .expect("sol.new always produces one result")
+                .into(),
+        )
     }
 
     /// `sol.keccak256` over a byte buffer, yielding the 32-byte hash.

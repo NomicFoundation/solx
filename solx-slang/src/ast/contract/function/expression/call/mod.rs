@@ -18,8 +18,10 @@ use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
+use slang_solidity_v2::ast::IndexAccessKind;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
+use slang_solidity_v2::ast::TypeName as SlangTypeName;
 use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::AssertOperation;
 use solx_mlir::ods::sol::BareCallOperation;
@@ -56,6 +58,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
         block: BlockRef<'context, 'block>,
     ) -> Self::Output {
         let callee = self.operand();
+        // `{value, salt}` call options are extracted by C20b; until then no value/salt is forwarded.
+        let call_value: Option<Value<'context, 'block>> = None;
+        let salt: Option<Value<'context, 'block>> = None;
         let arguments = self.arguments();
 
         // A callee resolving to a struct definition is a struct constructor (`S(a, b)` / `Lib.S(...)`):
@@ -855,7 +860,138 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             unimplemented!("unsupported member call");
         }
 
+        // `new T[](n)` / `new bytes(n)` / `new C(args)`.
+        if let Expression::NewExpression(_) = &callee {
+            let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                unimplemented!("named arguments on a new expression are not supported");
+            };
+            let slang_type = self.get_type();
+            // `new T[](n)` / `new bytes(n)` / `new string(n)` allocate a dynamic memory aggregate of
+            // `n` via a zeroed `sol.malloc`. The array forms resolve a call type; `new bytes` / `new
+            // string` surface none, so fall back to the syntactic elementary type name.
+            let dynamic_result_type = match &slang_type {
+                Some(
+                    inner @ (SlangType::Array(_) | SlangType::Bytes(_) | SlangType::String(_)),
+                ) => Some(AstType::resolve(
+                    inner,
+                    LocationPolicy::Declared(Some(DataLocation::Memory)),
+                    &context.state.builder,
+                )),
+                None if matches!(
+                    self.operand(),
+                    Expression::NewExpression(new_expression)
+                        if matches!(new_expression.type_name(), SlangTypeName::ElementaryType(_))
+                ) =>
+                {
+                    Some(
+                        AstType::string(context.state.builder.context, DataLocation::Memory)
+                            .into_mlir(),
+                    )
+                }
+                _ => None,
+            };
+            if let Some(result_type) = dynamic_result_type {
+                let BlockAnd {
+                    value: values,
+                    block: current_block,
+                } = positional.emit(context, block);
+                let builder = &context.state.builder;
+                let address = match values.first() {
+                    Some(&size_value) => {
+                        let size = AstValue::from(size_value)
+                            .cast(
+                                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                                builder,
+                                &current_block,
+                            )
+                            .into_mlir();
+                        AstValue::malloc(result_type, Some(size), true, builder, &current_block)
+                            .into_mlir()
+                    }
+                    None => AstValue::malloc(result_type, None, true, builder, &current_block)
+                        .into_mlir(),
+                };
+                return BlockAnd {
+                    value: vec![address],
+                    block: current_block,
+                };
+            }
+
+            // Contract creation: `new C(args)` lowers to `sol.new` (embedding `C`'s deploy bytecode);
+            // record the dependency so the linker pulls the object in. `{salt: s}` selects CREATE2.
+            let Some(SlangType::Contract(contract_type)) = slang_type else {
+                unimplemented!("new expression has no resolved type or unsupported new target");
+            };
+            let Definition::Contract(contract_definition) = contract_type.definition() else {
+                unreachable!("Slang ContractType always references a Contract definition");
+            };
+            let contract_name = contract_definition.name().name();
+            let payable = contract_definition.is_payable();
+            context.state.add_dependency(contract_name.clone());
+
+            // Coerce each constructor argument to its declared parameter type so a literal materialises
+            // in the parameter's representation (the deployed constructor ABI-decodes by parameter type).
+            let parameter_types = contract_definition
+                .constructor()
+                .map(|constructor| {
+                    AstType::resolve_signature(
+                        &constructor,
+                        LocationPolicy::Declared(None),
+                        &context.state.builder,
+                    )
+                    .0
+                })
+                .unwrap_or_default();
+            let ordered: Vec<Expression> = positional.iter().collect();
+            let BlockAnd {
+                value: ctor_args,
+                block,
+            } = ordered.emit_as(&parameter_types, context, block);
+            let builder = &context.state.builder;
+            let result_type = AstType::contract(builder.context, &contract_name, payable);
+            // `new C{value: v}()` forwards `v` wei; a plain `new C()` sends zero.
+            let val = match call_value {
+                Some(value) => AstValue::from(value),
+                None => AstValue::uint256(0, builder, &block),
+            };
+            let value = AstValue::create_contract(
+                &contract_name,
+                val,
+                salt.map(AstValue::from),
+                &ctor_args,
+                result_type,
+                builder,
+                &block,
+            )
+            .into_mlir();
+            return BlockAnd {
+                value: vec![value],
+                block,
+            };
+        }
+
         let Expression::Identifier(identifier) = &callee else {
+            // `T[](x)`: an empty-bracket array type used as a data-location cast.
+            if let Expression::IndexAccessExpression(array_type) = &callee
+                && array_type.start().is_none()
+                && array_type.end().is_none()
+                && !matches!(array_type.kind(), IndexAccessKind::Slice)
+            {
+                let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                    unimplemented!("named arguments on an array-type cast are not supported");
+                };
+                let first = positional.iter().next().expect("slang validated");
+                let target_type =
+                    AstType::resolve_optional(self.get_type(), &context.state.builder)
+                        .expect("slang validated");
+                let BlockAnd { value, block } = first.emit_as(target_type, context, block);
+                return BlockAnd {
+                    value: vec![value.into_mlir()],
+                    block,
+                };
+            }
+            // A function-pointer value callee (`arr[i]`, `(cond ? f : g)`) was
+            // dispatched above; any other non-identifier callee is unsupported.
             unimplemented!("unsupported callee expression");
         };
         match identifier.resolve_to_definition() {
