@@ -290,15 +290,24 @@ impl<'context> Context<'context> {
     }
 
     /// Parses, verifies, and translates LLVM-dialect MLIR text to a raw LLVM module.
+    ///
+    /// `immutables` lowers `llvm.setimmutable` (a library's library-address
+    /// immutable, which has no LLVM-IR translation) to heap stores at the given
+    /// offsets before translation; `None` leaves the module unchanged.
     pub fn translate_source_to_llvm(
         context: &melior::Context,
         source: &str,
+        immutables: Option<&std::collections::BTreeMap<String, std::collections::BTreeSet<u64>>>,
     ) -> anyhow::Result<RawLlvmModule> {
         let module = Module::parse(context, source)
             .ok_or_else(|| anyhow::anyhow!("failed to parse MLIR source text"))?;
 
         if !module.as_operation().verify() {
             anyhow::bail!("MLIR module verification failed");
+        }
+
+        if let Some(immutables) = immutables {
+            Self::lower_set_immutables(&module, immutables);
         }
 
         unsafe {
@@ -320,6 +329,33 @@ impl<'context> Context<'context> {
                 context: llvm_context,
                 module: llvm_module as *mut _,
             })
+        }
+    }
+
+    /// Lowers every `llvm.setimmutable` to heap stores at its reserved offsets via the solx-llvm C-API.
+    fn lower_set_immutables(
+        module: &Module,
+        immutables: &std::collections::BTreeMap<String, std::collections::BTreeSet<u64>>,
+    ) {
+        let mut id_cstrings: Vec<std::ffi::CString> = Vec::new();
+        let mut offsets: Vec<u64> = Vec::new();
+        for (id, id_offsets) in immutables {
+            for &offset in id_offsets {
+                id_cstrings.push(
+                    std::ffi::CString::new(id.as_str()).expect("immutable id has no interior NUL"),
+                );
+                offsets.push(offset);
+            }
+        }
+        let id_pointers: Vec<*const std::ffi::c_char> =
+            id_cstrings.iter().map(|id| id.as_ptr()).collect();
+        unsafe {
+            crate::ffi::mlirEvmLowerSetImmutables(
+                module.to_raw(),
+                id_pointers.as_ptr(),
+                offsets.as_ptr(),
+                offsets.len() as u64,
+            );
         }
     }
 }

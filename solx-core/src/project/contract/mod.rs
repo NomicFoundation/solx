@@ -529,7 +529,7 @@ impl Contract {
                     solx_utils::CodeSegment::Deploy => bare_name.to_owned(),
                     solx_utils::CodeSegment::Runtime => runtime_identifier.clone(),
                 };
-                let dependencies = match code_segment {
+                let mut dependencies = match code_segment {
                     solx_utils::CodeSegment::Deploy => {
                         let mut dependencies =
                             solx_codegen_evm::Dependencies::new(code_identifier.as_str());
@@ -540,11 +540,17 @@ impl Contract {
                         solx_codegen_evm::Dependencies::new(code_identifier.as_str())
                     }
                 };
+                for cross_contract in mlir.dependencies.iter() {
+                    dependencies.push(cross_contract.clone(), false);
+                }
 
                 let melior_context = solx_mlir::Context::create_mlir_context();
-                let raw_llvm =
-                    solx_mlir::Context::translate_source_to_llvm(&melior_context, &mlir.source)
-                        .context("MLIR translation")?;
+                let raw_llvm = solx_mlir::Context::translate_source_to_llvm(
+                    &melior_context,
+                    &mlir.source,
+                    immutables.as_ref(),
+                )
+                .context("MLIR translation")?;
                 let context = unsafe { inkwell::context::Context::new(raw_llvm.context) };
                 let module = unsafe { inkwell::module::Module::new(raw_llvm.module) };
                 module.set_name(code_identifier.as_str());
