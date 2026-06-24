@@ -28,12 +28,17 @@ expression_emit!(PostfixExpression; |node, context, block| {
 });
 
 expression_emit!(PrefixExpression; |node, context, block| {
+    // `delete x` is value-less, so it never reaches value position: a statement
+    // discard site emits it directly (`AssignmentTarget::delete`), not through this `Emit`.
+    if let PrefixExpressionOperator::DeleteKeyword(_) = node.operator() {
+        unreachable!("`delete` is value-less; a discard site emits it, not value-position `Emit`");
+    }
     let result_type =
         AstType::resolve_optional(node.get_type(), &context.state.builder);
     let operator = match node.operator() {
         PrefixExpressionOperator::Bang(_) => Operator::Not,
         PrefixExpressionOperator::DeleteKeyword(_) => {
-            unimplemented!("delete is not yet supported")
+            unreachable!("delete is routed before prefix-operator classification")
         }
         PrefixExpressionOperator::Minus(_) => Operator::Subtract,
         PrefixExpressionOperator::MinusMinus(_) => Operator::Decrement,

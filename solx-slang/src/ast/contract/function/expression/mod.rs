@@ -24,6 +24,7 @@ use std::collections::HashMap;
 
 use melior::ir::BlockRef;
 use melior::ir::Type;
+use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 
@@ -35,6 +36,7 @@ use crate::ast::EmitAs;
 use crate::ast::EmitExpression;
 use crate::ast::EmitForEffect;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
+use crate::ast::contract::function::expression::assignment::AssignmentTarget;
 use crate::ast::contract::storage_layout::StorageSlot;
 
 /// Lowers Solidity expressions to MLIR SSA values.
@@ -160,6 +162,14 @@ impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for Expression {
     ) -> BlockRef<'context, 'block> {
         match self {
             Expression::FunctionCallExpression(call) => call.emit(context, block).block,
+            Expression::PrefixExpression(prefix)
+                if matches!(
+                    prefix.operator(),
+                    ast::PrefixExpressionOperator::DeleteKeyword(_)
+                ) =>
+            {
+                AssignmentTarget::delete(context, &prefix.operand(), block)
+            }
             _ => self.emit(context, block).block,
         }
     }

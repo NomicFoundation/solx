@@ -2,6 +2,7 @@
 //! Assignment expression emission.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -10,6 +11,7 @@ use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::AssignmentExpression;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use solx_mlir::ods::sol::DeleteOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
@@ -29,6 +31,8 @@ pub enum AssignmentTarget<'context, 'block> {
     Pointer(Value<'context, 'block>, Type<'context>),
     /// State variable — storage slot and declared element type.
     Storage(StorageSlot, Type<'context>),
+    /// Reference-typed location: the destination into which the RHS reference's contents are copied via `sol.copy`.
+    ReferenceCopy(Value<'context, 'block>),
 }
 
 impl<'context, 'block> AssignmentTarget<'context, 'block> {
@@ -85,17 +89,14 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         }
     }
 
-    /// Resolves a state-variable lvalue (bare `x`) to its target. A reference-typed
-    /// state variable is not yet supported; a value-typed one stores the scalar directly.
+    /// Resolves a state-variable lvalue (bare `x`) to its target. Reference-typed storage
+    /// is copied via `sol.copy` ([`Self::ReferenceCopy`]); value-typed storage stores the scalar directly.
     fn from_state_variable<'state>(
         context: &ExpressionContext<'state, 'context, 'block>,
         state_variable: &ast::StateVariableDefinition,
         block: BlockRef<'context, 'block>,
     ) -> (Self, BlockRef<'context, 'block>) {
         let declared_type = state_variable.get_type().expect("slang validated");
-        if declared_type.is_reference_type() {
-            unimplemented!("assignment to a reference-typed state variable is not yet supported");
-        }
         let slot = context
             .storage_layout
             .get(&state_variable.node_id())
@@ -108,18 +109,25 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
             LocationPolicy::Declared(None),
             &context.state.builder,
         );
+        if declared_type.is_reference_type() && !matches!(declared_type, ast::Type::Mapping(_)) {
+            let address_type = AstType::new(element_type)
+                .address_type(slot.location, context.state.builder.context);
+            let storage_ref =
+                Pointer::addr_of(&slot.name, address_type, &context.state.builder, &block)
+                    .into_mlir();
+            return (Self::ReferenceCopy(storage_ref), block);
+        }
         (Self::Storage(slot, element_type), block)
     }
 
-    /// Classifies a computed lvalue `address` into its target. A reference element (the address type
-    /// IS the element type) is not yet supported; any other becomes a [`Self::Pointer`].
+    /// Classifies a computed lvalue `address` into its target: a reference element (the address type
+    /// IS the element type) becomes a [`Self::ReferenceCopy`], any other a [`Self::Pointer`].
     fn from_address(address: Value<'context, 'block>, element_type: Type<'context>) -> Self {
         if address.r#type() == element_type {
-            unimplemented!(
-                "assignment to a reference-typed lvalue in storage/calldata is not yet supported"
-            );
+            Self::ReferenceCopy(address)
+        } else {
+            Self::Pointer(address, element_type)
         }
-        Self::Pointer(address, element_type)
     }
 
     /// Stores a coerced value into this target.
@@ -146,7 +154,80 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                 slot.store(&context.state.builder, stored_value, *element_type, block);
                 stored_value
             }
+            Self::ReferenceCopy(address) => {
+                // The RHS is already a reference of the matching type; copy its
+                // contents into the destination reference (no scalar coercion).
+                Pointer::new(*address).copy_from(
+                    AstValue::from(value),
+                    &context.state.builder,
+                    block,
+                );
+                value
+            }
         }
+    }
+
+    /// Emits `delete x` — resets the lvalue to its zero. A storage aggregate is deep-cleared via
+    /// `sol.delete`; a memory aggregate resets to a zero-filled buffer; a value lvalue to its typed zero.
+    pub fn delete<'state>(
+        context: &ExpressionContext<'state, 'context, 'block>,
+        operand: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> BlockRef<'context, 'block> {
+        let (target, block) = Self::new(context, operand, block);
+        match &target {
+            Self::ReferenceCopy(reference) => {
+                mlir_op_void!(
+                    &context.state.builder,
+                    &block,
+                    DeleteOperation.reference(*reference)
+                );
+            }
+            Self::Pointer(_, element_type) | Self::Storage(_, element_type) => {
+                let slang_type = operand.get_type().expect("slang validated");
+                let zero = if slang_type.is_reference_type() {
+                    // A memory aggregate resets to a freshly allocated zero-filled buffer, exactly as
+                    // it is default-initialised — not a scalar zero.
+                    match &slang_type {
+                        ast::Type::String(_) | ast::Type::Bytes(_) => {
+                            let size = AstValue::constant(
+                                0,
+                                AstType::unsigned(
+                                    context.state.builder.context,
+                                    solx_utils::BIT_LENGTH_FIELD,
+                                ),
+                                &context.state.builder,
+                                &block,
+                            )
+                            .into_mlir();
+                            AstValue::malloc(
+                                *element_type,
+                                Some(size),
+                                true,
+                                &context.state.builder,
+                                &block,
+                            )
+                            .into_mlir()
+                        }
+                        _ => AstValue::malloc(
+                            *element_type,
+                            None,
+                            true,
+                            &context.state.builder,
+                            &block,
+                        )
+                        .into_mlir(),
+                    }
+                } else {
+                    // The zero of a value lvalue is its type's own zero, not a raw `ui256` 0 — emitting
+                    // a `ui256` 0 and letting the store coerce it would be an ill-typed cast (e.g. to `func_ref`).
+                    AstValue::zero(AstType::new(*element_type), &context.state.builder, &block)
+                        .into_mlir()
+                };
+                target.store(context, zero, &block);
+            }
+        }
+        block
     }
 }
 
@@ -191,6 +272,9 @@ expression_emit!(AssignmentExpression; |node, context, block| {
                 let old = slot.load(&context.state.builder, *element_type, &block);
                 (AstValue::from(old), *element_type)
             }
+            AssignmentTarget::ReferenceCopy(_) => unreachable!(
+                "a compound assignment to a reference-typed lvalue is rejected by the type checker"
+            ),
         };
         let BlockAnd { value: rhs, block } = right.emit(context, block);
         let result = operator.emit_value_binary(
