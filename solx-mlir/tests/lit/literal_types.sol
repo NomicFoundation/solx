@@ -1,22 +1,18 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s --check-prefix=CHECK-SOLX
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s --check-prefix=CHECK-SOLC
 
-// `return -1;`: solc folds it to `sol.constant -1 : si8`, while solx materializes
-// the negation as `1 : ui8` cast to `si8` then subtracted from `0 : si8`. Both
-// backends walk functions in source order, so each CHECK sequence runs
-// address_literal, neg_int8, ether_rational, scientific.
+// Both backends fold `return -1;` to `sol.constant -1 : si8`. The CHECK blocks
+// are split only because solx walks functions alphabetically and solc in source
+// order, so each backend's sequence follows its own function order.
 
 // CHECK-SOLX: sol.func @{{.*address_literal.*}}
 // CHECK-SOLX:   sol.constant 255 : ui160
 // CHECK-SOLX:   sol.address_cast %{{.*}} : ui160 to !sol.address
-// CHECK-SOLX: sol.func @{{.*neg_int8.*}}
-// CHECK-SOLX:   %[[ONE:.*]] = sol.constant 1 : ui8
-// CHECK-SOLX:   %[[ONE_S:.*]] = sol.cast %[[ONE]] : ui8 to si8
-// CHECK-SOLX:   %[[ZERO:.*]] = sol.constant 0 : si8
-// CHECK-SOLX:   %[[N:.*]] = sol.sub %[[ZERO]], %[[ONE_S]] : si8
-// CHECK-SOLX:   sol.return %[[N]] : si8
 // CHECK-SOLX: sol.func @{{.*ether_rational.*}}
 // CHECK-SOLX:   sol.constant 500000000000000000 : ui64
+// CHECK-SOLX: sol.func @{{.*neg_int8.*}}
+// CHECK-SOLX:   %[[N:.*]] = sol.constant -1 : si8
+// CHECK-SOLX:   sol.return %[[N]] : si8
 // CHECK-SOLX: sol.func @{{.*scientific.*}}
 // CHECK-SOLX:   sol.constant 1000000000000000000 : ui64
 

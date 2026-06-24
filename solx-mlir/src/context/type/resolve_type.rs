@@ -67,7 +67,9 @@ impl<'context> Type<'context> {
                 )
                 .into_mlir(),
                 LiteralKind::Rational { .. } => {
-                    unimplemented!("rational literal type is not yet supported")
+                    // A rational appears only as a compile-time intermediate that constant
+                    // folding consumes; one surviving to runtime would fail downstream, not here.
+                    Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
                 }
             },
             SlangType::String(string_type) => Type::string(

@@ -13,6 +13,9 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::attribute::StringAttribute;
+use melior::ir::attribute::TypeAttribute;
+use melior::ir::r#type::FunctionType;
+use melior::ir::r#type::IntegerType;
 use num_bigint::BigInt;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::BuiltIn;
@@ -20,6 +23,7 @@ use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
+use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::IndexAccessKind;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
@@ -29,9 +33,11 @@ use solx_mlir::ods::sol::AssertOperation;
 use solx_mlir::ods::sol::BareCallOperation;
 use solx_mlir::ods::sol::BareDelegateCallOperation;
 use solx_mlir::ods::sol::BareStaticCallOperation;
+use solx_mlir::ods::sol::BlockHashOperation;
 use solx_mlir::ods::sol::ConcatOperation;
 use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
+use solx_mlir::ods::sol::ExtCallOperation;
 use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::PopOperation;
 use solx_mlir::ods::sol::PushStringOperation;
@@ -49,6 +55,9 @@ use crate::ast::LocationPolicy;
 use crate::ast::Pointer;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call_options::CallOptions;
+use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
+use crate::ast::contract::getter::StructGetterLayout;
+use crate::ast::analysis::query::MemberAccessOperand;
 
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCallExpression {
     type Output = BlockAnd<'context, 'block, Vec<Value<'context, 'block>>>;
@@ -210,6 +219,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 BuiltIn::Assert
                     | BuiltIn::Require
                     | BuiltIn::Gasleft
+                    | BuiltIn::Blockhash
                     | BuiltIn::Keccak256
                     | BuiltIn::Sha256
                     | BuiltIn::Ripemd160
@@ -377,6 +387,33 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     value: vec![AstValue::gas_left(&context.state.builder, &block).into_mlir()],
                     block,
                 },
+                BuiltIn::Blockhash => {
+                    let BlockAnd {
+                        value: values,
+                        block,
+                    } = positional.emit(context, block);
+                    let builder = &context.state.builder;
+                    // `sol.blockhash` takes a `ui256` block number; coerce a narrower
+                    // argument type up first.
+                    let block_number = AstValue::from(values[0])
+                        .cast(
+                            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                            builder,
+                            &block,
+                        )
+                        .into_mlir();
+                    let value = mlir_op!(
+                        builder,
+                        block,
+                        BlockHashOperation
+                            .block_number(block_number)
+                            .val(AstType::fixed_bytes(builder.context, 32))
+                    );
+                    BlockAnd {
+                        value: vec![value],
+                        block,
+                    }
+                }
                 BuiltIn::Keccak256 => {
                     let BlockAnd {
                         value: values,
@@ -435,14 +472,32 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         block,
                     } = positional.emit(context, block);
                     let builder = &context.state.builder;
+                    // `ecrecover(bytes32 hash, uint8 v, bytes32 r, bytes32 s)`: the
+                    // hash / r / s arguments keep their literal `uint256` type, but
+                    // `sol.ecrecover` takes `fixedbytes<32>` for them and `ui8` for
+                    // `v`. Coerce each to its signature type (matching solc).
+                    let bytes32 = AstType::fixed_bytes(builder.context, 32).into_mlir();
+                    let ui8 = Type::from(IntegerType::unsigned(builder.context, 8));
+                    let hash = AstValue::from(values[0])
+                        .cast(AstType::new(bytes32), builder, &block)
+                        .into_mlir();
+                    let v = AstValue::from(values[1])
+                        .cast(AstType::new(ui8), builder, &block)
+                        .into_mlir();
+                    let r = AstValue::from(values[2])
+                        .cast(AstType::new(bytes32), builder, &block)
+                        .into_mlir();
+                    let s = AstValue::from(values[3])
+                        .cast(AstType::new(bytes32), builder, &block)
+                        .into_mlir();
                     let value = mlir_op!(
                         builder,
                         block,
                         EcrecoverOperation
-                            .hash(values[0])
-                            .v(values[1])
-                            .r(values[2])
-                            .s(values[3])
+                            .hash(hash)
+                            .v(v)
+                            .r(r)
+                            .s(s)
                             .result(AstType::address(builder.context, false))
                     );
                     BlockAnd {
@@ -456,18 +511,23 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         block,
                     } = positional.emit(context, block);
                     let builder = &context.state.builder;
+                    // `addmod`/`mulmod` require identical `ui256` operand/result types, but a literal
+                    // operand keeps its narrow type, so widen all three to ui256.
+                    let ui256 = AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        .into_mlir();
+                    let x = AstValue::from(values[0])
+                        .cast(AstType::new(ui256), builder, &block)
+                        .into_mlir();
+                    let y = AstValue::from(values[1])
+                        .cast(AstType::new(ui256), builder, &block)
+                        .into_mlir();
+                    let modulus = AstValue::from(values[2])
+                        .cast(AstType::new(ui256), builder, &block)
+                        .into_mlir();
                     let value = if matches!(built_in, BuiltIn::Addmod) {
-                        mlir_op!(
-                            builder,
-                            block,
-                            AddModOperation.x(values[0]).y(values[1]).r#mod(values[2])
-                        )
+                        mlir_op!(builder, block, AddModOperation.x(x).y(y).r#mod(modulus))
                     } else {
-                        mlir_op!(
-                            builder,
-                            block,
-                            MulModOperation.x(values[0]).y(values[1]).r#mod(values[2])
-                        )
+                        mlir_op!(builder, block, MulModOperation.x(x).y(y).r#mod(modulus))
                     };
                     BlockAnd {
                         value: vec![value],
@@ -651,7 +711,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     };
                     let (value, block) = match member_built_in {
                         BuiltIn::AddressSend => {
-                            // `address.send(value)` → `sol.send`, yielding the success flag.
+                            // `address.send(value)` → `sol.send`, yielding the
+                            // success flag. `sol.send` takes a `ui256` amount, so a
+                            // narrow literal (`r.send(0)` → ui8) is widened first.
                             let builder = &context.state.builder;
                             let BlockAnd { value: addr, block } =
                                 access.operand().emit(context, block);
@@ -659,12 +721,22 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 value: values,
                                 block,
                             } = positional.emit(context, block);
+                            let amount = AstValue::from(values[0])
+                                .cast(
+                                    AstType::unsigned(
+                                        builder.context,
+                                        solx_utils::BIT_LENGTH_FIELD,
+                                    ),
+                                    builder,
+                                    &block,
+                                )
+                                .into_mlir();
                             let value = mlir_op!(
                                 builder,
                                 block,
                                 SendOperation
                                     .addr(addr)
-                                    .val(values[0])
+                                    .val(amount)
                                     .status(AstType::signless(
                                         builder.context,
                                         solx_utils::BIT_LENGTH_BOOLEAN
@@ -681,11 +753,17 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 value: values,
                                 block,
                             } = positional.emit(context, block);
-                            mlir_op_void!(
-                                builder,
-                                block,
-                                TransferOperation.addr(addr).val(values[0])
-                            );
+                            let amount = AstValue::from(values[0])
+                                .cast(
+                                    AstType::unsigned(
+                                        builder.context,
+                                        solx_utils::BIT_LENGTH_FIELD,
+                                    ),
+                                    builder,
+                                    &block,
+                                )
+                                .into_mlir();
+                            mlir_op_void!(builder, block, TransferOperation.addr(addr).val(amount));
                             (None, block)
                         }
                         BuiltIn::AbiEncode => {
@@ -999,7 +1077,391 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 None => {}
             }
 
-            unimplemented!("unsupported member call");
+            // A member call `x.f(...)`, classified by operand and member resolution.
+            let operand = access.operand();
+            // `super.f` / a recorded base redirect: an internal call up the C3 chain.
+            if matches!(operand, Expression::SuperKeyword(_))
+                || context.state.super_redirect.contains_key(&access.node_id())
+            {
+                let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                    unimplemented!("named arguments on a super call are not supported");
+                };
+                let target_id = context
+                    .state
+                    .super_redirect
+                    .get(&access.node_id())
+                    .copied()
+                    .expect("a super/base call has a recorded redirect target");
+                let argument_expressions: Vec<Expression> = positional.iter().collect();
+                let function = context.state.resolve_function(target_id);
+                let BlockAnd {
+                    value: argument_values,
+                    block,
+                } = argument_expressions.emit_as(&function.parameter_types, context, block);
+                let results = function.call(&argument_values, &context.state.builder, &block);
+                return BlockAnd {
+                    value: results,
+                    block,
+                };
+            }
+
+            let member_definition = access.member().resolve_to_definition();
+            // An external library call (`L.f` namespace or `using for` onto a
+            // selector-bearing library function) delegatecalls — the only member
+            // call that accepts named arguments.
+            if let Some(Definition::Function(function)) = &member_definition
+                && function.compute_selector().is_some()
+                && (matches!(&operand, Expression::Identifier(identifier)
+                        if matches!(identifier.resolve_to_definition(), Some(Definition::Library(_))))
+                    || matches!(
+                        function.enclosing_definition(),
+                        Some(Definition::Library(_))
+                    ))
+            {
+                // Resolve the link target from the member-access callee: the
+                // library function, its `solx_utils::ContractName`, and the `self`
+                // receiver (`None` for a namespace-qualified `L.f`, the operand value
+                // for a `using for` `x.f`).
+                let Some(Definition::Library(library)) = function.enclosing_definition() else {
+                    unreachable!("an external library call's target is a library member");
+                };
+                let library_operand = access.operand();
+                let self_receiver = (!MemberAccessOperand(&library_operand)
+                    .is_namespace_qualifier())
+                .then_some(library_operand);
+                let library_name = solx_utils::ContractName::new(
+                    library.get_file_id().to_owned(),
+                    Some(library.name().name()),
+                );
+                let parameter_ids: Vec<NodeId> = function
+                    .parameters()
+                    .iter()
+                    .map(|parameter| parameter.node_id())
+                    .collect();
+                let explicit_parameter_ids = if self_receiver.is_some() {
+                    &parameter_ids[1..]
+                } else {
+                    &parameter_ids[..]
+                };
+                let argument_expressions = arguments.ordered_by(explicit_parameter_ids);
+
+                // An external library call delegatecalls into the deployed library via `sol.ext_call`
+                // (`delegate_call` + `library_call`). The address is a `sol.lib_addr` link placeholder;
+                // a `using for` receiver becomes the implicit leading `self` argument.
+                let (parameter_types, return_types) = AstType::resolve_signature(
+                    function,
+                    LocationPolicy::Declared(None),
+                    &context.state.builder,
+                );
+                let selector = function.compute_selector().expect("slang validated");
+                let mlir_name = function.mlir_function_name();
+                let (argument_values, current_block) = match &self_receiver {
+                    Some(receiver) => {
+                        let (parameter_self, parameter_rest) =
+                            parameter_types.split_first().expect("slang validated");
+                        let BlockAnd {
+                            value: self_value,
+                            block,
+                        } = receiver.emit(context, block);
+                        let builder = &context.state.builder;
+                        let self_value = self_value
+                            .cast(AstType::new(*parameter_self), builder, &block)
+                            .into_mlir();
+                        let BlockAnd {
+                            value: mut rest_values,
+                            block,
+                        } = argument_expressions.emit_as(parameter_rest, context, block);
+                        rest_values.insert(0, self_value);
+                        (rest_values, block)
+                    }
+                    None => {
+                        let BlockAnd { value, block } =
+                            argument_expressions.emit_as(&parameter_types, context, block);
+                        (value, block)
+                    }
+                };
+                let builder = &context.state.builder;
+                let address =
+                    AstValue::library_address(&library_name, builder, &current_block).into_mlir();
+                let callee_type =
+                    FunctionType::new(builder.context, &parameter_types, &return_types);
+                let gas = AstValue::gas_left(builder, &current_block).into_mlir();
+                let value = AstValue::uint256(0, builder, &current_block).into_mlir();
+                let selector_value =
+                    AstValue::uint256(i64::from(selector), builder, &current_block).into_mlir();
+                // `sol.ext_call` yields the `i1` status (result 0) then the decoded outs; it reverts
+                // internally on failure, so the status is dropped and only the decoded results return.
+                let operation = current_block.append_operation(mlir_op_build!(
+                    builder,
+                    ExtCallOperation
+                        .callee(StringAttribute::new(builder.context, &mlir_name))
+                        .ins(&argument_values)
+                        .addr(address)
+                        .gas(gas)
+                        .val(value)
+                        .selector(selector_value)
+                        .delegate_call(Attribute::unit(builder.context))
+                        .library_call(Attribute::unit(builder.context))
+                        .callee_type(TypeAttribute::new(callee_type.into()))
+                        .status(AstType::signless(
+                            builder.context,
+                            solx_utils::BIT_LENGTH_BOOLEAN
+                        ))
+                        .outs(&return_types)
+                ));
+                let results = (0..return_types.len())
+                    .map(|index| {
+                        operation
+                            .result(index + 1)
+                            .expect("sol.ext_call produces the declared results")
+                            .into()
+                    })
+                    .collect();
+                return BlockAnd {
+                    value: results,
+                    block: current_block,
+                };
+            }
+
+            // Every other member call is positional.
+            let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                unimplemented!("named arguments on this member call are not supported");
+            };
+            return match member_definition {
+                // `using for` / `L.f` onto an internal (no-selector) library fn,
+                // inlined like an ordinary internal call; a selector-bearing one is
+                // a `this.f` / `instance.f` external call.
+                Some(Definition::Function(function)) if function.compute_selector().is_none() => {
+                    let resolved = context.state.resolve_function(function.node_id());
+                    // A namespace qualifier (`L.f` / `M.f`) is not a value, so only
+                    // the explicit arguments pass; a `using for` receiver becomes the
+                    // implicit `self` first parameter.
+                    if MemberAccessOperand(&operand).is_namespace_qualifier() {
+                        let arguments: Vec<Expression> = positional.iter().collect();
+                        let BlockAnd {
+                            value: argument_values,
+                            block,
+                        } = arguments.emit_as(&resolved.parameter_types, context, block);
+                        let results =
+                            resolved.call(&argument_values, &context.state.builder, &block);
+                        BlockAnd {
+                            value: results,
+                            block,
+                        }
+                    } else {
+                        let (parameter_self, parameter_rest) = resolved
+                            .parameter_types
+                            .split_first()
+                            .expect("slang validated");
+                        let BlockAnd {
+                            value: self_value,
+                            block,
+                        } = operand.emit(context, block);
+                        let self_value = self_value
+                            .cast(
+                                AstType::new(*parameter_self),
+                                &context.state.builder,
+                                &block,
+                            )
+                            .into_mlir();
+                        let arguments: Vec<Expression> = positional.iter().collect();
+                        let BlockAnd {
+                            value: mut argument_values,
+                            block,
+                        } = arguments.emit_as(parameter_rest, context, block);
+                        argument_values.insert(0, self_value);
+                        let results =
+                            resolved.call(&argument_values, &context.state.builder, &block);
+                        BlockAnd {
+                            value: results,
+                            block,
+                        }
+                    }
+                }
+                // `this.f` / `instance.f` (external call) and `this.x` / `instance.x` (getter) converge
+                // on one `sol.ext_icall`, differing only in the selector and signature source. A
+                // `view`/`pure` callee lowers to a STATICCALL. A nested / reference-typed getter is a LOUD residual.
+                Some(Definition::Function(_) | Definition::StateVariable(_)) => {
+                    let (selector, parameter_types, return_types, is_static) = match access
+                        .member()
+                        .resolve_to_definition()
+                    {
+                        Some(Definition::Function(function)) => {
+                            let (parameter_types, return_types) = AstType::resolve_signature(
+                                &function,
+                                LocationPolicy::ForceMemory,
+                                &context.state.builder,
+                            );
+                            (
+                                function.compute_selector().expect("slang validated"),
+                                parameter_types,
+                                return_types,
+                                matches!(
+                                    function.mutability(),
+                                    FunctionMutability::View | FunctionMutability::Pure
+                                ),
+                            )
+                        }
+                        Some(Definition::StateVariable(state_variable)) => {
+                            // A getter on another instance is single-valued here; only a self getter
+                            // (`this.m(key)`) lowers its key/index argument.
+                            if !matches!(access.operand(), Expression::ThisKeyword(_))
+                                && !positional.is_empty()
+                            {
+                                unimplemented!(
+                                    "external getter with key/index arguments is not yet supported"
+                                );
+                            }
+                            // The getter's external ABI signature: scalar `() -> (T)`, mapping `(K) -> (V)`,
+                            // array `(uint256) -> (element)`, struct `() -> (flattened members)`. Single-level
+                            // only — a nested or reference-typed key / value / element yields `None` below.
+                            let builder = &context.state.builder;
+                            let signature = state_variable.get_type().and_then(|declared_type| {
+                                match &declared_type {
+                                    SlangType::Mapping(mapping_type) => {
+                                        let key = mapping_type.key_type();
+                                        let value = mapping_type.value_type();
+                                        if key.is_reference_type() || value.is_reference_type() {
+                                            return None;
+                                        }
+                                        Some((
+                                            vec![AstType::resolve(
+                                                &key,
+                                                LocationPolicy::Declared(None),
+                                                builder,
+                                            )],
+                                            vec![AstType::resolve(
+                                                &value,
+                                                LocationPolicy::Declared(None),
+                                                builder,
+                                            )],
+                                        ))
+                                    }
+                                    SlangType::Array(array_type) => {
+                                        let element = array_type.element_type();
+                                        if element.is_reference_type() {
+                                            return None;
+                                        }
+                                        Some((
+                                            vec![
+                                                AstType::unsigned(
+                                                    builder.context,
+                                                    solx_utils::BIT_LENGTH_FIELD,
+                                                )
+                                                .into_mlir(),
+                                            ],
+                                            vec![AstType::resolve(
+                                                &element,
+                                                LocationPolicy::Declared(None),
+                                                builder,
+                                            )],
+                                        ))
+                                    }
+                                    SlangType::FixedSizeArray(array_type) => {
+                                        let element = array_type.element_type();
+                                        if element.is_reference_type() {
+                                            return None;
+                                        }
+                                        Some((
+                                            vec![
+                                                AstType::unsigned(
+                                                    builder.context,
+                                                    solx_utils::BIT_LENGTH_FIELD,
+                                                )
+                                                .into_mlir(),
+                                            ],
+                                            vec![AstType::resolve(
+                                                &element,
+                                                LocationPolicy::Declared(None),
+                                                builder,
+                                            )],
+                                        ))
+                                    }
+                                    SlangType::Struct(struct_type) => {
+                                        let Definition::Struct(struct_definition) =
+                                            struct_type.definition()
+                                        else {
+                                            return None;
+                                        };
+                                        let struct_mlir_type = AstType::resolve(
+                                            &declared_type,
+                                            LocationPolicy::Declared(Some(DataLocation::Storage)),
+                                            builder,
+                                        );
+                                        let plan = struct_definition
+                                            .struct_getter_layout(struct_mlir_type, builder)?;
+                                        let return_types = plan
+                                            .iter()
+                                            .map(|(_, _, result_type)| *result_type)
+                                            .collect();
+                                        Some((Vec::new(), return_types))
+                                    }
+                                    other if !other.is_reference_type() => Some((
+                                        Vec::new(),
+                                        vec![AstType::resolve(
+                                            other,
+                                            LocationPolicy::Declared(None),
+                                            builder,
+                                        )],
+                                    )),
+                                    _ => None,
+                                }
+                            });
+                            let Some((parameter_types, return_types)) = signature else {
+                                unimplemented!(
+                                    "getter of a nested or reference-typed state variable is not yet supported"
+                                );
+                            };
+                            (
+                                state_variable.compute_selector().expect("slang validated"),
+                                parameter_types,
+                                return_types,
+                                false,
+                            )
+                        }
+                        _ => unreachable!(
+                            "an external member call resolves to a function or state variable"
+                        ),
+                    };
+                    let BlockAnd {
+                        value: receiver,
+                        block,
+                    } = access.operand().emit(context, block);
+                    let ordered: Vec<Expression> = positional.iter().collect();
+                    let BlockAnd {
+                        value: argument_values,
+                        block,
+                    } = ordered.emit_as(&parameter_types, context, block);
+                    let builder = &context.state.builder;
+                    let callee = AstValue::external_callee(
+                        receiver,
+                        selector,
+                        &parameter_types,
+                        &return_types,
+                        builder,
+                        &block,
+                    );
+                    // A `view`/`pure` callee lowers to a STATICCALL; `{value: v}`
+                    // forwards `v`, a plain call sends zero — both handled by
+                    // `call_indirect` (the callee is an `ext_func_ref`).
+                    let results = callee.call_indirect(
+                        &argument_values,
+                        &return_types,
+                        call_value,
+                        is_static,
+                        builder,
+                        &block,
+                    );
+                    BlockAnd {
+                        value: results,
+                        block,
+                    }
+                }
+                other => unimplemented!(
+                    "unsupported member call: {:?}",
+                    other.map(|definition| definition.node_id())
+                ),
+            };
         }
 
         // `new T[](n)` / `new bytes(n)` / `new C(args)`.
@@ -1137,8 +1599,8 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             unimplemented!("unsupported callee expression");
         };
         match identifier.resolve_to_definition() {
-            // A direct call passes its arguments by position; ordering them against
-            // the parameter ids drives the call.
+            // A direct call passes its arguments by position or by name; ordering
+            // them against the parameter ids collapses both into one path.
             Some(Definition::Function(function_definition)) => {
                 let parameter_ids: Vec<NodeId> = function_definition
                     .parameters()

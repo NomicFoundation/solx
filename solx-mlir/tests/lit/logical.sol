@@ -5,8 +5,8 @@
 // then-branch, then load and return (both compilers seed with `sol.constant
 // false`). ||: same shape with the conditional store in the else-branch, and the
 // seed differs — solc stores the loaded `a`, solx stores `sol.constant true`.
-// Both backends walk functions in source order, so the CHECK sequences run
-// logical_and, logical_or, logical_not.
+// solx walks functions alphabetically and solc in source order, so each
+// backend's CHECK sequence follows its own function order.
 
 // CHECK-SOLX: sol.func @{{.*logical_and.*}}
 // CHECK-SOLX:   sol.alloca : !sol.ptr<i1, Stack>
@@ -20,6 +20,8 @@
 // CHECK-SOLX:   }
 // CHECK-SOLX:   sol.load %[[RES]]
 // CHECK-SOLX:   sol.return
+// CHECK-SOLX: sol.func @{{.*logical_not.*}}
+// CHECK-SOLX:   sol.cmp eq, %{{.*}}, %{{.*}} : i1
 // CHECK-SOLX: sol.func @{{.*logical_or.*}}
 // CHECK-SOLX:   sol.alloca : !sol.ptr<i1, Stack>
 // CHECK-SOLX:   sol.alloca : !sol.ptr<i1, Stack>
@@ -33,8 +35,6 @@
 // CHECK-SOLX:   }
 // CHECK-SOLX:   sol.load %[[RES]]
 // CHECK-SOLX:   sol.return
-// CHECK-SOLX: sol.func @{{.*logical_not.*}}
-// CHECK-SOLX:   sol.cmp eq, %{{.*}}, %{{.*}} : i1
 
 // CHECK-SOLC: sol.func @{{.*logical_and.*}}
 // CHECK-SOLC:   sol.alloca : !sol.ptr<i1, Stack>

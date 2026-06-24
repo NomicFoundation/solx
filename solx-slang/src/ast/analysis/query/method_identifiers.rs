@@ -6,6 +6,8 @@ use std::collections::BTreeMap;
 
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::FunctionKind;
+use slang_solidity_v2::ast::LibraryDefinition;
 
 /// The ABI `method_identifiers` map: externally-dispatchable signature → 4-byte selector (lower-case hex).
 pub trait MethodIdentifiers {
@@ -16,10 +18,43 @@ pub trait MethodIdentifiers {
 impl MethodIdentifiers for ContractDefinition {
     fn method_identifiers(&self) -> BTreeMap<String, String> {
         let mut method_identifiers = BTreeMap::new();
+        // Walk the C3-linearised function list so a derived contract exposes inherited external functions too.
+        for function in self.linearised_functions() {
+            let Some(signature) = function.compute_canonical_signature() else {
+                continue;
+            };
+            let Some(selector) = function.compute_selector() else {
+                continue;
+            };
+            method_identifiers.insert(signature, format!("{selector:08x}"));
+        }
+        // Walk the C3-linearised state-variable list so every `public` state
+        // variable's auto-generated getter — own or inherited — appears in the ABI.
+        for state_variable in self.linearised_state_variables() {
+            let Some(signature) = state_variable.compute_canonical_signature() else {
+                continue;
+            };
+            let Some(selector) = state_variable.compute_selector() else {
+                continue;
+            };
+            method_identifiers.insert(signature, format!("{selector:08x}"));
+        }
+        method_identifiers
+    }
+}
+
+impl MethodIdentifiers for LibraryDefinition {
+    fn method_identifiers(&self) -> BTreeMap<String, String> {
+        // A library dispatches only its externally-visible functions; keeping the regular functions
+        // with a selector yields exactly the deployed dispatch set.
+        let mut method_identifiers = BTreeMap::new();
         for member in self.members().iter() {
             let ContractMember::FunctionDefinition(function) = member else {
                 continue;
             };
+            if !matches!(function.kind(), FunctionKind::Regular) {
+                continue;
+            }
             let Some(signature) = function.compute_canonical_signature() else {
                 continue;
             };

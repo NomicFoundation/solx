@@ -252,6 +252,29 @@ impl Frontend for Slang {
                 ));
                 let _ = emitted;
             }
+
+            // Emit every library as its own deployable object, including internal-only ones: solc
+            // emits a call-protected stub per library, and the harness's `// library:` directive
+            // deploys and links it by name, so the object must exist even when all functions are internal.
+            for member in source_unit.members().iter() {
+                let SourceUnitMember::LibraryDefinition(library) = member else {
+                    continue;
+                };
+
+                let melior_context = solx_mlir::Context::create_mlir_context();
+                let evm_version = input_json.settings.evm_version.unwrap_or_default();
+                let mut context = solx_mlir::Context::new(&melior_context, evm_version);
+                let scope = ObjectScope::new(&[], &[]);
+                library.emit(&mut context, &scope);
+                Self::record_object(
+                    context,
+                    library.name().name(),
+                    library.method_identifiers(),
+                    input_json,
+                    file_identifier,
+                    &mut output,
+                )?;
+            }
         }
 
         Ok(output)

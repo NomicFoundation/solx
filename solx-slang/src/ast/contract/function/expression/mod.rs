@@ -72,12 +72,38 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
     type Output = BlockAnd<'context, 'block, AstValue<'context, 'block>>;
 
-    /// Dispatches an expression to its variant's emission.
+    /// Dispatches an expression to its variant's emission, first folding a compile-time-constant
+    /// arithmetic/bitwise expression to a constant (slang records the exact value, matching solc's
+    /// rational arithmetic — the only way to lower a rational intermediate, which has no runtime type).
     fn emit<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> Self::Output {
+        // A COMPUTED constant expression folds to its exact integer (a bare literal is excluded
+        // so it keeps its own emit arm).
+        let folds = matches!(
+            self,
+            Expression::AdditiveExpression(_)
+                | Expression::MultiplicativeExpression(_)
+                | Expression::ExponentiationExpression(_)
+                | Expression::ShiftExpression(_)
+                | Expression::BitwiseAndExpression(_)
+                | Expression::BitwiseOrExpression(_)
+                | Expression::BitwiseXorExpression(_)
+                | Expression::PrefixExpression(_)
+        );
+        if folds && let Some(folded) = self.integer_value() {
+            let result_type = AstType::resolve_optional(self.get_type(), &context.state.builder)
+                .expect("slang validated");
+            let value = AstValue::constant_from_bigint(
+                &folded,
+                AstType::new(result_type),
+                &context.state.builder,
+                &block,
+            );
+            return BlockAnd { block, value };
+        }
         match self {
             Expression::DecimalNumberExpression(inner) => inner.emit(context, block),
             Expression::HexNumberExpression(inner) => inner.emit(context, block),
