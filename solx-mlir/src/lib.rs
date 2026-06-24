@@ -23,6 +23,7 @@ pub use self::attributes::state_mutability::StateMutability;
 pub use self::context::Context;
 pub use self::context::UserDefinedOperator;
 pub use self::context::builder::Builder;
+pub use self::context::builder::try_fallback_kind::TryFallbackKind;
 pub use self::context::environment::Environment;
 pub use self::context::function::Function;
 pub use self::context::pointer::Pointer;

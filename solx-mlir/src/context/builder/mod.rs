@@ -2,6 +2,7 @@
 //! The `{context, location}` dialect-construction handle the `mlir_op!` macros read.
 //!
 
+pub mod try_fallback_kind;
 
 use melior::ir::Location;
 

@@ -5,6 +5,7 @@
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 pub mod positional_arguments;
+pub mod try_external_call;
 
 use melior::ir::Attribute;
 use melior::ir::BlockLike;

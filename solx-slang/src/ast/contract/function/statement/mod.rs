@@ -9,6 +9,7 @@ pub mod control_flow;
 pub mod event;
 pub mod expression_statement_kind;
 pub mod revert;
+pub mod try_statement;
 pub mod variable_declaration;
 
 use std::collections::HashMap;
@@ -325,7 +326,7 @@ impl<'context: 'block, 'block> EmitStatement<'context, 'block> for Statement {
             Statement::RevertStatement(inner) => inner.emit(context, block),
             Statement::EmitStatement(inner) => inner.emit(context, block),
             Statement::AssemblyStatement(_) => unimplemented!("inline assembly is not yet supported"),
-            Statement::TryStatement(_) => unimplemented!("try/catch is not yet supported"),
+            Statement::TryStatement(inner) => inner.emit(context, block),
         }
     }
 }
