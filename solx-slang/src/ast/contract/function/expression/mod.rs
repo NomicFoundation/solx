@@ -132,14 +132,20 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
 impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Expression {
     type Output = AstValue<'context, 'block>;
 
-    /// Emits this expression then casts it to `target_type`.
+    /// Emits this expression coerced to `target_type` (a string literal materialises in the target
+    /// representation directly; every other expression emits then casts).
     fn emit_as<'state>(
         &self,
         target_type: Type<'context>,
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, AstValue<'context, 'block>> {
-        let BlockAnd { value, block } = self.emit(context, block);
+        let BlockAnd { value, block } = match self {
+            Expression::StringExpression(string_literal) => {
+                string_literal.emit_as(target_type, context, block)
+            }
+            _ => self.emit(context, block),
+        };
         let value = value.cast(AstType::new(target_type), &context.state.builder, &block);
         BlockAnd { value, block }
     }

@@ -5,7 +5,11 @@
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
+use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::r#type::IntegerType;
+use num_bigint::BigInt;
+use num_bigint::Sign;
 use slang_solidity_v2::ast::DecimalNumberExpression;
 use slang_solidity_v2::ast::FalseKeyword;
 use slang_solidity_v2::ast::HexNumberExpression;
@@ -13,8 +17,10 @@ use slang_solidity_v2::ast::StringExpression;
 use slang_solidity_v2::ast::ThisKeyword;
 use slang_solidity_v2::ast::TrueKeyword;
 use solx_mlir::ods::sol::ThisOperation;
+use solx_utils::BIT_LENGTH_BYTE;
 
 use crate::ast::BlockAnd;
+use crate::ast::EmitAs;
 use crate::ast::EmitExpression;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
@@ -65,8 +71,69 @@ expression_emit!(ThisKeyword; |context, block| {
 });
 
 expression_emit!(StringExpression; |node, context, block| {
+    // A string literal's bytes are emitted verbatim — they need not be valid
+    // UTF-8 (`hex"..."`, `"\xff"`).
     let bytes = node.value();
-    let literal = std::str::from_utf8(&bytes).expect("string literal is valid UTF-8");
+    // SAFETY: the `&str` is only read as bytes by `StringAttribute::new` (never assumed UTF-8).
+    let literal = unsafe { std::str::from_utf8_unchecked(&bytes) };
     let value = AstValue::string_literal(literal, &context.state.builder, &block);
     BlockAnd { block, value }
 });
+
+// A string literal used where `bytesN` / `byte` is expected materialises as a compile-time
+// fixed-bytes / byte constant rather than the runtime `sol.string` its natural emit produces.
+impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for StringExpression {
+    type Output = AstValue<'context, 'block>;
+
+    fn emit_as<'state>(
+        &self,
+        target_type: Type<'context>,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> BlockAnd<'context, 'block, AstValue<'context, 'block>> {
+        let builder = &context.state.builder;
+        // A string literal toward a single `byte` (an element of `bytes` /
+        // `string`) materialises as a `!sol.byte` constant.
+        if AstType::new(target_type).is_byte() {
+            let byte = self.value().first().copied().unwrap_or(0);
+            let ui8 = Type::from(IntegerType::unsigned(
+                builder.context,
+                BIT_LENGTH_BYTE as u32,
+            ));
+            let integer = AstValue::constant_from_bigint(
+                &BigInt::from(byte),
+                AstType::new(ui8),
+                builder,
+                &block,
+            );
+            let value = integer.cast(AstType::new(target_type), builder, &block);
+            return BlockAnd { block, value };
+        }
+        // `bytesN` is left-aligned: the literal occupies the high bytes,
+        // zero-padded on the right.
+        if let Some(width) = AstType::new(target_type).fixed_bytes_or_byte_width() {
+            let mut buffer = vec![0u8; width as usize];
+            for (slot, byte) in buffer.iter_mut().zip(self.value().iter()) {
+                *slot = *byte;
+            }
+            let integer_value = BigInt::from_bytes_be(Sign::Plus, &buffer);
+            let integer_type = Type::from(IntegerType::unsigned(
+                builder.context,
+                width * BIT_LENGTH_BYTE as u32,
+            ));
+            let integer = AstValue::constant_from_bigint(
+                &integer_value,
+                AstType::new(integer_type),
+                builder,
+                &block,
+            );
+            let value = integer.cast(
+                AstType::fixed_bytes(builder.context, width),
+                builder,
+                &block,
+            );
+            return BlockAnd { block, value };
+        }
+        self.emit(context, block)
+    }
+}
