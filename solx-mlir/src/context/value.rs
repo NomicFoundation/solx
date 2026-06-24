@@ -38,6 +38,7 @@ use crate::ods::sol::GasLeftOperation;
 use crate::ods::sol::ICallOperation;
 use crate::ods::sol::Keccak256Operation;
 use crate::ods::sol::LengthOperation;
+use crate::ods::sol::LibAddrOperation;
 use crate::ods::sol::MallocOperation;
 use crate::ods::sol::NewOperation;
 use crate::ods::sol::PushOperation;
@@ -388,6 +389,21 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
+    /// `sol.lib_addr` — a library's linked deploy address, a placeholder the linker resolves by the library's full path.
+    pub fn library_address(
+        name: &solx_utils::ContractName,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            builder,
+            block,
+            LibAddrOperation
+                ._name(StringAttribute::new(builder.context, &name.full_path))
+                .val(Type::address(builder.context, false).into_mlir())
+        ))
+    }
+
     /// `sol.new` — contract creation embedding `obj_name`'s deploy bytecode. `val`
     /// is the forwarded wei; a `salt` selects CREATE2. `operand_segment_sizes` is
     /// set by hand (melior's ODS builder doesn't synthesize it); the salt must be
@@ -426,17 +442,24 @@ impl<'context, 'block> Value<'context, 'block> {
         )
     }
 
-    /// `sol.keccak256` over a byte buffer, yielding the 32-byte hash.
+    /// `sol.keccak256` over a byte buffer, yielding the 32-byte hash. The buffer is coerced to memory first.
     pub fn keccak256(
         buffer: Self,
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
+        let input = buffer
+            .cast(
+                Type::string(builder.context, solx_utils::DataLocation::Memory),
+                builder,
+                block,
+            )
+            .into_mlir();
         Self::new(mlir_op!(
             builder,
             block,
             Keccak256Operation
-                .addr(buffer.into_mlir())
+                .addr(input)
                 .result(Type::fixed_bytes(builder.context, 32))
         ))
     }

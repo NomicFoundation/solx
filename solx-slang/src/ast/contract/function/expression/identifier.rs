@@ -14,6 +14,7 @@ use crate::ast::EmitExpression;
 use crate::ast::LocationPolicy;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 expression_emit!(Identifier; |node, context, block| {
@@ -75,6 +76,16 @@ expression_emit!(Identifier; |node, context, block| {
                 .state
                 .resolve_function(target_id)
                 .pointer_constant(&context.state.builder, &block);
+            BlockAnd { block, value }
+        }
+        Some(Definition::Library(library)) => {
+            // A library name used as a value (`address(L)`) is its linked deploy
+            // address, placed by its link symbol.
+            let name = solx_utils::ContractName::new(
+                library.get_file_id().to_owned(),
+                Some(library.name().name()),
+            );
+            let value = AstValue::library_address(&name, &context.state.builder, &block);
             BlockAnd { block, value }
         }
         None => unreachable!("slang resolves every identifier reference"),
