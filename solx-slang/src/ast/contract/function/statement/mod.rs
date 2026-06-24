@@ -8,6 +8,7 @@ use crate::ast::Value as AstValue;
 pub mod control_flow;
 pub mod event;
 pub mod expression_statement_kind;
+pub mod modifier_strategy;
 pub mod revert;
 pub mod try_statement;
 pub mod variable_declaration;
@@ -40,6 +41,7 @@ use solx_mlir::ods::sol::ReturnOperation;
 use solx_mlir::ods::sol::RevertOperation;
 
 use self::expression_statement_kind::ExpressionStatementKind;
+use self::modifier_strategy::ModifierStrategy;
 use crate::ast::BlockAnd;
 use crate::ast::EmitAs;
 use crate::ast::EmitExpression;
@@ -65,6 +67,8 @@ pub struct StatementContext<'state, 'context, 'block> {
     /// The function's return slots, parallel to `return_types` (`None` for an unnamed return); a bare
     /// `return;` and the epilogue load these so the `sol.return` arity matches.
     pub return_slots: &'state [Option<Value<'context, 'block>>],
+    /// How the `_;` placeholder lowers (body-call hand-off, inline modifier chain, or nothing). Set by direct assignment.
+    pub modifier_strategy: ModifierStrategy<'context, 'block>,
     /// Arithmetic overflow-checking mode (Checked by default, Unchecked inside `unchecked {}`).
     pub arithmetic_mode: ArithmeticMode,
 }
@@ -100,6 +104,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             storage_layout,
             return_types,
             return_slots,
+            modifier_strategy: ModifierStrategy::None,
             arithmetic_mode: ArithmeticMode::Checked,
         }
     }
@@ -223,6 +228,10 @@ statement_emit!(ContinueStatement; |context, block| {
 // ([`ExpressionStatementKind`]) and emitted by kind.
 statement_emit!(ExpressionStatement; |node, context, block| {
     match ExpressionStatementKind::from_statement(node) {
+        // The placeholder hands off per the active modifier strategy (inline chain or body call).
+        ExpressionStatementKind::ModifierPlaceholder => {
+            ModifierStrategy::emit_placeholder(context, block)
+        }
         ExpressionStatementKind::RevertCall(call) => {
             let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
             else {
@@ -286,6 +295,26 @@ statement_emit!(ExpressionStatement; |node, context, block| {
                     block
                 }
             };
+            Some(block)
+        }
+        ExpressionStatementKind::TypeOrSuperNoop => Some(block),
+        ExpressionStatementKind::TypeReference(expression) => {
+            // A discarded type / selector reference is compile-time; only a runtime receiver under the
+            // member-access chain (a conditional) has side effects, so peel to the base and run just that.
+            let mut current = expression.unwrap_parentheses();
+            while let Expression::MemberAccessExpression(access) = current {
+                current = access.operand().unwrap_parentheses();
+            }
+            if let Expression::ConditionalExpression(conditional) = current {
+                let emitter = ExpressionContext::from(&*context);
+                Some(conditional.operand().emit(&emitter, block).block)
+            } else {
+                Some(block)
+            }
+        }
+        ExpressionStatementKind::TupleConditional(conditional) => {
+            let emitter = ExpressionContext::from(&*context);
+            let BlockAnd { block, .. } = conditional.emit(&emitter, block);
             Some(block)
         }
         ExpressionStatementKind::Value(expression) => {

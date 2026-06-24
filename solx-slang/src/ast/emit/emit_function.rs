@@ -8,6 +8,7 @@ use melior::ir::Type;
 use melior::ir::Value;
 
 use crate::ast::contract::function::FunctionScope;
+use crate::ast::contract::function::body_kind::BodyKind;
 
 /// Lowers a function definition to a `sol.func`. A contract / library threads the
 /// emission via the shared [`FunctionScope`]; the node carries the projection.
@@ -29,13 +30,15 @@ pub trait EmitFunction {
     );
 
     /// Opens the `sol.func`, binds parameters and return slots, threads the body
-    /// statements, and closes with the default return. `symbol_override` names the
-    /// `sol.func` explicitly and suppresses the public selector and special kind.
+    /// statements (or the modifier chain), and closes with the default return.
+    /// `symbol_override` names the `sol.func` explicitly and suppresses the public
+    /// selector and special kind.
     fn emit_inner<'state, 'context>(
         &self,
         scope: &FunctionScope<'state, 'context>,
         symbol_override: Option<&str>,
         contract_body: &BlockRef<'context, '_>,
+        body_kind: BodyKind,
     );
 
     /// Emits a default `sol.return` when the block lacks a terminator, loading

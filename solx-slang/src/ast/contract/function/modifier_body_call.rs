@@ -1,0 +1,68 @@
+//!
+//! The `ModifierBodyCall` modifier-stage hand-off record.
+//!
+
+use melior::ir::BlockLike;
+use melior::ir::Type;
+use melior::ir::Value;
+use melior::ir::attribute::FlatSymbolRefAttribute;
+
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
+use solx_mlir::Builder;
+use solx_mlir::ods::sol::CallOperation;
+
+/// The hand-off from a modifier stage's `_` placeholder to the next-stage / `$body` `sol.func`:
+/// forwards the wrapping function's parameters and stores the call results into its return slots.
+pub struct ModifierBodyCall<'context, 'block> {
+    /// Symbol of the internal `sol.func` holding the wrapped body / next stage.
+    pub symbol: String,
+    /// The downstream `sol.func`'s declared result types.
+    pub result_types: Vec<Type<'context>>,
+    /// The wrapping function's parameters, forwarded to the body call.
+    pub forward_params: Vec<Value<'context, 'block>>,
+    /// The wrapping function's return slots; the body call's results are stored
+    /// here so the modifier tail and epilogue observe them.
+    pub return_slots: Vec<Option<Value<'context, 'block>>>,
+}
+
+impl<'context, 'block> ModifierBodyCall<'context, 'block> {
+    /// Emits the hand-off: call the downstream `sol.func` with the forwarded parameters followed by
+    /// the current return-slot values, then store the results back into the return slots.
+    pub fn emit<Block>(&self, builder: &Builder<'context>, block: &Block)
+    where
+        Block: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let mut operands = self.forward_params.clone();
+        for (slot, result_type) in self.return_slots.iter().zip(self.result_types.iter()) {
+            if let Some(pointer) = slot {
+                operands.push(
+                    Pointer::new(*pointer)
+                        .load(AstType::new(*result_type), builder, block)
+                        .into_mlir(),
+                );
+            }
+        }
+        // The synthetic `$body` / next-stage `sol.func` is not a registered
+        // function, so its call is built here rather than through `Function::call`.
+        let operation = block.append_operation(mlir_op_build!(
+            builder,
+            CallOperation
+                .callee(FlatSymbolRefAttribute::new(builder.context, &self.symbol))
+                .outs(&self.result_types)
+                .operands(&operands)
+        ));
+        let results = (0..self.result_types.len()).map(|index| {
+            operation
+                .result(index)
+                .expect("sol.call produces its declared result count")
+        });
+        for (slot, value) in self.return_slots.iter().zip(results) {
+            if let Some(pointer) = slot {
+                Pointer::new(*pointer).store(AstValue::new(value.into()), builder, block);
+            }
+        }
+    }
+}

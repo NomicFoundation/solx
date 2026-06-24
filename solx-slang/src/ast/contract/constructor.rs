@@ -30,7 +30,9 @@ use crate::ast::contract::function::FunctionScope;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::statement::StatementContext;
+use crate::ast::contract::function::statement::modifier_strategy::ModifierStrategy;
 use crate::ast::emit::EmitConstructor;
+use crate::ast::emit::EmitModifierChain;
 use crate::ast::analysis::query::MatchLinearisedBase;
 use crate::ast::analysis::query::PositionalArguments;
 
@@ -340,9 +342,35 @@ impl EmitConstructor for ContractDefinition {
             let environment = scopes.entry(contract.node_id()).or_default();
             environment.enter_scope();
 
-            // INTERMEDIATE (C34 pending): constructor modifiers are not yet emitted, so every
-            // constructor body runs inline in its own parameter scope, base-first (reversed MRO).
-            for statement in body.statements().iter() {
+            // A constructor may carry modifiers, virtually dispatched against the *deployed* contract
+            // (an overridden modifier runs its most-derived body). Base invocations resolve to no modifier.
+            let (mut modifier_stages, mut modifier_stage_params, next_block) =
+                base_constructor.build_modifier_stages(scope, environment, current_block);
+            current_block = next_block;
+
+            if modifier_stages.is_empty() {
+                for statement in body.statements().iter() {
+                    let mut emitter = StatementContext::new(
+                        scope.state,
+                        environment,
+                        &region,
+                        scope.storage_layout,
+                        &return_types,
+                        &[],
+                    );
+                    match statement.emit(&mut emitter, current_block) {
+                        Some(next) => current_block = next,
+                        None => {
+                            terminated = true;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                // The constructor body is the innermost stage, run inline at the last modifier's `_;`
+                // (a constructor has no return value, so the body need not be a separate `sol.func`).
+                modifier_stages.push(body.clone());
+                modifier_stage_params.push(Vec::new());
                 let mut emitter = StatementContext::new(
                     scope.state,
                     environment,
@@ -351,12 +379,14 @@ impl EmitConstructor for ContractDefinition {
                     &return_types,
                     &[],
                 );
-                match statement.emit(&mut emitter, current_block) {
+                emitter.modifier_strategy = ModifierStrategy::InlineChain {
+                    stages: modifier_stages,
+                    parameters: modifier_stage_params,
+                    index: 0,
+                };
+                match ModifierStrategy::emit_placeholder(&mut emitter, current_block) {
                     Some(next) => current_block = next,
-                    None => {
-                        terminated = true;
-                        break;
-                    }
+                    None => terminated = true,
                 }
             }
 

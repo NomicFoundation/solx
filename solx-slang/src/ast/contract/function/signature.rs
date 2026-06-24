@@ -10,6 +10,7 @@ use solx_mlir::StateMutability;
 
 use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
+use crate::ast::contract::function::body_kind::BodyKind;
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 
 /// The resolved MLIR signature of a function: its symbol name, parameter and
@@ -18,8 +19,11 @@ use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 pub struct Signature<'context> {
     /// The MLIR symbol the `sol.func` is emitted under.
     pub mlir_name: String,
-    /// The Sol-typed parameter types.
+    /// The Sol-typed parameter types. A [`BodyKind::ModifierBody`] emission extends these with the
+    /// result types (the wrapped body receives its returns as trailing parameters).
     pub mlir_parameter_types: Vec<Type<'context>>,
+    /// The number of the function's own parameters, before any modifier-body trailing-return extension.
+    pub parameter_count: usize,
     /// The Sol-typed result types, parallel to the function's returns.
     pub result_types: Vec<Type<'context>>,
     /// The 4-byte public selector, when the function is externally dispatched.
@@ -33,24 +37,32 @@ pub struct Signature<'context> {
 
 impl<'context> Signature<'context> {
     /// Resolves the MLIR signature of `function` — symbol, parameter and result
-    /// types, selector, mutability, and kind. A `symbol_override`
+    /// types, selector, mutability, and kind. A `symbol_override` or modifier body
     /// carries no public selector or special function kind.
     pub fn resolve(
         function: &FunctionDefinition,
         symbol_override: Option<&str>,
+        body_kind: BodyKind,
         builder: &Builder<'context>,
     ) -> Self {
         let mlir_name = symbol_override
             .map(str::to_owned)
             .unwrap_or_else(|| function.mlir_function_name());
 
-        let (mlir_parameter_types, result_types) =
+        let (mut mlir_parameter_types, result_types) =
             AstType::resolve_signature(function, LocationPolicy::Declared(None), builder);
+
+        let parameter_count = mlir_parameter_types.len();
+
+        // A modifier body (`$body`) receives the wrapping function's return values as trailing parameters.
+        if body_kind == BodyKind::ModifierBody {
+            mlir_parameter_types.extend(result_types.iter().copied());
+        }
 
         let state_mutability = StateMutability::from(function.mutability());
 
-        let (selector, mlir_kind) = match symbol_override {
-            None => {
+        let (selector, mlir_kind) = match (symbol_override, body_kind) {
+            (None, BodyKind::Function) => {
                 let mlir_kind = match function.kind() {
                     FunctionKind::Constructor => Some(solx_mlir::FunctionKind::Constructor),
                     FunctionKind::Fallback => Some(solx_mlir::FunctionKind::Fallback),
@@ -62,12 +74,13 @@ impl<'context> Signature<'context> {
                 };
                 (function.compute_selector(), mlir_kind)
             }
-            Some(_) => (None, None),
+            _ => (None, None),
         };
 
         Signature {
             mlir_name,
             mlir_parameter_types,
+            parameter_count,
             result_types,
             selector,
             state_mutability,
