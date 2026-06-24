@@ -4,7 +4,10 @@
 
 pub mod constructor;
 pub mod function;
+pub mod object_scope;
 pub mod storage_layout;
+
+pub use self::object_scope::ObjectScope;
 
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
@@ -28,7 +31,7 @@ use crate::ast::emit::EmitConstructor;
 use crate::ast::analysis::query::StorageLayout;
 
 impl EmitObject for ContractDefinition {
-    fn emit(&self, context: &mut Context) {
+    fn emit(&self, context: &mut Context, _scope: &ObjectScope) {
         let contract_name = self.name().name();
 
         // Pre-register the contract's own functions so a call by bare name resolves to its

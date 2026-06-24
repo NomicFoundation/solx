@@ -3,12 +3,16 @@
 //!
 
 use crate::ast::EmitObject;
+use crate::ast::contract::ObjectScope;
+use crate::ast::operator_binding::OperatorBindings;
 use crate::ast::analysis::query::MethodIdentifiers;
 pub mod compilation_config;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::SourceUnitMember;
 use slang_solidity_v2::compilation::CompilationBuilder;
 use slang_solidity_v2::compilation::CompilationUnit;
 use slang_solidity_v2::diagnostics::DiagnosticExtensions;
@@ -62,6 +66,28 @@ impl Slang {
         }
 
         Ok(builder.build())
+    }
+
+    /// Gathers every file-level (free) function — not part of any contract's linearised set, so
+    /// collected once and handed to each contract emitter.
+    fn gather_free_functions(unit: &CompilationUnit) -> Vec<FunctionDefinition> {
+        unit.file_ids()
+            .iter()
+            .filter_map(|file_identifier| unit.file(file_identifier))
+            .flat_map(|file| {
+                file.ast()
+                    .members()
+                    .iter()
+                    .filter_map(|member| {
+                        if let SourceUnitMember::FunctionDefinition(function) = member {
+                            Some(function)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
     }
 
     /// Finalises a freshly-emitted object's module and records its MLIR stages
@@ -189,6 +215,8 @@ impl Frontend for Slang {
         }
 
         let file_identifiers = unit.file_ids();
+        let free_functions = Self::gather_free_functions(&unit);
+        let operator_bindings = OperatorBindings::gather(&unit);
 
         for file_identifier in file_identifiers.iter() {
             let Some(file) = unit.file(file_identifier) else {
@@ -196,32 +224,34 @@ impl Frontend for Slang {
             };
             let source_unit = file.ast();
 
-            // The current pipeline creates one MLIR module per source file, so only the first
-            // contract is processed. An `abstract contract` is never deployed; skip it.
-            let contracts = source_unit.contracts();
-            let Some(contract) = contracts.first() else {
-                continue;
-            };
-            if contract.is_abstract() {
-                continue;
+            // Emit every contract in the file as its own deployable object (the harness deploys any
+            // by name). The `catch_unwind` isolates each: a contract the recut cannot yet lower is
+            // simply absent from the artifacts, so its gap never aborts the file's other contracts.
+            for contract in source_unit.contracts().iter() {
+                // An `abstract contract` is never deployed; skip it.
+                if contract.is_abstract() {
+                    continue;
+                }
+                let emitted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                    || -> anyhow::Result<()> {
+                        let melior_context = solx_mlir::Context::create_mlir_context();
+                        let evm_version = input_json.settings.evm_version.unwrap_or_default();
+                        let mut context = solx_mlir::Context::new(&melior_context, evm_version);
+                        context.operator_bindings = operator_bindings.map.clone();
+                        let scope = ObjectScope::new(&free_functions, &operator_bindings.functions);
+                        contract.emit(&mut context, &scope);
+                        Self::record_object(
+                            context,
+                            contract.name().name(),
+                            contract.method_identifiers(),
+                            input_json,
+                            file_identifier,
+                            &mut output,
+                        )
+                    },
+                ));
+                let _ = emitted;
             }
-            let emitted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
-                || -> anyhow::Result<()> {
-                    let melior_context = solx_mlir::Context::create_mlir_context();
-                    let evm_version = input_json.settings.evm_version.unwrap_or_default();
-                    let mut context = solx_mlir::Context::new(&melior_context, evm_version);
-                    contract.emit(&mut context);
-                    Self::record_object(
-                        context,
-                        contract.name().name(),
-                        contract.method_identifiers(),
-                        input_json,
-                        file_identifier,
-                        &mut output,
-                    )
-                },
-            ));
-            let _ = emitted;
         }
 
         Ok(output)

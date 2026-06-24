@@ -14,11 +14,13 @@ use solx_mlir::LocationPolicy;
 use solx_mlir::Type;
 use solx_mlir::ods::sol::ContractOperation;
 
+use crate::ast::contract::ObjectScope;
+
 /// Lowers a top-level definition to one deployable `sol.contract`, threading `&mut Context`.
-/// Implemented by `ContractDefinition`.
+/// Implemented by `ContractDefinition` and `LibraryDefinition` (a library omits the constructor / state steps).
 pub trait EmitObject {
     /// Emits this definition as a deployable `sol.contract` with its functions.
-    fn emit(&self, context: &mut Context);
+    fn emit(&self, context: &mut Context, scope: &ObjectScope);
 
     /// Emits the empty `sol.contract` shell, returning its body block for
     /// appending the object's function definitions. The kind builds its own
