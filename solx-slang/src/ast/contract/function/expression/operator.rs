@@ -8,6 +8,7 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use melior::ir::operation::Operation;
+use melior::ir::r#type::IntegerType;
 
 use solx_mlir::Builder;
 use solx_mlir::CmpPredicate;
@@ -83,7 +84,7 @@ pub enum Operator {
 impl Operator {
     /// Builds a Sol dialect binary operation. Checked mode uses the `sol.c*` arithmetic variants;
     /// modulo, bitwise, and shift are always unchecked.
-    pub fn build_binary_operation<'context>(
+    pub fn emit_sol_binary_operation<'context>(
         self,
         mode: ArithmeticMode,
         builder: &Builder<'context>,
@@ -128,7 +129,7 @@ impl Operator {
                 mlir_op_build!(builder, ShrOperation.result(lhs.r#type()).lhs(lhs).rhs(rhs))
             }
             _ => unreachable!(
-                "build_binary_operation called on non-arithmetic operator: {self:?}"
+                "emit_sol_binary_operation called on non-arithmetic operator: {self:?}"
             ),
         }
     }
@@ -165,8 +166,10 @@ impl Operator {
         (value, block)
     }
 
-    /// Combines already-materialised `lhs`/`rhs` into a value of `result_type`, casting both
-    /// operands to `result_type` before the operation.
+    /// Combines already-materialised `lhs`/`rhs` into a value of `result_type`.
+    ///
+    /// The integer-only bitwise/shift ops bridge a `bytesN` / `byte` operand through `ui(8*N)`
+    /// and cast back; on a shift only the shifted value is bridged.
     pub fn emit_value_binary<'context, 'block>(
         self,
         mode: ArithmeticMode,
@@ -176,18 +179,54 @@ impl Operator {
         result_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> AstValue<'context, 'block> {
-        let lhs = lhs
-            .cast(AstType::new(result_type), builder, block)
-            .into_mlir();
-        let rhs = rhs
-            .cast(AstType::new(result_type), builder, block)
-            .into_mlir();
+        let is_shift = matches!(self, Operator::ShiftLeft | Operator::ShiftRight);
+        let is_bitwise = is_shift
+            || matches!(
+                self,
+                Operator::BitwiseAnd | Operator::BitwiseOr | Operator::BitwiseXor
+            );
+
+        let (lhs, rhs, restore_type) = if is_bitwise
+            && let Some(width) = AstType::new(result_type).fixed_bytes_or_byte_width()
+        {
+            let int_type = Type::from(IntegerType::unsigned(builder.context, 8 * width));
+            let lhs = lhs
+                .cast(AstType::new(result_type), builder, block)
+                .cast(AstType::new(int_type), builder, block)
+                .into_mlir();
+            let rhs = if is_shift {
+                rhs.cast(AstType::new(int_type), builder, block).into_mlir()
+            } else {
+                rhs.cast(AstType::new(result_type), builder, block)
+                    .cast(AstType::new(int_type), builder, block)
+                    .into_mlir()
+            };
+            (lhs, rhs, Some(result_type))
+        } else {
+            let lhs = lhs
+                .cast(AstType::new(result_type), builder, block)
+                .into_mlir();
+            // `**` keeps its exponent's own (unsigned) type: `sol.exp`/`sol.cexp` take an unsigned
+            // exponent alongside a possibly-signed base, so it must NOT be coerced to the result type.
+            let rhs = if matches!(self, Operator::Exponentiation) {
+                rhs.into_mlir()
+            } else {
+                rhs.cast(AstType::new(result_type), builder, block)
+                    .into_mlir()
+            };
+            (lhs, rhs, None)
+        };
+
         let result: Value<'context, 'block> = block
-            .append_operation(self.build_binary_operation(mode, builder, lhs, rhs))
+            .append_operation(self.emit_sol_binary_operation(mode, builder, lhs, rhs))
             .result(0)
             .expect("binary operation always produces one result")
             .into();
-        result.into()
+
+        match restore_type {
+            Some(fixed) => AstValue::from(result).cast(AstType::new(fixed), builder, block),
+            None => result.into(),
+        }
     }
 
     /// Emits postfix `++` / `--`, returning the old value.
@@ -228,11 +267,31 @@ impl Operator {
             Operator::BitwiseNot => {
                 let BlockAnd { value, block } = operand.emit(context, block);
                 let operand_type = target_type.expect("slang validated");
-                let value = value
-                    .cast(AstType::new(operand_type), &context.state.builder, &block)
-                    .into_mlir();
+                let value = value.cast(AstType::new(operand_type), &context.state.builder, &block);
+                // `sol.not` is integer-only; bridge a `bytesN` / `byte` operand through `ui(8*N)` and cast back.
+                let builder = &context.state.builder;
+                let (value, restore_type) =
+                    match AstType::new(operand_type).fixed_bytes_or_byte_width() {
+                        Some(width) => {
+                            let int_type =
+                                Type::from(IntegerType::unsigned(builder.context, 8 * width));
+                            (
+                                value
+                                    .cast(AstType::new(int_type), builder, &block)
+                                    .into_mlir(),
+                                Some(operand_type),
+                            )
+                        }
+                        None => (value.into_mlir(), None),
+                    };
                 let result: Value<'context, 'block> =
-                    mlir_op!(&context.state.builder, block, NotOperation.value(value));
+                    mlir_op!(builder, block, NotOperation.value(value));
+                let result = match restore_type {
+                    Some(fixed) => AstValue::from(result)
+                        .cast(AstType::new(fixed), builder, &block)
+                        .into_mlir(),
+                    None => result,
+                };
                 (result.into(), block)
             }
             Operator::Not => {
@@ -374,7 +433,7 @@ impl Operator {
         let one = AstValue::constant(1, AstType::new(element_type), &context.state.builder, block)
             .into_mlir();
         block
-            .append_operation(self.build_binary_operation(
+            .append_operation(self.emit_sol_binary_operation(
                 context.arithmetic_mode,
                 &context.state.builder,
                 old,
