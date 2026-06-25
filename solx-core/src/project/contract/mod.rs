@@ -486,7 +486,13 @@ impl Contract {
                 )?;
                 let (immutables_out, metadata_out) = match code_segment {
                     solx_utils::CodeSegment::Deploy => (None, None),
-                    solx_utils::CodeSegment::Runtime => (Some(BTreeMap::new()), metadata_bytes),
+                    // Carry the runtime object's discovered immutables (id -> bytecode offsets) so the
+                    // deploy object can bake their values via `setimmutable`. Previously hardcoded empty,
+                    // which silently dropped every immutable once the Slang frontend began emitting real
+                    // `sol.immutable`s instead of storage-slot stand-ins.
+                    solx_utils::CodeSegment::Runtime => {
+                        (Some(build.immutables.unwrap_or_default()), metadata_bytes)
+                    }
                 };
                 let object = EVMContractObject::new(
                     code_identifier,
@@ -607,7 +613,13 @@ impl Contract {
                 )?;
                 let (immutables_out, metadata_out) = match code_segment {
                     solx_utils::CodeSegment::Deploy => (None, None),
-                    solx_utils::CodeSegment::Runtime => (Some(BTreeMap::new()), metadata_bytes),
+                    // Carry the runtime object's discovered immutables (id -> bytecode offsets) so the
+                    // deploy object can bake their values via `setimmutable`. Previously hardcoded empty,
+                    // which silently dropped every immutable once the Slang frontend began emitting real
+                    // `sol.immutable`s instead of storage-slot stand-ins.
+                    solx_utils::CodeSegment::Runtime => {
+                        (Some(build.immutables.unwrap_or_default()), metadata_bytes)
+                    }
                 };
                 let object = EVMContractObject::new(
                     code_identifier.clone(),

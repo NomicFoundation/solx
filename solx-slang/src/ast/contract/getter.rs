@@ -484,14 +484,12 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             builder,
             &block,
         );
-        let storage_ref =
-            Pointer::addr_of(&slot.name, AstType::new(address_type), builder, &entry).into_mlir();
         let value = if declared_type.is_reference_type() {
-            storage_ref
+            Pointer::addr_of(&slot.name, AstType::new(address_type), builder, &entry).into_mlir()
         } else {
-            Pointer::new(storage_ref)
-                .load(AstType::new(element_type), builder, &entry)
-                .into_mlir()
+            // Route through the slot so an `immutable` getter reads via `sol.load_immutable` and a
+            // storage/transient one via `sol.addr_of` + `sol.load`, matching solc and the body reads.
+            slot.load(builder, element_type, &entry)
         };
         mlir_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
     }

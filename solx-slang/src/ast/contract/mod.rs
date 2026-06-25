@@ -28,6 +28,7 @@ use slang_solidity_v2::ast::NodeId;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
+use solx_mlir::ods::sol::ImmutableOperation;
 use solx_mlir::ods::sol::StateVarOperation;
 use solx_utils::DataLocation;
 
@@ -145,6 +146,18 @@ impl EmitObject for ContractDefinition {
                 &context.builder,
             );
             let builder = &context.builder;
+            // An `immutable` is a symbol-addressed `sol.immutable` (no storage slot); a read lowers to
+            // `sol.load_immutable` and the constructor's write to a `!sol.ptr<T, Immutable>` store, all
+            // matching solc. Emit the definition and skip the storage-slot machinery below.
+            if matches!(slot.location, DataLocation::Immutable) {
+                let operation =
+                    ImmutableOperation::builder(builder.context, builder.unknown_location)
+                        .sym_name(StringAttribute::new(builder.context, &slot.name))
+                        .r#type(TypeAttribute::new(element_type))
+                        .build();
+                contract_body.append_operation(operation.into());
+                continue;
+            }
             let slot_attribute: IntegerAttribute =
                 Attribute::parse(builder.context, &format!("{} : i256", slot.slot))
                     .expect("valid slot literal")

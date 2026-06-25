@@ -1,12 +1,11 @@
 //!
-//! Immutable storage-layout query (solx-side).
+//! Immutable layout query (solx-side).
 //!
-//! `immutable` state variables have no native storage; the solx backend lowers
-//! them as ordinary storage appended after the persistent layout, so a read
-//! after the constructor's write observes the value. Slang exposes only the
-//! persistent layout's high-water slot ([`ContractAbi::next_free_slot`]); this
-//! packs the immutable value types from there, mirroring Slang's own
-//! `lay_out_state_variables` so the result matches byte-for-byte.
+//! `immutable` state variables are emitted as `sol.immutable` (symbol-addressed, no storage slot),
+//! read via `sol.load_immutable`, and written in the constructor through a `!sol.ptr<T, Immutable>`
+//! store — matching solc. This query only ENUMERATES the immutables (keyed by node id, carrying each
+//! variable's MLIR symbol name) so emission and reads can find them; the slot/offset it computes are
+//! vestigial under the `Immutable` class and impose no storage layout.
 //!
 
 use std::collections::HashMap;
@@ -59,6 +58,9 @@ impl ImmutableStorageLayout for ContractDefinition {
 
             let label = variable.name().unparse().to_string();
             let node_id = variable.node_id();
+            // `immutable`s are emitted as `sol.immutable` (a symbol, not a storage slot) and read via
+            // `sol.load_immutable`, matching solc. The slot/offset are vestigial under the `Immutable`
+            // class — kept only so the entry carries the variable's MLIR symbol name.
             layout.insert(
                 node_id,
                 StorageSlot::new(
@@ -66,7 +68,7 @@ impl ImmutableStorageLayout for ContractDefinition {
                     byte_offset_in_slot as u32,
                     &label,
                     node_id,
-                    DataLocation::Storage,
+                    DataLocation::Immutable,
                 ),
             );
 
