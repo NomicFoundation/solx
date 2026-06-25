@@ -85,25 +85,35 @@ impl EmitObject for ContractDefinition {
                 .map(|(symbol, function)| (function.clone(), symbol.clone())),
         );
 
-        // Free functions reachable from this contract, transitively — not in the linearised set,
-        // so registered here and emitted as ordinary internal functions below.
-        let mut reached_free_functions = FreeCallCollector::reachable_free_functions(
-            self,
-            scope.free_functions,
-            &shadowed_functions,
-        );
-
-        // Out-of-band sources the reachability walk misses by name, deduped against one growing `seen`
-        // set: operator-bound functions and internal library functions (`L.f(...)`).
-        let mut seen: HashSet<NodeId> = reached_free_functions
-            .iter()
-            .map(|function| function.node_id())
-            .collect();
+        // Internal library functions (`L.f(...)`) and operator-bound free functions
+        // (`using {add as +} for T`) reachable from this contract. Each is registered below, but it
+        // also seeds the free-function walk as a root: a free function reached ONLY through an
+        // operator (`x + y` dispatching to a free `add` whose body calls `loadAdder()`) or through a
+        // library call would otherwise be missed by the by-name walk and panic at emission.
         let library_functions = LibraryCallCollector::reachable_library_functions(
             self,
             scope.free_functions,
             &shadowed_functions,
         );
+        let mut walk_roots = shadowed_functions;
+        walk_roots.extend(scope.operator_functions.iter().cloned());
+        walk_roots.extend(library_functions.iter().cloned());
+
+        // Free functions reachable from this contract, transitively — not in the linearised set,
+        // so registered here and emitted as ordinary internal functions below.
+        let mut reached_free_functions = FreeCallCollector::reachable_free_functions(
+            self,
+            scope.free_functions,
+            &walk_roots,
+        );
+
+        // The operator-bound and library functions themselves are walked above but not collected as
+        // free functions (they are not in the free-function set), so register them now, deduped
+        // against the reached set.
+        let mut seen: HashSet<NodeId> = reached_free_functions
+            .iter()
+            .map(|function| function.node_id())
+            .collect();
         for function in scope
             .operator_functions
             .iter()
