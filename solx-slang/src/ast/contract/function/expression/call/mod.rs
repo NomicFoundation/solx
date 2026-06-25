@@ -6,6 +6,7 @@ use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 pub mod positional_arguments;
 pub mod try_external_call;
+pub mod try_new_expression;
 
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
@@ -1529,45 +1530,8 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             let Definition::Contract(contract_definition) = contract_type.definition() else {
                 unreachable!("Slang ContractType always references a Contract definition");
             };
-            let contract_name = contract_definition.name().name();
-            let payable = contract_definition.is_payable();
-            context.state.add_dependency(contract_name.clone());
-
-            // Coerce each constructor argument to its declared parameter type so a literal materialises
-            // in the parameter's representation (the deployed constructor ABI-decodes by parameter type).
-            let parameter_types = contract_definition
-                .constructor()
-                .map(|constructor| {
-                    AstType::resolve_signature(
-                        &constructor,
-                        LocationPolicy::Declared(None),
-                        &context.state.builder,
-                    )
-                    .0
-                })
-                .unwrap_or_default();
-            let ordered: Vec<Expression> = positional.iter().collect();
-            let BlockAnd {
-                value: ctor_args,
-                block,
-            } = ordered.emit_as(&parameter_types, context, block);
-            let builder = &context.state.builder;
-            let result_type = AstType::contract(builder.context, &contract_name, payable);
-            // `new C{value: v}()` forwards `v` wei; a plain `new C()` sends zero.
-            let val = match call_value {
-                Some(value) => AstValue::from(value),
-                None => AstValue::uint256(0, builder, &block),
-            };
-            let value = AstValue::create_contract(
-                &contract_name,
-                val,
-                salt.map(AstValue::from),
-                &ctor_args,
-                result_type,
-                builder,
-                &block,
-            )
-            .into_mlir();
+            let (value, block) =
+                emit_contract_creation(context, &contract_definition, positional, call_value, salt, false, block);
             return BlockAnd {
                 value: vec![value],
                 block,
@@ -1628,4 +1592,60 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             ),
         }
     }
+}
+
+/// Emits a `new C(args)` contract creation as `sol.new`, recording the link dependency so the linker
+/// pulls the deploy object in. With `try_call`, marks the creation (`sol.new ... try`) so a surrounding
+/// `sol.try` receives a success status instead of reverting. Shared by the plain `new` path and the
+/// `try new` path (`TryNewExpression`) so both emit identical sol-dialect.
+pub(crate) fn emit_contract_creation<'state, 'context: 'block, 'block>(
+    context: &ExpressionContext<'state, 'context, 'block>,
+    contract_definition: &slang_solidity_v2::ast::ContractDefinition,
+    positional: &slang_solidity_v2::ast::PositionalArguments,
+    call_value: Option<Value<'context, 'block>>,
+    salt: Option<Value<'context, 'block>>,
+    try_call: bool,
+    block: BlockRef<'context, 'block>,
+) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
+    let contract_name = contract_definition.name().name();
+    let payable = contract_definition.is_payable();
+    context.state.add_dependency(contract_name.clone());
+
+    // Coerce each constructor argument to its declared parameter type so a literal materialises in the
+    // parameter's representation (the deployed constructor ABI-decodes by parameter type).
+    let parameter_types = contract_definition
+        .constructor()
+        .map(|constructor| {
+            AstType::resolve_signature(
+                &constructor,
+                LocationPolicy::Declared(None),
+                &context.state.builder,
+            )
+            .0
+        })
+        .unwrap_or_default();
+    let ordered: Vec<Expression> = positional.iter().collect();
+    let BlockAnd {
+        value: ctor_args,
+        block,
+    } = ordered.emit_as(&parameter_types, context, block);
+    let builder = &context.state.builder;
+    let result_type = AstType::contract(builder.context, &contract_name, payable);
+    // `new C{value: v}()` forwards `v` wei; a plain `new C()` sends zero.
+    let val = match call_value {
+        Some(value) => AstValue::from(value),
+        None => AstValue::uint256(0, builder, &block),
+    };
+    let value = AstValue::create_contract(
+        &contract_name,
+        val,
+        salt.map(AstValue::from),
+        &ctor_args,
+        result_type,
+        try_call,
+        builder,
+        &block,
+    )
+    .into_mlir();
+    (value, block)
 }

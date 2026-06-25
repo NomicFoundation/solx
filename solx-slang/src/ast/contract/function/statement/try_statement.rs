@@ -22,6 +22,7 @@ use crate::ast::EmitStatement;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::try_external_call::TryExternalCall;
+use crate::ast::contract::function::expression::call::try_new_expression::TryNewExpression;
 use crate::ast::contract::function::statement::StatementContext;
 
 // Binds block argument 0 (the decoded payload) to the clause parameter — a
@@ -52,9 +53,18 @@ statement_emit!(CatchClause; |node, context, block| {
 statement_emit!(TryStatement; |node, context, block| {
     let expression = node.expression();
 
-    // Only a lowerable external call carries a real catch path; any other `try`
-    // expression runs just the success body, binding the first named return.
-    let Some(try_call) = TryExternalCall::from_expression(&expression) else {
+    // A lowerable external call (`recv.f(args)`) or contract creation (`new C(args)`) carries a real
+    // catch path; any other `try` expression runs just the success body, binding the first named
+    // return. Both lowerable forms yield `(status, results, block)` and share the region emission below.
+    let classified = {
+        let emitter = ExpressionContext::from(&*context);
+        TryExternalCall::from_expression(&expression)
+            .map(|call| call.emit(&emitter, block))
+            .or_else(|| {
+                TryNewExpression::from_expression(&expression).map(|new| new.emit(&emitter, block))
+            })
+    };
+    let Some((status, results, current_block)) = classified else {
         let BlockAnd { value, block: current_block } = {
             let emitter = ExpressionContext::from(&*context);
             expression.emit(&emitter, block)
@@ -73,9 +83,6 @@ statement_emit!(TryStatement; |node, context, block| {
         }
         return node.body().emit(context, current_block);
     };
-
-    let (status, results, current_block) =
-        try_call.emit(&ExpressionContext::from(&*context), block);
 
     // Bucket the catch clauses: parameter-less and unnamed `catch (bytes r)` are fallbacks; typed
     // clauses are told apart by parameter type (`Error(string)` vs `Panic(uint256)`).

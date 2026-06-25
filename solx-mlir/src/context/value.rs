@@ -414,6 +414,7 @@ impl<'context, 'block> Value<'context, 'block> {
         salt: Option<Self>,
         ctor_args: &[MlirValue<'context, 'block>],
         result_type: Type<'context>,
+        try_call: bool,
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
@@ -423,9 +424,14 @@ impl<'context, 'block> Value<'context, 'block> {
         if let Some(salt) = salt {
             new_builder = new_builder.salt(salt.inner);
         }
-        let new_builder = new_builder
+        let mut new_builder = new_builder
             .ctor_args(ctor_args)
             .out(result_type.into_mlir());
+        // `try new C(...)` marks the creation with `try` so the conversion yields a success status
+        // instead of reverting, letting the surrounding `sol.try` run a catch handler.
+        if try_call {
+            new_builder = new_builder.try_call(Attribute::unit(builder.context));
+        }
         let mut operation: Operation = new_builder.build().into();
         let ctor_args_count =
             i32::try_from(ctor_args.len()).expect("constructor argument count fits in i32");
