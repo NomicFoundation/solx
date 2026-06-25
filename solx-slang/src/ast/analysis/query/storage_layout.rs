@@ -54,10 +54,10 @@ impl StorageLayout for ContractDefinition {
                 ),
             );
         }
-        // `immutable` variables are laid out as storage slots appended after the persistent layout
-        // and lowered as ordinary storage, so a read after the constructor's write observes it. solx
-        // computes this appended layout itself; Slang exposes only the persistent high-water slot.
-        for (node_id, slot) in self.immutable_storage_layout(abi.next_free_slot()) {
+        // `immutable` variables carry no storage slot: they are emitted as `sol.immutable` and read
+        // via `sol.load_immutable`. This only adds an `Immutable`-located entry per immutable so
+        // emission and reads can resolve it by node id to its MLIR symbol name.
+        for (node_id, slot) in self.immutable_storage_layout() {
             layout.insert(node_id, slot);
         }
         layout
