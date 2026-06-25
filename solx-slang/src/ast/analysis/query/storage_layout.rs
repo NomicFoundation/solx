@@ -4,13 +4,13 @@
 
 use std::collections::HashMap;
 
+use ruint::aliases::U256;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::StateVariableMutability;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::storage_layout::StorageSlot;
-
-use super::immutable_storage_layout::ImmutableStorageLayout;
 
 /// A contract's storage layout: state variable node ID → its storage slot.
 pub trait StorageLayout {
@@ -55,10 +55,19 @@ impl StorageLayout for ContractDefinition {
             );
         }
         // `immutable` variables carry no storage slot: they are emitted as `sol.immutable` and read
-        // via `sol.load_immutable`. This only adds an `Immutable`-located entry per immutable so
-        // emission and reads can resolve it by node id to its MLIR symbol name.
-        for (node_id, slot) in self.immutable_storage_layout() {
-            layout.insert(node_id, slot);
+        // via `sol.load_immutable`. Slang's ABI layout omits them, so enumerate them from the AST —
+        // one `Immutable`-located entry per immutable, carrying the variable's MLIR symbol name so
+        // emission and reads resolve it by node id (the slot/offset are unused placeholders).
+        for variable in self.linearised_state_variables() {
+            if !matches!(variable.mutability(), StateVariableMutability::Immutable) {
+                continue;
+            }
+            let node_id = variable.node_id();
+            let label = variable.name().unparse().to_string();
+            layout.insert(
+                node_id,
+                StorageSlot::new(U256::ZERO, 0, &label, node_id, DataLocation::Immutable),
+            );
         }
         layout
     }

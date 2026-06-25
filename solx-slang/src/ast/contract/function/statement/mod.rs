@@ -230,7 +230,8 @@ statement_emit!(ContinueStatement; |context, block| {
 // ([`ExpressionStatementKind`]) and emitted by kind.
 statement_emit!(ExpressionStatement; |node, context, block| {
     match ExpressionStatementKind::from_statement(node) {
-        // The placeholder hands off per the active modifier strategy (inline chain or body call).
+        // A `_;` in a `sol.modifier` definition body lowers to `sol.placeholder`; in any other body
+        // the strategy is `None` and this is a no-op (a placeholder cannot occur there).
         ExpressionStatementKind::ModifierPlaceholder => {
             ModifierStrategy::emit_placeholder(context, block)
         }
