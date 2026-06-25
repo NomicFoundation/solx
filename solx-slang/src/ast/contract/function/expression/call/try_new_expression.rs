@@ -85,7 +85,9 @@ impl TryNewExpression {
         let mut call_value = None;
         let mut salt = None;
         if let Some(options) = &self.options {
-            let (value, salt_value, next_block) = CallOptions(options).capture(context, current_block);
+            // `new C{value, salt}` takes no `{gas:}` option, so the captured gas is unused.
+            let (value, salt_value, _gas, next_block) =
+                CallOptions(options).capture(context, current_block);
             current_block = next_block;
             call_value = value;
             salt = salt_value;

@@ -558,12 +558,15 @@ impl<'context, 'block> Value<'context, 'block> {
         argument_values: &[MlirValue<'context, 'block>],
         result_types: &[MlirType<'context>],
         call_value: Option<MlirValue<'context, 'block>>,
+        call_gas: Option<MlirValue<'context, 'block>>,
         is_static: bool,
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Vec<MlirValue<'context, 'block>> {
         if self.r#type().is_ext_function_ref() {
             let value = call_value.unwrap_or_else(|| Self::uint256(0, builder, block).into_mlir());
+            // A `{gas: g}` option caps the forwarded gas; without it, forward all remaining gas.
+            let gas = call_gas.unwrap_or_else(|| Self::gas_left(builder, block).into_mlir());
             let mut out_types = Vec::with_capacity(result_types.len() + 1);
             out_types
                 .push(Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
@@ -573,7 +576,7 @@ impl<'context, 'block> Value<'context, 'block> {
                     .outs(&out_types)
                     .callee(self.into_mlir())
                     .callee_operands(argument_values)
-                    .gas(Self::gas_left(builder, block).into_mlir())
+                    .gas(gas)
                     .value(value);
             if is_static {
                 operation_builder = operation_builder.static_call(Attribute::unit(builder.context));

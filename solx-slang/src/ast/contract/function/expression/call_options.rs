@@ -31,7 +31,9 @@ pub struct CallOptions<'node>(pub &'node CallOptionsExpression);
 
 impl CallOptions<'_> {
     /// Evaluates the option list in source order and returns the captured `value` (as `msg.value`,
-    /// coerced to `ui256`) and `salt` (CREATE2 salt, from `bytes32`). `{gas: …}` is not yet threaded.
+    /// coerced to `ui256`), `gas` (the call's gas cap, coerced to `ui256`), and `salt` (CREATE2 salt,
+    /// from `bytes32`). A dropped `gas`/`value`/`salt` is `None`; the caller forwards all remaining gas
+    /// and zero value/salt in that case.
     pub fn capture<'state, 'context, 'block>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -39,10 +41,12 @@ impl CallOptions<'_> {
     ) -> (
         Option<Value<'context, 'block>>,
         Option<Value<'context, 'block>>,
+        Option<Value<'context, 'block>>,
         BlockRef<'context, 'block>,
     ) {
         let mut value = None;
         let mut salt = None;
+        let mut gas = None;
         let mut current_block = block;
         for option in self.0.options().iter() {
             // Emit each option toward its expected type so a literal folds correctly (the CREATE2
@@ -90,17 +94,27 @@ impl CallOptions<'_> {
                     );
                 }
                 Some(BuiltIn::CallOptionGas) => {
-                    // The gas limit is evaluated for its side effects but not threaded into the call
-                    // (which forwards all remaining gas); a `{gas: …}` that caps gas is not yet modelled.
+                    // `{gas: g}` caps the gas forwarded to the call (vs. forwarding all remaining gas);
+                    // coerce to `ui256` to match the call op's gas operand, like solc.
                     let BlockAnd {
-                        value: _gas,
+                        value: option_value,
                         block: next_block,
                     } = option.value().emit(context, current_block);
                     current_block = next_block;
+                    let builder = &context.state.builder;
+                    gas = Some(
+                        option_value
+                            .cast(
+                                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                                builder,
+                                &current_block,
+                            )
+                            .into_mlir(),
+                    );
                 }
                 _ => unreachable!("a call option resolves to a value, gas, or salt built-in"),
             }
         }
-        (value, salt, current_block)
+        (value, salt, gas, current_block)
     }
 }

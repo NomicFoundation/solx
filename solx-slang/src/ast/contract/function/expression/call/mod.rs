@@ -72,12 +72,12 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
     ) -> Self::Output {
         // `recv.f{value: v}(args)` / `new C{value, salt}(args)`: evaluate the option list (in source
         // order) before the arguments, forwarding `value` as msg.value and `salt` as the CREATE2 salt.
-        let (call_value, salt, block, callee) = match self.operand().unwrap_parentheses() {
+        let (call_value, salt, call_gas, block, callee) = match self.operand().unwrap_parentheses() {
             Expression::CallOptionsExpression(options) => {
-                let (value, salt, block) = CallOptions(&options).capture(context, block);
-                (value, salt, block, options.operand().unwrap_parentheses())
+                let (value, salt, gas, block) = CallOptions(&options).capture(context, block);
+                (value, salt, gas, block, options.operand().unwrap_parentheses())
             }
-            other => (None, None, block, other),
+            other => (None, None, None, block, other),
         };
         let arguments = self.arguments();
 
@@ -202,6 +202,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 &argument_values,
                 &result_types,
                 call_value,
+                call_gas,
                 false,
                 &context.state.builder,
                 &block,
@@ -587,7 +588,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 builder,
                                 BareCallOperation
                                     .addr(address)
-                                    .gas(AstValue::gas_left(builder, &block))
+                                    .gas(call_gas.map(AstValue::from).unwrap_or_else(|| AstValue::gas_left(builder, &block)))
                                     .val(value)
                                     .inp(input)
                                     .status(status_type)
@@ -598,7 +599,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             builder,
                             BareDelegateCallOperation
                                 .addr(address)
-                                .gas(AstValue::gas_left(builder, &block))
+                                .gas(call_gas.map(AstValue::from).unwrap_or_else(|| AstValue::gas_left(builder, &block)))
                                 .inp(input)
                                 .status(status_type)
                                 .ret_data(ret_data_type)
@@ -607,7 +608,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             builder,
                             BareStaticCallOperation
                                 .addr(address)
-                                .gas(AstValue::gas_left(builder, &block))
+                                .gas(call_gas.map(AstValue::from).unwrap_or_else(|| AstValue::gas_left(builder, &block)))
                                 .inp(input)
                                 .status(status_type)
                                 .ret_data(ret_data_type)
@@ -1448,12 +1449,13 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         &block,
                     );
                     // A `view`/`pure` callee lowers to a STATICCALL; `{value: v}`
-                    // forwards `v`, a plain call sends zero — both handled by
-                    // `call_indirect` (the callee is an `ext_func_ref`).
+                    // forwards `v`, `{gas: g}` caps the forwarded gas, a plain call sends zero and
+                    // forwards all gas — all handled by `call_indirect` (the callee is an `ext_func_ref`).
                     let results = callee.call_indirect(
                         &argument_values,
                         &return_types,
                         call_value,
+                        call_gas,
                         is_static,
                         builder,
                         &block,

@@ -1,22 +1,17 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s --check-prefix=CHECK-SOLX
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s --check-prefix=CHECK-SOLC
+// RUN: solx --emit-mlir=sol %s | FileCheck %s --check-prefixes=CHECK,CHECK-SOLX
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s --check-prefixes=CHECK,CHECK-SOLC
 
-// A `{gas: g}` call option is evaluated for its side effects but NOT threaded
-// into the call in solx (the call forwards all remaining gas via `sol.gasleft`),
-// whereas solc caps the call gas with the option value. So both backends emit
-// the `gas` constant and fold the `{value: …}` operand identically, but DIVERGE
-// on the call op's gas operand: solx passes `gas %gasleft` while solc passes the
-// capped `{gas: …}` value. (They also diverge on the call op itself: solx
-// `sol.ext_icall`, solc symbol `sol.ext_call`.)
+// A `{gas: g, value: v}` external call threads `g` as the call's gas operand (capping the forwarded
+// gas) and `v` as msg.value, both coerced to ui256 — matching solc. solx previously evaluated `{gas:}`
+// but discarded it, forwarding all remaining gas via `sol.gasleft`; it now caps the gas like solc (see
+// CallOptions::capture / Value::call_indirect). The gas and value operands are now identical between
+// the backends; the only remaining divergence is the call op itself: solx emits `sol.ext_icall` (an
+// `ext_func_ref` callee), solc a symbol-callee `sol.ext_call` — the cataloged benign divergence.
 
-// CHECK-SOLX: sol.constant 5000 : ui16
-// CHECK-SOLX: %[[V:.*]] = sol.cast %{{.*}} : ui8 to ui256
-// CHECK-SOLX: %[[G:.*]] = sol.gasleft : ui256
+// CHECK: sol.constant 5000 : ui16
+// CHECK: %[[G:.*]] = sol.cast %{{.*}} : ui16 to ui256
+// CHECK: %[[V:.*]] = sol.cast %{{.*}} : ui8 to ui256
 // CHECK-SOLX: sol.ext_icall %{{.*}}() gas %[[G]] value %[[V]] : !sol.ext_func_ref<() -> ui256>, () -> (i1, ui256)
-
-// CHECK-SOLC: %[[GC:.*]] = sol.constant 5000 : ui16
-// CHECK-SOLC: %[[G:.*]] = sol.cast %[[GC]] : ui16 to ui256
-// CHECK-SOLC: %[[V:.*]] = sol.cast %{{.*}} : ui8 to ui256
 // CHECK-SOLC: sol.ext_call "{{.*}}"() at %{{.*}} gas %[[G]] value %[[V]] selector %{{.*}} {callee_type = () -> ui256} : !sol.address, () -> (i1, ui256)
 
 interface I {
