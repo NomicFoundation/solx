@@ -19,6 +19,7 @@ use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
 use melior::ir::r#type::IntegerType;
+use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionKind;
@@ -255,8 +256,17 @@ impl EmitObject for ContractDefinition {
         {
             let modifier_scope = FunctionScope::new(context, Some(self), &storage_layout);
             let mut wrapped_functions = self.linearised_functions();
-            if let Some(constructor) = self.constructor() {
-                wrapped_functions.push(constructor);
+            // Collect modifiers from every constructor in the C3 chain, not just the most-derived
+            // contract's own: `emit_constructor` emits a `sol.func` for each base constructor in the
+            // linearisation, and each may invoke (override-resolved) modifiers whose `sol.modifier`
+            // definitions must be emitted here, or the base constructor's `sol.modifier_call_blk`
+            // would reference a dangling symbol (a null MLIR value that crashes lowering).
+            for base in self.linearised_bases() {
+                if let ContractBase::Contract(base_contract) = base
+                    && let Some(constructor) = base_contract.constructor()
+                {
+                    wrapped_functions.push(constructor);
+                }
             }
             for function in wrapped_functions.iter() {
                 for modifier in function.resolve_invoked_modifiers(&modifier_scope) {
