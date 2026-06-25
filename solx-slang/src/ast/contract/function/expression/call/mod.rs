@@ -1150,11 +1150,38 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 // An external library call delegatecalls into the deployed library via `sol.ext_call`
                 // (`delegate_call` + `library_call`). The address is a `sol.lib_addr` link placeholder;
                 // a `using for` receiver becomes the implicit leading `self` argument.
-                let (parameter_types, return_types) = AstType::resolve_signature(
+                let (parameter_types, _) = AstType::resolve_signature(
                     function,
                     LocationPolicy::Declared(None),
                     &context.state.builder,
                 );
+                // A `calldata` return cannot cross the (delegate)call boundary, so it is decoded into
+                // memory like every other external-call return. Only a `calldata` return is remapped:
+                // a public library function may return a `storage` reference (e.g. a struct holding a
+                // mapping), which is passed by slot and must keep its `storage` location; `memory` and
+                // value returns are likewise kept as declared. Parameters keep their declared location
+                // too — a `storage` reference parameter is passed by slot, not copied to memory.
+                let return_types: Vec<_> = match function.returns() {
+                    Some(returns) => returns
+                        .iter()
+                        .map(|parameter| {
+                            let policy = if matches!(
+                                parameter.storage_location(),
+                                Some(slang_solidity_v2::ast::StorageLocation::CallDataKeyword(_))
+                            ) {
+                                LocationPolicy::ForceMemory
+                            } else {
+                                LocationPolicy::Declared(None)
+                            };
+                            AstType::resolve(
+                                &parameter.get_type().expect("slang validated"),
+                                policy,
+                                &context.state.builder,
+                            )
+                        })
+                        .collect(),
+                    None => Vec::new(),
+                };
                 // A library external function keeps the ` storage` data-location in its selector
                 // (e.g. `g(uint256[] storage)`), matching solc — see `library_aware_selector`.
                 let selector = crate::ast::contract::function::signature::library_aware_selector(
