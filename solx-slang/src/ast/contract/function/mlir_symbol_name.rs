@@ -24,6 +24,13 @@ pub trait MlirSymbolName {
     /// like-named modifiers (an inherited override chain) resolve to distinct `sol.modifier` defs.
     /// The same authority names both the `sol.modifier` def and the invoking `sol.call`.
     fn modifier_symbol(&self) -> String;
+
+    /// The MLIR symbol of this constructor when emitted as a base-constructor `sol.func` (a plain
+    /// internal function the construction chain `sol.call`s into, distinct from the most-derived
+    /// `constructor()` def). Suffixed with its node id so each base contract's constructor resolves to
+    /// its own symbol, with the chaining call routing through the same authority. (Mirrors solc's
+    /// `@_<id>` node-id mangling.)
+    fn base_constructor_symbol(&self) -> String;
 }
 
 impl MlirSymbolName for FunctionDefinition {
@@ -61,5 +68,9 @@ impl MlirSymbolName for FunctionDefinition {
             .map(|identifier| identifier.name())
             .unwrap_or_else(|| "modifier".to_owned());
         format!("{name}_{}", self.node_id())
+    }
+
+    fn base_constructor_symbol(&self) -> String {
+        format!("constructor#{}", self.node_id())
     }
 }

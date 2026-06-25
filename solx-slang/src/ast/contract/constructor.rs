@@ -1,16 +1,16 @@
 //!
-//! Contract constructor synthesis: the deploy-time `constructor()` `sol.func`.
+//! Contract constructor synthesis: the deploy-time `constructor()` `sol.func` and the base-constructor
+//! `sol.func`s the construction chain calls into.
 //!
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
+use melior::ir::Value;
 use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
-use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 
 use solx_mlir::Environment;
@@ -20,20 +20,19 @@ use solx_mlir::ods::sol::ReturnOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
-use crate::ast::EmitFunction;
 use crate::ast::EmitStatement;
 use crate::ast::LocationPolicy;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
+use crate::ast::analysis::query::BaseConstructorArguments;
+use crate::ast::analysis::query::BaseConstructorChain;
 use crate::ast::contract::function::FunctionScope;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
+use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::emit::EmitConstructor;
 use crate::ast::emit::EmitModifierCalls;
-use crate::ast::analysis::query::MatchLinearisedBase;
-use crate::ast::analysis::query::PositionalArguments;
 
 impl EmitConstructor for ContractDefinition {
     fn emit_constructor<'state, 'context>(
@@ -41,8 +40,8 @@ impl EmitConstructor for ContractDefinition {
         scope: &FunctionScope<'state, 'context>,
         contract_body: &BlockRef<'context, '_>,
     ) {
-        // C3 linearisation, most-derived (self) first. Interfaces have no
-        // constructor, so only contracts contribute to the construction chain.
+        // C3 linearisation, most-derived (self) first. Interfaces have no constructor, so only
+        // contracts contribute to the construction chain.
         let mro: Vec<ContractDefinition> = self
             .linearised_bases()
             .into_iter()
@@ -51,100 +50,228 @@ impl EmitConstructor for ContractDefinition {
                 ContractBase::Interface(_) => None,
             })
             .collect();
+        let mro_node_ids = mro.iter().map(|base| base.node_id()).collect();
 
-        // With no base constructor, the contract's own constructor (or an empty one running just the
-        // state-variable initializers) is the entire construction; otherwise take the chain path below.
-        let has_base_constructor = mro.iter().skip(1).any(|base| base.constructor().is_some());
-        if !has_base_constructor {
-            if let Some(constructor) = self.constructor() {
-                constructor.emit(scope, contract_body);
-                return;
+        // Where each base constructor's arguments come from (an inline `is Base(args)` or a constructor
+        // `Base(args)` invocation), and the contract whose constructor scope evaluates them.
+        let base_arguments = self.base_constructor_arguments(&mro, &mro_node_ids);
+
+        // The most-derived constructor `sol.func` (`kind = #Constructor`): it carries the most-derived
+        // contract's own constructor parameters and mutability, runs the whole hierarchy's state-variable
+        // initializers first, then chains into the next constructor. solc emits exactly one such function
+        // per contract module, even when the contract declares no constructor of its own.
+        self.emit_constructor_func(
+            scope,
+            self,
+            &mro,
+            &base_arguments,
+            true,
+            contract_body,
+        );
+
+        // Each *other* constructor in the linearisation becomes a plain internal `sol.func` (no `kind`,
+        // no `orig_fn_type`), emitted once, that the chain `sol.call`s into. solc orders these after the
+        // most-derived constructor, in linearisation order.
+        for contract in mro.iter().skip(1) {
+            if contract.constructor().is_none() {
+                continue;
             }
-            let entry = Function::new("constructor()".to_owned(), Vec::new(), Vec::new()).define(
-                None,
-                StateMutability::NonPayable,
-                Some(solx_mlir::FunctionKind::Constructor),
-                None,
-                &scope.state.builder,
+            self.emit_constructor_func(
+                scope,
+                contract,
+                &mro,
+                &base_arguments,
+                false,
                 contract_body,
             );
-            let block = self.emit_state_var_initializers(scope, entry);
-            mlir_op_void!(&scope.state.builder, &block, ReturnOperation.operands(&[]));
-            return;
         }
+    }
 
-        // Inheritance chain: one `constructor()` runs every base constructor (base-first), each in its
-        // own parameter scope, after the initializers; it takes the most-derived contract's parameters.
-        let derived_constructor = self.constructor();
-        let (parameter_types, mutability) = match &derived_constructor {
+    fn emit_constructor_func<'state, 'context>(
+        &self,
+        scope: &FunctionScope<'state, 'context>,
+        owner: &ContractDefinition,
+        mro: &[ContractDefinition],
+        base_arguments: &HashMap<NodeId, BaseConstructorArguments>,
+        is_most_derived: bool,
+        contract_body: &BlockRef<'context, '_>,
+    ) {
+        let constructor = owner.constructor();
+        let builder = &scope.state.builder;
+
+        // The most-derived constructor is the dispatch entry (`constructor()`, `kind = #Constructor`,
+        // unique `id`-less); a base constructor is a plain internal func under a node-id-qualified symbol
+        // with a referenceable `id`, matching solc's `@_<id>` mangling.
+        let (symbol, kind, function_id) = if is_most_derived {
+            (
+                "constructor()".to_owned(),
+                Some(solx_mlir::FunctionKind::Constructor),
+                None,
+            )
+        } else {
+            (
+                constructor
+                    .as_ref()
+                    .expect("a base constructor func is emitted only for a contract with a constructor")
+                    .base_constructor_symbol(),
+                None,
+                Some(scope.state.next_function_id()),
+            )
+        };
+
+        let (parameter_types, mutability) = match &constructor {
             Some(constructor) => {
                 let (parameter_types, _) = AstType::resolve_signature(
                     constructor,
                     LocationPolicy::Declared(None),
-                    &scope.state.builder,
+                    builder,
                 );
-                (
-                    parameter_types,
-                    StateMutability::from(constructor.mutability()),
-                )
+                (parameter_types, StateMutability::from(constructor.mutability()))
             }
             None => (Vec::new(), StateMutability::NonPayable),
         };
-        let signature = Function::new("constructor()".to_owned(), parameter_types, Vec::new());
-        let entry = signature.define(
-            None,
-            mutability,
-            Some(solx_mlir::FunctionKind::Constructor),
-            None,
-            &scope.state.builder,
-            contract_body,
-        );
 
-        // Per-contract constructor scopes, keyed by contract node id — base constructors reuse the
-        // derived contract's parameter names, so a single flat scope would clobber them.
-        let mut root_environment = Environment::new();
-        if let Some(constructor) = &derived_constructor {
+        let signature = Function::new(symbol, parameter_types, Vec::new());
+        let entry = signature.define(None, mutability, kind, function_id, builder, contract_body);
+        let region = entry.parent_region().expect("entry block has a region");
+
+        // The most-derived constructor runs the whole hierarchy's state-variable initializers at the
+        // very top, before parameter spills and the construction chain (matching solc).
+        let mut current_block = if is_most_derived {
+            self.emit_state_var_initializers(scope, entry)
+        } else {
+            entry
+        };
+
+        // A constructor's modifiers (a `Base(args)` invocation is not one) emit `sol.modifier_call_blk`s
+        // at the top of the function before the parameter spills, exactly as a regular function does.
+        if let Some(constructor) = &constructor {
+            let parameters: Vec<_> = constructor.parameters().iter().collect();
+            constructor.emit_modifier_call_blocks(
+                scope,
+                &parameters,
+                &signature.parameter_types,
+                &current_block,
+            );
+        }
+
+        // Spill the constructor's own parameters into stack slots, bound by declaration id.
+        let mut environment = Environment::new();
+        if let Some(constructor) = &constructor {
             for (index, parameter) in constructor.parameters().iter().enumerate() {
-                let parameter_type = signature.parameter_types[index];
-                let parameter_value = AstValue::new(
-                    entry
-                        .argument(index)
-                        .expect("argument index is within the block signature")
-                        .into(),
+                environment.bind_block_argument(
+                    parameter.node_id(),
+                    signature.parameter_types[index],
+                    index,
+                    &entry,
+                    builder,
                 );
-                let pointer =
-                    Pointer::stack_slot(AstType::new(parameter_type), &scope.state.builder, &entry);
-                pointer.store(parameter_value, &scope.state.builder, &entry);
-                root_environment.define_variable(parameter.node_id(), pointer.into_mlir());
             }
         }
 
-        // State-variable initializers (whole C3 hierarchy) run first; they cannot
-        // reference constructor parameters or locals.
-        let mut current_block = self.emit_state_var_initializers(scope, entry);
-
-        let mut scopes: HashMap<NodeId, Environment<'context, '_>> = HashMap::new();
-        scopes.insert(self.node_id(), root_environment);
-        let mut bound_scopes: HashSet<NodeId> = HashSet::new();
-        bound_scopes.insert(self.node_id());
-
-        let mro_node_ids: HashSet<NodeId> = mro.iter().map(|base| base.node_id()).collect();
-        current_block = self.bind_base_constructor_scopes(
+        // Chain into the next constructor: evaluate its invocation arguments (in this contract's scope,
+        // against this constructor's parameters) and `sol.call` it. solc emits this between the parameter
+        // spills and the constructor body.
+        current_block = self.emit_next_constructor_call(
             scope,
-            &mro,
-            &mro_node_ids,
-            &mut scopes,
-            &mut bound_scopes,
+            owner,
+            mro,
+            base_arguments,
+            &environment,
             current_block,
         );
-        self.emit_constructor_bodies(
-            scope,
-            &mro,
-            &mut scopes,
-            &bound_scopes,
-            &entry,
-            current_block,
-        )
+
+        // The constructor body, emitted inline.
+        let mut terminated = false;
+        if let Some(body) = constructor.as_ref().and_then(|constructor| constructor.body()) {
+            let return_types: [Type<'context>; 0] = [];
+            environment.enter_scope();
+            for statement in body.statements().iter() {
+                let mut emitter = StatementContext::new(
+                    scope.state,
+                    &mut environment,
+                    &region,
+                    scope.storage_layout,
+                    &return_types,
+                    &[],
+                );
+                match statement.emit(&mut emitter, current_block) {
+                    Some(next) => current_block = next,
+                    None => {
+                        terminated = true;
+                        break;
+                    }
+                }
+            }
+            environment.exit_scope();
+        }
+
+        if !terminated {
+            mlir_op_void!(builder, &current_block, ReturnOperation.operands(&[]));
+        }
+    }
+
+    fn emit_next_constructor_call<'state, 'context, 'block>(
+        &self,
+        scope: &FunctionScope<'state, 'context>,
+        owner: &ContractDefinition,
+        mro: &[ContractDefinition],
+        base_arguments: &HashMap<NodeId, BaseConstructorArguments>,
+        environment: &Environment<'context, 'block>,
+        mut current_block: BlockRef<'context, 'block>,
+    ) -> BlockRef<'context, 'block> {
+        let Some(next_contract) = self.next_constructor_contract(owner, mro) else {
+            return current_block;
+        };
+        let next_constructor = next_contract
+            .constructor()
+            .expect("next_constructor_contract returns a contract with a constructor");
+        let builder = &scope.state.builder;
+
+        // The arguments supplied to the next constructor (an empty list when it takes none). They are
+        // evaluated in this contract's scope, against this constructor's parameters.
+        let arguments = base_arguments
+            .get(&next_contract.node_id())
+            .map(|spec| spec.arguments.as_slice())
+            .unwrap_or_default();
+
+        // solc lowers each argument to its *own* type (not the parameter type) and lets the `sol.call`
+        // carry the implicit-castable operand/parameter mismatch, so the call operand types are the
+        // argument types — match it, emitting no cast here.
+        let mut operands: Vec<Value<'context, 'block>> = Vec::with_capacity(arguments.len());
+        for argument in arguments.iter() {
+            let emitter = ExpressionContext::new(
+                scope.state,
+                environment,
+                scope.storage_layout,
+                ArithmeticMode::Checked,
+            );
+            let BlockAnd {
+                value,
+                block: next_block,
+            } = argument.emit(&emitter, current_block);
+            current_block = next_block;
+            operands.push(value.into_mlir());
+        }
+
+        let parameter_types: Vec<Type<'context>> = next_constructor
+            .parameters()
+            .iter()
+            .map(|parameter| {
+                AstType::resolve(
+                    &parameter.get_type().expect("slang validated"),
+                    LocationPolicy::Declared(None),
+                    builder,
+                )
+            })
+            .collect();
+        let next_signature = Function::new(
+            next_constructor.base_constructor_symbol(),
+            parameter_types,
+            Vec::new(),
+        );
+        next_signature.call(&operands, builder, &current_block);
+        current_block
     }
 
     fn emit_state_var_initializers<'state, 'context, 'block>(
@@ -191,210 +318,5 @@ impl EmitConstructor for ContractDefinition {
             }
         }
         block
-    }
-
-    fn bind_base_constructor_scopes<'state, 'context, 'block>(
-        &self,
-        scope: &FunctionScope<'state, 'context>,
-        mro: &[ContractDefinition],
-        mro_node_ids: &HashSet<NodeId>,
-        scopes: &mut HashMap<NodeId, Environment<'context, 'block>>,
-        bound_scopes: &mut HashSet<NodeId>,
-        mut current_block: BlockRef<'context, 'block>,
-    ) -> BlockRef<'context, 'block> {
-        for contract in mro.iter() {
-            // A contract whose constructor takes no parameters evaluates its base-argument expressions
-            // in a fresh empty scope; one with parameters was already bound by a more-derived contract.
-            scopes.entry(contract.node_id()).or_default();
-
-            let mut base_argument_specs: Vec<(ContractDefinition, Vec<Expression>)> = Vec::new();
-            if let Some(constructor) = contract.constructor() {
-                for invocation in constructor.modifier_invocations().iter() {
-                    let Some(arguments) = invocation
-                        .arguments()
-                        .and_then(|argument_list| argument_list.positional_arguments())
-                    else {
-                        continue;
-                    };
-                    if let Some(base_contract) =
-                        invocation.name().match_linearised_base(mro, mro_node_ids)
-                    {
-                        base_argument_specs.push((base_contract, arguments));
-                    }
-                }
-            }
-            for inheritance in contract.inheritance_types().iter() {
-                let Some(arguments) = inheritance
-                    .arguments()
-                    .and_then(|argument_list| argument_list.positional_arguments())
-                else {
-                    continue;
-                };
-                if let Some(base_contract) = inheritance
-                    .type_name()
-                    .match_linearised_base(mro, mro_node_ids)
-                {
-                    base_argument_specs.push((base_contract, arguments));
-                }
-            }
-
-            // solc evaluates base-constructor arguments in C3-linearisation order (most-derived first),
-            // not source order, so a side-effecting argument runs in the right order.
-            base_argument_specs.sort_by_key(|(base, _)| {
-                mro.iter()
-                    .position(|contract| contract.node_id() == base.node_id())
-                    .unwrap_or(usize::MAX)
-            });
-
-            // Evaluate the arguments in this contract's scope and build each base's parameter scope.
-            // The borrow of the evaluating scope must end before inserting the new scopes, so collect first.
-            let evaluated: Vec<(NodeId, Environment<'context, '_>)> = {
-                let evaluating_scope = scopes
-                    .get(&contract.node_id())
-                    .expect("scope ensured at the top of this iteration");
-                let mut evaluated = Vec::new();
-                for (base_contract, arguments) in base_argument_specs {
-                    let base_id = base_contract.node_id();
-                    // A more-derived contract already supplied this base's
-                    // arguments (most-derived wins).
-                    if scopes.contains_key(&base_id) {
-                        continue;
-                    }
-                    let Some(base_constructor) = base_contract.constructor() else {
-                        continue;
-                    };
-                    let mut base_environment = Environment::new();
-                    for (parameter, argument) in
-                        base_constructor.parameters().iter().zip(arguments.iter())
-                    {
-                        // Evaluate the argument even for an unnamed parameter — the evaluation may have
-                        // side effects that must still run, in base-linearisation order.
-                        let BlockAnd {
-                            value,
-                            block: next_block,
-                        } = {
-                            let emitter = ExpressionContext::new(
-                                scope.state,
-                                evaluating_scope,
-                                scope.storage_layout,
-                                ArithmeticMode::Checked,
-                            );
-                            argument.emit(&emitter, current_block)
-                        };
-                        current_block = next_block;
-                        let parameter_type = AstType::resolve(
-                            &parameter.get_type().expect("slang validated"),
-                            LocationPolicy::Declared(None),
-                            &scope.state.builder,
-                        );
-                        let cast = value.cast(
-                            AstType::new(parameter_type),
-                            &scope.state.builder,
-                            &current_block,
-                        );
-                        let pointer = Pointer::stack_slot(
-                            AstType::new(parameter_type),
-                            &scope.state.builder,
-                            &current_block,
-                        );
-                        pointer.store(cast, &scope.state.builder, &current_block);
-                        // Bind by the parameter's node id (variables are keyed by declaration id, so
-                        // an unnamed parameter binds harmlessly).
-                        base_environment.define_variable(parameter.node_id(), pointer.into_mlir());
-                    }
-                    evaluated.push((base_id, base_environment));
-                }
-                evaluated
-            };
-            for (base_id, base_environment) in evaluated {
-                bound_scopes.insert(base_id);
-                scopes.entry(base_id).or_insert(base_environment);
-            }
-        }
-        current_block
-    }
-
-    fn emit_constructor_bodies<'state, 'context, 'block>(
-        &self,
-        scope: &FunctionScope<'state, 'context>,
-        mro: &[ContractDefinition],
-        scopes: &mut HashMap<NodeId, Environment<'context, 'block>>,
-        bound_scopes: &HashSet<NodeId>,
-        entry: &BlockRef<'context, 'block>,
-        mut current_block: BlockRef<'context, 'block>,
-    ) {
-        let region = entry.parent_region().expect("entry block has a region");
-        let return_types: [Type<'context>; 0] = [];
-        let mut terminated = false;
-        for contract in mro.iter().rev() {
-            let Some(base_constructor) = contract.constructor() else {
-                continue;
-            };
-            let Some(body) = base_constructor.body() else {
-                continue;
-            };
-            if !base_constructor.parameters().is_empty()
-                && !bound_scopes.contains(&contract.node_id())
-            {
-                continue;
-            }
-            // A constructor may carry modifiers, virtually dispatched against the *deployed* contract
-            // (an overridden modifier runs its most-derived body). Each invocation is a
-            // `sol.modifier_call_blk` whose isolated block carries a fresh copy of the base
-            // constructor's parameters; emit them before the body. A base-constructor invocation
-            // `Base(args)` resolves to no modifier and is skipped.
-            let base_parameters: Vec<_> = base_constructor.parameters().iter().collect();
-            let base_parameter_types: Vec<Type<'context>> = base_constructor
-                .parameters()
-                .iter()
-                .map(|parameter| {
-                    AstType::resolve(
-                        &parameter.get_type().expect("slang validated"),
-                        LocationPolicy::Declared(None),
-                        &scope.state.builder,
-                    )
-                })
-                .collect();
-            base_constructor.emit_modifier_call_blocks(
-                scope,
-                &base_parameters,
-                &base_parameter_types,
-                &current_block,
-            );
-
-            let environment = scopes.entry(contract.node_id()).or_default();
-            environment.enter_scope();
-
-            for statement in body.statements().iter() {
-                let mut emitter = StatementContext::new(
-                    scope.state,
-                    environment,
-                    &region,
-                    scope.storage_layout,
-                    &return_types,
-                    &[],
-                );
-                match statement.emit(&mut emitter, current_block) {
-                    Some(next) => current_block = next,
-                    None => {
-                        terminated = true;
-                        break;
-                    }
-                }
-            }
-
-            environment.exit_scope();
-            if terminated {
-                break;
-            }
-        }
-
-        if !terminated {
-            mlir_op_void!(
-                &scope.state.builder,
-                &current_block,
-                ReturnOperation.operands(&[])
-            );
-        }
     }
 }
