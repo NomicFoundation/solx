@@ -5,12 +5,81 @@
 use melior::ir::Type;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
+use slang_solidity_v2::ast::StorageLocation;
 use solx_mlir::Builder;
 use solx_mlir::StateMutability;
 
 use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
+
+/// The ABI selector of `function`, including the ` storage` data-location suffix on any storage
+/// reference parameter — which a library external function carries in its canonical signature
+/// (e.g. `g(uint256[] storage)`), matching solc. Slang's `compute_canonical_signature` omits the
+/// location, so when a parameter is declared `storage` the selector is recomputed from a
+/// location-aware signature; every other function keeps Slang's selector unchanged.
+///
+/// Only library external functions can carry a `storage` parameter in an externally-visible
+/// signature (Solidity forbids it elsewhere), so this is a no-op for ordinary functions.
+pub fn library_aware_selector(function: &FunctionDefinition) -> Option<u32> {
+    let base_selector = function.compute_selector()?;
+    let parameters: Vec<_> = function.parameters().iter().collect();
+    let is_storage = |parameter: &slang_solidity_v2::ast::Parameter| {
+        matches!(
+            parameter.storage_location(),
+            Some(StorageLocation::StorageKeyword(_))
+        )
+    };
+    if !parameters.iter().any(is_storage) {
+        return Some(base_selector);
+    }
+    let signature = function.compute_canonical_signature()?;
+    let open = signature.find('(')?;
+    let close = signature.rfind(')')?;
+    let parameter_types = split_top_level_commas(&signature[open + 1..close]);
+    // A shape mismatch (each parameter is exactly one top-level type) means the signature is not what
+    // we expect; keep Slang's selector rather than emit a wrong one.
+    if parameter_types.len() != parameters.len() {
+        return Some(base_selector);
+    }
+    let located: Vec<String> = parameter_types
+        .iter()
+        .zip(parameters.iter())
+        .map(|(type_name, parameter)| {
+            if is_storage(parameter) {
+                format!("{type_name} storage")
+            } else {
+                (*type_name).to_owned()
+            }
+        })
+        .collect();
+    let located_signature = format!("{}({})", &signature[..open], located.join(","));
+    let hash = solx_utils::Keccak256Hash::from_slice(located_signature.as_bytes());
+    let bytes = hash.as_bytes();
+    Some(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+/// Splits a canonical parameter list on top-level commas, keeping nested tuple/array commas
+/// (`(uint256,uint256)`, `uint256[2]`) within their parameter — so each returned slice is exactly one
+/// parameter's canonical type.
+fn split_top_level_commas(parameters: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0;
+    for (index, character) in parameters.char_indices() {
+        match character {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth -= 1,
+            ',' if depth == 0 => {
+                parts.push(&parameters[start..index]);
+                start = index + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&parameters[start..]);
+    parts
+}
 
 /// The resolved MLIR signature of a function: its symbol name, parameter and
 /// result types, public selector, mutability, and MLIR kind. Built by
@@ -60,7 +129,7 @@ impl<'context> Signature<'context> {
                         unreachable!("modifiers are filtered before emission")
                     }
                 };
-                (function.compute_selector(), mlir_kind)
+                (library_aware_selector(function), mlir_kind)
             }
             Some(_) => (None, None),
         };

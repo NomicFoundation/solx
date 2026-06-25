@@ -1154,7 +1154,12 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     LocationPolicy::Declared(None),
                     &context.state.builder,
                 );
-                let selector = function.compute_selector().expect("slang validated");
+                // A library external function keeps the ` storage` data-location in its selector
+                // (e.g. `g(uint256[] storage)`), matching solc — see `library_aware_selector`.
+                let selector = crate::ast::contract::function::signature::library_aware_selector(
+                    function,
+                )
+                .expect("slang validated");
                 let mlir_name = function.mlir_function_name();
                 let (argument_values, current_block) = match &self_receiver {
                     Some(receiver) => {
