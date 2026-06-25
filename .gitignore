@@ -33,3 +33,5 @@ opencode.json
 # LIT-only coverage artifacts
 /lit-cov/
 /lit.profdata
+/cov.sh
+/covdata/
