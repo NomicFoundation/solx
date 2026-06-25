@@ -68,8 +68,9 @@ pub struct StatementContext<'state, 'context, 'block> {
     /// The function's return slots, parallel to `return_types` (`None` for an unnamed return); a bare
     /// `return;` and the epilogue load these so the `sol.return` arity matches.
     pub return_slots: &'state [Option<Value<'context, 'block>>],
-    /// How the `_;` placeholder lowers (body-call hand-off, inline modifier chain, or nothing). Set by direct assignment.
-    pub modifier_strategy: ModifierStrategy<'context, 'block>,
+    /// How a `_;` placeholder lowers (`sol.placeholder` in a modifier-definition body, otherwise
+    /// nothing). Set by direct assignment.
+    pub modifier_strategy: ModifierStrategy,
     /// Arithmetic overflow-checking mode (Checked by default, Unchecked inside `unchecked {}`).
     pub arithmetic_mode: ArithmeticMode,
 }

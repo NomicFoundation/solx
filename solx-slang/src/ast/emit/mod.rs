@@ -19,7 +19,7 @@ pub use self::emit_constructor::EmitConstructor;
 pub use self::emit_expression::EmitExpression;
 pub use self::emit_for_effect::EmitForEffect;
 pub use self::emit_function::EmitFunction;
-pub use self::emit_modifier_chain::EmitModifierChain;
+pub use self::emit_modifier_chain::EmitModifierCalls;
 pub use self::emit_object::EmitObject;
 pub use self::emit_place::EmitPlace;
 pub use self::emit_statement::EmitStatement;

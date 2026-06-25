@@ -55,6 +55,14 @@ expression_emit!(Identifier; |node, context, block| {
             }
         }
         Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
+            // Inside a `sol.modifier_call_blk` the wrapping function's parameters are bound directly
+            // to the isolated block's arguments as values, so a read yields the value with no load.
+            if let Some(value) = context.environment.value_binding(definition.node_id()) {
+                return BlockAnd {
+                    block,
+                    value: AstValue::new(value),
+                };
+            }
             let pointer =
                 Pointer::new(context.environment.variable(definition.node_id()));
             let value = pointer.load(pointer.pointee(), &context.state.builder, &block);

@@ -19,6 +19,11 @@ pub trait MlirSymbolName {
     /// This function's MLIR symbol qualified by its node id, so two free functions of the same
     /// signature (reachable together via an alias) do not collide.
     fn node_id_qualified_symbol(&self) -> String;
+
+    /// The MLIR symbol of this modifier definition — its name suffixed with its node id, so two
+    /// like-named modifiers (an inherited override chain) resolve to distinct `sol.modifier` defs.
+    /// The same authority names both the `sol.modifier` def and the invoking `sol.call`.
+    fn modifier_symbol(&self) -> String;
 }
 
 impl MlirSymbolName for FunctionDefinition {
@@ -48,5 +53,13 @@ impl MlirSymbolName for FunctionDefinition {
 
     fn node_id_qualified_symbol(&self) -> String {
         format!("{}#{:?}", self.mlir_function_name(), self.node_id())
+    }
+
+    fn modifier_symbol(&self) -> String {
+        let name = self
+            .name()
+            .map(|identifier| identifier.name())
+            .unwrap_or_else(|| "modifier".to_owned());
+        format!("{name}_{}", self.node_id())
     }
 }

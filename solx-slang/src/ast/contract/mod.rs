@@ -44,6 +44,7 @@ use crate::ast::EmitFunction;
 use crate::ast::EmitObject;
 use crate::ast::Type as AstType;
 use crate::ast::emit::EmitConstructor;
+use crate::ast::emit::EmitModifierCalls;
 use crate::ast::analysis::query::StorageLayout;
 
 impl EmitObject for ContractDefinition {
@@ -241,6 +242,34 @@ impl EmitObject for ContractDefinition {
             free.emit_with_symbol(
                 &FunctionScope::new(context, Some(self), &storage_layout),
                 &free.node_id_qualified_symbol(),
+                &contract_body,
+            );
+            context.current_contract_type = None;
+        }
+
+        // Emit one contract-level `sol.modifier` per distinct invoked, override-resolved modifier
+        // definition (across the constructor and every function), deduped by node id. The
+        // `sol.modifier_call_blk`s emitted inside the functions reference these by symbol.
+        let mut emitted_modifiers: HashSet<NodeId> = HashSet::new();
+        let mut invoked_modifiers: Vec<slang_solidity_v2::ast::FunctionDefinition> = Vec::new();
+        {
+            let modifier_scope = FunctionScope::new(context, Some(self), &storage_layout);
+            let mut wrapped_functions = self.linearised_functions();
+            if let Some(constructor) = self.constructor() {
+                wrapped_functions.push(constructor);
+            }
+            for function in wrapped_functions.iter() {
+                for modifier in function.resolve_invoked_modifiers(&modifier_scope) {
+                    if emitted_modifiers.insert(modifier.node_id()) {
+                        invoked_modifiers.push(modifier);
+                    }
+                }
+            }
+        }
+        for modifier in invoked_modifiers.iter() {
+            context.current_contract_type = Some(contract_type);
+            modifier.emit_modifier_definition(
+                &FunctionScope::new(context, Some(self), &storage_layout),
                 &contract_body,
             );
             context.current_contract_type = None;

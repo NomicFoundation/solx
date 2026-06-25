@@ -20,6 +20,10 @@ use crate::Type;
 pub struct Environment<'context, 'block> {
     /// Stack of scopes, each mapping a declaration's `NodeId` to its place (scope 0 holds parameters).
     scopes: Vec<HashMap<NodeId, Value<'context, 'block>>>,
+    /// Declarations bound directly to an SSA value rather than a place: a read yields the value with
+    /// no `sol.load`. Used inside a `sol.modifier_call_blk`, whose `IsolatedFromAbove` block exposes
+    /// the wrapping function's parameters as block-argument values (no spilling to a stack slot).
+    value_bindings: HashMap<NodeId, Value<'context, 'block>>,
 }
 
 impl<'context, 'block> Default for Environment<'context, 'block> {
@@ -33,7 +37,19 @@ impl<'context, 'block> Environment<'context, 'block> {
     pub fn new() -> Self {
         Self {
             scopes: vec![HashMap::new()],
+            value_bindings: HashMap::new(),
         }
+    }
+
+    /// Binds `declaration` directly to the SSA `value` (not a place): a read returns `value` itself,
+    /// emitting no `sol.load`. Used to expose a `sol.modifier_call_blk` block argument as a parameter.
+    pub fn bind_value(&mut self, declaration: NodeId, value: Value<'context, 'block>) {
+        self.value_bindings.insert(declaration, value);
+    }
+
+    /// The SSA value `declaration` is directly bound to, if any (see [`Self::bind_value`]).
+    pub fn value_binding(&self, declaration: NodeId) -> Option<Value<'context, 'block>> {
+        self.value_bindings.get(&declaration).copied()
     }
 
     /// Pushes a new lexical scope.

@@ -27,6 +27,7 @@ pub use self::context::builder::Builder;
 pub use self::context::builder::try_fallback_kind::TryFallbackKind;
 pub use self::context::environment::Environment;
 pub use self::context::function::Function;
+pub use self::context::function::Modifier;
 pub use self::context::pointer::Pointer;
 pub use self::context::r#type::Type;
 pub use self::context::r#type::array_size::ArraySize;
