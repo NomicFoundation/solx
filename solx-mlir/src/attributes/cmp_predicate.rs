@@ -48,6 +48,20 @@ impl From<InequalityExpressionOperator> for CmpPredicate {
 }
 
 impl CmpPredicate {
+    /// The user-defined operator this predicate corresponds to (`a == b` on a UDVT with a
+    /// `using {f as ==} for T` binding calls `f` instead of emitting `sol.cmp`). Every predicate
+    /// maps to exactly one [`UserDefinedOperator`].
+    pub fn user_defined_operator(self) -> crate::UserDefinedOperator {
+        match self {
+            Self::Eq => crate::UserDefinedOperator::Eq,
+            Self::Ne => crate::UserDefinedOperator::Ne,
+            Self::Lt => crate::UserDefinedOperator::Lt,
+            Self::Le => crate::UserDefinedOperator::Le,
+            Self::Gt => crate::UserDefinedOperator::Gt,
+            Self::Ge => crate::UserDefinedOperator::Ge,
+        }
+    }
+
     /// This predicate's encoding as the `i64` [`IntegerAttribute`] the `sol.cmp`
     /// predicate operand demands.
     pub fn attribute(self, context: &melior::Context) -> IntegerAttribute<'_> {

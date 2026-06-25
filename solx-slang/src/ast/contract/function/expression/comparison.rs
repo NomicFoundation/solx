@@ -15,11 +15,23 @@ use crate::ast::EmitAs;
 use crate::ast::EmitExpression;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::operator::Operator;
 
 expression_emit!(EqualityExpression, InequalityExpression; |node, context, block| {
     let left = node.left_operand();
     let right = node.right_operand();
     let predicate = CmpPredicate::from(node.operator());
+    // A user-defined comparison operator (`using {f as ==} for T global;`) dispatches to the bound
+    // function instead of emitting native `sol.cmp`, mirroring the arithmetic operator bindings in
+    // `Operator::emit_binary`. The binding is keyed on the left operand's user-defined value type.
+    if let Some(function_id) =
+        Operator::user_defined_operator(context, &left, predicate.user_defined_operator())
+    {
+        let BlockAnd { value: lhs, block } = left.emit(context, block);
+        let BlockAnd { value: rhs, block } = right.emit(context, block);
+        let result = Operator::emit_operator_call(context, function_id, vec![lhs, rhs], &block);
+        return BlockAnd { block, value: result.into() };
+    }
     // A string literal compared with a `bytesN` sibling materialises toward the sibling's fixed-bytes
     // type (the non-string operand is emitted first to learn it).
     let left_is_string = matches!(left, Expression::StringExpression(_));

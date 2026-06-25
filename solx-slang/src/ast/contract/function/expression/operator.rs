@@ -87,7 +87,7 @@ pub enum Operator {
 
 impl Operator {
     /// The function bound to `user_operator` for `operand`'s user-defined value type, or `None` if unbound.
-    fn user_defined_operator<'context, 'block>(
+    pub(crate) fn user_defined_operator<'context, 'block>(
         context: &ExpressionContext<'_, 'context, 'block>,
         operand: &Expression,
         user_operator: UserDefinedOperator,
@@ -106,7 +106,7 @@ impl Operator {
     }
 
     /// Calls the bound user-defined-operator function `function_id`, coercing each argument to its parameter type.
-    fn emit_operator_call<'context, 'block>(
+    pub(crate) fn emit_operator_call<'context, 'block>(
         context: &ExpressionContext<'_, 'context, 'block>,
         function_id: NodeId,
         argument_values: Vec<AstValue<'context, 'block>>,
