@@ -565,9 +565,21 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             // namespace-qualified internal function with none (`C.f`, `(L.f)`) is
             // an internal pointer (`sol.func_constant`), like a bare `f`.
             _ => {
-                let Some(Definition::Function(function_definition)) =
-                    node.member().resolve_to_definition()
-                else {
+                let member_definition = node.member().resolve_to_definition();
+                // A member resolving to a library used as a VALUE (`address(M.L)` through an
+                // aliased import `import "x" as M; M.L`) is its linked deploy address — the same
+                // `sol.lib_addr` a bare `L` emits (`identifier.rs`). solc's MLIR frontend does not
+                // resolve the alias here, so this is a solx-only path emitting the canonical op.
+                if let Some(Definition::Library(library)) = &member_definition {
+                    let name = solx_utils::ContractName::new(
+                        library.get_file_id().to_owned(),
+                        Some(library.name().name()),
+                    );
+                    let value =
+                        AstValue::library_address(&name, &context.state.builder, &block);
+                    return BlockAnd { block, value };
+                }
+                let Some(Definition::Function(function_definition)) = member_definition else {
                     unimplemented!("unsupported member access: {}", node.member().name());
                 };
                 if let Some(selector) = function_definition.compute_selector() {

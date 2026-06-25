@@ -24,11 +24,11 @@ impl MemberAccessOperand<'_> {
     /// Whether the operand is a namespace qualifier (a library / import alias, not a value)
     /// rather than a `using for` receiver.
     pub fn is_namespace_qualifier(&self) -> bool {
-        let Expression::Identifier(identifier) = self.0 else {
-            return false;
-        };
+        // A bare `L` (Identifier) or an aliased-import `M.L` (a MemberAccessExpression resolving
+        // through the alias to the library) is a namespace, not a `using for` receiver value — both
+        // resolve via `resolve()`.
         matches!(
-            identifier.resolve_to_definition(),
+            self.resolve(),
             Some(Definition::Library(_) | Definition::Import(_) | Definition::ImportedSymbol(_))
         )
     }
