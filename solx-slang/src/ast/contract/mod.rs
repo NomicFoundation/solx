@@ -85,18 +85,20 @@ impl EmitObject for ContractDefinition {
                 .map(|(symbol, function)| (function.clone(), symbol.clone())),
         );
 
-        // Internal library functions (`L.f(...)`) and operator-bound free functions
-        // (`using {add as +} for T`) reachable from this contract. Each is registered below, but it
-        // also seeds the free-function walk as a root: a free function reached ONLY through an
-        // operator (`x + y` dispatching to a free `add` whose body calls `loadAdder()`) or through a
-        // library call would otherwise be missed by the by-name walk and panic at emission.
+        // BOTH reachability walks (library and free) are seeded with the `super`-shadowed overrides
+        // AND the operator-bound functions: a function reached ONLY transitively through a user-defined
+        // operator (`x + y` dispatching to a free `add` whose body calls a free `loadAdder()` OR an
+        // internal `L.helper()`) would otherwise be missed by the by-name walk and panic at emission.
+        let mut walk_roots = shadowed_functions;
+        walk_roots.extend(scope.operator_functions.iter().cloned());
+
+        // Internal library functions (`L.f(...)`) reachable from this contract — registered below, and
+        // their bodies seed the free-function walk (a library function may call a free function).
         let library_functions = LibraryCallCollector::reachable_library_functions(
             self,
             scope.free_functions,
-            &shadowed_functions,
+            &walk_roots,
         );
-        let mut walk_roots = shadowed_functions;
-        walk_roots.extend(scope.operator_functions.iter().cloned());
         walk_roots.extend(library_functions.iter().cloned());
 
         // Free functions reachable from this contract, transitively — not in the linearised set,
