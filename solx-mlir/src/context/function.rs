@@ -145,14 +145,11 @@ impl<'context> Function<'context> {
                 function_id,
             ));
         }
-        // A selector-bearing function, constructor, or fallback carries `orig_fn_type`:
-        // the SolToYul fallback dispatcher reads it to recover the pre-conversion Sol signature.
-        if selector.is_some()
-            || matches!(
-                kind,
-                Some(FunctionKind::Constructor | FunctionKind::Fallback)
-            )
-        {
+        // A selector-bearing function or constructor carries `orig_fn_type`: the
+        // SolToYul interface/constructor dispatchers read it to recover the
+        // pre-conversion Sol signature. Fallbacks no longer need it — their
+        // dispatcher derives everything from the live `function_type` arity.
+        if selector.is_some() || matches!(kind, Some(FunctionKind::Constructor)) {
             operation_builder =
                 operation_builder.orig_fn_type(TypeAttribute::new(function_type.into()));
         }
