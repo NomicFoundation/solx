@@ -7,7 +7,6 @@ use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::IndexAccessExpression;
-use slang_solidity_v2::ast::IndexAccessKind;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::ods::sol::SliceOperation;
@@ -101,10 +100,10 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
 // `a[i]` / `m[k]` address the element and `sol.load` it; a slice `a[start:end]` instead produces
 // a sub-array VALUE via `sol.slice`. A dynamic-`bytes` element widens `!sol.byte` to `bytes1`.
 expression_emit!(IndexAccessExpression; |node, context, block| {
-    // A slice `a[start:end]` produces a sub-array VALUE via `sol.slice`, distinguished by `kind()`
+    // A slice `a[start:end]` produces a sub-array VALUE via `sol.slice`, distinguished by `is_slice()`
     // (an open-ended `a[i:]` is indistinguishable from `a[i]` by `end()` alone). Omitted `start` is
     // `0`, omitted `end` the operand's length; both indices widen to `ui256`.
-    if matches!(node.kind(), IndexAccessKind::Slice) {
+    if node.is_slice() {
         let base = node.operand();
         let BlockAnd {
             value: base_value,

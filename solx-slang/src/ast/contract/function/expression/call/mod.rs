@@ -25,7 +25,6 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionMutability;
-use slang_solidity_v2::ast::IndexAccessKind;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::TypeName as SlangTypeName;
@@ -1577,7 +1576,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             if let Expression::IndexAccessExpression(array_type) = &callee
                 && array_type.start().is_none()
                 && array_type.end().is_none()
-                && !matches!(array_type.kind(), IndexAccessKind::Slice)
+                && !array_type.is_slice()
             {
                 let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
                     unimplemented!("named arguments on an array-type cast are not supported");
