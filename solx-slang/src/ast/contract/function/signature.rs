@@ -16,37 +16,40 @@ use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 
-/// The selector of `function`, computed the way solc's `FunctionType::externalSignature` is.
+/// The library external-function signature solc selects on, when it differs from Slang's plain ABI
+/// signature — or `None` when the canonical signature already applies (a non-library function, or one
+/// whose shape we don't recognise).
 ///
-/// A **library** external/public function does not select on the plain ABI signature: its
-/// externally-visible signature is `signatureInExternalFunction(structsByName = true)`. A struct
-/// parameter keeps its scope-qualified name (`L.S`, `I.S`) instead of being expanded to its ABI
-/// tuple, and a `storage` reference parameter carries a trailing ` storage` — e.g. `f(L.S storage)`,
-/// `g(uint256[] storage)`, `g(L.S)`, `a(I.S)`. Slang's `compute_selector` hashes the plain ABI
-/// canonical signature (a struct expanded to a tuple, no location), so for a library function the
-/// selector is recomputed from this struct-name- and location-aware signature; every other function
-/// keeps Slang's selector unchanged.
+/// solc's `signatureInExternalFunction(structsByName = true)` re-names a library function's parameters
+/// by their scope-qualified declared name. This implements the part of that rule the corpus exercises:
+/// a **struct** parameter is named by its declared type-name path — a library-local `S` becomes `L.S`,
+/// a qualified `I.S` stays `I.S` — and a `storage` reference parameter gets a trailing ` storage`
+/// (e.g. `f(L.S storage)`, `g(uint256[] storage)`, `g(L.S)`, `a(I.S)`).
 ///
-/// The recomputation is gated on the function being a library member because the mangling is
-/// library-specific: a regular contract's external function ABI-encodes a struct parameter as a
-/// tuple (and cannot carry a `storage` parameter at all), so its selector is the canonical one.
-pub fn library_aware_selector(function: &FunctionDefinition) -> Option<u32> {
-    let base_selector = function.compute_selector()?;
+/// NOT yet implemented (these keep Slang's plain ABI form and currently DIVERGE from solc — see the
+/// `slang-frontend-known-limitations` note): enum and contract/interface parameters (solc qualifies
+/// them too, e.g. `L.E`, `Other`); a **file-level** struct (solc keeps the bare `S`, this yields the
+/// wrong `L.S`); and structs referenced through an import alias (the written path is used verbatim
+/// rather than the struct's canonical scope). A fully correct version needs each parameter's resolved
+/// declaration and its enclosing-scope chain, which the public Slang API does not expose on a struct
+/// definition.
+pub fn library_aware_signature(function: &FunctionDefinition) -> Option<String> {
     let Some(Definition::Library(library)) = function.enclosing_definition() else {
-        return Some(base_selector);
+        return None;
     };
     let library_name = library.name().name();
 
     let parameters: Vec<_> = function.parameters().iter().collect();
     // The canonical signature names a struct by its expanded ABI tuple `(uint256)`; only such a
-    // tuple introduces a `(`, so it marks exactly the parameters that need re-naming by scope.
+    // tuple introduces a `(`, so it marks exactly the struct parameters that need re-naming by scope.
     let canonical = function.compute_canonical_signature()?;
     let open = canonical.find('(')?;
-    let canonical_types = split_top_level_commas(&canonical[open + 1..canonical.rfind(')')?]);
+    let close = canonical.rfind(')')?;
+    let canonical_types = split_top_level_commas(&canonical[open + 1..close]);
     // A shape mismatch (each parameter is exactly one top-level type) means the signature is not
-    // what we expect; keep Slang's selector rather than emit a wrong one.
+    // what we expect; fall back to the canonical signature rather than emit a wrong one.
     if canonical_types.len() != parameters.len() {
-        return Some(base_selector);
+        return None;
     }
 
     let is_storage = |parameter: &Parameter| {
@@ -60,10 +63,8 @@ pub fn library_aware_selector(function: &FunctionDefinition) -> Option<u32> {
         let mut type_name = if canonical_type.contains('(') {
             // A struct parameter: solc names it by scope (`structsByName`). Reuse the canonical
             // token's array suffix (`[]`, `[2]`) but replace the leading tuple with the qualified
-            // struct name. Fall back to Slang's selector if the struct name cannot be resolved.
-            let Some(qualified) = library_struct_name(parameter, &library_name) else {
-                return Some(base_selector);
-            };
+            // struct name. Fall back to the canonical signature if the name cannot be resolved.
+            let qualified = library_struct_name(parameter, &library_name)?;
             format!("{qualified}{suffix}", suffix = array_suffix(canonical_type))
         } else {
             (*canonical_type).to_owned()
@@ -73,18 +74,35 @@ pub fn library_aware_selector(function: &FunctionDefinition) -> Option<u32> {
         }
         located.push(type_name);
     }
-    let located_signature = format!("{}({})", &canonical[..open], located.join(","));
-    let hash = solx_utils::Keccak256Hash::from_slice(located_signature.as_bytes());
+    Some(format!("{}({})", &canonical[..open], located.join(",")))
+}
+
+/// The 4-byte selector of `function`, using [`library_aware_signature`] for a library function and
+/// Slang's plain ABI selector otherwise. The one selector authority that the `sol.func` definition,
+/// `.selector` reads, library call sites, and the ABI `methodIdentifiers` map all route through, so
+/// the deployed dispatcher and the published ABI agree.
+pub fn library_aware_selector(function: &FunctionDefinition) -> Option<u32> {
+    let base_selector = function.compute_selector()?;
+    let Some(signature) = library_aware_signature(function) else {
+        return Some(base_selector);
+    };
+    let hash = solx_utils::Keccak256Hash::from_slice(signature.as_bytes());
     let bytes = hash.as_bytes();
     Some(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
 }
 
-/// The scope-qualified name solc gives a struct parameter of a library function (`structsByName`):
-/// `Container.Struct` (e.g. `L.S`, `I.S`). The container is read from the parameter's declared
-/// type-name path — an explicit qualifier (`I.S`) already names the struct's container, while an
-/// unqualified name (`S`) is a member of the enclosing library. Array wrappers are peeled to the
-/// base type name; the caller re-attaches the array suffix. Returns `None` when the base type is
-/// not an identifier path (then it is not a struct, and the caller falls back to the ABI selector).
+/// An approximation of the scope-qualified name solc gives a struct parameter of a library function
+/// (`structsByName`): `Container.Struct` (e.g. `L.S`, `I.S`). The container is read from the
+/// parameter's WRITTEN type-name path — an explicit qualifier (`I.S`) is taken verbatim, while an
+/// unqualified name (`S`) is assumed to be a member of the enclosing library (`L.S`). Array wrappers
+/// are peeled to the base type name; the caller re-attaches the array suffix. Returns `None` when the
+/// base type is not an identifier path (then it is not a struct, and the caller uses the ABI form).
+///
+/// This is correct for a struct declared in the library or referenced through its real scope path
+/// (the corpus cases), but diverges from solc's `StructDefinition::canonicalName()` for a FILE-LEVEL
+/// struct (solc keeps bare `S`, this yields `L.S`) and for an import alias (`Renamed.S` taken verbatim
+/// rather than the canonical `I.S`). A faithful version needs the struct definition's enclosing-scope
+/// chain, which the public Slang API does not expose on a struct definition.
 fn library_struct_name(parameter: &Parameter, library_name: &str) -> Option<String> {
     let mut type_name = parameter.type_name();
     while let TypeName::ArrayTypeName(array) = type_name {

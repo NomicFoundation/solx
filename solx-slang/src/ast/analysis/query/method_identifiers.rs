@@ -45,6 +45,9 @@ impl MethodIdentifiers for ContractDefinition {
 
 impl MethodIdentifiers for LibraryDefinition {
     fn method_identifiers(&self) -> BTreeMap<String, String> {
+        use crate::ast::contract::function::signature::library_aware_selector;
+        use crate::ast::contract::function::signature::library_aware_signature;
+
         // A library dispatches only its externally-visible functions; keeping the regular functions
         // with a selector yields exactly the deployed dispatch set.
         let mut method_identifiers = BTreeMap::new();
@@ -55,10 +58,15 @@ impl MethodIdentifiers for LibraryDefinition {
             if !matches!(function.kind(), FunctionKind::Regular) {
                 continue;
             }
-            let Some(signature) = function.compute_canonical_signature() else {
+            // Both the signature key and the selector value use the library-aware form (a struct
+            // parameter named by scope, a ` storage` suffix) so the published ABI matches the selector
+            // the deployed dispatcher and `L.f.selector` resolve to — see `library_aware_signature`.
+            let signature =
+                library_aware_signature(&function).or_else(|| function.compute_canonical_signature());
+            let Some(signature) = signature else {
                 continue;
             };
-            let Some(selector) = function.compute_selector() else {
+            let Some(selector) = library_aware_selector(&function) else {
                 continue;
             };
             method_identifiers.insert(signature, format!("{selector:08x}"));

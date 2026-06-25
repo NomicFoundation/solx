@@ -3,12 +3,13 @@
 
 // A library external function selects on solc's `signatureInExternalFunction(structsByName = true)`:
 // a struct parameter is named by its scope-qualified name (`L.S`, `I.S`) rather than its ABI tuple
-// `(uint256)`, and a `storage` parameter keeps its data-location. Slang's `compute_selector` hashes
-// the plain ABI canonical signature, so the selector is recomputed (see `library_aware_selector`):
+// `(uint256...)`, and a `storage` parameter keeps its data-location. Slang's `compute_selector` hashes
+// the plain ABI canonical signature, so the selector is recomputed (see `library_aware_signature`):
 //   f(L.S storage) -> 0xc1d97e2c = -1043495828    g(L.S) -> 0x4221b079 = 1109318265
-// The two `a` overloads take same-arity structs from different scopes (`I.S` vs `L.S`); they must
-// select distinctly (`a(I.S)` -> -1327751287, `a(L.S)` -> -968416976), which the scope qualifier —
-// not the ABI tuple, identical for both — is what distinguishes.
+// The two `a` overloads take structs from different scopes: `I.S` (1 field, tuple `(uint256)`) and the
+// library's own `S` (2 fields, tuple `(uint256,uint256)`). Their ABI tuples already differ, so this
+// pins the scope-qualified selector VALUES against solc (`a(I.S)` -> -1327751287, `a(L.S)` ->
+// -968416976) — i.e. that the qualifier is `I.S`/`L.S`, not the bare names or the tuples.
 
 pragma abicoder v2;
 interface I { struct S { uint256 a; } }

@@ -30,10 +30,10 @@ expression_emit!(CallOptionsExpression; |node, context, block| {
 pub struct CallOptions<'node>(pub &'node CallOptionsExpression);
 
 impl CallOptions<'_> {
-    /// Evaluates the option list in source order and returns the captured `value` (as `msg.value`,
-    /// coerced to `ui256`), `gas` (the call's gas cap, coerced to `ui256`), and `salt` (CREATE2 salt,
-    /// from `bytes32`). A dropped `gas`/`value`/`salt` is `None`; the caller forwards all remaining gas
-    /// and zero value/salt in that case.
+    /// Evaluates the option list in source order and returns `(value, salt, gas, block)`: `value` (as
+    /// `msg.value`, coerced to `ui256`), `salt` (CREATE2 salt, from `bytes32`), and `gas` (the call's
+    /// gas cap, coerced to `ui256`) — in that tuple order. A dropped `value`/`salt`/`gas` is `None`;
+    /// the caller then sends zero value/salt and forwards all remaining gas.
     pub fn capture<'state, 'context, 'block>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
