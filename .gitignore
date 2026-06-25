@@ -29,3 +29,7 @@
 .mcp.json
 opencode.json
 .claude/
+
+# LIT-only coverage artifacts
+/lit-cov/
+/lit.profdata
