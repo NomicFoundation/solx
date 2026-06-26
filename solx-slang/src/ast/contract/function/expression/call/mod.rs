@@ -33,6 +33,7 @@ use solx_mlir::ods::sol::AssertOperation;
 use solx_mlir::ods::sol::BareCallOperation;
 use solx_mlir::ods::sol::BareDelegateCallOperation;
 use solx_mlir::ods::sol::BareStaticCallOperation;
+use solx_mlir::ods::sol::BlobHashOperation;
 use solx_mlir::ods::sol::BlockHashOperation;
 use solx_mlir::ods::sol::ConcatOperation;
 use solx_mlir::ods::sol::DecodeOperation;
@@ -43,6 +44,7 @@ use solx_mlir::ods::sol::PopOperation;
 use solx_mlir::ods::sol::PushStringOperation;
 use solx_mlir::ods::sol::RequireOperation;
 use solx_mlir::ods::sol::Ripemd160Operation;
+use solx_mlir::ods::sol::SelfdestructOperation;
 use solx_mlir::ods::sol::SendOperation;
 use solx_mlir::ods::sol::Sha256Operation;
 use solx_mlir::ods::sol::TransferOperation;
@@ -227,6 +229,8 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     | BuiltIn::Ecrecover
                     | BuiltIn::Addmod
                     | BuiltIn::Mulmod
+                    | BuiltIn::Selfdestruct
+                    | BuiltIn::Blobhash
             )
         {
             let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
@@ -412,6 +416,50 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     );
                     BlockAnd {
                         value: vec![value],
+                        block,
+                    }
+                }
+                BuiltIn::Blobhash => {
+                    let BlockAnd {
+                        value: values,
+                        block,
+                    } = positional.emit(context, block);
+                    let builder = &context.state.builder;
+                    // `sol.blobhash` takes a `ui256` index; coerce a narrower
+                    // argument type up first (mirroring `blockhash`).
+                    let index = AstValue::from(values[0])
+                        .cast(
+                            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                            builder,
+                            &block,
+                        )
+                        .into_mlir();
+                    let value = mlir_op!(
+                        builder,
+                        block,
+                        BlobHashOperation
+                            .idx(index)
+                            .val(AstType::fixed_bytes(builder.context, 32))
+                    );
+                    BlockAnd {
+                        value: vec![value],
+                        block,
+                    }
+                }
+                BuiltIn::Selfdestruct => {
+                    let BlockAnd {
+                        value: values,
+                        block,
+                    } = positional.emit(context, block);
+                    let builder = &context.state.builder;
+                    // `sol.selfdestruct` takes a payable address recipient; the
+                    // argument is already `address payable` per the signature.
+                    let recipient = AstValue::from(values[0])
+                        .cast(AstType::address(builder.context, true), builder, &block)
+                        .into_mlir();
+                    mlir_op_void!(builder, &block, SelfdestructOperation.recipient(recipient));
+                    BlockAnd {
+                        value: vec![],
                         block,
                     }
                 }
