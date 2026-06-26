@@ -13,7 +13,7 @@ pub struct StorageSlot {
     /// Byte offset within the slot. Non-zero only for variables packed
     /// into a shared slot.
     pub byte_offset: u32,
-    /// MLIR symbol name, formatted as `{label}_{node_id}` (the node id disambiguates inherited like-named variables).
+    /// MLIR symbol name, formatted as `{label}_{node_id}`.
     pub name: String,
     /// Storage class: `Storage` selects SLOAD/SSTORE, `Transient` (EIP-1153) selects TLOAD/TSTORE.
     pub location: DataLocation,

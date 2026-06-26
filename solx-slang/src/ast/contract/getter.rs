@@ -40,7 +40,7 @@ use crate::ast::contract::function::expression::ExpressionContext;
 /// The field-layout plan for a struct's `public` accessor return tuple.
 pub trait StructGetterLayout {
     /// The struct's returnable members `(field index, member type, ABI result type)`; nested
-    /// mappings / arrays / structs are skipped (Solidity omits them). `None` if none are returnable.
+    /// mappings / arrays / structs are skipped. `None` if none are returnable.
     fn struct_getter_layout<'context>(
         &self,
         struct_mlir_type: Type<'context>,
@@ -99,8 +99,7 @@ type KeyedGetterSignature<'context> = (
 pub trait GetterSignature {
     /// Returns `(parameter_types, return_types)`: scalar `() -> (T)`, mapping
     /// `(K) -> (V)`, array `(uint256) -> (element)`, struct `() -> (flattened
-    /// members)`. `None` for a getter with no flattenable result (e.g. a struct of only
-    /// mappings) — the same case solc emits no getter for.
+    /// members)`. `None` for a getter with no flattenable result.
     fn getter_signature<'context>(
         &self,
         builder: &Builder<'context>,
@@ -109,7 +108,7 @@ pub trait GetterSignature {
     /// The multi-level signature of a keyed (`mapping`/array) getter: the re-walk's
     /// `(input_types, result_types)`, plus the terminal's `struct_plan` and whether it
     /// is a reference (Memory) leaf. Shared by [`GetterSignature::getter_signature`]
-    /// (the call site) and the getter body, so the two can never disagree. `None` for a
+    /// and the getter body, so the two can never disagree. `None` for a
     /// non-keyed type or a terminal with no flattenable getter.
     fn keyed_getter_signature<'context>(
         &self,
@@ -124,8 +123,6 @@ impl GetterSignature for StateVariableDefinition {
         builder: &Builder<'context>,
     ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)> {
         self.get_type().and_then(|declared_type| match &declared_type {
-            // A keyed getter (`mapping`/array, possibly nested) shares the body's
-            // multi-level signature so the call site and the body cannot diverge.
             SlangType::Mapping(_) | SlangType::Array(_) | SlangType::FixedSizeArray(_) => self
                 .keyed_getter_signature(DataLocation::Storage, builder)
                 .map(|(input_types, result_types, _, _)| (input_types, result_types)),
@@ -142,8 +139,6 @@ impl GetterSignature for StateVariableDefinition {
                 let return_types = plan.iter().map(|(_, _, result_type)| *result_type).collect();
                 Some((Vec::new(), return_types))
             }
-            // A scalar reference type (`string` / `bytes`) returns a Memory copy in
-            // the external ABI; a value scalar returns in its declared representation.
             other if other.is_reference_type() => Some((
                 Vec::new(),
                 vec![AstType::resolve(other, LocationPolicy::ForceMemory, builder)],
@@ -160,8 +155,6 @@ impl GetterSignature for StateVariableDefinition {
         location: DataLocation,
         builder: &Builder<'context>,
     ) -> Option<KeyedGetterSignature<'context>> {
-        // Re-walk nested mappings / arrays, one ABI input per level; a reference key is
-        // decoded into Memory (not its storage location).
         let mut input_types: Vec<Type<'context>> = Vec::new();
         let mut terminal = self.get_type()?;
         loop {
@@ -194,8 +187,6 @@ impl GetterSignature for StateVariableDefinition {
         if input_types.is_empty() {
             return None;
         }
-        // The terminal: a `string`/`bytes` leaf returns a Memory copy; a struct returns
-        // its flattened members; a value returns in its declared representation.
         let terminal_is_reference =
             matches!(&terminal, SlangType::String(_) | SlangType::Bytes(_));
         let result_type = if terminal_is_reference {
@@ -328,8 +319,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                     mlir_op_void!(builder, entry, ReturnOperation.operands(&values));
                 }
                 None => {
-                    // A `string`/`bytes` terminal returns a Memory copy of the storage
-                    // value via `sol.data_loc_cast`; a value terminal loads in place.
                     let value = if is_reference {
                         AstValue::new(base)
                             .cast(AstType::new(result_type), builder, entry)
@@ -366,7 +355,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 .compute_canonical_signature()
                 .expect("slang validated");
             let selector = state_variable.compute_selector().expect("slang validated");
-            // Reference types return in `Memory` (the external ABI), not their declared storage location.
             let slang_type = state_variable.get_type().expect("slang validated");
             let element_type = AstType::resolve(&slang_type, LocationPolicy::ForceMemory, builder);
             let entry = Function::new(signature, Vec::new(), vec![element_type]).define(
@@ -412,8 +400,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 .expect("slang validated");
             let selector = state_variable.compute_selector().expect("slang validated");
 
-            // The keyed getter's ABI signature — shared with the call site (`getter_signature`)
-            // so the two never diverge. `None` when there is no flattenable getter.
             let Some((input_types, result_types, struct_plan, terminal_is_reference)) =
                 state_variable.keyed_getter_signature(location, builder)
             else {
@@ -423,8 +409,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 &state_variable.get_type().expect("slang validated"),
                 builder,
             );
-            // `return_loaded` reads the single terminal result type (the struct path uses
-            // `struct_plan` instead, so the value is unused there).
             let result_type = result_types[0];
             let entry = Function::new(signature, input_types, result_types).define(
                 Some(selector),
@@ -437,8 +421,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             let mut base =
                 Pointer::addr_of(&slot.name, AstType::new(container_type), builder, &entry)
                     .into_mlir();
-            // Re-walk the nesting; an array index is bounds-checked with a no-message `sol.require`
-            // (matching solc's accessor, not `sol.gep`'s `Panic(0x32)`).
             let mut current = declared_type.clone();
             let mut index = 0usize;
             loop {
@@ -581,9 +563,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
         let address_type = AstType::new(element_type)
             .address_type(location, builder.context)
             .into_mlir();
-        // A reference-typed scalar getter (`string` / `bytes public`) returns a Memory
-        // copy (the external ABI), matching solc's `data_loc_cast` from the storage
-        // reference; a value scalar returns its loaded value.
         let is_reference = declared_type.is_reference_type();
         let return_type = if is_reference {
             AstType::resolve(&declared_type, LocationPolicy::ForceMemory, builder)
@@ -606,8 +585,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 .cast(AstType::new(return_type), builder, &entry)
                 .into_mlir()
         } else {
-            // Route through the slot so an `immutable` getter reads via `sol.load_immutable` and a
-            // storage/transient one via `sol.addr_of` + `sol.load`, matching solc and the body reads.
             slot.load(builder, element_type, &entry)
         };
         mlir_op_void!(builder, &entry, ReturnOperation.operands(&[value]));

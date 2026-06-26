@@ -40,8 +40,6 @@ impl EmitConstructor for ContractDefinition {
         scope: &FunctionScope<'state, 'context>,
         contract_body: &BlockRef<'context, '_>,
     ) {
-        // C3 linearisation, most-derived (self) first. Interfaces have no constructor, so only
-        // contracts contribute to the construction chain.
         let mro: Vec<ContractDefinition> = self
             .linearised_bases()
             .into_iter()
@@ -52,14 +50,8 @@ impl EmitConstructor for ContractDefinition {
             .collect();
         let mro_node_ids = mro.iter().map(|base| base.node_id()).collect();
 
-        // Where each base constructor's arguments come from (an inline `is Base(args)` or a constructor
-        // `Base(args)` invocation), and the contract whose constructor scope evaluates them.
         let base_arguments = self.base_constructor_arguments(&mro, &mro_node_ids);
 
-        // The most-derived constructor `sol.func` (`kind = #Constructor`): it carries the most-derived
-        // contract's own constructor parameters and mutability, runs the whole hierarchy's state-variable
-        // initializers first, then chains into the next constructor. solc emits exactly one such function
-        // per contract module, even when the contract declares no constructor of its own.
         self.emit_constructor_func(
             scope,
             self,
@@ -69,9 +61,6 @@ impl EmitConstructor for ContractDefinition {
             contract_body,
         );
 
-        // Each *other* constructor in the linearisation becomes a plain internal `sol.func` (no `kind`,
-        // no `orig_fn_type`), emitted once, that the chain `sol.call`s into. solc orders these after the
-        // most-derived constructor, in linearisation order.
         for contract in mro.iter().skip(1) {
             if contract.constructor().is_none() {
                 continue;
@@ -99,9 +88,6 @@ impl EmitConstructor for ContractDefinition {
         let constructor = owner.constructor();
         let builder = &scope.state.builder;
 
-        // The most-derived constructor is the dispatch entry (`constructor()`, `kind = #Constructor`,
-        // unique `id`-less); a base constructor is a plain internal func under a node-id-qualified symbol
-        // with a referenceable `id`, matching solc's `@_<id>` mangling.
         let (symbol, kind, function_id) = if is_most_derived {
             (
                 "constructor()".to_owned(),
@@ -135,16 +121,12 @@ impl EmitConstructor for ContractDefinition {
         let entry = signature.define(None, mutability, kind, function_id, builder, contract_body);
         let region = entry.parent_region().expect("entry block has a region");
 
-        // The most-derived constructor runs the whole hierarchy's state-variable initializers at the
-        // very top, before parameter spills and the construction chain (matching solc).
         let mut current_block = if is_most_derived {
             self.emit_state_var_initializers(scope, entry)
         } else {
             entry
         };
 
-        // A constructor's modifiers (a `Base(args)` invocation is not one) emit `sol.modifier_call_blk`s
-        // at the top of the function before the parameter spills, exactly as a regular function does.
         if let Some(constructor) = &constructor {
             let parameters: Vec<_> = constructor.parameters().iter().collect();
             constructor.emit_modifier_call_blocks(
@@ -155,7 +137,6 @@ impl EmitConstructor for ContractDefinition {
             );
         }
 
-        // Spill the constructor's own parameters into stack slots, bound by declaration id.
         let mut environment = Environment::new();
         if let Some(constructor) = &constructor {
             for (index, parameter) in constructor.parameters().iter().enumerate() {
@@ -169,9 +150,6 @@ impl EmitConstructor for ContractDefinition {
             }
         }
 
-        // Chain into the next constructor: evaluate its invocation arguments (in this contract's scope,
-        // against this constructor's parameters) and `sol.call` it. solc emits this between the parameter
-        // spills and the constructor body.
         current_block = self.emit_next_constructor_call(
             scope,
             owner,
@@ -181,7 +159,6 @@ impl EmitConstructor for ContractDefinition {
             current_block,
         );
 
-        // The constructor body, emitted inline.
         let mut terminated = false;
         if let Some(body) = constructor.as_ref().and_then(|constructor| constructor.body()) {
             let return_types: [Type<'context>; 0] = [];
@@ -228,16 +205,11 @@ impl EmitConstructor for ContractDefinition {
             .expect("next_constructor_contract returns a contract with a constructor");
         let builder = &scope.state.builder;
 
-        // The arguments supplied to the next constructor (an empty list when it takes none). They are
-        // evaluated in this contract's scope, against this constructor's parameters.
         let arguments = base_arguments
             .get(&next_contract.node_id())
             .map(|spec| spec.arguments.as_slice())
             .unwrap_or_default();
 
-        // solc lowers each argument to its *own* type (not the parameter type) and lets the `sol.call`
-        // carry the implicit-castable operand/parameter mismatch, so the call operand types are the
-        // argument types — match it, emitting no cast here.
         let mut operands: Vec<Value<'context, 'block>> = Vec::with_capacity(arguments.len());
         for argument in arguments.iter() {
             let emitter = ExpressionContext::new(
@@ -279,8 +251,6 @@ impl EmitConstructor for ContractDefinition {
         scope: &FunctionScope<'state, 'context>,
         mut block: BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
-        // Initializers cannot reference constructor parameters or locals, so they
-        // run over an empty variable environment.
         let environment = Environment::new();
         let emitter = ExpressionContext::new(
             scope.state,
@@ -288,8 +258,6 @@ impl EmitConstructor for ContractDefinition {
             scope.storage_layout,
             ArithmeticMode::Checked,
         );
-        // Run initializers for the whole C3-linearised hierarchy in order, so a derived contract executes
-        // its bases' state-variable initializers (including side effects) exactly as solc does.
         for state_variable in self.linearised_state_variables() {
             let Some(slot) = scope.storage_layout.get(&state_variable.node_id()) else {
                 continue;
