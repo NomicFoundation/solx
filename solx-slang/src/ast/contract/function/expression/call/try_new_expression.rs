@@ -16,7 +16,7 @@ use solx_mlir::CmpPredicate;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::call::emit_contract_creation;
+use crate::ast::contract::function::expression::call::ContractCreation;
 use crate::ast::contract::function::expression::call_options::CallOptions;
 
 /// A `try new C(args)` contract creation, resolved from the `try` expression (the other shape — besides
@@ -92,10 +92,9 @@ impl TryNewExpression {
             call_value = value;
             salt = salt_value;
         }
-        let (contract_value, current_block) = emit_contract_creation(
+        let (contract_value, current_block) = self.contract_definition.emit_creation(
             context,
-            &self.contract_definition,
-            &self.arguments,
+            self.arguments.iter().collect(),
             call_value,
             salt,
             true,

@@ -311,6 +311,11 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                     .compute_canonical_signature()
                                     .expect("slang validated");
                                 let parameters = error_definition.parameters();
+                                // slang's binder does not resolve the named-argument
+                                // names of a custom error inside `require(...)` (it does
+                                // for `revert CustomError({...})`), so `ordered_by` cannot
+                                // bind them here — keep the positional-only path until the
+                                // binder gap is fixed upstream.
                                 let ArgumentsDeclaration::PositionalArguments(error_arguments) =
                                     error_call.arguments()
                                 else {
@@ -1132,16 +1137,23 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             if matches!(operand, Expression::SuperKeyword(_))
                 || context.state.super_redirect.contains_key(&access.node_id())
             {
-                let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
-                    unimplemented!("named arguments on a super call are not supported");
-                };
                 let target_id = context
                     .state
                     .super_redirect
                     .get(&access.node_id())
                     .copied()
                     .expect("a super/base call has a recorded redirect target");
-                let argument_expressions: Vec<Expression> = positional.iter().collect();
+                // Named arguments bind to the statically-resolved callee's parameter
+                // names; ordering collapses positional and named forms into one path.
+                let parameter_ids: Vec<NodeId> = match access.member().resolve_to_definition() {
+                    Some(Definition::Function(function_definition)) => function_definition
+                        .parameters()
+                        .iter()
+                        .map(|parameter| parameter.node_id())
+                        .collect(),
+                    _ => unreachable!("a super/base call resolves its member to a function"),
+                };
+                let argument_expressions = arguments.ordered_by(&parameter_ids);
                 let function = context.state.resolve_function(target_id);
                 let BlockAnd {
                     value: argument_values,
@@ -1304,25 +1316,29 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 };
             }
 
-            // Every other member call is positional.
-            let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
-                unimplemented!("named arguments on this member call are not supported");
-            };
+            // A member call orders named arguments against the callee's parameters
+            // (a `using for` receiver is the implicit `self`, a getter takes positional
+            // key/index arguments only — see the arms below).
             return match member_definition {
                 // `using for` / `L.f` onto an internal (no-selector) library fn,
                 // inlined like an ordinary internal call; a selector-bearing one is
                 // a `this.f` / `instance.f` external call.
                 Some(Definition::Function(function)) if function.compute_selector().is_none() => {
                     let resolved = context.state.resolve_function(function.node_id());
+                    let parameter_ids: Vec<NodeId> = function
+                        .parameters()
+                        .iter()
+                        .map(|parameter| parameter.node_id())
+                        .collect();
                     // A namespace qualifier (`L.f` / `M.f`) is not a value, so only
                     // the explicit arguments pass; a `using for` receiver becomes the
                     // implicit `self` first parameter.
                     if MemberAccessOperand(&operand).is_namespace_qualifier() {
-                        let arguments: Vec<Expression> = positional.iter().collect();
+                        let argument_expressions = arguments.ordered_by(&parameter_ids);
                         let BlockAnd {
                             value: argument_values,
                             block,
-                        } = arguments.emit_as(&resolved.parameter_types, context, block);
+                        } = argument_expressions.emit_as(&resolved.parameter_types, context, block);
                         let results =
                             resolved.call(&argument_values, &context.state.builder, &block);
                         BlockAnd {
@@ -1345,11 +1361,13 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 &block,
                             )
                             .into_mlir();
-                        let arguments: Vec<Expression> = positional.iter().collect();
+                        // The receiver is the implicit `self`; order only the explicit
+                        // arguments against the remaining parameter ids.
+                        let argument_expressions = arguments.ordered_by(&parameter_ids[1..]);
                         let BlockAnd {
                             value: mut argument_values,
                             block,
-                        } = arguments.emit_as(parameter_rest, context, block);
+                        } = argument_expressions.emit_as(parameter_rest, context, block);
                         argument_values.insert(0, self_value);
                         let results =
                             resolved.call(&argument_values, &context.state.builder, &block);
@@ -1363,6 +1381,28 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 // on one `sol.ext_icall`, differing only in the selector and signature source. A
                 // `view`/`pure` callee lowers to a STATICCALL. A nested / reference-typed getter is a LOUD residual.
                 Some(Definition::Function(_) | Definition::StateVariable(_)) => {
+                    // An external function call orders named arguments against the
+                    // callee's parameters; a getter takes positional key/index
+                    // arguments only (its synthetic ABI signature has no names).
+                    let ordered_arguments: Vec<Expression> =
+                        match access.member().resolve_to_definition() {
+                            Some(Definition::Function(function)) => {
+                                let parameter_ids: Vec<NodeId> = function
+                                    .parameters()
+                                    .iter()
+                                    .map(|parameter| parameter.node_id())
+                                    .collect();
+                                arguments.ordered_by(&parameter_ids)
+                            }
+                            _ => {
+                                let ArgumentsDeclaration::PositionalArguments(positional) =
+                                    &arguments
+                                else {
+                                    unimplemented!("named arguments on a getter are not supported");
+                                };
+                                positional.iter().collect()
+                            }
+                        };
                     let (selector, parameter_types, return_types, is_static) = match access
                         .member()
                         .resolve_to_definition()
@@ -1387,7 +1427,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             // A getter on another instance is single-valued here; only a self getter
                             // (`this.m(key)`) lowers its key/index argument.
                             if !matches!(access.operand(), Expression::ThisKeyword(_))
-                                && !positional.is_empty()
+                                && !ordered_arguments.is_empty()
                             {
                                 unimplemented!(
                                     "external getter with key/index arguments is not yet supported"
@@ -1508,11 +1548,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         value: receiver,
                         block,
                     } = access.operand().emit(context, block);
-                    let ordered: Vec<Expression> = positional.iter().collect();
                     let BlockAnd {
                         value: argument_values,
                         block,
-                    } = ordered.emit_as(&parameter_types, context, block);
+                    } = ordered_arguments.emit_as(&parameter_types, context, block);
                     let builder = &context.state.builder;
                     let callee = AstValue::external_callee(
                         receiver,
@@ -1548,9 +1587,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
 
         // `new T[](n)` / `new bytes(n)` / `new C(args)`.
         if let Expression::NewExpression(_) = &callee {
-            let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
-                unimplemented!("named arguments on a new expression are not supported");
-            };
             let slang_type = self.get_type();
             // `new T[](n)` / `new bytes(n)` / `new string(n)` allocate a dynamic memory aggregate of
             // `n` via a zeroed `sol.malloc`. The array forms resolve a call type; `new bytes` / `new
@@ -1577,6 +1613,11 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 _ => None,
             };
             if let Some(result_type) = dynamic_result_type {
+                // `new T[](n)` / `new bytes(n)` / `new string(n)` take a single positional
+                // size argument; solc rejects named arguments on these forms.
+                let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                    unimplemented!("named arguments on a new array/bytes/string are not supported");
+                };
                 let BlockAnd {
                     value: values,
                     block: current_block,
@@ -1611,8 +1652,27 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             let Definition::Contract(contract_definition) = contract_type.definition() else {
                 unreachable!("Slang ContractType always references a Contract definition");
             };
-            let (value, block) =
-                emit_contract_creation(context, &contract_definition, positional, call_value, salt, false, block);
+            // Named constructor arguments are ordered against the constructor's
+            // parameters; positional arguments pass through unchanged.
+            let parameter_ids: Vec<NodeId> = contract_definition
+                .constructor()
+                .map(|constructor| {
+                    constructor
+                        .parameters()
+                        .iter()
+                        .map(|parameter| parameter.node_id())
+                        .collect()
+                })
+                .unwrap_or_default();
+            let ordered_arguments = arguments.ordered_by(&parameter_ids);
+            let (value, block) = contract_definition.emit_creation(
+                context,
+                ordered_arguments,
+                call_value,
+                salt,
+                false,
+                block,
+            );
             return BlockAnd {
                 value: vec![value],
                 block,
@@ -1679,54 +1739,73 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
 /// pulls the deploy object in. With `try_call`, marks the creation (`sol.new ... try`) so a surrounding
 /// `sol.try` receives a success status instead of reverting. Shared by the plain `new` path and the
 /// `try new` path (`TryNewExpression`) so both emit identical sol-dialect.
-pub(crate) fn emit_contract_creation<'state, 'context: 'block, 'block>(
-    context: &ExpressionContext<'state, 'context, 'block>,
-    contract_definition: &slang_solidity_v2::ast::ContractDefinition,
-    positional: &slang_solidity_v2::ast::PositionalArguments,
-    call_value: Option<Value<'context, 'block>>,
-    salt: Option<Value<'context, 'block>>,
-    try_call: bool,
-    block: BlockRef<'context, 'block>,
-) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
-    let contract_name = contract_definition.name().name();
-    let payable = contract_definition.is_payable();
-    context.state.add_dependency(contract_name.clone());
+/// Emits the creation of a contract instance — shared by the `new C(args)`
+/// expression path and the `try new C(args)` path — lowering to `sol.new` and
+/// recording the linker dependency on the created contract.
+pub(crate) trait ContractCreation {
+    /// Emits `new self(ordered_arguments)`, forwarding `{value}`/`{salt}` and using
+    /// `try` semantics when `try_call` is set. `ordered_arguments` are already in the
+    /// constructor's declaration order (see [`ArgumentsDeclaration::ordered_by`]).
+    fn emit_creation<'state, 'context: 'block, 'block>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        ordered_arguments: Vec<Expression>,
+        call_value: Option<Value<'context, 'block>>,
+        salt: Option<Value<'context, 'block>>,
+        try_call: bool,
+        block: BlockRef<'context, 'block>,
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>);
+}
 
-    // Coerce each constructor argument to its declared parameter type so a literal materialises in the
-    // parameter's representation (the deployed constructor ABI-decodes by parameter type).
-    let parameter_types = contract_definition
-        .constructor()
-        .map(|constructor| {
-            AstType::resolve_signature(
-                &constructor,
-                LocationPolicy::Declared(None),
-                &context.state.builder,
-            )
-            .0
-        })
-        .unwrap_or_default();
-    let ordered: Vec<Expression> = positional.iter().collect();
-    let BlockAnd {
-        value: ctor_args,
-        block,
-    } = ordered.emit_as(&parameter_types, context, block);
-    let builder = &context.state.builder;
-    let result_type = AstType::contract(builder.context, &contract_name, payable);
-    // `new C{value: v}()` forwards `v` wei; a plain `new C()` sends zero.
-    let val = match call_value {
-        Some(value) => AstValue::from(value),
-        None => AstValue::uint256(0, builder, &block),
-    };
-    let value = AstValue::create_contract(
-        &contract_name,
-        val,
-        salt.map(AstValue::from),
-        &ctor_args,
-        result_type,
-        try_call,
-        builder,
-        &block,
-    )
-    .into_mlir();
-    (value, block)
+impl ContractCreation for slang_solidity_v2::ast::ContractDefinition {
+    fn emit_creation<'state, 'context: 'block, 'block>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        ordered_arguments: Vec<Expression>,
+        call_value: Option<Value<'context, 'block>>,
+        salt: Option<Value<'context, 'block>>,
+        try_call: bool,
+        block: BlockRef<'context, 'block>,
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
+        let contract_name = self.name().name();
+        let payable = self.is_payable();
+        context.state.add_dependency(contract_name.clone());
+
+        // Coerce each constructor argument to its declared parameter type so a literal materialises in the
+        // parameter's representation (the deployed constructor ABI-decodes by parameter type).
+        let parameter_types = self
+            .constructor()
+            .map(|constructor| {
+                AstType::resolve_signature(
+                    &constructor,
+                    LocationPolicy::Declared(None),
+                    &context.state.builder,
+                )
+                .0
+            })
+            .unwrap_or_default();
+        let BlockAnd {
+            value: ctor_args,
+            block,
+        } = ordered_arguments.emit_as(&parameter_types, context, block);
+        let builder = &context.state.builder;
+        let result_type = AstType::contract(builder.context, &contract_name, payable);
+        // `new C{value: v}()` forwards `v` wei; a plain `new C()` sends zero.
+        let val = match call_value {
+            Some(value) => AstValue::from(value),
+            None => AstValue::uint256(0, builder, &block),
+        };
+        let value = AstValue::create_contract(
+            &contract_name,
+            val,
+            salt.map(AstValue::from),
+            &ctor_args,
+            result_type,
+            try_call,
+            builder,
+            &block,
+        )
+        .into_mlir();
+        (value, block)
+    }
 }
