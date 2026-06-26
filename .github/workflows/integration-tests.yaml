@@ -20,8 +20,11 @@ jobs:
 
   label-check:
     if: >-
-      (github.event.action == 'labeled' && github.event.label.name == 'ci:integration'
-      || github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'ci:integration'))
+      ((github.event.action == 'labeled'
+          && contains(fromJSON('["ci:integration", "ci:integration-benchmark-full"]'), github.event.label.name)
+          && contains(github.event.pull_request.labels.*.name, 'ci:integration'))
+        || (github.event.action != 'labeled'
+          && contains(github.event.pull_request.labels.*.name, 'ci:integration')))
       && !github.event.pull_request.head.repo.fork
     runs-on: ubuntu-24.04
     steps:
@@ -216,14 +219,15 @@ jobs:
           SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
         run: ./target/release/solx-dev test solx-tester --solidity-compiler ./target/release/solx
 
-      # When `ci:benchmark-full` is present, enable every otherwise-disabled
-      # compiler (solc, solx-latest) and its comparison columns in the Foundry
-      # and Hardhat benchmark configs, so the reports cover the full matrix
-      # instead of just solx (PR) vs solx-main. Scoped to `[compilers.*]` and
-      # `[[comparisons]]`; disabled `[projects.*]` (hangs / unsupported Solidity)
-      # are deliberately left off. Edits only this throwaway CI checkout.
+      # When `ci:integration-benchmark-full` is present, enable every
+      # otherwise-disabled compiler (solc, solx-latest) and its comparison
+      # columns in the Foundry and Hardhat benchmark configs, so the reports
+      # cover the full matrix instead of just solx (PR) vs solx-main. Scoped to
+      # `[compilers.*]` and `[[comparisons]]`; disabled `[projects.*]` (hangs /
+      # unsupported Solidity) are deliberately left off. Edits only this
+      # throwaway CI checkout.
       - name: Enable full benchmark (all compilers + comparisons)
-        if: contains(github.event.pull_request.labels.*.name, 'ci:benchmark-full')
+        if: contains(github.event.pull_request.labels.*.name, 'ci:integration-benchmark-full')
         run: |
           for cfg in solx-dev/foundry-tests.toml solx-dev/hardhat-tests.toml; do
             awk '
