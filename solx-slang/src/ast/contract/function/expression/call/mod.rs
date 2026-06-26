@@ -760,8 +760,45 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 // `string`/`bytes` concat — dispatched on slang's typed
                 // classification of the member.
                 Some(member_built_in) => {
+                    // `arr.pop({})` / `arr.push({})`: empty named braces on a zero-parameter
+                    // array built-in are the no-argument form (`pop` discards; `push` appends
+                    // and yields the new element). Handle them directly; every other member
+                    // built-in takes positional arguments only (slang rejects named args there).
+                    if matches!(member_built_in, BuiltIn::ArrayPop | BuiltIn::ArrayPush)
+                        && matches!(&arguments,
+                            ArgumentsDeclaration::NamedArguments(named) if named.iter().next().is_none())
+                    {
+                        let base_slang_type =
+                            access.operand().get_type().expect("slang validated");
+                        let BlockAnd {
+                            value: array_value,
+                            block,
+                        } = access.operand().emit(context, block);
+                        let builder = &context.state.builder;
+                        let result = match member_built_in {
+                            BuiltIn::ArrayPop => {
+                                mlir_op_void!(builder, &block, PopOperation.inp(array_value));
+                                vec![]
+                            }
+                            _ => {
+                                let (new_slot, element_type) =
+                                    array_value.push_slot(&base_slang_type, builder, &block);
+                                vec![
+                                    Pointer::new(new_slot.into_mlir())
+                                        .load(AstType::new(element_type), builder, &block)
+                                        .into_mlir(),
+                                ]
+                            }
+                        };
+                        return BlockAnd {
+                            value: result,
+                            block,
+                        };
+                    }
                     let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
-                        unimplemented!("a built-in member takes positional arguments only");
+                        unreachable!(
+                            "slang rejects named arguments on a member built-in (other than empty `pop`/`push` braces)"
+                        );
                     };
                     let (value, block) = match member_built_in {
                         BuiltIn::AddressSend => {
