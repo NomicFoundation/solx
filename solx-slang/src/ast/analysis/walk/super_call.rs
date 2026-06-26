@@ -94,6 +94,9 @@ impl SuperDispatch {
             }
         }
 
+        // A base-qualified call can also appear in an inheritance-specifier argument
+        // (`contract C is Base(Other.f())`), which no function body contains; collect those
+        // up front so each gets a `redirect` entry.
         for base_contract in mro.iter() {
             let mut collector = SuperDispatch::default();
             for inheritance in base_contract.inheritance_types().iter() {

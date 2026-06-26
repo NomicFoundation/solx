@@ -421,6 +421,8 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             let mut base =
                 Pointer::addr_of(&slot.name, AstType::new(container_type), builder, &entry)
                     .into_mlir();
+            // Re-walk the nesting; an array index is bounds-checked with a no-message `sol.require`
+            // (not `sol.gep`'s `Panic(0x32)`).
             let mut current = declared_type.clone();
             let mut index = 0usize;
             loop {

@@ -79,6 +79,9 @@ impl EmitObject for ContractDefinition {
                 .map(|(symbol, function)| (function.clone(), symbol.clone())),
         );
 
+        // Both reachability walks are seeded with the operator-bound functions too: a function
+        // reached ONLY transitively through a user-defined operator would otherwise be missed by
+        // the by-name walk and panic at emission.
         let mut walk_roots = shadowed_functions;
         walk_roots.extend(scope.operator_functions.iter().cloned());
 

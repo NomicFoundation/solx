@@ -70,6 +70,9 @@ expression_emit!(ThisKeyword; |context, block| {
 
 expression_emit!(StringExpression; |node, context, block| {
     let bytes = node.value();
+    // The bytes are read only as bytes by `StringAttribute::new`, never as UTF-8 (a Solidity
+    // literal may be non-UTF-8, e.g. `"\xff"`), so the unchecked conversion is sound and a checked
+    // `from_utf8` would wrongly reject valid input.
     let literal = unsafe { std::str::from_utf8_unchecked(&bytes) };
     let value = AstValue::string_literal(literal, &context.state.builder, &block);
     BlockAnd { block, value }

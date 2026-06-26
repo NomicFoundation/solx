@@ -222,6 +222,9 @@ impl Frontend for Slang {
             };
             let source_unit = file.ast();
 
+            // Emit every contract as its own deployable object. The `catch_unwind` isolates each:
+            // a contract that cannot yet be lowered is simply absent from the artifacts, so its gap
+            // never aborts the file's other contracts. An `abstract contract` is never deployed.
             for contract in source_unit.contracts().iter() {
                 if contract.is_abstract() {
                     continue;
@@ -247,6 +250,9 @@ impl Frontend for Slang {
                 let _ = emitted;
             }
 
+            // Emit every library as its own deployable object, including internal-only ones: the
+            // harness's `// library:` directive deploys and links it by name, so the object must
+            // exist even when all its functions are internal.
             for member in source_unit.members().iter() {
                 let SourceUnitMember::LibraryDefinition(library) = member else {
                     continue;
