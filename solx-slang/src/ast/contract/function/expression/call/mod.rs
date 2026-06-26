@@ -185,7 +185,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
         };
         if function_pointer_callee && matches!(callee.get_type(), Some(SlangType::Function(_))) {
             let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
-                unimplemented!("named arguments on an indirect call are not supported");
+                unreachable!("named arguments on an indirect call are not supported");
             };
             let function_slang_type = callee.get_type().expect("slang validated");
             let (parameter_types, result_types) =
@@ -234,7 +234,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             )
         {
             let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
-                unimplemented!("a built-in takes positional arguments only");
+                unreachable!("a built-in takes positional arguments only");
             };
             // Only handled built-ins with a matching argument count reach here, so
             // the per-built-in argument expectations hold; `assert` / `require` are
@@ -603,7 +603,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     | BuiltIn::AddressStaticcall),
                 ) => {
                     let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
-                        unimplemented!("a bare low-level call takes positional arguments only");
+                        unreachable!("a bare low-level call takes positional arguments only");
                     };
                     let BlockAnd {
                         value: address,
@@ -739,7 +739,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 // `T.wrap(x)` / `T.unwrap(x)`: a single conversion to the result type.
                 Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
                     let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
-                        unimplemented!("a UDVT wrap/unwrap takes one positional argument");
+                        unreachable!("a UDVT wrap/unwrap takes one positional argument");
                     };
                     let argument = positional.iter().next().expect("slang validated");
                     let BlockAnd { value, block } = argument.emit(context, block);
@@ -1118,7 +1118,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             );
                             (Some(value), block)
                         }
-                        _ => unimplemented!(
+                        _ => unreachable!(
                             "unsupported call-position member built-in: {}",
                             access.member().name()
                         ),
@@ -1398,7 +1398,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 let ArgumentsDeclaration::PositionalArguments(positional) =
                                     &arguments
                                 else {
-                                    unimplemented!("named arguments on a getter are not supported");
+                                    unreachable!("named arguments on a getter are not supported");
                                 };
                                 positional.iter().collect()
                             }
@@ -1482,7 +1482,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         block,
                     }
                 }
-                other => unimplemented!(
+                other => unreachable!(
                     "unsupported member call: {:?}",
                     other.map(|definition| definition.node_id())
                 ),
@@ -1520,7 +1520,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 // `new T[](n)` / `new bytes(n)` / `new string(n)` take a single positional
                 // size argument; solc rejects named arguments on these forms.
                 let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
-                    unimplemented!("named arguments on a new array/bytes/string are not supported");
+                    unreachable!("named arguments on a new array/bytes/string are not supported");
                 };
                 let BlockAnd {
                     value: values,
@@ -1551,7 +1551,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             // Contract creation: `new C(args)` lowers to `sol.new` (embedding `C`'s deploy bytecode);
             // record the dependency so the linker pulls the object in. `{salt: s}` selects CREATE2.
             let Some(SlangType::Contract(contract_type)) = slang_type else {
-                unimplemented!("new expression has no resolved type or unsupported new target");
+                unreachable!("new expression has no resolved type or unsupported new target");
             };
             let Definition::Contract(contract_definition) = contract_type.definition() else {
                 unreachable!("Slang ContractType always references a Contract definition");
@@ -1591,7 +1591,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 && !array_type.is_slice()
             {
                 let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
-                    unimplemented!("named arguments on an array-type cast are not supported");
+                    unreachable!("named arguments on an array-type cast are not supported");
                 };
                 let first = positional.iter().next().expect("slang validated");
                 let target_type =
@@ -1605,7 +1605,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             }
             // A function-pointer value callee (`arr[i]`, `(cond ? f : g)`) was
             // dispatched above; any other non-identifier callee is unsupported.
-            unimplemented!("unsupported callee expression");
+            unreachable!("unsupported callee expression");
         };
         match identifier.resolve_to_definition() {
             // A direct call passes its arguments by position or by name; ordering
@@ -1631,7 +1631,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     block,
                 }
             }
-            _ => unimplemented!(
+            _ => unreachable!(
                 "callee '{}' does not resolve to a function",
                 identifier.name()
             ),

@@ -609,7 +609,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     return BlockAnd { block, value };
                 }
                 let Some(Definition::Function(function_definition)) = member_definition else {
-                    unimplemented!("unsupported member access: {}", node.member().name());
+                    unreachable!("unsupported member access: {}", node.member().name());
                 };
                 if let Some(selector) = function_definition.compute_selector() {
                     // An external function pointer's ABI representation types its reference parameters

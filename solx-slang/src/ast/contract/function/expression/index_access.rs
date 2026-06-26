@@ -31,7 +31,7 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Place<'context, 'block>> {
         if self.end().is_some() {
-            unimplemented!("range index (a[i:j]) is not yet supported");
+            unreachable!("range index (a[i:j]) is not yet supported");
         }
 
         let base = self.operand();
@@ -60,7 +60,7 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
                         unreachable!("slang should not surface Inherited at an index-access base")
                     }
                     Some(other) => DataLocation::from_slang(other, None),
-                    None => unimplemented!(
+                    None => unreachable!(
                         "index access on a value-typed base is not yet wired: {:?}",
                         std::mem::discriminant(&base_type)
                     ),

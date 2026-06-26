@@ -248,7 +248,7 @@ statement_emit!(ExpressionStatement; |node, context, block| {
                     None
                 }
                 ArgumentsDeclaration::NamedArguments(_) => {
-                    unimplemented!("named arguments on a revert are not supported");
+                    unreachable!("named arguments on a revert are not supported");
                 }
             };
             // `sol.revert` is not a terminator; the block stays live for the

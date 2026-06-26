@@ -105,7 +105,7 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
             let BlockAnd { value, block } = conditional.emit(&emitter, block);
             (value, block)
         }
-        _ => unimplemented!(
+        _ => unreachable!(
             "tuple deconstruction with this right-hand side shape is not yet supported"
         ),
     };

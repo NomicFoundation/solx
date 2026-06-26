@@ -108,7 +108,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
                         let BlockAnd { value, block } = nested.emit(context, branch_block);
                         (value, block)
                     }
-                    other => unimplemented!(
+                    other => unreachable!(
                         "multi-value conditional branch of this expression kind is not supported: {:?}",
                         std::mem::discriminant(other)
                     ),

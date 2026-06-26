@@ -45,7 +45,7 @@ expression_emit!(Identifier; |node, context, block| {
                     .storage_layout
                     .get(&state_variable.node_id())
                     .unwrap_or_else(|| {
-                        unimplemented!("unregistered state variable {:?}", state_variable.node_id())
+                        unreachable!("unregistered state variable {:?}", state_variable.node_id())
                     });
                 let value = slot.load(&context.state.builder, element_type, &block);
                 BlockAnd {
@@ -98,7 +98,7 @@ expression_emit!(Identifier; |node, context, block| {
         }
         None => unreachable!("slang resolves every identifier reference"),
         Some(other) => {
-            unimplemented!("unsupported identifier reference {:?}", other.node_id())
+            unreachable!("unsupported identifier reference {:?}", other.node_id())
         }
     }
 });

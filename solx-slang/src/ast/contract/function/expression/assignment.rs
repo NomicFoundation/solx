@@ -57,7 +57,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                     )
                 }
                 None => unreachable!("slang resolves every identifier reference"),
-                Some(other) => unimplemented!(
+                Some(other) => unreachable!(
                     "assignment to non-variable definition {:?} is not yet supported",
                     other.node_id()
                 ),
@@ -118,7 +118,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                     block,
                 )
             }
-            _ => unimplemented!(
+            _ => unreachable!(
                 "assignment target {:?} is not yet supported",
                 std::mem::discriminant(target_expression)
             ),
@@ -137,7 +137,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
             .storage_layout
             .get(&state_variable.node_id())
             .unwrap_or_else(|| {
-                unimplemented!("unregistered state variable {:?}", state_variable.node_id())
+                unreachable!("unregistered state variable {:?}", state_variable.node_id())
             })
             .clone();
         let element_type = AstType::resolve(
@@ -247,7 +247,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                     Expression::ConditionalExpression(conditional) => {
                         conditional.emit(context, block)
                     }
-                    _ => unimplemented!(
+                    _ => unreachable!(
                         "tuple assignment with this right-hand side shape is not yet supported"
                     ),
                 };

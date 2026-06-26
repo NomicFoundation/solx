@@ -23,7 +23,7 @@ use crate::ast::contract::function::statement::assembly::YulContext;
 // is inlined. An effect op (store/copy/log/terminator) yields its first operand for the statement to discard.
 yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'context, 'block>>>; |call, context, block| {
     let YulExpression::YulPath(path) = call.operand() else {
-        unimplemented!("unsupported yul callee expression");
+        unreachable!("unsupported yul callee expression");
     };
     let callee = path.iter().next().expect("empty yul function path");
     let argument_nodes: Vec<_> = call.arguments().iter().collect();

@@ -388,7 +388,7 @@ impl Operator {
                 );
                 (result.into(), block)
             }
-            _ => unimplemented!("unsupported prefix operator: {self:?}"),
+            _ => unreachable!("unsupported prefix operator: {self:?}"),
         }
     }
 
@@ -401,7 +401,7 @@ impl Operator {
         block: &BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, Value<'context, 'block>) {
         let Expression::Identifier(identifier) = operand else {
-            unimplemented!("unsupported operand for {self:?}");
+            unreachable!("unsupported operand for {self:?}");
         };
 
         match identifier.resolve_to_definition() {
@@ -410,7 +410,7 @@ impl Operator {
                     .storage_layout
                     .get(&state_variable.node_id())
                     .unwrap_or_else(|| {
-                        unimplemented!("unregistered state variable {:?}", state_variable.node_id())
+                        unreachable!("unregistered state variable {:?}", state_variable.node_id())
                     });
                 let element_type = AstType::resolve_state_variable(
                     &state_variable.get_type().expect("slang validated"),
@@ -433,7 +433,7 @@ impl Operator {
             }
             None => unreachable!("slang resolves every identifier reference"),
             Some(other) => {
-                unimplemented!("unsupported operand for {self:?}: {:?}", other.node_id())
+                unreachable!("unsupported operand for {self:?}: {:?}", other.node_id())
             }
         }
     }
