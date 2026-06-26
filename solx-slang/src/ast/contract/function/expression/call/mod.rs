@@ -311,18 +311,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                     .compute_canonical_signature()
                                     .expect("slang validated");
                                 let parameters = error_definition.parameters();
-                                // slang's binder does not resolve the named-argument
-                                // names of a custom error inside `require(...)` (it does
-                                // for `revert CustomError({...})`), so `ordered_by` cannot
-                                // bind them here — keep the positional-only path until the
-                                // binder gap is fixed upstream.
-                                let ArgumentsDeclaration::PositionalArguments(error_arguments) =
-                                    error_call.arguments()
-                                else {
-                                    unimplemented!(
-                                        "named arguments in a require custom error are not yet supported"
-                                    );
-                                };
+                                let parameter_ids: Vec<NodeId> = parameters
+                                    .iter()
+                                    .map(|parameter| parameter.node_id())
+                                    .collect();
                                 let parameter_types: Vec<_> = parameters
                                     .iter()
                                     .map(|parameter| {
@@ -333,8 +325,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                         )
                                     })
                                     .collect();
-                                let error_argument_expressions: Vec<Expression> =
-                                    error_arguments.iter().collect();
+                                let error_argument_expressions = error_call
+                                    .arguments()
+                                    .ordered_by(&parameter_ids)
+                                    .expect("slang validated");
                                 let BlockAnd {
                                     value: argument_values,
                                     block: current_block,
