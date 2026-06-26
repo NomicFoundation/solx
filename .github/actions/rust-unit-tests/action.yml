@@ -142,7 +142,7 @@ runs:
 
     - name: Upload results Linux
       if: (success() || failure()) && runner.os == 'Linux' && inputs.upload-results == 'true'
-      uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # v2.23.0
+      uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3 # v2.24.0
       with:
         check_name: ${{ runner.os }} ${{ runner.arch }} ${{ inputs.check-name }}
         files: '*${{ inputs.results-xml }}'
@@ -151,7 +151,7 @@ runs:
 
     - name: Upload test results MacOS
       if: (success() || failure()) && runner.os == 'macOS' && inputs.upload-results == 'true'
-      uses: EnricoMi/publish-unit-test-result-action/macos@c950f6fb443cb5af20a377fd0dfaa78838901040 # v2.23.0
+      uses: EnricoMi/publish-unit-test-result-action/macos@d0a4676d0e0b938bc201470d88276b7c74c712b3 # v2.24.0
       with:
         check_name: ${{ runner.os }} ${{ runner.arch }} ${{ inputs.check-name }}
         files: '*${{ inputs.results-xml }}'
@@ -160,7 +160,7 @@ runs:
 
     - name: Upload test results Windows
       if: (success() || failure()) && runner.os == 'Windows' && inputs.upload-results == 'true'
-      uses: EnricoMi/publish-unit-test-result-action/windows@c950f6fb443cb5af20a377fd0dfaa78838901040 # v2.23.0
+      uses: EnricoMi/publish-unit-test-result-action/windows@d0a4676d0e0b938bc201470d88276b7c74c712b3 # v2.24.0
       with:
         check_name: ${{ runner.os }} ${{ runner.arch }} ${{ inputs.check-name }}
         files: '*${{ inputs.results-xml }}'
