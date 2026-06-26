@@ -44,7 +44,7 @@ statement_emit!(RevertStatement; |node, context, block| {
         .iter()
         .map(|parameter| parameter.node_id())
         .collect::<Vec<_>>();
-    let ordered = node.arguments().ordered_by(&parameter_ids);
+    let ordered = node.arguments().ordered_by(&parameter_ids).expect("slang validated");
     let parameter_types: Vec<_> = parameters
         .iter()
         .map(|parameter| {

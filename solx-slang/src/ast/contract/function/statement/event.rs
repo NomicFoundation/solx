@@ -32,7 +32,7 @@ statement_emit!(EmitStatementNode; |node, context, block| {
         .iter()
         .map(|parameter| parameter.node_id())
         .collect::<Vec<_>>();
-    let ordered_arguments = node.arguments().ordered_by(&parameter_ids);
+    let ordered_arguments = node.arguments().ordered_by(&parameter_ids).expect("slang validated");
 
     let emitter = ExpressionContext::from(&*context);
     let mut indexed_arguments: Vec<Value<'context, 'block>> = Vec::new();

@@ -97,7 +97,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 .iter()
                 .map(|member| member.node_id())
                 .collect();
-            let arguments = arguments.ordered_by(&member_ids);
+            let arguments = arguments.ordered_by(&member_ids).expect("slang validated");
             let builder = &context.state.builder;
             let struct_address =
                 AstValue::malloc(result_type, None, false, builder, &block).into_mlir();
@@ -1153,7 +1153,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         .collect(),
                     _ => unreachable!("a super/base call resolves its member to a function"),
                 };
-                let argument_expressions = arguments.ordered_by(&parameter_ids);
+                let argument_expressions = arguments.ordered_by(&parameter_ids).expect("slang validated");
                 let function = context.state.resolve_function(target_id);
                 let BlockAnd {
                     value: argument_values,
@@ -1204,7 +1204,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 } else {
                     &parameter_ids[..]
                 };
-                let argument_expressions = arguments.ordered_by(explicit_parameter_ids);
+                let argument_expressions = arguments.ordered_by(explicit_parameter_ids).expect("slang validated");
 
                 // An external library call delegatecalls into the deployed library via `sol.ext_call`
                 // (`delegate_call` + `library_call`). The address is a `sol.lib_addr` link placeholder;
@@ -1334,7 +1334,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     // the explicit arguments pass; a `using for` receiver becomes the
                     // implicit `self` first parameter.
                     if MemberAccessOperand(&operand).is_namespace_qualifier() {
-                        let argument_expressions = arguments.ordered_by(&parameter_ids);
+                        let argument_expressions = arguments.ordered_by(&parameter_ids).expect("slang validated");
                         let BlockAnd {
                             value: argument_values,
                             block,
@@ -1363,7 +1363,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             .into_mlir();
                         // The receiver is the implicit `self`; order only the explicit
                         // arguments against the remaining parameter ids.
-                        let argument_expressions = arguments.ordered_by(&parameter_ids[1..]);
+                        let argument_expressions = arguments.ordered_by(&parameter_ids[1..]).expect("slang validated");
                         let BlockAnd {
                             value: mut argument_values,
                             block,
@@ -1392,7 +1392,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                     .iter()
                                     .map(|parameter| parameter.node_id())
                                     .collect();
-                                arguments.ordered_by(&parameter_ids)
+                                arguments.ordered_by(&parameter_ids).expect("slang validated")
                             }
                             _ => {
                                 let ArgumentsDeclaration::PositionalArguments(positional) =
@@ -1568,7 +1568,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         .collect()
                 })
                 .unwrap_or_default();
-            let ordered_arguments = arguments.ordered_by(&parameter_ids);
+            let ordered_arguments = arguments.ordered_by(&parameter_ids).expect("slang validated");
             let (value, block) = contract_definition.emit_creation(
                 context,
                 ordered_arguments,
@@ -1616,7 +1616,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     .iter()
                     .map(|parameter| parameter.node_id())
                     .collect();
-                let ordered = arguments.ordered_by(&parameter_ids);
+                let ordered = arguments.ordered_by(&parameter_ids).expect("slang validated");
                 // Virtual dispatch: a bare internal call resolving to an overridden base function is
                 // routed to the most-derived override (a non-virtual callee passes through unchanged).
                 let call_id = context.state.resolve_virtual(function_definition.node_id());
