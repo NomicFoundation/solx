@@ -70,7 +70,6 @@ expression_emit!(ThisKeyword; |context, block| {
 
 expression_emit!(StringExpression; |node, context, block| {
     let bytes = node.value();
-    // SAFETY: `StringAttribute::new` reads the `&str` only as bytes, never assuming UTF-8.
     let literal = unsafe { std::str::from_utf8_unchecked(&bytes) };
     let value = AstValue::string_literal(literal, &context.state.builder, &block);
     BlockAnd { block, value }
