@@ -364,6 +364,8 @@ impl Operator {
                 (result, block)
             }
             Operator::Subtract => {
+                // Unary negation uses UNCHECKED subtraction (`-INT_MIN` wraps, does not revert):
+                // checked negation needs signed-type awareness and a dedicated op, not `sol.csub`.
                 let BlockAnd { value, block } = operand.emit(context, block);
                 let operand_type = target_type.expect("slang validated");
                 let value = value

@@ -50,6 +50,8 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         let comparison = lhs.compare(rhs, predicate, &context.state.builder, &block);
         return BlockAnd { block, value: comparison };
     }
+    // Two fixed-bytes operands of different widths are LEFT-aligned: widen the smaller and compare
+    // as fixed-bytes. The integer path below would right-align them, yielding the wrong result.
     if let (Some(lhs_width), Some(rhs_width)) = (
         lhs.r#type().fixed_bytes_or_byte_width(),
         rhs.r#type().fixed_bytes_or_byte_width(),
@@ -70,6 +72,9 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         let comparison = lhs_common.compare(rhs_common, predicate, builder, &block);
         return BlockAnd { block, value: comparison };
     }
+    // Widen each operand to 256 bits preserving its OWN signedness (so a negative is not
+    // reinterpreted as a huge unsigned), then compare as signed if either is signed. A plain
+    // ui256 default would make `(-10) < 10` a false unsigned comparison.
     let signed_lhs =
         IntegerType::try_from(lhs.r#type().into_mlir()).is_ok_and(|integer| integer.is_signed());
     let signed_rhs =

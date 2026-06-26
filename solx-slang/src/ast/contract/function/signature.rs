@@ -135,7 +135,7 @@ fn array_suffix(canonical_type: &str) -> &str {
 }
 
 /// Splits a canonical parameter list on top-level commas, keeping nested tuple/array commas
-/// (`(uint256,uint256)`, `uint256[2]`) within their parameter: so each returned slice is exactly one
+/// (`(uint256,uint256)`, `uint256[2]`) within their parameter, so each returned slice is exactly one
 /// parameter's canonical type.
 fn split_top_level_commas(parameters: &str) -> Vec<&str> {
     let mut parts = Vec::new();

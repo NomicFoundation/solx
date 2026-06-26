@@ -3,8 +3,8 @@
 //! nodes that share one emission body.
 //!
 //! - [`expression_emit`]: `impl EmitExpression` for value-producing expression
-//!   nodes (so identically emitted nodes: e.g. the decimal and hex integer
-//!   literals: are written once);
+//!   nodes (so identically emitted nodes, e.g. the decimal and hex integer
+//!   literals, are written once);
 //! - [`statement_emit`]: its `impl EmitStatement` counterpart;
 //! - [`yul_emit`]: the inline-assembly `impl EmitYul` counterpart, threading a
 //!   `&mut YulContext` and an explicit per-node output.

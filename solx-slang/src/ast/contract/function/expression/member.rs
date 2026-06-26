@@ -1,5 +1,5 @@
 //!
-//! Member access expression emission: `base.member`: namespace-qualified reads, struct fields, and built-ins.
+//! Member access expression emission for `base.member`: namespace-qualified reads, struct fields, and built-ins.
 //!
 
 use melior::ir::BlockLike;
@@ -236,6 +236,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 unreachable!("type(C).creationCode/runtimeCode resolves to a contract definition");
             };
             let contract_name = contract_definition.name().name();
+            // `runtimeCode` must depend on the deployed object `C_deployed`; depending on the
+            // creation object `C` alone leaves its data symbols unresolved at link time.
             let object_name = match builtin {
                 BuiltIn::TypeRuntimeCode => {
                     format!("{contract_name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX)

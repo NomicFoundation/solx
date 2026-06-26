@@ -193,6 +193,8 @@ impl EmitObject for ContractDefinition {
                 FunctionKind::Receive => receive_emitted = true,
                 _ => {}
             }
+            // An overridden public function colliding with an inherited state-variable auto-getter's
+            // selector is skipped here; the getter, emitted last, wins.
             if let Some(selector) = function.compute_selector()
                 && getter_selectors.contains(&selector)
             {
