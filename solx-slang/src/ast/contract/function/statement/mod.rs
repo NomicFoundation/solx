@@ -236,13 +236,24 @@ statement_emit!(ExpressionStatement; |node, context, block| {
             ModifierStrategy::emit_placeholder(context, block)
         }
         ExpressionStatementKind::RevertCall(call) => {
-            let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
-            else {
-                unimplemented!("only positional arguments supported");
+            // `revert(...)` takes positional arguments; a degenerate empty
+            // named-argument list `revert({})` is equivalent to `revert()`.
+            let argument = match &call.arguments() {
+                ArgumentsDeclaration::PositionalArguments(positional_arguments) => {
+                    positional_arguments.iter().next()
+                }
+                ArgumentsDeclaration::NamedArguments(named_arguments)
+                    if named_arguments.iter().next().is_none() =>
+                {
+                    None
+                }
+                ArgumentsDeclaration::NamedArguments(_) => {
+                    unimplemented!("named arguments on a revert are not supported");
+                }
             };
             // `sol.revert` is not a terminator; the block stays live for the
             // caller (an enclosing yield or the epilogue default return).
-            let block = match positional_arguments.iter().next() {
+            let block = match argument {
                 // `revert()` — a no-data revert.
                 None => {
                     let builder = &context.state.builder;
