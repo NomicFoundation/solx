@@ -17,9 +17,9 @@ use crate::ast::contract::function::FunctionScope;
 
 /// Synthesises a contract's deploy-time construction as a chain of `sol.func`s: the most-derived
 /// `constructor()` (`kind = #Constructor`) and one plain internal `sol.func` per other constructor in
-/// the linearisation, each `sol.call`ing the next, matching solc op-for-op.
+/// the linearisation, each `sol.call`ing the next.
 pub trait EmitConstructor {
-    /// Emits the contract's construction chain — the most-derived `constructor()` and a separate
+    /// Emits the contract's construction chain: the most-derived `constructor()` and a separate
     /// `sol.func` per other base constructor in the C3 linearisation, wired with `sol.call`.
     fn emit_constructor<'state, 'context>(
         &self,
@@ -54,7 +54,7 @@ pub trait EmitConstructor {
     ) -> BlockRef<'context, 'block>;
 
     /// Emits every state-variable inline initializer in the C3-linearised hierarchy, in order (a
-    /// derived contract runs its bases' initializers and side effects, as solc does).
+    /// derived contract runs its bases' initializers and side effects).
     fn emit_state_var_initializers<'state, 'context, 'block>(
         &self,
         scope: &FunctionScope<'state, 'context>,

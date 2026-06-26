@@ -19,7 +19,7 @@ pub trait EmitFunction {
         contract_body: &BlockRef<'context, '_>,
     );
 
-    /// Emits the function under an explicit `symbol` with no public selector —
+    /// Emits the function under an explicit `symbol` with no public selector:
     /// for free and library functions, resolved by node id, never dispatched.
     fn emit_with_symbol<'state, 'context>(
         &self,

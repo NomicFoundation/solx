@@ -2,11 +2,11 @@
 //! Crate-wide projection macros: generate the per-family emission impl for AST
 //! nodes that share one emission body.
 //!
-//! - [`expression_emit`] — `impl EmitExpression` for value-producing expression
-//!   nodes (so identically emitted nodes — e.g. the decimal and hex integer
-//!   literals — are written once);
-//! - [`statement_emit`] — its `impl EmitStatement` counterpart;
-//! - [`yul_emit`] — the inline-assembly `impl EmitYul` counterpart, threading a
+//! - [`expression_emit`]: `impl EmitExpression` for value-producing expression
+//!   nodes (so identically emitted nodes: e.g. the decimal and hex integer
+//!   literals: are written once);
+//! - [`statement_emit`]: its `impl EmitStatement` counterpart;
+//! - [`yul_emit`]: the inline-assembly `impl EmitYul` counterpart, threading a
 //!   `&mut YulContext` and an explicit per-node output.
 //!
 //! The ODS op-construction macros (`mlir_op!` / `mlir_op_build!` / `mlir_op_void!`)
@@ -14,7 +14,7 @@
 //!
 
 /// Generates `impl EmitExpression` for one or more value-producing expression
-/// nodes that share the emission `$body` — so nodes that emit identically (decimal
+/// nodes that share the emission `$body`: so nodes that emit identically (decimal
 /// and hex integer literals) state their body once. The closure binds the node
 /// (`|node, context, block|`) or omits it when unused (`|context, block|`);
 /// `context` is the `&ExpressionContext`. Names resolve against the call site's
@@ -54,7 +54,7 @@ macro_rules! expression_emit {
 
 /// `expression_emit!`'s statement counterpart: generates `impl EmitStatement` for
 /// one or more statement nodes. The context is `&mut StatementContext` (a statement
-/// may declare variables) and the output is the fixed `Option<BlockRef>` — the
+/// may declare variables) and the output is the fixed `Option<BlockRef>`: the
 /// continuation block, or `None` when control diverged (`return` / `break` /
 /// `continue`). The closure binds the node (`|node, context, block|`) or omits it
 /// when unused (`|context, block|`). Names resolve against the call site's imports.
@@ -89,7 +89,7 @@ macro_rules! statement_emit {
 /// The inline-assembly (Yul) counterpart of [`statement_emit`] / [`expression_emit`]:
 /// generates `impl EmitYul` for a Yul node. The context is `&mut YulContext` (a Yul
 /// `let` declares variables); the output is stated per node because Yul never
-/// diverges solx control flow — a statement yields its continuation `BlockRef`
+/// diverges solx control flow: a statement yields its continuation `BlockRef`
 /// (not an `Option`), an expression its `(word, continuation)` pair. The closure
 /// binds the node (`|node, context, block|`). Names resolve against the call
 /// site's imports.

@@ -57,8 +57,6 @@ impl OperatorBindings {
             .collect();
 
         for directive in directives {
-            // Operators are bound only via a deconstruction clause `{f as op}`;
-            // `using L for T` attaches library functions, never operators.
             let UsingClause::UsingDeconstruction(deconstruction) = directive.clause() else {
                 continue;
             };

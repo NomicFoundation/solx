@@ -57,8 +57,6 @@ impl Slang {
                     self.version.default
                 )
             })?;
-        // Slang gates EVM built-in availability on the target; solx targets the EVM version
-        // downstream, so admit every built-in here.
         let mut builder = CompilationBuilder::create(version, EvmTarget::LATEST, configuration);
 
         for path in paths.iter() {
@@ -68,7 +66,7 @@ impl Slang {
         Ok(builder.build())
     }
 
-    /// Gathers every file-level (free) function — not part of any contract's linearised set, so
+    /// Gathers every file-level (free) function: not part of any contract's linearised set, so
     /// collected once and handed to each contract emitter.
     fn gather_free_functions(unit: &CompilationUnit) -> Vec<FunctionDefinition> {
         unit.file_ids()
@@ -224,11 +222,7 @@ impl Frontend for Slang {
             };
             let source_unit = file.ast();
 
-            // Emit every contract in the file as its own deployable object (the harness deploys any
-            // by name). The `catch_unwind` isolates each: a contract the recut cannot yet lower is
-            // simply absent from the artifacts, so its gap never aborts the file's other contracts.
             for contract in source_unit.contracts().iter() {
-                // An `abstract contract` is never deployed; skip it.
                 if contract.is_abstract() {
                     continue;
                 }
@@ -253,9 +247,6 @@ impl Frontend for Slang {
                 let _ = emitted;
             }
 
-            // Emit every library as its own deployable object, including internal-only ones: solc
-            // emits a call-protected stub per library, and the harness's `// library:` directive
-            // deploys and links it by name, so the object must exist even when all functions are internal.
             for member in source_unit.members().iter() {
                 let SourceUnitMember::LibraryDefinition(library) = member else {
                     continue;

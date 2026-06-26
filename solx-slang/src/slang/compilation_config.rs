@@ -39,12 +39,10 @@ impl CompilationBuilderConfig for CompilationConfig {
     ) -> Result<String, UnresolvedImport> {
         let path = import_path;
 
-        // Try exact match first.
         if self.sources.contains_key(path) {
             return Ok(path.to_owned());
         }
 
-        // Resolve relative imports against the importing file's directory.
         if let Some(dir) = Path::new(source_file_identifier).parent() {
             let resolved = dir.join(path);
             let mut normalized = Vec::new();
