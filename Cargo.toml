@@ -98,8 +98,8 @@ features = [
 # Slang
 [workspace.dependencies.slang_solidity_v2]
 git = "https://github.com/NomicFoundation/slang.git"
-rev = "736d83a203f9351f5ee1766f52a305d926964bcb"
+rev = "9db8b67d174929e0c8405daa6ceb98aaf7309d01"
 
 [workspace.dependencies.slang_solidity_v2_common]
 git = "https://github.com/NomicFoundation/slang.git"
-rev = "736d83a203f9351f5ee1766f52a305d926964bcb"
+rev = "9db8b67d174929e0c8405daa6ceb98aaf7309d01"
