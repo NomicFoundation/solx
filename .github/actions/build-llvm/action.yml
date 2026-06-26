@@ -56,6 +56,14 @@ runs:
   using: "composite"
   steps:
 
+    # Rebuild LLVM when the msys2 toolchain it links against changes, not just
+    # when our setup file does: a stale artifact fails at exec, not at restore.
+    - name: Fingerprint msys2 toolchain
+      id: msys-toolchain
+      if: runner.os == 'Windows'
+      shell: 'msys2 {0}'
+      run: echo "hash=$(pacman -Q | sha256sum | head -c 8)" >> "${GITHUB_OUTPUT}"
+
     - name: Compute LLVM cache key
       id: llvm-cache
       shell: bash
@@ -84,6 +92,7 @@ runs:
         [ "$UTILS" = 'true' ] && KEY="${KEY}-utils"
         [ '${{ inputs.enable-tests }}' = 'true' ] && KEY="${KEY}-tests"
         KEY="${KEY}-dev${DEV_HASH}-${SHA}"
+        [ -n '${{ steps.msys-toolchain.outputs.hash }}' ] && KEY="${KEY}-msys${{ steps.msys-toolchain.outputs.hash }}"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
     - name: Restore LLVM artifact cache
