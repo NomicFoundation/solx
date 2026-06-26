@@ -83,8 +83,6 @@ impl TryExternalCall {
         Vec<Value<'context, 'block>>,
         BlockRef<'context, 'block>,
     ) {
-        // A `recv.f{value: v}(args)` forwards `v` as msg.value; gas/salt follow the
-        // same drop/forward rule as a normal call.
         let mut current_block = block;
         let mut call_value = None;
         let mut call_gas = None;
@@ -95,8 +93,6 @@ impl TryExternalCall {
             call_value = value;
             call_gas = gas;
         }
-        // External (ABI) signature: `calldata` reference parameters cross the call
-        // boundary as memory (see `resolve_external_function_types`).
         let (parameter_types, return_types) = AstType::resolve_signature(
             &self.function,
             LocationPolicy::ForceMemory,
@@ -123,11 +119,8 @@ impl TryExternalCall {
         let builder = &context.state.builder;
         let value =
             call_value.unwrap_or_else(|| AstValue::uint256(0, builder, &current_block).into_mlir());
-        // `{gas: g}` caps the forwarded gas; without it, forward all remaining gas.
         let gas =
             call_gas.unwrap_or_else(|| AstValue::gas_left(builder, &current_block).into_mlir());
-        // `sol.ext_icall` results are `(i1 status, decoded-returns...)`; the `try` form yields the
-        // status instead of reverting, so the caller can run a `catch` handler.
         let mut out_types = Vec::with_capacity(return_types.len() + 1);
         out_types
             .push(AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());

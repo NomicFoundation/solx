@@ -19,8 +19,8 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::ContractCreation;
 use crate::ast::contract::function::expression::call_options::CallOptions;
 
-/// A `try new C(args)` contract creation, resolved from the `try` expression (the other shape — besides
-/// an external call — that carries a real catch path), so [`Self::emit`] is an infallible emitter.
+/// A `try new C(args)` contract creation, resolved from the `try` expression (the other shape,
+/// besides an external call, that carries a real catch path), so [`Self::emit`] is an infallible emitter.
 pub struct TryNewExpression {
     /// The `{value: v}` / `{salt: s}` options layer, if any (`new C{value: v}(args)`).
     options: Option<CallOptionsExpression>,
@@ -51,8 +51,6 @@ impl TryNewExpression {
             }
             _ => return None,
         };
-        // Only a contract creation carries a catch path; `new T[](n)` / `new bytes(n)` resolve to an
-        // array/bytes type, not a contract.
         let Some(SlangType::Contract(contract_type)) = call.get_type() else {
             return None;
         };
@@ -80,12 +78,10 @@ impl TryNewExpression {
         Vec<Value<'context, 'block>>,
         BlockRef<'context, 'block>,
     ) {
-        // `new C{value: v}(args)` forwards `v` as msg.value and `{salt: s}` as the CREATE2 salt.
         let mut current_block = block;
         let mut call_value = None;
         let mut salt = None;
         if let Some(options) = &self.options {
-            // `new C{value, salt}` takes no `{gas:}` option, so the captured gas is unused.
             let (value, salt_value, _gas, next_block) =
                 CallOptions(options).capture(context, current_block);
             current_block = next_block;
@@ -100,9 +96,6 @@ impl TryNewExpression {
             true,
             current_block,
         );
-        // Success status: the created contract's address is non-zero. Mirror solc — cast the contract
-        // to an address, then to `ui160`, and compare against zero; the `sol.try` runs a catch on a
-        // revert instead of propagating it.
         let builder = &context.state.builder;
         let ui160 = AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_ETH_ADDRESS);
         let address = AstValue::from(contract_value)

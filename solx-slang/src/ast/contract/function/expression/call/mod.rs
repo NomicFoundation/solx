@@ -71,8 +71,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> Self::Output {
-        // `recv.f{value: v}(args)` / `new C{value, salt}(args)`: evaluate the option list (in source
-        // order) before the arguments, forwarding `value` as msg.value and `salt` as the CREATE2 salt.
         let (call_value, salt, call_gas, block, callee) = match self.operand().unwrap_parentheses() {
             Expression::CallOptionsExpression(options) => {
                 let (value, salt, gas, block) = CallOptions(&options).capture(context, block);
@@ -82,8 +80,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
         };
         let arguments = self.arguments();
 
-        // A callee resolving to a struct definition is a struct constructor (`S(a, b)` / `Lib.S(...)`):
-        // allocate the struct in memory, order field initialisers by declaration, store each coerced.
         let struct_callee = match &callee {
             Expression::Identifier(identifier) => identifier.resolve_to_definition(),
             Expression::MemberAccessExpression(access) => access.member().resolve_to_definition(),
@@ -137,8 +133,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             };
         }
 
-        // `T(x)` / `bytesN("…")`: an explicit 1-argument type conversion coerces
-        // the argument to the call's own type.
         if self.is_type_conversion()
             && let ArgumentsDeclaration::PositionalArguments(positional) = &arguments
             && positional.len() == 1
@@ -153,13 +147,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             };
         }
 
-        // A call through a function-pointer VALUE — a local / parameter / contract-
-        // static `fp`, a struct field `s.f`, a namespace-static `C.x`, an `arr[i]`,
-        // or a `(cond ? f : g)` — dispatches through the pointer the callee yields.
-        // A direct `f` / `C.f`, an external `i.f` / getter `i.x`, a library `L.f`,
-        // and the built-in members all resolve to a function definition or a
-        // built-in (never a pointer VALUE), so they fall through to their own
-        // dispatch below.
         let function_pointer_callee = match &callee {
             Expression::Identifier(identifier) => matches!(
                 identifier.resolve_to_definition(),
@@ -214,7 +201,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             };
         }
 
-        // An identifier-callee built-in (`keccak256`, `require`, …).
         if let Expression::Identifier(identifier) = &callee
             && let Some(built_in) = identifier.resolve_to_built_in()
             && matches!(
@@ -236,9 +222,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
                 unreachable!("a built-in takes positional arguments only");
             };
-            // Only handled built-ins with a matching argument count reach here, so
-            // the per-built-in argument expectations hold; `assert` / `require` are
-            // statement-style and yield no value.
             return match built_in {
                 BuiltIn::Assert => {
                     let condition = positional.iter().next().expect("assert has one argument");
@@ -272,7 +255,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         .into_mlir();
                     let builder = &context.state.builder;
                     let block = match message {
-                        // A literal string message lowers to `sol.require %cond, "msg"`.
                         Some(Expression::StringExpression(string_expression)) => {
                             let bytes = string_expression.value();
                             let literal =
@@ -288,13 +270,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             block
                         }
                         Some(expression) => {
-                            // `require(cond, CustomError(args))` (Solidity ≥ 0.8.26)
-                            // lowers to the `call` form of `sol.require` carrying the
-                            // error's canonical signature and its ABI-encoded
-                            // arguments — the same payload `revert CustomError(args)`
-                            // builds, but guarded by the condition. Any other runtime
-                            // expression is ABI-encoded under the `Error(string)`
-                            // selector.
                             if let Expression::FunctionCallExpression(error_call) = &expression
                                 && let Some(Definition::Error(error_definition)) =
                                     (match error_call.operand() {
@@ -397,8 +372,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         block,
                     } = positional.emit(context, block);
                     let builder = &context.state.builder;
-                    // `sol.blockhash` takes a `ui256` block number; coerce a narrower
-                    // argument type up first.
                     let block_number = AstValue::from(values[0])
                         .cast(
                             AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
@@ -424,8 +397,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         block,
                     } = positional.emit(context, block);
                     let builder = &context.state.builder;
-                    // `sol.blobhash` takes a `ui256` index; coerce a narrower
-                    // argument type up first (mirroring `blockhash`).
                     let index = AstValue::from(values[0])
                         .cast(
                             AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
@@ -451,8 +422,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         block,
                     } = positional.emit(context, block);
                     let builder = &context.state.builder;
-                    // `sol.selfdestruct` takes a payable address recipient; the
-                    // argument is already `address payable` per the signature.
                     let recipient = AstValue::from(values[0])
                         .cast(AstType::address(builder.context, true), builder, &block)
                         .into_mlir();
@@ -520,10 +489,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         block,
                     } = positional.emit(context, block);
                     let builder = &context.state.builder;
-                    // `ecrecover(bytes32 hash, uint8 v, bytes32 r, bytes32 s)`: the
-                    // hash / r / s arguments keep their literal `uint256` type, but
-                    // `sol.ecrecover` takes `fixedbytes<32>` for them and `ui8` for
-                    // `v`. Coerce each to its signature type (matching solc).
                     let bytes32 = AstType::fixed_bytes(builder.context, 32).into_mlir();
                     let ui8 = Type::from(IntegerType::unsigned(builder.context, 8));
                     let hash = AstValue::from(values[0])
@@ -559,8 +524,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         block,
                     } = positional.emit(context, block);
                     let builder = &context.state.builder;
-                    // `addmod`/`mulmod` require identical `ui256` operand/result types, but a literal
-                    // operand keeps its narrow type, so widen all three to ui256.
                     let ui256 = AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                         .into_mlir();
                     let x = AstValue::from(values[0])
@@ -586,11 +549,8 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             };
         }
 
-        // A member-access callee: a call-position built-in, a namespace-qualified
-        // struct constructor, or a member call `x.f(...)`.
         if let Expression::MemberAccessExpression(access) = &callee {
             match access.member().resolve_to_built_in() {
-                // `addr.call/delegatecall/staticcall(data)` → (success, returndata).
                 Some(
                     kind @ (BuiltIn::AddressCall
                     | BuiltIn::AddressDelegatecall
@@ -609,8 +569,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         block,
                     } = argument.emit(context, block);
                     let builder = &context.state.builder;
-                    // `sol.bare_call`'s input rejects a non-memory operand, so an
-                    // argument sourced from storage / calldata is copied into memory first.
                     let input = input
                         .cast(
                             AstType::string(builder.context, solx_utils::DataLocation::Memory),
@@ -677,8 +635,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         block,
                     };
                 }
-                // `abi.decode(payload, (T))` — `sol.decode` to the result types the
-                // call's slang type resolves to (one per requested type).
                 Some(BuiltIn::AbiDecode) => {
                     let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
                         unimplemented!("abi.decode takes positional arguments only");
@@ -688,14 +644,11 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         value: payload_value,
                         block,
                     } = payload_expression.emit(context, block);
-                    // One MLIR result type per requested type, resolved from the call's binder-assigned type.
                     let result_types: Vec<Type> = AstType::resolve_result_types(
                         &self.get_type().expect("slang validated"),
                         &context.state.builder,
                     );
                     let builder = &context.state.builder;
-                    // `sol.decode` requires a memory / calldata buffer; a storage `bytes` / `string`
-                    // is a reference, so copy it to memory first (memory / calldata pass through).
                     let payload_value = if matches!(
                         payload_expression
                             .get_type()
@@ -730,7 +683,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         block,
                     };
                 }
-                // `T.wrap(x)` / `T.unwrap(x)`: a single conversion to the result type.
                 Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
                     let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
                         unreachable!("a UDVT wrap/unwrap takes one positional argument");
@@ -749,15 +701,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         block,
                     };
                 }
-                // Any other member built-in in call position: an ABI encode, a
-                // dynamic-array `push`/`pop`, an address value transfer, or a
-                // `string`/`bytes` concat — dispatched on slang's typed
-                // classification of the member.
                 Some(member_built_in) => {
-                    // `arr.pop({})` / `arr.push({})`: empty named braces on a zero-parameter
-                    // array built-in are the no-argument form (`pop` discards; `push` appends
-                    // and yields the new element). Handle them directly; every other member
-                    // built-in takes positional arguments only (slang rejects named args there).
                     if matches!(member_built_in, BuiltIn::ArrayPop | BuiltIn::ArrayPush)
                         && matches!(&arguments,
                             ArgumentsDeclaration::NamedArguments(named) if named.iter().next().is_none())
@@ -796,9 +740,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     };
                     let (value, block) = match member_built_in {
                         BuiltIn::AddressSend => {
-                            // `address.send(value)` → `sol.send`, yielding the
-                            // success flag. `sol.send` takes a `ui256` amount, so a
-                            // narrow literal (`r.send(0)` → ui8) is widened first.
                             let builder = &context.state.builder;
                             let BlockAnd { value: addr, block } =
                                 access.operand().emit(context, block);
@@ -830,7 +771,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             (Some(value), block)
                         }
                         BuiltIn::AddressTransfer => {
-                            // `address.transfer(value)` → `sol.transfer` (no result).
                             let builder = &context.state.builder;
                             let BlockAnd { value: addr, block } =
                                 access.operand().emit(context, block);
@@ -852,7 +792,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             (None, block)
                         }
                         BuiltIn::AbiEncode => {
-                            // `abi.encode(args)` → a standard `sol.encode`.
                             let BlockAnd {
                                 value: values,
                                 block,
@@ -864,7 +803,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             (Some(result), block)
                         }
                         BuiltIn::AbiEncodePacked => {
-                            // `abi.encodePacked(args)` → a packed `sol.encode`.
                             let BlockAnd {
                                 value: values,
                                 block,
@@ -875,8 +813,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             (Some(result), block)
                         }
                         BuiltIn::AbiEncodeWithSelector => {
-                            // `abi.encodeWithSelector(selector, args)`: cast the first
-                            // argument to `bytes4` and prepend it to the payload.
                             let BlockAnd {
                                 value: mut values,
                                 block,
@@ -896,8 +832,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             (Some(result), block)
                         }
                         BuiltIn::AbiEncodeWithSignature => {
-                            // `abi.encodeWithSignature(sig, args)`: hash the signature to a 4-byte
-                            // selector and prepend it (a literal hashes at compile time, a runtime one via `keccak256`).
                             let mut iter = positional.iter();
                             let signature_expression = iter.next().expect("slang validated");
                             let (selector_value, mut current) = match &signature_expression {
@@ -958,10 +892,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             (Some(result), current)
                         }
                         BuiltIn::AbiEncodeCall => {
-                            // `abi.encodeCall(callee, args)`: the callee's 4-byte selector prepended to its
-                            // ABI-encoded arguments. A static reference folds the selector to a constant; a
-                            // runtime pointer reads it via `sol.ext_func_selector`. Arguments are coerced to
-                            // the callee's parameter types, encoded from `Memory` (the external-call ABI).
                             let mut iter = positional.iter();
                             let function_expression = iter.next().expect("slang validated");
                             let call_arguments = iter.next().expect("slang validated");
@@ -1045,7 +975,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             (Some(result), current)
                         }
                         BuiltIn::ArrayPop => {
-                            // `arr.pop()` / `bytes.pop()` → `sol.pop`.
                             let BlockAnd {
                                 value: array_value,
                                 block,
@@ -1064,8 +993,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             if let (SlangType::Bytes(_), Some(value_argument)) =
                                 (&base_slang_type, &value_argument)
                             {
-                                // `bytes.push(x)` appends a single byte in place via `sol.push_string`;
-                                // the packed element is not separately addressable, so there is no returned slot.
                                 let BlockAnd {
                                     value: bytes_reference,
                                     block,
@@ -1097,8 +1024,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 );
                                 let new_slot = new_slot.into_mlir();
                                 let Some(value_argument) = value_argument else {
-                                    // `arr.push()` in value position yields the freshly-appended element via
-                                    // `sol.load` (a value element as a fresh default, a reference as its storage reference).
                                     let builder = &context.state.builder;
                                     let loaded = Pointer::new(new_slot)
                                         .load(AstType::new(element_type), builder, &block)
@@ -1109,8 +1034,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                     };
                                 };
                                 if AstType::new(element_type).is_reference() {
-                                    // A reference-typed element is appended by copying the source memory
-                                    // aggregate into the storage slot `push` returns (a memory→storage `sol.copy`).
                                     let BlockAnd { value, block } =
                                         value_argument.emit(context, block);
                                     Pointer::new(new_slot).copy_from(
@@ -1132,8 +1055,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             }
                         }
                         BuiltIn::StringConcat | BuiltIn::BytesConcat => {
-                            // `string.concat(...)` / `bytes.concat(...)` → `sol.concat` over the variadic
-                            // values, yielding a fresh memory string.
                             let BlockAnd {
                                 value: values,
                                 block,
@@ -1162,9 +1083,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 None => {}
             }
 
-            // A member call `x.f(...)`, classified by operand and member resolution.
             let operand = access.operand();
-            // `super.f` / a recorded base redirect: an internal call up the C3 chain.
             if matches!(operand, Expression::SuperKeyword(_))
                 || context.state.super_redirect.contains_key(&access.node_id())
             {
@@ -1174,8 +1093,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     .get(&access.node_id())
                     .copied()
                     .expect("a super/base call has a recorded redirect target");
-                // Named arguments bind to the statically-resolved callee's parameter
-                // names; ordering collapses positional and named forms into one path.
                 let parameter_ids: Vec<NodeId> = match access.member().resolve_to_definition() {
                     Some(Definition::Function(function_definition)) => function_definition
                         .parameters()
@@ -1198,9 +1115,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             }
 
             let member_definition = access.member().resolve_to_definition();
-            // An external library call (`L.f` namespace or `using for` onto a
-            // selector-bearing library function) delegatecalls — the only member
-            // call that accepts named arguments.
             if let Some(Definition::Function(function)) = &member_definition
                 && function.compute_selector().is_some()
                 && (matches!(&operand, Expression::Identifier(identifier)
@@ -1210,10 +1124,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         Some(Definition::Library(_))
                     ))
             {
-                // Resolve the link target from the member-access callee: the
-                // library function, its `solx_utils::ContractName`, and the `self`
-                // receiver (`None` for a namespace-qualified `L.f`, the operand value
-                // for a `using for` `x.f`).
                 let Some(Definition::Library(library)) = function.enclosing_definition() else {
                     unreachable!("an external library call's target is a library member");
                 };
@@ -1237,20 +1147,11 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 };
                 let argument_expressions = arguments.ordered_by(explicit_parameter_ids).expect("slang validated");
 
-                // An external library call delegatecalls into the deployed library via `sol.ext_call`
-                // (`delegate_call` + `library_call`). The address is a `sol.lib_addr` link placeholder;
-                // a `using for` receiver becomes the implicit leading `self` argument.
                 let (parameter_types, _) = AstType::resolve_signature(
                     function,
                     LocationPolicy::Declared(None),
                     &context.state.builder,
                 );
-                // A `calldata` return cannot cross the (delegate)call boundary, so it is decoded into
-                // memory like every other external-call return. Only a `calldata` return is remapped:
-                // a public library function may return a `storage` reference (e.g. a struct holding a
-                // mapping), which is passed by slot and must keep its `storage` location; `memory` and
-                // value returns are likewise kept as declared. Parameters keep their declared location
-                // too — a `storage` reference parameter is passed by slot, not copied to memory.
                 let return_types: Vec<_> = match function.returns() {
                     Some(returns) => returns
                         .iter()
@@ -1272,8 +1173,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         .collect(),
                     None => Vec::new(),
                 };
-                // A library external function keeps the ` storage` data-location in its selector
-                // (e.g. `g(uint256[] storage)`), matching solc — see `library_aware_selector`.
                 let selector = crate::ast::contract::function::signature::library_aware_selector(
                     function,
                 )
@@ -1313,8 +1212,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 let value = AstValue::uint256(0, builder, &current_block).into_mlir();
                 let selector_value =
                     AstValue::uint256(i64::from(selector), builder, &current_block).into_mlir();
-                // `sol.ext_call` yields the `i1` status (result 0) then the decoded outs; it reverts
-                // internally on failure, so the status is dropped and only the decoded results return.
                 let operation = current_block.append_operation(mlir_op_build!(
                     builder,
                     ExtCallOperation
@@ -1347,13 +1244,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 };
             }
 
-            // A member call orders named arguments against the callee's parameters
-            // (a `using for` receiver is the implicit `self`, a getter takes positional
-            // key/index arguments only — see the arms below).
             return match member_definition {
-                // `using for` / `L.f` onto an internal (no-selector) library fn,
-                // inlined like an ordinary internal call; a selector-bearing one is
-                // a `this.f` / `instance.f` external call.
                 Some(Definition::Function(function)) if function.compute_selector().is_none() => {
                     let resolved = context.state.resolve_function(function.node_id());
                     let parameter_ids: Vec<NodeId> = function
@@ -1361,9 +1252,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         .iter()
                         .map(|parameter| parameter.node_id())
                         .collect();
-                    // A namespace qualifier (`L.f` / `M.f`) is not a value, so only
-                    // the explicit arguments pass; a `using for` receiver becomes the
-                    // implicit `self` first parameter.
                     if MemberAccessOperand(&operand).is_namespace_qualifier() {
                         let argument_expressions = arguments.ordered_by(&parameter_ids).expect("slang validated");
                         let BlockAnd {
@@ -1392,8 +1280,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 &block,
                             )
                             .into_mlir();
-                        // The receiver is the implicit `self`; order only the explicit
-                        // arguments against the remaining parameter ids.
                         let argument_expressions = arguments.ordered_by(&parameter_ids[1..]).expect("slang validated");
                         let BlockAnd {
                             value: mut argument_values,
@@ -1408,13 +1294,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         }
                     }
                 }
-                // `this.f` / `instance.f` (external call) and `this.x` / `instance.x` (getter) converge
-                // on one `sol.ext_icall`, differing only in the selector and signature source. A
-                // `view`/`pure` callee lowers to a STATICCALL. A nested / reference-typed getter is a LOUD residual.
                 Some(Definition::Function(_) | Definition::StateVariable(_)) => {
-                    // An external function call orders named arguments against the
-                    // callee's parameters; a getter takes positional key/index
-                    // arguments only (its synthetic ABI signature has no names).
                     let ordered_arguments: Vec<Expression> =
                         match access.member().resolve_to_definition() {
                             Some(Definition::Function(function)) => {
@@ -1455,12 +1335,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             )
                         }
                         Some(Definition::StateVariable(state_variable)) => {
-                            // A `this.m(key)` self getter and an `other.m(key)` getter on another
-                            // instance share one path: the receiver is emitted below and the
-                            // key/index arguments are passed against the getter's signature.
-                            // The getter's external ABI signature (scalar / mapping / array / struct,
-                            // multi-level). `None` only for a struct with no returnable members, which
-                            // slang rejects (solc: "the struct has all its members omitted").
                             let builder = &context.state.builder;
                             let Some((parameter_types, return_types)) =
                                 state_variable.getter_signature(builder)
@@ -1497,9 +1371,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         builder,
                         &block,
                     );
-                    // A `view`/`pure` callee lowers to a STATICCALL; `{value: v}`
-                    // forwards `v`, `{gas: g}` caps the forwarded gas, a plain call sends zero and
-                    // forwards all gas — all handled by `call_indirect` (the callee is an `ext_func_ref`).
                     let results = callee.call_indirect(
                         &argument_values,
                         &return_types,
@@ -1521,12 +1392,8 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             };
         }
 
-        // `new T[](n)` / `new bytes(n)` / `new C(args)`.
         if let Expression::NewExpression(_) = &callee {
             let slang_type = self.get_type();
-            // `new T[](n)` / `new bytes(n)` / `new string(n)` allocate a dynamic memory aggregate of
-            // `n` via a zeroed `sol.malloc`. The array forms resolve a call type; `new bytes` / `new
-            // string` surface none, so fall back to the syntactic elementary type name.
             let dynamic_result_type = match &slang_type {
                 Some(
                     inner @ (SlangType::Array(_) | SlangType::Bytes(_) | SlangType::String(_)),
@@ -1549,8 +1416,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 _ => None,
             };
             if let Some(result_type) = dynamic_result_type {
-                // `new T[](n)` / `new bytes(n)` / `new string(n)` take a single positional
-                // size argument; solc rejects named arguments on these forms.
                 let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
                     unreachable!("named arguments on a new array/bytes/string are not supported");
                 };
@@ -1580,16 +1445,12 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 };
             }
 
-            // Contract creation: `new C(args)` lowers to `sol.new` (embedding `C`'s deploy bytecode);
-            // record the dependency so the linker pulls the object in. `{salt: s}` selects CREATE2.
             let Some(SlangType::Contract(contract_type)) = slang_type else {
                 unreachable!("new expression has no resolved type or unsupported new target");
             };
             let Definition::Contract(contract_definition) = contract_type.definition() else {
                 unreachable!("Slang ContractType always references a Contract definition");
             };
-            // Named constructor arguments are ordered against the constructor's
-            // parameters; positional arguments pass through unchanged.
             let parameter_ids: Vec<NodeId> = contract_definition
                 .constructor()
                 .map(|constructor| {
@@ -1616,7 +1477,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
         }
 
         let Expression::Identifier(identifier) = &callee else {
-            // `T[](x)`: an empty-bracket array type used as a data-location cast.
             if let Expression::IndexAccessExpression(array_type) = &callee
                 && array_type.start().is_none()
                 && array_type.end().is_none()
@@ -1635,13 +1495,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     block,
                 };
             }
-            // A function-pointer value callee (`arr[i]`, `(cond ? f : g)`) was
-            // dispatched above; any other non-identifier callee is unsupported.
             unreachable!("unsupported callee expression");
         };
         match identifier.resolve_to_definition() {
-            // A direct call passes its arguments by position or by name; ordering
-            // them against the parameter ids collapses both into one path.
             Some(Definition::Function(function_definition)) => {
                 let parameter_ids: Vec<NodeId> = function_definition
                     .parameters()
@@ -1649,8 +1505,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     .map(|parameter| parameter.node_id())
                     .collect();
                 let ordered = arguments.ordered_by(&parameter_ids).expect("slang validated");
-                // Virtual dispatch: a bare internal call resolving to an overridden base function is
-                // routed to the most-derived override (a non-virtual callee passes through unchanged).
                 let call_id = context.state.resolve_virtual(function_definition.node_id());
                 let function = context.state.resolve_function(call_id);
                 let BlockAnd {
@@ -1675,9 +1529,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
 /// pulls the deploy object in. With `try_call`, marks the creation (`sol.new ... try`) so a surrounding
 /// `sol.try` receives a success status instead of reverting. Shared by the plain `new` path and the
 /// `try new` path (`TryNewExpression`) so both emit identical sol-dialect.
-/// Emits the creation of a contract instance — shared by the `new C(args)`
-/// expression path and the `try new C(args)` path — lowering to `sol.new` and
-/// recording the linker dependency on the created contract.
 pub(crate) trait ContractCreation {
     /// Emits `new self(ordered_arguments)`, forwarding `{value}`/`{salt}` and using
     /// `try` semantics when `try_call` is set. `ordered_arguments` are already in the
@@ -1707,8 +1558,6 @@ impl ContractCreation for slang_solidity_v2::ast::ContractDefinition {
         let payable = self.is_payable();
         context.state.add_dependency(contract_name.clone());
 
-        // Coerce each constructor argument to its declared parameter type so a literal materialises in the
-        // parameter's representation (the deployed constructor ABI-decodes by parameter type).
         let parameter_types = self
             .constructor()
             .map(|constructor| {
@@ -1726,7 +1575,6 @@ impl ContractCreation for slang_solidity_v2::ast::ContractDefinition {
         } = ordered_arguments.emit_as(&parameter_types, context, block);
         let builder = &context.state.builder;
         let result_type = AstType::contract(builder.context, &contract_name, payable);
-        // `new C{value: v}()` forwards `v` wei; a plain `new C()` sends zero.
         let val = match call_value {
             Some(value) => AstValue::from(value),
             None => AstValue::uint256(0, builder, &block),
