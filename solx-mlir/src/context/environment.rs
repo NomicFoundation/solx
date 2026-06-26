@@ -26,12 +26,6 @@ pub struct Environment<'context, 'block> {
     value_bindings: HashMap<NodeId, Value<'context, 'block>>,
 }
 
-impl<'context, 'block> Default for Environment<'context, 'block> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<'context, 'block> Environment<'context, 'block> {
     /// Creates a new environment with a single root scope.
     pub fn new() -> Self {

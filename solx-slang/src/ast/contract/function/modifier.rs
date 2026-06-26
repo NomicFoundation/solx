@@ -36,7 +36,6 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 use crate::ast::contract::function::statement::StatementContext;
-use crate::ast::contract::function::statement::modifier_strategy::ModifierStrategy;
 use crate::ast::analysis::query::ModifierResolution;
 use crate::ast::analysis::query::PositionalArguments;
 use crate::ast::emit::EmitModifierCalls;
@@ -232,7 +231,6 @@ impl EmitModifierCalls for FunctionDefinition {
                 &return_types,
                 &[],
             );
-            emitter.modifier_strategy = ModifierStrategy::Placeholder;
             match statement.emit(&mut emitter, current_block) {
                 Some(next) => current_block = next,
                 None => {

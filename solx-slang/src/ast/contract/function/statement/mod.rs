@@ -9,7 +9,6 @@ pub mod assembly;
 pub mod control_flow;
 pub mod event;
 pub mod expression_statement_kind;
-pub mod modifier_strategy;
 pub mod revert;
 pub mod try_statement;
 pub mod variable_declaration;
@@ -38,11 +37,11 @@ use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::ods::sol::BreakOperation;
 use solx_mlir::ods::sol::ContinueOperation;
+use solx_mlir::ods::sol::PlaceholderOperation;
 use solx_mlir::ods::sol::ReturnOperation;
 use solx_mlir::ods::sol::RevertOperation;
 
 use self::expression_statement_kind::ExpressionStatementKind;
-use self::modifier_strategy::ModifierStrategy;
 use crate::ast::BlockAnd;
 use crate::ast::EmitAs;
 use crate::ast::EmitExpression;
@@ -68,9 +67,6 @@ pub struct StatementContext<'state, 'context, 'block> {
     /// The function's return slots, parallel to `return_types` (`None` for an unnamed return); a bare
     /// `return;` and the epilogue load these so the `sol.return` arity matches.
     pub return_slots: &'state [Option<Value<'context, 'block>>],
-    /// How a `_;` placeholder lowers (`sol.placeholder` in a modifier-definition body, otherwise
-    /// nothing). Set by direct assignment.
-    pub modifier_strategy: ModifierStrategy,
     /// Arithmetic overflow-checking mode (Checked by default, Unchecked inside `unchecked {}`).
     pub arithmetic_mode: ArithmeticMode,
 }
@@ -106,7 +102,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             storage_layout,
             return_types,
             return_slots,
-            modifier_strategy: ModifierStrategy::None,
             arithmetic_mode: ArithmeticMode::Checked,
         }
     }
@@ -230,10 +225,11 @@ statement_emit!(ContinueStatement; |context, block| {
 // ([`ExpressionStatementKind`]) and emitted by kind.
 statement_emit!(ExpressionStatement; |node, context, block| {
     match ExpressionStatementKind::from_statement(node) {
-        // A `_;` in a `sol.modifier` definition body lowers to `sol.placeholder`; in any other body
-        // the strategy is `None` and this is a no-op (a placeholder cannot occur there).
+        // A `_;` lowers to `sol.placeholder`. The frontend only resolves the `_` built-in inside a
+        // `sol.modifier` definition body, so this dispatch arm cannot occur elsewhere.
         ExpressionStatementKind::ModifierPlaceholder => {
-            ModifierStrategy::emit_placeholder(context, block)
+            mlir_op_void!(&context.state.builder, &block, PlaceholderOperation);
+            Some(block)
         }
         ExpressionStatementKind::RevertCall(call) => {
             // `revert(...)` takes positional arguments; a degenerate empty
