@@ -589,8 +589,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     let Some((parameter_types, return_types)) =
                         state_variable.getter_signature(builder)
                     else {
-                        unimplemented!(
-                            "function pointer to a nested or reference-typed getter is not yet supported"
+                        unreachable!(
+                            "slang rejects a function pointer to a getter on a struct with no returnable members"
                         );
                     };
                     let selector = state_variable.compute_selector().expect("slang validated");

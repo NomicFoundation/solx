@@ -1464,14 +1464,15 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             // A `this.m(key)` self getter and an `other.m(key)` getter on another
                             // instance share one path: the receiver is emitted below and the
                             // key/index arguments are passed against the getter's signature.
-                            // The getter's external ABI signature (scalar / mapping / array / struct);
-                            // a nested or reference-typed key / value / element yields `None`.
+                            // The getter's external ABI signature (scalar / mapping / array / struct,
+                            // multi-level). `None` only for a struct with no returnable members, which
+                            // slang rejects (solc: "the struct has all its members omitted").
                             let builder = &context.state.builder;
                             let Some((parameter_types, return_types)) =
                                 state_variable.getter_signature(builder)
                             else {
-                                unimplemented!(
-                                    "getter of a nested or reference-typed state variable is not yet supported"
+                                unreachable!(
+                                    "slang rejects a getter on a struct with no returnable members"
                                 );
                             };
                             (

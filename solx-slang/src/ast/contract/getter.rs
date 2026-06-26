@@ -87,33 +87,35 @@ impl StructGetterLayout for StructDefinition {
 /// The external ABI signature of a `public` state variable's synthesised getter,
 /// shared by the call-position getter (`this.m(key)`), the getter-as-function-pointer
 /// value (`fp = this.m`), and the published method identifiers.
+/// The resolved signature of a keyed getter: `(input_types, result_types, struct_plan,
+/// terminal_is_reference)`.
+type KeyedGetterSignature<'context> = (
+    Vec<Type<'context>>,
+    Vec<Type<'context>>,
+    Option<Vec<(u64, Type<'context>, Type<'context>)>>,
+    bool,
+);
+
 pub trait GetterSignature {
     /// Returns `(parameter_types, return_types)`: scalar `() -> (T)`, mapping
     /// `(K) -> (V)`, array `(uint256) -> (element)`, struct `() -> (flattened
-    /// members)`. Returns `None` for a getter whose key / value / element is itself
-    /// a nested or reference type (not yet supported).
+    /// members)`. `None` for a getter with no flattenable result (e.g. a struct of only
+    /// mappings) — the same case solc emits no getter for.
     fn getter_signature<'context>(
         &self,
         builder: &Builder<'context>,
     ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)>;
-}
 
-/// Resolves a getter's terminal value/element type for its external ABI signature:
-/// a `string`/`bytes` leaf returns a Memory copy (the external ABI returns reference
-/// types in memory); a nested (array/struct) reference terminal isn't modelled by the
-/// single-level signature, so it yields `None`; a value terminal resolves in its
-/// declared representation.
-fn getter_terminal_type<'context>(
-    terminal: &SlangType,
-    builder: &Builder<'context>,
-) -> Option<Type<'context>> {
-    match terminal {
-        SlangType::String(_) | SlangType::Bytes(_) => {
-            Some(AstType::resolve(terminal, LocationPolicy::ForceMemory, builder))
-        }
-        _ if terminal.is_reference_type() => None,
-        _ => Some(AstType::resolve(terminal, LocationPolicy::Declared(None), builder)),
-    }
+    /// The multi-level signature of a keyed (`mapping`/array) getter: the re-walk's
+    /// `(input_types, result_types)`, plus the terminal's `struct_plan` and whether it
+    /// is a reference (Memory) leaf. Shared by [`GetterSignature::getter_signature`]
+    /// (the call site) and the getter body, so the two can never disagree. `None` for a
+    /// non-keyed type or a terminal with no flattenable getter.
+    fn keyed_getter_signature<'context>(
+        &self,
+        location: DataLocation,
+        builder: &Builder<'context>,
+    ) -> Option<KeyedGetterSignature<'context>>;
 }
 
 impl GetterSignature for StateVariableDefinition {
@@ -122,33 +124,11 @@ impl GetterSignature for StateVariableDefinition {
         builder: &Builder<'context>,
     ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)> {
         self.get_type().and_then(|declared_type| match &declared_type {
-            SlangType::Mapping(mapping_type) => {
-                let key = mapping_type.key_type();
-                let value = mapping_type.value_type();
-                // A reference key would need the body's `string<Memory>` handling; defer it.
-                if key.is_reference_type() {
-                    return None;
-                }
-                let value_type = getter_terminal_type(&value, builder)?;
-                Some((
-                    vec![AstType::resolve(&key, LocationPolicy::Declared(None), builder)],
-                    vec![value_type],
-                ))
-            }
-            SlangType::Array(array_type) => {
-                let element_type = getter_terminal_type(&array_type.element_type(), builder)?;
-                Some((
-                    vec![AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()],
-                    vec![element_type],
-                ))
-            }
-            SlangType::FixedSizeArray(array_type) => {
-                let element_type = getter_terminal_type(&array_type.element_type(), builder)?;
-                Some((
-                    vec![AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()],
-                    vec![element_type],
-                ))
-            }
+            // A keyed getter (`mapping`/array, possibly nested) shares the body's
+            // multi-level signature so the call site and the body cannot diverge.
+            SlangType::Mapping(_) | SlangType::Array(_) | SlangType::FixedSizeArray(_) => self
+                .keyed_getter_signature(DataLocation::Storage, builder)
+                .map(|(input_types, result_types, _, _)| (input_types, result_types)),
             SlangType::Struct(struct_type) => {
                 let Definition::Struct(struct_definition) = struct_type.definition() else {
                     return None;
@@ -173,6 +153,72 @@ impl GetterSignature for StateVariableDefinition {
                 vec![AstType::resolve(other, LocationPolicy::Declared(None), builder)],
             )),
         })
+    }
+
+    fn keyed_getter_signature<'context>(
+        &self,
+        location: DataLocation,
+        builder: &Builder<'context>,
+    ) -> Option<KeyedGetterSignature<'context>> {
+        // Re-walk nested mappings / arrays, one ABI input per level; a reference key is
+        // decoded into Memory (not its storage location).
+        let mut input_types: Vec<Type<'context>> = Vec::new();
+        let mut terminal = self.get_type()?;
+        loop {
+            match &terminal {
+                SlangType::Mapping(mapping_type) => {
+                    let key = mapping_type.key_type();
+                    let key_type = if key.is_reference_type() {
+                        AstType::string(builder.context, DataLocation::Memory).into_mlir()
+                    } else {
+                        AstType::resolve(&key, LocationPolicy::Declared(Some(location)), builder)
+                    };
+                    input_types.push(key_type);
+                    terminal = mapping_type.value_type();
+                }
+                SlangType::Array(array_type) => {
+                    input_types.push(
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+                    );
+                    terminal = array_type.element_type();
+                }
+                SlangType::FixedSizeArray(array_type) => {
+                    input_types.push(
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+                    );
+                    terminal = array_type.element_type();
+                }
+                _ => break,
+            }
+        }
+        if input_types.is_empty() {
+            return None;
+        }
+        // The terminal: a `string`/`bytes` leaf returns a Memory copy; a struct returns
+        // its flattened members; a value returns in its declared representation.
+        let terminal_is_reference =
+            matches!(&terminal, SlangType::String(_) | SlangType::Bytes(_));
+        let result_type = if terminal_is_reference {
+            AstType::resolve(&terminal, LocationPolicy::ForceMemory, builder)
+        } else {
+            AstType::resolve(&terminal, LocationPolicy::Declared(Some(location)), builder)
+        };
+        let struct_plan = match &terminal {
+            SlangType::Struct(struct_type) => {
+                let Definition::Struct(struct_definition) = struct_type.definition() else {
+                    return None;
+                };
+                Some(struct_definition.struct_getter_layout(result_type, builder)?)
+            }
+            SlangType::String(_) | SlangType::Bytes(_) => None,
+            _ if terminal.is_reference_type() => return None,
+            _ => None,
+        };
+        let result_types: Vec<Type<'context>> = match &struct_plan {
+            Some(plan) => plan.iter().map(|(_, _, result)| *result).collect(),
+            None => vec![result_type],
+        };
+        Some((input_types, result_types, struct_plan, terminal_is_reference))
     }
 }
 
@@ -366,79 +412,20 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 .expect("slang validated");
             let selector = state_variable.compute_selector().expect("slang validated");
 
-            let mut input_types: Vec<Type<'context>> = Vec::new();
-            let mut terminal = declared_type.clone();
-            loop {
-                match &terminal {
-                    SlangType::Mapping(mapping_type) => {
-                        let key_slang = mapping_type.key_type();
-                        // A reference-typed key is an ABI input decoded into memory (not its storage location).
-                        let key_type = if key_slang.is_reference_type() {
-                            AstType::string(builder.context, DataLocation::Memory).into_mlir()
-                        } else {
-                            AstType::resolve(
-                                &key_slang,
-                                LocationPolicy::Declared(Some(location)),
-                                builder,
-                            )
-                        };
-                        input_types.push(key_type);
-                        terminal = mapping_type.value_type();
-                    }
-                    SlangType::Array(array_type) => {
-                        input_types.push(
-                            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                                .into_mlir(),
-                        );
-                        terminal = array_type.element_type();
-                    }
-                    SlangType::FixedSizeArray(array_type) => {
-                        input_types.push(
-                            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                                .into_mlir(),
-                        );
-                        terminal = array_type.element_type();
-                    }
-                    _ => break,
-                }
-            }
-            if input_types.is_empty() || input_types.len() != abi.inputs().len() {
+            // The keyed getter's ABI signature — shared with the call site (`getter_signature`)
+            // so the two never diverge. `None` when there is no flattenable getter.
+            let Some((input_types, result_types, struct_plan, terminal_is_reference)) =
+                state_variable.keyed_getter_signature(location, builder)
+            else {
                 return;
-            }
-
+            };
             let container_type = AstType::resolve_state_variable(
                 &state_variable.get_type().expect("slang validated"),
                 builder,
             );
-            // A `string`/`bytes` leaf terminal returns its Memory representation (the
-            // external ABI); a value/struct terminal uses its declared storage location.
-            let terminal_is_reference =
-                matches!(&terminal, SlangType::String(_) | SlangType::Bytes(_));
-            let result_type = if terminal_is_reference {
-                AstType::resolve(&terminal, LocationPolicy::ForceMemory, builder)
-            } else {
-                AstType::resolve(&terminal, LocationPolicy::Declared(Some(location)), builder)
-            };
-            let struct_plan = match &terminal {
-                SlangType::Struct(struct_type) => {
-                    let Definition::Struct(struct_definition) = struct_type.definition() else {
-                        return;
-                    };
-                    match struct_definition.struct_getter_layout(result_type, builder) {
-                        Some(plan) => Some(plan),
-                        None => return,
-                    }
-                }
-                // `string` / `bytes` leaves are emitted as a Memory copy below; any other
-                // reference terminal (a nested aggregate) is deferred.
-                SlangType::String(_) | SlangType::Bytes(_) => None,
-                _ if terminal.is_reference_type() => return,
-                _ => None,
-            };
-            let result_types: Vec<Type<'context>> = match &struct_plan {
-                Some(plan) => plan.iter().map(|(_, _, result)| *result).collect(),
-                None => vec![result_type],
-            };
+            // `return_loaded` reads the single terminal result type (the struct path uses
+            // `struct_plan` instead, so the value is unused there).
+            let result_type = result_types[0];
             let entry = Function::new(signature, input_types, result_types).define(
                 Some(selector),
                 StateMutability::View,
