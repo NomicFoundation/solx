@@ -47,12 +47,12 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::operator_binding::OperatorBindings;
 
-/// Solidity operator, bridged from slang's typed per-expression operator enums (never parsed from text).
+/// Solidity operator, bridged from slang's typed per-expression operator enums.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operator {
-    /// `+` (binary)
+    /// `+`
     Add,
-    /// `-` (binary or unary negation)
+    /// `-`, binary or unary negation
     Subtract,
     /// `*`
     Multiply,
@@ -71,7 +71,7 @@ pub enum Operator {
     BitwiseXor,
     /// `<<`
     ShiftLeft,
-    /// `>>` (and the no-op `>>>`)
+    /// `>>` and the no-op `>>>`
     ShiftRight,
     /// `~`
     BitwiseNot,
@@ -164,8 +164,6 @@ impl Operator {
             Self::BitwiseAnd => mlir_op_build!(builder, AndOperation.lhs(lhs).rhs(rhs)),
             Self::BitwiseOr => mlir_op_build!(builder, OrOperation.lhs(lhs).rhs(rhs)),
             Self::BitwiseXor => mlir_op_build!(builder, XorOperation.lhs(lhs).rhs(rhs)),
-            // `sol.shl`/`sol.shr` have a free `rhs` (independent shift amount), so the result
-            // type is not inferable from both operands and is set explicitly to follow `lhs`.
             Self::ShiftLeft => {
                 mlir_op_build!(builder, ShlOperation.result(lhs.r#type()).lhs(lhs).rhs(rhs))
             }
@@ -178,8 +176,8 @@ impl Operator {
         }
     }
 
-    /// Lowers a binary expression `left <op> right` to its result value (dispatching to a bound
-    /// user-defined operator when present). With no `target_type`, the wider operand type is selected.
+    /// Lowers a binary expression `left <op> right` to its result value, dispatching to a bound
+    /// user-defined operator when present. With no `target_type`, the wider operand type is selected.
     pub fn emit_binary<'context, 'block>(
         self,
         context: &ExpressionContext<'_, 'context, 'block>,
@@ -298,8 +296,8 @@ impl Operator {
         (old.into(), block)
     }
 
-    /// Emits prefix operators (`!`, `-`, `~`, `++`, `--`), dispatching a `-` / `~` on a bound
-    /// user-defined value type to its function. `target_type`, when set, types the operation.
+    /// Emits prefix operators, dispatching a `-` / `~` on a bound user-defined value type to its
+    /// function. `target_type`, when set, types the operation.
     pub fn emit_prefix<'context, 'block>(
         self,
         context: &ExpressionContext<'_, 'context, 'block>,
@@ -329,7 +327,6 @@ impl Operator {
                 let BlockAnd { value, block } = operand.emit(context, block);
                 let operand_type = target_type.expect("slang validated");
                 let value = value.cast(AstType::new(operand_type), &context.state.builder, &block);
-                // `sol.not` is integer-only; bridge a `bytesN` / `byte` operand through `ui(8*N)` and cast back.
                 let builder = &context.state.builder;
                 let (value, restore_type) =
                     match AstType::new(operand_type).fixed_bytes_or_byte_width() {
@@ -367,8 +364,6 @@ impl Operator {
                 (result, block)
             }
             Operator::Subtract => {
-                // Unary negation uses unchecked subtraction: checked negation (e.g. -INT_MIN reverting)
-                // needs signed-type awareness and a dedicated op, not sol.csub.
                 let BlockAnd { value, block } = operand.emit(context, block);
                 let operand_type = target_type.expect("slang validated");
                 let value = value
@@ -392,8 +387,7 @@ impl Operator {
         }
     }
 
-    /// Loads, increments or decrements, stores, and returns `(old, new)` for an
-    /// identifier lvalue (a local / parameter or a state variable).
+    /// Loads, increments or decrements, stores, and returns `(old, new)` for an identifier lvalue.
     fn emit_increment_decrement<'context, 'block>(
         self,
         context: &ExpressionContext<'_, 'context, 'block>,
@@ -438,7 +432,7 @@ impl Operator {
         }
     }
 
-    /// Emits `++` / `--` on a *computed* lvalue (`a[i]` or a struct field); `None` for any other operand.
+    /// Emits `++` / `--` on a *computed* lvalue such as `a[i]` or a struct field; `None` otherwise.
     fn emit_increment_decrement_indexed<'context, 'block>(
         self,
         context: &ExpressionContext<'_, 'context, 'block>,

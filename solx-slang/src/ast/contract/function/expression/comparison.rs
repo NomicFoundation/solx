@@ -1,5 +1,5 @@
 //!
-//! Comparison expression emission: equality and inequality (`sol.cmp`), reconciling the operand types first.
+//! Comparison expression emission: equality and inequality, reconciling the operand types first.
 //!
 
 use melior::ir::BlockRef;
@@ -21,9 +21,6 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
     let left = node.left_operand();
     let right = node.right_operand();
     let predicate = CmpPredicate::from(node.operator());
-    // A user-defined comparison operator (`using {f as ==} for T global;`) dispatches to the bound
-    // function instead of emitting native `sol.cmp`, mirroring the arithmetic operator bindings in
-    // `Operator::emit_binary`. The binding is keyed on the left operand's user-defined value type.
     if let Some(function_id) =
         Operator::user_defined_operator(context, &left, predicate.user_defined_operator())
     {
@@ -32,8 +29,6 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         let result = Operator::emit_operator_call(context, function_id, vec![lhs, rhs], &block);
         return BlockAnd { block, value: result.into() };
     }
-    // A string literal compared with a `bytesN` sibling materialises toward the sibling's fixed-bytes
-    // type (the non-string operand is emitted first to learn it).
     let left_is_string = matches!(left, Expression::StringExpression(_));
     let right_is_string = matches!(right, Expression::StringExpression(_));
     let (lhs, rhs, block) = if right_is_string && !left_is_string {
@@ -55,9 +50,6 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         let comparison = lhs.compare(rhs, predicate, &context.state.builder, &block);
         return BlockAnd { block, value: comparison };
     }
-    // Two fixed-bytes operands of different widths: `bytesN` are LEFT-aligned, so widen the smaller
-    // and compare AS fixed-bytes (matching solc). The mixed-integer path below would right-align them,
-    // yielding the wrong result.
     if let (Some(lhs_width), Some(rhs_width)) = (
         lhs.r#type().fixed_bytes_or_byte_width(),
         rhs.r#type().fixed_bytes_or_byte_width(),
@@ -78,9 +70,6 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         let comparison = lhs_common.compare(rhs_common, predicate, builder, &block);
         return BlockAnd { block, value: comparison };
     }
-    // Mixed-type comparison: widen each operand to 256 bits preserving ITS OWN signedness (so a
-    // negative isn't reinterpreted as a huge unsigned), then compare as signed if either is signed
-    // — a plain `ui256` default would make `(-10) < 10` an unsigned (false) comparison.
     let signed_lhs =
         IntegerType::try_from(lhs.r#type().into_mlir()).is_ok_and(|integer| integer.is_signed());
     let signed_rhs =

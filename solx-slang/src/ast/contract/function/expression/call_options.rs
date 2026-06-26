@@ -16,8 +16,6 @@ use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 expression_emit!(CallOptionsExpression; |node, context, block| {
-    // In value position (decorated but not called), contributes only its options' side effects;
-    // its value is the wrapped operand's.
     let mut current_block = block;
     for option in node.options().iter() {
         let BlockAnd { value: _value, block: next } = option.value().emit(context, current_block);
@@ -26,14 +24,13 @@ expression_emit!(CallOptionsExpression; |node, context, block| {
     node.operand().emit(context, current_block)
 });
 
-/// A local lens over a foreign `CallOptionsExpression`, capturing the call modifiers (`value` / `salt`).
+/// A local lens over a foreign `CallOptionsExpression`, capturing the `value` and `salt` call modifiers.
 pub struct CallOptions<'node>(pub &'node CallOptionsExpression);
 
 impl CallOptions<'_> {
-    /// Evaluates the option list in source order and returns `(value, salt, gas, block)`: `value` (as
-    /// `msg.value`, coerced to `ui256`), `salt` (CREATE2 salt, from `bytes32`), and `gas` (the call's
-    /// gas cap, coerced to `ui256`) — in that tuple order. A dropped `value`/`salt`/`gas` is `None`;
-    /// the caller then sends zero value/salt and forwards all remaining gas.
+    /// Evaluates the option list in source order and returns `(value, salt, gas, block)` in that
+    /// tuple order. A dropped `value`/`salt`/`gas` is `None`; the caller then sends zero value/salt
+    /// and forwards all remaining gas.
     pub fn capture<'state, 'context, 'block>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -49,8 +46,6 @@ impl CallOptions<'_> {
         let mut gas = None;
         let mut current_block = block;
         for option in self.0.options().iter() {
-            // Emit each option toward its expected type so a literal folds correctly (the CREATE2
-            // `salt` is `bytes32`, so `salt: hex"00"` folds to a fixedbytes constant, not a memory string).
             match option.name().resolve_to_built_in() {
                 Some(BuiltIn::CallOptionValue) => {
                     let BlockAnd {
@@ -94,8 +89,6 @@ impl CallOptions<'_> {
                     );
                 }
                 Some(BuiltIn::CallOptionGas) => {
-                    // `{gas: g}` caps the gas forwarded to the call (vs. forwarding all remaining gas);
-                    // coerce to `ui256` to match the call op's gas operand, like solc.
                     let BlockAnd {
                         value: option_value,
                         block: next_block,

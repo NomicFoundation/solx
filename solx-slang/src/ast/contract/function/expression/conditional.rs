@@ -28,8 +28,8 @@ use crate::ast::contract::function::expression::ExpressionContext;
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalExpression {
     type Output = BlockAnd<'context, 'block, Vec<Value<'context, 'block>>>;
 
-    /// Emits `cond ? a : b`, yielding one value per result (a scalar yields one, a tuple-valued
-    /// conditional one per element). Both branches store into shared slots loaded after the `sol.if`.
+    /// Emits `cond ? a : b`, yielding one value per result. Both branches store into shared slots
+    /// loaded after the `sol.if`.
     fn emit<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -38,8 +38,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
         let true_expression = self.true_expression();
         let false_expression = self.false_expression();
 
-        // A tuple-valued conditional yields one value per element. A branch is a literal tuple (types
-        // from its items) or a multi-value expression (types from the conditional's own tuple type).
         if let Some(SlangType::Tuple(tuple_type)) = self.get_type() {
             let result_types: Vec<Type<'context>> = match (&true_expression, &false_expression) {
                 (Expression::TupleExpression(true_tuple), Expression::TupleExpression(_)) => {
@@ -85,7 +83,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
                 (then_block, &true_expression),
                 (else_block, &false_expression),
             ] {
-                // Expand the branch to one value per result slot (literal tuple, call result list, or nested conditional).
                 let (values, current) = match branch_expression {
                     Expression::TupleExpression(tuple) => {
                         let mut values = Vec::new();
@@ -137,9 +134,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
             };
         }
 
-        // A scalar ternary yields a single value. A branch of bare function names yields an internal
-        // `func_ref`, but slang types it from the function's visibility, not the pointer type — so
-        // recover the internal-pointer type from a branch when present, else use the conditional's own type.
         let func_ref_type = |expression: &Expression| {
             let Expression::Identifier(identifier) = expression else {
                 return None;
@@ -172,8 +166,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
             IfOperation.cond(condition_boolean); then_region, else_region
         );
 
-        // `emit_as` already routes a string literal to its target representation and
-        // casts the value to `result_type`, so both branches share one body.
         for (branch_block, branch_expression) in [
             (then_block, &true_expression),
             (else_block, &false_expression),
@@ -199,7 +191,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
 
 expression_emit!(TupleExpression; |node, context, block| {
     let items = node.items();
-    // TODO: support multi-value tuples (e.g. tuple deconstruction)
     let item = items.iter().next().expect("slang validated");
     let inner = item
         .expression()
@@ -218,8 +209,6 @@ expression_emit!(ArrayExpression; |node, context, block| {
         ),
     };
     let builder = &context.state.builder;
-    // An array literal is always a memory aggregate, so resolve element and result types in their
-    // memory representation — the per-element coercion is then a `data_loc_cast` into memory (matching solc).
     let declared_element_type =
         AstType::resolve(&element_slang_type, LocationPolicy::ForceMemory, builder);
     // Emit element values before fixing the element type: for a function-pointer array literal the

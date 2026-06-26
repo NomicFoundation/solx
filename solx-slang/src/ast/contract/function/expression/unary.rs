@@ -16,8 +16,6 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
 
 expression_emit!(PostfixExpression; |node, context, block| {
-    // Peel parenthesised single-element tuples so `(i)++` / `(arr[j])--` resolve
-    // their lvalue exactly like the bare `i++` / `arr[j]--`.
     let operand = node.operand().unwrap_parentheses();
     let operator = match node.operator() {
         PostfixExpressionOperator::MinusMinus(_) => Operator::Decrement,
@@ -28,8 +26,6 @@ expression_emit!(PostfixExpression; |node, context, block| {
 });
 
 expression_emit!(PrefixExpression; |node, context, block| {
-    // `delete x` is value-less, so it never reaches value position: a statement
-    // discard site emits it directly (`AssignmentTarget::delete`), not through this `Emit`.
     if let PrefixExpressionOperator::DeleteKeyword(_) = node.operator() {
         unreachable!("`delete` is value-less; a discard site emits it, not value-position `Emit`");
     }
@@ -45,8 +41,6 @@ expression_emit!(PrefixExpression; |node, context, block| {
         PrefixExpressionOperator::PlusPlus(_) => Operator::Increment,
         PrefixExpressionOperator::Tilde(_) => Operator::BitwiseNot,
     };
-    // Peel parenthesised single-element tuples so `--(i)` / `~(x)` operate on the
-    // bare inner lvalue / value, as solc treats them.
     let operand = node.operand().unwrap_parentheses();
     let (value, block) = operator.emit_prefix(context, &operand, result_type, block);
     BlockAnd { block, value }

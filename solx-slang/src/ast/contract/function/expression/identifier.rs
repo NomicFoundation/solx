@@ -18,10 +18,8 @@ use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 expression_emit!(Identifier; |node, context, block| {
-    // A bare name resolves to exactly one definition (slang's binder is total); each kind reads differently.
     match node.resolve_to_definition() {
         Some(Definition::StateVariable(state_variable)) => {
-            // A `constant` inlines its compile-time initializer (no slot); any other state variable loads its slot.
             let declared_type = state_variable.get_type().expect("slang validated");
             let element_type = AstType::resolve(
                 &declared_type,
@@ -33,8 +31,6 @@ expression_emit!(Identifier; |node, context, block| {
                 StateVariableMutability::Constant
             ) {
                 let initializer = state_variable.value().expect("slang validated");
-                // Emit toward the declared type so a `bytesN constant` initialised
-                // from a string literal folds to a fixed-bytes constant.
                 if let Expression::StringExpression(string_literal) = &initializer {
                     string_literal.emit_as(element_type, context, block)
                 } else {
@@ -55,8 +51,6 @@ expression_emit!(Identifier; |node, context, block| {
             }
         }
         Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
-            // Inside a `sol.modifier_call_blk` the wrapping function's parameters are bound directly
-            // to the isolated block's arguments as values, so a read yields the value with no load.
             if let Some(value) = context.environment.value_binding(definition.node_id()) {
                 return BlockAnd {
                     block,
@@ -75,8 +69,6 @@ expression_emit!(Identifier; |node, context, block| {
             initializer.emit(context, block)
         }
         Some(Definition::Function(function_definition)) => {
-            // A bare function name binds the most-derived override (virtual dispatch); an explicit
-            // `Base.f` skips this redirect.
             let target_id = context
                 .state
                 .resolve_virtual(function_definition.node_id());
@@ -87,8 +79,6 @@ expression_emit!(Identifier; |node, context, block| {
             BlockAnd { block, value }
         }
         Some(Definition::Library(library)) => {
-            // A library name used as a value (`address(L)`) is its linked deploy
-            // address, placed by its link symbol.
             let name = solx_utils::ContractName::new(
                 library.get_file_id().to_owned(),
                 Some(library.name().name()),

@@ -23,8 +23,7 @@ use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpression {
-    /// Emits the address `a[i]` / `m[k]` denotes with the element type (`sol.map` for a mapping key,
-    /// `sol.gep` for a sequential index), without the load.
+    /// Emits the address `a[i]` / `m[k]` denotes with the element type, without the load.
     fn emit_place<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -97,12 +96,7 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
     }
 }
 
-// `a[i]` / `m[k]` address the element and `sol.load` it; a slice `a[start:end]` instead produces
-// a sub-array VALUE via `sol.slice`. A dynamic-`bytes` element widens `!sol.byte` to `bytes1`.
 expression_emit!(IndexAccessExpression; |node, context, block| {
-    // A slice `a[start:end]` produces a sub-array VALUE via `sol.slice`, distinguished by `is_slice()`
-    // (an open-ended `a[i:]` is indistinguishable from `a[i]` by `end()` alone). Omitted `start` is
-    // `0`, omitted `end` the operand's length; both indices widen to `ui256`.
     if node.is_slice() {
         let base = node.operand();
         let BlockAnd {
@@ -177,9 +171,6 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
         &context.state.builder,
         &block,
     );
-    // A scalar element may need a fixed-bytes re-alignment to its declared type. A reference-typed
-    // element is loaded as its canonical reference and is authoritative (slang can mis-type the
-    // result of indexing an array literal of calldata references, so trust the loaded value's type).
     if value.r#type().is_reference() {
         return BlockAnd { block, value };
     }

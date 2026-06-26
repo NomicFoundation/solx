@@ -82,7 +82,6 @@ expression_emit!(
     BitwiseXorExpression,
     ShiftExpression;
     |node, context, block| {
-        // The result type slang assigns annotates the operands; `None` lets `emit_binary` pick the wider.
         let result_type =
             AstType::resolve_optional(node.get_type(), &context.state.builder);
         let (value, block) = Operator::from(node).emit_binary(

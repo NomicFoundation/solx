@@ -1,5 +1,5 @@
 //!
-//! Member access expression emission: `base.member` — namespace-qualified reads, struct fields, and built-ins.
+//! Member access expression emission: `base.member`: namespace-qualified reads, struct fields, and built-ins.
 //!
 
 use melior::ir::BlockLike;
@@ -52,7 +52,7 @@ use crate::ast::contract::getter::GetterSignature;
 use crate::ast::analysis::query::MemberAccessOperand;
 
 impl<'context: 'block, 'block> EmitPlace<'context, 'block> for MemberAccessExpression {
-    /// Emits the address `s.field` denotes with the field's element type (`sol.gep`), without the load. Struct base only.
+    /// Emits the address `s.field` denotes with the field's element type, without the load. Struct base only.
     fn emit_place<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -66,8 +66,6 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for MemberAccessExpre
             unreachable!("slang StructType always references a Struct definition");
         };
 
-        // Locate the accessed field by node-id identity — slang exposes fields as an ordered list
-        // with no direct index lookup, and the binder resolves the access (no name comparison).
         let Some(Definition::StructMember(member_definition)) =
             self.member().resolve_to_definition()
         else {
@@ -108,8 +106,6 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for MemberAccessExpre
 }
 
 expression_emit!(MemberAccessExpression; |node, context, block| {
-    // A namespace-qualified read (`C.x`, `L.CONST`, `M.a`) reads the named member like the bare
-    // identifier would. `this.x` keeps the external-getter path (its operand is `this`, not an identifier).
     if let Expression::Identifier(operand) = node.operand()
         && matches!(
             operand.resolve_to_definition(),
@@ -121,8 +117,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             )
         )
     {
-        // A state-variable / `constant` member reads as the bare identifier would (keyed by node id).
-        // A `Function` member is NOT delegated — it would pick up the virtual redirect `Base.f` must skip.
+        // A `Function` member is NOT delegated: it would pick up the virtual redirect `Base.f` must skip.
         match node.member().resolve_to_definition() {
             Some(Definition::StateVariable(_) | Definition::Constant(_)) => {
                 return node.member().emit(context, block);
@@ -130,11 +125,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             _ => {}
         }
     }
-    // `type(T).min/max/interfaceId/name/creationCode/runtimeCode`: a compile-time property of the named type.
     match node.member().resolve_to_built_in() {
         Some(builtin @ (BuiltIn::TypeMin | BuiltIn::TypeMax)) => {
-            // `type(T).min/max` for an integer type is a compile-time integer
-            // constant of `T`.
             let result_type =
                 AstType::resolve_optional(node.get_type(), &context.state.builder)
                     .expect("slang validated");
@@ -156,9 +148,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             return BlockAnd { block, value };
         }
         Some(builtin @ (BuiltIn::TypeEnumMin | BuiltIn::TypeEnumMax)) => {
-            // `type(E).min/max` for an enum is the lowest (`0`) or highest
-            // (`member_count - 1`) member ordinal, bridged to the enum type via
-            // `sol.enum_cast`.
             let Expression::TypeExpression(type_expression) = node.operand() else {
                 unreachable!("type(E).min/max operand is a type expression");
             };
@@ -186,8 +175,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             return BlockAnd { block, value };
         }
         Some(BuiltIn::TypeInterfaceId) => {
-            // `type(I).interfaceId` (EIP-165): the XOR of the selectors of `I`'s *directly*-declared
-            // functions, a compile-time `bytes4` (emitted as a `uint32` constant bridged to `bytes4`).
             let Expression::TypeExpression(type_expression) = node.operand() else {
                 unreachable!("type(I).interfaceId operand is a type expression");
             };
@@ -220,8 +207,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             return BlockAnd { block, value };
         }
         Some(BuiltIn::TypeName) => {
-            // `type(C).name` — the contract / interface name as a `string memory`
-            // constant.
             let Expression::TypeExpression(type_expression) = node.operand() else {
                 unreachable!("type(C).name operand is a type expression");
             };
@@ -238,9 +223,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             return BlockAnd { block, value };
         }
         Some(builtin @ (BuiltIn::TypeCreationCode | BuiltIn::TypeRuntimeCode)) => {
-            // `type(C).creationCode/runtimeCode` — the deploy / deployed bytecode (`bytes memory`) via
-            // `sol.object_code`. The reference is a linker dependency; `runtimeCode` must depend on
-            // `C_deployed` (depending on `C` alone leaves its data symbols unresolved).
             let Expression::TypeExpression(type_expression) = node.operand() else {
                 unreachable!("type(C).creationCode/runtimeCode operand is a type expression");
             };
@@ -276,8 +258,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 value: value.into(),
             };
         }
-        // `address.balance`/`codehash`/`code`, `arr.length`: a unary intrinsic
-        // over the receiver value.
         Some(BuiltIn::AddressBalance) => {
             let BlockAnd {
                 value: address,
@@ -342,8 +322,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 block,
             };
         }
-        // A function-like built-in member named WITHOUT a call (`addr.transfer`, `data.pop`, …) is a
-        // reference, not the action: evaluate the operand for side effects and yield a placeholder.
         Some(
             BuiltIn::AddressTransfer
             | BuiltIn::AddressSend
@@ -361,8 +339,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             let value = AstValue::uint256(0, builder, &block);
             return BlockAnd { block, value };
         }
-        // `abi.encode;` / `T.wrap;` named without a call are no-ops (the operand is a namespace / type,
-        // not a value), so nothing is evaluated; yield a placeholder.
         Some(
             BuiltIn::AbiEncode
             | BuiltIn::AbiEncodePacked
@@ -379,7 +355,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
         }
         _ => {}
     }
-    // EVM environment globals (`block`/`tx`/`msg`): nullary `sol.*` intrinsics, built then appended once.
     let builder = &context.state.builder;
     let environment_op = match node.member().resolve_to_built_in() {
         Some(BuiltIn::TxOrigin) => {
@@ -452,10 +427,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             value: value.into(),
         };
     }
-    // A struct-typed base is a field read (`s.field`); anything else
-    // (e.g. `msg.sender`, `addr.balance`) is a built-in member access.
     if matches!(node.operand().get_type(), Some(SlangType::Struct(_))) {
-        // Address the field (`sol.gep`) and `sol.load` it.
         let BlockAnd {
             value: Place {
                 address,
@@ -473,9 +445,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
         node.member().resolve_to_definition(),
         MemberAccessOperand(&node.operand()).resolve(),
     ) {
-        // `E.Variant` (or qualified `C.E.Variant`) not in call position: the
-        // variant's ordinal, located by NodeId identity against the enum's members
-        // (never by comparing the member name as text).
         (
             Some(Definition::EnumMember(member_definition)),
             Some(Definition::Enum(enum_definition)),
@@ -485,8 +454,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             .position(|member| member.node_id() == member_definition.node_id()),
         _ => None,
     } {
-        // The variant's ordinal as an integer constant, bridged to the enum type
-        // via `sol.enum_cast`.
         let result_type = AstType::resolve_optional(node.get_type(), &context.state.builder)
             .expect("slang validated");
         let builder = &context.state.builder;
@@ -494,9 +461,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             .cast(AstType::new(result_type), builder, &block);
         BlockAnd { block, value }
     } else {
-        // A value-position member built-in over a non-struct base: `.selector` / `.address`, or an
-        // external function pointer. Static `.selector` constants (function/error 4-byte, event 32-byte
-        // topic) are reached the same way, preceded by the receiver's side effects.
         let selector_constant = match node.member().resolve_to_built_in() {
             Some(BuiltIn::FunctionSelector) => match MemberAccessOperand(&node.operand()).resolve() {
                 Some(Definition::Function(function)) => {
@@ -527,8 +491,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             _ => None,
         };
         if let Some((selector, byte_width)) = selector_constant {
-            // The runtime receiver of `<receiver>.member.selector` still runs for its side effects;
-            // a namespace / type qualifier (`C.f.selector`) is no value and runs nothing.
             let block = if let Expression::MemberAccessExpression(inner) = node.operand()
                 && !MemberAccessOperand(&inner.operand()).is_namespace_or_type()
             {
@@ -541,8 +503,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             return BlockAnd { block, value };
         }
         match node.member().resolve_to_built_in() {
-            // `f.selector` on an external function-pointer VALUE pulls its selector
-            // at runtime via `sol.ext_func_selector`.
             Some(BuiltIn::FunctionSelector) => {
                 let BlockAnd {
                     value: operand_value,
@@ -551,8 +511,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 let value = operand_value.ext_func_selector(&context.state.builder, &block);
                 BlockAnd { block, value }
             }
-            // `f.address` — the address component of an external function-pointer
-            // VALUE, pulled out of its `!sol.ext_func_ref` via `sol.ext_func_addr`.
             Some(BuiltIn::FunctionAddress) => {
                 let BlockAnd {
                     value: operand_value,
@@ -561,17 +519,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 let value = operand_value.ext_func_address(&context.state.builder, &block);
                 BlockAnd { block, value }
             }
-            // A member resolving to a function used as a value (not called) is a
-            // function pointer: an externally-visible function with a selector
-            // (`this.f`, `instance.f`) is an external pointer, while a
-            // namespace-qualified internal function with none (`C.f`, `(L.f)`) is
-            // an internal pointer (`sol.func_constant`), like a bare `f`.
             _ => {
                 let member_definition = node.member().resolve_to_definition();
-                // A member resolving to a library used as a VALUE (`address(M.L)` through an
-                // aliased import `import "x" as M; M.L`) is its linked deploy address — the same
-                // `sol.lib_addr` a bare `L` emits (`identifier.rs`). solc's MLIR frontend does not
-                // resolve the alias here, so this is a solx-only path emitting the canonical op.
                 if let Some(Definition::Library(library)) = &member_definition {
                     let name = solx_utils::ContractName::new(
                         library.get_file_id().to_owned(),
@@ -581,9 +530,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                         AstValue::library_address(&name, &context.state.builder, &block);
                     return BlockAnd { block, value };
                 }
-                // A public state variable used as a value is its synthesised external getter
-                // taken as a function pointer (`fp = inst.x`): an `sol.ext_func_ref` carrying the
-                // getter's selector and ABI signature, mirroring the external-function arm below.
                 if let Some(Definition::StateVariable(state_variable)) = &member_definition {
                     let builder = &context.state.builder;
                     let Some((parameter_types, return_types)) =
@@ -612,8 +558,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     unreachable!("unsupported member access: {}", node.member().name());
                 };
                 if let Some(selector) = function_definition.compute_selector() {
-                    // An external function pointer's ABI representation types its reference parameters
-                    // as `Memory` (calldata cannot cross the call boundary), matching solc.
                     let (parameter_types, return_types) = AstType::resolve_signature(
                         &function_definition,
                         LocationPolicy::ForceMemory,
@@ -633,8 +577,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     );
                     BlockAnd { block, value }
                 } else {
-                    // The literal target lowers with no virtual redirect: `Base.f` names Base's own
-                    // implementation, not the most-derived override a bare `f` would bind.
                     let value = context
                         .state
                         .resolve_function(function_definition.node_id())

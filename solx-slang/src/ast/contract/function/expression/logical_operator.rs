@@ -18,16 +18,14 @@ use crate::ast::contract::function::expression::ExpressionContext;
 
 /// A short-circuit logical operator (`&&` / `||`).
 pub enum LogicalOperator {
-    /// `&&` — evaluates the RHS only when the LHS is true.
+    /// `&&`: evaluates the RHS only when the LHS is true.
     And,
-    /// `||` — evaluates the RHS only when the LHS is false.
+    /// `||`: evaluates the RHS only when the LHS is false.
     Or,
 }
 
 impl LogicalOperator {
-    /// The `i1` value the result keeps when the LHS short-circuits: `false` for
-    /// `&&` (a false LHS makes the whole expression false), `true` for `||` (a
-    /// true LHS makes it true).
+    /// The `i1` value the result keeps when the LHS short-circuits: `false` for `&&`, `true` for `||`.
     fn short_circuit_value(&self) -> bool {
         matches!(self, LogicalOperator::Or)
     }

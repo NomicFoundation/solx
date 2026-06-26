@@ -48,7 +48,7 @@ pub struct ExpressionContext<'state, 'context, 'block> {
     pub environment: &'state Environment<'context, 'block>,
     /// State variable node ID to storage slot mapping.
     pub storage_layout: &'state HashMap<NodeId, StorageSlot>,
-    /// Arithmetic overflow-checking mode (Checked by default, Unchecked inside `unchecked {}` and for-loop steps).
+    /// Arithmetic overflow-checking mode; Checked by default, Unchecked inside `unchecked {}` and for-loop steps.
     pub arithmetic_mode: ArithmeticMode,
 }
 
@@ -73,15 +73,12 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
     type Output = BlockAnd<'context, 'block, AstValue<'context, 'block>>;
 
     /// Dispatches an expression to its variant's emission, first folding a compile-time-constant
-    /// arithmetic/bitwise expression to a constant (slang records the exact value, matching solc's
-    /// rational arithmetic — the only way to lower a rational intermediate, which has no runtime type).
+    /// arithmetic/bitwise expression to a constant.
     fn emit<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> Self::Output {
-        // A COMPUTED constant expression folds to its exact integer (a bare literal is excluded
-        // so it keeps its own emit arm).
         let folds = matches!(
             self,
             Expression::AdditiveExpression(_)
@@ -159,8 +156,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
 impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Expression {
     type Output = AstValue<'context, 'block>;
 
-    /// Emits this expression coerced to `target_type` (a string literal materialises in the target
-    /// representation directly; every other expression emits then casts).
+    /// Emits this expression coerced to `target_type`.
     fn emit_as<'state>(
         &self,
         target_type: Type<'context>,

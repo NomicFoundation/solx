@@ -29,8 +29,6 @@ impl StorageSlot {
     where
         'context: 'block,
     {
-        // An `immutable` has no storage address: it is read by symbol via `sol.load_immutable`,
-        // matching solc (the constructor's write still goes through a `!sol.ptr<T, Immutable>` store).
         if matches!(self.location, DataLocation::Immutable) {
             let operation = block.append_operation(mlir_op_build!(
                 builder,
@@ -64,7 +62,7 @@ impl StorageSlot {
     }
 
     /// Returns the place denoting this slot via `sol.addr_of`, typed by the element's `address_type`
-    /// for the slot's location (a reference element addresses AS itself, so a later `load` short-circuits).
+    /// for the slot's location.
     fn addr_of<'context, 'block>(
         &self,
         builder: &Builder<'context>,
