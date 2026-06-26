@@ -98,6 +98,24 @@ pub trait GetterSignature {
     ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)>;
 }
 
+/// Resolves a getter's terminal value/element type for its external ABI signature:
+/// a `string`/`bytes` leaf returns a Memory copy (the external ABI returns reference
+/// types in memory); a nested (array/struct) reference terminal isn't modelled by the
+/// single-level signature, so it yields `None`; a value terminal resolves in its
+/// declared representation.
+fn getter_terminal_type<'context>(
+    terminal: &SlangType,
+    builder: &Builder<'context>,
+) -> Option<Type<'context>> {
+    match terminal {
+        SlangType::String(_) | SlangType::Bytes(_) => {
+            Some(AstType::resolve(terminal, LocationPolicy::ForceMemory, builder))
+        }
+        _ if terminal.is_reference_type() => None,
+        _ => Some(AstType::resolve(terminal, LocationPolicy::Declared(None), builder)),
+    }
+}
+
 impl GetterSignature for StateVariableDefinition {
     fn getter_signature<'context>(
         &self,
@@ -107,32 +125,28 @@ impl GetterSignature for StateVariableDefinition {
             SlangType::Mapping(mapping_type) => {
                 let key = mapping_type.key_type();
                 let value = mapping_type.value_type();
-                if key.is_reference_type() || value.is_reference_type() {
+                // A reference key would need the body's `string<Memory>` handling; defer it.
+                if key.is_reference_type() {
                     return None;
                 }
+                let value_type = getter_terminal_type(&value, builder)?;
                 Some((
                     vec![AstType::resolve(&key, LocationPolicy::Declared(None), builder)],
-                    vec![AstType::resolve(&value, LocationPolicy::Declared(None), builder)],
+                    vec![value_type],
                 ))
             }
             SlangType::Array(array_type) => {
-                let element = array_type.element_type();
-                if element.is_reference_type() {
-                    return None;
-                }
+                let element_type = getter_terminal_type(&array_type.element_type(), builder)?;
                 Some((
                     vec![AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()],
-                    vec![AstType::resolve(&element, LocationPolicy::Declared(None), builder)],
+                    vec![element_type],
                 ))
             }
             SlangType::FixedSizeArray(array_type) => {
-                let element = array_type.element_type();
-                if element.is_reference_type() {
-                    return None;
-                }
+                let element_type = getter_terminal_type(&array_type.element_type(), builder)?;
                 Some((
                     vec![AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()],
-                    vec![AstType::resolve(&element, LocationPolicy::Declared(None), builder)],
+                    vec![element_type],
                 ))
             }
             SlangType::Struct(struct_type) => {
@@ -237,6 +251,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             base: Value<'context, 'block>,
             struct_plan: &Option<Vec<(u64, Type<'context>, Type<'context>)>>,
             result_type: Type<'context>,
+            is_reference: bool,
             builder: &Builder<'context>,
             entry: &BlockRef<'context, 'block>,
         ) {
@@ -267,9 +282,17 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                     mlir_op_void!(builder, entry, ReturnOperation.operands(&values));
                 }
                 None => {
-                    let value = Pointer::new(base)
-                        .load(AstType::new(result_type), builder, entry)
-                        .into_mlir();
+                    // A `string`/`bytes` terminal returns a Memory copy of the storage
+                    // value via `sol.data_loc_cast`; a value terminal loads in place.
+                    let value = if is_reference {
+                        AstValue::new(base)
+                            .cast(AstType::new(result_type), builder, entry)
+                            .into_mlir()
+                    } else {
+                        Pointer::new(base)
+                            .load(AstType::new(result_type), builder, entry)
+                            .into_mlir()
+                    };
                     mlir_op_void!(builder, entry, ReturnOperation.operands(&[value]));
                 }
             }
@@ -387,8 +410,15 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 &state_variable.get_type().expect("slang validated"),
                 builder,
             );
-            let result_type =
-                AstType::resolve(&terminal, LocationPolicy::Declared(Some(location)), builder);
+            // A `string`/`bytes` leaf terminal returns its Memory representation (the
+            // external ABI); a value/struct terminal uses its declared storage location.
+            let terminal_is_reference =
+                matches!(&terminal, SlangType::String(_) | SlangType::Bytes(_));
+            let result_type = if terminal_is_reference {
+                AstType::resolve(&terminal, LocationPolicy::ForceMemory, builder)
+            } else {
+                AstType::resolve(&terminal, LocationPolicy::Declared(Some(location)), builder)
+            };
             let struct_plan = match &terminal {
                 SlangType::Struct(struct_type) => {
                     let Definition::Struct(struct_definition) = struct_type.definition() else {
@@ -399,6 +429,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                         None => return,
                     }
                 }
+                // `string` / `bytes` leaves are emitted as a Memory copy below; any other
+                // reference terminal (a nested aggregate) is deferred.
+                SlangType::String(_) | SlangType::Bytes(_) => None,
                 _ if terminal.is_reference_type() => return,
                 _ => None,
             };
@@ -504,7 +537,14 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                     _ => break,
                 }
             }
-            return_loaded(base, &struct_plan, result_type, builder, &entry);
+            return_loaded(
+                base,
+                &struct_plan,
+                result_type,
+                terminal_is_reference,
+                builder,
+                &entry,
+            );
             return;
         }
 
@@ -538,7 +578,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 let base =
                     Pointer::addr_of(&slot.name, AstType::new(container_type), builder, &entry)
                         .into_mlir();
-                return_loaded(base, &Some(plan), struct_mlir_type, builder, &entry);
+                return_loaded(base, &Some(plan), struct_mlir_type, false, builder, &entry);
                 return;
             }
         }
