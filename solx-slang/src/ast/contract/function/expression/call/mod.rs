@@ -58,7 +58,7 @@ use crate::ast::Pointer;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call_options::CallOptions;
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
-use crate::ast::contract::getter::StructGetterLayout;
+use crate::ast::contract::getter::GetterSignature;
 use crate::ast::analysis::query::MemberAccessOperand;
 
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCallExpression {
@@ -1424,111 +1424,15 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             )
                         }
                         Some(Definition::StateVariable(state_variable)) => {
-                            // A getter on another instance is single-valued here; only a self getter
-                            // (`this.m(key)`) lowers its key/index argument.
-                            if !matches!(access.operand(), Expression::ThisKeyword(_))
-                                && !ordered_arguments.is_empty()
-                            {
-                                unimplemented!(
-                                    "external getter with key/index arguments is not yet supported"
-                                );
-                            }
-                            // The getter's external ABI signature: scalar `() -> (T)`, mapping `(K) -> (V)`,
-                            // array `(uint256) -> (element)`, struct `() -> (flattened members)`. Single-level
-                            // only — a nested or reference-typed key / value / element yields `None` below.
+                            // A `this.m(key)` self getter and an `other.m(key)` getter on another
+                            // instance share one path: the receiver is emitted below and the
+                            // key/index arguments are passed against the getter's signature.
+                            // The getter's external ABI signature (scalar / mapping / array / struct);
+                            // a nested or reference-typed key / value / element yields `None`.
                             let builder = &context.state.builder;
-                            let signature = state_variable.get_type().and_then(|declared_type| {
-                                match &declared_type {
-                                    SlangType::Mapping(mapping_type) => {
-                                        let key = mapping_type.key_type();
-                                        let value = mapping_type.value_type();
-                                        if key.is_reference_type() || value.is_reference_type() {
-                                            return None;
-                                        }
-                                        Some((
-                                            vec![AstType::resolve(
-                                                &key,
-                                                LocationPolicy::Declared(None),
-                                                builder,
-                                            )],
-                                            vec![AstType::resolve(
-                                                &value,
-                                                LocationPolicy::Declared(None),
-                                                builder,
-                                            )],
-                                        ))
-                                    }
-                                    SlangType::Array(array_type) => {
-                                        let element = array_type.element_type();
-                                        if element.is_reference_type() {
-                                            return None;
-                                        }
-                                        Some((
-                                            vec![
-                                                AstType::unsigned(
-                                                    builder.context,
-                                                    solx_utils::BIT_LENGTH_FIELD,
-                                                )
-                                                .into_mlir(),
-                                            ],
-                                            vec![AstType::resolve(
-                                                &element,
-                                                LocationPolicy::Declared(None),
-                                                builder,
-                                            )],
-                                        ))
-                                    }
-                                    SlangType::FixedSizeArray(array_type) => {
-                                        let element = array_type.element_type();
-                                        if element.is_reference_type() {
-                                            return None;
-                                        }
-                                        Some((
-                                            vec![
-                                                AstType::unsigned(
-                                                    builder.context,
-                                                    solx_utils::BIT_LENGTH_FIELD,
-                                                )
-                                                .into_mlir(),
-                                            ],
-                                            vec![AstType::resolve(
-                                                &element,
-                                                LocationPolicy::Declared(None),
-                                                builder,
-                                            )],
-                                        ))
-                                    }
-                                    SlangType::Struct(struct_type) => {
-                                        let Definition::Struct(struct_definition) =
-                                            struct_type.definition()
-                                        else {
-                                            return None;
-                                        };
-                                        let struct_mlir_type = AstType::resolve(
-                                            &declared_type,
-                                            LocationPolicy::Declared(Some(DataLocation::Storage)),
-                                            builder,
-                                        );
-                                        let plan = struct_definition
-                                            .struct_getter_layout(struct_mlir_type, builder)?;
-                                        let return_types = plan
-                                            .iter()
-                                            .map(|(_, _, result_type)| *result_type)
-                                            .collect();
-                                        Some((Vec::new(), return_types))
-                                    }
-                                    other if !other.is_reference_type() => Some((
-                                        Vec::new(),
-                                        vec![AstType::resolve(
-                                            other,
-                                            LocationPolicy::Declared(None),
-                                            builder,
-                                        )],
-                                    )),
-                                    _ => None,
-                                }
-                            });
-                            let Some((parameter_types, return_types)) = signature else {
+                            let Some((parameter_types, return_types)) =
+                                state_variable.getter_signature(builder)
+                            else {
                                 unimplemented!(
                                     "getter of a nested or reference-typed state variable is not yet supported"
                                 );

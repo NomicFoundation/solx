@@ -48,6 +48,7 @@ use crate::ast::Pointer;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::getter::GetterSignature;
 use crate::ast::analysis::query::MemberAccessOperand;
 
 impl<'context: 'block, 'block> EmitPlace<'context, 'block> for MemberAccessExpression {
@@ -578,6 +579,33 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     );
                     let value =
                         AstValue::library_address(&name, &context.state.builder, &block);
+                    return BlockAnd { block, value };
+                }
+                // A public state variable used as a value is its synthesised external getter
+                // taken as a function pointer (`fp = inst.x`): an `sol.ext_func_ref` carrying the
+                // getter's selector and ABI signature, mirroring the external-function arm below.
+                if let Some(Definition::StateVariable(state_variable)) = &member_definition {
+                    let builder = &context.state.builder;
+                    let Some((parameter_types, return_types)) =
+                        state_variable.getter_signature(builder)
+                    else {
+                        unimplemented!(
+                            "function pointer to a nested or reference-typed getter is not yet supported"
+                        );
+                    };
+                    let selector = state_variable.compute_selector().expect("slang validated");
+                    let BlockAnd {
+                        value: receiver,
+                        block,
+                    } = node.operand().emit(context, block);
+                    let value = AstValue::external_callee(
+                        receiver,
+                        selector,
+                        &parameter_types,
+                        &return_types,
+                        &context.state.builder,
+                        &block,
+                    );
                     return BlockAnd { block, value };
                 }
                 let Some(Definition::Function(function_definition)) = member_definition else {

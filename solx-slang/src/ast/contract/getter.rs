@@ -84,6 +84,84 @@ impl StructGetterLayout for StructDefinition {
     }
 }
 
+/// The external ABI signature of a `public` state variable's synthesised getter,
+/// shared by the call-position getter (`this.m(key)`), the getter-as-function-pointer
+/// value (`fp = this.m`), and the published method identifiers.
+pub trait GetterSignature {
+    /// Returns `(parameter_types, return_types)`: scalar `() -> (T)`, mapping
+    /// `(K) -> (V)`, array `(uint256) -> (element)`, struct `() -> (flattened
+    /// members)`. Returns `None` for a getter whose key / value / element is itself
+    /// a nested or reference type (not yet supported).
+    fn getter_signature<'context>(
+        &self,
+        builder: &Builder<'context>,
+    ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)>;
+}
+
+impl GetterSignature for StateVariableDefinition {
+    fn getter_signature<'context>(
+        &self,
+        builder: &Builder<'context>,
+    ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)> {
+        self.get_type().and_then(|declared_type| match &declared_type {
+            SlangType::Mapping(mapping_type) => {
+                let key = mapping_type.key_type();
+                let value = mapping_type.value_type();
+                if key.is_reference_type() || value.is_reference_type() {
+                    return None;
+                }
+                Some((
+                    vec![AstType::resolve(&key, LocationPolicy::Declared(None), builder)],
+                    vec![AstType::resolve(&value, LocationPolicy::Declared(None), builder)],
+                ))
+            }
+            SlangType::Array(array_type) => {
+                let element = array_type.element_type();
+                if element.is_reference_type() {
+                    return None;
+                }
+                Some((
+                    vec![AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()],
+                    vec![AstType::resolve(&element, LocationPolicy::Declared(None), builder)],
+                ))
+            }
+            SlangType::FixedSizeArray(array_type) => {
+                let element = array_type.element_type();
+                if element.is_reference_type() {
+                    return None;
+                }
+                Some((
+                    vec![AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()],
+                    vec![AstType::resolve(&element, LocationPolicy::Declared(None), builder)],
+                ))
+            }
+            SlangType::Struct(struct_type) => {
+                let Definition::Struct(struct_definition) = struct_type.definition() else {
+                    return None;
+                };
+                let struct_mlir_type = AstType::resolve(
+                    &declared_type,
+                    LocationPolicy::Declared(Some(DataLocation::Storage)),
+                    builder,
+                );
+                let plan = struct_definition.struct_getter_layout(struct_mlir_type, builder)?;
+                let return_types = plan.iter().map(|(_, _, result_type)| *result_type).collect();
+                Some((Vec::new(), return_types))
+            }
+            // A scalar reference type (`string` / `bytes`) returns a Memory copy in
+            // the external ABI; a value scalar returns in its declared representation.
+            other if other.is_reference_type() => Some((
+                Vec::new(),
+                vec![AstType::resolve(other, LocationPolicy::ForceMemory, builder)],
+            )),
+            other => Some((
+                Vec::new(),
+                vec![AstType::resolve(other, LocationPolicy::Declared(None), builder)],
+            )),
+        })
+    }
+}
+
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariableDefinition {
     type Output = ();
 
@@ -476,7 +554,16 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
         let address_type = AstType::new(element_type)
             .address_type(location, builder.context)
             .into_mlir();
-        let entry = Function::new(signature, Vec::new(), vec![element_type]).define(
+        // A reference-typed scalar getter (`string` / `bytes public`) returns a Memory
+        // copy (the external ABI), matching solc's `data_loc_cast` from the storage
+        // reference; a value scalar returns its loaded value.
+        let is_reference = declared_type.is_reference_type();
+        let return_type = if is_reference {
+            AstType::resolve(&declared_type, LocationPolicy::ForceMemory, builder)
+        } else {
+            element_type
+        };
+        let entry = Function::new(signature, Vec::new(), vec![return_type]).define(
             Some(selector),
             StateMutability::View,
             None,
@@ -484,8 +571,13 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             builder,
             &block,
         );
-        let value = if declared_type.is_reference_type() {
-            Pointer::addr_of(&slot.name, AstType::new(address_type), builder, &entry).into_mlir()
+        let value = if is_reference {
+            let storage_reference =
+                Pointer::addr_of(&slot.name, AstType::new(address_type), builder, &entry)
+                    .into_mlir();
+            AstValue::new(storage_reference)
+                .cast(AstType::new(return_type), builder, &entry)
+                .into_mlir()
         } else {
             // Route through the slot so an `immutable` getter reads via `sol.load_immutable` and a
             // storage/transient one via `sol.addr_of` + `sol.load`, matching solc and the body reads.
