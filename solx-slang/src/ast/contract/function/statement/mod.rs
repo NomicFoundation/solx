@@ -107,12 +107,8 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     }
 }
 
-// A multi-element tuple return is unpacked into one value per declared slot; any other expression
-// yields a single value. Each is cast to its declared return type before the `sol.return`.
 statement_emit!(ReturnStatement; |node, context, block| {
     let Some(expression) = node.expression() else {
-        // A bare `return;` returns the current return-slot values (zero for an unset slot) so the
-        // `sol.return` arity matches the function — a 0-operand return would otherwise fail verification.
         let builder = &context.state.builder;
         let mut values = Vec::with_capacity(context.return_types.len());
         for (index, &return_type) in context.return_types.iter().enumerate() {
@@ -152,8 +148,6 @@ statement_emit!(ReturnStatement; |node, context, block| {
         }
         (values, current)
     } else if context.return_types.len() > 1 {
-        // A single expression yielding multiple values (a tuple-returning call or a tuple-branch
-        // conditional) expands its full result list so the `sol.return` arity matches.
         let BlockAnd { value: values, block } = match &expression {
             Expression::FunctionCallExpression(call) => {
                 call.emit(&emitter, block)
@@ -170,8 +164,6 @@ statement_emit!(ReturnStatement; |node, context, block| {
             block,
         )
     } else {
-        // A single-value return materialises a string literal toward the declared return type
-        // (a `bytesN`/`byte` constant), not a runtime string the cast would reject.
         let return_type = context.return_types[0];
         let BlockAnd { value, block } = expression.emit_as(return_type, &emitter, block);
         (vec![value], block)
@@ -200,8 +192,6 @@ statement_emit!(ReturnStatement; |node, context, block| {
 });
 
 statement_emit!(Block; |node, context, block| {
-    // A `{ … }` block emits its statements in a fresh lexical scope, threading the
-    // continuation block and short-circuiting the moment control diverges.
     context.environment.enter_scope();
     let result = node
         .statements()
@@ -221,19 +211,13 @@ statement_emit!(ContinueStatement; |context, block| {
     None
 });
 
-// A bare expression statement discards its value but keeps its side effects, classified once
-// ([`ExpressionStatementKind`]) and emitted by kind.
 statement_emit!(ExpressionStatement; |node, context, block| {
     match ExpressionStatementKind::from_statement(node) {
-        // A `_;` lowers to `sol.placeholder`. The frontend only resolves the `_` built-in inside a
-        // `sol.modifier` definition body, so this dispatch arm cannot occur elsewhere.
         ExpressionStatementKind::ModifierPlaceholder => {
             mlir_op_void!(&context.state.builder, &block, PlaceholderOperation);
             Some(block)
         }
         ExpressionStatementKind::RevertCall(call) => {
-            // `revert(...)` takes positional arguments; a degenerate empty
-            // named-argument list `revert({})` is equivalent to `revert()`.
             let argument = match &call.arguments() {
                 ArgumentsDeclaration::PositionalArguments(positional_arguments) => {
                     positional_arguments.iter().next()
@@ -247,10 +231,7 @@ statement_emit!(ExpressionStatement; |node, context, block| {
                     unreachable!("named arguments on a revert are not supported");
                 }
             };
-            // `sol.revert` is not a terminator; the block stays live for the
-            // caller (an enclosing yield or the epilogue default return).
             let block = match argument {
-                // `revert()` — a no-data revert.
                 None => {
                     let builder = &context.state.builder;
                     mlir_op_void!(
@@ -262,8 +243,6 @@ statement_emit!(ExpressionStatement; |node, context, block| {
                     );
                     block
                 }
-                // A non-empty string literal bakes the message into the op as the
-                // `Error(string)` payload (no runtime encoding).
                 Some(Expression::StringExpression(string_expression))
                     if !string_expression.value().is_empty() =>
                 {
@@ -279,8 +258,6 @@ statement_emit!(ExpressionStatement; |node, context, block| {
                     );
                     block
                 }
-                // A non-literal message or empty literal is evaluated at runtime and ABI-encoded
-                // under the `Error(string)` selector.
                 Some(expression) => {
                     let emitter = ExpressionContext::from(&*context);
                     let BlockAnd {
@@ -309,8 +286,6 @@ statement_emit!(ExpressionStatement; |node, context, block| {
         }
         ExpressionStatementKind::TypeOrSuperNoop => Some(block),
         ExpressionStatementKind::TypeReference(expression) => {
-            // A discarded type / selector reference is compile-time; only a runtime receiver under the
-            // member-access chain (a conditional) has side effects, so peel to the base and run just that.
             let mut current = expression.unwrap_parentheses();
             while let Expression::MemberAccessExpression(access) = current {
                 current = access.operand().unwrap_parentheses();

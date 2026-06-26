@@ -1,11 +1,11 @@
 //!
 //! Function- and constructor-modifier emission (`sol.modifier_call_blk` + `sol.modifier`).
 //!
-//! A modified function `f` evaluates each modifier invocation in its own `sol.modifier_call_blk` — an
-//! `IsolatedFromAbove` block carrying a fresh copy of `f`'s whole parameter list as block arguments —
+//! A modified function `f` evaluates each modifier invocation in its own `sol.modifier_call_blk`: an
+//! `IsolatedFromAbove` block carrying a fresh copy of `f`'s whole parameter list as block arguments,
 //! which evaluates the invocation's arguments and `sol.call`s the modifier. The blocks sit at the top
 //! of `f`, before `f`'s inlined body. Each invoked modifier definition is emitted once as a contract-
-//! level `sol.modifier` (its `_;` lowered to `sol.placeholder`). This mirrors solc op-for-op.
+//! level `sol.modifier`, with its `_;` lowered to `sol.placeholder`.
 //!
 
 use melior::ir::Block;
@@ -47,8 +47,6 @@ impl EmitModifierCalls for FunctionDefinition {
     ) -> Vec<FunctionDefinition> {
         let mut resolved = Vec::new();
         for invocation in self.modifier_invocations().iter() {
-            // Resolve the invocation lexically (`m`) or by its final path segment (`M.C.m`);
-            // a base-constructor invocation `Base(args)` resolves to neither and is skipped.
             let lexical = match invocation.name().resolve_to_definition() {
                 Some(Definition::Modifier(modifier)) => modifier,
                 _ => match scope
@@ -59,8 +57,6 @@ impl EmitModifierCalls for FunctionDefinition {
                     None => continue,
                 },
             };
-            // Re-dispatch to the most-derived override (a `virtual` modifier overridden in a derived
-            // contract); a non-virtual or library modifier keeps its lexical resolution.
             let definition = scope
                 .contract
                 .and_then(|contract| contract.resolve_modifier_override(&invocation, &lexical))
@@ -87,7 +83,6 @@ impl EmitModifierCalls for FunctionDefinition {
             .collect();
 
         for invocation in self.modifier_invocations().iter() {
-            // Resolve the invocation; a base-constructor invocation resolves to no modifier and is skipped.
             let lexical = match invocation.name().resolve_to_definition() {
                 Some(Definition::Modifier(modifier)) => modifier,
                 _ => match scope
@@ -116,8 +111,6 @@ impl EmitModifierCalls for FunctionDefinition {
                 .first_block()
                 .expect("the modifier-call block was just appended");
 
-            // Expose the wrapped function's parameters as the block arguments' values, so an
-            // invocation-argument identifier reads the block argument directly (no spill / load).
             let mut environment = Environment::new();
             for (index, parameter) in parameters.iter().enumerate() {
                 let argument: Value<'context, '_> = block
@@ -127,7 +120,6 @@ impl EmitModifierCalls for FunctionDefinition {
                 environment.bind_value(parameter.node_id(), argument);
             }
 
-            // Evaluate each invocation argument in the block, cast it to the modifier's parameter type.
             let argument_expressions = invocation
                 .arguments()
                 .and_then(|argument_list| argument_list.positional_arguments())
@@ -154,7 +146,6 @@ impl EmitModifierCalls for FunctionDefinition {
                 operands.push(cast.into_mlir());
             }
 
-            // `sol.call @<modifier> (operands) : (...) -> ()` — a modifier returns nothing.
             current_block.append_operation(mlir_op_build!(
                 builder,
                 CallOperation
@@ -166,8 +157,6 @@ impl EmitModifierCalls for FunctionDefinition {
                     .operands(&operands)
             ));
 
-            // The block has no terminator (`NoTerminator`); append the assembled `sol.modifier_call_blk`
-            // to the wrapped function, before its inlined body.
             function_block.append_operation(
                 ModifierCallBlkOperation::builder(builder.context, builder.unknown_location)
                     .body_region(region)
@@ -205,8 +194,6 @@ impl EmitModifierCalls for FunctionDefinition {
             .parent_region()
             .expect("the modifier entry block belongs to a region");
 
-        // A modifier parameter is spilled to a stack slot, like a function parameter, so its body reads it
-        // by load — matching solc.
         let mut environment = Environment::new();
         for (index, parameter) in self.parameters().iter().enumerate() {
             environment.bind_block_argument(
@@ -218,7 +205,6 @@ impl EmitModifierCalls for FunctionDefinition {
             );
         }
 
-        // The modifier has no return value; its `_;` lowers to `sol.placeholder`.
         let return_types: [Type<'context>; 0] = [];
         let mut current_block = entry_block;
         let mut terminated = false;

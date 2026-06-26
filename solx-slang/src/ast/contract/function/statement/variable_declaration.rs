@@ -42,7 +42,6 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
 
     let emitter = ExpressionContext::from(&*context);
 
-    // Explicit initializers evaluate and cast before alloca, matching solc's order (cast → alloca → store).
     let (block, initial_value) = if let Some(ref initializer_expression) = node.value() {
         let BlockAnd { value, block } =
             initializer_expression.emit_as(declared_type, &emitter, block);
@@ -100,8 +99,6 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
             (value, block)
         }
         Expression::ConditionalExpression(conditional) => {
-            // `(a, b) = cond ? (x, y) : (z, w)` — the conditional yields one
-            // value per tuple element through its own Emit.
             let BlockAnd { value, block } = conditional.emit(&emitter, block);
             (value, block)
         }

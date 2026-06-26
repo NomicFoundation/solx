@@ -29,8 +29,6 @@ use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::statement::StatementContext;
 use melior::ir::Block;
 
-// A `sol.if` region whose live block already terminated (e.g. with `sol.return`)
-// still ends with a dead `sol.yield` block, matching solc.
 statement_emit!(IfStatement; |node, context, block| {
     let condition_expression = node.condition();
     let emitter = ExpressionContext::from(&*context);
@@ -146,7 +144,6 @@ statement_emit!(ForStatement; |node, context, block| {
         mlir_op_void!(&context.state.builder, &body_end, YieldOperation.ins(&[]));
     }
 
-    // Step region — always unchecked (matches solc: loop step i++ uses sol.add).
     if let Some(ref iterator_expression) = node.iterator() {
         let emitter = ExpressionContext::new(
             context.state,
@@ -201,7 +198,6 @@ statement_emit!(DoWhileStatement; |node, context, block| {
     let body_region = solx_mlir::ffi::block_parent_region(&body_block);
     let saved_region = context.region_pointer;
 
-    // Body region (executes first).
     context.region_pointer = &*body_region as *const _;
     let body_end = node.body().emit(context, body_block);
     if let Some(body_end) = body_end {

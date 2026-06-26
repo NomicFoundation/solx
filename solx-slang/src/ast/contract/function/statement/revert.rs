@@ -18,8 +18,6 @@ use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
 
-// `sol.revert` is not a terminator: the block stays live and the caller appends
-// its terminator (an enclosing `sol.yield` or the epilogue default return).
 statement_emit!(RevertStatement; |node, context, block| {
     let error = match node.error().resolve_to_definition() {
         None => {

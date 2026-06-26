@@ -36,7 +36,7 @@ pub struct YulContext<'frame, 'context, 'block> {
     /// User-defined Yul functions in scope, keyed by name; each is inlined at its
     /// call sites and lives only for the declaring block / inlined frame.
     pub yul_functions: HashMap<String, YulFunctionDefinition>,
-    /// Per-name inline-recursion guard: a function being inlined has depth ≥ 1, so
+    /// Per-name inline-recursion guard: a function being inlined has depth >= 1, so
     /// a recursive call is rejected (it would loop the compiler).
     pub yul_inline_depth: HashMap<String, usize>,
 }
@@ -60,7 +60,6 @@ impl<'frame, 'context, 'block> YulContext<'frame, 'context, 'block> {
     }
 }
 
-// An `assembly { … }` block is the top-level Yul block, reusing the enclosing function scope.
 statement_emit!(AssemblyStatement; |node, context, block| {
     let mut yul_context = YulContext::new(
         context.state,

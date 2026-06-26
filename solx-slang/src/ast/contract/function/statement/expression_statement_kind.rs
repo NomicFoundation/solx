@@ -47,8 +47,6 @@ impl ExpressionStatementKind {
         {
             return Self::RevertCall(call);
         }
-        // A bare type-name / `super` reference is compile-time only, including the array-type form
-        // `s[7][];` (a bound-less index access — `a[i]` always has a start).
         let is_type_or_super_noop = match &expression {
             Expression::ElementaryType(_)
             | Expression::TypeExpression(_)
@@ -61,15 +59,11 @@ impl ExpressionStatementKind {
         if is_type_or_super_noop {
             return Self::TypeOrSuperNoop;
         }
-        // A member access with no slang type is a compile-time type / module reference, not a
-        // runtime value (slang leaves type / module references untyped).
         if let Expression::MemberAccessExpression(access) = &expression
             && access.get_type().is_none()
         {
             return Self::TypeReference(expression);
         }
-        // A discarded tuple-valued conditional has no single value, but its branches may have side
-        // effects; peel parentheses first.
         if let Expression::ConditionalExpression(conditional) =
             expression_statement.expression().unwrap_parentheses()
             && matches!(conditional.get_type(), Some(SlangType::Tuple(_)))

@@ -69,9 +69,6 @@ impl EmitFunction for FunctionDefinition {
             mlir_kind,
         } = Signature::resolve(self, symbol_override, &scope.state.builder);
 
-        // A regular function (including one emitted under a symbol override — a free / library /
-        // shadowed-base function) can be the target of an internal function pointer, so it carries a
-        // unique dispatch tag; constructors, fallbacks, and receives (which set `mlir_kind`) do not.
         let function_id = mlir_kind.is_none().then(|| scope.state.next_function_id());
 
         let signature = Function::new(mlir_name, mlir_parameter_types, result_types);
@@ -89,7 +86,6 @@ impl EmitFunction for FunctionDefinition {
             .expect("entry block belongs to a region");
         let mut current_block = function_entry_block;
 
-        // State-variable initializers run at the top of the constructor body, before its modifiers.
         if matches!(self.kind(), FunctionKind::Constructor) {
             current_block = scope
                 .contract
@@ -97,9 +93,6 @@ impl EmitFunction for FunctionDefinition {
                 .emit_state_var_initializers(scope, current_block);
         }
 
-        // Each modifier invocation is a `sol.modifier_call_blk` at the top of the function, before the
-        // inlined body (and before the parameter spills, matching solc). The modifier definitions are
-        // emitted once, contract-level, by the contract.
         self.emit_modifier_call_blocks(
             scope,
             &self.parameters().iter().collect::<Vec<_>>(),
@@ -118,7 +111,6 @@ impl EmitFunction for FunctionDefinition {
             );
         }
 
-        // A stack slot per named return (`None` for unnamed).
         let mut return_slots: Vec<Option<Value<'context, '_>>> = Vec::new();
         if let Some(returns) = self.returns() {
             for (index, parameter) in returns.iter().enumerate() {
@@ -138,7 +130,6 @@ impl EmitFunction for FunctionDefinition {
             }
         }
 
-        // The function body, emitted inline (no `$body` helper func).
         let mut terminated = false;
         for statement in body.statements().iter() {
             let mut emitter = StatementContext::new(
@@ -178,8 +169,6 @@ impl EmitFunction for FunctionDefinition {
         if block.terminator().is_some() {
             return;
         }
-        // Named returns load from their slot; an unnamed return materialises its type's own default
-        // (a type-correct one, not an ill-typed integer zero).
         let returns: Vec<_> = self
             .returns()
             .map(|params| params.iter().collect::<Vec<_>>())

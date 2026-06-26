@@ -25,7 +25,6 @@ use crate::ast::Value as AstValue;
 use crate::ast::contract::function::statement::assembly::YulContext;
 use crate::ast::contract::function::statement::assembly::block::EmitRegionBody;
 
-// A Yul `break`/`continue` terminates its region — the `None` continuation, threaded like a Sol statement's.
 yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, context, block| {
     match statement {
         YulStatement::YulVariableAssignmentStatement(assignment) => {
@@ -98,8 +97,6 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
         YulStatement::YulIfStatement(if_statement) => {
             let condition = if_statement.condition();
             let BlockAnd { value: condition_value, block } = condition.emit(context, block);
-            // Yul `if` has no `else`, so the else region stays empty —
-            // `mlir_region_op!` would append a block to it, so build by hand.
             let then_region = Region::new();
             then_region.append_block(Block::new(&[]));
             let else_region = Region::new();
@@ -121,8 +118,6 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
         }
         YulStatement::YulForStatement(for_statement) => {
             context.environment.enter_scope();
-            // Initialization runs once in the parent block; a divergent init makes
-            // the loop unreachable (solc permits this silently).
             let mut current = block;
             for inner in for_statement.initialization().statements().iter() {
                 match inner.emit(context, current) {
@@ -167,12 +162,9 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
             result
         }
         YulStatement::YulFunctionDefinition(_) => {
-            // Pre-registered by the enclosing block's hoisting pre-pass.
             Some(block)
         }
         YulStatement::YulLeaveStatement(_) => {
-            // `leave` returns from the current Yul function; the inliner stops
-            // emitting a body at `leave`, so here it is a no-op.
             Some(block)
         }
         YulStatement::YulBreakStatement(_) => {
@@ -196,8 +188,6 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
                 }
             }
 
-            // A value-less `switch X default { … }` runs the default body
-            // unconditionally, with no `yul.switch`.
             if value_cases.is_empty() {
                 return match default_body {
                     Some(default_body) => default_body.emit(context, current),

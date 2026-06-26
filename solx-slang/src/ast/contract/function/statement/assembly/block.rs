@@ -13,8 +13,6 @@ use solx_mlir::ods::yul::*;
 use crate::ast::EmitYul;
 use crate::ast::contract::function::statement::assembly::YulContext;
 
-// Yul resolves function calls regardless of textual order, so a block pre-registers its `function`
-// definitions, emits the rest, then drops the definitions it added (so an enclosing scope's stay intact).
 yul_emit!(YulBlock => Option<BlockRef<'context, 'block>>; |yul_block, context, block| {
     let saved_functions: Vec<String> = context.yul_functions.keys().cloned().collect();
     for statement in yul_block.statements().iter() {

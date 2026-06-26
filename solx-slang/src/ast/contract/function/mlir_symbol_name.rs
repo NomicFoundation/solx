@@ -6,7 +6,7 @@ use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 
-/// The MLIR symbol name a function definition lowers to — the one naming authority both definitions
+/// The MLIR symbol name a function definition lowers to: the one naming authority both definitions
 /// and call sites route through, so a function and its callers agree on the symbol.
 pub trait MlirSymbolName {
     /// The unique MLIR symbol name for this function: an externally-callable function uses Slang's
@@ -20,7 +20,7 @@ pub trait MlirSymbolName {
     /// signature (reachable together via an alias) do not collide.
     fn node_id_qualified_symbol(&self) -> String;
 
-    /// The MLIR symbol of this modifier definition — its name suffixed with its node id, so two
+    /// The MLIR symbol of this modifier definition: its name suffixed with its node id, so two
     /// like-named modifiers (an inherited override chain) resolve to distinct `sol.modifier` defs.
     /// The same authority names both the `sol.modifier` def and the invoking `sol.call`.
     fn modifier_symbol(&self) -> String;
@@ -28,8 +28,7 @@ pub trait MlirSymbolName {
     /// The MLIR symbol of this constructor when emitted as a base-constructor `sol.func` (a plain
     /// internal function the construction chain `sol.call`s into, distinct from the most-derived
     /// `constructor()` def). Suffixed with its node id so each base contract's constructor resolves to
-    /// its own symbol, with the chaining call routing through the same authority. (Mirrors solc's
-    /// `@_<id>` node-id mangling.)
+    /// its own symbol, with the chaining call routing through the same authority.
     fn base_constructor_symbol(&self) -> String;
 }
 

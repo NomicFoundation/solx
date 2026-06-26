@@ -18,9 +18,6 @@ use crate::ast::EmitYul;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::statement::assembly::YulContext;
 
-// A Yul function call producing its result words. Yul evaluates arguments right-to-left; a
-// `BuiltIn::Yul*` callee is a one-to-one `yul.*` EVM intrinsic, otherwise a user-defined function
-// is inlined. An effect op (store/copy/log/terminator) yields its first operand for the statement to discard.
 yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'context, 'block>>>; |call, context, block| {
     let YulExpression::YulPath(path) = call.operand() else {
         unreachable!("unsupported yul callee expression");
@@ -40,8 +37,6 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
         .collect();
 
     let Some(opcode) = callee.resolve_to_built_in() else {
-        // A user-defined Yul function is inlined (solc's MLIR backend asserts on these, so there is no
-        // ground truth to mirror). Recursion is rejected.
         let name = callee.name();
         let depth = context.yul_inline_depth.entry(name.clone()).or_insert(0);
         if *depth >= 1 {
@@ -72,8 +67,6 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
             context.environment.define_variable(return_identifier.node_id(), slot);
         }
 
-        // Yul hoists nested functions: register them for this frame so calls
-        // resolve regardless of textual order.
         let mut hoisted: Vec<String> = Vec::new();
         for inner in definition.body().statements().iter() {
             if let YulStatement::YulFunctionDefinition(nested) = &inner {
@@ -88,7 +81,6 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
             if matches!(inner, YulStatement::YulFunctionDefinition(_)) {
                 continue;
             }
-            // `leave` returns from the function: stop emitting the body.
             if matches!(inner, YulStatement::YulLeaveStatement(_)) {
                 break;
             }
@@ -131,8 +123,6 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
         BuiltIn::YulOr => YulValue::new(mlir_op!(builder, &current, OrOperation.lhs(arguments[0]).rhs(arguments[1]).out(i256))),
         BuiltIn::YulXor => YulValue::new(mlir_op!(builder, &current, XOrOperation.lhs(arguments[0]).rhs(arguments[1]).out(i256))),
         BuiltIn::YulNot => YulValue::new(mlir_op!(builder, &current, NotOperation.value(arguments[0]).out(i256))),
-        // Yul `shl(shift, value)` / `shr` / `sar` shift the SECOND operand by the
-        // first; the op operands are `(shift, val)` in that order.
         BuiltIn::YulShl => YulValue::new(mlir_op!(builder, &current, ShlOperation.shift(arguments[0]).val(arguments[1]).out(i256))),
         BuiltIn::YulShr => YulValue::new(mlir_op!(builder, &current, ShrOperation.shift(arguments[0]).val(arguments[1]).out(i256))),
         BuiltIn::YulSar => YulValue::new(mlir_op!(builder, &current, SarOperation.shift(arguments[0]).val(arguments[1]).out(i256))),
@@ -158,8 +148,6 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
         BuiltIn::YulGasprice => YulValue::new(mlir_op!(builder, &current, GasPriceOperation.out(i256))),
         BuiltIn::YulTimestamp => YulValue::new(mlir_op!(builder, &current, TimeStampOperation.out(i256))),
         BuiltIn::YulNumber => YulValue::new(mlir_op!(builder, &current, NumberOperation.out(i256))),
-        // Pre-merge `difficulty` and post-merge `prevrandao` are EVM opcode 0x44;
-        // the Yul dialect exposes it as `prevrandao`.
         BuiltIn::YulDifficulty | BuiltIn::YulPrevrandao => {
             YulValue::new(mlir_op!(builder, &current, PrevrandaoOperation.out(i256)))
         }
@@ -225,8 +213,6 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
             arguments[0]
         }
 
-        // `yul.call`'s single result is `$status`, which `mlir_op!` extracts as
-        // result 0.
         BuiltIn::YulCall => YulValue::new(mlir_op!(
             builder,
             &current,
@@ -317,7 +303,6 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
             YulValue::constant(&BigInt::from(0u32), builder, &current)
         }
 
-        // `pop(x)` evaluates and discards; the argument is already emitted.
         BuiltIn::YulPop => arguments[0],
 
         _ => unimplemented!("unsupported yul intrinsic: {opcode:?}"),
