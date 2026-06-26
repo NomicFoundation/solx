@@ -74,7 +74,6 @@ impl LibraryCallCollector {
                 }
                 walk.reach(library_function);
             }
-            // Walk reached free functions for the library calls they make (e.g. `fu() { L.inter(); }`).
             for reached_function in collector.reached {
                 if free_ids.contains(&reached_function.node_id()) {
                     walk.enqueue(reached_function);

@@ -13,7 +13,7 @@ use slang_solidity_v2::ast::NodeId;
 /// reached functions. The caller drives it: `next_body` yields each body, the caller's own `Visitor`
 /// reports what it reaches via `reach`, and `into_reached` returns the result.
 pub struct ReachabilityWalk {
-    /// Reached functions, deduplicated by node id — the result set.
+    /// Reached functions, deduplicated by node id: the result set.
     collected: HashMap<NodeId, FunctionDefinition>,
     /// Node ids whose bodies have already been handed out by `next_body`.
     walked: HashSet<NodeId>,

@@ -40,8 +40,6 @@ impl StorageLayout for ContractDefinition {
                 )
             })
             .collect();
-        // Transient (EIP-1153) variables number their slots in a separate space;
-        // the storage class on the slot selects TLOAD/TSTORE over SLOAD/SSTORE.
         for item in abi.transient_storage_layout() {
             layout.insert(
                 item.node_id(),
@@ -54,10 +52,6 @@ impl StorageLayout for ContractDefinition {
                 ),
             );
         }
-        // `immutable` variables carry no storage slot: they are emitted as `sol.immutable` and read
-        // via `sol.load_immutable`. Slang's ABI layout omits them, so enumerate them from the AST —
-        // one `Immutable`-located entry per immutable, carrying the variable's MLIR symbol name so
-        // emission and reads resolve it by node id (the slot/offset are unused placeholders).
         for variable in self.linearised_state_variables() {
             if !matches!(variable.mutability(), StateVariableMutability::Immutable) {
                 continue;

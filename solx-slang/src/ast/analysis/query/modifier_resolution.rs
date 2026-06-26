@@ -10,7 +10,7 @@ use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::ModifierInvocation;
 
 /// Resolves a modifier invocation against the contract's C3-linearised modifier
-/// set — virtual override re-dispatch and namespace-qualified resolution.
+/// set: virtual override re-dispatch and namespace-qualified resolution.
 pub trait ModifierResolution {
     /// Every modifier across the contract's C3-linearised bases (most-derived
     /// first).

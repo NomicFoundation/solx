@@ -5,8 +5,8 @@
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 
-/// A local lens over a member-access operand `x` (in `x.f`, `E.Variant`, …), viewed for the
-/// definition it resolves to — a value, a namespace qualifier, or a type reference.
+/// A local lens over a member-access operand `x` (in `x.f`, `E.Variant`, ...), viewed for the
+/// definition it resolves to: a value, a namespace qualifier, or a type reference.
 pub struct MemberAccessOperand<'expression>(pub &'expression Expression);
 
 impl MemberAccessOperand<'_> {
@@ -24,9 +24,6 @@ impl MemberAccessOperand<'_> {
     /// Whether the operand is a namespace qualifier (a library / import alias, not a value)
     /// rather than a `using for` receiver.
     pub fn is_namespace_qualifier(&self) -> bool {
-        // A bare `L` (Identifier) or an aliased-import `M.L` (a MemberAccessExpression resolving
-        // through the alias to the library) is a namespace, not a `using for` receiver value — both
-        // resolve via `resolve()`.
         matches!(
             self.resolve(),
             Some(Definition::Library(_) | Definition::Import(_) | Definition::ImportedSymbol(_))

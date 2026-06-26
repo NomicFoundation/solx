@@ -29,7 +29,7 @@ pub struct FreeCallCollector {
 
 impl FreeCallCollector {
     /// Returns the free functions reachable from `contract`'s functions and constructor (deduplicated
-    /// by node id). `extra_roots` are extra bodies to walk (e.g. `super`-reached base overrides).
+    /// by node id). `extra_roots` are extra bodies to walk.
     pub fn reachable_free_functions(
         contract: &ContractDefinition,
         free_functions: &[FunctionDefinition],
@@ -43,8 +43,6 @@ impl FreeCallCollector {
             return Vec::new();
         }
 
-        // One collector for the whole walk: it owns the id set and clears its
-        // `reached` accumulator between bodies, so no per-body borrow lifetime.
         let mut collector = FreeCallCollector {
             free_ids,
             reached: Vec::new(),

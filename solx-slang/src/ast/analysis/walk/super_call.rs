@@ -59,8 +59,6 @@ impl SuperDispatch {
 
         let mut dispatch = SuperDispatch::default();
 
-        // Virtual dispatch: map every shadowed base function to the most-derived implementation of its
-        // signature (the one kept by `linearised_functions`), so a plain `g()` in a base body reaches the override.
         let mut most_derived_by_signature: HashMap<String, NodeId> = HashMap::new();
         for function in contract.linearised_functions() {
             most_derived_by_signature
@@ -84,8 +82,6 @@ impl SuperDispatch {
         let mut shadowed_ids: HashSet<NodeId> = HashSet::new();
         let mut walked: HashSet<NodeId> = HashSet::new();
 
-        // Seed with every function the most-derived contract runs (linearised functions + chain constructors),
-        // each tagged with the mro index of the contract whose body it is.
         let mut to_walk: Vec<(usize, FunctionDefinition)> = Vec::new();
         for function in contract.linearised_functions() {
             let index = Self::defining_index(&mro, function.node_id())
@@ -98,9 +94,6 @@ impl SuperDispatch {
             }
         }
 
-        // A base-qualified call can also appear in an inheritance-specifier argument
-        // (`contract C is Base(Other.f())`), which no function body contains — collect those `Base.f()`
-        // calls up front so each gets a `redirect` entry (no `super` here, so only `base_calls`).
         for base_contract in mro.iter() {
             let mut collector = SuperDispatch::default();
             for inheritance in base_contract.inheritance_types().iter() {
@@ -127,7 +120,6 @@ impl SuperDispatch {
             if !walked.insert(function.node_id()) {
                 continue;
             }
-            // Gather this function's `super.f` / `Base.f` accesses.
             let mut collector = SuperDispatch::default();
             accept_function_definition(&function, &mut collector);
             for (access_id, lexical_target) in collector.super_calls {
@@ -149,8 +141,6 @@ impl SuperDispatch {
                 );
             }
             for (access_id, target) in collector.base_calls {
-                // `Base.f` names the override exactly; its defining contract gives
-                // the qualified symbol and the index to walk from.
                 let Some(target_index) = Self::defining_index(&mro, target.node_id()) else {
                     continue;
                 };
@@ -225,8 +215,6 @@ impl SuperDispatch {
 
 impl Visitor for SuperDispatch {
     fn enter_member_access_expression(&mut self, node: &MemberAccessExpression) -> bool {
-        // Peel parenthesisation: `(super).f` / `(Base).f` are the same internal
-        // calls as `super.f` / `Base.f`.
         let operand = node.operand().unwrap_parentheses();
         if matches!(operand, Expression::SuperKeyword(_)) {
             if let Some(Definition::Function(function)) = node.member().resolve_to_definition() {
@@ -239,10 +227,8 @@ impl Visitor for SuperDispatch {
             )
             && let Some(Definition::Function(function)) = node.member().resolve_to_definition()
         {
-            // `Base.f(...)` — an explicit base-qualified internal call.
             self.base_calls.push((node.node_id(), function));
         }
-        // Descend so nested calls (e.g. `super.f(super.g())`) are found.
         true
     }
 }
