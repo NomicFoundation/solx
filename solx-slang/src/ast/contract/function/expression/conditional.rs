@@ -186,9 +186,12 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
             mlir_op_void!(&context.state.builder, &branch_end, YieldOperation.ins(&[]));
         }
 
-        let result = result_slot.load(AstType::new(result_type), &context.state.builder, &block);
         BlockAnd {
-            value: vec![result.into_mlir()],
+            value: vec![
+                result_slot
+                    .load(AstType::new(result_type), &context.state.builder, &block)
+                    .into_mlir(),
+            ],
             block,
         }
     }

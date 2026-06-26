@@ -85,7 +85,7 @@ statement_emit!(ForStatement; |node, context, block| {
 
     let block = match node.initialization() {
         ForStatementInitialization::VariableDeclarationStatement(declaration) => {
-            let statement = Statement::VariableDeclarationStatement(declaration.clone());
+            let statement = Statement::VariableDeclarationStatement(declaration);
             match statement.emit(context, block) {
                 Some(block) => block,
                 None => {
@@ -95,7 +95,7 @@ statement_emit!(ForStatement; |node, context, block| {
             }
         }
         ForStatementInitialization::ExpressionStatement(expression_statement) => {
-            let statement = Statement::ExpressionStatement(expression_statement.clone());
+            let statement = Statement::ExpressionStatement(expression_statement);
             match statement.emit(context, block) {
                 Some(block) => block,
                 None => {
