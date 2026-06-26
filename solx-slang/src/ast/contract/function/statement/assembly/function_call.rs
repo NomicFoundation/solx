@@ -165,13 +165,19 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
         }
         BuiltIn::YulChainid => YulValue::new(mlir_op!(builder, &current, ChainIdOperation.out(i256))),
         BuiltIn::YulBasefee => YulValue::new(mlir_op!(builder, &current, BaseFeeOperation.out(i256))),
+        BuiltIn::YulBlobbasefee => YulValue::new(mlir_op!(builder, &current, BlobBaseFeeOperation.out(i256))),
         BuiltIn::YulGaslimit => YulValue::new(mlir_op!(builder, &current, GasLimitOperation.out(i256))),
         BuiltIn::YulGas => YulValue::new(mlir_op!(builder, &current, GasOperation.out(i256))),
         BuiltIn::YulBlockhash => YulValue::new(mlir_op!(builder, &current, BlockHashOperation.block(arguments[0]).out(i256))),
+        BuiltIn::YulBlobhash => YulValue::new(mlir_op!(builder, &current, BlobHashOperation.idx(arguments[0]).out(i256))),
 
         BuiltIn::YulBalance => YulValue::new(mlir_op!(builder, &current, BalanceOperation.addr(arguments[0]).out(i256))),
         BuiltIn::YulExtcodehash => YulValue::new(mlir_op!(builder, &current, ExtCodeHashOperation.addr(arguments[0]).out(i256))),
         BuiltIn::YulExtcodesize => YulValue::new(mlir_op!(builder, &current, ExtCodeSizeOperation.addr(arguments[0]).out(i256))),
+        BuiltIn::YulExtcodecopy => {
+            mlir_op_void!(builder, &current, ExtCodeCopyOperation.addr(arguments[0]).dst(arguments[1]).src(arguments[2]).size(arguments[3]));
+            arguments[0]
+        }
         BuiltIn::YulAddress => YulValue::new(mlir_op!(builder, &current, AddressOperation.out(i256))),
         BuiltIn::YulSelfbalance => YulValue::new(mlir_op!(builder, &current, SelfBalanceOperation.out(i256))),
 
@@ -188,6 +194,7 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
             mlir_op_void!(builder, &current, MCopyOperation.dst(arguments[0]).src(arguments[1]).size(arguments[2]));
             arguments[0]
         }
+        BuiltIn::YulMsize => YulValue::new(mlir_op!(builder, &current, MSizeOperation.out(i256))),
         BuiltIn::YulSload => YulValue::new(mlir_op!(builder, &current, SLoadOperation.addr(arguments[0]).out(i256))),
         BuiltIn::YulSstore => {
             mlir_op_void!(builder, &current, SStoreOperation.addr(arguments[0]).val(arguments[1]));
@@ -257,6 +264,19 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
                 .out_size(arguments[5])
                 .out(i256)
         )),
+        BuiltIn::YulCallcode => YulValue::new(mlir_op!(
+            builder,
+            &current,
+            CallCodeOperation
+                .gas(arguments[0])
+                .address(arguments[1])
+                .value(arguments[2])
+                .inp_offset(arguments[3])
+                .inp_size(arguments[4])
+                .out_offset(arguments[5])
+                .out_size(arguments[6])
+                .status(i256)
+        )),
 
         BuiltIn::YulCreate => YulValue::new(mlir_op!(builder, &current, CreateOperation.val(arguments[0]).addr(arguments[1]).size(arguments[2]).out(i256))),
         BuiltIn::YulCreate2 => YulValue::new(mlir_op!(
@@ -282,6 +302,10 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
         }
         BuiltIn::YulRevert => {
             mlir_op_void!(builder, &current, RevertOperation.addr(arguments[0]).size(arguments[1]));
+            arguments[0]
+        }
+        BuiltIn::YulSelfdestruct => {
+            mlir_op_void!(builder, &current, SelfDestructOperation.addr(arguments[0]));
             arguments[0]
         }
         BuiltIn::YulStop => {
