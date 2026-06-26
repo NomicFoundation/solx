@@ -364,8 +364,8 @@ impl Operator {
                 (result, block)
             }
             Operator::Subtract => {
-                // Unary negation uses UNCHECKED subtraction (`-INT_MIN` wraps, does not revert):
-                // checked negation needs signed-type awareness and a dedicated op, not `sol.csub`.
+                // `-x` lowers to `0 - x`, checked or unchecked per the active arithmetic mode (as
+                // the binary subtraction path does); checked negation reverts on `-type(intN).min`.
                 let BlockAnd { value, block } = operand.emit(context, block);
                 let operand_type = target_type.expect("slang validated");
                 let value = value
@@ -378,11 +378,13 @@ impl Operator {
                     &block,
                 )
                 .into_mlir();
-                let result: Value<'context, 'block> = mlir_op!(
-                    &context.state.builder,
-                    block,
-                    SubOperation.lhs(zero).rhs(value)
-                );
+                let builder = &context.state.builder;
+                let result: Value<'context, 'block> =
+                    if matches!(context.arithmetic_mode, ArithmeticMode::Checked) {
+                        mlir_op!(builder, block, CSubOperation.lhs(zero).rhs(value))
+                    } else {
+                        mlir_op!(builder, block, SubOperation.lhs(zero).rhs(value))
+                    };
                 (result.into(), block)
             }
             _ => unreachable!("unsupported prefix operator: {self:?}"),

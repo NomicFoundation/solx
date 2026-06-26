@@ -37,6 +37,9 @@
 // CHECK-DAG: sol.func @{{.*unary_neg.*}}
 // CHECK-DAG:   %{{.*}} = sol.sub %{{.*}}, %{{.*}} : si256
 
+// CHECK-DAG: sol.func @{{.*checked_neg.*}}
+// CHECK-DAG:   %{{.*}} = sol.csub %{{.*}}, %{{.*}} : si256
+
 // CHECK-DAG: sol.func @{{.*signed_add.*}}
 // CHECK-DAG:   sol.cadd %{{.*}}, %{{.*}} : si256
 
@@ -95,6 +98,10 @@ contract C {
         unchecked {
             return -a;
         }
+    }
+
+    function checked_neg(int256 a) public pure returns (int256) {
+        return -a;
     }
 
     function signed_add(int256 a, int256 b) public pure returns (int256) {
