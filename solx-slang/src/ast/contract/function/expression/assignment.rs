@@ -370,9 +370,11 @@ expression_emit!(AssignmentExpression; |node, context, block| {
             ast::AssignmentExpressionOperator::Equal(_) => {
                 unreachable!("should already be handled")
             }
-            ast::AssignmentExpressionOperator::GreaterThanGreaterThanEqual(_)
-            | ast::AssignmentExpressionOperator::GreaterThanGreaterThanGreaterThanEqual(_) => {
+            ast::AssignmentExpressionOperator::GreaterThanGreaterThanEqual(_) => {
                 Operator::ShiftRight
+            }
+            ast::AssignmentExpressionOperator::GreaterThanGreaterThanGreaterThanEqual(_) => {
+                unreachable!(">>>= is not a valid Solidity operator")
             }
             ast::AssignmentExpressionOperator::LessThanLessThanEqual(_) => Operator::ShiftLeft,
             ast::AssignmentExpressionOperator::MinusEqual(_) => Operator::Subtract,

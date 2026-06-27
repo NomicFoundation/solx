@@ -71,7 +71,7 @@ pub enum Operator {
     BitwiseXor,
     /// `<<`
     ShiftLeft,
-    /// `>>` and the no-op `>>>`
+    /// `>>`
     ShiftRight,
     /// `~`
     BitwiseNot,
