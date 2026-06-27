@@ -36,8 +36,8 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> Self::Output {
-        let true_expression = self.true_expression();
-        let false_expression = self.false_expression();
+        let true_expression = self.true_expression().unwrap_parentheses();
+        let false_expression = self.false_expression().unwrap_parentheses();
 
         if let Some(SlangType::Tuple(tuple_type)) = self.get_type() {
             let result_types: Vec<Type<'context>> = match (&true_expression, &false_expression) {
@@ -209,8 +209,8 @@ impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for ConditionalEx
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
-        let true_expression = self.true_expression();
-        let false_expression = self.false_expression();
+        let true_expression = self.true_expression().unwrap_parentheses();
+        let false_expression = self.false_expression().unwrap_parentheses();
         let BlockAnd {
             value: condition_value,
             block,

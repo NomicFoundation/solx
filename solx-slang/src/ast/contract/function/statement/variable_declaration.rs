@@ -74,7 +74,7 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
 });
 
 statement_emit!(MultiTypedDeclaration; |node, context, block| {
-    let expression = node.value();
+    let expression = node.value().unwrap_parentheses();
     let elements = node.elements();
 
     let emitter = ExpressionContext::from(&*context);

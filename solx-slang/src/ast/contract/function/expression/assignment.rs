@@ -341,7 +341,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
 
 expression_emit!(AssignmentExpression; |node, context, block| {
     let left = node.left_operand().unwrap_parentheses();
-    let right = node.right_operand();
+    let right = node.right_operand().unwrap_parentheses();
     if let Expression::TupleExpression(tuple) = &left {
         let (bindings, block) = AssignmentTarget::destructure(context, tuple, &right, block);
         let (value, block) = AssignmentTarget::store_all(context, bindings, block);
