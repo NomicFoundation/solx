@@ -4,12 +4,11 @@
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
-use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::CallOptionsExpression;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
-use slang_solidity_v2::ast::PositionalArguments;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::CmpPredicate;
 
@@ -28,8 +27,8 @@ pub struct TryNewExpression {
     options: Option<CallOptionsExpression>,
     /// The contract being created.
     contract_definition: ContractDefinition,
-    /// The positional constructor arguments.
-    arguments: PositionalArguments,
+    /// The constructor arguments, ordered against the constructor's parameters.
+    arguments: CallArguments,
 }
 
 impl TryNewExpression {
@@ -59,9 +58,17 @@ impl TryNewExpression {
         let Definition::Contract(contract_definition) = contract_type.definition() else {
             return None;
         };
-        let ArgumentsDeclaration::PositionalArguments(arguments) = call.arguments() else {
-            return None;
-        };
+        let parameter_ids: Vec<NodeId> = contract_definition
+            .constructor()
+            .map(|constructor| {
+                constructor
+                    .parameters()
+                    .iter()
+                    .map(|parameter| parameter.node_id())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let arguments = CallArguments::for_parameter_ids(&call.arguments(), &parameter_ids);
         Some(Self {
             options,
             contract_definition,
@@ -92,7 +99,7 @@ impl TryNewExpression {
         }
         let creation = ContractCreation::new(
             self.contract_definition.clone(),
-            CallArguments::ordered(self.arguments.iter().collect()),
+            CallArguments::ordered(self.arguments.expressions.clone()),
         );
         let BlockAnd {
             value: contract_value,

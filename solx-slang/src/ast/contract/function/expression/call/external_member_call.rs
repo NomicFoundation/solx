@@ -2,7 +2,10 @@
 //! External contract member calls and getter calls.
 //!
 
+use melior::ir::Attribute;
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
+use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
@@ -10,6 +13,8 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::NodeId;
+use solx_mlir::Builder;
+use solx_mlir::ods::sol::ExtICallOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
@@ -64,39 +69,8 @@ impl ExternalMemberCall {
         call_value: Option<Value<'context, 'block>>,
         call_gas: Option<Value<'context, 'block>>,
     ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
-        let (selector, parameter_types, return_types, is_static) = match &self.definition {
-            Definition::Function(function) => {
-                let (parameter_types, return_types) = AstType::resolve_signature(
-                    function,
-                    LocationPolicy::ForceMemory,
-                    &context.state.builder,
-                );
-                (
-                    function.compute_selector().expect("slang validated"),
-                    parameter_types,
-                    return_types,
-                    matches!(
-                        function.mutability(),
-                        FunctionMutability::View | FunctionMutability::Pure
-                    ),
-                )
-            }
-            Definition::StateVariable(state_variable) => {
-                let builder = &context.state.builder;
-                let Some((parameter_types, return_types)) =
-                    state_variable.getter_signature(builder)
-                else {
-                    unreachable!("slang rejects a getter on a struct with no returnable members");
-                };
-                (
-                    state_variable.compute_selector().expect("slang validated"),
-                    parameter_types,
-                    return_types,
-                    false,
-                )
-            }
-            _ => unreachable!("an external member call resolves to a function or state variable"),
-        };
+        let (selector, parameter_types, return_types, is_static) =
+            self.resolve_call(&context.state.builder);
         let BlockAnd {
             value: receiver,
             block,
@@ -126,6 +100,106 @@ impl ExternalMemberCall {
         BlockAnd {
             value: results,
             block,
+        }
+    }
+
+    /// Emits this call with `try` semantics, returning the success status flag, the decoded results,
+    /// and the continuation block.
+    pub fn emit_try<'state, 'context: 'block, 'block>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        call_value: Option<Value<'context, 'block>>,
+        call_gas: Option<Value<'context, 'block>>,
+        block: BlockRef<'context, 'block>,
+    ) -> (
+        Value<'context, 'block>,
+        Vec<Value<'context, 'block>>,
+        BlockRef<'context, 'block>,
+    ) {
+        let (selector, parameter_types, return_types, _is_static) =
+            self.resolve_call(&context.state.builder);
+        let BlockAnd {
+            value: receiver,
+            block,
+        } = self.access.operand().emit(context, block);
+        let BlockAnd {
+            value: argument_values,
+            block,
+        } = self.arguments.emit_as(&parameter_types, context, block);
+        let builder = &context.state.builder;
+        let callee = AstValue::external_callee(
+            receiver,
+            selector,
+            &parameter_types,
+            &return_types,
+            builder,
+            &block,
+        )
+        .into_mlir();
+        let value = call_value.unwrap_or_else(|| AstValue::uint256(0, builder, &block).into_mlir());
+        let gas = call_gas.unwrap_or_else(|| AstValue::gas_left(builder, &block).into_mlir());
+        let mut out_types = Vec::with_capacity(return_types.len() + 1);
+        out_types
+            .push(AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
+        out_types.extend_from_slice(&return_types);
+        let operation = block.append_operation(mlir_op_build!(
+            builder,
+            ExtICallOperation
+                .outs(&out_types)
+                .callee(callee)
+                .callee_operands(&argument_values)
+                .gas(gas)
+                .value(value)
+                .try_call(Attribute::unit(builder.context))
+        ));
+        let status = operation
+            .result(0)
+            .expect("sol.ext_icall try produces a status result")
+            .into();
+        let results = (0..return_types.len())
+            .map(|index| {
+                operation
+                    .result(index + 1)
+                    .expect("sol.ext_icall try produces a status plus its declared results")
+                    .into()
+            })
+            .collect();
+        (status, results, block)
+    }
+
+    /// Resolves the callee's ABI selector, Sol-typed parameter and result types, and whether the
+    /// call is to a read-only callee.
+    fn resolve_call<'context>(
+        &self,
+        builder: &Builder<'context>,
+    ) -> (u32, Vec<Type<'context>>, Vec<Type<'context>>, bool) {
+        match &self.definition {
+            Definition::Function(function) => {
+                let (parameter_types, return_types) =
+                    AstType::resolve_signature(function, LocationPolicy::ForceMemory, builder);
+                (
+                    function.compute_selector().expect("slang validated"),
+                    parameter_types,
+                    return_types,
+                    matches!(
+                        function.mutability(),
+                        FunctionMutability::View | FunctionMutability::Pure
+                    ),
+                )
+            }
+            Definition::StateVariable(state_variable) => {
+                let Some((parameter_types, return_types)) = state_variable.getter_signature(builder)
+                else {
+                    unreachable!("slang rejects a getter on a struct with no returnable members");
+                };
+                (
+                    state_variable.compute_selector().expect("slang validated"),
+                    parameter_types,
+                    return_types,
+                    false,
+                )
+            }
+            _ => unreachable!("an external member call resolves to a function or state variable"),
         }
     }
 }
