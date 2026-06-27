@@ -137,6 +137,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
     };
 
     let emitter = ExpressionContext::from(&*context);
+    let expression = expression.unwrap_parentheses();
 
     let (values, block) = if let Expression::TupleExpression(tuple) = &expression
         && tuple.items().len() > 1
@@ -162,7 +163,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
                 conditional.emit(&emitter, block)
             }
             _ => {
-                unimplemented!("multi-value return of a non-call expression is not supported")
+                unreachable!("a multi-value return is a tuple, call, or conditional expression")
             }
         };
         (
