@@ -122,6 +122,18 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             Some(Definition::StateVariable(_) | Definition::Constant(_)) => {
                 return node.member().emit(context, block);
             }
+            Some(Definition::Function(function_definition))
+                if matches!(
+                    operand.resolve_to_definition(),
+                    Some(Definition::Contract(_))
+                ) =>
+            {
+                let value = context
+                    .state
+                    .resolve_function(function_definition.node_id())
+                    .pointer_constant(&context.state.builder, &block);
+                return BlockAnd { block, value };
+            }
             _ => {}
         }
     }

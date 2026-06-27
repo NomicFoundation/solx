@@ -135,11 +135,23 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
         }
 
         let func_ref_type = |expression: &Expression| {
-            let Expression::Identifier(identifier) = expression else {
-                return None;
+            let definition = match expression {
+                Expression::Identifier(identifier) => identifier.resolve_to_definition()?,
+                Expression::MemberAccessExpression(access) => {
+                    let Expression::Identifier(operand) = access.operand() else {
+                        return None;
+                    };
+                    if !matches!(
+                        operand.resolve_to_definition(),
+                        Some(Definition::Contract(_))
+                    ) {
+                        return None;
+                    }
+                    access.member().resolve_to_definition()?
+                }
+                _ => return None,
             };
-            let Definition::Function(function_definition) = identifier.resolve_to_definition()?
-            else {
+            let Definition::Function(function_definition) = definition else {
                 return None;
             };
             let function = context
