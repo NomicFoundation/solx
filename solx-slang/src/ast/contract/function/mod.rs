@@ -17,7 +17,6 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::FunctionDefinition;
-use slang_solidity_v2::ast::FunctionKind;
 
 use solx_mlir::Environment;
 use solx_mlir::Function;
@@ -27,7 +26,6 @@ use self::signature::Signature;
 use self::statement::StatementContext;
 use crate::ast::EmitFunction;
 use crate::ast::EmitStatement;
-use crate::ast::emit::EmitConstructor;
 use crate::ast::emit::EmitModifierCalls;
 
 pub use self::function_scope::FunctionScope;
@@ -85,13 +83,6 @@ impl EmitFunction for FunctionDefinition {
             .parent_region()
             .expect("entry block belongs to a region");
         let mut current_block = function_entry_block;
-
-        if matches!(self.kind(), FunctionKind::Constructor) {
-            current_block = scope
-                .contract
-                .expect("a constructor is emitted only within a contract")
-                .emit_state_var_initializers(scope, current_block);
-        }
 
         self.emit_modifier_call_blocks(
             scope,
