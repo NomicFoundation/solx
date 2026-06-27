@@ -112,9 +112,6 @@ impl<'context> Type<'context> {
                     Definition::Struct(definition) => definition,
                     _ => unreachable!("Slang StructType always references a Struct definition"),
                 };
-                // TODO(v2): move struct-member type resolution into Slang itself
-                // so consumers don't have to walk `members()` and propagate the
-                // struct's data location by hand.
                 let mut member_types = Vec::new();
                 for member in struct_definition.members().iter() {
                     let member_slang_type = member.get_type().expect("slang validated");
