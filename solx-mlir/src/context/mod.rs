@@ -179,8 +179,6 @@ impl<'context> Context<'context> {
         let pass_manager = PassManager::new(context);
         pass_manager.enable_verifier(true);
 
-        // TODO: the canonicalizer causes an infinite loop on complex loop tests
-        // (e.g. loop/complex/1.sol) at the -Oz optimization level.
         unsafe {
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateTransformsCanonicalizer(),
