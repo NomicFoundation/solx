@@ -148,7 +148,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
             Expression::IndexAccessExpression(inner) => inner.emit(context, block),
             Expression::CallOptionsExpression(inner) => inner.emit(context, block),
             Expression::NewExpression(_) => {
-                unimplemented!("expression emission: bare new")
+                unreachable!("a new expression is consumed by its call or discarded for effect")
             }
             Expression::TypeExpression(_)
             | Expression::ElementaryType(_)
@@ -205,6 +205,7 @@ impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for Expression {
             {
                 conditional.emit_for_effect(context, block)
             }
+            Expression::NewExpression(_) => block,
             _ => self.emit(context, block).block,
         }
     }
