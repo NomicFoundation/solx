@@ -147,12 +147,16 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
             Expression::MemberAccessExpression(inner) => inner.emit(context, block),
             Expression::IndexAccessExpression(inner) => inner.emit(context, block),
             Expression::CallOptionsExpression(inner) => inner.emit(context, block),
-            Expression::NewExpression(_)
-            | Expression::TypeExpression(_)
+            Expression::NewExpression(_) => {
+                unimplemented!("expression emission: bare new")
+            }
+            Expression::TypeExpression(_)
             | Expression::ElementaryType(_)
             | Expression::PayableKeyword(_)
             | Expression::SuperKeyword(_) => {
-                unimplemented!("expression emission: bare type/keyword")
+                unreachable!(
+                    "a type or keyword is not a value; it is consumed by its enclosing conversion, call, or member access"
+                )
             }
         }
     }
