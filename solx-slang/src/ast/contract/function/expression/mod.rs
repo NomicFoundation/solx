@@ -196,6 +196,11 @@ impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for Expression {
             {
                 AssignmentTarget::delete(context, &prefix.operand(), block)
             }
+            Expression::ConditionalExpression(conditional)
+                if matches!(conditional.get_type(), Some(ast::Type::Void(_))) =>
+            {
+                conditional.emit_for_effect(context, block)
+            }
             _ => self.emit(context, block).block,
         }
     }

@@ -178,7 +178,18 @@ impl<'context> Type<'context> {
                     Type::func_ref(builder.context, &parameter_types, &result_types).into_mlir()
                 }
             }
-            _ => unimplemented!("unsupported Slang type"),
+            SlangType::FixedPointNumber(fixed_point_type) => {
+                let bits = fixed_point_type.bits();
+                if fixed_point_type.is_signed() {
+                    MlirType::from(IntegerType::signed(builder.context, bits))
+                } else {
+                    MlirType::from(IntegerType::unsigned(builder.context, bits))
+                }
+            }
+            SlangType::Library(_) => Type::address(builder.context, false).into_mlir(),
+            SlangType::Tuple(_) | SlangType::Void(_) => {
+                unreachable!("tuple and void are resolved via Type::resolve_result_types")
+            }
         }
     }
 

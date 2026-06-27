@@ -19,6 +19,7 @@ use solx_mlir::ods::sol::YieldOperation;
 use crate::ast::BlockAnd;
 use crate::ast::EmitAs;
 use crate::ast::EmitExpression;
+use crate::ast::EmitForEffect;
 use crate::ast::LocationPolicy;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
@@ -198,6 +199,39 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
             ],
             block,
         }
+    }
+}
+
+impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for ConditionalExpression {
+    /// Emits a void-typed `cond ? a : b` for effect: one branch runs per the condition, with no result.
+    fn emit_for_effect<'state>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> BlockRef<'context, 'block> {
+        let true_expression = self.true_expression();
+        let false_expression = self.false_expression();
+        let BlockAnd {
+            value: condition_value,
+            block,
+        } = self.operand().emit(context, block);
+        let condition_boolean = condition_value
+            .is_nonzero(&context.state.builder, &block)
+            .into_mlir();
+        let (then_block, else_block) = mlir_region_op!(
+            &context.state.builder, &block,
+            IfOperation.cond(condition_boolean); then_region, else_region
+        );
+
+        for (branch_block, branch_expression) in [
+            (then_block, &true_expression),
+            (else_block, &false_expression),
+        ] {
+            let branch_end = branch_expression.emit_for_effect(context, branch_block);
+            mlir_op_void!(&context.state.builder, &branch_end, YieldOperation.ins(&[]));
+        }
+
+        block
     }
 }
 
