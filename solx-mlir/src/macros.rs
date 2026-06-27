@@ -3,8 +3,9 @@
 //!
 //! `mlir_op_build!` / `mlir_op!` / `mlir_op_void!` / `mlir_region_op!` collapse the ceremony of an
 //! ODS-generated op builder (the `(context, unknown_location)` head and `.build().into()` tail) so a
-//! site states only the op name and its setters. Ops with `operand_segment_sizes` (`Encode`, `New`,
-//! `Emit`), multiple results (`Decode`), or `sol.try`'s conditional catch regions are built by hand.
+//! site states only the op name and its setters. Ops with optional setters applied conditionally
+//! (`Encode`'s `selector`, `New`'s `salt`, `Emit`'s `signature`), multiple results (`Decode`), or
+//! `sol.try`'s conditional catch regions are built by hand.
 //!
 
 /// Coerces one op-builder setter argument to the type the ODS setter expects (identity for most types).

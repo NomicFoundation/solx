@@ -5,15 +5,12 @@
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Operation;
 use melior::ir::Type as MlirType;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
-use melior::ir::attribute::DenseI32ArrayAttribute;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
-use melior::ir::operation::OperationMutLike;
 use melior::ir::r#type::IntegerType;
 use melior::ir::r#type::TypeLike;
 use num::BigInt;
@@ -405,9 +402,8 @@ impl<'context, 'block> Value<'context, 'block> {
     }
 
     /// `sol.new` — contract creation embedding `obj_name`'s deploy bytecode. `val`
-    /// is the forwarded wei; a `salt` selects CREATE2. `operand_segment_sizes` is
-    /// set by hand (melior's ODS builder doesn't synthesize it); the salt must be
-    /// appended before the variadic ctor args or the two transpose.
+    /// is the forwarded wei; a `salt` selects CREATE2. The salt must be appended
+    /// before the variadic ctor args or the two transpose.
     pub fn create_contract(
         obj_name: &str,
         val: Self,
@@ -432,16 +428,9 @@ impl<'context, 'block> Value<'context, 'block> {
         if try_call {
             new_builder = new_builder.try_call(Attribute::unit(builder.context));
         }
-        let mut operation: Operation = new_builder.build().into();
-        let ctor_args_count =
-            i32::try_from(ctor_args.len()).expect("constructor argument count fits in i32");
-        let salt_segment = i32::from(salt.is_some());
-        let segment_sizes =
-            DenseI32ArrayAttribute::new(builder.context, &[1, salt_segment, ctor_args_count]);
-        operation.set_inherent_attribute("operand_segment_sizes", segment_sizes.into());
         Self::new(
             block
-                .append_operation(operation)
+                .append_operation(new_builder.build().into())
                 .result(0)
                 .expect("sol.new always produces one result")
                 .into(),
@@ -488,19 +477,9 @@ impl<'context, 'block> Value<'context, 'block> {
         if packed {
             op_builder = op_builder.packed(Attribute::unit(builder.context));
         }
-        let mut operation: Operation = op_builder.build().into();
-        // TODO: drop this manual segment-sizes plumbing once the melior op-builder
-        // macro emits `operand_segment_sizes` automatically for ops with variadic
-        // or optional operand groups.
-        let ins_count = i32::try_from(ins.len()).expect("encode argument count fits in i32");
-        let segment_sizes = DenseI32ArrayAttribute::new(
-            builder.context,
-            &[ins_count, i32::from(selector.is_some())],
-        );
-        operation.set_inherent_attribute("operand_segment_sizes", segment_sizes.into());
         Self::new(
             block
-                .append_operation(operation)
+                .append_operation(op_builder.build().into())
                 .result(0)
                 .expect("sol.encode always produces one result")
                 .into(),

@@ -648,7 +648,7 @@ dependencies = [
  "bitflags",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.10.5",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -1292,7 +1292,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ab67060fc6b8ef687992d439ca0fa36e7ed17e9a0b16b25b601e8757df720de"
 dependencies = [
  "data-encoding",
- "syn 2.0.117",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -2586,7 +2586,7 @@ checksum = "ae960838283323069879657ca3de837e9f7bbb4c7bf6ea7f1b290d5e9476d2e0"
 [[package]]
 name = "melior"
 version = "0.26.9"
-source = "git+https://github.com/NomicFoundation/melior?rev=62a909e2ff67fcc19f7f42dc4fb70c3e03376bd2#62a909e2ff67fcc19f7f42dc4fb70c3e03376bd2"
+source = "git+https://github.com/NomicFoundation/melior?rev=193e8252ca5d2774555b3e2f29ec8b97f28f5d38#193e8252ca5d2774555b3e2f29ec8b97f28f5d38"
 dependencies = [
  "melior-macro",
  "mlir-sys",
@@ -2595,7 +2595,7 @@ dependencies = [
 [[package]]
 name = "melior-macro"
 version = "0.19.5"
-source = "git+https://github.com/NomicFoundation/melior?rev=62a909e2ff67fcc19f7f42dc4fb70c3e03376bd2#62a909e2ff67fcc19f7f42dc4fb70c3e03376bd2"
+source = "git+https://github.com/NomicFoundation/melior?rev=193e8252ca5d2774555b3e2f29ec8b97f28f5d38#193e8252ca5d2774555b3e2f29ec8b97f28f5d38"
 dependencies = [
  "comrak",
  "convert_case 0.11.0",
