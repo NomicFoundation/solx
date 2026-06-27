@@ -94,7 +94,7 @@ impl NewExpressionCall {
                         .into_mlir()
                 }
                 None => {
-                    AstValue::malloc(result_type, None, true, builder, &current_block).into_mlir()
+                    unreachable!("new array/bytes/string requires a size argument")
                 }
             };
             return BlockAnd {
