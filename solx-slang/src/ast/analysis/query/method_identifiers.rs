@@ -42,9 +42,6 @@ impl MethodIdentifiers for ContractDefinition {
 
 impl MethodIdentifiers for LibraryDefinition {
     fn method_identifiers(&self) -> BTreeMap<String, String> {
-        use crate::ast::contract::function::signature::library_aware_selector;
-        use crate::ast::contract::function::signature::library_aware_signature;
-
         let mut method_identifiers = BTreeMap::new();
         for member in self.members().iter() {
             let ContractMember::FunctionDefinition(function) = member else {
@@ -53,12 +50,10 @@ impl MethodIdentifiers for LibraryDefinition {
             if !matches!(function.kind(), FunctionKind::Regular) {
                 continue;
             }
-            let signature = library_aware_signature(&function)
-                .or_else(|| function.compute_canonical_signature());
-            let Some(signature) = signature else {
+            let Some(signature) = function.compute_library_signature() else {
                 continue;
             };
-            let Some(selector) = library_aware_selector(&function) else {
+            let Some(selector) = function.compute_selector() else {
                 continue;
             };
             method_identifiers.insert(signature, format!("{selector:08x}"));

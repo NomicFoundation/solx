@@ -121,9 +121,7 @@ impl ExternalLibraryCall {
                 .collect(),
             None => Vec::new(),
         };
-        let selector =
-            crate::ast::contract::function::signature::library_aware_selector(&self.function)
-                .expect("slang validated");
+        let selector = self.function.compute_selector().expect("slang validated");
         let mlir_name = self.function.mlir_function_name();
         let (argument_values, current_block) = match &self.self_receiver {
             Some(receiver) => {

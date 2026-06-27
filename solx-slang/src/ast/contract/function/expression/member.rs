@@ -478,7 +478,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
         let selector_constant = match node.member().resolve_to_built_in() {
             Some(BuiltIn::FunctionSelector) => match MemberAccessOperand(&node.operand()).resolve() {
                 Some(Definition::Function(function)) => {
-                    crate::ast::contract::function::signature::library_aware_selector(&function)
+                    function
+                        .compute_selector()
                         .map(|selector| (BigInt::from(selector), 4))
                 }
                 Some(Definition::StateVariable(state_variable)) => {
