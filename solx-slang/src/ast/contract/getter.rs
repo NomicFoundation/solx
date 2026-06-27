@@ -39,8 +39,9 @@ use crate::ast::contract::function::expression::ExpressionContext;
 
 /// The field-layout plan for a struct's `public` accessor return tuple.
 pub trait StructGetterLayout {
-    /// The struct's returnable members `(field index, member type, ABI result type)`; nested
-    /// mappings / arrays / structs are skipped. `None` if none are returnable.
+    /// The struct's returnable members `(field index, member type, ABI result type)`: mappings and
+    /// arrays are skipped, a nested struct is returned whole as its memory ABI tuple. `None` if no
+    /// member is returnable.
     fn struct_getter_layout<'context>(
         &self,
         struct_mlir_type: Type<'context>,
@@ -56,24 +57,21 @@ impl StructGetterLayout for StructDefinition {
     ) -> Option<Vec<(u64, Type<'context>, Type<'context>)>> {
         let mut plan = Vec::new();
         for (member_index, member) in self.members().iter().enumerate() {
-            let is_string_or_bytes = match member.get_type() {
-                Some(
-                    SlangType::Mapping(_)
-                    | SlangType::Array(_)
-                    | SlangType::FixedSizeArray(_)
-                    | SlangType::Struct(_),
-                ) => continue,
-                Some(SlangType::String(_) | SlangType::Bytes(_)) => true,
-                Some(_) => false,
-                None => return None,
-            };
+            let member_slang = member.get_type()?;
             let member_type = AstType::new(struct_mlir_type)
                 .element_type(member_index)
                 .into_mlir();
-            let result_member_type = if is_string_or_bytes {
-                AstType::string(builder.context, DataLocation::Memory).into_mlir()
-            } else {
-                member_type
+            let result_member_type = match &member_slang {
+                SlangType::Mapping(_) | SlangType::Array(_) | SlangType::FixedSizeArray(_) => {
+                    continue;
+                }
+                SlangType::String(_) | SlangType::Bytes(_) => {
+                    AstType::string(builder.context, DataLocation::Memory).into_mlir()
+                }
+                SlangType::Struct(_) => {
+                    AstType::resolve(&member_slang, LocationPolicy::ForceMemory, builder)
+                }
+                _ => member_type,
             };
             plan.push((member_index as u64, member_type, result_member_type));
         }
