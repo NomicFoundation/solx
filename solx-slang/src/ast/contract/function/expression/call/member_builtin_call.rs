@@ -163,7 +163,7 @@ impl MemberBuiltinCall {
             }
             BuiltIn::AbiDecode => {
                 let ArgumentsDeclaration::PositionalArguments(positional) = &self.arguments else {
-                    unimplemented!("abi.decode takes positional arguments only");
+                    unreachable!("abi.decode takes positional arguments only; named arguments are invalid");
                 };
                 let payload_expression = positional.iter().next().expect("slang validated");
                 let BlockAnd {
