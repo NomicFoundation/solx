@@ -16,12 +16,11 @@ use solx_mlir::TryFallbackKind;
 use solx_mlir::ods::sol::TryOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitExpression;
 use crate::ast::EmitStatement;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::try_external_call::TryExternalCall;
+use crate::ast::contract::function::expression::call::try_function_pointer_call::TryFunctionPointerCall;
 use crate::ast::contract::function::expression::call::try_new_expression::TryNewExpression;
 use crate::ast::contract::function::statement::StatementContext;
 
@@ -49,32 +48,19 @@ statement_emit!(CatchClause; |node, context, block| {
 statement_emit!(TryStatement; |node, context, block| {
     let expression = node.expression();
 
-    let classified = {
+    let (status, results, current_block) = {
         let emitter = ExpressionContext::from(&*context);
-        TryExternalCall::from_expression(&expression)
-            .map(|call| call.emit(&emitter, block))
-            .or_else(|| {
-                TryNewExpression::from_expression(&expression).map(|new| new.emit(&emitter, block))
-            })
-    };
-    let Some((status, results, current_block)) = classified else {
-        let BlockAnd { value, block: current_block } = {
-            let emitter = ExpressionContext::from(&*context);
-            expression.emit(&emitter, block)
-        };
-        if let Some(parameters) = node.returns()
-            && let Some(parameter) = parameters.iter().next()
-            && parameter.name().is_some()
-        {
-            context.environment.bind_parameter(
-                parameter.node_id(),
-                AstType::parameter(parameter.get_type().as_ref(), &context.state.builder),
-                value.into_mlir(),
-                &context.state.builder,
-                &current_block,
-            );
+        if let Some(call) = TryExternalCall::from_expression(&expression) {
+            call.emit(&emitter, block)
+        } else if let Some(new) = TryNewExpression::from_expression(&expression) {
+            new.emit(&emitter, block)
+        } else if let Some(call) = TryFunctionPointerCall::from_expression(&expression) {
+            call.emit(&emitter, block)
+        } else {
+            unreachable!(
+                "a try expression is an external call, an external function-pointer call, or a contract creation"
+            )
         }
-        return node.body().emit(context, current_block);
     };
 
     let mut panic_clause: Option<CatchClause> = None;

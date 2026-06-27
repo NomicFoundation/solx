@@ -17,6 +17,7 @@ pub mod new_expression_call;
 pub mod positional_arguments;
 pub mod struct_construction;
 pub mod try_external_call;
+pub mod try_function_pointer_call;
 pub mod try_new_expression;
 pub mod type_conversion;
 

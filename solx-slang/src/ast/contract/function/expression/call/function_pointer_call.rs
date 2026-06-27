@@ -2,6 +2,8 @@
 //! Solidity function-pointer call.
 //!
 
+use melior::ir::Attribute;
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
@@ -9,9 +11,12 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use solx_mlir::ods::sol::ExtICallOperation;
+
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
 use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 
@@ -92,5 +97,61 @@ impl FunctionPointerCall {
             value: results,
             block,
         }
+    }
+
+    /// Emits this call with `try` semantics, returning the success status flag, the decoded results,
+    /// and the continuation block. Valid only for an externally-visible function pointer.
+    pub fn emit_try<'state, 'context: 'block, 'block>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        call_value: Option<Value<'context, 'block>>,
+        call_gas: Option<Value<'context, 'block>>,
+        block: BlockRef<'context, 'block>,
+    ) -> (
+        Value<'context, 'block>,
+        Vec<Value<'context, 'block>>,
+        BlockRef<'context, 'block>,
+    ) {
+        let function_slang_type = self.callee.get_type().expect("slang validated");
+        let (parameter_types, result_types) =
+            AstType::function_pointer_signature(&function_slang_type, &context.state.builder);
+        let BlockAnd {
+            value: callee_value,
+            block,
+        } = self.callee.emit(context, block);
+        let BlockAnd {
+            value: argument_values,
+            block,
+        } = self.arguments.emit_as(&parameter_types, context, block);
+        let builder = &context.state.builder;
+        let value = call_value.unwrap_or_else(|| AstValue::uint256(0, builder, &block).into_mlir());
+        let gas = call_gas.unwrap_or_else(|| AstValue::gas_left(builder, &block).into_mlir());
+        let mut out_types = Vec::with_capacity(result_types.len() + 1);
+        out_types
+            .push(AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
+        out_types.extend_from_slice(&result_types);
+        let operation = block.append_operation(mlir_op_build!(
+            builder,
+            ExtICallOperation
+                .outs(&out_types)
+                .callee(callee_value.into_mlir())
+                .callee_operands(&argument_values)
+                .gas(gas)
+                .value(value)
+                .try_call(Attribute::unit(builder.context))
+        ));
+        let status = operation
+            .result(0)
+            .expect("sol.ext_icall try produces a status result")
+            .into();
+        let results = (0..result_types.len())
+            .map(|index| {
+                operation
+                    .result(index + 1)
+                    .expect("sol.ext_icall try produces a status plus its declared results")
+                    .into()
+            })
+            .collect();
+        (status, results, block)
     }
 }
