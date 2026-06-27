@@ -4,8 +4,6 @@
 
 use melior::ir::Type as MlirType;
 use melior::ir::r#type::IntegerType;
-use num::BigInt;
-use num::Signed;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::LiteralKind;
@@ -42,17 +40,11 @@ impl<'context> Type<'context> {
             SlangType::Address(_) => Type::address(builder.context, false).into_mlir(),
             SlangType::Literal(literal_type) => match literal_type.kind() {
                 LiteralKind::Address { .. } => Type::address(builder.context, false).into_mlir(),
-                LiteralKind::Integer { value } => {
-                    let bits = integer_bits_required(&value) as usize;
-                    let bits = bits
-                        .next_multiple_of(solx_utils::BIT_LENGTH_BYTE)
-                        .max(solx_utils::BIT_LENGTH_BYTE);
-                    let bits = u32::try_from(bits).expect("bit size fits in 32 bits");
-                    if value.is_negative() {
-                        MlirType::from(IntegerType::signed(builder.context, bits))
-                    } else {
-                        MlirType::from(IntegerType::unsigned(builder.context, bits))
-                    }
+                LiteralKind::Integer { .. } => {
+                    let mobile_type = literal_type
+                        .mobile_type()
+                        .expect("slang validated: integer literal fits in 256 bits");
+                    Type::resolve(&mobile_type, policy, builder)
                 }
                 LiteralKind::HexInteger { bytes, .. } => {
                     let bits = bytes * solx_utils::BIT_LENGTH_BYTE as u32;
@@ -273,19 +265,5 @@ impl<'context> Type<'context> {
             LocationPolicy::Declared(None),
             builder,
         )
-    }
-}
-
-// TODO: Remove when nomicFoundation/slang#1793 is merged and we can instead
-// depend on `LiteralType::mobile_type()` for literal type conversion.
-fn integer_bits_required(value: &BigInt) -> u32 {
-    if value.is_negative() {
-        let magnitude_minus_one = -value - 1u32;
-        u32::try_from(magnitude_minus_one.bits()).expect("literal magnitude bit count fits in u32")
-            + 1
-    } else {
-        u32::try_from(value.bits())
-            .expect("literal bit count fits in u32")
-            .max(1)
     }
 }
