@@ -3,8 +3,7 @@
 
 // A public keyed getter over an array of structs whose only member is a nested
 // struct: the array index resolves an element place, then the terminal struct is
-// returned whole as its memory ABI tuple via `sol.data_loc_cast`. Earlier solx
-// emitted no getter at all for an all-struct terminal.
+// returned whole as its memory ABI tuple via `sol.data_loc_cast`.
 
 // CHECK: sol.func @{{.*}}(%arg0: ui256) -> !sol.struct<(ui256), Memory>
 // CHECK:   %[[A:.*]] = sol.addr_of @{{.*}} : !sol.array<? x !sol.struct<(!sol.struct<(ui256), Storage>), Storage>, Storage>

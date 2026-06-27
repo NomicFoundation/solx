@@ -3,7 +3,7 @@
 
 // A public getter over a struct with a nested-struct member flattens the struct
 // into one return value per kept member; the nested struct is returned whole as
-// its memory ABI tuple via `sol.data_loc_cast`, not dropped.
+// its memory ABI tuple via `sol.data_loc_cast`.
 
 // CHECK: sol.func @{{.*}}() -> (ui256, !sol.struct<(ui256), Memory>)
 // CHECK:   %[[BASE:.*]] = sol.addr_of @{{.*}} : !sol.struct<(ui256, !sol.struct<(ui256), Storage>), Storage>

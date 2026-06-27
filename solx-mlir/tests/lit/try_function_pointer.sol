@@ -2,8 +2,7 @@
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // A `try` over a call through an external function pointer lowers to a `try_call`
-// ext_icall on the function-pointer ref and a `sol.try`; the function-pointer
-// shape no longer bypasses try/catch (it used to fall through and drop the catch).
+// ext_icall on the function-pointer ref and a `sol.try`.
 
 // CHECK: ext_icall {{.*}} {try_call} : !sol.ext_func_ref<() -> ui256>
 // CHECK: sol.try
