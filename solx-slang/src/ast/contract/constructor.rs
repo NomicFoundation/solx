@@ -52,14 +52,7 @@ impl EmitConstructor for ContractDefinition {
 
         let base_arguments = self.base_constructor_arguments(&mro, &mro_node_ids);
 
-        self.emit_constructor_func(
-            scope,
-            self,
-            &mro,
-            &base_arguments,
-            true,
-            contract_body,
-        );
+        self.emit_constructor_func(scope, self, &mro, &base_arguments, true, contract_body);
 
         for contract in mro.iter().skip(1) {
             if contract.constructor().is_none() {
@@ -98,7 +91,9 @@ impl EmitConstructor for ContractDefinition {
             (
                 constructor
                     .as_ref()
-                    .expect("a base constructor func is emitted only for a contract with a constructor")
+                    .expect(
+                        "a base constructor func is emitted only for a contract with a constructor",
+                    )
                     .base_constructor_symbol(),
                 None,
                 Some(scope.state.next_function_id()),
@@ -112,7 +107,10 @@ impl EmitConstructor for ContractDefinition {
                     LocationPolicy::Declared(None),
                     builder,
                 );
-                (parameter_types, StateMutability::from(constructor.mutability()))
+                (
+                    parameter_types,
+                    StateMutability::from(constructor.mutability()),
+                )
             }
             None => (Vec::new(), StateMutability::NonPayable),
         };
@@ -160,13 +158,17 @@ impl EmitConstructor for ContractDefinition {
         );
 
         let mut terminated = false;
-        if let Some(body) = constructor.as_ref().and_then(|constructor| constructor.body()) {
+        if let Some(body) = constructor
+            .as_ref()
+            .and_then(|constructor| constructor.body())
+        {
             let return_types: [Type<'context>; 0] = [];
             environment.enter_scope();
             for statement in body.statements().iter() {
                 let mut emitter = StatementContext::new(
                     scope.state,
                     &mut environment,
+                    scope.dispatch,
                     &region,
                     scope.storage_layout,
                     &return_types,
@@ -217,6 +219,7 @@ impl EmitConstructor for ContractDefinition {
             let emitter = ExpressionContext::new(
                 scope.state,
                 environment,
+                scope.dispatch,
                 scope.storage_layout,
                 ArithmeticMode::Checked,
             );
@@ -257,6 +260,7 @@ impl EmitConstructor for ContractDefinition {
         let emitter = ExpressionContext::new(
             scope.state,
             &environment,
+            scope.dispatch,
             scope.storage_layout,
             ArithmeticMode::Checked,
         );

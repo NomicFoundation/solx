@@ -3,9 +3,9 @@
 //!
 
 use crate::ast::EmitObject;
+use crate::ast::analysis::query::MethodIdentifiers;
 use crate::ast::contract::ObjectScope;
 use crate::ast::operator_binding::OperatorBindings;
-use crate::ast::analysis::query::MethodIdentifiers;
 pub mod compilation_config;
 
 use std::collections::BTreeMap;

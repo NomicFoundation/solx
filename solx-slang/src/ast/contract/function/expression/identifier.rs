@@ -69,9 +69,7 @@ expression_emit!(Identifier; |node, context, block| {
             initializer.emit(context, block)
         }
         Some(Definition::Function(function_definition)) => {
-            let target_id = context
-                .state
-                .resolve_virtual(function_definition.node_id());
+            let target_id = context.dispatch.resolve_virtual(function_definition.node_id());
             let value = context
                 .state
                 .resolve_function(target_id)

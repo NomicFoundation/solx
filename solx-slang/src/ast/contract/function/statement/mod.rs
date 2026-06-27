@@ -47,6 +47,7 @@ use crate::ast::EmitAs;
 use crate::ast::EmitExpression;
 use crate::ast::EmitForEffect;
 use crate::ast::EmitStatement;
+use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::storage_layout::StorageSlot;
@@ -57,6 +58,8 @@ pub struct StatementContext<'state, 'context, 'block> {
     pub state: &'state Context<'context>,
     /// Variable environment (mutable for new declarations and loop targets).
     pub environment: &'state mut Environment<'context, 'block>,
+    /// Contract-local dispatch metadata.
+    pub dispatch: &'state ContractDispatch,
     /// The current region for new blocks. A raw pointer to switch between Sol op regions without
     /// lifetime conflicts; re-pointed by direct assignment.
     pub region_pointer: *const Region<'context>,
@@ -79,6 +82,7 @@ impl<'state, 'context, 'block> From<&'state StatementContext<'_, 'context, 'bloc
         ExpressionContext::new(
             statement.state,
             statement.environment,
+            statement.dispatch,
             statement.storage_layout,
             statement.arithmetic_mode,
         )
@@ -90,6 +94,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     pub fn new(
         state: &'state Context<'context>,
         environment: &'state mut Environment<'context, 'block>,
+        dispatch: &'state ContractDispatch,
         region: &Region<'context>,
         storage_layout: &'state HashMap<NodeId, StorageSlot>,
         return_types: &'state [Type<'context>],
@@ -98,6 +103,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         Self {
             state,
             environment,
+            dispatch,
             region_pointer: region as *const Region<'context>,
             storage_layout,
             return_types,

@@ -19,6 +19,7 @@ use crate::ast::EmitStatement;
 use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 use crate::ast::contract::function::statement::StatementContext;
 
 statement_emit!(EmitStatementNode; |node, context, block| {
@@ -30,13 +31,13 @@ statement_emit!(EmitStatementNode; |node, context, block| {
         .iter()
         .map(|parameter| parameter.node_id())
         .collect::<Vec<_>>();
-    let ordered_arguments = node.arguments().ordered_by(&parameter_ids).expect("slang validated");
+    let arguments = CallArguments::for_parameter_ids(&node.arguments(), &parameter_ids);
 
     let emitter = ExpressionContext::from(&*context);
     let mut indexed_arguments: Vec<Value<'context, 'block>> = Vec::new();
     let mut non_indexed_arguments: Vec<Value<'context, 'block>> = Vec::new();
     let mut current_block = block;
-    for (parameter, argument) in parameters.iter().zip(ordered_arguments) {
+    for (parameter, argument) in parameters.iter().zip(arguments.expressions.iter()) {
         let BlockAnd {
             value,
             block: next_block,

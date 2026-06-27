@@ -135,6 +135,7 @@ impl EmitFunction for FunctionDefinition {
             let mut emitter = StatementContext::new(
                 scope.state,
                 &mut environment,
+                scope.dispatch,
                 &region,
                 scope.storage_layout,
                 &signature.return_types,

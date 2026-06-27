@@ -31,13 +31,13 @@ use crate::ast::EmitExpression;
 use crate::ast::EmitStatement;
 use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
+use crate::ast::analysis::query::ModifierResolution;
+use crate::ast::analysis::query::PositionalArguments;
 use crate::ast::contract::function::FunctionScope;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 use crate::ast::contract::function::statement::StatementContext;
-use crate::ast::analysis::query::ModifierResolution;
-use crate::ast::analysis::query::PositionalArguments;
 use crate::ast::emit::EmitModifierCalls;
 
 impl EmitModifierCalls for FunctionDefinition {
@@ -134,14 +134,14 @@ impl EmitModifierCalls for FunctionDefinition {
                     let emitter = ExpressionContext::new(
                         scope.state,
                         &environment,
+                        scope.dispatch,
                         scope.storage_layout,
                         ArithmeticMode::Checked,
                     );
                     argument.emit(&emitter, current_block)
                 };
                 current_block = next_block;
-                let parameter_type =
-                    AstType::parameter(parameter.get_type().as_ref(), builder);
+                let parameter_type = AstType::parameter(parameter.get_type().as_ref(), builder);
                 let cast = value.cast(AstType::new(parameter_type), builder, &current_block);
                 operands.push(cast.into_mlir());
             }
@@ -212,6 +212,7 @@ impl EmitModifierCalls for FunctionDefinition {
             let mut emitter = StatementContext::new(
                 scope.state,
                 &mut environment,
+                scope.dispatch,
                 &region,
                 scope.storage_layout,
                 &return_types,

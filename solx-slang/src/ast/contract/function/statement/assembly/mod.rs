@@ -19,6 +19,7 @@ use solx_mlir::Environment;
 
 use crate::ast::EmitStatement;
 use crate::ast::EmitYul;
+use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::contract::storage_layout::StorageSlot;
 
@@ -28,6 +29,8 @@ pub struct YulContext<'frame, 'context, 'block> {
     pub state: &'frame Context<'context>,
     /// Variable environment (mutable for Yul `let` declarations).
     pub environment: &'frame mut Environment<'context, 'block>,
+    /// Contract-local dispatch metadata.
+    pub dispatch: &'frame ContractDispatch,
     /// The current region for creating new blocks. A raw pointer to allow
     /// switching between Yul op regions without lifetime conflicts.
     pub region_pointer: *const Region<'context>,
@@ -46,12 +49,14 @@ impl<'frame, 'context, 'block> YulContext<'frame, 'context, 'block> {
     pub fn new(
         state: &'frame Context<'context>,
         environment: &'frame mut Environment<'context, 'block>,
+        dispatch: &'frame ContractDispatch,
         region_pointer: *const Region<'context>,
         storage_layout: &'frame HashMap<NodeId, StorageSlot>,
     ) -> Self {
         Self {
             state,
             environment,
+            dispatch,
             region_pointer,
             storage_layout,
             yul_functions: HashMap::new(),
@@ -64,6 +69,7 @@ statement_emit!(AssemblyStatement; |node, context, block| {
     let mut yul_context = YulContext::new(
         context.state,
         &mut *context.environment,
+        context.dispatch,
         context.region_pointer,
         context.storage_layout,
     );

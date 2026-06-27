@@ -122,32 +122,44 @@ impl GetterSignature for StateVariableDefinition {
         &self,
         builder: &Builder<'context>,
     ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)> {
-        self.get_type().and_then(|declared_type| match &declared_type {
-            SlangType::Mapping(_) | SlangType::Array(_) | SlangType::FixedSizeArray(_) => self
-                .keyed_getter_signature(DataLocation::Storage, builder)
-                .map(|(input_types, result_types, _, _)| (input_types, result_types)),
-            SlangType::Struct(struct_type) => {
-                let Definition::Struct(struct_definition) = struct_type.definition() else {
-                    return None;
-                };
-                let struct_mlir_type = AstType::resolve(
-                    &declared_type,
-                    LocationPolicy::Declared(Some(DataLocation::Storage)),
-                    builder,
-                );
-                let plan = struct_definition.struct_getter_layout(struct_mlir_type, builder)?;
-                let return_types = plan.iter().map(|(_, _, result_type)| *result_type).collect();
-                Some((Vec::new(), return_types))
-            }
-            other if other.is_reference_type() => Some((
-                Vec::new(),
-                vec![AstType::resolve(other, LocationPolicy::ForceMemory, builder)],
-            )),
-            other => Some((
-                Vec::new(),
-                vec![AstType::resolve(other, LocationPolicy::Declared(None), builder)],
-            )),
-        })
+        self.get_type()
+            .and_then(|declared_type| match &declared_type {
+                SlangType::Mapping(_) | SlangType::Array(_) | SlangType::FixedSizeArray(_) => self
+                    .keyed_getter_signature(DataLocation::Storage, builder)
+                    .map(|(input_types, result_types, _, _)| (input_types, result_types)),
+                SlangType::Struct(struct_type) => {
+                    let Definition::Struct(struct_definition) = struct_type.definition() else {
+                        return None;
+                    };
+                    let struct_mlir_type = AstType::resolve(
+                        &declared_type,
+                        LocationPolicy::Declared(Some(DataLocation::Storage)),
+                        builder,
+                    );
+                    let plan = struct_definition.struct_getter_layout(struct_mlir_type, builder)?;
+                    let return_types = plan
+                        .iter()
+                        .map(|(_, _, result_type)| *result_type)
+                        .collect();
+                    Some((Vec::new(), return_types))
+                }
+                other if other.is_reference_type() => Some((
+                    Vec::new(),
+                    vec![AstType::resolve(
+                        other,
+                        LocationPolicy::ForceMemory,
+                        builder,
+                    )],
+                )),
+                other => Some((
+                    Vec::new(),
+                    vec![AstType::resolve(
+                        other,
+                        LocationPolicy::Declared(None),
+                        builder,
+                    )],
+                )),
+            })
     }
 
     fn keyed_getter_signature<'context>(
@@ -171,13 +183,15 @@ impl GetterSignature for StateVariableDefinition {
                 }
                 SlangType::Array(array_type) => {
                     input_types.push(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir(),
                     );
                     terminal = array_type.element_type();
                 }
                 SlangType::FixedSizeArray(array_type) => {
                     input_types.push(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir(),
                     );
                     terminal = array_type.element_type();
                 }
@@ -187,8 +201,7 @@ impl GetterSignature for StateVariableDefinition {
         if input_types.is_empty() {
             return None;
         }
-        let terminal_is_reference =
-            matches!(&terminal, SlangType::String(_) | SlangType::Bytes(_));
+        let terminal_is_reference = matches!(&terminal, SlangType::String(_) | SlangType::Bytes(_));
         let result_type = if terminal_is_reference {
             AstType::resolve(&terminal, LocationPolicy::ForceMemory, builder)
         } else {
@@ -209,7 +222,12 @@ impl GetterSignature for StateVariableDefinition {
             Some(plan) => plan.iter().map(|(_, _, result)| *result).collect(),
             None => vec![result_type],
         };
-        Some((input_types, result_types, struct_plan, terminal_is_reference))
+        Some((
+            input_types,
+            result_types,
+            struct_plan,
+            terminal_is_reference,
+        ))
     }
 }
 

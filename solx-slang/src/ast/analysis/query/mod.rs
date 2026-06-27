@@ -12,8 +12,8 @@ pub mod modifier_resolution;
 pub mod positional_arguments;
 pub mod storage_layout;
 
-pub use self::base_constructor_chain::BaseConstructorChain;
 pub use self::base_constructor_chain::BaseConstructorArguments;
+pub use self::base_constructor_chain::BaseConstructorChain;
 pub use self::match_linearised_base::MatchLinearisedBase;
 pub use self::member_access_operand::MemberAccessOperand;
 pub use self::method_identifiers::MethodIdentifiers;

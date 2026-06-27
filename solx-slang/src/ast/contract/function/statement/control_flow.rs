@@ -148,6 +148,7 @@ statement_emit!(ForStatement; |node, context, block| {
         let emitter = ExpressionContext::new(
             context.state,
             context.environment,
+            context.dispatch,
             context.storage_layout,
             ArithmeticMode::Unchecked,
         );

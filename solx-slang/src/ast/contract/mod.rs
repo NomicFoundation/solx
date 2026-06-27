@@ -3,6 +3,7 @@
 //!
 
 pub mod constructor;
+pub mod contract_dispatch;
 pub mod function;
 pub mod getter;
 pub mod object_scope;
@@ -33,8 +34,7 @@ use solx_mlir::ods::sol::ImmutableOperation;
 use solx_mlir::ods::sol::StateVarOperation;
 use solx_utils::DataLocation;
 
-use crate::ast::analysis::walk::free_function::FreeCallCollector;
-use crate::ast::analysis::walk::library::LibraryCallCollector;
+use self::contract_dispatch::ContractDispatch;
 use self::function::FunctionScope;
 use self::function::expression::ExpressionContext;
 use self::function::expression::arithmetic_mode::ArithmeticMode;
@@ -44,17 +44,19 @@ use crate::ast::EmitExpression;
 use crate::ast::EmitFunction;
 use crate::ast::EmitObject;
 use crate::ast::Type as AstType;
+use crate::ast::analysis::query::StorageLayout;
+use crate::ast::analysis::walk::free_function::FreeCallCollector;
+use crate::ast::analysis::walk::library::LibraryCallCollector;
 use crate::ast::emit::EmitConstructor;
 use crate::ast::emit::EmitModifierCalls;
-use crate::ast::analysis::query::StorageLayout;
 
 impl EmitObject for ContractDefinition {
     fn emit(&self, context: &mut Context, scope: &ObjectScope) {
         let contract_name = self.name().name();
 
-        let super_dispatch = crate::ast::analysis::walk::super_call::SuperDispatch::build_super_dispatch(self);
-        context.super_redirect = super_dispatch.redirect.clone();
-        context.virtual_redirect = super_dispatch.virtual_redirect.clone();
+        let super_dispatch =
+            crate::ast::analysis::walk::super_call::SuperDispatch::build_super_dispatch(self);
+        let dispatch = ContractDispatch::from_super_dispatch(&super_dispatch);
         let shadowed_functions: Vec<_> = super_dispatch
             .shadowed
             .iter()
@@ -92,11 +94,8 @@ impl EmitObject for ContractDefinition {
         );
         walk_roots.extend(library_functions.iter().cloned());
 
-        let mut reached_free_functions = FreeCallCollector::reachable_free_functions(
-            self,
-            scope.free_functions,
-            &walk_roots,
-        );
+        let mut reached_free_functions =
+            FreeCallCollector::reachable_free_functions(self, scope.free_functions, &walk_roots);
 
         let mut seen: HashSet<NodeId> = reached_free_functions
             .iter()
@@ -174,7 +173,7 @@ impl EmitObject for ContractDefinition {
 
         context.current_contract_type = Some(contract_type);
         self.emit_constructor(
-            &FunctionScope::new(context, Some(self), &storage_layout),
+            &FunctionScope::new(context, Some(self), &dispatch, &storage_layout),
             &contract_body,
         );
         context.current_contract_type = None;
@@ -205,7 +204,7 @@ impl EmitObject for ContractDefinition {
             }
             context.current_contract_type = Some(contract_type);
             function.emit(
-                &FunctionScope::new(context, Some(self), &storage_layout),
+                &FunctionScope::new(context, Some(self), &dispatch, &storage_layout),
                 &contract_body,
             );
             context.current_contract_type = None;
@@ -214,7 +213,7 @@ impl EmitObject for ContractDefinition {
         for (symbol, function) in &super_dispatch.shadowed {
             context.current_contract_type = Some(contract_type);
             function.emit_with_symbol(
-                &FunctionScope::new(context, Some(self), &storage_layout),
+                &FunctionScope::new(context, Some(self), &dispatch, &storage_layout),
                 symbol,
                 &contract_body,
             );
@@ -224,7 +223,7 @@ impl EmitObject for ContractDefinition {
         for free in reached_free_functions.iter() {
             context.current_contract_type = Some(contract_type);
             free.emit_with_symbol(
-                &FunctionScope::new(context, Some(self), &storage_layout),
+                &FunctionScope::new(context, Some(self), &dispatch, &storage_layout),
                 &free.node_id_qualified_symbol(),
                 &contract_body,
             );
@@ -234,7 +233,8 @@ impl EmitObject for ContractDefinition {
         let mut emitted_modifiers: HashSet<NodeId> = HashSet::new();
         let mut invoked_modifiers: Vec<slang_solidity_v2::ast::FunctionDefinition> = Vec::new();
         {
-            let modifier_scope = FunctionScope::new(context, Some(self), &storage_layout);
+            let modifier_scope =
+                FunctionScope::new(context, Some(self), &dispatch, &storage_layout);
             let mut wrapped_functions = self.linearised_functions();
             // Collect modifiers from every constructor in the C3 chain, not just the most-derived
             // contract's own: `emit_constructor` emits a `sol.func` for each base constructor in the
@@ -259,7 +259,7 @@ impl EmitObject for ContractDefinition {
         for modifier in invoked_modifiers.iter() {
             context.current_contract_type = Some(contract_type);
             modifier.emit_modifier_definition(
-                &FunctionScope::new(context, Some(self), &storage_layout),
+                &FunctionScope::new(context, Some(self), &dispatch, &storage_layout),
                 &contract_body,
             );
             context.current_contract_type = None;
@@ -269,6 +269,7 @@ impl EmitObject for ContractDefinition {
         let getter_context = ExpressionContext::new(
             context,
             &environment,
+            &dispatch,
             &storage_layout,
             ArithmeticMode::Checked,
         );
@@ -321,6 +322,7 @@ impl EmitObject for LibraryDefinition {
         );
 
         let storage_layout: HashMap<NodeId, StorageSlot> = HashMap::new();
+        let dispatch = ContractDispatch::default();
         let library_type =
             AstType::contract(context.builder.context, &library_name, false).into_mlir();
         let module_body = context.module.body();
@@ -334,7 +336,7 @@ impl EmitObject for LibraryDefinition {
         for function in functions.iter() {
             context.current_contract_type = Some(library_type);
             function.emit(
-                &FunctionScope::new(context, None, &storage_layout),
+                &FunctionScope::new(context, None, &dispatch, &storage_layout),
                 &contract_body,
             );
             context.current_contract_type = None;

@@ -36,6 +36,7 @@ use crate::ast::BlockAnd;
 use crate::ast::EmitAs;
 use crate::ast::EmitExpression;
 use crate::ast::EmitForEffect;
+use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::expression::assignment::AssignmentTarget;
 use crate::ast::contract::storage_layout::StorageSlot;
@@ -46,6 +47,8 @@ pub struct ExpressionContext<'state, 'context, 'block> {
     pub state: &'state Context<'context>,
     /// Variable environment.
     pub environment: &'state Environment<'context, 'block>,
+    /// Contract-local dispatch metadata.
+    pub dispatch: &'state ContractDispatch,
     /// State variable node ID to storage slot mapping.
     pub storage_layout: &'state HashMap<NodeId, StorageSlot>,
     /// Arithmetic overflow-checking mode; Checked by default, Unchecked inside `unchecked {}` and for-loop steps.
@@ -57,12 +60,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     pub fn new(
         state: &'state Context<'context>,
         environment: &'state Environment<'context, 'block>,
+        dispatch: &'state ContractDispatch,
         storage_layout: &'state HashMap<NodeId, StorageSlot>,
         arithmetic_mode: ArithmeticMode,
     ) -> Self {
         Self {
             state,
             environment,
+            dispatch,
             storage_layout,
             arithmetic_mode,
         }

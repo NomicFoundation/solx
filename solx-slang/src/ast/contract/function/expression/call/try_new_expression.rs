@@ -13,10 +13,12 @@ use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::CmpPredicate;
 
+use crate::ast::BlockAnd;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::call::ContractCreation;
+use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
+use crate::ast::contract::function::expression::call::contract_creation::ContractCreation;
 use crate::ast::contract::function::expression::call_options::CallOptions;
 
 /// A `try new C(args)` contract creation, resolved from the `try` expression (the other shape,
@@ -88,18 +90,21 @@ impl TryNewExpression {
             call_value = value;
             salt = salt_value;
         }
-        let (contract_value, current_block) = self.contract_definition.emit_creation(
-            context,
-            self.arguments.iter().collect(),
-            call_value,
-            salt,
-            true,
-            current_block,
+        let creation = ContractCreation::new(
+            self.contract_definition.clone(),
+            CallArguments::ordered(self.arguments.iter().collect()),
         );
+        let BlockAnd {
+            value: contract_value,
+            block: current_block,
+        } = creation.emit(context, call_value, salt, true, current_block);
         let builder = &context.state.builder;
         let ui160 = AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_ETH_ADDRESS);
-        let address = AstValue::from(contract_value)
-            .cast(AstType::address(builder.context, false), builder, &current_block);
+        let address = AstValue::from(contract_value).cast(
+            AstType::address(builder.context, false),
+            builder,
+            &current_block,
+        );
         let as_ui160 = address.cast(ui160, builder, &current_block);
         let zero = AstValue::constant(0, ui160, builder, &current_block);
         let status = as_ui160

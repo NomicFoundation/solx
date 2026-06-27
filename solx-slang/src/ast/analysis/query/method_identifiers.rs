@@ -53,8 +53,8 @@ impl MethodIdentifiers for LibraryDefinition {
             if !matches!(function.kind(), FunctionKind::Regular) {
                 continue;
             }
-            let signature =
-                library_aware_signature(&function).or_else(|| function.compute_canonical_signature());
+            let signature = library_aware_signature(&function)
+                .or_else(|| function.compute_canonical_signature());
             let Some(signature) = signature else {
                 continue;
             };

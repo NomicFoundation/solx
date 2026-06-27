@@ -11,11 +11,11 @@ use slang_solidity_v2::ast::RevertStatement;
 use solx_mlir::ods::sol::RevertOperation;
 
 use crate::ast::BlockAnd;
-use crate::ast::EmitAs;
 use crate::ast::EmitStatement;
 use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 use crate::ast::contract::function::statement::StatementContext;
 
 statement_emit!(RevertStatement; |node, context, block| {
@@ -42,7 +42,7 @@ statement_emit!(RevertStatement; |node, context, block| {
         .iter()
         .map(|parameter| parameter.node_id())
         .collect::<Vec<_>>();
-    let ordered = node.arguments().ordered_by(&parameter_ids).expect("slang validated");
+    let arguments = CallArguments::for_parameter_ids(&node.arguments(), &parameter_ids);
     let parameter_types: Vec<_> = parameters
         .iter()
         .map(|parameter| {
@@ -59,7 +59,7 @@ statement_emit!(RevertStatement; |node, context, block| {
     let BlockAnd {
         value: values,
         block,
-    } = ordered.emit_as(&parameter_types, &emitter, block);
+    } = arguments.emit_as(&parameter_types, &emitter, block);
     let builder = &context.state.builder;
     mlir_op_void!(
         builder,

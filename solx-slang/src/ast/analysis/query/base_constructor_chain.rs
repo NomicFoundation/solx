@@ -73,12 +73,12 @@ impl BaseConstructorChain for ContractDefinition {
                     else {
                         continue;
                     };
-                    collected.entry(base_contract.node_id()).or_insert(
-                        BaseConstructorArguments {
+                    collected
+                        .entry(base_contract.node_id())
+                        .or_insert(BaseConstructorArguments {
                             arguments,
                             declaring_contract: declaring_contract.clone(),
-                        },
-                    );
+                        });
                 }
             }
             for inheritance in declaring_contract.inheritance_types().iter() {
@@ -94,12 +94,12 @@ impl BaseConstructorChain for ContractDefinition {
                 else {
                     continue;
                 };
-                collected.entry(base_contract.node_id()).or_insert(
-                    BaseConstructorArguments {
+                collected
+                    .entry(base_contract.node_id())
+                    .or_insert(BaseConstructorArguments {
                         arguments,
                         declaring_contract: declaring_contract.clone(),
-                    },
-                );
+                    });
             }
         }
         collected

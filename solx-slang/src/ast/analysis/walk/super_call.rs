@@ -2,7 +2,7 @@
 //! Super / C3 virtual-dispatch precompute pass.
 //!
 //! Re-resolves a contract's `super.f(...)` and virtual internal calls against its C3 linearisation,
-//! producing the `redirect` / `shadowed` / `virtual_redirect` maps the `Context` carries.
+//! producing the `redirect` / `shadowed` / `virtual_redirect` maps contract lowering carries.
 //!
 
 use std::collections::HashMap;

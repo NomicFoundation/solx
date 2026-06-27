@@ -47,6 +47,7 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
         let emitter = ExpressionContext::new(
             context.state,
             context.environment,
+            context.dispatch,
             context.storage_layout,
             ArithmeticMode::Checked,
         );

@@ -48,10 +48,6 @@ pub struct Context<'context> {
     pub current_contract_type: Option<Type<'context>>,
     /// User-defined operator bindings, keyed by `(udvt_definition_id, operator)` → bound function id.
     pub operator_bindings: HashMap<(NodeId, UserDefinedOperator), NodeId>,
-    /// `super` call redirect (member-access node id → C3-linearised target); frontend pre-resolves diamonds.
-    pub super_redirect: HashMap<NodeId, NodeId>,
-    /// Virtual dispatch redirect: overridden base function id → most-derived override.
-    pub virtual_redirect: HashMap<NodeId, NodeId>,
     /// Cross-contract references in encounter order, drained into the linker output.
     pub dependencies: RefCell<Vec<String>>,
     /// Monotonic internal-function-pointer dispatch tag; starts at 1 (0 is the null pointer).
@@ -135,8 +131,6 @@ impl<'context> Context<'context> {
             builder: Builder::new(context),
             current_contract_type: None,
             operator_bindings: HashMap::new(),
-            super_redirect: HashMap::new(),
-            virtual_redirect: HashMap::new(),
             dependencies: RefCell::new(Vec::new()),
             function_id_counter: Cell::new(1),
         }
@@ -176,14 +170,6 @@ impl<'context> Context<'context> {
         self.function_signatures
             .get(&definition_id)
             .unwrap_or_else(|| panic!("undefined function for definition {definition_id:?}"))
-    }
-
-    /// Redirects a virtual callee to its most-derived override (pass-through if not shadowed).
-    pub fn resolve_virtual(&self, definition_id: NodeId) -> NodeId {
-        self.virtual_redirect
-            .get(&definition_id)
-            .copied()
-            .unwrap_or(definition_id)
     }
 
     /// Runs the Sol-to-LLVM conversion pass pipeline on `module` in place:
