@@ -59,8 +59,6 @@ statement_emit!(EmitStatementNode; |node, context, block| {
             )
             .into_mlir();
         if indexed {
-            // TODO: an indexed reference-type parameter must store the keccak256 hash of its
-            // encoded value as the topic, not the value.
             indexed_arguments.push(value);
         } else {
             non_indexed_arguments.push(value);
