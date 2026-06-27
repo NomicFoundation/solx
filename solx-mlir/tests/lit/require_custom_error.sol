@@ -7,12 +7,26 @@
 
 // CHECK: sol.require {{.*}} "MyError(uint256)"({{.*}}) {{{.*}}call
 
+// The error operand may also be a member access (an error declared in a library,
+// referenced as Lib.LibError(args)); it reaches the same call form.
+// CHECK: sol.require {{.*}} "LibError(uint256)"({{.*}}) {{{.*}}call
+
 pragma solidity ^0.8.27;
 
 error MyError(uint256 x);
 
+library Lib {
+    error LibError(uint256 x);
+}
+
 contract C {
     function f(uint256 a) external pure {
         require(a > 0, MyError(a));
+    }
+}
+
+contract D {
+    function g(uint256 a) external pure {
+        require(a > 0, Lib.LibError(a));
     }
 }
