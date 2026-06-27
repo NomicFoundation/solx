@@ -49,12 +49,6 @@ impl<'context> Type<'context> {
     }
 
     /// Resolves a possibly-absent Slang type (the `Option`-lift over [`Self::resolve`]).
-    // TODO: slang's binder does not fold binary expressions of literal operands —
-    // its typing rules return the type of one operand (e.g. type of the left
-    // operand for shifts), so `1 << 100` gets typed as ui8 (the type of `1`) and
-    // constant subexpressions overflow at that width. solc folds via
-    // `RationalNumberType::binaryOperatorResult`, sizing the result to fit the
-    // folded value. Either teach slang to fold, or fold here before emission.
     pub fn resolve_optional(
         slang_type: Option<SlangType>,
         builder: &Builder<'context>,
