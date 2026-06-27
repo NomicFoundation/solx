@@ -551,7 +551,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                         state_variable.getter_signature(builder)
                     else {
                         unreachable!(
-                            "slang rejects a function pointer to a getter on a struct with no returnable members"
+                            "a function pointer to a public accessor with no returnable members is invalid"
                         );
                     };
                     let selector = state_variable.compute_selector().expect("slang validated");

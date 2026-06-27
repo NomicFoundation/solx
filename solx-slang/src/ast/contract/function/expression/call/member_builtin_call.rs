@@ -261,7 +261,7 @@ impl MemberBuiltinCall {
                 }
                 let ArgumentsDeclaration::PositionalArguments(positional) = &self.arguments else {
                     unreachable!(
-                        "slang rejects named arguments on a member built-in (other than empty `pop`/`push` braces)"
+                        "named arguments on a member built-in are invalid (other than empty `pop`/`push` braces)"
                     );
                 };
                 let (value, block) = match member_built_in {

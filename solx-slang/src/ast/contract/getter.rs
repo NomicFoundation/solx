@@ -84,9 +84,6 @@ impl StructGetterLayout for StructDefinition {
     }
 }
 
-/// The external ABI signature of a `public` state variable's synthesised getter,
-/// shared by the call-position getter (`this.m(key)`), the getter-as-function-pointer
-/// value (`fp = this.m`), and the published method identifiers.
 /// The resolved signature of a keyed getter: `(input_types, result_types, struct_plan,
 /// terminal_is_reference)`.
 type KeyedGetterSignature<'context> = (
@@ -96,6 +93,9 @@ type KeyedGetterSignature<'context> = (
     bool,
 );
 
+/// The external ABI signature of a `public` state variable's synthesised getter,
+/// shared by the call-position getter (`this.m(key)`), the getter-as-function-pointer
+/// value (`fp = this.m`), and the published method identifiers.
 pub trait GetterSignature {
     /// Returns `(parameter_types, return_types)`: scalar `() -> (T)`, mapping
     /// `(K) -> (V)`, array `(uint256) -> (element)`, struct `() -> (flattened

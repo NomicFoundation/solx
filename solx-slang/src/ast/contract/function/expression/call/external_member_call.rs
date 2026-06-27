@@ -190,7 +190,7 @@ impl ExternalMemberCall {
             Definition::StateVariable(state_variable) => {
                 let Some((parameter_types, return_types)) = state_variable.getter_signature(builder)
                 else {
-                    unreachable!("slang rejects a getter on a struct with no returnable members");
+                    unreachable!("a public accessor with no returnable members is invalid");
                 };
                 (
                     state_variable.compute_selector().expect("slang validated"),
