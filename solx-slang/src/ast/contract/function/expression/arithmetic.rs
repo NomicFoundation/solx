@@ -67,7 +67,9 @@ impl From<&ShiftExpression> for Operator {
     fn from(node: &ShiftExpression) -> Self {
         match node.operator() {
             ShiftExpressionOperator::GreaterThanGreaterThan(_) => Self::ShiftRight,
-            ShiftExpressionOperator::GreaterThanGreaterThanGreaterThan(_) => Self::ShiftRight,
+            ShiftExpressionOperator::GreaterThanGreaterThanGreaterThan(_) => {
+                unreachable!(">>> is not a valid Solidity operator")
+            }
             ShiftExpressionOperator::LessThanLessThan(_) => Self::ShiftLeft,
         }
     }
