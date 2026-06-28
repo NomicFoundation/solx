@@ -102,14 +102,21 @@ impl<'context, 'block> Pointer<'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> Self {
         let slot = Self::stack_slot(pointee, builder, block);
-        if pointee.is_string() {
-            let buffer = Value::malloc(pointee.into_mlir(), None, false, builder, block);
-            slot.store(buffer, builder, block);
-        } else if (pointee.is_array() || pointee.is_struct())
-            && matches!(pointee.data_location(), DataLocation::Memory)
-        {
-            let buffer = Value::malloc(pointee.into_mlir(), None, true, builder, block);
-            slot.store(buffer, builder, block);
+        if pointee.is_array() || pointee.is_struct() || pointee.is_string() {
+            let default = match pointee.data_location() {
+                DataLocation::CallData => Value::default_calldata(pointee, builder, block),
+                DataLocation::Storage | DataLocation::Transient => {
+                    Value::default_storage(pointee, builder, block)
+                }
+                // A memory string keeps an empty buffer; arrays/structs zero-fill.
+                DataLocation::Memory => {
+                    Value::malloc(pointee.into_mlir(), None, !pointee.is_string(), builder, block)
+                }
+                DataLocation::Stack | DataLocation::Immutable => {
+                    unreachable!("an aggregate default is in memory, storage, or calldata")
+                }
+            };
+            slot.store(default, builder, block);
         } else if !pointee.is_reference() {
             slot.store(Value::zero(pointee, builder, block), builder, block);
         }

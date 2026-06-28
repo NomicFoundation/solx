@@ -24,7 +24,9 @@ use crate::Type;
 use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ConvCastOperation;
+use crate::ods::sol::DefaultCallDataOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
+use crate::ods::sol::DefaultStorageOperation;
 use crate::ods::sol::EncodeOperation;
 use crate::ods::sol::ExtFuncAddrOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
@@ -236,6 +238,32 @@ impl<'context, 'block> Value<'context, 'block> {
                 .expect("sol.malloc produces one result")
                 .into(),
         )
+    }
+
+    /// `sol.default_storage` - the default value of a storage or transient aggregate.
+    pub fn default_storage(
+        r#type: Type<'context>,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            builder,
+            block,
+            DefaultStorageOperation.result(r#type.into_mlir())
+        ))
+    }
+
+    /// `sol.default_calldata` - the default value of a calldata aggregate.
+    pub fn default_calldata(
+        r#type: Type<'context>,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            builder,
+            block,
+            DefaultCallDataOperation.result(r#type.into_mlir())
+        ))
     }
 
     /// The default value of a return position reached without an explicit `return <value>`, keyed on the Slang type.
