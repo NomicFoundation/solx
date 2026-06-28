@@ -106,6 +106,11 @@ MlirType solxCreateFixedBytesType(MlirContext ctx, uint32_t size) {
     return wrap(mlir::sol::FixedBytesType::get(context, size));
 }
 
+MlirType solxCreateByteType(MlirContext ctx) {
+    auto *context = unwrap(ctx);
+    return wrap(mlir::sol::ByteType::get(context));
+}
+
 MlirType solxCreateArrayType(MlirContext ctx, int64_t size, MlirType elementType,
                              uint32_t dataLocation) {
     if (dataLocation > 5) abort();

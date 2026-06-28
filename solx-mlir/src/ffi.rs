@@ -115,6 +115,9 @@ unsafe extern "C" {
     /// Creates a `sol::FixedBytesType` of the given byte width.
     pub fn solxCreateFixedBytesType(context: MlirContext, size: u32) -> mlir_sys::MlirType;
 
+    /// Creates the single `sol::ByteType` (the `bytes`/`string` element).
+    pub fn solxCreateByteType(context: MlirContext) -> mlir_sys::MlirType;
+
     /// Creates a `sol::ArrayType` with the given size, element type, and data
     /// location. `size = -1` denotes a dynamic array.
     pub fn solxCreateArrayType(

@@ -140,6 +140,11 @@ impl<'context> Type<'context> {
         })
     }
 
+    /// The single `sol::ByteType` (the `bytes`/`string` element type).
+    pub fn byte(context: &'context melior::Context) -> Self {
+        Self::new(unsafe { MlirType::from_raw(crate::ffi::solxCreateByteType(context.to_raw())) })
+    }
+
     /// A `sol::ArrayType` of `element_type` at `location`.
     pub fn array(
         context: &'context melior::Context,

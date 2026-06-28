@@ -205,7 +205,7 @@ impl<'context> Type<'context> {
                 array_type.location(),
             ),
             SlangType::Bytes(bytes_type) => (
-                Type::fixed_bytes(builder.context, 1).into_mlir(),
+                Type::byte(builder.context).into_mlir(),
                 bytes_type.location(),
             ),
             other => unreachable!(
