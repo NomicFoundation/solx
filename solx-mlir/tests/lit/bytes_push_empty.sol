@@ -20,6 +20,9 @@ contract C {
     }
 }
 
+// FIX: solx and solc must emit the same bytecode
+// FIX: all CHECK statements must live above Solidity code
+
 // CHECK-SOLX: sol.func @{{.*pushEmptyByte.*}}
 // CHECK-SOLX:   %[[B:.*]] = sol.addr_of @{{.*data.*}} : !sol.string<Storage>
 // CHECK-SOLX:   %{{.*}} = sol.push %[[B]] : !sol.string<Storage> -> !sol.ptr<!sol.fixedbytes<1>, Storage>

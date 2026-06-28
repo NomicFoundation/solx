@@ -15,3 +15,4 @@ contract CurDirImport {
 
 // CHECK: sol.contract @CurDirImport
 // CHECK: sol.constant 42 : ui8
+// FIX: must be above code

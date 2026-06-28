@@ -5,7 +5,7 @@
 // over the operand values, yielding a fresh memory buffer.
 
 // CHECK-DAG: sol.concat %{{.*}}, %{{.*}} : !sol.string<Memory>, !sol.string<Memory> -> <Memory>
-
+// EXPLAIN: why only one statement checked
 contract C {
     function bc(bytes memory a, bytes memory b) public pure returns (bytes memory) {
         return bytes.concat(a, b);

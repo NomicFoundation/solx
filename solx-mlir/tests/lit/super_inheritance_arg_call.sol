@@ -21,6 +21,7 @@
 // CHECK-SOLX: sol.func @{{.*val.*}}() -> ui256
 // CHECK-SOLX:   sol.constant 7 : ui8
 
+// FIX: looks like these name checks can be relaxed so we collapse SOLX and SOLC?
 // CHECK-SOLC: sol.contract @{{.*Derived.*}}
 // CHECK-SOLC: sol.func @{{.*val.*}}() -> ui256
 // CHECK-SOLC:   sol.constant 7 : ui8

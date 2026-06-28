@@ -7,7 +7,7 @@
 // ABI-encoded into the call). solx-only: solc's MLIR frontend NYIs on an attached-library member call
 // over `bytes` (SolidityToMLIR.cpp:1698), so there is no print-init parity reference; the runtime
 // behaviour is corpus-validated (libraries/attached_public_library_function_returning_calldata).
-
+// FIX: remove all references to solc, solx-solidity repo, and SolidityToMLIR or its other files
 library D {
     function f(bytes calldata _x) public pure returns (bytes calldata) { return _x; }
 }

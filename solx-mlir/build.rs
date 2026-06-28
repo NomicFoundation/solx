@@ -46,21 +46,21 @@ fn main() {
     }
 
     // Compile stub definitions for the six MLIR ExecutionEngine C API symbols
-    // that melior references unconditionally. See mlir_execution_engine_stubs.c
+    // that melior references unconditionally. See execution_engine_link_stubs.c
     // for the full explanation.
-    println!("cargo:rerun-if-changed=mlir_execution_engine_stubs.c");
+    println!("cargo:rerun-if-changed=execution_engine_link_stubs.c");
     cc::Build::new()
-        .file("mlir_execution_engine_stubs.c")
-        .compile("mlir_execution_engine_stubs");
+        .file("execution_engine_link_stubs.c")
+        .compile("execution_engine_link_stubs");
 
     // Compile C++ wrappers for Sol dialect attribute creation.
     // The Sol C API does not expose ContractKindAttr/StateMutabilityAttr
     // constructors, so we provide thin extern "C" wrappers.
-    println!("cargo:rerun-if-changed=sol_attr_stubs.cpp");
+    println!("cargo:rerun-if-changed=sol_capi_ext.cpp");
     cc::Build::new()
         .cpp(true)
-        .file("sol_attr_stubs.cpp")
+        .file("sol_capi_ext.cpp")
         .include(&include_path)
         .flag("-std=c++17")
-        .compile("sol_attr_stubs");
+        .compile("sol_capi_ext");
 }

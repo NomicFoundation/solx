@@ -5,6 +5,7 @@
 // form of sol.require carrying the error's canonical signature and arguments,
 // exactly as `revert CustomError(args)` does. solx and solc agree.
 
+// FIX: merge CHECK sequences and comments into their own blocks
 // CHECK: sol.require {{.*}} "MyError(uint256)"({{.*}}) {{{.*}}call
 
 // The error operand may also be a member access (an error declared in a library,

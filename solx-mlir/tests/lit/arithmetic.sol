@@ -113,6 +113,6 @@ contract C {
     }
 
     function signed_shr(int256 a, uint256 b) public pure returns (int256) {
-        return a >> b;
+        return a >> b; // EXPLAIN: why bitwise operator here
     }
 }

@@ -29,7 +29,7 @@
 // CHECK-SOLC: sol.func @{{.*delMemArr.*}}
 // CHECK-SOLC: sol.malloc zero_init : {{.*}}!sol.array<? x ui256, Memory>
 // CHECK-SOLC: sol.store %{{[0-9]+}}, %{{[0-9]+}} : !sol.array<? x ui256, Memory>
-
+// EXPLAIN: can the two below be just re-ordered?
 contract C {
     function delStr() public pure {
         string memory s = "hello";

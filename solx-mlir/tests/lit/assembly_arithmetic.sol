@@ -43,7 +43,7 @@ contract C {
 
     function bits(uint256 a, uint256 b) public pure returns (uint256 r) {
         assembly {
-            r := and(a, b)
+            r := and(a, b) // EXPLAIN: how are these arithmetic?
             r := or(r, a)
             r := xor(r, b)
             r := not(r)
@@ -56,7 +56,7 @@ contract C {
         assembly {
             r := sdiv(a, b)
             r := smod(a, b)
-            r := sar(a, r)
+            r := sar(a, r) // EXPLAIN: are these last 5 still arithmetic
             r := byte(a, r)
             r := signextend(a, r)
             r := addmod(a, b, r)

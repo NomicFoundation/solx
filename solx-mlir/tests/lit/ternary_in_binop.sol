@@ -18,6 +18,7 @@
 // CHECK: %[[L:.*]] = sol.load %[[SLOT]] : !sol.ptr<ui256, Stack>, ui256
 // CHECK: sol.cadd %[[L]], %{{.*}} : ui256
 
+// FIX: rename the function to something nice
 contract C {
     function inbin(bool c, uint256 a, uint256 b) public pure returns (uint256) {
         return (c ? a : b) + 10;

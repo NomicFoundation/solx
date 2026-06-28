@@ -14,11 +14,5 @@ config.environment["PATH"] = os.pathsep.join(
     [solx_bin_dir, solc_bin_dir, os.environ.get("PATH", "")]
 )
 
-# Propagate the coverage profile path so each solx invocation spawned by lit
-# writes its own .profraw file (used for LIT-only coverage measurement). No-op
-# when LLVM_PROFILE_FILE is unset, i.e. for ordinary non-instrumented runs.
-if os.environ.get("LLVM_PROFILE_FILE"):
-    config.environment["LLVM_PROFILE_FILE"] = os.environ["LLVM_PROFILE_FILE"]
-
 config.test_source_root = config_dir
 config.test_exec_root = os.path.join(config_dir, "Output")

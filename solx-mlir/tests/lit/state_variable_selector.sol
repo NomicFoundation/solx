@@ -8,6 +8,8 @@
 // its side effects first (a `sol.this`), while solc emits the constant directly, so
 // the prefixes are split to allow the extra `sol.this` on the solx side.
 
+// EXPLAIN: why solx is different, looks important to me
+
 // CHECK-SOLX: sol.func @{{.*s.*}}() -> !sol.fixedbytes<4>
 // CHECK-SOLX:   sol.this : !sol.contract<"C">
 // CHECK-SOLX:   sol.constant 1067774533 : ui32

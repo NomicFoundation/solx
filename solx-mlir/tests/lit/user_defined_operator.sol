@@ -22,6 +22,7 @@ function neg(T a) pure returns (T) { return T.wrap(0 - T.unwrap(a)); }
 using {add as +, sub as -, mul as *, div as /, rem as %, band as &, bor as |, bxor as ^, bnot as ~, neg as -} for T global;
 
 contract C {
+    // FIX: mess, must be hoisted above
     // CHECK-DAG: sol.func @{{.*binary_add.*}}
     // CHECK-DAG:   sol.call @{{.*add.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
     function binary_add(T a, T b) public pure returns (T) { return a + b; }

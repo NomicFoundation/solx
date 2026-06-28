@@ -13,7 +13,7 @@
 // CHECK: %[[V:.*]] = sol.cast %{{.*}} : ui8 to ui256
 // CHECK-SOLX: sol.ext_icall %{{.*}}() gas %[[G]] value %[[V]] : !sol.ext_func_ref<() -> ui256>, () -> (i1, ui256)
 // CHECK-SOLC: sol.ext_call "{{.*}}"() at %{{.*}} gas %[[G]] value %[[V]] selector %{{.*}} {callee_type = () -> ui256} : !sol.address, () -> (i1, ui256)
-
+// FIX: must be same for solx and solc
 interface I {
     function f() external payable returns (uint256);
 }

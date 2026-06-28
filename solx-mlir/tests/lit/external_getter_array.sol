@@ -17,7 +17,7 @@
 // CHECK-SOLC: %[[A:.*]] = sol.address_cast %[[T]] : !sol.contract<{{.*}}> to !sol.address
 // CHECK-SOLC: %[[I:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
 // CHECK-SOLC: sol.ext_call "{{.*}}"(%[[I]]) at %[[A]] gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256{{.*}}} : !sol.address, (ui256) -> (i1, ui256)
-
+// EXPLAIN: why solc and solx different
 contract C {
     uint256[] public arr;
 

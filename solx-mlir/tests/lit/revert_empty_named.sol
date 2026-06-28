@@ -5,6 +5,8 @@
 // and lowers to a no-data revert, matching solc.
 // CHECK: sol.revert ""
 
+// FIX: can be merged intol revert.sol ?
+
 contract C {
     function f(bool b) external pure {
         if (b) revert({});

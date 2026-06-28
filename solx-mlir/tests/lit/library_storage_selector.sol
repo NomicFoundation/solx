@@ -13,3 +13,4 @@ library L {
 
 // CHECK-DAG: sol.func @{{.*}}(%{{.*}}: !sol.array<? x ui256, Storage>) -> ui256 {{.*}}selector = -960505452
 // CHECK-DAG: sol.func @{{.*}}(%{{.*}}: !sol.array<? x ui256, Memory>) -> ui256 {{.*}}selector = 1088207624
+// FIX: above code

@@ -28,6 +28,7 @@
 contract A {
     function base() internal pure virtual returns (uint256) { return 1; }
 }
+// FIX: need spacing between these for sure
 contract B is A {
     function fromB() internal pure returns (uint256) { return A.base() + 10; }
 }

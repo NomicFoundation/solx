@@ -10,6 +10,7 @@
 // definitions to a later pass, so there is no comparable definition in its module output. The runtime
 // behaviour is corpus-validated (operators/userDefined/operator_making_{view,pure}_external_call).
 
+// FIX: this does not look good without any spacing between declarations
 type T is int32;
 using {add as +} for T global;
 function helper(T x) pure returns (T) { return x; }

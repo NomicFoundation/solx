@@ -24,6 +24,8 @@
 // CHECK-SOLC: sol.func @{{.*shr.*}}
 // CHECK-SOLC: sol.shr %{{[0-9]+}}, %{{[0-9]+}} : !sol.fixedbytes<4>, ui8
 
+// EXPLAIN: why different solc solx
+
 contract C {
     function shl(bytes4 a, uint8 n) public pure returns (bytes4) { return a << n; }
     function shr(bytes4 a, uint8 n) public pure returns (bytes4) { return a >> n; }
