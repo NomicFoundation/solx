@@ -20,6 +20,15 @@
 // CHECK: yul.shl
 // CHECK: yul.shr
 
+// CHECK: sol.func @{{.*signed.*}}
+// CHECK: yul.sdiv
+// CHECK: yul.smod
+// CHECK: yul.sar
+// CHECK: yul.byte
+// CHECK: yul.signextend
+// CHECK: yul.addmod
+// CHECK: yul.mulmod
+
 contract C {
     function arith(uint256 a, uint256 b) public pure returns (uint256 r) {
         assembly {
@@ -40,6 +49,18 @@ contract C {
             r := not(r)
             r := shl(a, r)
             r := shr(b, r)
+        }
+    }
+
+    function signed(uint256 a, uint256 b) public pure returns (uint256 r) {
+        assembly {
+            r := sdiv(a, b)
+            r := smod(a, b)
+            r := sar(a, r)
+            r := byte(a, r)
+            r := signextend(a, r)
+            r := addmod(a, b, r)
+            r := mulmod(a, b, r)
         }
     }
 }

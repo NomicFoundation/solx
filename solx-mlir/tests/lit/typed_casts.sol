@@ -20,6 +20,15 @@
 // CHECK-DAG: sol.func @{{.*to_enum.*}}
 // CHECK-DAG: sol.enum_cast %{{.*}} : ui8 to !sol.enum<2>
 
+// CHECK-DAG: sol.func @{{.*bytes_to_int.*}}
+// CHECK-DAG: sol.bytes_cast %{{.*}} : !sol.fixedbytes<32> to ui256
+
+// CHECK-DAG: sol.func @{{.*bytes4_to_int.*}}
+// CHECK-DAG: sol.bytes_cast %{{.*}} : !sol.fixedbytes<4> to ui32
+
+// CHECK-DAG: sol.func @{{.*widen_bytes.*}}
+// CHECK-DAG: sol.bytes_cast %{{.*}} : !sol.fixedbytes<1> to !sol.fixedbytes<4>
+
 contract C {
     enum E {
         A,
@@ -33,6 +42,18 @@ contract C {
 
     function narrow_bytes(bytes32 x) public pure returns (bytes16) {
         return bytes16(x);
+    }
+
+    function bytes_to_int(bytes32 x) public pure returns (uint256) {
+        return uint256(x);
+    }
+
+    function bytes4_to_int(bytes4 x) public pure returns (uint32) {
+        return uint32(x);
+    }
+
+    function widen_bytes(bytes1 x) public pure returns (bytes4) {
+        return bytes4(x);
     }
 
     function to_address(uint160 x) public pure returns (address) {

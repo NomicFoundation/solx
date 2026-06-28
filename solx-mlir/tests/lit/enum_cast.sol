@@ -12,6 +12,12 @@
 // CHECK-DAG: sol.func @{{.*toUint.*}}(%{{.*}}: !sol.enum<2>) -> ui8
 // CHECK-DAG:   sol.enum_cast %{{.*}} : !sol.enum<2> to ui8
 
+// Converting an enum to a wider integer casts to the ui8 partner first, then a
+// plain integer sol.cast widens ui8 to ui256.
+// CHECK-DAG: sol.func @{{.*toWide.*}}(%{{.*}}: !sol.enum<2>) -> ui256
+// CHECK-DAG:   sol.enum_cast %{{.*}} : !sol.enum<2> to ui8
+// CHECK-DAG:   sol.cast %{{.*}} : ui8 to ui256
+
 contract C {
     enum Color { Red, Green, Blue }
 
@@ -21,5 +27,9 @@ contract C {
 
     function fromUint(uint8 v) public pure returns (Color) {
         return Color(v);
+    }
+
+    function toWide(Color a) public pure returns (uint256) {
+        return uint256(uint8(a));
     }
 }

@@ -24,6 +24,18 @@
 // CHECK-DAG: case 2 {
 // CHECK-DAG: default {
 
+// A switch with no source default still lowers to yul.switch with a synthesized
+// empty default region; nested plain blocks are flattened into the body.
+// CHECK-DAG: sol.func @{{.*no_default.*}}
+// CHECK-DAG: yul.switch
+// CHECK-DAG: case 1 {
+// CHECK-DAG: case 2 {
+// CHECK-DAG: default {
+
+// CHECK-DAG: sol.func @{{.*nested.*}}
+// CHECK-DAG: yul.add
+// CHECK-DAG: yul.mul
+
 contract C {
     function loop(uint256 n) public pure returns (uint256 r) {
         assembly {
@@ -41,6 +53,24 @@ contract C {
             case 1 { r := 100 }
             case 2 { r := 200 }
             default { r := 300 }
+        }
+    }
+
+    function no_default(uint256 n) public pure returns (uint256 r) {
+        assembly {
+            switch n
+            case 1 { r := 10 }
+            case 2 { r := 20 }
+        }
+    }
+
+    function nested(uint256 a) public pure returns (uint256 r) {
+        assembly {
+            let x := a
+            {
+                let y := add(x, 1)
+                { let z := mul(y, 2) r := z }
+            }
         }
     }
 }
