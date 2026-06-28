@@ -1,13 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Auto-generated getters for reference-type scalar state vars (`bytes`, `string`)
-// return a Memory copy of the storage value via `sol.data_loc_cast`, matching solc
-// (the external ABI returns reference types in memory, not their declared storage
-// location). solx names them `data()` / `name()`, solc `get_data_<id>` /
-// `get_name_<id>`, and the mutability annotation differs (#View vs #NonPayable);
-// the getter bodies are otherwise identical, so the checks are shared.
-
 // CHECK: sol.func @{{.*data.*}}() -> !sol.string<Memory> attributes {{.*}}selector = 1943314746 : i32
 // CHECK:   %[[P:.*]] = sol.addr_of @{{.*data.*}} : !sol.string<Storage>
 // CHECK:   %[[C:.*]] = sol.data_loc_cast %[[P]] : !sol.string<Storage>, !sol.string<Memory>

@@ -1,10 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// A public getter over a struct with a nested-struct member flattens the struct
-// into one return value per kept member; the nested struct is returned whole as
-// its memory ABI tuple via `sol.data_loc_cast`.
-
 // CHECK: sol.func @{{.*}}() -> (ui256, !sol.struct<(ui256), Memory>)
 // CHECK:   %[[BASE:.*]] = sol.addr_of @{{.*}} : !sol.struct<(ui256, !sol.struct<(ui256), Storage>), Storage>
 // CHECK:   %[[SCALAR:.*]] = sol.gep %[[BASE]], {{.*}} : !sol.struct<(ui256, !sol.struct<(ui256), Storage>), Storage>, ui64, !sol.ptr<ui256, Storage>

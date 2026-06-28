@@ -1,26 +1,20 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck %s --check-prefixes=CHECK,CHECK-SOLX
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s --check-prefixes=CHECK,CHECK-SOLC
 
-// Call options `{value: …}` / `{salt: …}` thread into the call / create op as
-// explicit operands: an external call forwards the value as `msg.value`, a
-// low-level `addr.call` likewise, and `new C{value, salt}` forwards the value
-// and selects CREATE2 with the salt. solx-only: solx builds the external typed
-// call as `sol.ext_icall` (via `sol.ext_func_constant`) where solc emits a
-// symbol-callee `sol.ext_call`, so the op names differ; the value/salt operand
-// wiring is identical. (The `{gas: …}` option is not yet threaded.)
+// Call options thread `{value: ...}` / `{salt: ...}` into the call / create op as explicit operands.
+// An external call and a low-level `addr.call` forward the value as msg.value; `new C{value, salt}`
+// forwards the value and selects CREATE2 via the salt. The value and salt operand wiring is identical
+// between the backends. Only the external typed call differs: solx emits `sol.ext_func_constant` plus
+// `sol.ext_icall` over an ext_func_ref callee, while solc emits a symbol-callee `sol.ext_call` carrying
+// an explicit selector operand. CHECK-SOLX pins the solx form and CHECK-SOLC the solc form. The two
+// backends emit the functions in different orders, so the block matches order-independently.
 
-// Functions emit in the order solx walks them (alphabetical by symbol), so the
-// CHECK-LABEL blocks follow that order.
-// CHECK-LABEL: sol.func @{{.*}}bare_value
-// CHECK: sol.bare_call {{.*}} value %{{[0-9]+}} input
-
-// CHECK-LABEL: sol.func @{{.*}}create_salt_only
-// CHECK: sol.new "Created" value = %c0_ui256 salt = %{{[0-9]+}} ctor
-
-// CHECK-LABEL: sol.func @{{.*}}create_value_salt
-// CHECK: sol.new "Created" value = %{{[0-9]+}} salt = %{{[0-9]+}} ctor
-
-// CHECK-LABEL: sol.func @{{.*}}external_value
-// CHECK: sol.ext_icall {{.*}} value %{{[0-9]+}}
+// CHECK-SOLX-DAG: sol.ext_func_constant %{{.*}} {selector = {{.*}}} : !sol.address -> !sol.ext_func_ref
+// CHECK-SOLX-DAG: sol.ext_icall %{{.*}} gas %{{.*}} value %{{.*}}
+// CHECK-SOLC-DAG: sol.ext_call "{{.*}}"({{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector
+// CHECK-DAG: sol.bare_call %{{.*}} gas %{{.*}} value %{{.*}} input
+// CHECK-DAG: sol.new "{{.*}}" value = %{{[0-9]+}} salt = %{{.*}} ctor()
+// CHECK-DAG: sol.new "{{.*}}" value = %c0_ui256 salt = %{{.*}} ctor()
 
 pragma solidity ^0.8.0;
 

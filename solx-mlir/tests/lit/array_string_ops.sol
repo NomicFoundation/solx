@@ -1,9 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Order-independent (solx walks functions alphabetically, solc in source order).
-// `pushValue` appends and stores; `pushEmpty` appends a default and is the only
-// other push, so the module carries exactly two pushes and a single store.
 // CHECK-DAG: sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
 // CHECK-DAG: sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
 // CHECK-DAG: sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>

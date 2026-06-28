@@ -1,12 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Named-argument calls `f({y: .., x: ..})` and `S({b: .., a: ..})` are reordered
-// into the callee's parameter / struct-member declaration order before
-// evaluation — bound by slang's typed resolution, never by name strings. The
-// disordered call below evaluates x (10) before y (3), i.e. parameter order, and
-// passes them positionally to the call.
-
 // CHECK: sol.func @{{.*disordered.*}}
 // CHECK: sol.constant 10
 // CHECK: sol.constant 3

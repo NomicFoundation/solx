@@ -1,10 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// A public keyed getter over an array of structs whose only member is a nested
-// struct: the array index resolves an element place, then the terminal struct is
-// returned whole as its memory ABI tuple via `sol.data_loc_cast`.
-
 // CHECK: sol.func @{{.*}}(%arg0: ui256) -> !sol.struct<(ui256), Memory>
 // CHECK:   %[[A:.*]] = sol.addr_of @{{.*}} : !sol.array<? x !sol.struct<(!sol.struct<(ui256), Storage>), Storage>, Storage>
 // CHECK:   %[[ELT:.*]] = sol.gep %[[A]], %arg0 {{.*}}: !sol.array<? x !sol.struct<(!sol.struct<(ui256), Storage>), Storage>, Storage>, ui256, !sol.struct<(!sol.struct<(ui256), Storage>), Storage>

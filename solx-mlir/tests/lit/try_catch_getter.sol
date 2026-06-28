@@ -1,10 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// A `try` over a public state-variable getter (`t.totalSupply()`) resolves the
-// member to the generated getter and lowers to a `sol.try`, the same as a `try`
-// over a declared external function.
-
 // CHECK: try_call
 // CHECK: sol.try
 // CHECK: error {

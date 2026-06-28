@@ -1,14 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// An interface (IShape.area) and an abstract contract (Base.name) declare
-// body-less virtual functions; only the concrete `Square` supplies bodies.
-// Both backends emit the implemented `area`/`name` only inside @Square, in the
-// same order (alphabetical for solx, source order for solc both yield area,
-// name). The state_var slot/offset and selectors are identical across backends;
-// only the function symbol names carry the solc node-id suffix, matched by regex.
-// cmul operands are commuted between backends, so the operands are left unpinned.
-
 // CHECK: sol.contract @{{.*Square.*}}
 // CHECK:   sol.state_var @{{.*side.*}} slot 0 offset 0 : ui256
 // CHECK:   sol.func @{{.*area.*}}() -> ui256 attributes {{.*}}selector = 1296140591

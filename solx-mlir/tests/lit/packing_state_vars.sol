@@ -1,13 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Five sub-32-byte state vars pack into slot 0 at distinct byte offsets:
-// uint8 @0, uint16 @1, bool @3, address @4, bytes4 @24. Both backends compute
-// identical slot/offset assignments. Reads are addr_of -> load; writes are
-// addr_of + load(stack) + store, but solx emits load-before-addr_of while solc
-// emits addr_of-before-load, so the write ops are pinned with CHECK-DAG.
-// Function source order matches the alphabetical walk, so a single block works.
-
 // CHECK-DAG: sol.state_var @{{.*a.*}} slot 0 offset 0 : ui8
 // CHECK-DAG: sol.state_var @{{.*b.*}} slot 0 offset 1 : ui16
 // CHECK-DAG: sol.state_var @{{.*c.*}} slot 0 offset 3 : i1

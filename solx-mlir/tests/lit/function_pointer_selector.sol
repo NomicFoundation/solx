@@ -1,14 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// Function-pointer `.selector` / `.address` and error / event `.selector`.
-// solx-only: solc's MLIR frontend aborts (NYI, SolidityToMLIR.cpp:1518) on every
-// direct `.selector` / `.address` member access, so there is no solc RUN line to
-// cross-check. A statically-named function / error / event selector folds to a
-// compile-time constant bridged to fixedbytes; an external function-pointer
-// VALUE pulls its selector / address at runtime via the native Sol ops.
-
-// Functions emit alphabetically by symbol, so the CHECK-LABEL blocks follow
-// that order (error_selector, event_selector, named_selector, …).
 // CHECK-LABEL: sol.func @{{.*}}error_selector
 // CHECK: sol.constant {{.*}} : ui32
 // CHECK: sol.bytes_cast {{.*}} to !sol.fixedbytes<4>
@@ -25,7 +16,6 @@
 // CHECK-DAG: sol.ext_func_selector {{.*}} -> !sol.fixedbytes<4>
 // CHECK-DAG: sol.ext_func_addr {{.*}} -> !sol.address
 
-// `this.bar` used as a value (not called) is an external function pointer.
 // CHECK-LABEL: sol.func @{{.*}}pointer_value
 // CHECK: sol.ext_func_constant {{.*}} -> !sol.ext_func_ref<() -> ui256>
 

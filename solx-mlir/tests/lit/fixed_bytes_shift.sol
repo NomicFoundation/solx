@@ -5,9 +5,9 @@
 // in solx's emitter, so a fixed-bytes operand is bridged through `ui(8*N)`:
 // the shifted value is `bytes_cast` to the integer, the shift amount cast to
 // the same width, the integer `sol.shl` / `sol.shr` applied, and the result
-// `bytes_cast` back to `bytesN`. solc's nascent MLIR backend instead keeps
-// `sol.shl` / `sol.shr` directly on `!sol.fixedbytes<N>`; behavioural parity is
-// covered by the tester, so the bridge vs direct-op shape is checked per-tool.
+// `bytes_cast` back to `bytesN`. solc instead keeps `sol.shl` / `sol.shr`
+// directly on `!sol.fixedbytes<N>`, so the bridge vs direct-op shape is checked
+// per-backend.
 
 // CHECK-SOLX: sol.func @{{.*shl.*}}
 // CHECK-SOLX: %[[V:.*]] = sol.bytes_cast %{{[0-9]+}} : !sol.fixedbytes<4> to ui32
@@ -23,8 +23,6 @@
 // CHECK-SOLC: sol.shl %{{[0-9]+}}, %{{[0-9]+}} : !sol.fixedbytes<4>, ui8
 // CHECK-SOLC: sol.func @{{.*shr.*}}
 // CHECK-SOLC: sol.shr %{{[0-9]+}}, %{{[0-9]+}} : !sol.fixedbytes<4>, ui8
-
-// EXPLAIN: why different solc solx
 
 contract C {
     function shl(bytes4 a, uint8 n) public pure returns (bytes4) { return a << n; }

@@ -4,7 +4,7 @@
 // Short-circuit &&: alloca a result slot, seed it, conditionally store b in the
 // then-branch, then load and return (both compilers seed with `sol.constant
 // false`). ||: same shape with the conditional store in the else-branch, and the
-// seed differs — solc stores the loaded `a`, solx stores `sol.constant true`.
+// seed differs - solc stores the loaded `a`, solx stores `sol.constant true`.
 // solx walks functions alphabetically and solc in source order, so each
 // backend's CHECK sequence follows its own function order.
 

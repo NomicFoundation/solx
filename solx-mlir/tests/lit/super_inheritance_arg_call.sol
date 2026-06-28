@@ -2,15 +2,13 @@
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s --check-prefix=CHECK-SOLC
 
 // A base-qualified internal call placed in an inheritance-specifier argument
-// (`contract Derived is Lib, Base(Lib.val())`) — a call that lives in no function
-// body. The super/C3 precompute pass collects it from the inheritance specifier so
-// it still gets a redirect, and the synthesised @Derived constructor evaluates it.
+// (`contract Derived is Lib, Base(Lib.val())`) - a call that lives in no function
+// body; the synthesised @Derived constructor evaluates it.
 //
 // Backends diverge on how base-constructor arguments are threaded at this stage:
 // solx materialises the `Lib.val()` call inside the @Derived constructor and passes
-// its result to the inherited base constructor, while solc's `print-init` dump
-// emits the base-constructor body and the `val` helper but defers wiring the
-// argument to a later lowering. Both still copy the `val` helper (constant 7) into
+// its result to the inherited base constructor, while solc emits the base-constructor
+// body and the `val` helper but defers wiring the argument to a later lowering. Both still copy the `val` helper (constant 7) into
 // the concrete contract, so the prefixes are split to reflect that divergence.
 
 // CHECK-SOLX: sol.contract @{{.*Derived.*}}
@@ -21,7 +19,6 @@
 // CHECK-SOLX: sol.func @{{.*val.*}}() -> ui256
 // CHECK-SOLX:   sol.constant 7 : ui8
 
-// FIX: looks like these name checks can be relaxed so we collapse SOLX and SOLC?
 // CHECK-SOLC: sol.contract @{{.*Derived.*}}
 // CHECK-SOLC: sol.func @{{.*val.*}}() -> ui256
 // CHECK-SOLC:   sol.constant 7 : ui8

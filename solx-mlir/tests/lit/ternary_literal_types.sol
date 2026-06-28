@@ -1,13 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Ternary with mixed literal branches: the slot adopts the common literal type
-// (ui8), the join loads it and casts to the declared ui256 return type. A string
-// ternary routes each branch through the memory representation (sol.string_lit
-// stored into a !sol.string<Memory> slot). solx walks alphabetically (lits, pick),
-// solc in source order (lits, pick) — same order, so plain CHECK-LABEL blocks work.
-// Symbols carry a solc node-id suffix (regex).
-
 // CHECK-LABEL: sol.func @{{.*lits.*}}(%{{.*}}: i1) -> ui256
 // CHECK: %[[S:.*]] = sol.alloca : !sol.ptr<ui8, Stack>
 // CHECK: sol.if %{{.*}} {

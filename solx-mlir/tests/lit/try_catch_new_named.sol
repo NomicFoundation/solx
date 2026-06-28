@@ -1,10 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// A `try new D({...})` with named constructor arguments reorders them and lowers
-// to a `sol.try` over the creation; the named-argument shape no longer bypasses
-// try/catch.
-
 // CHECK: sol.new
 // CHECK: sol.try
 // CHECK: fallback {

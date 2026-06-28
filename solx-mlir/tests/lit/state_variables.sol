@@ -4,18 +4,15 @@
 // CHECK-DAG: sol.state_var @{{.*}} slot 0 offset 0 : ui256
 // CHECK-DAG: sol.state_var @{{.*}} slot 1 offset 0 : ui256
 
-// Read: addr_of -> load -> return
 // CHECK: sol.func @{{.*get_x.*}}
 // CHECK:   %[[PTR:.*]] = sol.addr_of @{{.*}} : !sol.ptr<ui256, Storage>
 // CHECK:   sol.load %[[PTR]] : !sol.ptr<ui256, Storage>, ui256
 // CHECK:   sol.return
 
-// Write: addr_of -> store
 // CHECK: sol.func @{{.*set_x.*}}
 // CHECK:   %[[PTR:.*]] = sol.addr_of @{{.*}} : !sol.ptr<ui256, Storage>
 // CHECK:   sol.store %{{.*}}, %[[PTR]] : ui256, !sol.ptr<ui256, Storage>
 
-// Swap: touches both state vars
 // CHECK: sol.func @{{.*swap.*}}
 // CHECK-DAG: sol.addr_of
 // CHECK-DAG: sol.store

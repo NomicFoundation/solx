@@ -1,7 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// solc --mlir-action=print-init crashes on this valid modifier shape.
-
 // CHECK: sol.func @{{.*}}f{{.*}}() -> ui256
 // CHECK: sol.modifier_call_blk
 // CHECK: sol.call @{{.*stop.*}}() : () -> ()

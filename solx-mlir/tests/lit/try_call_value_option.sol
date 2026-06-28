@@ -1,7 +1,7 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s --check-prefix=CHECK-SOLX
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s --check-prefix=CHECK-SOLC
 
-// A `try recv.f{value: v}(args)` external call captures the `{value: …}` option
+// A `try recv.f{value: v}(args)` external call captures the `{value: ...}` option
 // (via the call-options layer over the member access) and forwards it as the
 // call's `value` operand, while the `try` flag routes failure to the catch
 // regions instead of reverting. Both backends fold the `{value: 1}` operand and

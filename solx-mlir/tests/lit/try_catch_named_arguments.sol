@@ -1,10 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// A `try` over an external call with named arguments reorders them into
-// declaration order and lowers to a `sol.try`; the named-argument shape no
-// longer bypasses try/catch.
-
 // CHECK: try_call
 // CHECK: sol.try
 // CHECK: fallback {

@@ -1,12 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// A nested ternary lowers to nested sol.if regions, each writing a stack slot read
-// after the if. The outer slot is written by the inner ternary's loaded result in
-// the then-branch and by `d` in the else-branch. Both backends emit byte-identical
-// op structure; the symbol name carries a solc node-id suffix (regex). One function
-// keeps the CHECK-LABEL order stable across the alphabetical/source-order walk.
-
 // CHECK-LABEL: sol.func @{{.*nested.*}}(%{{.*}}: i1, %{{.*}}: i1, %{{.*}}: ui256, %{{.*}}: ui256, %{{.*}}: ui256) -> ui256
 // CHECK: sol.if %{{.*}} {
 // CHECK:   sol.if %{{.*}} {

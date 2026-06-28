@@ -1,10 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Environment / block-context and account-info Yul opcodes each lower to their
-// own nullary/unary Yul-dialect op (rule 16). `blobbasefee` is intentionally
-// excluded: solx does not yet implement YulBlobbasefee (see divergences).
-
 // CHECK: sol.func @{{.*f.*}}
 // CHECK: yul.caller
 // CHECK: yul.origin

@@ -1,13 +1,9 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Named constructor arguments on `new C({...})` are reordered into the
-// constructor's declaration order (`{b: 99, a: 11}` -> `ctor(11, 99)`). solc
-// reorders identically; pinned solx-only because solc's emission diverges
-// benignly (mangled `"D_NN"` contract name).
-// FIX: add a new line everywhere between comments and CHECK sequences
 // CHECK: %[[A:.*]] = sol.cast %c11_ui8
 // CHECK: %[[B:.*]] = sol.cast %c99_ui8
-// CHECK: sol.new "D"{{.*}}ctor(%[[A]], %[[B]] :
+// CHECK: sol.new "D{{.*}}ctor(%[[A]], %[[B]] :
 
 contract D {
     uint256 x;

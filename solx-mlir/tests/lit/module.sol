@@ -1,10 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Comprehensive test - checks the full Sol dialect module structure.
-
-// FIX: let's rename it to module.sol so it's not a redundant name but indeed a module-wide test
-
 // CHECK:      module attributes {llvm.data_layout = "E-p:256:256-i256:256:256-S256-a:256:256", llvm.target_triple = "evm-unknown-unknown"
 // CHECK:        sol.contract @{{.*C.*}} {
 // CHECK-NEXT:     sol.func @{{.*}} attributes {{.*}}kind = #Constructor

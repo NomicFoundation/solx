@@ -1,12 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// A transient var coexists with a regular storage var. They live in distinct
-// address spaces (Transient vs Storage) with independent slot numbering: both
-// land at `slot 0 offset 0`. A read-modify-write of the transient var and a
-// copy into storage keep the address spaces straight. solx and solc agree on
-// the op set (ordering differs, so the body uses CHECK-DAG).
-
 // CHECK-DAG: sol.state_var @{{.*persistent.*}} slot 0 offset 0 : ui256
 // CHECK-DAG: sol.state_var @{{.*guard.*}} transient slot 0 offset 0 : ui256
 

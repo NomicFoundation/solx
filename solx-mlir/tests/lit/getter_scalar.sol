@@ -1,10 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Auto-generated public getters for scalar state vars. solx names the synthesized
-// getter `value()` / solc names it `get_value_<id>`, so match the name with regex.
-// Both pin the same ABI selector and the same body: addr_of -> load -> return.
-
 // CHECK: sol.func @{{.*value.*}}() -> ui256 attributes {{.*}}selector = 1067774533 : i32
 // CHECK:   %[[P:.*]] = sol.addr_of @{{.*value.*}} : !sol.ptr<ui256, Storage>
 // CHECK:   %[[V:.*]] = sol.load %[[P]] : !sol.ptr<ui256, Storage>, ui256

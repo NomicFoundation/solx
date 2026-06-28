@@ -1,12 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// A ternary whose branches are side-effecting calls: the selected call runs inside
-// its sol.if branch (only one side executes), its result stored into the shared
-// slot and loaded after the join. Callee symbols carry a solc node-id suffix
-// (regex). Pinned on the `se` function only, whose CHECK-LABEL anchors past the
-// inc/dec definitions regardless of the alphabetical vs source walk order.
-
 // CHECK-LABEL: sol.func @{{.*se.*}}(%{{.*}}: i1) -> ui256
 // CHECK: %[[SLOT:.*]] = sol.alloca : !sol.ptr<ui256, Stack>
 // CHECK: sol.if %{{.*}} {

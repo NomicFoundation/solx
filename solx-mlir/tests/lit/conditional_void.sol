@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// A void-typed conditional emits a single sol.if; each arm runs for effect, with
-// no result slot, no load, and an empty yield per region.
-
 // CHECK-LABEL: sol.func @"choose(bool)"
 // CHECK: sol.if %{{[0-9]+}} {
 // CHECK-NEXT: sol.call @"a()"() : () -> ()

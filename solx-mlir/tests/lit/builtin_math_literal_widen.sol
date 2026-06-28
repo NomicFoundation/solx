@@ -1,12 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// `addmod`/`mulmod` require `ui256` operands, so narrow literal arguments are
-// widened with `sol.cast` before the op. `ecrecover` coerces its literal hash /
-// r / s arguments through `sol.cast` then `sol.bytes_cast` to `fixedbytes<32>`.
-// The three functions emit in different orders (solx alphabetical, solc
-// source), so match the distinctive ops with CHECK-DAG.
-
 // CHECK-DAG: sol.cast %{{.*}} : ui8 to ui256
 // CHECK-DAG: sol.addmod %{{.*}}, %{{.*}}, %{{.*}} : ui256
 // CHECK-DAG: sol.mulmod %{{.*}}, %{{.*}}, %{{.*}} : ui256

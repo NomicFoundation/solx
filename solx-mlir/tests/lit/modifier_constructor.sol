@@ -1,11 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// A constructor modifier uses the same shape: the state-variable initializers run first, then one
-// `sol.modifier_call_blk` per modifier (its isolated block carrying the constructor's parameters),
-// then the constructor body inline. The constructor symbol diverges between backends, so it is
-// matched by `kind = #Constructor`.
-
 // CHECK: sol.func @{{.*}} attributes {{.*}}kind = #Constructor
 // CHECK: sol.modifier_call_blk {
 // CHECK-NEXT: ^bb0(%[[A:.*]]: ui256):
@@ -23,6 +18,7 @@ contract C {
         require(v > 0);
         _;
     }
+
     constructor(uint256 a) setup(a) {
         x = a;
     }

@@ -1,10 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// `immutable` state variables emit `sol.immutable` (a symbol, NOT a storage slot), are written in
-// the constructor through a `!sol.ptr<T, Immutable>` store, and read via `sol.load_immutable`. solx
-// and solc agree op-for-op; only symbol node-ids and SSA value names differ (matched by regex).
-
 // CHECK: sol.immutable @{{.*a.*}} : ui256
 // CHECK: sol.immutable @{{.*owner.*}} : !sol.address
 

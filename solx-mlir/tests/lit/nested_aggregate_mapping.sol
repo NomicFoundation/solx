@@ -1,11 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Nested mapping(address => mapping(uint => uint)): each index applies one
-// sol.map. The outer map yields an inner !sol.mapping value, the inner map
-// yields a !sol.ptr<ui256, Storage>. Both backends emit identical chains;
-// read/write are checked in the order both agree on (read then write).
-
 // CHECK: sol.state_var @{{.*balances.*}} slot 0 offset 0 : !sol.mapping<!sol.address, !sol.mapping<ui256, ui256>>
 
 // CHECK: sol.func {{.*}}read{{.*}}-> ui256

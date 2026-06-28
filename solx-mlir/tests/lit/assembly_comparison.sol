@@ -1,9 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Inline-assembly comparisons lower to `yul.cmp` with the matching predicate;
-// `iszero(x)` is `yul.cmp eq, x, 0`.
-
 // CHECK: sol.func @{{.*compare.*}}
 // CHECK: yul.cmp ult
 // CHECK: yul.cmp ugt

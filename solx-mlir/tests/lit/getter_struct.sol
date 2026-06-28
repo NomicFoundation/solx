@@ -1,11 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Auto-generated public getter for a struct state var: the synthesized getter
-// returns the value-type fields as a tuple. solx names it `origin()` / solc names
-// it `get_origin_<id>` (regex). Both pin the same selector and the identical body:
-// addr_of, then a gep/load per field, then a multi-value return.
-
 // CHECK-DAG: sol.state_var @{{.*origin.*}} slot 0 offset 0 : !sol.struct<(ui256, ui256), Storage>
 
 // CHECK: sol.func @{{.*origin.*}}() -> (ui256, ui256) attributes {{.*}}selector = -1819582670 : i32

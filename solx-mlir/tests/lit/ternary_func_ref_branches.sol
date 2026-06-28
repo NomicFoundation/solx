@@ -1,14 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// A scalar ternary whose branches are bare internal-function identifiers
-// (`cond ? a : b`): slang types the branches from the functions' visibility, so
-// the result type is recovered as the internal `func_ref` pointer type. Each
-// branch emits a `sol.func_constant` of that func_ref type stored into the
-// result slot. Both backends emit the identical func_ref-typed `sol.if`
-// (only the referenced function symbol naming differs: `@"a()"`/`@"b()"` vs
-// `@a_<id>`/`@b_<id>`).
-
 // CHECK: sol.func @{{.*f.*}}(%arg0: i1) -> ui256
 // CHECK:   %[[SLOT:.*]] = sol.alloca : !sol.ptr<!sol.func_ref<() -> ui256>, Stack>
 // CHECK:   sol.if %{{.*}} {

@@ -1,13 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Assignment to a *computed* reference-typed lvalue: `arr[0] = v`, where the
-// indexed element is itself a storage struct. `from_address` sees the GEP result
-// type equal to the element type, classifying the target as a `ReferenceCopy`,
-// so the memory RHS is deep-copied into the storage element via `sol.copy`
-// (rather than a scalar `sol.store`). This is the computed-lvalue counterpart of
-// the bare `s = m` state-variable reference copy.
-
 // CHECK: sol.func @{{.*setElem.*}}
 // CHECK: %[[ARR:.*]] = sol.addr_of @{{arr.*}} : !sol.array<? x !sol.struct<(ui256, ui256), Storage>, Storage>
 // CHECK: %[[ELEM:.*]] = sol.gep %[[ARR]], %{{.*}} {{.*}}!sol.struct<(ui256, ui256), Storage>

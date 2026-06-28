@@ -1,12 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// A ternary whose branches reference public functions through the contract type
-// (`b ? C.f : C.g`), then calls the result. Through the type (not an instance) a
-// public function is an internal pointer regardless of visibility, so each branch
-// emits a `sol.func_constant` of `func_ref` type (not `ext_func_ref`) and the call
-// is a `sol.icall`. No solc parity RUN line: solc's own MLIR lowering NYIs on a
-// contract-type member access whose result is a function type.
-
 // CHECK: sol.func @{{.*test.*}}(%arg0: i1) -> ui256
 // CHECK:   %[[SLOT:.*]] = sol.alloca : !sol.ptr<!sol.func_ref<() -> ui256>, Stack>
 // CHECK:   sol.if %{{.*}} {

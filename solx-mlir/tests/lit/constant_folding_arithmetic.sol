@@ -1,16 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Pure arithmetic in a `constant` initializer is folded at compile time, so each
-// reference lowers to a single folded `sol.constant` (plus a cast widening the
-// narrow rational type to the declared type). Both backends fold identically:
-//   A = (10 + 5) * 2 -> 30
-//   B = 100 / 4      -> 25
-//   C2 = 1 << 4      -> 16
-//   D = 200 + 55     -> 255 (ui8; printed as the signed-form %c-1_ui8 SSA name)
-//   E = 1 << 100     -> 2**100 (ui104; the shift result is sized to the fold, not the ui8 of `1`)
-// Functions are alphabetical, matching solc's source order, so one shared block.
-
 // CHECK: sol.func @{{.*ra.*}}() -> ui256
 // CHECK:   %{{.*}} = sol.constant 30 : ui8
 // CHECK:   %{{.*}} = sol.cast %{{.*}} : ui8 to ui256

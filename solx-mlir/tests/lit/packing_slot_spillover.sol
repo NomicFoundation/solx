@@ -1,12 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Exercises slot spillover during packing. address(20 bytes) + uint96(12 bytes)
-// exactly fill slot 0; the full-width uint256 then takes slot 1 by itself; and
-// the trailing bool + uint8 pack together into slot 2. Both backends agree on
-// every slot/offset. Reads are a uniform addr_of -> load regardless of where
-// the var sits in its slot, since the offset lives in the state_var decl.
-
 // CHECK-DAG: sol.state_var @{{.*owner.*}} slot 0 offset 0 : !sol.address
 // CHECK-DAG: sol.state_var @{{.*balance.*}} slot 0 offset 20 : ui96
 // CHECK-DAG: sol.state_var @{{.*total.*}} slot 1 offset 0 : ui256

@@ -39,6 +39,7 @@ contract Derived is Base {
     function foo() internal pure override returns (uint256) {
         return 2;
     }
+
     function call() public pure returns (uint256) {
         return Base.foo() + foo();
     }

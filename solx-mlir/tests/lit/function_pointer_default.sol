@@ -1,17 +1,16 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck %s --check-prefixes=CHECK,CHECK-SOLX
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s --check-prefixes=CHECK,CHECK-SOLC
 
-// A default-initialised function pointer (declared without an initialiser) takes
-// its type's zero value: an internal pointer is `sol.default_func_constant` (a
-// pointer that reverts when called); an external one is a zero address + zero
-// selector packed into an `!sol.ext_func_ref` via `sol.ext_func_constant`.
+// A default-initialised function pointer (no initialiser) takes its type's zero value. For the
+// external pointer both backends pack a zero address and zero selector into an !sol.ext_func_ref
+// via sol.ext_func_constant. For the internal pointer solx types sol.default_func_constant to the
+// variable (!sol.func_ref<(ui256) -> ui256>) while solc emits the generic !sol.func_ref<() -> ()>
+// and leans on the store slot's type. The backends emit these functions in opposite order, so the
+// asserts use CHECK-DAG.
 
-// Functions emit alphabetically by symbol, so external_default precedes
-// internal_default.
-// CHECK-LABEL: sol.func @{{.*}}external_default
-// CHECK: sol.ext_func_constant {{.*}}selector = 0 {{.*}}-> !sol.ext_func_ref<() -> ()>
-
-// CHECK-LABEL: sol.func @{{.*}}internal_default
-// CHECK: sol.default_func_constant : !sol.func_ref<(ui256) -> ui256>
+// CHECK-DAG: sol.ext_func_constant {{.*}}selector = 0 {{.*}}-> !sol.ext_func_ref<() -> ()>
+// CHECK-SOLX-DAG: sol.default_func_constant : !sol.func_ref<(ui256) -> ui256>
+// CHECK-SOLC-DAG: sol.default_func_constant : !sol.func_ref<() -> ()>
 
 pragma solidity ^0.8.0;
 

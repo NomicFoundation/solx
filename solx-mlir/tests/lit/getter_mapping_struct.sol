@@ -1,10 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Auto-generated getter for a mapping whose value is a struct: the key is an
-// argument, the struct's value-type fields are returned as a tuple. Both backends
-// emit the identical addr_of -> map -> (gep/load per field) -> multi-return shape.
-
 // CHECK-DAG: sol.state_var @{{.*infos.*}} slot 0 offset 0 : !sol.mapping<ui256, !sol.struct<(ui256, !sol.address), Storage>>
 
 // CHECK: sol.func @{{.*infos.*}}(%arg0: ui256) -> (ui256, !sol.address) attributes {{.*}}selector = 685653147 : i32

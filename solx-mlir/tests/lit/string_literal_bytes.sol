@@ -1,7 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-
-// A string / bytes literal need not be valid UTF-8 (`hex"..."`, escaped bytes);
-// it lowers to `sol.string_lit` carrying the raw bytes verbatim.
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK-LABEL: sol.func @{{.*}}raw
 // CHECK: sol.string_lit

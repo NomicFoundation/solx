@@ -1,11 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Struct public getter whose member is a `string`: the member is returned in the
-// external (Memory) ABI location. Both backends gep into the storage field, then
-// emit a `sol.data_loc_cast` Storage -> Memory, returning the casted reference
-// alongside the value-type field.
-
 // CHECK: sol.func @{{.*s.*}}() -> (ui256, !sol.string<Memory>) attributes {{.*}}selector = -2034821918 : i32
 // CHECK:   %[[BASE:.*]] = sol.addr_of @{{.*s.*}} : !sol.struct<(ui256, !sol.string<Storage>), Storage>
 // CHECK:   %[[I0:.*]] = sol.constant 0 : ui64

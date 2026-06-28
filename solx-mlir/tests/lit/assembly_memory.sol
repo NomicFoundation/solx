@@ -1,9 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Inline-assembly memory and storage opcodes lower to the raw Yul-dialect
-// load/store ops (operating on signless `i256`), not the Sol memory ops.
-
 // CHECK: sol.func @{{.*mem.*}}
 // CHECK: yul.mstore
 // CHECK: yul.mload

@@ -1,13 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// A tuple-valued conditional whose false branch is itself a (tuple-valued) nested
-// conditional: `a ? (1,2) : b ? (3,4) : (5,6)`. The outer conditional's branches
-// are not both literal tuples, so result types come from the conditional's tuple
-// type; the nested-conditional branch recurses, producing an inner `sol.if`
-// writing into its own pair of slots. Both backends emit the identical two-level
-// `sol.if` nest with per-result store/yield (callee/func symbol naming aside).
-
 // CHECK: sol.func @{{.*f.*}}(%arg0: i1, %arg1: i1) -> (ui256, ui256)
 // CHECK:   %[[O0:.*]] = sol.alloca : !sol.ptr<ui8, Stack>
 // CHECK:   %[[O1:.*]] = sol.alloca : !sol.ptr<ui8, Stack>

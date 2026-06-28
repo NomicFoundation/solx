@@ -1,10 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// A ternary whose condition is a comparison expression: the sol.cmp result feeds
-// the sol.if directly (no separate is_nonzero on an already-boolean operand).
-// Single function keeps CHECK ordering stable; symbol carries a solc node-id (regex).
-
 // CHECK-LABEL: sol.func @{{.*tcmpcond.*}}(%{{.*}}: ui256, %{{.*}}: ui256, %{{.*}}: ui256) -> ui256
 // CHECK: %[[C:.*]] = sol.cmp gt, %{{.*}}, %{{.*}} : ui256
 // CHECK: sol.if %[[C]] {

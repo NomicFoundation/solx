@@ -1,11 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// `return cond ? (a, b) : (c, d)` in a multi-value return position lowers to one
-// `sol.alloca` slot per result, a `sol.if` whose two branches store the tuple
-// elements into those slots, and loads after the join feeding a multi-operand
-// `sol.return`.
-
 // CHECK: sol.alloca : !sol.ptr<ui8, Stack>
 // CHECK: sol.alloca : !sol.ptr<ui8, Stack>
 // CHECK: sol.if
