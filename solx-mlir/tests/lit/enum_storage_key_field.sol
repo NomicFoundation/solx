@@ -1,8 +1,8 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK-DAG: sol.state_var @{{.*counts.*}} slot 0 offset 0 : !sol.mapping<!sol.enum<1>, ui256>
-// CHECK-DAG: sol.state_var @{{.*item.*}} slot 1 offset 0 : !sol.struct<(!sol.enum<1>, ui256), Storage>
+// CHECK: sol.state_var @{{.*counts.*}} slot 0 offset 0 : !sol.mapping<!sol.enum<1>, ui256>
+// CHECK: sol.state_var @{{.*item.*}} slot 1 offset 0 : !sol.struct<(!sol.enum<1>, ui256), Storage>
 
 // CHECK: sol.func @{{.*getCount.*}}(%{{.*}}: !sol.enum<1>) -> ui256
 // CHECK:   sol.map %{{.*}}, %{{.*}} : !sol.mapping<!sol.enum<1>, ui256>, !sol.enum<1>, !sol.ptr<ui256, Storage>

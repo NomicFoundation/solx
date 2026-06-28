@@ -1,7 +1,7 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK-DAG: sol.state_var @{{.*p.*}} slot 0 offset 0 : !sol.struct<(ui8, ui16, i1, !sol.address), Storage>
+// CHECK: sol.state_var @{{.*p.*}} slot 0 offset 0 : !sol.struct<(ui8, ui16, i1, !sol.address), Storage>
 
 // CHECK: sol.func @{{.*readA.*}}() -> ui8
 // CHECK-DAG:   sol.addr_of @{{.*p.*}} : !sol.struct<(ui8, ui16, i1, !sol.address), Storage>

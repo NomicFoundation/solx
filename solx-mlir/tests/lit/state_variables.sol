@@ -1,8 +1,8 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK-DAG: sol.state_var @{{.*}} slot 0 offset 0 : ui256
-// CHECK-DAG: sol.state_var @{{.*}} slot 1 offset 0 : ui256
+// CHECK: sol.state_var @{{.*}} slot 0 offset 0 : ui256
+// CHECK: sol.state_var @{{.*}} slot 1 offset 0 : ui256
 
 // CHECK: sol.func @{{.*get_x.*}}
 // CHECK:   %[[PTR:.*]] = sol.addr_of @{{.*}} : !sol.ptr<ui256, Storage>

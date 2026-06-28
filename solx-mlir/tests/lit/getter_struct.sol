@@ -1,7 +1,7 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK-DAG: sol.state_var @{{.*origin.*}} slot 0 offset 0 : !sol.struct<(ui256, ui256), Storage>
+// CHECK: sol.state_var @{{.*origin.*}} slot 0 offset 0 : !sol.struct<(ui256, ui256), Storage>
 
 // CHECK: sol.func @{{.*origin.*}}() -> (ui256, ui256) attributes {{.*}}selector = -1819582670 : i32
 // CHECK:   %[[S:.*]] = sol.addr_of @{{.*origin.*}} : !sol.struct<(ui256, ui256), Storage>

@@ -1,9 +1,9 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK-DAG: sol.state_var @{{.*counter.*}} slot 0 offset 0 : ui8
-// CHECK-DAG: sol.state_var @{{.*toggled.*}} slot 0 offset 1 : i1
-// CHECK-DAG: sol.state_var @{{.*width.*}} slot 0 offset 2 : ui16
+// CHECK: sol.state_var @{{.*counter.*}} slot 0 offset 0 : ui8
+// CHECK: sol.state_var @{{.*toggled.*}} slot 0 offset 1 : i1
+// CHECK: sol.state_var @{{.*width.*}} slot 0 offset 2 : ui16
 
 // CHECK: sol.func @{{.*bump.*}}()
 // CHECK-DAG:   sol.addr_of @{{.*counter.*}} : !sol.ptr<ui8, Storage>

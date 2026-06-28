@@ -1,11 +1,11 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK-DAG: sol.state_var @{{.*a.*}} slot 0 offset 0 : ui8
-// CHECK-DAG: sol.state_var @{{.*b.*}} slot 0 offset 1 : ui16
-// CHECK-DAG: sol.state_var @{{.*c.*}} slot 0 offset 3 : i1
-// CHECK-DAG: sol.state_var @{{.*d.*}} slot 0 offset 4 : !sol.address
-// CHECK-DAG: sol.state_var @{{.*e.*}} slot 0 offset 24 : !sol.fixedbytes<4>
+// CHECK: sol.state_var @{{.*a.*}} slot 0 offset 0 : ui8
+// CHECK: sol.state_var @{{.*b.*}} slot 0 offset 1 : ui16
+// CHECK: sol.state_var @{{.*c.*}} slot 0 offset 3 : i1
+// CHECK: sol.state_var @{{.*d.*}} slot 0 offset 4 : !sol.address
+// CHECK: sol.state_var @{{.*e.*}} slot 0 offset 24 : !sol.fixedbytes<4>
 
 // CHECK: sol.func @{{.*getA.*}}() -> ui8
 // CHECK:   %[[P:.*]] = sol.addr_of @{{.*a.*}} : !sol.ptr<ui8, Storage>
