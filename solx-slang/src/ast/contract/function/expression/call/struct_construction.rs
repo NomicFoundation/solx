@@ -86,7 +86,7 @@ impl StructConstruction {
                 &block,
             );
             let field_address =
-                struct_pointer.gep(index_value, AstType::new(field_type), builder, &block);
+                struct_pointer.gep(index_value, AstType::new(field_type), false, builder, &block);
             let BlockAnd {
                 value: argument_value,
                 block: next_block,

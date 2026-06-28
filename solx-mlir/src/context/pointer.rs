@@ -2,6 +2,7 @@
 //! A `!sol.ptr<T, Loc>` place in the Sol dialect: a typed address, and the loads, stores, and steps it supports.
 //!
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type as MlirType;
@@ -200,6 +201,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
         self,
         index: Value<'context, 'block>,
         element_type: Type<'context>,
+        no_panic_bounds: bool,
         builder: &Builder<'context>,
         block: &B,
     ) -> Self
@@ -213,14 +215,20 @@ impl<'context, 'block> Pointer<'context, 'block> {
                 element_type.into_mlir().to_raw(),
             ))
         };
-        Self::new(mlir_op!(
-            builder,
-            block,
-            GepOperation
-                .base_addr(self.inner)
-                .idx(index.into_mlir())
-                .addr(address_type)
-        ))
+        let mut gep = GepOperation::builder(builder.context, builder.unknown_location)
+            .base_addr(self.inner)
+            .idx(index.into_mlir())
+            .addr(address_type);
+        if no_panic_bounds {
+            gep = gep.no_panic_bounds(Attribute::unit(builder.context));
+        }
+        Self::new(
+            block
+                .append_operation(gep.build().into())
+                .result(0)
+                .expect("sol.gep produces one result")
+                .into(),
+        )
     }
 
     /// Steps to the place of the mapping entry for `key` (`sol.map`). The dialect derives no map

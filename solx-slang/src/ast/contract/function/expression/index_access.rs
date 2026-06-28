@@ -79,6 +79,7 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
                     .gep(
                         index_value,
                         AstType::new(element_type),
+                        false,
                         &context.state.builder,
                         &block,
                     )

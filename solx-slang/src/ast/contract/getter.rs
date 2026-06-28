@@ -8,23 +8,16 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use num_bigint::BigInt;
 use slang_solidity_v2::abi::AbiEntry;
-use slang_solidity_v2::ast::ArgumentsDeclaration;
-use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
-use slang_solidity_v2::ast::Expression;
-use slang_solidity_v2::ast::LiteralKind;
 use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::StateVariableMutability;
 use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Builder;
-use solx_mlir::CmpPredicate;
 use solx_mlir::Function;
 use solx_mlir::StateMutability;
-use solx_mlir::ods::sol::RequireOperation;
 use solx_mlir::ods::sol::ReturnOperation;
 use solx_utils::DataLocation;
 
@@ -238,67 +231,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) {
-        /// Folds a constant integer expression to a [`BigInt`] when it is one of
-        /// the closed set of integer-foldable forms.
-        fn fold_constant_int(expression: &Expression) -> Option<BigInt> {
-            match expression {
-                Expression::DecimalNumberExpression(decimal) => decimal.integer_value(),
-                Expression::HexNumberExpression(hex) => hex.integer_value(),
-                Expression::Identifier(identifier) => match identifier.resolve_to_definition() {
-                    Some(Definition::StateVariable(state_variable)) => {
-                        fold_constant_int(&state_variable.value()?)
-                    }
-                    Some(Definition::Constant(constant)) => fold_constant_int(&constant.value()?),
-                    _ => None,
-                },
-                Expression::MemberAccessExpression(access) => {
-                    match access.member().resolve_to_definition() {
-                        Some(Definition::StateVariable(state_variable)) => {
-                            fold_constant_int(&state_variable.value()?)
-                        }
-                        Some(Definition::Constant(constant)) => {
-                            fold_constant_int(&constant.value()?)
-                        }
-                        _ => None,
-                    }
-                }
-                Expression::FunctionCallExpression(call) => {
-                    let ArgumentsDeclaration::PositionalArguments(positional) = call.arguments()
-                    else {
-                        return None;
-                    };
-                    let mut arguments = positional.iter();
-                    let argument = arguments.next()?;
-                    if arguments.next().is_some() {
-                        return None;
-                    }
-                    let is_wrap_unwrap = matches!(
-                        &call.operand(),
-                        Expression::MemberAccessExpression(member)
-                            if matches!(
-                                member.member().resolve_to_built_in(),
-                                Some(BuiltIn::Wrap | BuiltIn::Unwrap)
-                            )
-                    );
-                    if is_wrap_unwrap || call.is_type_conversion() {
-                        fold_constant_int(&argument)
-                    } else {
-                        None
-                    }
-                }
-                _ => expression
-                    .get_type()
-                    .and_then(|slang_type| match slang_type {
-                        SlangType::Literal(literal) => match literal.kind() {
-                            LiteralKind::Integer { value } => Some(value),
-                            LiteralKind::HexInteger { value, .. } => Some(BigInt::from(value)),
-                            _ => None,
-                        },
-                        _ => None,
-                    }),
-            }
-        }
-
         /// Emits the terminal `sol.return` from `base` (a struct expands to its members, a scalar loads one value).
         fn return_loaded<'context, 'block>(
             base: Value<'context, 'block>,
@@ -319,7 +251,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                             entry,
                         );
                         let address = Pointer::new(base)
-                            .gep(index_value, AstType::new(*member_type), builder, entry)
+                            .gep(index_value, AstType::new(*member_type), false, builder, entry)
                             .into_mlir();
                         let value = if member_type == result_member_type {
                             Pointer::new(address)
@@ -381,17 +313,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 builder,
                 &block,
             );
-            if let Some(value) = fold_constant_int(&initializer) {
-                let constant = AstValue::constant_from_bigint(
-                    &value,
-                    AstType::new(element_type),
-                    builder,
-                    &entry,
-                )
-                .into_mlir();
-                mlir_op_void!(builder, &entry, ReturnOperation.operands(&[constant]));
-                return;
-            }
             let BlockAnd {
                 value,
                 block: entry,
@@ -437,8 +358,8 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             let mut base =
                 Pointer::addr_of(&slot.name, AstType::new(container_type), builder, &entry)
                     .into_mlir();
-            // Re-walk the nesting; an array index is bounds-checked with a no-message `sol.require`
-            // (not `sol.gep`'s `Panic(0x32)`).
+            // Re-walk the nesting; an array index passes `no_panic_bounds` so an out-of-bounds access
+            // plain-reverts rather than `Panic(0x32)`.
             let mut current = declared_type.clone();
             let mut index = 0usize;
             loop {
@@ -478,15 +399,11 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                             LocationPolicy::Declared(Some(location)),
                             builder,
                         );
-                        let length = AstValue::new(base).length(builder, &entry);
-                        let in_bounds = AstValue::new(arg)
-                            .compare(length, CmpPredicate::Lt, builder, &entry)
-                            .into_mlir();
-                        mlir_op_void!(builder, &entry, RequireOperation.cond(in_bounds).args(&[]));
                         base = Pointer::new(base)
                             .gep(
                                 AstValue::new(arg),
                                 AstType::new(element_type),
+                                true,
                                 builder,
                                 &entry,
                             )
@@ -504,16 +421,11 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                             LocationPolicy::Declared(Some(location)),
                             builder,
                         );
-                        let length = AstValue::uint256(array_type.size() as i64, builder, &entry)
-                            .into_mlir();
-                        let in_bounds = AstValue::new(arg)
-                            .compare(AstValue::new(length), CmpPredicate::Lt, builder, &entry)
-                            .into_mlir();
-                        mlir_op_void!(builder, &entry, RequireOperation.cond(in_bounds).args(&[]));
                         base = Pointer::new(base)
                             .gep(
                                 AstValue::new(arg),
                                 AstType::new(element_type),
+                                true,
                                 builder,
                                 &entry,
                             )

@@ -93,7 +93,7 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for MemberAccessExpre
         let element_type = base_value.r#type().element_type(field_index);
         let address = base_value
             .into_pointer()
-            .gep(index_value, element_type, builder, &block)
+            .gep(index_value, element_type, false, builder, &block)
             .into_mlir();
         BlockAnd {
             value: Place {
