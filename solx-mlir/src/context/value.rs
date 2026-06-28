@@ -11,6 +11,8 @@ use melior::ir::ValueLike;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
+use melior::ir::attribute::TypeAttribute;
+use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
 use melior::ir::r#type::TypeLike;
 use num::BigInt;
@@ -28,6 +30,7 @@ use crate::ods::sol::DefaultCallDataOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::DefaultStorageOperation;
 use crate::ods::sol::EncodeOperation;
+use crate::ods::sol::ExtCallOperation;
 use crate::ods::sol::ExtFuncAddrOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
 use crate::ods::sol::ExtFuncSelectorOperation;
@@ -396,6 +399,65 @@ impl<'context, 'block> Value<'context, 'block> {
         let address = receiver.cast(Type::address(builder.context, false), builder, block);
         let ext_func_ref_type = Type::ext_func_ref(builder.context, parameter_types, return_types);
         Self::ext_func_constant(address, selector, ext_func_ref_type, builder, block)
+    }
+
+    /// `sol.ext_call` to a statically-resolved external callee `callee_name`, dispatched by `selector`
+    /// at `receiver` cast to `address`. Returns the success status and the decoded results. With
+    /// `try_call` the status is surfaced for a `try`/`catch`; otherwise the call reverts on failure and
+    /// the caller discards the status. A `view`/`pure` callee passes `is_static` for a `STATICCALL`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn external_call(
+        receiver: Self,
+        callee_name: &str,
+        selector: u32,
+        parameter_types: &[MlirType<'context>],
+        argument_values: &[MlirValue<'context, 'block>],
+        result_types: &[MlirType<'context>],
+        call_value: Option<MlirValue<'context, 'block>>,
+        call_gas: Option<MlirValue<'context, 'block>>,
+        is_static: bool,
+        try_call: bool,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> (MlirValue<'context, 'block>, Vec<MlirValue<'context, 'block>>) {
+        let address = receiver
+            .cast(Type::address(builder.context, false), builder, block)
+            .into_mlir();
+        let value = call_value.unwrap_or_else(|| Self::uint256(0, builder, block).into_mlir());
+        let gas = call_gas.unwrap_or_else(|| Self::gas_left(builder, block).into_mlir());
+        let selector_value = Self::uint256(i64::from(selector), builder, block).into_mlir();
+        let callee_type = FunctionType::new(builder.context, parameter_types, result_types);
+        let mut operation_builder =
+            ExtCallOperation::builder(builder.context, builder.unknown_location)
+                .callee(StringAttribute::new(builder.context, callee_name))
+                .ins(argument_values)
+                .addr(address)
+                .gas(gas)
+                .val(value)
+                .selector(selector_value)
+                .callee_type(TypeAttribute::new(callee_type.into()))
+                .status(Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir())
+                .outs(result_types);
+        if is_static {
+            operation_builder = operation_builder.static_call(Attribute::unit(builder.context));
+        }
+        if try_call {
+            operation_builder = operation_builder.try_call(Attribute::unit(builder.context));
+        }
+        let operation = block.append_operation(operation_builder.build().into());
+        let status = operation
+            .result(0)
+            .expect("sol.ext_call produces a status result")
+            .into();
+        let results = (0..result_types.len())
+            .map(|index| {
+                operation
+                    .result(index + 1)
+                    .expect("sol.ext_call produces a status plus its declared results")
+                    .into()
+            })
+            .collect();
+        (status, results)
     }
 
     /// `sol.func_constant` — an internal function pointer (`!sol.func_ref<…>`) to the symbol `name`.

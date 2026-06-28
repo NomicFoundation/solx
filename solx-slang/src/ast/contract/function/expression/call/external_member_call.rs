@@ -2,8 +2,6 @@
 //! External contract member calls and getter calls.
 //!
 
-use melior::ir::Attribute;
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -14,7 +12,6 @@ use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::NodeId;
 use solx_mlir::Builder;
-use solx_mlir::ods::sol::ExtICallOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
@@ -23,6 +20,7 @@ use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
+use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 use crate::ast::contract::getter::GetterSignature;
 
 /// An external member call to a function or generated getter.
@@ -69,7 +67,7 @@ impl ExternalMemberCall {
         call_value: Option<Value<'context, 'block>>,
         call_gas: Option<Value<'context, 'block>>,
     ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
-        let (selector, parameter_types, return_types, is_static) =
+        let (callee_name, selector, parameter_types, return_types, is_static) =
             self.resolve_call(&context.state.builder);
         let BlockAnd {
             value: receiver,
@@ -80,20 +78,17 @@ impl ExternalMemberCall {
             block,
         } = self.arguments.emit_as(&parameter_types, context, block);
         let builder = &context.state.builder;
-        let callee = AstValue::external_callee(
+        let (_status, results) = AstValue::external_call(
             receiver,
+            &callee_name,
             selector,
             &parameter_types,
-            &return_types,
-            builder,
-            &block,
-        );
-        let results = callee.call_indirect(
             &argument_values,
             &return_types,
             call_value,
             call_gas,
             is_static,
+            false,
             builder,
             &block,
         );
@@ -116,7 +111,7 @@ impl ExternalMemberCall {
         Vec<Value<'context, 'block>>,
         BlockRef<'context, 'block>,
     ) {
-        let (selector, parameter_types, return_types, _is_static) =
+        let (callee_name, selector, parameter_types, return_types, _is_static) =
             self.resolve_call(&context.state.builder);
         let BlockAnd {
             value: receiver,
@@ -127,57 +122,35 @@ impl ExternalMemberCall {
             block,
         } = self.arguments.emit_as(&parameter_types, context, block);
         let builder = &context.state.builder;
-        let callee = AstValue::external_callee(
+        let (status, results) = AstValue::external_call(
             receiver,
+            &callee_name,
             selector,
             &parameter_types,
+            &argument_values,
             &return_types,
+            call_value,
+            call_gas,
+            false,
+            true,
             builder,
             &block,
-        )
-        .into_mlir();
-        let value = call_value.unwrap_or_else(|| AstValue::uint256(0, builder, &block).into_mlir());
-        let gas = call_gas.unwrap_or_else(|| AstValue::gas_left(builder, &block).into_mlir());
-        let mut out_types = Vec::with_capacity(return_types.len() + 1);
-        out_types
-            .push(AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
-        out_types.extend_from_slice(&return_types);
-        let operation = block.append_operation(mlir_op_build!(
-            builder,
-            ExtICallOperation
-                .outs(&out_types)
-                .callee(callee)
-                .callee_operands(&argument_values)
-                .gas(gas)
-                .value(value)
-                .try_call(Attribute::unit(builder.context))
-        ));
-        let status = operation
-            .result(0)
-            .expect("sol.ext_icall try produces a status result")
-            .into();
-        let results = (0..return_types.len())
-            .map(|index| {
-                operation
-                    .result(index + 1)
-                    .expect("sol.ext_icall try produces a status plus its declared results")
-                    .into()
-            })
-            .collect();
+        );
         (status, results, block)
     }
 
-    /// Resolves the callee's ABI selector, Sol-typed parameter and result types, and whether the
-    /// call is to a read-only callee.
+    /// Resolves the callee's MLIR name, ABI selector, Sol-typed parameter and result types, and
+    /// whether the call is to a read-only callee.
     fn resolve_call<'context>(
         &self,
         builder: &Builder<'context>,
-    ) -> (u32, Vec<Type<'context>>, Vec<Type<'context>>, bool) {
+    ) -> (String, u32, Vec<Type<'context>>, Vec<Type<'context>>, bool) {
         match &self.definition {
             Definition::Function(function) => {
                 let (parameter_types, return_types) =
                     AstType::resolve_signature(function, LocationPolicy::ForceMemory, builder);
                 (
+                    function.mlir_function_name(),
                     function.compute_selector().expect("slang validated"),
                     parameter_types,
                     return_types,
@@ -193,10 +166,13 @@ impl ExternalMemberCall {
                     unreachable!("a public accessor with no returnable members is invalid");
                 };
                 (
+                    state_variable
+                        .compute_canonical_signature()
+                        .expect("slang validated"),
                     state_variable.compute_selector().expect("slang validated"),
                     parameter_types,
                     return_types,
-                    false,
+                    true,
                 )
             }
             _ => unreachable!("an external member call resolves to a function or state variable"),
