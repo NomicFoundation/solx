@@ -37,6 +37,9 @@
 // CHECK-DAG: sol.func @{{.*get_prevrandao.*}}
 // CHECK-DAG:   sol.prevrandao : ui256
 
+// CHECK-DAG: sol.func @{{.*get_difficulty.*}}
+// CHECK-DAG:   sol.difficulty : ui256
+
 // CHECK-DAG: sol.func @{{.*get_balance.*}}
 // CHECK-DAG:   sol.balance %{{.*}} : !sol.address -> ui256
 
@@ -87,6 +90,10 @@ contract C {
 
     function get_prevrandao() public view returns (uint256) {
         return block.prevrandao;
+    }
+
+    function get_difficulty() public view returns (uint256) {
+        return block.difficulty;
     }
 
     function get_balance(address a) public view returns (uint256) {
