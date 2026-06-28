@@ -50,25 +50,13 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         let comparison = lhs.compare(rhs, predicate, &context.state.builder, &block);
         return BlockAnd { block, value: comparison };
     }
-    // Two fixed-bytes operands of different widths are LEFT-aligned: widen the smaller and compare
-    // as fixed-bytes. The integer path below would right-align them, yielding the wrong result.
-    if let (Some(lhs_width), Some(rhs_width)) = (
-        lhs.r#type().fixed_bytes_or_byte_width(),
-        rhs.r#type().fixed_bytes_or_byte_width(),
-    ) {
+    let lhs_bytes = lhs.r#type().fixed_bytes_or_byte_width();
+    let rhs_bytes = rhs.r#type().fixed_bytes_or_byte_width();
+    if let Some(common_width) = lhs_bytes.into_iter().chain(rhs_bytes).max() {
         let builder = &context.state.builder;
-        let common_width = lhs_width.max(rhs_width);
         let common = AstType::fixed_bytes(builder.context, common_width).into_mlir();
-        let lhs_common = if lhs_width == common_width {
-            lhs
-        } else {
-            lhs.cast(AstType::new(common), builder, &block)
-        };
-        let rhs_common = if rhs_width == common_width {
-            rhs
-        } else {
-            rhs.cast(AstType::new(common), builder, &block)
-        };
+        let lhs_common = lhs.cast(AstType::new(common), builder, &block);
+        let rhs_common = rhs.cast(AstType::new(common), builder, &block);
         let comparison = lhs_common.compare(rhs_common, predicate, builder, &block);
         return BlockAnd { block, value: comparison };
     }
