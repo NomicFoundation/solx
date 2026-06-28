@@ -2,7 +2,7 @@
 //! Transitive reachability walk over a contract's function bodies.
 //!
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 
 use slang_solidity_v2::ast::ContractDefinition;
@@ -13,8 +13,9 @@ use slang_solidity_v2::ast::NodeId;
 /// reached functions. The caller drives it: `next_body` yields each body, the caller's own `Visitor`
 /// reports what it reaches via `reach`, and `into_reached` returns the result.
 pub struct ReachabilityWalk {
-    /// Reached functions, deduplicated by node id: the result set.
-    collected: HashMap<NodeId, FunctionDefinition>,
+    /// Reached functions, deduplicated by node id: the result set. A `BTreeMap` so emission order is
+    /// the deterministic ascending-node-id order rather than randomized hash iteration.
+    collected: BTreeMap<NodeId, FunctionDefinition>,
     /// Node ids whose bodies have already been handed out by `next_body`.
     walked: HashSet<NodeId>,
     /// Function bodies still to walk.
@@ -31,7 +32,7 @@ impl ReachabilityWalk {
         }
         to_walk.extend(extra_roots.iter().cloned());
         Self {
-            collected: HashMap::new(),
+            collected: BTreeMap::new(),
             walked: HashSet::new(),
             to_walk,
         }
@@ -73,8 +74,8 @@ impl ReachabilityWalk {
         }
     }
 
-    /// Consumes the walk and returns the reached functions, deduplicated by
-    /// node id.
+    /// Consumes the walk and returns the reached functions, deduplicated by node id and ordered by it,
+    /// so emission is reproducible across runs.
     pub fn into_reached(self) -> Vec<FunctionDefinition> {
         self.collected.into_values().collect()
     }
