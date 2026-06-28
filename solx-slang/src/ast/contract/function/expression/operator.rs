@@ -8,7 +8,6 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use melior::ir::operation::Operation;
-use melior::ir::r#type::IntegerType;
 
 use solx_mlir::Builder;
 use solx_mlir::CmpPredicate;
@@ -217,10 +216,8 @@ impl Operator {
         (value, block)
     }
 
-    /// Combines already-materialised `lhs`/`rhs` into a value of `result_type`.
-    ///
-    /// The integer-only bitwise/shift ops bridge a `bytesN` / `byte` operand through `ui(8*N)`
-    /// and cast back; on a shift only the shifted value is bridged.
+    /// Combines already-materialised `lhs`/`rhs` into a value of `result_type`. Bitwise and shift
+    /// ops apply directly to a `bytesN` / `byte` result type; no integer bridge.
     pub fn emit_value_binary<'context, 'block>(
         self,
         mode: ArithmeticMode,
@@ -230,42 +227,20 @@ impl Operator {
         result_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> AstValue<'context, 'block> {
-        let is_shift = matches!(self, Operator::ShiftLeft | Operator::ShiftRight);
-        let is_bitwise = is_shift
-            || matches!(
-                self,
-                Operator::BitwiseAnd | Operator::BitwiseOr | Operator::BitwiseXor
-            );
-
-        let (lhs, rhs, restore_type) = if is_bitwise
-            && let Some(width) = AstType::new(result_type).fixed_bytes_or_byte_width()
-        {
-            let int_type = Type::from(IntegerType::unsigned(builder.context, 8 * width));
-            let lhs = lhs
-                .cast(AstType::new(result_type), builder, block)
-                .cast(AstType::new(int_type), builder, block)
-                .into_mlir();
-            let rhs = if is_shift {
-                rhs.cast(AstType::new(int_type), builder, block).into_mlir()
-            } else {
-                rhs.cast(AstType::new(result_type), builder, block)
-                    .cast(AstType::new(int_type), builder, block)
-                    .into_mlir()
-            };
-            (lhs, rhs, Some(result_type))
+        let lhs = lhs
+            .cast(AstType::new(result_type), builder, block)
+            .into_mlir();
+        // The right operand keeps its own type when it is not coerced to the result: `**` takes an
+        // unsigned exponent alongside a possibly-signed base, and a shift of a `bytesN` value takes
+        // an integer amount, so `sol.shl` / `sol.shr` apply to `!sol.fixedbytes<N>` directly.
+        let keep_rhs = matches!(self, Operator::Exponentiation)
+            || (matches!(self, Operator::ShiftLeft | Operator::ShiftRight)
+                && AstType::new(result_type).fixed_bytes_or_byte_width().is_some());
+        let rhs = if keep_rhs {
+            rhs.into_mlir()
         } else {
-            let lhs = lhs
-                .cast(AstType::new(result_type), builder, block)
-                .into_mlir();
-            // `**` keeps its exponent's own (unsigned) type: `sol.exp`/`sol.cexp` take an unsigned
-            // exponent alongside a possibly-signed base, so it must NOT be coerced to the result type.
-            let rhs = if matches!(self, Operator::Exponentiation) {
-                rhs.into_mlir()
-            } else {
-                rhs.cast(AstType::new(result_type), builder, block)
-                    .into_mlir()
-            };
-            (lhs, rhs, None)
+            rhs.cast(AstType::new(result_type), builder, block)
+                .into_mlir()
         };
 
         let result: Value<'context, 'block> = block
@@ -273,11 +248,7 @@ impl Operator {
             .result(0)
             .expect("binary operation always produces one result")
             .into();
-
-        match restore_type {
-            Some(fixed) => AstValue::from(result).cast(AstType::new(fixed), builder, block),
-            None => result.into(),
-        }
+        result.into()
     }
 
     /// Emits postfix `++` / `--`, returning the old value.
@@ -326,30 +297,11 @@ impl Operator {
             Operator::BitwiseNot => {
                 let BlockAnd { value, block } = operand.emit(context, block);
                 let operand_type = target_type.expect("slang validated");
-                let value = value.cast(AstType::new(operand_type), &context.state.builder, &block);
-                let builder = &context.state.builder;
-                let (value, restore_type) =
-                    match AstType::new(operand_type).fixed_bytes_or_byte_width() {
-                        Some(width) => {
-                            let int_type =
-                                Type::from(IntegerType::unsigned(builder.context, 8 * width));
-                            (
-                                value
-                                    .cast(AstType::new(int_type), builder, &block)
-                                    .into_mlir(),
-                                Some(operand_type),
-                            )
-                        }
-                        None => (value.into_mlir(), None),
-                    };
+                let value = value
+                    .cast(AstType::new(operand_type), &context.state.builder, &block)
+                    .into_mlir();
                 let result: Value<'context, 'block> =
-                    mlir_op!(builder, block, NotOperation.value(value));
-                let result = match restore_type {
-                    Some(fixed) => AstValue::from(result)
-                        .cast(AstType::new(fixed), builder, &block)
-                        .into_mlir(),
-                    None => result,
-                };
+                    mlir_op!(&context.state.builder, block, NotOperation.value(value));
                 (result.into(), block)
             }
             Operator::Not => {
