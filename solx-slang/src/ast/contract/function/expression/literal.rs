@@ -90,7 +90,10 @@ impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Stri
         let state = context.state;
         if AstType::new(target_type).is_byte() {
             let byte = self.value().first().copied().unwrap_or(0);
-            let ui8 = Type::from(IntegerType::unsigned(state.mlir(), BIT_LENGTH_BYTE as u32));
+            let ui8 = Type::from(IntegerType::unsigned(
+                state.mlir_context,
+                BIT_LENGTH_BYTE as u32,
+            ));
             let integer = AstValue::constant_from_bigint(
                 &BigInt::from(byte),
                 AstType::new(ui8),
@@ -107,7 +110,7 @@ impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Stri
             }
             let integer_value = BigInt::from_bytes_be(Sign::Plus, &buffer);
             let integer_type = Type::from(IntegerType::unsigned(
-                state.mlir(),
+                state.mlir_context,
                 width * BIT_LENGTH_BYTE as u32,
             ));
             let integer = AstValue::constant_from_bigint(
@@ -116,7 +119,11 @@ impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Stri
                 state,
                 &block,
             );
-            let value = integer.cast(AstType::fixed_bytes(state.mlir(), width), state, &block);
+            let value = integer.cast(
+                AstType::fixed_bytes(state.mlir_context, width),
+                state,
+                &block,
+            );
             return BlockAnd { block, value };
         }
         self.emit(context, block)

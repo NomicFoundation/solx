@@ -2,7 +2,7 @@
 //! Length parameter for `sol::ArrayType`.
 //!
 
-/// Length of a `sol::ArrayType` — the dialect encodes this as `int64_t` with `-1` for dynamic length.
+/// Length of a `sol::ArrayType`: the dialect encodes this as `int64_t` with `-1` for dynamic length.
 pub enum ArraySize {
     /// Dynamic-length array (Solidity `T[]`).
     Dynamic,

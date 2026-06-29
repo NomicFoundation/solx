@@ -150,7 +150,7 @@ impl EmitModifierCalls for FunctionDefinition {
                 state,
                 CallOperation
                     .callee(FlatSymbolRefAttribute::new(
-                        state.mlir(),
+                        state.mlir_context,
                         &definition.modifier_symbol()
                     ))
                     .outs(&[])
@@ -158,7 +158,7 @@ impl EmitModifierCalls for FunctionDefinition {
             ));
 
             function_block.append_operation(
-                ModifierCallBlkOperation::builder(state.mlir(), state.location())
+                ModifierCallBlkOperation::builder(state.mlir_context, state.location())
                     .body_region(region)
                     .build()
                     .into(),

@@ -44,7 +44,7 @@ impl<'context> Modifier<'context> {
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
-        let function_type = FunctionType::new(context.mlir(), &self.parameter_types, &[]);
+        let function_type = FunctionType::new(context.mlir_context, &self.parameter_types, &[]);
         let body_region = Region::new();
         let entry_block = Block::new(
             &self
@@ -55,8 +55,8 @@ impl<'context> Modifier<'context> {
         );
         body_region.append_block(entry_block);
 
-        let operation = ModifierOperation::builder(context.mlir(), context.location())
-            .sym_name(StringAttribute::new(context.mlir(), &self.mlir_name))
+        let operation = ModifierOperation::builder(context.mlir_context, context.location())
+            .sym_name(StringAttribute::new(context.mlir_context, &self.mlir_name))
             .function_type(TypeAttribute::new(function_type.into()))
             .body(body_region)
             .build();

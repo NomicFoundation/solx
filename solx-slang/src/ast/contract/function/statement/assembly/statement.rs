@@ -50,7 +50,7 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
                     .node_id();
                 let slot = AstValue::from(context.environment.variable(declaration))
                     .reinterpret(
-                        AstType::llvm_ptr(context.state.mlir()),
+                        AstType::llvm_ptr(context.state.mlir_context),
                         context.state,
                         &current,
                     )
@@ -195,7 +195,7 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
                 };
             }
 
-            let context_handle = context.state.mlir();
+            let context_handle = context.state.mlir_context;
             let case_attributes: Vec<Attribute<'context>> = value_cases
                 .iter()
                 .map(|case| YulValue::word_attribute(&case.value().value(), context_handle))

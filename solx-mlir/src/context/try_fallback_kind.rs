@@ -7,8 +7,8 @@
 pub enum TryFallbackKind {
     /// No `catch {}` / `catch (bytes)` clause: the region is empty and the conversion re-reverts raw revert data.
     None,
-    /// Parameter-less `catch { ... }`: the region runs the body with no bound value.
-    Parameterless,
+    /// Empty `catch { ... }`: the region runs the body with no bound value.
+    Empty,
     /// Low-level `catch (bytes memory data) { ... }`: the region binds the returndata as a memory `bytes` argument.
     Bytes,
 }

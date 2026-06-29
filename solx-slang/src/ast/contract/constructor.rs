@@ -272,7 +272,8 @@ impl EmitConstructor for ContractDefinition {
             let state = scope.state;
             let element_type =
                 AstType::resolve(&declared_type, LocationPolicy::Declared(None), state);
-            let address_type = AstType::new(element_type).address_type(slot.location, state.mlir());
+            let address_type =
+                AstType::new(element_type).address_type(slot.location, state.mlir_context);
             let storage_ref = Pointer::addr_of(&slot.name, address_type, state, &block).into_mlir();
             let BlockAnd {
                 value,

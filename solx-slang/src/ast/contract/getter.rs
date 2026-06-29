@@ -59,7 +59,7 @@ impl StructGetterLayout for StructDefinition {
                     continue;
                 }
                 SlangType::String(_) | SlangType::Bytes(_) => {
-                    AstType::string(context.mlir(), DataLocation::Memory).into_mlir()
+                    AstType::string(context.mlir_context, DataLocation::Memory).into_mlir()
                 }
                 SlangType::Struct(_) => {
                     AstType::resolve(&member_slang, LocationPolicy::ForceMemory, context)
@@ -165,7 +165,7 @@ impl GetterSignature for StateVariableDefinition {
                 SlangType::Mapping(mapping_type) => {
                     let key = mapping_type.key_type();
                     let key_type = if key.is_reference_type() {
-                        AstType::string(context.mlir(), DataLocation::Memory).into_mlir()
+                        AstType::string(context.mlir_context, DataLocation::Memory).into_mlir()
                     } else {
                         AstType::resolve(&key, LocationPolicy::Declared(Some(location)), context)
                     };
@@ -174,13 +174,15 @@ impl GetterSignature for StateVariableDefinition {
                 }
                 SlangType::Array(array_type) => {
                     input_types.push(
-                        AstType::unsigned(context.mlir(), solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+                        AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir(),
                     );
                     terminal = array_type.element_type();
                 }
                 SlangType::FixedSizeArray(array_type) => {
                     input_types.push(
-                        AstType::unsigned(context.mlir(), solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+                        AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir(),
                     );
                     terminal = array_type.element_type();
                 }
@@ -244,7 +246,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                     for (member_index, member_type, result_member_type) in plan {
                         let index_value = AstValue::constant(
                             *member_index as i64,
-                            AstType::unsigned(context.mlir(), solx_utils::BIT_LENGTH_X64),
+                            AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_X64),
                             context,
                             entry,
                         );
@@ -380,7 +382,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                             state,
                         );
                         let level_type = AstType::new(resolved_value)
-                            .address_type(location, state.mlir())
+                            .address_type(location, state.mlir_context)
                             .into_mlir();
                         base = Pointer::new(base)
                             .entry(AstValue::new(arg), AstType::new(level_type), state, &entry)
@@ -490,7 +492,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             state,
         );
         let address_type = AstType::new(element_type)
-            .address_type(location, state.mlir())
+            .address_type(location, state.mlir_context)
             .into_mlir();
         let is_reference = declared_type.is_reference_type();
         let return_type = if is_reference {

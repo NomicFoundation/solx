@@ -1,15 +1,15 @@
 //!
-//! Data-location policy for Slang→MLIR type resolution.
+//! Data-location policy for Slang-to-MLIR type resolution.
 //!
 
 use solx_utils::DataLocation;
 
-/// How Slang→MLIR type resolution picks the data location of each reference type.
+/// How Slang-to-MLIR type resolution picks the data location of each reference type.
 #[derive(Clone, Copy)]
 pub enum LocationPolicy {
     /// Use each reference type's declared location, substituting the carried location for `Inherited` members.
     Declared(Option<DataLocation>),
-    /// Force every reference type to `Memory` — the external (ABI) representation,
+    /// Force every reference type to `Memory`: the external (ABI) representation,
     /// where `calldata` cannot cross the call boundary.
     ForceMemory,
 }

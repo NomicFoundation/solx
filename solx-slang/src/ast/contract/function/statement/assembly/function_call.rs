@@ -106,7 +106,7 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
     };
 
     let state = context.state;
-    let i256 = AstType::signless(state.mlir(), solx_utils::BIT_LENGTH_FIELD).into_mlir();
+    let i256 = AstType::signless(state.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
 
     let value = match opcode {
         BuiltIn::YulAdd => YulValue::new(mlir_op!(state, &current, AddOperation.lhs(arguments[0]).rhs(arguments[1]).out(i256))),

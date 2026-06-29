@@ -88,16 +88,18 @@ impl MemberBuiltinCall {
                 let state = context.state;
                 let input = input
                     .cast(
-                        AstType::string(state.mlir(), solx_utils::DataLocation::Memory),
+                        AstType::string(state.mlir_context, solx_utils::DataLocation::Memory),
                         state,
                         &block,
                     )
                     .into_mlir();
                 let address = address.into_mlir();
                 let status_type =
-                    AstType::signless(state.mlir(), solx_utils::BIT_LENGTH_BOOLEAN).into_mlir();
+                    AstType::signless(state.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN)
+                        .into_mlir();
                 let ret_data_type =
-                    AstType::string(state.mlir(), solx_utils::DataLocation::Memory).into_mlir();
+                    AstType::string(state.mlir_context, solx_utils::DataLocation::Memory)
+                        .into_mlir();
                 let operation = match kind {
                     BuiltIn::AddressCall => {
                         let value = call_value
@@ -184,7 +186,7 @@ impl MemberBuiltinCall {
                     Some(SlangDataLocation::Storage)
                 ) {
                     payload_value.cast(
-                        AstType::string(state.mlir(), solx_utils::DataLocation::Memory),
+                        AstType::string(state.mlir_context, solx_utils::DataLocation::Memory),
                         state,
                         &block,
                     )
@@ -192,7 +194,7 @@ impl MemberBuiltinCall {
                     payload_value
                 };
                 let operation = block.append_operation(
-                    DecodeOperation::builder(state.mlir(), state.location())
+                    DecodeOperation::builder(state.mlir_context, state.location())
                         .addr(payload_value.into_mlir())
                         .outs(&result_types)
                         .build()
@@ -276,7 +278,7 @@ impl MemberBuiltinCall {
                         } = positional.emit(context, block);
                         let amount = AstValue::from(values[0])
                             .cast(
-                                AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD),
+                                AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
                                 state,
                                 &block,
                             )
@@ -288,7 +290,7 @@ impl MemberBuiltinCall {
                                 .addr(addr)
                                 .val(amount)
                                 .status(AstType::signless(
-                                    state.mlir(),
+                                    state.mlir_context,
                                     solx_utils::BIT_LENGTH_BOOLEAN
                                 ))
                         );
@@ -304,7 +306,7 @@ impl MemberBuiltinCall {
                         } = positional.emit(context, block);
                         let amount = AstValue::from(values[0])
                             .cast(
-                                AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD),
+                                AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
                                 state,
                                 &block,
                             )
@@ -339,7 +341,7 @@ impl MemberBuiltinCall {
                         } = positional.emit(context, block);
                         let state = context.state;
                         let selector = AstValue::from(values.remove(0))
-                            .cast(AstType::fixed_bytes(state.mlir(), 4), state, &block)
+                            .cast(AstType::fixed_bytes(state.mlir_context, 4), state, &block)
                             .into_mlir();
                         let result =
                             AstValue::abi_encode(&values, Some(selector), false, state, &block)
@@ -375,7 +377,11 @@ impl MemberBuiltinCall {
                                     AstValue::keccak256(signature_value, context.state, &current);
                                 let state = context.state;
                                 let selector_value = hash
-                                    .cast(AstType::fixed_bytes(state.mlir(), 4), state, &current)
+                                    .cast(
+                                        AstType::fixed_bytes(state.mlir_context, 4),
+                                        state,
+                                        &current,
+                                    )
                                     .into_mlir();
                                 (selector_value, current)
                             }
@@ -500,7 +506,7 @@ impl MemberBuiltinCall {
                                 block,
                             } = base.emit(context, block);
                             let byte_target =
-                                AstType::fixed_bytes(context.state.mlir(), 1).into_mlir();
+                                AstType::fixed_bytes(context.state.mlir_context, 1).into_mlir();
                             let BlockAnd { value, block } =
                                 value_argument.emit_as(byte_target, context, block);
                             let state = context.state;
@@ -550,7 +556,7 @@ impl MemberBuiltinCall {
                         } = positional.emit(context, block);
                         let state = context.state;
                         let result_type =
-                            AstType::string(state.mlir(), solx_utils::DataLocation::Memory)
+                            AstType::string(state.mlir_context, solx_utils::DataLocation::Memory)
                                 .into_mlir();
                         let value = mlir_op!(
                             state,

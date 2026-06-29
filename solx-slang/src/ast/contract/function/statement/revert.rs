@@ -26,7 +26,7 @@ statement_emit!(RevertStatement; |node, context, block| {
                 state,
                 &block,
                 RevertOperation
-                    .signature(StringAttribute::new(state.mlir(), ""))
+                    .signature(StringAttribute::new(state.mlir_context, ""))
                     .args(&[])
             );
             return Some(block);
@@ -65,9 +65,9 @@ statement_emit!(RevertStatement; |node, context, block| {
         state,
         &block,
         RevertOperation
-            .signature(StringAttribute::new(state.mlir(), &signature))
+            .signature(StringAttribute::new(state.mlir_context, &signature))
             .args(&values)
-            .call(Attribute::unit(state.mlir()))
+            .call(Attribute::unit(state.mlir_context))
     );
     Some(block)
 });

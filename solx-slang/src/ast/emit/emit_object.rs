@@ -36,8 +36,8 @@ pub trait EmitObject {
             context,
             block,
             ContractOperation
-                .sym_name(StringAttribute::new(context.mlir(), name))
-                .kind(kind.attribute(context.mlir()))
+                .sym_name(StringAttribute::new(context.mlir_context, name))
+                .kind(kind.attribute(context.mlir_context))
             ; body_region
         )
     }

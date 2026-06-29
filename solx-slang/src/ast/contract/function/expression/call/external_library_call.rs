@@ -150,7 +150,7 @@ impl ExternalLibraryCall {
         };
         let state = context.state;
         let address = AstValue::library_address(&library_name, state, &current_block).into_mlir();
-        let callee_type = FunctionType::new(state.mlir(), &parameter_types, &return_types);
+        let callee_type = FunctionType::new(state.mlir_context, &parameter_types, &return_types);
         let gas = AstValue::gas_left(state, &current_block).into_mlir();
         let value = AstValue::uint256(0, state, &current_block).into_mlir();
         let selector_value =
@@ -158,17 +158,17 @@ impl ExternalLibraryCall {
         let operation = current_block.append_operation(mlir_op_build!(
             state,
             ExtCallOperation
-                .callee(StringAttribute::new(state.mlir(), &mlir_name))
+                .callee(StringAttribute::new(state.mlir_context, &mlir_name))
                 .ins(&argument_values)
                 .addr(address)
                 .gas(gas)
                 .val(value)
                 .selector(selector_value)
-                .delegate_call(Attribute::unit(state.mlir()))
-                .library_call(Attribute::unit(state.mlir()))
+                .delegate_call(Attribute::unit(state.mlir_context))
+                .library_call(Attribute::unit(state.mlir_context))
                 .callee_type(TypeAttribute::new(callee_type.into()))
                 .status(AstType::signless(
-                    state.mlir(),
+                    state.mlir_context,
                     solx_utils::BIT_LENGTH_BOOLEAN
                 ))
                 .outs(&return_types)

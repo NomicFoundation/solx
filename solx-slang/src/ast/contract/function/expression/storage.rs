@@ -33,7 +33,10 @@ impl StorageSlot {
             let operation = block.append_operation(mlir_op_build!(
                 context,
                 LoadImmutableOperation
-                    ._name(FlatSymbolRefAttribute::new(context.mlir(), &self.name))
+                    ._name(FlatSymbolRefAttribute::new(
+                        context.mlir_context,
+                        &self.name
+                    ))
                     .val(element_type)
             ));
             return operation
@@ -72,7 +75,8 @@ impl StorageSlot {
     where
         'context: 'block,
     {
-        let place_type = AstType::new(element_type).address_type(self.location, context.mlir());
+        let place_type =
+            AstType::new(element_type).address_type(self.location, context.mlir_context);
         Pointer::addr_of(&self.name, place_type, context, block)
     }
 }

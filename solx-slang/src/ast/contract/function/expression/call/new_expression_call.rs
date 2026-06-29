@@ -65,7 +65,7 @@ impl NewExpressionCall {
                     if matches!(new_expression.type_name(), SlangTypeName::ElementaryType(_))
             ) =>
             {
-                Some(AstType::string(context.state.mlir(), DataLocation::Memory).into_mlir())
+                Some(AstType::string(context.state.mlir_context, DataLocation::Memory).into_mlir())
             }
             _ => None,
         };
@@ -82,7 +82,7 @@ impl NewExpressionCall {
                 Some(&size_value) => {
                     let size = AstValue::from(size_value)
                         .cast(
-                            AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD),
+                            AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
                             state,
                             &current_block,
                         )

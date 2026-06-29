@@ -143,7 +143,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         );
         if declared_type.is_reference_type() && !matches!(declared_type, ast::Type::Mapping(_)) {
             let address_type =
-                AstType::new(element_type).address_type(slot.location, context.state.mlir());
+                AstType::new(element_type).address_type(slot.location, context.state.mlir_context);
             let storage_ref =
                 Pointer::addr_of(&slot.name, address_type, context.state, &block).into_mlir();
             return (Self::ReferenceCopy(storage_ref), block);

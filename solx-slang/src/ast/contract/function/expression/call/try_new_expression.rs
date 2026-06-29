@@ -106,9 +106,9 @@ impl TryNewExpression {
             block: current_block,
         } = creation.emit(context, call_value, salt, true, current_block);
         let state = context.state;
-        let ui160 = AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_ETH_ADDRESS);
+        let ui160 = AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_ETH_ADDRESS);
         let address = AstValue::from(contract_value).cast(
-            AstType::address(state.mlir(), false),
+            AstType::address(state.mlir_context, false),
             state,
             &current_block,
         );

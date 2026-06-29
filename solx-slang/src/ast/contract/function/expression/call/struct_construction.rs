@@ -80,7 +80,7 @@ impl StructConstruction {
             );
             let index_value = AstValue::constant(
                 index as i64,
-                AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_X64),
+                AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_X64),
                 state,
                 &block,
             );

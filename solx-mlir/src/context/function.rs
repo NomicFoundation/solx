@@ -7,8 +7,8 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Region;
 use melior::ir::RegionLike;
-use melior::ir::Type;
-use melior::ir::Value;
+use melior::ir::Type as MlirType;
+use melior::ir::Value as MlirValue;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
@@ -20,6 +20,8 @@ use melior::ir::r#type::IntegerType;
 use crate::Context;
 use crate::FunctionKind;
 use crate::StateMutability;
+use crate::Type;
+use crate::Value;
 use crate::ods::sol::CallOperation;
 use crate::ods::sol::FuncOperation;
 
@@ -29,65 +31,23 @@ pub struct Function<'context> {
     /// The mangled MLIR function name.
     pub mlir_name: String,
     /// Parameter types (MLIR-interned, exact types from the function signature).
-    pub parameter_types: Vec<Type<'context>>,
+    pub parameter_types: Vec<MlirType<'context>>,
     /// Return types (MLIR-interned, exact types from the function signature).
-    pub return_types: Vec<Type<'context>>,
+    pub return_types: Vec<MlirType<'context>>,
 }
 
 impl<'context> Function<'context> {
     /// Creates a new function metadata entry.
     pub fn new(
         mlir_name: String,
-        parameter_types: Vec<Type<'context>>,
-        return_types: Vec<Type<'context>>,
+        parameter_types: Vec<MlirType<'context>>,
+        return_types: Vec<MlirType<'context>>,
     ) -> Self {
         Self {
             mlir_name,
             parameter_types,
             return_types,
         }
-    }
-
-    /// Emits a `sol.call` to this function (an internal call by symbol), returning its results in order.
-    pub fn call<'block, B>(
-        &self,
-        operands: &[Value<'context, 'block>],
-        context: &Context<'context>,
-        block: &B,
-    ) -> Vec<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        let operation = block.append_operation(mlir_op_build!(
-            context,
-            CallOperation
-                .callee(FlatSymbolRefAttribute::new(context.mlir(), &self.mlir_name))
-                .outs(&self.return_types)
-                .operands(operands)
-        ));
-        (0..self.return_types.len())
-            .map(|index| {
-                operation
-                    .result(index)
-                    .expect("sol.call produces its declared result count")
-                    .into()
-            })
-            .collect()
-    }
-
-    /// `sol.func_constant` — the internal function pointer to this function.
-    pub fn pointer_constant<'block>(
-        &self,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> crate::Value<'context, 'block> {
-        crate::Value::function_constant(
-            &self.mlir_name,
-            self.func_ref_type(context),
-            context,
-            block,
-        )
     }
 
     /// Emits this function's `sol.func` definition with an empty entry block, returned for the body.
@@ -101,8 +61,11 @@ impl<'context> Function<'context> {
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
-        let function_type =
-            FunctionType::new(context.mlir(), &self.parameter_types, &self.return_types);
+        let function_type = FunctionType::new(
+            context.mlir_context,
+            &self.parameter_types,
+            &self.return_types,
+        );
         let body_region = Region::new();
         let entry_block = Block::new(
             &self
@@ -113,31 +76,30 @@ impl<'context> Function<'context> {
         );
         body_region.append_block(entry_block);
 
-        let mut operation_builder = FuncOperation::builder(context.mlir(), context.location())
-            .sym_name(StringAttribute::new(context.mlir(), &self.mlir_name))
-            .function_type(TypeAttribute::new(function_type.into()))
-            .state_mutability(state_mutability.attribute(context.mlir()))
-            .body(body_region);
+        let mut operation_builder =
+            FuncOperation::builder(context.mlir_context, context.location())
+                .sym_name(StringAttribute::new(context.mlir_context, &self.mlir_name))
+                .function_type(TypeAttribute::new(function_type.into()))
+                .state_mutability(state_mutability.attribute(context.mlir_context))
+                .body(body_region);
         if let Some(function_kind) = kind {
-            operation_builder = operation_builder.kind(function_kind.attribute(context.mlir()));
+            operation_builder =
+                operation_builder.kind(function_kind.attribute(context.mlir_context));
         }
         if let Some(selector_value) = selector {
             operation_builder = operation_builder.selector(IntegerAttribute::new(
-                IntegerType::new(context.mlir(), crate::Type::SELECTOR_BIT_WIDTH).into(),
+                IntegerType::new(context.mlir_context, Type::SELECTOR_BIT_WIDTH).into(),
                 selector_value as i64,
             ));
         }
         // A referenceable function carries a unique `id`: `sol.icall` dispatch switches over it.
         if let Some(function_id) = id {
             operation_builder = operation_builder.id(IntegerAttribute::new(
-                IntegerType::new(context.mlir(), 64).into(),
+                IntegerType::new(context.mlir_context, solx_utils::BIT_LENGTH_X64 as u32).into(),
                 function_id,
             ));
         }
-        // A selector-bearing function or constructor carries `orig_fn_type`: the
-        // SolToYul interface/constructor dispatchers read it to recover the
-        // pre-conversion Sol signature. Fallbacks no longer need it — their
-        // dispatcher derives everything from the live `function_type` arity.
+        // Selector-bearing functions and constructors carry `orig_fn_type` for the SolToYul dispatchers.
         if selector.is_some() || matches!(kind, Some(FunctionKind::Constructor)) {
             operation_builder =
                 operation_builder.orig_fn_type(TypeAttribute::new(function_type.into()));
@@ -150,9 +112,53 @@ impl<'context> Function<'context> {
             .expect("func body has entry block")
     }
 
-    /// The `!sol.func_ref<…>` type of an internal pointer to this function,
+    /// Emits a `sol.call` to this function (an internal call by symbol), returning its results in order.
+    pub fn call<'block, B>(
+        &self,
+        operands: &[MlirValue<'context, 'block>],
+        context: &Context<'context>,
+        block: &B,
+    ) -> Vec<MlirValue<'context, 'block>>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let operation = block.append_operation(mlir_op_build!(
+            context,
+            CallOperation
+                .callee(FlatSymbolRefAttribute::new(
+                    context.mlir_context,
+                    &self.mlir_name
+                ))
+                .outs(&self.return_types)
+                .operands(operands)
+        ));
+        (0..self.return_types.len())
+            .map(|index| {
+                operation
+                    .result(index)
+                    .expect("sol.call produces its declared result count")
+                    .into()
+            })
+            .collect()
+    }
+
+    /// The `!sol.func_ref<...>` type of an internal pointer to this function,
     /// built from its declared signature.
-    pub fn func_ref_type(&self, context: &Context<'context>) -> crate::Type<'context> {
-        crate::Type::func_ref(context.mlir(), &self.parameter_types, &self.return_types)
+    pub fn func_ref_type(&self, context: &Context<'context>) -> Type<'context> {
+        Type::func_ref(
+            context.mlir_context,
+            &self.parameter_types,
+            &self.return_types,
+        )
+    }
+
+    /// `sol.func_constant`: the internal function pointer to this function.
+    pub fn pointer_constant<'block>(
+        &self,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        Value::function_constant(&self.mlir_name, self.func_ref_type(context), context, block)
     }
 }

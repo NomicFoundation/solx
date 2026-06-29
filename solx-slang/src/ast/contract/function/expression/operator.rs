@@ -311,7 +311,7 @@ impl Operator {
                 let zero = AstValue::constant(0, value.r#type(), context.state, &block);
                 let cmp = value.compare(zero, CmpPredicate::Eq, context.state, &block);
                 let result_type = target_type.unwrap_or(
-                    AstType::unsigned(context.state.mlir(), solx_utils::BIT_LENGTH_FIELD)
+                    AstType::unsigned(context.state.mlir_context, solx_utils::BIT_LENGTH_FIELD)
                         .into_mlir(),
                 );
                 let result = cmp.cast(AstType::new(result_type), context.state, &block);

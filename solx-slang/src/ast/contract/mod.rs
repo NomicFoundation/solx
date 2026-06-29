@@ -121,7 +121,7 @@ impl EmitObject for ContractDefinition {
 
         let storage_layout = self.storage_layout();
         let contract_type =
-            AstType::contract(context.mlir(), &contract_name, self.is_payable()).into_mlir();
+            AstType::contract(context.mlir_context, &contract_name, self.is_payable()).into_mlir();
 
         let module_body = context.module.body();
         let contract_body = self.emit_contract_shell(
@@ -141,29 +141,29 @@ impl EmitObject for ContractDefinition {
             );
             let state = &*context;
             if matches!(slot.location, DataLocation::Immutable) {
-                let operation = ImmutableOperation::builder(state.mlir(), state.location())
-                    .sym_name(StringAttribute::new(state.mlir(), &slot.name))
+                let operation = ImmutableOperation::builder(state.mlir_context, state.location())
+                    .sym_name(StringAttribute::new(state.mlir_context, &slot.name))
                     .r#type(TypeAttribute::new(element_type))
                     .build();
                 contract_body.append_operation(operation.into());
                 continue;
             }
             let slot_attribute: IntegerAttribute =
-                Attribute::parse(state.mlir(), &format!("{} : i256", slot.slot))
+                Attribute::parse(state.mlir_context, &format!("{} : i256", slot.slot))
                     .expect("valid slot literal")
                     .try_into()
                     .expect("slot literal is an integer attribute");
             let byte_offset_attribute = IntegerAttribute::new(
-                IntegerType::new(state.mlir(), solx_utils::BIT_LENGTH_X32 as u32).into(),
+                IntegerType::new(state.mlir_context, solx_utils::BIT_LENGTH_X32 as u32).into(),
                 slot.byte_offset.into(),
             );
-            let mut operation = StateVarOperation::builder(state.mlir(), state.location())
-                .sym_name(StringAttribute::new(state.mlir(), &slot.name))
+            let mut operation = StateVarOperation::builder(state.mlir_context, state.location())
+                .sym_name(StringAttribute::new(state.mlir_context, &slot.name))
                 .r#type(TypeAttribute::new(element_type))
                 .slot(slot_attribute)
                 .byte_offset(byte_offset_attribute);
             if matches!(slot.location, DataLocation::Transient) {
-                operation = operation.transient(Attribute::unit(state.mlir()));
+                operation = operation.transient(Attribute::unit(state.mlir_context));
             }
             contract_body.append_operation(operation.build().into());
         }
@@ -320,7 +320,8 @@ impl EmitObject for LibraryDefinition {
 
         let storage_layout: HashMap<NodeId, StorageSlot> = HashMap::new();
         let dispatch = ContractDispatch::default();
-        let library_type = AstType::contract(context.mlir(), &library_name, false).into_mlir();
+        let library_type =
+            AstType::contract(context.mlir_context, &library_name, false).into_mlir();
         let module_body = context.module.body();
         let contract_body = self.emit_contract_shell(
             context,

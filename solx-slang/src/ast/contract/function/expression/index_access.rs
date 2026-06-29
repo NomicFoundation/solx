@@ -61,8 +61,8 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
                         std::mem::discriminant(&base_type)
                     ),
                 };
-                let address_type =
-                    AstType::new(element_type).address_type(base_location, context.state.mlir());
+                let address_type = AstType::new(element_type)
+                    .address_type(base_location, context.state.mlir_context);
                 let address = base_value
                     .into_pointer()
                     .entry(index_value, address_type, context.state, &block)
@@ -102,7 +102,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
             block,
         } = base.emit(context, block);
         let ui256 =
-            AstType::unsigned(context.state.mlir(), solx_utils::BIT_LENGTH_FIELD)
+            AstType::unsigned(context.state.mlir_context, solx_utils::BIT_LENGTH_FIELD)
                 .into_mlir();
         let (start_value, block) = match node.start() {
             Some(start_expression) => {

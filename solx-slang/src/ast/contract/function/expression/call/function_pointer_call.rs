@@ -127,7 +127,9 @@ impl FunctionPointerCall {
         let value = call_value.unwrap_or_else(|| AstValue::uint256(0, state, &block).into_mlir());
         let gas = call_gas.unwrap_or_else(|| AstValue::gas_left(state, &block).into_mlir());
         let mut out_types = Vec::with_capacity(result_types.len() + 1);
-        out_types.push(AstType::signless(state.mlir(), solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
+        out_types.push(
+            AstType::signless(state.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir(),
+        );
         out_types.extend_from_slice(&result_types);
         let operation = block.append_operation(mlir_op_build!(
             state,
@@ -137,7 +139,7 @@ impl FunctionPointerCall {
                 .callee_operands(&argument_values)
                 .gas(gas)
                 .value(value)
-                .try_call(Attribute::unit(state.mlir()))
+                .try_call(Attribute::unit(state.mlir_context))
         ));
         let status = operation
             .result(0)

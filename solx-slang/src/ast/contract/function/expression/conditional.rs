@@ -275,7 +275,7 @@ expression_emit!(ArrayExpression; |node, context, block| {
     let array_type = match &result_slang_type {
         SlangType::FixedSizeArray(fixed_array_type) if element_type != declared_element_type => {
             AstType::array(
-                state.mlir(),
+                state.mlir_context,
                 solx_mlir::ArraySize::Fixed(fixed_array_type.size() as u64),
                 element_type,
                 solx_utils::DataLocation::Memory,

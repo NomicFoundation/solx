@@ -245,7 +245,7 @@ statement_emit!(ExpressionStatement; |node, context, block| {
                         state,
                         &block,
                         RevertOperation
-                            .signature(StringAttribute::new(state.mlir(), ""))
+                            .signature(StringAttribute::new(state.mlir_context, ""))
                             .args(&[])
                     );
                     block
@@ -260,7 +260,7 @@ statement_emit!(ExpressionStatement; |node, context, block| {
                         state,
                         &block,
                         RevertOperation
-                            .signature(StringAttribute::new(state.mlir(), &message))
+                            .signature(StringAttribute::new(state.mlir_context, &message))
                             .args(&[])
                     );
                     block
@@ -273,7 +273,7 @@ statement_emit!(ExpressionStatement; |node, context, block| {
                     } = expression.emit(&emitter, block);
                     let state = context.state;
                     let string_memory_type =
-                        AstType::string(state.mlir(), solx_utils::DataLocation::Memory)
+                        AstType::string(state.mlir_context, solx_utils::DataLocation::Memory)
                             .into_mlir();
                     let message_value = message_value
                         .cast(AstType::new(string_memory_type), state, &block)
@@ -282,9 +282,9 @@ statement_emit!(ExpressionStatement; |node, context, block| {
                         state,
                         &block,
                         RevertOperation
-                            .signature(StringAttribute::new(state.mlir(), "Error(string)"))
+                            .signature(StringAttribute::new(state.mlir_context, "Error(string)"))
                             .args(&[message_value])
-                            .call(Attribute::unit(state.mlir()))
+                            .call(Attribute::unit(state.mlir_context))
                     );
                     block
                 }

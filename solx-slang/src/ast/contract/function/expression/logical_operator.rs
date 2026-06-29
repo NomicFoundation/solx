@@ -43,7 +43,7 @@ impl LogicalOperator {
         let BlockAnd { value: lhs, block } = left.emit(emitter, block);
         let lhs_bool = lhs.is_nonzero(emitter.state, &block).into_mlir();
 
-        let i1_type = AstType::signless(emitter.state.mlir(), solx_utils::BIT_LENGTH_BOOLEAN);
+        let i1_type = AstType::signless(emitter.state.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN);
         let result_ptr = Pointer::stack_slot(i1_type, emitter.state, &block);
         let default_value = AstValue::boolean(short_circuit_value, emitter.state, &block);
         result_ptr.store(default_value, emitter.state, &block);

@@ -86,7 +86,7 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for MemberAccessExpre
 
         let index_value = AstValue::constant(
             field_index as i64,
-            AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_X64),
+            AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_X64),
             state,
             &block,
         );
@@ -208,14 +208,14 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 })
                 .fold(0u32, |interface_id, selector| interface_id ^ selector);
             let state = context.state;
-            let integer_type = Type::from(IntegerType::unsigned(state.mlir(), 32));
+            let integer_type = Type::from(IntegerType::unsigned(state.mlir_context, 32));
             let value = AstValue::constant_from_bigint(
                 &BigInt::from(interface_id),
                 AstType::new(integer_type),
                 state,
                 &block,
             )
-            .cast(AstType::fixed_bytes(state.mlir(), 4), state, &block);
+            .cast(AstType::fixed_bytes(state.mlir_context, 4), state, &block);
             return BlockAnd { block, value };
         }
         Some(BuiltIn::TypeName) => {
@@ -264,7 +264,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 state,
                 &block,
                 ObjectCodeOperation
-                    .obj_name(StringAttribute::new(state.mlir(), &object_name))
+                    .obj_name(StringAttribute::new(state.mlir_context, &object_name))
                     .out(result_type)
             );
             return BlockAnd {
@@ -283,7 +283,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 &block,
                 BalanceOperation
                     .cont_addr(address.into_mlir())
-                    .out(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
+                    .out(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
             );
             return BlockAnd {
                 block,
@@ -301,7 +301,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 &block,
                 CodeHashOperation
                     .cont_addr(address.into_mlir())
-                    .out(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
+                    .out(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
             );
             return BlockAnd {
                 block,
@@ -319,7 +319,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 &block,
                 CodeOperation
                     .cont_addr(address.into_mlir())
-                    .out(AstType::string(state.mlir(), DataLocation::Memory))
+                    .out(AstType::string(state.mlir_context, DataLocation::Memory))
             );
             return BlockAnd {
                 block,
@@ -372,61 +372,61 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
     let state = context.state;
     let environment_op = match node.member().resolve_to_built_in() {
         Some(BuiltIn::TxOrigin) => {
-            Some(mlir_op_build!(state, OriginOperation.addr(AstType::address(state.mlir(), false))))
+            Some(mlir_op_build!(state, OriginOperation.addr(AstType::address(state.mlir_context, false))))
         }
         Some(BuiltIn::TxGasPrice) => Some(mlir_op_build!(
             state,
-            GasPriceOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
+            GasPriceOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::MsgSender) => {
-            Some(mlir_op_build!(state, CallerOperation.addr(AstType::address(state.mlir(), false))))
+            Some(mlir_op_build!(state, CallerOperation.addr(AstType::address(state.mlir_context, false))))
         }
         Some(BuiltIn::MsgValue) => Some(mlir_op_build!(
             state,
-            CallValueOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
+            CallValueOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::BlockTimestamp) => Some(mlir_op_build!(
             state,
-            TimestampOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
+            TimestampOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::BlockNumber) => Some(mlir_op_build!(
             state,
-            BlockNumberOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
+            BlockNumberOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::BlockCoinbase) => {
-            Some(mlir_op_build!(state, CoinbaseOperation.addr(AstType::address(state.mlir(), false))))
+            Some(mlir_op_build!(state, CoinbaseOperation.addr(AstType::address(state.mlir_context, false))))
         }
         Some(BuiltIn::BlockChainid) => Some(mlir_op_build!(
             state,
-            ChainIdOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
+            ChainIdOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::BlockBasefee) => Some(mlir_op_build!(
             state,
-            BaseFeeOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
+            BaseFeeOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::BlockGaslimit) => Some(mlir_op_build!(
             state,
-            GasLimitOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
+            GasLimitOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::BlockBlobbasefee) => Some(mlir_op_build!(
             state,
-            BlobBaseFeeOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
+            BlobBaseFeeOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::BlockDifficulty) => Some(mlir_op_build!(
             state,
-            DifficultyOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
+            DifficultyOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::BlockPrevrandao) => Some(mlir_op_build!(
             state,
-            PrevRandaoOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
+            PrevRandaoOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::MsgSig) => Some(mlir_op_build!(
             state,
-            SigOperation.val(AstType::fixed_bytes(state.mlir(), 4))
+            SigOperation.val(AstType::fixed_bytes(state.mlir_context, 4))
         )),
         Some(BuiltIn::MsgData) => Some(mlir_op_build!(
             state,
-            GetCallDataOperation.addr(AstType::string(state.mlir(), DataLocation::CallData))
+            GetCallDataOperation.addr(AstType::string(state.mlir_context, DataLocation::CallData))
         )),
         _ => None,
     };

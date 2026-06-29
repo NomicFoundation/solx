@@ -11,7 +11,6 @@ use mlir_sys::MlirPass;
 use mlir_sys::MlirRegion;
 
 unsafe extern "C" {
-
     /// Returns the dialect handle for the Sol dialect.
     pub fn mlirGetDialectHandle__sol__() -> MlirDialectHandle;
 
@@ -185,7 +184,7 @@ unsafe extern "C" {
     pub fn solxIsEnumType(ty: mlir_sys::MlirType) -> bool;
     /// Whether `ty` is the `!sol.address`.
     pub fn solxIsAddressType(ty: mlir_sys::MlirType) -> bool;
-    /// Whether `ty` is a `!sol.contract<…>`.
+    /// Whether `ty` is a `!sol.contract<...>`.
     pub fn solxIsContractType(ty: mlir_sys::MlirType) -> bool;
     /// Whether `ty` is a `!sol.fixedbytes<N>`.
     pub fn solxIsFixedBytesType(ty: mlir_sys::MlirType) -> bool;
@@ -194,19 +193,19 @@ unsafe extern "C" {
     pub fn solxFixedBytesTypeSize(ty: mlir_sys::MlirType) -> u32;
     /// Whether `ty` is the single `!sol.byte` (the `bytes`/`string` element).
     pub fn solxIsByteType(ty: mlir_sys::MlirType) -> bool;
-    /// Whether `ty` is a `!sol.string<…>` (`bytes` and `string` share it).
+    /// Whether `ty` is a `!sol.string<...>` (`bytes` and `string` share it).
     pub fn solxIsStringType(ty: mlir_sys::MlirType) -> bool;
-    /// Whether `ty` is a `!sol.array<…>`.
+    /// Whether `ty` is a `!sol.array<...>`.
     pub fn solxIsArrayType(ty: mlir_sys::MlirType) -> bool;
-    /// Whether `ty` is a `!sol.struct<…>`.
+    /// Whether `ty` is a `!sol.struct<...>`.
     pub fn solxIsStructType(ty: mlir_sys::MlirType) -> bool;
-    /// Whether `ty` is a `!sol.mapping<…>`.
+    /// Whether `ty` is a `!sol.mapping<...>`.
     pub fn solxIsMappingType(ty: mlir_sys::MlirType) -> bool;
-    /// Whether `ty` is a `!sol.ext_func_ref<…>` (external function reference).
+    /// Whether `ty` is a `!sol.ext_func_ref<...>` (external function reference).
     pub fn solxIsExtFuncRefType(ty: mlir_sys::MlirType) -> bool;
-    /// Whether `ty` is a `!sol.func_ref<…>` (internal function reference).
+    /// Whether `ty` is a `!sol.func_ref<...>` (internal function reference).
     pub fn solxIsFuncRefType(ty: mlir_sys::MlirType) -> bool;
-    /// Whether `ty` is a `!sol.ptr<…>` (a typed place / address).
+    /// Whether `ty` is a `!sol.ptr<...>` (a typed place / address).
     pub fn solxIsPointerType(ty: mlir_sys::MlirType) -> bool;
 
     /// Returns the element type of a non-mapping reference type. For

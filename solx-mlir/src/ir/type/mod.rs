@@ -5,11 +5,13 @@
 pub mod array_size;
 pub mod location_policy;
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type as MlirType;
 use melior::ir::TypeLike;
 use melior::ir::r#type::IntegerType;
+use num::BigInt;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
@@ -20,6 +22,7 @@ use slang_solidity_v2::ast::Type as SlangType;
 use crate::Context;
 use crate::IntoOds;
 use crate::Value;
+use crate::ffi;
 use crate::ods::sol::AddressCastOperation;
 use crate::ods::sol::BytesCastOperation;
 use crate::ods::sol::CastOperation;
@@ -34,7 +37,7 @@ use self::location_policy::LocationPolicy;
 /// An MLIR type in the Sol dialect: type construction, the kind predicates, and the cast router [`Self::cast`].
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Type<'context> {
-    inner: MlirType<'context>,
+    pub inner: MlirType<'context>,
 }
 
 impl<'context> Type<'context> {
@@ -51,12 +54,12 @@ impl<'context> Type<'context> {
         Self::new(MlirType::from(IntegerType::unsigned(context, bits as u32)))
     }
 
-    /// A signless integer type of `bits` width (`i<bits>`) — the boolean `i1` and the Yul word `i256`.
+    /// A signless integer type of `bits` width (`i<bits>`): the boolean `i1` and the Yul word `i256`.
     pub fn signless(context: &'context melior::Context, bits: usize) -> Self {
         Self::new(MlirType::from(IntegerType::new(context, bits as u32)))
     }
 
-    /// The opaque LLVM pointer type (`!llvm.ptr`) — a Yul-local slot.
+    /// The opaque LLVM pointer type (`!llvm.ptr`): a Yul-local slot.
     pub fn llvm_ptr(context: &'context melior::Context) -> Self {
         Self::new(melior::dialect::llvm::r#type::pointer(context, 0))
     }
@@ -64,7 +67,7 @@ impl<'context> Type<'context> {
     /// A `sol::AddressType` with the given payability.
     pub fn address(context: &'context melior::Context, payable: bool) -> Self {
         Self::new(unsafe {
-            MlirType::from_raw(crate::ffi::solxCreateAddressType(context.to_raw(), payable))
+            MlirType::from_raw(ffi::solxCreateAddressType(context.to_raw(), payable))
         })
     }
 
@@ -75,7 +78,7 @@ impl<'context> Type<'context> {
         location: solx_utils::DataLocation,
     ) -> Self {
         Self::new(unsafe {
-            MlirType::from_raw(crate::ffi::solxCreatePointerType(
+            MlirType::from_raw(ffi::solxCreatePointerType(
                 context.to_raw(),
                 element_type.to_raw(),
                 location as u32,
@@ -87,7 +90,7 @@ impl<'context> Type<'context> {
     pub fn contract(context: &'context melior::Context, name: &str, payable: bool) -> Self {
         let name_bytes = name.as_bytes();
         Self::new(unsafe {
-            MlirType::from_raw(crate::ffi::solxCreateContractType(
+            MlirType::from_raw(ffi::solxCreateContractType(
                 context.to_raw(),
                 name_bytes.as_ptr() as *const std::ffi::c_char,
                 name_bytes.len(),
@@ -100,7 +103,7 @@ impl<'context> Type<'context> {
     /// share `!sol.string`).
     pub fn string(context: &'context melior::Context, location: solx_utils::DataLocation) -> Self {
         Self::new(unsafe {
-            MlirType::from_raw(crate::ffi::solxCreateStringType(
+            MlirType::from_raw(ffi::solxCreateStringType(
                 context.to_raw(),
                 location as u32,
             ))
@@ -110,7 +113,7 @@ impl<'context> Type<'context> {
     /// A `sol::FixedBytesType` of the given byte width.
     pub fn fixed_bytes(context: &'context melior::Context, width: u32) -> Self {
         Self::new(unsafe {
-            MlirType::from_raw(crate::ffi::solxCreateFixedBytesType(
+            MlirType::from_raw(ffi::solxCreateFixedBytesType(
                 context.to_raw(),
                 width,
             ))
@@ -119,7 +122,7 @@ impl<'context> Type<'context> {
 
     /// The single `sol::ByteType` (the `bytes`/`string` element type).
     pub fn byte(context: &'context melior::Context) -> Self {
-        Self::new(unsafe { MlirType::from_raw(crate::ffi::solxCreateByteType(context.to_raw())) })
+        Self::new(unsafe { MlirType::from_raw(ffi::solxCreateByteType(context.to_raw())) })
     }
 
     /// A `sol::ArrayType` of `element_type` at `location`.
@@ -130,7 +133,7 @@ impl<'context> Type<'context> {
         location: solx_utils::DataLocation,
     ) -> Self {
         Self::new(unsafe {
-            MlirType::from_raw(crate::ffi::solxCreateArrayType(
+            MlirType::from_raw(ffi::solxCreateArrayType(
                 context.to_raw(),
                 size.as_dialect_i64(),
                 element_type.to_raw(),
@@ -146,7 +149,7 @@ impl<'context> Type<'context> {
         value_type: MlirType<'context>,
     ) -> Self {
         Self::new(unsafe {
-            MlirType::from_raw(crate::ffi::solxCreateMappingType(
+            MlirType::from_raw(ffi::solxCreateMappingType(
                 context.to_raw(),
                 key_type.to_raw(),
                 value_type.to_raw(),
@@ -162,7 +165,7 @@ impl<'context> Type<'context> {
     ) -> Self {
         let raw_types: Vec<mlir_sys::MlirType> = member_types.iter().map(|t| t.to_raw()).collect();
         Self::new(unsafe {
-            MlirType::from_raw(crate::ffi::solxCreateStructType(
+            MlirType::from_raw(ffi::solxCreateStructType(
                 context.to_raw(),
                 raw_types.as_ptr(),
                 raw_types.len(),
@@ -175,11 +178,11 @@ impl<'context> Type<'context> {
     /// number of enum members).
     pub fn enumeration(context: &'context melior::Context, max: u32) -> Self {
         Self::new(unsafe {
-            MlirType::from_raw(crate::ffi::solxCreateEnumType(context.to_raw(), max))
+            MlirType::from_raw(ffi::solxCreateEnumType(context.to_raw(), max))
         })
     }
 
-    /// A `sol::FuncRefType` — an internal function pointer over `parameter_types -> result_types`.
+    /// A `sol::FuncRefType`: an internal function pointer over `parameter_types -> result_types`.
     pub fn func_ref(
         context: &'context melior::Context,
         parameter_types: &[MlirType<'context>],
@@ -188,7 +191,7 @@ impl<'context> Type<'context> {
         let parameters: Vec<_> = parameter_types.iter().map(|t| t.to_raw()).collect();
         let results: Vec<_> = result_types.iter().map(|t| t.to_raw()).collect();
         Self::new(unsafe {
-            MlirType::from_raw(crate::ffi::solxCreateFuncRefType(
+            MlirType::from_raw(ffi::solxCreateFuncRefType(
                 context.to_raw(),
                 parameters.as_ptr(),
                 parameters.len(),
@@ -198,7 +201,7 @@ impl<'context> Type<'context> {
         })
     }
 
-    /// A `sol::ExtFuncRefType` — an external function reference (address + selector) over `parameter_types -> result_types`.
+    /// A `sol::ExtFuncRefType`: an external function reference (address and selector) over `parameter_types -> result_types`.
     pub fn ext_func_ref(
         context: &'context melior::Context,
         parameter_types: &[MlirType<'context>],
@@ -207,7 +210,7 @@ impl<'context> Type<'context> {
         let parameters: Vec<_> = parameter_types.iter().map(|t| t.to_raw()).collect();
         let results: Vec<_> = result_types.iter().map(|t| t.to_raw()).collect();
         Self::new(unsafe {
-            MlirType::from_raw(crate::ffi::solxCreateExtFuncRefType(
+            MlirType::from_raw(ffi::solxCreateExtFuncRefType(
                 context.to_raw(),
                 parameters.as_ptr(),
                 parameters.len(),
@@ -230,18 +233,20 @@ impl<'context> Type<'context> {
             SlangType::Integer(integer_type) => {
                 let bits = integer_type.bits();
                 if integer_type.is_signed() {
-                    MlirType::from(IntegerType::signed(context.mlir(), bits))
+                    MlirType::from(IntegerType::signed(context.mlir_context, bits))
                 } else {
-                    MlirType::from(IntegerType::unsigned(context.mlir(), bits))
+                    MlirType::from(IntegerType::unsigned(context.mlir_context, bits))
                 }
             }
             SlangType::Boolean(_) => MlirType::from(IntegerType::new(
-                context.mlir(),
+                context.mlir_context,
                 solx_utils::BIT_LENGTH_BOOLEAN as u32,
             )),
-            SlangType::Address(_) => Type::address(context.mlir(), false).into_mlir(),
+            SlangType::Address(_) => Type::address(context.mlir_context, false).into_mlir(),
             SlangType::Literal(literal_type) => match literal_type.kind() {
-                LiteralKind::Address { .. } => Type::address(context.mlir(), false).into_mlir(),
+                LiteralKind::Address { .. } => {
+                    Type::address(context.mlir_context, false).into_mlir()
+                }
                 LiteralKind::Integer { .. } => {
                     let mobile_type = literal_type
                         .mobile_type()
@@ -250,43 +255,51 @@ impl<'context> Type<'context> {
                 }
                 LiteralKind::HexInteger { bytes, .. } => {
                     let bits = bytes * solx_utils::BIT_LENGTH_BYTE as u32;
-                    MlirType::from(IntegerType::unsigned(context.mlir(), bits))
+                    MlirType::from(IntegerType::unsigned(context.mlir_context, bits))
                 }
                 LiteralKind::String { .. } => {
-                    Type::string(context.mlir(), solx_utils::DataLocation::Memory).into_mlir()
+                    Type::string(context.mlir_context, solx_utils::DataLocation::Memory).into_mlir()
                 }
                 LiteralKind::HexString { bytes } => Type::fixed_bytes(
-                    context.mlir(),
+                    context.mlir_context,
                     bytes.try_into().expect("hex string length fits in u32"),
                 )
                 .into_mlir(),
                 LiteralKind::Rational { .. } => {
                     // A rational appears only as a compile-time intermediate that constant
                     // folding consumes; one surviving to runtime would fail downstream, not here.
-                    Type::unsigned(context.mlir(), solx_utils::BIT_LENGTH_FIELD).into_mlir()
+                    Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
                 }
             },
-            SlangType::String(string_type) => {
-                Type::string(context.mlir(), policy.data_location(string_type.location()))
-                    .into_mlir()
-            }
-            SlangType::Bytes(bytes_type) => {
-                Type::string(context.mlir(), policy.data_location(bytes_type.location()))
-                    .into_mlir()
-            }
+            SlangType::String(string_type) => Type::string(
+                context.mlir_context,
+                policy.data_location(string_type.location()),
+            )
+            .into_mlir(),
+            SlangType::Bytes(bytes_type) => Type::string(
+                context.mlir_context,
+                policy.data_location(bytes_type.location()),
+            )
+            .into_mlir(),
             SlangType::ByteArray(byte_array_type) => {
-                Type::fixed_bytes(context.mlir(), byte_array_type.width()).into_mlir()
+                Type::fixed_bytes(context.mlir_context, byte_array_type.width()).into_mlir()
             }
             SlangType::Array(array_type) => {
                 let element_type = Type::resolve(&array_type.element_type(), policy, context);
                 let location = policy.data_location(array_type.location());
-                Type::array(context.mlir(), ArraySize::Dynamic, element_type, location).into_mlir()
+                Type::array(
+                    context.mlir_context,
+                    ArraySize::Dynamic,
+                    element_type,
+                    location,
+                )
+                .into_mlir()
             }
             SlangType::FixedSizeArray(fixed_array_type) => {
                 let element_type = Type::resolve(&fixed_array_type.element_type(), policy, context);
                 let location = policy.data_location(fixed_array_type.location());
                 Type::array(
-                    context.mlir(),
+                    context.mlir_context,
                     ArraySize::Fixed(fixed_array_type.size() as u64),
                     element_type,
                     location,
@@ -304,7 +317,7 @@ impl<'context> Type<'context> {
                     LocationPolicy::Declared(Some(solx_utils::DataLocation::Storage)),
                     context,
                 );
-                Type::mapping(context.mlir(), key_type, value_type).into_mlir()
+                Type::mapping(context.mlir_context, key_type, value_type).into_mlir()
             }
             SlangType::Struct(struct_type) => {
                 let struct_location = policy.data_location(struct_type.location());
@@ -318,7 +331,7 @@ impl<'context> Type<'context> {
                     let member_slang_type = member.get_type().expect("slang validated");
                     member_types.push(Type::resolve(&member_slang_type, member_policy, context));
                 }
-                Type::structure(context.mlir(), &member_types, struct_location).into_mlir()
+                Type::structure(context.mlir_context, &member_types, struct_location).into_mlir()
             }
             SlangType::Contract(contract_type) => {
                 let contract_definition = match contract_type.definition() {
@@ -326,7 +339,7 @@ impl<'context> Type<'context> {
                     _ => unreachable!("Slang ContractType always references a Contract definition"),
                 };
                 Type::contract(
-                    context.mlir(),
+                    context.mlir_context,
                     contract_definition.name().name().as_str(),
                     contract_definition.is_payable(),
                 )
@@ -344,7 +357,7 @@ impl<'context> Type<'context> {
                 // Interfaces are never `payable` themselves; payability lives
                 // on the address-cast at the call site.
                 Type::contract(
-                    context.mlir(),
+                    context.mlir_context,
                     interface_definition.name().name().as_str(),
                     false,
                 )
@@ -359,7 +372,7 @@ impl<'context> Type<'context> {
                 // Solidity caps enums at 256 members, so the max enumerator
                 // index always fits in a `u8`.
                 let max = u8::try_from(member_count - 1).expect("enum member count fits in u8");
-                Type::enumeration(context.mlir(), max.into()).into_mlir()
+                Type::enumeration(context.mlir_context, max.into()).into_mlir()
             }
             SlangType::UserDefinedValue(udvt) => {
                 let target_type = udvt.target_type().expect("slang validated");
@@ -367,24 +380,26 @@ impl<'context> Type<'context> {
             }
             SlangType::Function(function_type) => {
                 // A function pointer lowers to `!sol.func_ref<fnTy>` (internal)
-                // or `!sol.ext_func_ref<fnTy>` (external — address + selector).
+                // or `!sol.ext_func_ref<fnTy>` (external: address and selector).
                 let (parameter_types, result_types) =
                     Type::function_pointer_signature(slang_type, context);
                 if function_type.is_externally_visible() {
-                    Type::ext_func_ref(context.mlir(), &parameter_types, &result_types).into_mlir()
+                    Type::ext_func_ref(context.mlir_context, &parameter_types, &result_types)
+                        .into_mlir()
                 } else {
-                    Type::func_ref(context.mlir(), &parameter_types, &result_types).into_mlir()
+                    Type::func_ref(context.mlir_context, &parameter_types, &result_types)
+                        .into_mlir()
                 }
             }
             SlangType::FixedPointNumber(fixed_point_type) => {
                 let bits = fixed_point_type.bits();
                 if fixed_point_type.is_signed() {
-                    MlirType::from(IntegerType::signed(context.mlir(), bits))
+                    MlirType::from(IntegerType::signed(context.mlir_context, bits))
                 } else {
-                    MlirType::from(IntegerType::unsigned(context.mlir(), bits))
+                    MlirType::from(IntegerType::unsigned(context.mlir_context, bits))
                 }
             }
-            SlangType::Library(_) => Type::address(context.mlir(), false).into_mlir(),
+            SlangType::Library(_) => Type::address(context.mlir_context, false).into_mlir(),
             SlangType::Tuple(_) | SlangType::Void(_) => {
                 unreachable!("tuple and void are resolved via Type::resolve_result_types")
             }
@@ -502,7 +517,7 @@ impl<'context> Type<'context> {
                 array_type.location(),
             ),
             SlangType::Bytes(bytes_type) => (
-                Type::byte(context.mlir()).into_mlir(),
+                Type::byte(context.mlir_context).into_mlir(),
                 bytes_type.location(),
             ),
             other => unreachable!(
@@ -521,47 +536,47 @@ impl<'context> Type<'context> {
 
     /// Whether this is a Sol enum type (`!sol.enum<N>`).
     pub fn is_enum(self) -> bool {
-        unsafe { crate::ffi::solxIsEnumType(self.inner.to_raw()) }
+        unsafe { ffi::solxIsEnumType(self.inner.to_raw()) }
     }
 
     /// Whether this is the Sol address type (`!sol.address`).
     pub fn is_address(self) -> bool {
-        unsafe { crate::ffi::solxIsAddressType(self.inner.to_raw()) }
+        unsafe { ffi::solxIsAddressType(self.inner.to_raw()) }
     }
 
-    /// Whether this is a Sol contract type (`!sol.contract<…>`).
+    /// Whether this is a Sol contract type (`!sol.contract<...>`).
     pub fn is_contract(self) -> bool {
-        unsafe { crate::ffi::solxIsContractType(self.inner.to_raw()) }
+        unsafe { ffi::solxIsContractType(self.inner.to_raw()) }
     }
 
     /// Whether this is a Sol fixed-bytes type (`!sol.fixedbytes<N>`).
     pub fn is_fixed_bytes(self) -> bool {
-        unsafe { crate::ffi::solxIsFixedBytesType(self.inner.to_raw()) }
+        unsafe { ffi::solxIsFixedBytesType(self.inner.to_raw()) }
     }
 
     /// Whether this is the single-byte `!sol.byte` (distinct from `!sol.fixedbytes<1>`).
     pub fn is_byte(self) -> bool {
-        unsafe { crate::ffi::solxIsByteType(self.inner.to_raw()) }
+        unsafe { ffi::solxIsByteType(self.inner.to_raw()) }
     }
 
     /// Whether this is the dynamic-bytes type `!sol.string` (shared by `string` and `bytes`).
     pub fn is_string(self) -> bool {
-        unsafe { crate::ffi::solxIsStringType(self.inner.to_raw()) }
+        unsafe { ffi::solxIsStringType(self.inner.to_raw()) }
     }
 
-    /// Whether this is a Sol array type (`!sol.array<…>`).
+    /// Whether this is a Sol array type (`!sol.array<...>`).
     pub fn is_array(self) -> bool {
-        unsafe { crate::ffi::solxIsArrayType(self.inner.to_raw()) }
+        unsafe { ffi::solxIsArrayType(self.inner.to_raw()) }
     }
 
-    /// Whether this is a Sol struct type (`!sol.struct<…>`).
+    /// Whether this is a Sol struct type (`!sol.struct<...>`).
     pub fn is_struct(self) -> bool {
-        unsafe { crate::ffi::solxIsStructType(self.inner.to_raw()) }
+        unsafe { ffi::solxIsStructType(self.inner.to_raw()) }
     }
 
-    /// Whether this is a Sol mapping type (`!sol.mapping<…>`).
+    /// Whether this is a Sol mapping type (`!sol.mapping<...>`).
     pub fn is_mapping(self) -> bool {
-        unsafe { crate::ffi::solxIsMappingType(self.inner.to_raw()) }
+        unsafe { ffi::solxIsMappingType(self.inner.to_raw()) }
     }
 
     /// Whether this is a Sol reference type: array, struct, string/`bytes`, or mapping.
@@ -572,23 +587,23 @@ impl<'context> Type<'context> {
     /// Whether this is a Sol function reference of either kind (internal or external).
     pub fn is_function_ref(self) -> bool {
         let raw = self.inner.to_raw();
-        unsafe { crate::ffi::solxIsFuncRefType(raw) || crate::ffi::solxIsExtFuncRefType(raw) }
+        unsafe { ffi::solxIsFuncRefType(raw) || ffi::solxIsExtFuncRefType(raw) }
     }
 
-    /// Whether this is a Sol external function reference (`!sol.ext_func_ref<…>`).
+    /// Whether this is a Sol external function reference (`!sol.ext_func_ref<...>`).
     pub fn is_ext_function_ref(self) -> bool {
-        unsafe { crate::ffi::solxIsExtFuncRefType(self.inner.to_raw()) }
+        unsafe { ffi::solxIsExtFuncRefType(self.inner.to_raw()) }
     }
 
-    /// Whether this is a Sol pointer (`!sol.ptr<T, Loc>`) — a typed place.
+    /// Whether this is a Sol pointer (`!sol.ptr<T, Loc>`): a typed place.
     pub fn is_pointer(self) -> bool {
-        unsafe { crate::ffi::solxIsPointerType(self.inner.to_raw()) }
+        unsafe { ffi::solxIsPointerType(self.inner.to_raw()) }
     }
 
     /// The pointee type `T` of a `!sol.ptr<T, Loc>` (the caller must ensure this is a pointer).
     pub fn pointee(self) -> Self {
         Self::new(unsafe {
-            MlirType::from_raw(crate::ffi::solxPointerTypePointeeType(self.inner.to_raw()))
+            MlirType::from_raw(ffi::solxPointerTypePointeeType(self.inner.to_raw()))
         })
     }
 
@@ -597,9 +612,9 @@ impl<'context> Type<'context> {
     pub fn data_location(self) -> solx_utils::DataLocation {
         let raw = self.inner.to_raw();
         let ordinal = if self.is_pointer() {
-            unsafe { crate::ffi::solxPointerTypeDataLocation(raw) }
+            unsafe { ffi::solxPointerTypeDataLocation(raw) }
         } else {
-            unsafe { crate::ffi::solxReferenceTypeDataLocation(raw) }
+            unsafe { ffi::solxReferenceTypeDataLocation(raw) }
         };
         solx_utils::DataLocation::try_from(ordinal).unwrap_or_else(|ordinal| {
             unreachable!("unexpected !sol.ptr data-location ordinal {ordinal}")
@@ -609,7 +624,7 @@ impl<'context> Type<'context> {
     /// The element / field type reached by stepping into this aggregate (the index is ignored for non-structs).
     pub fn element_type(self, field_index: usize) -> Self {
         Self::new(unsafe {
-            MlirType::from_raw(crate::ffi::mlirSolGetEltType(
+            MlirType::from_raw(ffi::mlirSolGetEltType(
                 self.inner.to_raw(),
                 field_index as u64,
             ))
@@ -639,7 +654,7 @@ impl<'context> Type<'context> {
     /// `1` for the single `!sol.byte`, and `None` for any other type.
     pub fn fixed_bytes_or_byte_width(self) -> Option<u32> {
         if self.is_fixed_bytes() {
-            Some(unsafe { crate::ffi::solxFixedBytesTypeSize(self.inner.to_raw()) })
+            Some(unsafe { ffi::solxFixedBytesTypeSize(self.inner.to_raw()) })
         } else if self.is_byte() {
             Some(1)
         } else {
@@ -654,9 +669,25 @@ impl<'context> Type<'context> {
         })
     }
 
-    /// The inner melior type, for the op-construction boundary.
-    pub fn into_mlir(self) -> MlirType<'context> {
-        self.inner
+    /// The bit width of the unsigned integer a `sol.bytes_cast` pairs with this fixed-bytes type.
+    pub fn fixed_bytes_integer_bits(self) -> u32 {
+        self.fixed_bytes_or_byte_width()
+            .expect("a fixed-bytes / byte type has a width")
+            * solx_utils::BIT_LENGTH_BYTE as u32
+    }
+
+    /// The integer attribute of `value` at this type, built via the big-integer FFI constructor for
+    /// values wider than `i64`.
+    pub fn big_integer_attribute(self, value: &BigInt) -> Attribute<'context> {
+        let (sign, words) = value.to_u64_digits();
+        unsafe {
+            Attribute::from_raw(ffi::solxCreateIntegerAttr(
+                self.inner.to_raw(),
+                sign == num::bigint::Sign::Minus,
+                words.len(),
+                words.as_ptr(),
+            ))
+        }
     }
 
     /// Casts `value` to this (target) type, returning it unchanged when it already has this type.
@@ -676,7 +707,7 @@ impl<'context> Type<'context> {
         if source == self {
             return value;
         }
-        // Enum ↔ integer (`sol.enum_cast` accepts the integer-backed enum;
+        // Enum to/from integer (`sol.enum_cast` accepts the integer-backed enum;
         // narrowing to an enum range-checks and may revert).
         if source.is_enum() || self.is_enum() {
             return Value::new(mlir_op!(
@@ -685,7 +716,7 @@ impl<'context> Type<'context> {
                 EnumCastOperation.inp(value.into_mlir()).out(self.inner)
             ));
         }
-        // Contract ↔ contract (inheritance up/downcast, interface).
+        // Contract to/from contract (inheritance up/downcast, interface).
         if source.is_contract() && self.is_contract() {
             return Value::new(mlir_op!(
                 context,
@@ -693,11 +724,11 @@ impl<'context> Type<'context> {
                 ContractCastOperation.inp(value.into_mlir()).out(self.inner)
             ));
         }
-        // address ↔ {integer, contract, fixedbytes<20>}. `sol.address_cast`
-        // requires the integer side to be exactly `ui160`, so a wider/narrower
-        // integer bridges through `ui160` (then a plain `sol.cast` resizes it).
+        // address to/from {integer, contract, fixedbytes<20>}: sol.address_cast requires the integer
+        // side to be exactly ui160, so a wider or narrower integer bridges through ui160 and a plain
+        // sol.cast resizes it.
         if source.is_address() || self.is_address() {
-            let ui160 = Self::unsigned(context.mlir(), solx_utils::BIT_LENGTH_ETH_ADDRESS);
+            let ui160 = Self::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_ETH_ADDRESS);
             if source.is_address() {
                 if self.is_contract() || self.is_fixed_bytes() || self == ui160 {
                     return self.address_cast(value, context, block);
@@ -711,7 +742,7 @@ impl<'context> Type<'context> {
             let as_160 = ui160.cast(value, context, block);
             return self.address_cast(as_160, context, block);
         }
-        // Dynamic `bytes`/`string` → `bytesN`: take the leading N bytes via the
+        // Dynamic `bytes`/`string` to `bytesN`: take the leading N bytes via the
         // dedicated op (`sol.bytes_cast` rejects a `!sol.string` operand).
         if source.is_reference() && self.is_fixed_bytes() {
             return Value::new(mlir_op!(
@@ -722,32 +753,33 @@ impl<'context> Type<'context> {
                     .out(self.inner)
             ));
         }
-        // byte / bytesN ↔ {byte, bytesN, integer}. `sol.bytes_cast` connects `fixedbytes<N>` ↔ `ui(N*8)`
-        // directly; an integer counterpart of a different width is first resized through that partner integer.
+        // byte / bytesN to/from {byte, bytesN, integer}. `sol.bytes_cast` connects `fixedbytes<N>`
+        // and `ui(N*8)` directly; an integer counterpart of a different width is first resized through
+        // that same-width integer.
         if source.is_fixed_bytes() || source.is_byte() {
-            let partner_bits = Self::partner_bits(source);
+            let bridge_bits = source.fixed_bytes_integer_bits();
             if let Ok(integer) = IntegerType::try_from(self.inner)
-                && integer.width() != partner_bits
+                && integer.width() != bridge_bits
             {
-                let partner = Self::unsigned(context.mlir(), partner_bits as usize);
-                let as_int = partner.bytes_cast(value, context, block);
+                let bridge = Self::unsigned(context.mlir_context, bridge_bits as usize);
+                let as_int = bridge.bytes_cast(value, context, block);
                 return self.cast(as_int, context, block);
             }
             return self.bytes_cast(value, context, block);
         }
         if self.is_fixed_bytes() || self.is_byte() {
-            let partner_bits = Self::partner_bits(self);
+            let bridge_bits = self.fixed_bytes_integer_bits();
             if let Ok(integer) = IntegerType::try_from(source.into_mlir())
-                && integer.width() != partner_bits
+                && integer.width() != bridge_bits
             {
-                let partner = Self::unsigned(context.mlir(), partner_bits as usize);
-                let as_int = partner.cast(value, context, block);
+                let bridge = Self::unsigned(context.mlir_context, bridge_bits as usize);
+                let as_int = bridge.cast(value, context, block);
                 return self.bytes_cast(as_int, context, block);
             }
             return self.bytes_cast(value, context, block);
         }
         // Reference types (array / struct / string / bytes / mapping) differ
-        // only by data location; a reference→reference cast routes through
+        // only by data location; a reference-to-reference cast routes through
         // `sol.data_loc_cast`.
         if source.is_reference() && self.is_reference() {
             return Value::new(mlir_op!(
@@ -797,12 +829,9 @@ impl<'context> Type<'context> {
         ))
     }
 
-    /// The bit width of the integer a `sol.bytes_cast` pairs with a fixed-bytes type (`8 * N`, or 8 for `!sol.byte`).
-    fn partner_bits(r#type: Type<'context>) -> u32 {
-        r#type
-            .fixed_bytes_or_byte_width()
-            .expect("a fixed-bytes / byte type has a width")
-            * 8
+    /// The inner melior type, for the op-construction boundary.
+    pub fn into_mlir(self) -> MlirType<'context> {
+        self.inner
     }
 }
 

@@ -14,7 +14,6 @@ use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
 use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
-use melior::ir::r#type::TypeLike;
 use num::BigInt;
 use slang_solidity_v2::ast::DataLocation;
 use slang_solidity_v2::ast::Type as SlangType;
@@ -22,6 +21,7 @@ use slang_solidity_v2::ast::Type as SlangType;
 use crate::CmpPredicate;
 use crate::Context;
 use crate::IntoOds;
+use crate::Pointer;
 use crate::Type;
 use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConstantOperation;
@@ -49,7 +49,7 @@ use crate::ods::sol::StringLitOperation;
 /// An MLIR value in the Sol dialect; the home for the conversions a value undergoes.
 #[derive(Clone, Copy)]
 pub struct Value<'context, 'block> {
-    inner: MlirValue<'context, 'block>,
+    pub inner: MlirValue<'context, 'block>,
 }
 
 impl<'context, 'block> Value<'context, 'block> {
@@ -86,10 +86,10 @@ impl<'context, 'block> Value<'context, 'block> {
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        if result_type == Type::address(context.mlir(), false) {
+        if result_type == Type::address(context.mlir_context, false) {
             let integer = Self::constant_from_bigint(
                 value,
-                Type::unsigned(context.mlir(), solx_utils::BIT_LENGTH_ETH_ADDRESS),
+                Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_ETH_ADDRESS),
                 context,
                 block,
             );
@@ -100,15 +100,7 @@ impl<'context, 'block> Value<'context, 'block> {
         {
             IntegerAttribute::new(result_type.into_mlir(), i64::from(*value != BigInt::ZERO)).into()
         } else {
-            let (sign, words) = value.to_u64_digits();
-            unsafe {
-                Attribute::from_raw(crate::ffi::solxCreateIntegerAttr(
-                    result_type.into_mlir().to_raw(),
-                    sign == num::bigint::Sign::Minus,
-                    words.len(),
-                    words.as_ptr(),
-                ))
-            }
+            result_type.big_integer_attribute(value)
         };
         Self::new(mlir_op!(
             context,
@@ -127,14 +119,28 @@ impl<'context, 'block> Value<'context, 'block> {
     ) -> Self {
         Self::constant_from_bigint(
             &BigInt::from(u8::from(value)),
-            Type::signless(context.mlir(), solx_utils::BIT_LENGTH_BOOLEAN),
+            Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN),
+            context,
+            block,
+        )
+    }
+
+    /// A `uint256` constant: Solidity's default integer width.
+    pub fn uint256(
+        value: i64,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::constant(
+            value,
+            Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD),
             context,
             block,
         )
     }
 
     /// A `string memory` value holding `text` verbatim, via `sol.string_lit`.
-    /// The bytes are taken as-is — a string literal need not be valid UTF-8.
+    /// The bytes are taken as-is; a string literal need not be valid UTF-8.
     pub fn string_literal(
         text: &str,
         context: &Context<'context>,
@@ -144,8 +150,11 @@ impl<'context, 'block> Value<'context, 'block> {
             context,
             block,
             StringLitOperation
-                .value(StringAttribute::new(context.mlir(), text))
-                .addr(Type::string(context.mlir(), solx_utils::DataLocation::Memory).into_mlir())
+                .value(StringAttribute::new(context.mlir_context, text))
+                .addr(
+                    Type::string(context.mlir_context, solx_utils::DataLocation::Memory)
+                        .into_mlir()
+                )
         ))
     }
 
@@ -158,19 +167,19 @@ impl<'context, 'block> Value<'context, 'block> {
         if r#type.is_address() {
             let bits = Self::constant(
                 0,
-                Type::unsigned(context.mlir(), solx_utils::BIT_LENGTH_ETH_ADDRESS),
+                Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_ETH_ADDRESS),
                 context,
                 block,
             );
             bits.cast(r#type, context, block)
         } else if r#type.is_contract() {
             // address(0) reinterpreted as the contract (solc: ui160 -> address -> contract).
-            let address = Self::zero(Type::address(context.mlir(), false), context, block);
+            let address = Self::zero(Type::address(context.mlir_context, false), context, block);
             address.cast(r#type, context, block)
         } else if let Some(width) = r#type.fixed_bytes_or_byte_width() {
             let bits = Self::constant(
                 0,
-                Type::unsigned(context.mlir(), (width * 8) as usize),
+                Type::unsigned(context.mlir_context, width as usize * solx_utils::BIT_LENGTH_BYTE),
                 context,
                 block,
             );
@@ -178,14 +187,14 @@ impl<'context, 'block> Value<'context, 'block> {
         } else if r#type.is_enum() {
             let bits = Self::constant(
                 0,
-                Type::unsigned(context.mlir(), solx_utils::BIT_LENGTH_FIELD),
+                Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD),
                 context,
                 block,
             );
             bits.cast(r#type, context, block)
         } else if r#type.is_ext_function_ref() {
             // A zero address + zero selector packed into the ext func ref.
-            let address = Self::zero(Type::address(context.mlir(), false), context, block);
+            let address = Self::zero(Type::address(context.mlir_context, false), context, block);
             Self::ext_func_constant(address, 0, r#type, context, block)
         } else if r#type.is_function_ref() {
             // An internal pointer's zero reverts when called.
@@ -201,7 +210,7 @@ impl<'context, 'block> Value<'context, 'block> {
         }
     }
 
-    /// `sol.malloc` — a fresh memory buffer typed as `mlir_type`. `Some` `size`
+    /// `sol.malloc`: a fresh memory buffer typed as `mlir_type`. `Some` `size`
     /// allocates a dynamically-sized buffer; `zero_init` zero-fills it.
     pub fn malloc(
         mlir_type: MlirType<'context>,
@@ -211,12 +220,12 @@ impl<'context, 'block> Value<'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> Self {
         let mut op_builder =
-            MallocOperation::builder(context.mlir(), context.location()).addr(mlir_type);
+            MallocOperation::builder(context.mlir_context, context.location()).addr(mlir_type);
         if let Some(size) = size {
             op_builder = op_builder.size(size);
         }
         if zero_init {
-            op_builder = op_builder.zero_init(Attribute::unit(context.mlir()));
+            op_builder = op_builder.zero_init(Attribute::unit(context.mlir_context));
         }
         Self::new(
             block
@@ -288,7 +297,7 @@ impl<'context, 'block> Value<'context, 'block> {
         }
     }
 
-    /// `sol.gasleft` — all remaining gas as a `ui256` (the `gasleft()` built-in and the default forwarded call gas).
+    /// `sol.gasleft`: all remaining gas as a `ui256`.
     pub fn gas_left<B>(context: &Context<'context>, block: &B) -> Self
     where
         B: BlockLike<'context, 'block>,
@@ -297,26 +306,13 @@ impl<'context, 'block> Value<'context, 'block> {
         Self::new(mlir_op!(
             context,
             block,
-            GasLeftOperation
-                .val(Type::unsigned(context.mlir(), solx_utils::BIT_LENGTH_FIELD).into_mlir())
+            GasLeftOperation.val(
+                Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
+            )
         ))
     }
 
-    /// A `uint256` constant — Solidity's default integer width.
-    pub fn uint256(
-        value: i64,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Self {
-        Self::constant(
-            value,
-            Type::unsigned(context.mlir(), solx_utils::BIT_LENGTH_FIELD),
-            context,
-            block,
-        )
-    }
-
-    /// `sol.ext_func_constant` packing a callee `address` and 4-byte `selector` into an `!sol.ext_func_ref<…>`.
+    /// `sol.ext_func_constant` packing a callee `address` and 4-byte `selector` into an `!sol.ext_func_ref<...>`.
     pub fn ext_func_constant<B>(
         address: Self,
         selector: u32,
@@ -334,14 +330,14 @@ impl<'context, 'block> Value<'context, 'block> {
             ExtFuncConstantOperation
                 .addr(address.inner)
                 .selector(IntegerAttribute::new(
-                    IntegerType::new(context.mlir(), Type::SELECTOR_BIT_WIDTH).into(),
+                    IntegerType::new(context.mlir_context, Type::SELECTOR_BIT_WIDTH).into(),
                     selector as i64,
                 ))
                 .result(result_type.into_mlir())
         ))
     }
 
-    /// The `!sol.ext_func_ref<…>` callee of an external interaction: `receiver` cast to `address`, packed with `selector`.
+    /// The `!sol.ext_func_ref<...>` callee of an external interaction: `receiver` cast to `address`, packed with `selector`.
     pub fn external_callee(
         receiver: Self,
         selector: u32,
@@ -350,8 +346,9 @@ impl<'context, 'block> Value<'context, 'block> {
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let address = receiver.cast(Type::address(context.mlir(), false), context, block);
-        let ext_func_ref_type = Type::ext_func_ref(context.mlir(), parameter_types, return_types);
+        let address = receiver.cast(Type::address(context.mlir_context, false), context, block);
+        let ext_func_ref_type =
+            Type::ext_func_ref(context.mlir_context, parameter_types, return_types);
         Self::ext_func_constant(address, selector, ext_func_ref_type, context, block)
     }
 
@@ -378,27 +375,32 @@ impl<'context, 'block> Value<'context, 'block> {
         Vec<MlirValue<'context, 'block>>,
     ) {
         let address = receiver
-            .cast(Type::address(context.mlir(), false), context, block)
+            .cast(Type::address(context.mlir_context, false), context, block)
             .into_mlir();
         let value = call_value.unwrap_or_else(|| Self::uint256(0, context, block).into_mlir());
         let gas = call_gas.unwrap_or_else(|| Self::gas_left(context, block).into_mlir());
         let selector_value = Self::uint256(i64::from(selector), context, block).into_mlir();
-        let callee_type = FunctionType::new(context.mlir(), parameter_types, result_types);
-        let mut operation_builder = ExtCallOperation::builder(context.mlir(), context.location())
-            .callee(StringAttribute::new(context.mlir(), callee_name))
-            .ins(argument_values)
-            .addr(address)
-            .gas(gas)
-            .val(value)
-            .selector(selector_value)
-            .callee_type(TypeAttribute::new(callee_type.into()))
-            .status(Type::signless(context.mlir(), solx_utils::BIT_LENGTH_BOOLEAN).into_mlir())
-            .outs(result_types);
+        let callee_type = FunctionType::new(context.mlir_context, parameter_types, result_types);
+        let mut operation_builder =
+            ExtCallOperation::builder(context.mlir_context, context.location())
+                .callee(StringAttribute::new(context.mlir_context, callee_name))
+                .ins(argument_values)
+                .addr(address)
+                .gas(gas)
+                .val(value)
+                .selector(selector_value)
+                .callee_type(TypeAttribute::new(callee_type.into()))
+                .status(
+                    Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN)
+                        .into_mlir(),
+                )
+                .outs(result_types);
         if is_static {
-            operation_builder = operation_builder.static_call(Attribute::unit(context.mlir()));
+            operation_builder =
+                operation_builder.static_call(Attribute::unit(context.mlir_context));
         }
         if try_call {
-            operation_builder = operation_builder.try_call(Attribute::unit(context.mlir()));
+            operation_builder = operation_builder.try_call(Attribute::unit(context.mlir_context));
         }
         let operation = block.append_operation(operation_builder.build().into());
         let status = operation
@@ -416,7 +418,7 @@ impl<'context, 'block> Value<'context, 'block> {
         (status, results)
     }
 
-    /// `sol.func_constant` — an internal function pointer (`!sol.func_ref<…>`) to the symbol `name`.
+    /// `sol.func_constant`: an internal function pointer (`!sol.func_ref<...>`) to the symbol `name`.
     pub fn function_constant(
         name: &str,
         result_type: Type<'context>,
@@ -428,11 +430,11 @@ impl<'context, 'block> Value<'context, 'block> {
             block,
             FuncConstantOperation
                 .addr(result_type.into_mlir())
-                .sym(FlatSymbolRefAttribute::new(context.mlir(), name))
+                .sym(FlatSymbolRefAttribute::new(context.mlir_context, name))
         ))
     }
 
-    /// `sol.lib_addr` — a library's linked deploy address, a placeholder the linker resolves by the library's full path.
+    /// `sol.lib_addr`: a library's linked deploy address, a placeholder the linker resolves by the library's full path.
     pub fn library_address(
         name: &solx_utils::ContractName,
         context: &Context<'context>,
@@ -442,12 +444,12 @@ impl<'context, 'block> Value<'context, 'block> {
             context,
             block,
             LibAddrOperation
-                ._name(StringAttribute::new(context.mlir(), &name.full_path))
-                .val(Type::address(context.mlir(), false).into_mlir())
+                ._name(StringAttribute::new(context.mlir_context, &name.full_path))
+                .val(Type::address(context.mlir_context, false).into_mlir())
         ))
     }
 
-    /// `sol.new` — contract creation embedding `obj_name`'s deploy bytecode. `val`
+    /// `sol.new`: contract creation embedding `obj_name`'s deploy bytecode. `val`
     /// is the forwarded wei; a `salt` selects CREATE2. The salt must be appended
     /// before the variadic ctor args or the two transpose.
     pub fn create_contract(
@@ -460,8 +462,8 @@ impl<'context, 'block> Value<'context, 'block> {
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let mut new_builder = NewOperation::builder(context.mlir(), context.location())
-            .obj_name(StringAttribute::new(context.mlir(), obj_name))
+        let mut new_builder = NewOperation::builder(context.mlir_context, context.location())
+            .obj_name(StringAttribute::new(context.mlir_context, obj_name))
             .val(val.inner);
         if let Some(salt) = salt {
             new_builder = new_builder.salt(salt.inner);
@@ -472,7 +474,7 @@ impl<'context, 'block> Value<'context, 'block> {
         // `try new C(...)` marks the creation with `try` so the conversion yields a success status
         // instead of reverting, letting the surrounding `sol.try` run a catch handler.
         if try_call {
-            new_builder = new_builder.try_call(Attribute::unit(context.mlir()));
+            new_builder = new_builder.try_call(Attribute::unit(context.mlir_context));
         }
         Self::new(
             block
@@ -491,7 +493,7 @@ impl<'context, 'block> Value<'context, 'block> {
     ) -> Self {
         let input = buffer
             .cast(
-                Type::string(context.mlir(), solx_utils::DataLocation::Memory),
+                Type::string(context.mlir_context, solx_utils::DataLocation::Memory),
                 context,
                 block,
             )
@@ -501,11 +503,14 @@ impl<'context, 'block> Value<'context, 'block> {
             block,
             Keccak256Operation
                 .addr(input)
-                .result(Type::fixed_bytes(context.mlir(), 32))
+                .result(Type::fixed_bytes(
+                    context.mlir_context,
+                    solx_utils::BYTE_LENGTH_FIELD as u32,
+                ))
         ))
     }
 
-    /// `sol.encode` — the ABI-encoded `bytes memory` payload of `ins`. A `selector`,
+    /// `sol.encode`: the ABI-encoded `bytes memory` payload of `ins`. A `selector`,
     /// when present, is prepended as the leading 4 bytes; `packed` selects `abi.encodePacked`.
     pub fn abi_encode(
         ins: &[MlirValue<'context, 'block>],
@@ -514,14 +519,14 @@ impl<'context, 'block> Value<'context, 'block> {
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let mut op_builder = EncodeOperation::builder(context.mlir(), context.location())
+        let mut op_builder = EncodeOperation::builder(context.mlir_context, context.location())
             .ins(ins)
-            .res(Type::string(context.mlir(), solx_utils::DataLocation::Memory).into_mlir());
+            .res(Type::string(context.mlir_context, solx_utils::DataLocation::Memory).into_mlir());
         if let Some(selector_value) = selector {
             op_builder = op_builder.selector(selector_value);
         }
         if packed {
-            op_builder = op_builder.packed(Attribute::unit(context.mlir()));
+            op_builder = op_builder.packed(Attribute::unit(context.mlir_context));
         }
         Self::new(
             block
@@ -542,14 +547,14 @@ impl<'context, 'block> Value<'context, 'block> {
         let integer = Self::constant_from_bigint(
             value,
             Type::unsigned(
-                context.mlir(),
+                context.mlir_context,
                 width_bytes as usize * solx_utils::BIT_LENGTH_BYTE,
             ),
             context,
             block,
         );
         integer.cast(
-            Type::fixed_bytes(context.mlir(), width_bytes),
+            Type::fixed_bytes(context.mlir_context, width_bytes),
             context,
             block,
         )
@@ -565,7 +570,7 @@ impl<'context, 'block> Value<'context, 'block> {
     ) -> (Self, MlirType<'context>) {
         let (element_type, location) = Type::dynamic_array_element(base_type, context);
         let push_result_type = Type::new(element_type)
-            .address_type(location, context.mlir())
+            .address_type(location, context.mlir_context)
             .into_mlir();
         let new_slot = Self::new(mlir_op!(
             context,
@@ -586,7 +591,7 @@ impl<'context, 'block> Value<'context, 'block> {
             block,
             ExtFuncSelectorOperation
                 .func(self.inner)
-                .result(Type::fixed_bytes(context.mlir(), 4).into_mlir())
+                .result(Type::fixed_bytes(context.mlir_context, solx_utils::BYTE_LENGTH_X32 as u32).into_mlir())
         ))
     }
 
@@ -601,7 +606,7 @@ impl<'context, 'block> Value<'context, 'block> {
             block,
             ExtFuncAddrOperation
                 .func(self.inner)
-                .result(Type::address(context.mlir(), false).into_mlir())
+                .result(Type::address(context.mlir_context, false).into_mlir())
         ))
     }
 
@@ -623,18 +628,20 @@ impl<'context, 'block> Value<'context, 'block> {
             // A `{gas: g}` option caps the forwarded gas; without it, forward all remaining gas.
             let gas = call_gas.unwrap_or_else(|| Self::gas_left(context, block).into_mlir());
             let mut out_types = Vec::with_capacity(result_types.len() + 1);
-            out_types
-                .push(Type::signless(context.mlir(), solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
+            out_types.push(
+                Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir(),
+            );
             out_types.extend_from_slice(result_types);
             let mut operation_builder =
-                ExtICallOperation::builder(context.mlir(), context.location())
+                ExtICallOperation::builder(context.mlir_context, context.location())
                     .outs(&out_types)
                     .callee(self.into_mlir())
                     .callee_operands(argument_values)
                     .gas(gas)
                     .value(value);
             if is_static {
-                operation_builder = operation_builder.static_call(Attribute::unit(context.mlir()));
+                operation_builder =
+                    operation_builder.static_call(Attribute::unit(context.mlir_context));
             }
             let operation = block.append_operation(operation_builder.build().into());
             (0..result_types.len())
@@ -703,7 +710,7 @@ impl<'context, 'block> Value<'context, 'block> {
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let predicate_attribute = predicate.attribute(context.mlir());
+        let predicate_attribute = predicate.attribute(context.mlir_context);
         let value: MlirValue<'context, 'block> = mlir_op!(
             context,
             block,
@@ -711,7 +718,10 @@ impl<'context, 'block> Value<'context, 'block> {
                 .predicate(Attribute::from(predicate_attribute))
                 .lhs(self.inner)
                 .rhs(other.inner)
-                .result(Type::signless(context.mlir(), solx_utils::BIT_LENGTH_BOOLEAN).into_mlir())
+                .result(
+                    Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN)
+                        .into_mlir()
+                )
         );
         Self::new(value)
     }
@@ -722,9 +732,9 @@ impl<'context, 'block> Value<'context, 'block> {
         Self::new(mlir_op!(
             context,
             block,
-            LengthOperation
-                .inp(self.inner)
-                .len(Type::unsigned(context.mlir(), solx_utils::BIT_LENGTH_FIELD).into_mlir())
+            LengthOperation.inp(self.inner).len(
+                Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
+            )
         ))
     }
 
@@ -734,7 +744,7 @@ impl<'context, 'block> Value<'context, 'block> {
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        if self.r#type() == Type::signless(context.mlir(), solx_utils::BIT_LENGTH_BOOLEAN) {
+        if self.r#type() == Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN) {
             return self;
         }
         let zero = Self::constant(0, self.r#type(), context, block);
@@ -746,10 +756,10 @@ impl<'context, 'block> Value<'context, 'block> {
         self.inner
     }
 
-    /// Views a `!sol.ptr`-typed value as a [`Pointer`] place — the inverse of
-    /// [`Pointer::into_value`]. The caller must ensure this value is a pointer.
-    pub fn into_pointer(self) -> crate::Pointer<'context, 'block> {
-        crate::Pointer::new(self.inner)
+    /// Views a `!sol.ptr`-typed value as a [`Pointer`] place, the inverse of [`Pointer::into_value`].
+    /// The caller must ensure this value is a pointer.
+    pub fn into_pointer(self) -> Pointer<'context, 'block> {
+        Pointer::new(self.inner)
     }
 
     /// The value's type.

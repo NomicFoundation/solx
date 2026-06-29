@@ -16,6 +16,7 @@ use solx_utils::DataLocation;
 use crate::Context;
 use crate::Type;
 use crate::Value;
+use crate::ffi;
 use crate::ods::sol::AddrOfOperation;
 use crate::ods::sol::AllocaOperation;
 use crate::ods::sol::CopyOperation;
@@ -29,24 +30,28 @@ use crate::ods::sol::StoreOperation;
 /// SSA value (a `storage` / `calldata` reference is the place), so it converts to and from [`Value`] freely.
 #[derive(Clone, Copy)]
 pub struct Pointer<'context, 'block> {
-    inner: MlirValue<'context, 'block>,
+    pub inner: MlirValue<'context, 'block>,
 }
 
 impl<'context, 'block> Pointer<'context, 'block> {
-    /// Wraps a place value — a `!sol.ptr<…>`, or a by-reference `Storage` / `CallData` aggregate (its own place).
+    /// Wraps a place value: a `!sol.ptr<...>`, or a by-reference `Storage` / `CallData` aggregate (its own place).
     pub fn new(inner: MlirValue<'context, 'block>) -> Self {
         Self { inner }
     }
 
-    /// Allocates a stack slot for `pointee` and returns the place — a
+    /// Allocates a stack slot for `pointee` and returns the place: a
     /// `sol.alloca` yielding `!sol.ptr<pointee, Stack>`.
     pub fn stack_slot<B>(pointee: Type<'context>, context: &Context<'context>, block: &B) -> Self
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let address_type =
-            Type::pointer(context.mlir(), pointee.into_mlir(), DataLocation::Stack).into_mlir();
+        let address_type = Type::pointer(
+            context.mlir_context,
+            pointee.into_mlir(),
+            DataLocation::Stack,
+        )
+        .into_mlir();
         Self::new(mlir_op!(
             context,
             block,
@@ -71,7 +76,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
             context,
             block,
             AddrOfOperation
-                .var(FlatSymbolRefAttribute::new(context.mlir(), symbol))
+                .var(FlatSymbolRefAttribute::new(context.mlir_context, symbol))
                 .addr(place_type.into_mlir())
         ))
     }
@@ -161,7 +166,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
         );
     }
 
-    /// Deep-copies the reference `value`'s pointee into this place (`sol.copy`) — the
+    /// Deep-copies the reference `value`'s pointee into this place (`sol.copy`): the
     /// reference-to-reference counterpart of the scalar [`Self::store`].
     pub fn copy_from<B>(
         self,
@@ -194,17 +199,17 @@ impl<'context, 'block> Pointer<'context, 'block> {
         'context: 'block,
     {
         let address_type = unsafe {
-            MlirType::from_raw(crate::ffi::mlirSolGepGetResultType(
+            MlirType::from_raw(ffi::mlirSolGepGetResultType(
                 self.inner.r#type().to_raw(),
                 element_type.into_mlir().to_raw(),
             ))
         };
-        let mut gep = GepOperation::builder(context.mlir(), context.location())
+        let mut gep = GepOperation::builder(context.mlir_context, context.location())
             .base_addr(self.inner)
             .idx(index.into_mlir())
             .addr(address_type);
         if no_panic_bounds {
-            gep = gep.no_panic_bounds(Attribute::unit(context.mlir()));
+            gep = gep.no_panic_bounds(Attribute::unit(context.mlir_context));
         }
         Self::new(
             block
@@ -243,7 +248,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
         self.inner
     }
 
-    /// The pointer as a [`Value`] — a `!sol.ptr` is a first-class SSA value.
+    /// The pointer as a [`Value`]: a `!sol.ptr` is a first-class SSA value.
     pub fn into_value(self) -> Value<'context, 'block> {
         Value::new(self.inner)
     }

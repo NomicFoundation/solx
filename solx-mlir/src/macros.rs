@@ -30,7 +30,7 @@ impl<'slice, T, const N: usize> IntoOds<&'slice [T]> for &'slice [T; N] {
 #[macro_export]
 macro_rules! mlir_op_build {
     ($context:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
-        $operation::builder($context.mlir(), $context.location())
+        $operation::builder($context.mlir_context, $context.location())
             $(.$method($($crate::IntoOds::into_ods($argument)),*))*
             .build()
             .into()
@@ -77,7 +77,7 @@ macro_rules! mlir_region_op {
         )+
         let operation = melior::ir::BlockLike::append_operation(
             $block,
-            $operation::builder($context.mlir(), $context.location())
+            $operation::builder($context.mlir_context, $context.location())
                 $(.$method($($crate::IntoOds::into_ods($argument)),*))*
                 $(.$region($region))+
                 .build()

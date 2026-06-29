@@ -94,7 +94,7 @@ impl IdentifierBuiltinCall {
                 let state = context.state;
                 let block_number = AstValue::from(values[0])
                     .cast(
-                        AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD),
+                        AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
                         state,
                         &block,
                     )
@@ -104,7 +104,7 @@ impl IdentifierBuiltinCall {
                     block,
                     BlockHashOperation
                         .block_number(block_number)
-                        .val(AstType::fixed_bytes(state.mlir(), 32))
+                        .val(AstType::fixed_bytes(state.mlir_context, 32))
                 );
                 BlockAnd {
                     value: vec![value],
@@ -119,7 +119,7 @@ impl IdentifierBuiltinCall {
                 let state = context.state;
                 let index = AstValue::from(values[0])
                     .cast(
-                        AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD),
+                        AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
                         state,
                         &block,
                     )
@@ -129,7 +129,7 @@ impl IdentifierBuiltinCall {
                     block,
                     BlobHashOperation
                         .idx(index)
-                        .val(AstType::fixed_bytes(state.mlir(), 32))
+                        .val(AstType::fixed_bytes(state.mlir_context, 32))
                 );
                 BlockAnd {
                     value: vec![value],
@@ -143,7 +143,7 @@ impl IdentifierBuiltinCall {
                 } = self.arguments.emit(context, block);
                 let state = context.state;
                 let recipient = AstValue::from(values[0])
-                    .cast(AstType::address(state.mlir(), true), state, &block)
+                    .cast(AstType::address(state.mlir_context, true), state, &block)
                     .into_mlir();
                 mlir_op_void!(state, &block, SelfdestructOperation.recipient(recipient));
                 BlockAnd {
@@ -174,7 +174,7 @@ impl IdentifierBuiltinCall {
                     block,
                     Sha256Operation
                         .data(values[0])
-                        .result(AstType::fixed_bytes(state.mlir(), 32))
+                        .result(AstType::fixed_bytes(state.mlir_context, 32))
                 );
                 BlockAnd {
                     value: vec![value],
@@ -192,7 +192,7 @@ impl IdentifierBuiltinCall {
                     block,
                     Ripemd160Operation
                         .data(values[0])
-                        .result(AstType::fixed_bytes(state.mlir(), 20))
+                        .result(AstType::fixed_bytes(state.mlir_context, 20))
                 );
                 BlockAnd {
                     value: vec![value],
@@ -205,8 +205,8 @@ impl IdentifierBuiltinCall {
                     block,
                 } = self.arguments.emit(context, block);
                 let state = context.state;
-                let bytes32 = AstType::fixed_bytes(state.mlir(), 32).into_mlir();
-                let ui8 = Type::from(IntegerType::unsigned(state.mlir(), 8));
+                let bytes32 = AstType::fixed_bytes(state.mlir_context, 32).into_mlir();
+                let ui8 = Type::from(IntegerType::unsigned(state.mlir_context, 8));
                 let hash = AstValue::from(values[0])
                     .cast(AstType::new(bytes32), state, &block)
                     .into_mlir();
@@ -227,7 +227,7 @@ impl IdentifierBuiltinCall {
                         .v(v)
                         .r(r)
                         .s(s)
-                        .result(AstType::address(state.mlir(), false))
+                        .result(AstType::address(state.mlir_context, false))
                 );
                 BlockAnd {
                     value: vec![value],
@@ -241,7 +241,7 @@ impl IdentifierBuiltinCall {
                 } = self.arguments.emit(context, block);
                 let state = context.state;
                 let ui256 =
-                    AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD).into_mlir();
+                    AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
                 let x = AstValue::from(values[0])
                     .cast(AstType::new(ui256), state, &block)
                     .into_mlir();
@@ -322,7 +322,7 @@ impl IdentifierBuiltinCall {
                     RequireOperation
                         .cond(condition_boolean)
                         .args(&[])
-                        .msg(StringAttribute::new(state.mlir(), &literal))
+                        .msg(StringAttribute::new(state.mlir_context, &literal))
                 );
                 block
             }
@@ -367,8 +367,8 @@ impl IdentifierBuiltinCall {
                         RequireOperation
                             .cond(condition_boolean)
                             .args(&argument_values)
-                            .msg(StringAttribute::new(state.mlir(), &signature))
-                            .call(Attribute::unit(state.mlir()))
+                            .msg(StringAttribute::new(state.mlir_context, &signature))
+                            .call(Attribute::unit(state.mlir_context))
                     );
                     current_block
                 } else {
@@ -377,7 +377,8 @@ impl IdentifierBuiltinCall {
                         block,
                     } = expression.emit(context, block);
                     let string_memory_type =
-                        AstType::string(state.mlir(), solx_utils::DataLocation::Memory).into_mlir();
+                        AstType::string(state.mlir_context, solx_utils::DataLocation::Memory)
+                            .into_mlir();
                     let message_value = message_value
                         .cast(AstType::new(string_memory_type), state, &block)
                         .into_mlir();
@@ -387,8 +388,8 @@ impl IdentifierBuiltinCall {
                         RequireOperation
                             .cond(condition_boolean)
                             .args(&[message_value])
-                            .msg(StringAttribute::new(state.mlir(), "Error(string)"))
-                            .call(Attribute::unit(state.mlir()))
+                            .msg(StringAttribute::new(state.mlir_context, "Error(string)"))
+                            .call(Attribute::unit(state.mlir_context))
                     );
                     block
                 }

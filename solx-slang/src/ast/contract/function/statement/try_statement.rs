@@ -70,7 +70,7 @@ statement_emit!(TryStatement; |node, context, block| {
     for clause in node.catch_clauses().iter() {
         match clause.error() {
             None => {
-                fallback_kind = TryFallbackKind::Parameterless;
+                fallback_kind = TryFallbackKind::Empty;
                 fallback_clause = Some(clause);
             }
             Some(error) if error.name().is_none() => {
@@ -104,26 +104,26 @@ statement_emit!(TryStatement; |node, context, block| {
     let panic_region = Region::new();
     if has_panic {
         panic_region.append_block(Block::new(&[(
-            AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+            AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
             state.location(),
         )]));
     }
     let error_region = Region::new();
     if has_error {
         error_region.append_block(Block::new(&[(
-            AstType::string(state.mlir(), solx_utils::DataLocation::Memory).into_mlir(),
+            AstType::string(state.mlir_context, solx_utils::DataLocation::Memory).into_mlir(),
             state.location(),
         )]));
     }
     let fallback_region = Region::new();
     match fallback_kind {
         TryFallbackKind::None => {}
-        TryFallbackKind::Parameterless => {
+        TryFallbackKind::Empty => {
             fallback_region.append_block(Block::new(&[]));
         }
         TryFallbackKind::Bytes => {
             fallback_region.append_block(Block::new(&[(
-                AstType::string(state.mlir(), solx_utils::DataLocation::Memory)
+                AstType::string(state.mlir_context, solx_utils::DataLocation::Memory)
                     .into_mlir(),
                 state.location(),
             )]));

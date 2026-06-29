@@ -53,7 +53,7 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
         );
         let BlockAnd { value, block } = initializer.emit(&emitter, block);
         let widened = value.cast(
-            AstType::signless(state.mlir(), solx_utils::BIT_LENGTH_FIELD),
+            AstType::signless(state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
             state,
             &block,
         );
@@ -94,7 +94,7 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
                         .expect("yul path head resolves to a declaration")
                         .node_id();
                     let slot = AstValue::from(context.environment.variable(declaration))
-                        .reinterpret(AstType::llvm_ptr(state.mlir()), state, &block)
+                        .reinterpret(AstType::llvm_ptr(state.mlir_context), state, &block)
                         .into_mlir();
                     return BlockAnd { value: YulValue::load(slot, state, &block), block };
                 }
@@ -111,7 +111,7 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
         .expect("yul variable reference resolves to a declaration")
         .node_id();
     let slot = AstValue::from(context.environment.variable(declaration))
-        .reinterpret(AstType::llvm_ptr(state.mlir()), state, &block)
+        .reinterpret(AstType::llvm_ptr(state.mlir_context), state, &block)
         .into_mlir();
     BlockAnd { value: YulValue::load(slot, state, &block), block }
 });

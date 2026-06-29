@@ -57,7 +57,7 @@ impl CallOptions<'_> {
                     value = Some(
                         option_value
                             .cast(
-                                AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD),
+                                AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
                                 state,
                                 &current_block,
                             )
@@ -65,7 +65,7 @@ impl CallOptions<'_> {
                     );
                 }
                 Some(BuiltIn::CallOptionSalt) => {
-                    let bytes32 = AstType::fixed_bytes(context.state.mlir(), 32).into_mlir();
+                    let bytes32 = AstType::fixed_bytes(context.state.mlir_context, 32).into_mlir();
                     let salt_expression = option.value();
                     let BlockAnd {
                         value: salt_bytes,
@@ -80,7 +80,7 @@ impl CallOptions<'_> {
                     salt = Some(
                         salt_bytes
                             .cast(
-                                AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD),
+                                AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
                                 state,
                                 &current_block,
                             )
@@ -97,7 +97,7 @@ impl CallOptions<'_> {
                     gas = Some(
                         option_value
                             .cast(
-                                AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD),
+                                AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
                                 state,
                                 &current_block,
                             )

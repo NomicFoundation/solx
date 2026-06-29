@@ -83,14 +83,14 @@ statement_emit!(EmitStatementNode; |node, context, block| {
     let indexed_count = i8::try_from(indexed_arguments.len())
         .expect("slang validated");
     let indexed_count_attribute = IntegerAttribute::new(
-        Type::from(IntegerType::new(state.mlir(), 8)),
+        Type::from(IntegerType::new(state.mlir_context, 8)),
         indexed_count.into(),
     );
-    let mut emit_builder = EmitOperation::builder(state.mlir(), state.location())
+    let mut emit_builder = EmitOperation::builder(state.mlir_context, state.location())
         .args(&combined_arguments)
         .indexed_args_count(indexed_count_attribute);
     if let Some(signature) = signature.as_deref() {
-        emit_builder = emit_builder.signature(StringAttribute::new(state.mlir(), signature));
+        emit_builder = emit_builder.signature(StringAttribute::new(state.mlir_context, signature));
     }
     current_block.append_operation(emit_builder.build().into());
     Some(current_block)

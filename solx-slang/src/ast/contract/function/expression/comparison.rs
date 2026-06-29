@@ -54,7 +54,7 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
     let rhs_bytes = rhs.r#type().fixed_bytes_or_byte_width();
     if let Some(common_width) = lhs_bytes.into_iter().chain(rhs_bytes).max() {
         let state = context.state;
-        let common = AstType::fixed_bytes(state.mlir(), common_width).into_mlir();
+        let common = AstType::fixed_bytes(state.mlir_context, common_width).into_mlir();
         let lhs_common = lhs.cast(AstType::new(common), state, &block);
         let rhs_common = rhs.cast(AstType::new(common), state, &block);
         let comparison = lhs_common.compare(rhs_common, predicate, state, &block);
@@ -67,7 +67,7 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         IntegerType::try_from(lhs.r#type().into_mlir()).is_ok_and(|integer| integer.is_signed());
     let signed_rhs =
         IntegerType::try_from(rhs.r#type().into_mlir()).is_ok_and(|integer| integer.is_signed());
-    let mlir_context = context.state.mlir();
+    let mlir_context = context.state.mlir_context;
     let signed_256 = Type::from(IntegerType::signed(mlir_context, 256));
     let unsigned_256 =
         AstType::unsigned(mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
