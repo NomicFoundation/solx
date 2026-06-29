@@ -18,6 +18,9 @@ unsafe extern "C" {
     /// Returns the dialect handle for the Yul dialect.
     pub fn mlirGetDialectHandle__yul__() -> MlirDialectHandle;
 
+    /// Loads a dialect into the context by handle.
+    pub fn mlirDialectHandleInsertDialect(handle: MlirDialectHandle, registry: MlirDialectRegistry);
+
     /// Registers all Sol dialect passes.
     pub fn mlirRegisterSolPasses();
 
@@ -48,8 +51,18 @@ unsafe extern "C" {
     /// Creates the `reconcile-unrealized-casts` pass.
     pub fn mlirCreateConversionReconcileUnrealizedCastsPass() -> MlirPass;
 
-    /// Loads a dialect into the context by handle.
-    pub fn mlirDialectHandleInsertDialect(handle: MlirDialectHandle, registry: MlirDialectRegistry);
+    /// Lowers each `llvm.setimmutable` op in `module` to heap stores at its
+    /// immutable's reserved offsets, then erases it. The id -> offsets mapping is
+    /// passed flattened: `imm_ids[i]` reserves offset `imm_offsets[i]` (one entry
+    /// per (id, offset) pair, `imm_count` entries). An op whose id is absent is
+    /// erased as a no-op. Mirrors the EVM-assembly `setimmutable` for the MLIR
+    /// (Slang) pipeline, which reaches codegen-evm as LLVM IR, not Yul.
+    pub fn mlirEvmLowerSetImmutables(
+        module: MlirModule,
+        imm_ids: *const *const std::ffi::c_char,
+        imm_offsets: *const u64,
+        imm_count: u64,
+    );
 
     /// Creates a `ContractKindAttr` (0=Interface, 1=Contract, 2=Library).
     pub fn solxCreateContractKindAttr(context: MlirContext, kind: u32) -> mlir_sys::MlirAttribute;
@@ -168,30 +181,6 @@ unsafe extern "C" {
         result_count: usize,
     ) -> mlir_sys::MlirType;
 
-    /// Lowers each `llvm.setimmutable` op in `module` to heap stores at its
-    /// immutable's reserved offsets, then erases it. The id -> offsets mapping is
-    /// passed flattened: `imm_ids[i]` reserves offset `imm_offsets[i]` (one entry
-    /// per (id, offset) pair, `imm_count` entries). An op whose id is absent is
-    /// erased as a no-op. Mirrors the EVM-assembly `setimmutable` for the MLIR
-    /// (Slang) pipeline, which reaches codegen-evm as LLVM IR, not Yul.
-    pub fn mlirEvmLowerSetImmutables(
-        module: MlirModule,
-        imm_ids: *const *const std::ffi::c_char,
-        imm_offsets: *const u64,
-        imm_count: u64,
-    );
-
-    /// Returns the element type of a non-mapping reference type. For
-    /// struct types, `struct_field_idx` selects the member.
-    pub fn mlirSolGetEltType(ty: mlir_sys::MlirType, struct_field_idx: u64) -> mlir_sys::MlirType;
-
-    /// Returns the result type of a `sol.gep` whose base has type
-    /// `base_addr_ty` and whose pointee is `element_type`.
-    pub fn mlirSolGepGetResultType(
-        base_addr_ty: mlir_sys::MlirType,
-        element_type: mlir_sys::MlirType,
-    ) -> mlir_sys::MlirType;
-
     /// Whether `ty` is a `!sol.enum<N>`.
     pub fn solxIsEnumType(ty: mlir_sys::MlirType) -> bool;
     /// Whether `ty` is the `!sol.address`.
@@ -219,6 +208,17 @@ unsafe extern "C" {
     pub fn solxIsFuncRefType(ty: mlir_sys::MlirType) -> bool;
     /// Whether `ty` is a `!sol.ptr<…>` (a typed place / address).
     pub fn solxIsPointerType(ty: mlir_sys::MlirType) -> bool;
+
+    /// Returns the element type of a non-mapping reference type. For
+    /// struct types, `struct_field_idx` selects the member.
+    pub fn mlirSolGetEltType(ty: mlir_sys::MlirType, struct_field_idx: u64) -> mlir_sys::MlirType;
+
+    /// Returns the result type of a `sol.gep` whose base has type
+    /// `base_addr_ty` and whose pointee is `element_type`.
+    pub fn mlirSolGepGetResultType(
+        base_addr_ty: mlir_sys::MlirType,
+        element_type: mlir_sys::MlirType,
+    ) -> mlir_sys::MlirType;
 
     /// The pointee type `T` of a `!sol.ptr<T, Loc>` (the caller must ensure `ty`
     /// is a pointer type).
