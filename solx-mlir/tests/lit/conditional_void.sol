@@ -1,5 +1,8 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
+// Ternary with void-typed arms: solc's print-init aborts on the assertion
+// !lVals.empty() in genRValExprs (SolidityToMLIR.cpp:2652), so this is solx-only.
+
 // CHECK-LABEL: sol.func @"choose(bool)"
 // CHECK: sol.if %{{[0-9]+}} {
 // CHECK-NEXT: sol.call @"a()"() : () -> ()

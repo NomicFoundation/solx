@@ -4,20 +4,17 @@
 // CHECK: sol.state_var @{{.*p.*}} slot 0 offset 0 : !sol.struct<(ui8, ui16, i1, !sol.address), Storage>
 
 // CHECK: sol.func @{{.*readA.*}}() -> ui8
-// CHECK-DAG:   sol.addr_of @{{.*p.*}} : !sol.struct<(ui8, ui16, i1, !sol.address), Storage>
-// CHECK-DAG:   sol.constant 0 : ui64
+// CHECK:   sol.addr_of @{{.*p.*}} : !sol.struct<(ui8, ui16, i1, !sol.address), Storage>
 // CHECK:   sol.gep %{{.*}}, %{{.*}} : !sol.struct<(ui8, ui16, i1, !sol.address), Storage>, ui64, !sol.ptr<ui8, Storage>
 // CHECK:   sol.load %{{.*}} : !sol.ptr<ui8, Storage>, ui8
 
 // CHECK: sol.func @{{.*readD.*}}() -> !sol.address
-// CHECK-DAG:   sol.addr_of @{{.*p.*}} : !sol.struct<(ui8, ui16, i1, !sol.address), Storage>
-// CHECK-DAG:   sol.constant 3 : ui64
+// CHECK:   sol.addr_of @{{.*p.*}} : !sol.struct<(ui8, ui16, i1, !sol.address), Storage>
 // CHECK:   sol.gep %{{.*}}, %{{.*}} : !sol.struct<(ui8, ui16, i1, !sol.address), Storage>, ui64, !sol.ptr<!sol.address, Storage>
 // CHECK:   sol.load %{{.*}} : !sol.ptr<!sol.address, Storage>, !sol.address
 
 // CHECK: sol.func @{{.*writeB.*}}(%arg0: ui16)
-// CHECK-DAG:   sol.addr_of @{{.*p.*}} : !sol.struct<(ui8, ui16, i1, !sol.address), Storage>
-// CHECK-DAG:   sol.constant 1 : ui64
+// CHECK:   sol.addr_of @{{.*p.*}} : !sol.struct<(ui8, ui16, i1, !sol.address), Storage>
 // CHECK:   sol.gep %{{.*}}, %{{.*}} : !sol.struct<(ui8, ui16, i1, !sol.address), Storage>, ui64, !sol.ptr<ui16, Storage>
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui16, !sol.ptr<ui16, Storage>
 

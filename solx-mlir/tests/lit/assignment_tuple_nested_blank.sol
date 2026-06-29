@@ -1,18 +1,19 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// CHECK: sol.func @{{.*blank.*}}
-// CHECK: sol.constant 7 : ui8
-// CHECK: sol.constant 8 : ui8
-// CHECK: %[[B:.*]] = sol.cast %{{.*}} : ui8 to ui256
+// Nested tuple LHS with a blank slot: solx lowers both and stores right-to-left.
+// solc aborts in genLValExpr (res.size() == 1) on the nested tuple, so it cannot compile this file.
+
+// CHECK: sol.func @"blank()"
+// CHECK: %[[B:.*]] = sol.cast %c7_ui8 : ui8 to ui256
 // CHECK: sol.store %[[B]], %{{[0-9]+}} : ui256, !sol.ptr<ui256, Stack>
 
-// CHECK: sol.func @{{.*nested.*}}
-// CHECK-DAG: %[[V1:.*]] = sol.cast %{{.*}} : ui8 to ui256
-// CHECK-DAG: %[[V2:.*]] = sol.cast %{{.*}} : ui8 to ui256
-// CHECK-DAG: %[[V3:.*]] = sol.cast %{{.*}} : ui8 to ui256
-// CHECK-DAG: sol.store %[[V1]], %{{[0-9]+}} : ui256, !sol.ptr<ui256, Stack>
-// CHECK-DAG: sol.store %[[V2]], %{{[0-9]+}} : ui256, !sol.ptr<ui256, Stack>
-// CHECK-DAG: sol.store %[[V3]], %{{[0-9]+}} : ui256, !sol.ptr<ui256, Stack>
+// CHECK: sol.func @"nested()"
+// CHECK: %[[C:.*]] = sol.cast %c3_ui8 : ui8 to ui256
+// CHECK: sol.store %[[C]], %{{[0-9]+}} : ui256, !sol.ptr<ui256, Stack>
+// CHECK: %[[VB:.*]] = sol.cast %c2_ui8 : ui8 to ui256
+// CHECK: sol.store %[[VB]], %{{[0-9]+}} : ui256, !sol.ptr<ui256, Stack>
+// CHECK: %[[VA:.*]] = sol.cast %c1_ui8 : ui8 to ui256
+// CHECK: sol.store %[[VA]], %{{[0-9]+}} : ui256, !sol.ptr<ui256, Stack>
 
 contract C {
     function nested() public pure returns (uint256, uint256, uint256) {

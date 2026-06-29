@@ -1,5 +1,8 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
+// Modifier body with an early return before the placeholder: solc's print-init
+// segfaults (exit 139) lowering it, so this is solx-only.
+
 // CHECK: sol.func @{{.*}}f{{.*}}() -> ui256
 // CHECK: sol.modifier_call_blk
 // CHECK: sol.call @{{.*stop.*}}() : () -> ()

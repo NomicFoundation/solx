@@ -1,5 +1,8 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
+// import "..." as M module alias with an M.L.f() library call: solc's print-init aborts via
+// llvm_unreachable("NYI") in genExpr(MemberAccess) at SolidityToMLIR.cpp:1698 (SIGABRT), so this is solx-only.
+
 // CHECK: sol.func @"a()"
 // CHECK:   sol.lib_addr "{{.*}}:L" : !sol.address
 // CHECK: sol.func @"g(uint256)"

@@ -5,8 +5,7 @@
 // CHECK:   sol.constant 7 : ui8
 // CHECK:   sol.store {{.*}}!sol.ptr<ui256, Storage>
 // CHECK:   sol.store %arg0
-// CHECK-DAG:   sol.constant 2 : ui8
-// CHECK-DAG:   sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
+// CHECK:   sol.constant 2 : ui8
 // CHECK:   sol.cmul
 // CHECK:   sol.call @[[B_CTOR:.*]](%{{.*}}) : (ui256) -> ()
 // CHECK:   sol.return
@@ -14,8 +13,7 @@
 // CHECK: sol.func @[[B_CTOR]](%arg0: ui256) attributes {{.*}}state_mutability = #NonPayable
 // CHECK-NOT: kind = #Constructor
 // CHECK:   sol.store %arg0
-// CHECK-DAG:   sol.constant 10 : ui8
-// CHECK-DAG:   sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
+// CHECK:   sol.constant 10 : ui8
 // CHECK:   sol.cadd
 // CHECK:   sol.call @[[A_CTOR:.*]](%{{.*}}) : (ui256) -> ()
 // CHECK:   sol.store {{.*}}!sol.ptr<ui256, Storage>

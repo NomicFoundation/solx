@@ -194,8 +194,8 @@ impl Operator {
             return (result.into(), block);
         }
 
-        let BlockAnd { value: rhs, block } = right.emit(context, block);
         let BlockAnd { value: lhs, block } = left.emit(context, block);
+        let BlockAnd { value: rhs, block } = right.emit(context, block);
         let result_type = target_type.unwrap_or_else(|| {
             let lhs_width = lhs.r#type().integer_bit_width();
             let rhs_width = rhs.r#type().integer_bit_width();

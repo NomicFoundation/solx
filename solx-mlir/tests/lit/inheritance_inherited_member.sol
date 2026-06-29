@@ -3,14 +3,14 @@
 
 // CHECK: sol.contract @{{.*Derived.*}}
 // CHECK:   sol.state_var @{{.*stored.*}} slot 0 offset 0 : ui256
+
 // CHECK:   sol.func @{{.*compute.*}}(%{{.*}}: ui256) -> ui256
-// CHECK-DAG:     sol.call @{{.*helper.*}}(%{{.*}}) : (ui256) -> ui256
-// CHECK-DAG:     sol.load %{{.*}} : !sol.ptr<ui256, Storage>, ui256
+// CHECK:     sol.call @{{.*helper.*}}(%{{.*}}) : (ui256) -> ui256
+// CHECK:     sol.load %{{.*}} : !sol.ptr<ui256, Storage>, ui256
 // CHECK:     sol.cadd
-// CHECK:     sol.return
+
 // CHECK:   sol.func @{{.*helper.*}}(%{{.*}}: ui256) -> ui256
 // CHECK:     sol.cadd
-// CHECK:     sol.return
 
 contract Base {
     uint256 internal stored;

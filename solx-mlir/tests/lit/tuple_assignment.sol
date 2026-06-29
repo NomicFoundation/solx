@@ -1,15 +1,23 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck %s --check-prefixes=CHECK,CHECK-SOLX
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s --check-prefixes=CHECK,CHECK-SOLC
 
-// CHECK-DAG because Solidity writes right-to-left so the leftmost write to an
+// Tuple-assign store order: solx stores targets right-to-left (leftmost-wins,
+// Solidity semantics); solc print-init stores left-to-right.
 
 // CHECK: sol.func @{{.*assign_from_call.*}}
-// CHECK: %[[R:[0-9]+]]:2 = sol.call @{{.*two.*}}
-// CHECK-DAG: sol.store %[[R]]#0, %{{[0-9]+}}
-// CHECK-DAG: sol.store %[[R]]#1, %{{[0-9]+}}
+// CHECK: %[[R:[0-9]+]]:2 = sol.call @{{.*two.*}}()
+// CHECK-SOLX: sol.store %[[R]]#1, %{{[0-9]+}}
+// CHECK-SOLX: sol.store %[[R]]#0, %{{[0-9]+}}
+// CHECK-SOLC: sol.store %[[R]]#0, %{{[0-9]+}}
+// CHECK-SOLC: sol.store %[[R]]#1, %{{[0-9]+}}
 
 // CHECK: sol.func @{{.*swap.*}}
-// CHECK: sol.return %{{[0-9]+}}, %{{[0-9]+}} : ui256, ui256
+// CHECK: %[[V0:[0-9]+]] = sol.load %{{[0-9]+}}
+// CHECK: %[[V1:[0-9]+]] = sol.load %{{[0-9]+}}
+// CHECK-SOLX: sol.store %[[V1]], %{{[0-9]+}}
+// CHECK-SOLX: sol.store %[[V0]], %{{[0-9]+}}
+// CHECK-SOLC: sol.store %[[V0]], %{{[0-9]+}}
+// CHECK-SOLC: sol.store %[[V1]], %{{[0-9]+}}
 
 contract C {
     function two() internal pure returns (uint256, uint256) {

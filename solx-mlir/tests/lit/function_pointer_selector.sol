@@ -1,5 +1,8 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
+// error/event .selector and function-pointer .selector/.address/value members: solc's
+// print-init hits NYI and aborts (UNREACHABLE at SolidityToMLIR.cpp:813), so this is solx-only.
+
 // CHECK-LABEL: sol.func @{{.*}}error_selector
 // CHECK: sol.constant {{.*}} : ui32
 // CHECK: sol.bytes_cast {{.*}} to !sol.fixedbytes<4>
@@ -13,8 +16,8 @@
 // CHECK: sol.bytes_cast {{.*}} to !sol.fixedbytes<4>
 
 // CHECK-LABEL: sol.func @{{.*}}pointer_members
-// CHECK-DAG: sol.ext_func_selector {{.*}} -> !sol.fixedbytes<4>
-// CHECK-DAG: sol.ext_func_addr {{.*}} -> !sol.address
+// CHECK: sol.ext_func_selector {{.*}} -> !sol.fixedbytes<4>
+// CHECK: sol.ext_func_addr {{.*}} -> !sol.address
 
 // CHECK-LABEL: sol.func @{{.*}}pointer_value
 // CHECK: sol.ext_func_constant {{.*}} -> !sol.ext_func_ref<() -> ui256>

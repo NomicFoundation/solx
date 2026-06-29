@@ -3,17 +3,20 @@
 
 // CHECK: sol.contract @{{.*D.*}}
 // CHECK: sol.func @{{.*who.*}}() -> ui256 attributes {{.*}}selector = -690872835
-// CHECK-DAG:   sol.constant 1000 : ui16
-// CHECK-DAG:   sol.call @{{.*who.*}}() : () -> ui256
-// CHECK:   sol.return
+// CHECK:   sol.call @{{.*who.*}}() : () -> ui256
+// CHECK:   sol.constant 1000 : ui16
+// CHECK:   sol.cadd
+
 // CHECK: sol.func @{{.*who.*}}() -> ui256
-// CHECK-DAG:   sol.constant 100 : ui8
-// CHECK-DAG:   sol.call @{{.*who.*}}() : () -> ui256
-// CHECK:   sol.return
+// CHECK:   sol.call @{{.*who.*}}() : () -> ui256
+// CHECK:   sol.constant 100 : ui8
+// CHECK:   sol.cadd
+
 // CHECK: sol.func @{{.*who.*}}() -> ui256
-// CHECK-DAG:   sol.constant 10 : ui8
-// CHECK-DAG:   sol.call @{{.*who.*}}() : () -> ui256
-// CHECK:   sol.return
+// CHECK:   sol.call @{{.*who.*}}() : () -> ui256
+// CHECK:   sol.constant 10 : ui8
+// CHECK:   sol.cadd
+
 // CHECK: sol.func @{{.*who.*}}() -> ui256
 // CHECK:   sol.constant 1 : ui8
 // CHECK-NOT: sol.call

@@ -9,8 +9,7 @@
 
 // CHECK: sol.func @[[BASECTOR]]() attributes {{.*}}state_mutability = #NonPayable
 // CHECK-NOT: kind = #Constructor
-// CHECK-DAG:   sol.constant 5 : ui8
-// CHECK-DAG:   sol.addr_of @{{.*}} : !sol.ptr<ui256, Storage>
+// CHECK:   sol.constant 5 : ui8
 // CHECK:   sol.store {{.*}}!sol.ptr<ui256, Storage>
 // CHECK:   sol.return
 

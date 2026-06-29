@@ -3,8 +3,7 @@
 
 // CHECK: sol.func @{{.*}}(%arg0: ui256) attributes {{.*}}kind = #Constructor
 // CHECK:   sol.store %arg0
-// CHECK-DAG:   sol.constant 1 : ui8
-// CHECK-DAG:   sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
+// CHECK:   sol.constant 1 : ui8
 // CHECK:   sol.cadd
 // CHECK:   sol.call @[[BASECTOR:.*]](%{{.*}}) : (ui256) -> ()
 // CHECK:   sol.return

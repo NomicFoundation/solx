@@ -1,5 +1,8 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
+// Ternary yielding an external function pointer: solc's print-init aborts NYI
+// (UNREACHABLE at SolidityToMLIR.cpp:1698), so this is solx-only.
+
 // CHECK: sol.func @{{.*test.*}}(%arg0: i1) -> ui256
 // CHECK:   %[[SLOT:.*]] = sol.alloca : !sol.ptr<!sol.func_ref<() -> ui256>, Stack>
 // CHECK:   sol.if %{{.*}} {

@@ -1,5 +1,9 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
+// External call {value:v} option bound to a function-pointer variable: solc never reaches
+// print-init, type-checking rejects it as "function () payable external ... is not implicitly
+// convertible to expected type function () payable external ...", so this is solx-only.
+
 // CHECK-LABEL: sol.func @{{.*}}g
 // CHECK: %[[V:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
 // CHECK: sol.ext_func_constant %{{.*}} {selector = {{.*}} : i32} : !sol.address -> !sol.ext_func_ref<() -> ui256>

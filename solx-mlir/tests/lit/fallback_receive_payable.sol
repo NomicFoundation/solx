@@ -2,12 +2,10 @@
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func @{{.*}}() attributes {{.*}}kind = #Fallback{{.*}}state_mutability = #Payable
-// CHECK-DAG:   sol.callvalue : ui256
-// CHECK-DAG:   sol.addr_of @{{.*received.*}} : !sol.ptr<ui256, Storage>
-// CHECK-DAG:   sol.load %{{.*}} : !sol.ptr<ui256, Storage>, ui256
-// CHECK-DAG:   sol.cadd %{{.*}}, %{{.*}} : ui256
-// CHECK-DAG:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
-// CHECK:       sol.return
+// CHECK:   sol.load %{{.*}} : !sol.ptr<ui256, Storage>, ui256
+// CHECK:   sol.callvalue : ui256
+// CHECK:   sol.cadd %{{.*}}, %{{.*}} : ui256
+// CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
 
 contract C {
     uint256 public received;

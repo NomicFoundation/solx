@@ -1,24 +1,27 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s --check-prefix=CHECK-SOLX
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s --check-prefix=CHECK-SOLC
+// RUN: solx --emit-mlir=sol %s | FileCheck %s --check-prefixes=CHECK,CHECK-SOLX
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s --check-prefixes=CHECK,CHECK-SOLC
 
-// CHECK-SOLX: sol.contract @Derived
-// CHECK-SOLX: sol.func @"inherited(uint256)"(%arg0: ui256) -> ui256
-// CHECK-SOLX: sol.call @[[DERIVED:checked_[0-9]+]](%{{.*}}) : (ui256) -> ()
-// CHECK-SOLX: sol.func @"qualified(uint256)"(%arg0: ui256) -> ui256
-// CHECK-SOLX: sol.call @[[BASE:checked_[0-9]+]](%{{.*}}) : (ui256) -> ()
-// CHECK-SOLX: sol.modifier @[[DERIVED]](%arg0: ui256)
+// inherited()'s virtual checked: solx binds the Derived override (cmp ne); solc print-init binds the Base modifier (cmp gt), same one qualified()'s Base.checked uses.
+// solx emits funcs then modifiers; solc interleaves func, modifier.
+
+// CHECK: sol.contract @Derived
+
+// CHECK-SOLX: sol.func @"inherited(uint256)"
+// CHECK-SOLX: sol.call @[[INH:checked_[0-9]+]](%{{.*}}) : (ui256) -> ()
+// CHECK-SOLX: sol.func @"qualified(uint256)"
+// CHECK-SOLX: sol.call @[[QUAL:checked_[0-9]+]](%{{.*}}) : (ui256) -> ()
+// CHECK-SOLX: sol.modifier @[[INH]](%arg0: ui256)
 // CHECK-SOLX: sol.cmp ne
-// CHECK-SOLX: sol.modifier @[[BASE]](%arg0: ui256)
+// CHECK-SOLX: sol.modifier @[[QUAL]](%arg0: ui256)
 // CHECK-SOLX: sol.cmp gt
 
-// CHECK-SOLC: sol.contract @Derived
 // CHECK-SOLC: sol.func @qualified
-// CHECK-SOLC: sol.call @[[BASE:checked_[0-9]+]](%{{.*}}) : (ui256) -> ()
-// CHECK-SOLC: sol.modifier @[[DERIVED:checked_[0-9]+]](%arg0: ui256)
+// CHECK-SOLC: sol.call @[[QUAL:checked_[0-9]+]](%{{.*}}) : (ui256) -> ()
+// CHECK-SOLC: sol.modifier @[[OVR:checked_[0-9]+]](%arg0: ui256)
 // CHECK-SOLC: sol.cmp ne
 // CHECK-SOLC: sol.func @inherited
-// CHECK-SOLC: sol.call @[[BASE]](%{{.*}}) : (ui256) -> ()
-// CHECK-SOLC: sol.modifier @[[BASE]](%arg0: ui256)
+// CHECK-SOLC: sol.call @[[QUAL]](%{{.*}}) : (ui256) -> ()
+// CHECK-SOLC: sol.modifier @[[QUAL]](%arg0: ui256)
 // CHECK-SOLC: sol.cmp gt
 
 contract Base {

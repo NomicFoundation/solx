@@ -298,36 +298,10 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
             Self::Pointer(_, element_type) | Self::Storage(_, element_type) => {
                 let slang_type = operand.get_type().expect("slang validated");
                 let zero = if slang_type.is_reference_type() {
-                    match &slang_type {
-                        ast::Type::String(_) | ast::Type::Bytes(_) => {
-                            let size = AstValue::constant(
-                                0,
-                                AstType::unsigned(
-                                    context.state.builder.context,
-                                    solx_utils::BIT_LENGTH_FIELD,
-                                ),
-                                &context.state.builder,
-                                &block,
-                            )
-                            .into_mlir();
-                            AstValue::malloc(
-                                *element_type,
-                                Some(size),
-                                true,
-                                &context.state.builder,
-                                &block,
-                            )
-                            .into_mlir()
-                        }
-                        _ => AstValue::malloc(
-                            *element_type,
-                            None,
-                            true,
-                            &context.state.builder,
-                            &block,
-                        )
-                        .into_mlir(),
-                    }
+                    let zero_init =
+                        !matches!(slang_type, ast::Type::String(_) | ast::Type::Bytes(_));
+                    AstValue::malloc(*element_type, None, zero_init, &context.state.builder, &block)
+                        .into_mlir()
                 } else {
                     AstValue::zero(AstType::new(*element_type), &context.state.builder, &block)
                         .into_mlir()

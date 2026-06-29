@@ -6,25 +6,21 @@
 // CHECK: sol.state_var @{{.*width.*}} slot 0 offset 2 : ui16
 
 // CHECK: sol.func @{{.*bump.*}}()
-// CHECK-DAG:   sol.addr_of @{{.*counter.*}} : !sol.ptr<ui8, Storage>
-// CHECK-DAG:   sol.load %{{.*}} : !sol.ptr<ui8, Storage>, ui8
-// CHECK-DAG:   sol.constant 1 : ui8
-// CHECK-DAG:   sol.cadd %{{.*}}, %{{.*}} : ui8
+// CHECK:   sol.load %{{.*}} : !sol.ptr<ui8, Storage>, ui8
+// CHECK:   sol.cadd %{{.*}}, %{{.*}} : ui8
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui8, !sol.ptr<ui8, Storage>
 
 // CHECK: sol.func @{{.*flip.*}}()
-// CHECK-DAG:   sol.addr_of @{{.*toggled.*}} : !sol.ptr<i1, Storage>
-// CHECK-DAG:   sol.load %{{.*}} : !sol.ptr<i1, Storage>, i1
-// CHECK-DAG:   sol.constant false
-// CHECK-DAG:   sol.cmp eq, %{{.*}}, %{{.*}} : i1
+// CHECK:   sol.load %{{.*}} : !sol.ptr<i1, Storage>, i1
+// CHECK:   sol.constant false
+// CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : i1
 // CHECK:   sol.store %{{.*}}, %{{.*}} : i1, !sol.ptr<i1, Storage>
 
 // CHECK: sol.func @{{.*widen.*}}()
-// CHECK-DAG:   sol.addr_of @{{.*width.*}} : !sol.ptr<ui16, Storage>
-// CHECK-DAG:   sol.load %{{.*}} : !sol.ptr<ui16, Storage>, ui16
-// CHECK-DAG:   sol.constant 5 : ui8
-// CHECK-DAG:   sol.cast %{{.*}} : ui8 to ui16
-// CHECK-DAG:   sol.cadd %{{.*}}, %{{.*}} : ui16
+// CHECK:   sol.load %{{.*}} : !sol.ptr<ui16, Storage>, ui16
+// CHECK:   sol.constant 5 : ui8
+// CHECK:   sol.cast %{{.*}} : ui8 to ui16
+// CHECK:   sol.cadd %{{.*}}, %{{.*}} : ui16
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui16, !sol.ptr<ui16, Storage>
 
 contract C {

@@ -8,20 +8,19 @@
 // CHECK: sol.state_var @{{.*e.*}} slot 0 offset 24 : !sol.fixedbytes<4>
 
 // CHECK: sol.func @{{.*getA.*}}() -> ui8
-// CHECK:   %[[P:.*]] = sol.addr_of @{{.*a.*}} : !sol.ptr<ui8, Storage>
-// CHECK:   sol.load %[[P]] : !sol.ptr<ui8, Storage>, ui8
+// CHECK:   sol.load %{{.*}} : !sol.ptr<ui8, Storage>, ui8
 
 // CHECK: sol.func @{{.*getD.*}}() -> !sol.address
-// CHECK:   %[[P:.*]] = sol.addr_of @{{.*d.*}} : !sol.ptr<!sol.address, Storage>
-// CHECK:   sol.load %[[P]] : !sol.ptr<!sol.address, Storage>, !sol.address
+// CHECK:   sol.load %{{.*}} : !sol.ptr<!sol.address, Storage>, !sol.address
 
 // CHECK: sol.func @{{.*setB.*}}(%arg0: ui16)
-// CHECK-DAG:   sol.addr_of @{{.*b.*}} : !sol.ptr<ui16, Storage>
-// CHECK-DAG:   sol.store %{{.*}}, %{{.*}} : ui16, !sol.ptr<ui16, Storage>
+// CHECK:   sol.store %{{.*}}, %{{.*}} : ui16, !sol.ptr<ui16, Storage>
+
+// CHECK: sol.func @{{.*setC.*}}(%arg0: i1)
+// CHECK:   sol.store %{{.*}}, %{{.*}} : i1, !sol.ptr<i1, Storage>
 
 // CHECK: sol.func @{{.*setE.*}}(%arg0: !sol.fixedbytes<4>)
-// CHECK-DAG:   sol.addr_of @{{.*e.*}} : !sol.ptr<!sol.fixedbytes<4>, Storage>
-// CHECK-DAG:   sol.store %{{.*}}, %{{.*}} : !sol.fixedbytes<4>, !sol.ptr<!sol.fixedbytes<4>, Storage>
+// CHECK:   sol.store %{{.*}}, %{{.*}} : !sol.fixedbytes<4>, !sol.ptr<!sol.fixedbytes<4>, Storage>
 
 contract C {
     uint8 a;

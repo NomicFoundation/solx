@@ -5,17 +5,23 @@
 // CHECK: sol.state_var @{{.*}} slot 1 offset 0 : ui256
 
 // CHECK: sol.func @{{.*get_x.*}}
-// CHECK:   %[[PTR:.*]] = sol.addr_of @{{.*}} : !sol.ptr<ui256, Storage>
-// CHECK:   sol.load %[[PTR]] : !sol.ptr<ui256, Storage>, ui256
+// CHECK:   %[[PX:.*]] = sol.addr_of @{{.*}} : !sol.ptr<ui256, Storage>
+// CHECK:   sol.load %[[PX]] : !sol.ptr<ui256, Storage>, ui256
+// CHECK:   sol.return
+
+// CHECK: sol.func @{{.*get_y.*}}
+// CHECK:   %[[PY:.*]] = sol.addr_of @{{.*}} : !sol.ptr<ui256, Storage>
+// CHECK:   sol.load %[[PY]] : !sol.ptr<ui256, Storage>, ui256
 // CHECK:   sol.return
 
 // CHECK: sol.func @{{.*set_x.*}}
-// CHECK:   %[[PTR:.*]] = sol.addr_of @{{.*}} : !sol.ptr<ui256, Storage>
-// CHECK:   sol.store %{{.*}}, %[[PTR]] : ui256, !sol.ptr<ui256, Storage>
+// CHECK:   %[[PS:.*]] = sol.addr_of @{{.*}} : !sol.ptr<ui256, Storage>
+// CHECK:   sol.store %{{.*}}, %[[PS]] : ui256, !sol.ptr<ui256, Storage>
 
 // CHECK: sol.func @{{.*swap.*}}
-// CHECK-DAG: sol.addr_of
-// CHECK-DAG: sol.store
+// CHECK:   sol.store %{{.*}} : ui256, !sol.ptr<ui256, Stack>
+// CHECK:   sol.store %{{.*}} : ui256, !sol.ptr<ui256, Storage>
+// CHECK:   sol.store %{{.*}} : ui256, !sol.ptr<ui256, Storage>
 
 contract C {
     uint256 x;
@@ -25,12 +31,12 @@ contract C {
         return x;
     }
 
-    function set_x(uint256 val) public {
-        x = val;
-    }
-
     function get_y() public view returns (uint256) {
         return y;
+    }
+
+    function set_x(uint256 val) public {
+        x = val;
     }
 
     function swap() public {

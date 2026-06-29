@@ -1,22 +1,16 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s --check-prefix=CHECK-SOLX
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s --check-prefix=CHECK-SOLC
+// RUN: solx --emit-mlir=sol %s | FileCheck %s --check-prefixes=CHECK,CHECK-SOLX
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s --check-prefixes=CHECK,CHECK-SOLC
 
-// `using L for uint256` with a method-style call `x.add(3)`. The receiver `x`
-// is the first argument of the library function. Both backends inline `add`
-// into the contract and dispatch via `sol.call`, but they DIVERGE on the
-// receiver argument: solx passes the receiver (call type `(ui256, ui256)`),
-// while solc's print-init drops the receiver entirely, lowering to a
-// `(ui256) -> ui256` call that forwards only the explicit `3`. Split prefixes
-// pin each backend's real call arity; the inlined `add` body is identical.
+// using-for x.add(3): solx loads the receiver and forwards it, sol.call @add(%x, %3) : (ui256, ui256) -> ui256.
+// solc print-init drops the receiver, lowering to sol.call @add(%3) : (ui256) -> ui256.
 
-// CHECK-SOLX: sol.func @{{.*f.*}}(%{{.*}}: ui256) -> ui256
-// CHECK-SOLX:   %[[X:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
-// CHECK-SOLX:   %[[THREE:.*]] = sol.cast %{{.*}} : ui8 to ui256
-// CHECK-SOLX:   sol.call @{{.*add.*}}(%[[X]], %[[THREE]]) : (ui256, ui256) -> ui256
-
-// CHECK-SOLC: sol.func @{{.*f.*}}(%{{.*}}: ui256) -> ui256
-// CHECK-SOLC:   %[[THREE:.*]] = sol.cast %{{.*}} : ui8 to ui256
-// CHECK-SOLC:   sol.call @{{.*add.*}}(%[[THREE]]) : (ui256) -> ui256
+// CHECK: sol.func @{{.*}}(%arg0: ui256) -> ui256
+// CHECK: sol.store %arg0, %[[SLOT:.*]] : ui256, !sol.ptr<ui256, Stack>
+// CHECK-SOLX: %[[X:.*]] = sol.load %[[SLOT]] : !sol.ptr<ui256, Stack>, ui256
+// CHECK: sol.constant 3 : ui8
+// CHECK: %[[THREE:.*]] = sol.cast %{{.*}} : ui8 to ui256
+// CHECK-SOLX: sol.call @{{.*add.*}}(%[[X]], %[[THREE]]) : (ui256, ui256) -> ui256
+// CHECK-SOLC: sol.call @{{.*add.*}}(%[[THREE]]) : (ui256) -> ui256
 
 library L {
     function add(uint256 a, uint256 b) internal pure returns (uint256) {

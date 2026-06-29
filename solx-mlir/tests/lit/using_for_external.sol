@@ -1,5 +1,8 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
+// using-for binding an external library function (lowered to a delegatecall library_call):
+// solc's print-init hits NYI and aborts at SolidityToMLIR.cpp:1698, so this is solx-only.
+
 // CHECK-LABEL: sol.func @{{.*}}f
 // CHECK: %[[X:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
 // CHECK: sol.lib_addr "{{.*}}:L" : !sol.address
