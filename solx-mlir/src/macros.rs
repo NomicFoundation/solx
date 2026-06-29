@@ -96,9 +96,9 @@ macro_rules! mlir_region_op {
     }};
 }
 
-/// Defines a Sol-dialect attribute enum backed by a `solxCreate*Attr` FFI constructor (taking
-/// `(MlirContext, u32)`): the `#[repr(u32)]` enum plus its `attribute()` builder.
-macro_rules! sol_u32_attribute {
+/// A Sol dialect attribute enum built by a `solxCreate*Attr` FFI constructor: the `#[repr(u32)]`
+/// enum plus its `attribute()` builder. `From`/other impls, where present, live alongside the call.
+macro_rules! sol_dialect_attribute {
     (
         $(#[$enum_meta:meta])*
         $name:ident => $ffi:path {
@@ -113,7 +113,7 @@ macro_rules! sol_u32_attribute {
         }
 
         impl $name {
-            /// Builds the corresponding Sol-dialect attribute in `context`.
+            /// Builds the corresponding Sol dialect attribute in `context`.
             pub fn attribute(self, context: &melior::Context) -> melior::ir::Attribute<'_> {
                 unsafe { melior::ir::Attribute::from_raw($ffi(context.to_raw(), self as u32)) }
             }
@@ -121,22 +121,31 @@ macro_rules! sol_u32_attribute {
     };
 }
 
-/// Implements `attribute()` for a `#[repr(i64)]` comparison-predicate enum: the `i64`
-/// `IntegerAttribute` the `sol.cmp` / `yul.cmp` predicate operand demands.
+/// A Sol comparison-predicate enum encoded as an `i64` `IntegerAttribute`: the `#[repr(i64)]` enum
+/// plus its `attribute()` builder. `From`/other impls, where present, live alongside the call.
 macro_rules! sol_predicate_attribute {
-    ($name:ident) => {
+    (
+        $(#[$enum_meta:meta])*
+        $name:ident {
+            $($(#[$variant_meta:meta])* $variant:ident = $value:expr),+ $(,)?
+        }
+    ) => {
+        $(#[$enum_meta])*
+        #[repr(i64)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum $name {
+            $($(#[$variant_meta])* $variant = $value),+
+        }
+
         impl $name {
-            /// This predicate's encoding as the `i64` `IntegerAttribute` the predicate operand demands.
+            /// The `i64` `IntegerAttribute` this predicate's operand demands.
             pub fn attribute(
                 self,
                 context: &melior::Context,
             ) -> melior::ir::attribute::IntegerAttribute<'_> {
                 melior::ir::attribute::IntegerAttribute::new(
-                    melior::ir::r#type::IntegerType::new(
-                        context,
-                        solx_utils::BIT_LENGTH_X64 as u32,
-                    )
-                    .into(),
+                    melior::ir::r#type::IntegerType::new(context, solx_utils::BIT_LENGTH_X64 as u32)
+                        .into(),
                     self as i64,
                 )
             }

@@ -2,7 +2,7 @@
 //! Sol dialect contract kind attribute.
 //!
 
-sol_u32_attribute! {
+sol_dialect_attribute! {
     /// Sol dialect contract kind (maps to the C++ `ContractKindAttr` values).
     ContractKind => crate::ffi::solxCreateContractKindAttr {
         /// Interface contract.

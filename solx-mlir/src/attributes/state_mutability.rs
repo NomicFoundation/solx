@@ -4,7 +4,7 @@
 
 use slang_solidity_v2::ast::FunctionMutability;
 
-sol_u32_attribute! {
+sol_dialect_attribute! {
     /// Sol dialect state mutability (maps to the C++ `StateMutabilityAttr` values).
     StateMutability => crate::ffi::solxCreateStateMutabilityAttr {
         /// Pure — no reads or writes.
