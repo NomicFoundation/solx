@@ -385,7 +385,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                             .address_type(location, state.mlir_context)
                             .into_mlir();
                         base = Pointer::new(base)
-                            .entry(AstValue::new(arg), AstType::new(level_type), state, &entry)
+                            .map(AstValue::new(arg), AstType::new(level_type), state, &entry)
                             .into_mlir();
                         index += 1;
                         current = value_slang;

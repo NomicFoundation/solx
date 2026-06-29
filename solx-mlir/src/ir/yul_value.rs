@@ -13,8 +13,6 @@ use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::TypeAttribute;
 use melior::ir::r#type::IntegerType;
 use num::BigInt;
-use solx_utils::BIT_LENGTH_FIELD;
-use solx_utils::BIT_LENGTH_X64;
 
 use crate::Context;
 use crate::IntoOds;
@@ -43,15 +41,16 @@ impl<'context, 'block> YulValue<'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> Self {
         let value_attribute = IntegerAttribute::try_from(
-            Type::signless(context.mlir_context, BIT_LENGTH_FIELD).big_integer_attribute(value),
+            Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_FIELD)
+                .big_integer_attribute(value),
         )
         .expect("yul.constant value is an i256 integer attribute");
         Self::new(mlir_op!(
             context,
             block,
-            ConstantOperation
-                .value(value_attribute)
-                .out(Type::signless(context.mlir_context, BIT_LENGTH_FIELD).into_mlir())
+            ConstantOperation.value(value_attribute).out(
+                Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
+            )
         ))
     }
 
@@ -70,7 +69,8 @@ impl<'context, 'block> YulValue<'context, 'block> {
                 AllocaOptions::new()
                     .align(Some(Self::word_alignment(context)))
                     .elem_type(Some(TypeAttribute::new(
-                        Type::signless(context.mlir_context, BIT_LENGTH_FIELD).into_mlir(),
+                        Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir(),
                     ))),
             ))
             .result(0)
@@ -105,7 +105,7 @@ impl<'context, 'block> YulValue<'context, 'block> {
                 .append_operation(llvm::load(
                     context.mlir_context,
                     pointer,
-                    Type::signless(context.mlir_context, BIT_LENGTH_FIELD).into_mlir(),
+                    Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
                     context.location(),
                     LoadStoreOptions::new().align(Some(Self::word_alignment(context))),
                 ))
@@ -132,7 +132,9 @@ impl<'context, 'block> YulValue<'context, 'block> {
                 .predicate(Attribute::from(predicate_attribute))
                 .lhs(self.inner)
                 .rhs(other.inner)
-                .out(Type::signless(context.mlir_context, BIT_LENGTH_FIELD).into_mlir())
+                .out(
+                    Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
+                )
         ))
     }
 
@@ -144,7 +146,7 @@ impl<'context, 'block> YulValue<'context, 'block> {
     /// The `alignment = 32 : i64` attribute every Yul-word `llvm` slot op carries.
     fn word_alignment(context: &Context<'context>) -> IntegerAttribute<'context> {
         IntegerAttribute::new(
-            IntegerType::new(context.mlir_context, BIT_LENGTH_X64 as u32).into(),
+            IntegerType::new(context.mlir_context, solx_utils::BIT_LENGTH_X64 as u32).into(),
             solx_utils::BYTE_LENGTH_FIELD as i64,
         )
     }

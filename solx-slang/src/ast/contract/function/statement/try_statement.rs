@@ -12,7 +12,6 @@ use melior::ir::operation::OperationLike;
 use slang_solidity_v2::ast::CatchClause;
 use slang_solidity_v2::ast::TryStatement;
 use slang_solidity_v2::ast::Type as SlangType;
-use solx_mlir::TryFallbackKind;
 use solx_mlir::ods::sol::TryOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
@@ -23,6 +22,17 @@ use crate::ast::contract::function::expression::call::try_external_call::TryExte
 use crate::ast::contract::function::expression::call::try_function_pointer_call::TryFunctionPointerCall;
 use crate::ast::contract::function::expression::call::try_new_expression::TryNewExpression;
 use crate::ast::contract::function::statement::StatementContext;
+
+/// The `catch` clause a `sol.try` carries, selecting how its fallback region is shaped.
+#[derive(Clone, Copy)]
+enum TryFallbackKind {
+    /// No `catch {}` / `catch (bytes)` clause: the region is empty and the conversion re-reverts raw revert data.
+    None,
+    /// Empty `catch { ... }`: the region runs the body with no bound value.
+    Empty,
+    /// Low-level `catch (bytes memory data) { ... }`: the region binds the returndata as a memory `bytes` argument.
+    Bytes,
+}
 
 statement_emit!(CatchClause; |node, context, block| {
     let region = block.parent_region().expect("block belongs to a region");

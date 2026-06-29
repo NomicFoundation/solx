@@ -5,10 +5,7 @@
 pub mod environment;
 pub mod function;
 pub mod modifier;
-pub mod try_fallback_kind;
 pub mod user_defined_operator;
-
-pub use self::user_defined_operator::UserDefinedOperator;
 
 use std::cell::Cell;
 use std::cell::RefCell;
@@ -29,6 +26,7 @@ use melior::ir::Type;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationLike;
 use melior::ir::operation::OperationMutLike;
+use melior::pass::Pass;
 use melior::pass::PassManager;
 use slang_solidity_v2::ast::NodeId;
 
@@ -37,6 +35,7 @@ use crate::llvm_module::RawLlvmModule;
 use crate::output::MlirOutput;
 
 use self::function::Function;
+use self::user_defined_operator::UserDefinedOperator;
 
 /// Accumulated MLIR state threaded through the AST visitors.
 pub struct Context<'context> {
@@ -185,34 +184,28 @@ impl<'context> Context<'context> {
         pass_manager.enable_verifier(true);
 
         unsafe {
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
-                ffi::mlirCreateTransformsCanonicalizer(),
-            ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
-                ffi::mlirCreateSolModifierOpLoweringPass(),
-            ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
+            pass_manager.add_pass(Pass::from_raw(ffi::mlirCreateTransformsCanonicalizer()));
+            pass_manager.add_pass(Pass::from_raw(ffi::mlirCreateSolModifierOpLoweringPass()));
+            pass_manager.add_pass(Pass::from_raw(
                 ffi::mlirCreateConversionConvertSolToYulPass(),
             ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
+            pass_manager.add_pass(Pass::from_raw(
                 ffi::mlirCreateConversionConvertYulToStandardPass(),
             ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
-                ffi::mlirCreateTransformsCanonicalizer(),
-            ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
+            pass_manager.add_pass(Pass::from_raw(ffi::mlirCreateTransformsCanonicalizer()));
+            pass_manager.add_pass(Pass::from_raw(
                 ffi::mlirCreateConversionSCFToControlFlowPass(),
             ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
+            pass_manager.add_pass(Pass::from_raw(
                 ffi::mlirCreateConversionConvertFuncToLLVMPass(),
             ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
+            pass_manager.add_pass(Pass::from_raw(
                 ffi::mlirCreateConversionArithToLLVMConversionPass(),
             ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
+            pass_manager.add_pass(Pass::from_raw(
                 ffi::mlirCreateConversionConvertControlFlowToLLVMPass(),
             ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
+            pass_manager.add_pass(Pass::from_raw(
                 ffi::mlirCreateConversionReconcileUnrealizedCastsPass(),
             ));
         }
@@ -319,22 +312,17 @@ impl<'context> Context<'context> {
     }
 
     /// Lowers every `llvm.setimmutable` to heap stores at its reserved offsets via the solx-llvm C-API.
-    fn lower_set_immutables(
-        module: &Module,
-        immutables: &BTreeMap<String, BTreeSet<u64>>,
-    ) {
+    fn lower_set_immutables(module: &Module, immutables: &BTreeMap<String, BTreeSet<u64>>) {
         let mut id_cstrings: Vec<CString> = Vec::new();
         let mut offsets: Vec<u64> = Vec::new();
         for (id, id_offsets) in immutables {
             for &offset in id_offsets {
-                id_cstrings.push(
-                    CString::new(id.as_str()).expect("immutable id has no interior NUL"),
-                );
+                id_cstrings
+                    .push(CString::new(id.as_str()).expect("immutable id has no interior NUL"));
                 offsets.push(offset);
             }
         }
-        let id_pointers: Vec<*const c_char> =
-            id_cstrings.iter().map(|id| id.as_ptr()).collect();
+        let id_pointers: Vec<*const c_char> = id_cstrings.iter().map(|id| id.as_ptr()).collect();
         unsafe {
             ffi::mlirEvmLowerSetImmutables(
                 module.to_raw(),

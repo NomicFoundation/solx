@@ -23,13 +23,20 @@ use crate::Context;
 use crate::IntoOds;
 use crate::Pointer;
 use crate::Type;
+use crate::ods::sol::AddressCastOperation;
+use crate::ods::sol::BytesCastOperation;
+use crate::ods::sol::CastOperation;
 use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConstantOperation;
+use crate::ods::sol::ContractCastOperation;
 use crate::ods::sol::ConvCastOperation;
+use crate::ods::sol::DataLocCastOperation;
 use crate::ods::sol::DefaultCallDataOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::DefaultStorageOperation;
+use crate::ods::sol::DynBytesToFixedBytesOperation;
 use crate::ods::sol::EncodeOperation;
+use crate::ods::sol::EnumCastOperation;
 use crate::ods::sol::ExtCallOperation;
 use crate::ods::sol::ExtFuncAddrOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
@@ -80,7 +87,7 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// Materialises a `sol.constant` from an arbitrary-width [`BigInt`] (literals that overflow `i64`).
+    /// Materialises a `sol.constant` from an arbitrary-width [`BigInt`], for literals that overflow `i64`.
     pub fn constant_from_bigint(
         value: &BigInt,
         result_type: Type<'context>,
@@ -160,7 +167,10 @@ impl<'context, 'block> Value<'context, 'block> {
         } else if let Some(width) = r#type.fixed_bytes_or_byte_width() {
             let bits = Self::constant(
                 0,
-                Type::unsigned(context.mlir_context, width as usize * solx_utils::BIT_LENGTH_BYTE),
+                Type::unsigned(
+                    context.mlir_context,
+                    width as usize * solx_utils::BIT_LENGTH_BYTE,
+                ),
                 context,
                 block,
             );
@@ -185,7 +195,7 @@ impl<'context, 'block> Value<'context, 'block> {
         } else if IntegerType::try_from(r#type.into_mlir()).is_ok() {
             Self::constant(0, r#type, context, block)
         } else {
-            unreachable!("Value::zero handles only scalar value types")
+            unreachable!("Self::zero handles only scalar value types")
         }
     }
 
@@ -606,23 +616,105 @@ impl<'context, 'block> Value<'context, 'block> {
         Self::new(mlir_op!(
             context,
             block,
-            Keccak256Operation
-                .addr(input)
-                .result(Type::fixed_bytes(
-                    context.mlir_context,
-                    solx_utils::BYTE_LENGTH_FIELD as u32,
-                ))
+            Keccak256Operation.addr(input).result(Type::fixed_bytes(
+                context.mlir_context,
+                solx_utils::BYTE_LENGTH_FIELD as u32,
+            ))
         ))
     }
 
-    /// Casts to `target_type` via the target type's cast router ([`Type::cast`]); a no-op when already that type.
+    /// Casts to `target_type`, a no-op when already that type; each non-integer kind routes to its own cast op.
     pub fn cast(
         self,
         target_type: Type<'context>,
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        target_type.cast(self, context, block)
+        let source = self.r#type();
+        if source == target_type {
+            return self;
+        }
+        if source.is_enum() || target_type.is_enum() {
+            return Self::new(mlir_op!(
+                context,
+                block,
+                EnumCastOperation
+                    .inp(self.into_mlir())
+                    .out(target_type.into_mlir())
+            ));
+        }
+        if source.is_contract() && target_type.is_contract() {
+            return Self::new(mlir_op!(
+                context,
+                block,
+                ContractCastOperation
+                    .inp(self.into_mlir())
+                    .out(target_type.into_mlir())
+            ));
+        }
+        if source.is_address() || target_type.is_address() {
+            let ui160 = Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_ETH_ADDRESS);
+            if source.is_address() {
+                if target_type.is_contract() || target_type.is_fixed_bytes() || target_type == ui160
+                {
+                    return self.address_cast(target_type, context, block);
+                }
+                let as_160 = self.address_cast(ui160, context, block);
+                return as_160.cast(target_type, context, block);
+            }
+            if source.is_contract() || source.is_fixed_bytes() || source == ui160 {
+                return self.address_cast(target_type, context, block);
+            }
+            let as_160 = self.cast(ui160, context, block);
+            return as_160.address_cast(target_type, context, block);
+        }
+        if source.is_reference() && target_type.is_fixed_bytes() {
+            return Self::new(mlir_op!(
+                context,
+                block,
+                DynBytesToFixedBytesOperation
+                    .inp(self.into_mlir())
+                    .out(target_type.into_mlir())
+            ));
+        }
+        if source.is_fixed_bytes() || source.is_byte() {
+            let bridge_bits = source.fixed_bytes_integer_bits();
+            if let Ok(integer) = IntegerType::try_from(target_type.into_mlir())
+                && integer.width() != bridge_bits
+            {
+                let bridge = Type::unsigned(context.mlir_context, bridge_bits as usize);
+                let as_int = self.bytes_cast(bridge, context, block);
+                return as_int.cast(target_type, context, block);
+            }
+            return self.bytes_cast(target_type, context, block);
+        }
+        if target_type.is_fixed_bytes() || target_type.is_byte() {
+            let bridge_bits = target_type.fixed_bytes_integer_bits();
+            if let Ok(integer) = IntegerType::try_from(source.into_mlir())
+                && integer.width() != bridge_bits
+            {
+                let bridge = Type::unsigned(context.mlir_context, bridge_bits as usize);
+                let as_int = self.cast(bridge, context, block);
+                return as_int.bytes_cast(target_type, context, block);
+            }
+            return self.bytes_cast(target_type, context, block);
+        }
+        if source.is_reference() && target_type.is_reference() {
+            return Self::new(mlir_op!(
+                context,
+                block,
+                DataLocCastOperation
+                    .inp(self.into_mlir())
+                    .out(target_type.into_mlir())
+            ));
+        }
+        Self::new(mlir_op!(
+            context,
+            block,
+            CastOperation
+                .inp(self.into_mlir())
+                .out(target_type.into_mlir())
+        ))
     }
 
     /// Reinterprets the value's representation as `target_type` via `sol.conv_cast`, e.g. across the
@@ -724,9 +816,10 @@ impl<'context, 'block> Value<'context, 'block> {
         Self::new(mlir_op!(
             context,
             block,
-            ExtFuncSelectorOperation
-                .func(self.inner)
-                .result(Type::fixed_bytes(context.mlir_context, solx_utils::BYTE_LENGTH_X32 as u32).into_mlir())
+            ExtFuncSelectorOperation.func(self.inner).result(
+                Type::fixed_bytes(context.mlir_context, solx_utils::BYTE_LENGTH_X32 as u32)
+                    .into_mlir()
+            )
         ))
     }
 
@@ -759,6 +852,38 @@ impl<'context, 'block> Value<'context, 'block> {
     /// The inner melior value, for the op-construction boundary.
     pub fn into_mlir(self) -> MlirValue<'context, 'block> {
         self.inner
+    }
+
+    /// Emits a `sol.bytes_cast` to the `target_type` byte / fixed-bytes / integer target.
+    fn bytes_cast(
+        self,
+        target_type: Type<'context>,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            context,
+            block,
+            BytesCastOperation
+                .inp(self.into_mlir())
+                .out(target_type.into_mlir())
+        ))
+    }
+
+    /// Emits a `sol.address_cast` to the address-side `target_type`.
+    fn address_cast(
+        self,
+        target_type: Type<'context>,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            context,
+            block,
+            AddressCastOperation
+                .inp(self.into_mlir())
+                .out(target_type.into_mlir())
+        ))
     }
 }
 

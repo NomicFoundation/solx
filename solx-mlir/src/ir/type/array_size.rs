@@ -10,12 +10,11 @@ pub enum ArraySize {
     Fixed(u64),
 }
 
-impl ArraySize {
-    /// Encodes the size into the dialect's wire format.
-    pub fn as_dialect_i64(self) -> i64 {
-        match self {
-            Self::Dynamic => -1,
-            Self::Fixed(n) => i64::try_from(n).expect("array size fits in i64"),
+impl From<ArraySize> for i64 {
+    fn from(size: ArraySize) -> Self {
+        match size {
+            ArraySize::Dynamic => -1,
+            ArraySize::Fixed(size) => Self::try_from(size).expect("array size fits in i64"),
         }
     }
 }

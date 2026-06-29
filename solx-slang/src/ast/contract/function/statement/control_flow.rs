@@ -45,8 +45,8 @@ statement_emit!(IfStatement; |node, context, block| {
         IfOperation.cond(condition_boolean); then_region, else_region
     );
 
-    let then_region = solx_mlir::ffi::block_parent_region(&then_block);
-    let else_region = solx_mlir::ffi::block_parent_region(&else_block);
+    let then_region = then_block.parent_region().expect("block belongs to a region");
+    let else_region = else_block.parent_region().expect("block belongs to a region");
 
     let saved_region = context.region_pointer;
     context.region_pointer = &*then_region as *const _;
@@ -107,7 +107,7 @@ statement_emit!(ForStatement; |node, context, block| {
 
     let (condition_block, body_block, step_block) =
         mlir_region_op!(context.state, &block, ForOperation; cond, body, step);
-    let body_region = solx_mlir::ffi::block_parent_region(&body_block);
+    let body_region = body_block.parent_region().expect("block belongs to a region");
     let saved_region = context.region_pointer;
 
     match node.condition() {
@@ -166,7 +166,7 @@ statement_emit!(ForStatement; |node, context, block| {
 statement_emit!(WhileStatement; |node, context, block| {
     let (condition_block, body_block) =
         mlir_region_op!(context.state, &block, WhileOperation; cond, body);
-    let body_region = solx_mlir::ffi::block_parent_region(&body_block);
+    let body_region = body_block.parent_region().expect("block belongs to a region");
     let saved_region = context.region_pointer;
 
     let emitter = ExpressionContext::from(&*context);
@@ -196,7 +196,7 @@ statement_emit!(WhileStatement; |node, context, block| {
 statement_emit!(DoWhileStatement; |node, context, block| {
     let (body_block, condition_block) =
         mlir_region_op!(context.state, &block, DoWhileOperation; body, cond);
-    let body_region = solx_mlir::ffi::block_parent_region(&body_block);
+    let body_region = body_block.parent_region().expect("block belongs to a region");
     let saved_region = context.region_pointer;
 
     context.region_pointer = &*body_region as *const _;

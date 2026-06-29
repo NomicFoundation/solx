@@ -141,8 +141,8 @@ impl EmitModifierCalls for FunctionDefinition {
                     argument.emit(&emitter, current_block)
                 };
                 current_block = next_block;
-                let parameter_type =
-                    AstType::resolve_optional(parameter.get_type(), state).expect("slang validated");
+                let parameter_type = AstType::resolve_optional(parameter.get_type(), state)
+                    .expect("slang validated");
                 let cast = value.cast(AstType::new(parameter_type), state, &current_block);
                 operands.push(cast.into_mlir());
             }

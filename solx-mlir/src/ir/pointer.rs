@@ -11,7 +11,6 @@ use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::TypeAttribute;
-use solx_utils::DataLocation;
 
 use crate::Context;
 use crate::Type;
@@ -42,7 +41,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
 
     /// Allocates a stack slot for `pointee` and returns the place: a
     /// `sol.alloca` yielding `!sol.ptr<pointee, Stack>`.
-    pub fn stack_slot<B>(pointee: Type<'context>, context: &Context<'context>, block: &B) -> Self
+    pub fn stack<B>(pointee: Type<'context>, context: &Context<'context>, block: &B) -> Self
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
@@ -50,7 +49,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
         let address_type = Type::pointer(
             context.mlir_context,
             pointee.into_mlir(),
-            DataLocation::Stack,
+            solx_utils::DataLocation::Stack,
         )
         .into_mlir();
         Self::new(mlir_op!(
@@ -68,21 +67,23 @@ impl<'context, 'block> Pointer<'context, 'block> {
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let slot = Self::stack_slot(pointee, context, block);
+        let slot = Self::stack(pointee, context, block);
         if pointee.is_array() || pointee.is_struct() || pointee.is_string() {
             let default = match pointee.data_location() {
-                DataLocation::CallData => Value::default_calldata(pointee, context, block),
-                DataLocation::Storage | DataLocation::Transient => {
+                solx_utils::DataLocation::CallData => {
+                    Value::default_calldata(pointee, context, block)
+                }
+                solx_utils::DataLocation::Storage | solx_utils::DataLocation::Transient => {
                     Value::default_storage(pointee, context, block)
                 }
-                DataLocation::Memory => Value::malloc(
+                solx_utils::DataLocation::Memory => Value::malloc(
                     pointee.into_mlir(),
                     None,
                     !pointee.is_string(),
                     context,
                     block,
                 ),
-                DataLocation::Stack | DataLocation::Immutable => {
+                solx_utils::DataLocation::Stack | solx_utils::DataLocation::Immutable => {
                     unreachable!("an aggregate default is in memory, storage, or calldata")
                 }
             };
@@ -100,7 +101,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
         entry_block: &BlockRef<'context, 'block>,
         context: &Context<'context>,
     ) -> Self {
-        let slot = Self::stack_slot(pointee, context, entry_block);
+        let slot = Self::stack(pointee, context, entry_block);
         let argument = Value::new(
             entry_block
                 .argument(argument_index)
@@ -222,7 +223,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
 
     /// Steps to the place of the mapping entry for `key` (`sol.map`). The dialect derives no map
     /// result type C-side, so the caller supplies the entry place type `entry_type`.
-    pub fn entry<B>(
+    pub fn map<B>(
         self,
         key: Value<'context, 'block>,
         entry_type: Type<'context>,

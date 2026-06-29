@@ -64,7 +64,7 @@ impl<'context, 'block> Environment<'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) {
         let cast = Value::new(value).cast(Type::new(parameter_type), context, block);
-        let pointer = Pointer::stack_slot(Type::new(parameter_type), context, block);
+        let pointer = Pointer::stack(Type::new(parameter_type), context, block);
         pointer.store(cast, context, block);
         self.define_variable(declaration, pointer.into_mlir());
     }

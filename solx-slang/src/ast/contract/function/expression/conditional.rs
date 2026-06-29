@@ -73,7 +73,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
             let condition_boolean = condition_value.is_nonzero(state, &block).into_mlir();
             let slots: Vec<Pointer<'context, 'block>> = result_types
                 .iter()
-                .map(|&result_type| Pointer::stack_slot(AstType::new(result_type), state, &block))
+                .map(|&result_type| Pointer::stack(AstType::new(result_type), state, &block))
                 .collect();
             let (then_block, else_block) = mlir_region_op!(state, &block, IfOperation.cond(condition_boolean); then_region, else_region);
 
@@ -169,7 +169,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
             .is_nonzero(context.state, &block)
             .into_mlir();
 
-        let result_slot = Pointer::stack_slot(AstType::new(result_type), context.state, &block);
+        let result_slot = Pointer::stack(AstType::new(result_type), context.state, &block);
         let (then_block, else_block) = mlir_region_op!(
             context.state, &block,
             IfOperation.cond(condition_boolean); then_region, else_region

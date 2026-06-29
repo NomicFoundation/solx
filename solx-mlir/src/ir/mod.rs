@@ -1,7 +1,8 @@
 //!
-//! Sol and Yul dialect IR wrappers: types, values, and places.
+//! Sol and Yul dialect IR wrappers: types, values, attributes, and places.
 //!
 
+pub mod attributes;
 pub mod pointer;
 pub mod r#type;
 pub mod value;

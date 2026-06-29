@@ -1,5 +1,5 @@
 //!
-//! An MLIR type in the Sol dialect: its construction, predicates, and the casts it routes.
+//! An MLIR type in the Sol dialect: its construction, kind predicates, and property queries.
 //!
 
 pub mod array_size;
@@ -8,13 +8,12 @@ pub mod location_policy;
 use std::ffi::c_char;
 
 use melior::ir::Attribute;
-use melior::ir::BlockLike;
-use melior::ir::BlockRef;
 use melior::ir::Type as MlirType;
 use melior::ir::TypeLike;
 use melior::ir::r#type::IntegerType;
 use num::BigInt;
-use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
+use num::bigint::Sign;
+use slang_solidity_v2::ast::DataLocation;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::LiteralKind;
@@ -23,20 +22,12 @@ use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::Context;
 use crate::IntoOds;
-use crate::Value;
 use crate::ffi;
-use crate::ods::sol::AddressCastOperation;
-use crate::ods::sol::BytesCastOperation;
-use crate::ods::sol::CastOperation;
-use crate::ods::sol::ContractCastOperation;
-use crate::ods::sol::DataLocCastOperation;
-use crate::ods::sol::DynBytesToFixedBytesOperation;
-use crate::ods::sol::EnumCastOperation;
 
 use self::array_size::ArraySize;
 use self::location_policy::LocationPolicy;
 
-/// An MLIR type in the Sol dialect: type construction, the kind predicates, and the cast router [`Self::cast`].
+/// An MLIR type in the Sol dialect: type construction, the kind predicates, and property queries.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Type<'context> {
     /// The wrapped melior type.
@@ -54,8 +45,8 @@ impl<'context> Type<'context> {
 
     /// Resolves a Slang semantic type to its MLIR (Sol dialect) type.
     ///
-    /// `policy` picks each reference type's data location (declared location, or forced to memory
-    /// for the external ABI representation); the `Struct` arm carries the parent's location into members.
+    /// `policy` picks each reference type's data location: the declared location, or memory forced for
+    /// the external ABI representation; the `Struct` arm carries the parent's location into members.
     pub fn resolve(
         slang_type: &SlangType,
         policy: LocationPolicy,
@@ -74,50 +65,50 @@ impl<'context> Type<'context> {
                 context.mlir_context,
                 solx_utils::BIT_LENGTH_BOOLEAN as u32,
             )),
-            SlangType::Address(_) => Type::address(context.mlir_context, false).into_mlir(),
+            SlangType::Address(_) => Self::address(context.mlir_context, false).into_mlir(),
             SlangType::Literal(literal_type) => match literal_type.kind() {
                 LiteralKind::Address { .. } => {
-                    Type::address(context.mlir_context, false).into_mlir()
+                    Self::address(context.mlir_context, false).into_mlir()
                 }
                 LiteralKind::Integer { .. } => {
                     let mobile_type = literal_type
                         .mobile_type()
                         .expect("slang validated: integer literal fits in 256 bits");
-                    Type::resolve(&mobile_type, policy, context)
+                    Self::resolve(&mobile_type, policy, context)
                 }
                 LiteralKind::HexInteger { bytes, .. } => {
                     let bits = bytes * solx_utils::BIT_LENGTH_BYTE as u32;
                     MlirType::from(IntegerType::unsigned(context.mlir_context, bits))
                 }
                 LiteralKind::String { .. } => {
-                    Type::string(context.mlir_context, solx_utils::DataLocation::Memory).into_mlir()
+                    Self::string(context.mlir_context, solx_utils::DataLocation::Memory).into_mlir()
                 }
-                LiteralKind::HexString { bytes } => Type::fixed_bytes(
+                LiteralKind::HexString { bytes } => Self::fixed_bytes(
                     context.mlir_context,
                     bytes.try_into().expect("hex string length fits in u32"),
                 )
                 .into_mlir(),
                 LiteralKind::Rational { .. } => {
-                    Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
+                    Self::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
                 }
             },
-            SlangType::String(string_type) => Type::string(
+            SlangType::String(string_type) => Self::string(
                 context.mlir_context,
                 policy.data_location(string_type.location()),
             )
             .into_mlir(),
-            SlangType::Bytes(bytes_type) => Type::string(
+            SlangType::Bytes(bytes_type) => Self::string(
                 context.mlir_context,
                 policy.data_location(bytes_type.location()),
             )
             .into_mlir(),
             SlangType::ByteArray(byte_array_type) => {
-                Type::fixed_bytes(context.mlir_context, byte_array_type.width()).into_mlir()
+                Self::fixed_bytes(context.mlir_context, byte_array_type.width()).into_mlir()
             }
             SlangType::Array(array_type) => {
-                let element_type = Type::resolve(&array_type.element_type(), policy, context);
+                let element_type = Self::resolve(&array_type.element_type(), policy, context);
                 let location = policy.data_location(array_type.location());
-                Type::array(
+                Self::array(
                     context.mlir_context,
                     ArraySize::Dynamic,
                     element_type,
@@ -126,9 +117,9 @@ impl<'context> Type<'context> {
                 .into_mlir()
             }
             SlangType::FixedSizeArray(fixed_array_type) => {
-                let element_type = Type::resolve(&fixed_array_type.element_type(), policy, context);
+                let element_type = Self::resolve(&fixed_array_type.element_type(), policy, context);
                 let location = policy.data_location(fixed_array_type.location());
-                Type::array(
+                Self::array(
                     context.mlir_context,
                     ArraySize::Fixed(fixed_array_type.size() as u64),
                     element_type,
@@ -137,17 +128,17 @@ impl<'context> Type<'context> {
                 .into_mlir()
             }
             SlangType::Mapping(mapping_type) => {
-                let key_type = Type::resolve(
+                let key_type = Self::resolve(
                     &mapping_type.key_type(),
                     LocationPolicy::Declared(Some(solx_utils::DataLocation::Storage)),
                     context,
                 );
-                let value_type = Type::resolve(
+                let value_type = Self::resolve(
                     &mapping_type.value_type(),
                     LocationPolicy::Declared(Some(solx_utils::DataLocation::Storage)),
                     context,
                 );
-                Type::mapping(context.mlir_context, key_type, value_type).into_mlir()
+                Self::mapping(context.mlir_context, key_type, value_type).into_mlir()
             }
             SlangType::Struct(struct_type) => {
                 let struct_location = policy.data_location(struct_type.location());
@@ -159,16 +150,16 @@ impl<'context> Type<'context> {
                 let mut member_types = Vec::new();
                 for member in struct_definition.members().iter() {
                     let member_slang_type = member.get_type().expect("slang validated");
-                    member_types.push(Type::resolve(&member_slang_type, member_policy, context));
+                    member_types.push(Self::resolve(&member_slang_type, member_policy, context));
                 }
-                Type::structure(context.mlir_context, &member_types, struct_location).into_mlir()
+                Self::structure(context.mlir_context, &member_types, struct_location).into_mlir()
             }
             SlangType::Contract(contract_type) => {
                 let contract_definition = match contract_type.definition() {
                     Definition::Contract(definition) => definition,
                     _ => unreachable!("Slang ContractType always references a Contract definition"),
                 };
-                Type::contract(
+                Self::contract(
                     context.mlir_context,
                     contract_definition.name().name().as_str(),
                     contract_definition.is_payable(),
@@ -184,7 +175,7 @@ impl<'context> Type<'context> {
                         )
                     }
                 };
-                Type::contract(
+                Self::contract(
                     context.mlir_context,
                     interface_definition.name().name().as_str(),
                     false,
@@ -198,20 +189,20 @@ impl<'context> Type<'context> {
                 };
                 let member_count = enum_definition.members().iter().count();
                 let max = u8::try_from(member_count - 1).expect("enum member count fits in u8");
-                Type::enumeration(context.mlir_context, max.into()).into_mlir()
+                Self::enumeration(context.mlir_context, max.into()).into_mlir()
             }
             SlangType::UserDefinedValue(udvt) => {
                 let target_type = udvt.target_type().expect("slang validated");
-                Type::resolve(&target_type, policy, context)
+                Self::resolve(&target_type, policy, context)
             }
             SlangType::Function(function_type) => {
                 let (parameter_types, result_types) =
-                    Type::function_pointer_signature(slang_type, context);
+                    Self::function_pointer_signature(slang_type, context);
                 if function_type.is_externally_visible() {
-                    Type::ext_func_ref(context.mlir_context, &parameter_types, &result_types)
+                    Self::ext_func_ref(context.mlir_context, &parameter_types, &result_types)
                         .into_mlir()
                 } else {
-                    Type::func_ref(context.mlir_context, &parameter_types, &result_types)
+                    Self::func_ref(context.mlir_context, &parameter_types, &result_types)
                         .into_mlir()
                 }
             }
@@ -223,9 +214,9 @@ impl<'context> Type<'context> {
                     MlirType::from(IntegerType::unsigned(context.mlir_context, bits))
                 }
             }
-            SlangType::Library(_) => Type::address(context.mlir_context, false).into_mlir(),
+            SlangType::Library(_) => Self::address(context.mlir_context, false).into_mlir(),
             SlangType::Tuple(_) | SlangType::Void(_) => {
-                unreachable!("tuple and void are resolved via Type::resolve_result_types")
+                unreachable!("tuple and void are resolved via Self::resolve_result_types")
             }
         }
     }
@@ -262,10 +253,10 @@ impl<'context> Type<'context> {
                 .types()
                 .iter()
                 .map(|element_type| {
-                    Type::resolve(element_type, LocationPolicy::Declared(None), context)
+                    Self::resolve(element_type, LocationPolicy::Declared(None), context)
                 })
                 .collect(),
-            other => vec![Type::resolve(
+            other => vec![Self::resolve(
                 other,
                 LocationPolicy::Declared(None),
                 context,
@@ -281,7 +272,7 @@ impl<'context> Type<'context> {
         context: &Context<'context>,
     ) -> (Vec<MlirType<'context>>, Vec<MlirType<'context>>) {
         let resolve = |parameter: Parameter| {
-            Type::resolve(
+            Self::resolve(
                 &parameter.get_type().expect("slang validated"),
                 policy,
                 context,
@@ -307,10 +298,10 @@ impl<'context> Type<'context> {
             .parameter_types()
             .iter()
             .map(|parameter_type| {
-                Type::resolve(parameter_type, LocationPolicy::Declared(None), context)
+                Self::resolve(parameter_type, LocationPolicy::Declared(None), context)
             })
             .collect();
-        let result_types = Type::resolve_result_types(&function_type.return_type(), context);
+        let result_types = Self::resolve_result_types(&function_type.return_type(), context);
         (parameter_types, result_types)
     }
 
@@ -321,7 +312,7 @@ impl<'context> Type<'context> {
     ) -> (MlirType<'context>, solx_utils::DataLocation) {
         let (element_type, slang_location) = match base_type {
             SlangType::Array(array_type) => (
-                Type::resolve(
+                Self::resolve(
                     &array_type.element_type(),
                     LocationPolicy::Declared(None),
                     context,
@@ -329,7 +320,7 @@ impl<'context> Type<'context> {
                 array_type.location(),
             ),
             SlangType::Bytes(bytes_type) => (
-                Type::byte(context.mlir_context).into_mlir(),
+                Self::byte(context.mlir_context).into_mlir(),
                 bytes_type.location(),
             ),
             other => unreachable!(
@@ -338,7 +329,7 @@ impl<'context> Type<'context> {
             ),
         };
         let location = match slang_location {
-            SlangDataLocation::Inherited => {
+            DataLocation::Inherited => {
                 unreachable!("slang's binder should not surface Inherited at an array push base")
             }
             other => solx_utils::DataLocation::from_slang(other, None),
@@ -400,20 +391,14 @@ impl<'context> Type<'context> {
     /// share `!sol.string`).
     pub fn string(context: &'context melior::Context, location: solx_utils::DataLocation) -> Self {
         Self::new(unsafe {
-            MlirType::from_raw(ffi::solxCreateStringType(
-                context.to_raw(),
-                location as u32,
-            ))
+            MlirType::from_raw(ffi::solxCreateStringType(context.to_raw(), location as u32))
         })
     }
 
     /// A `sol::FixedBytesType` of the given byte width.
     pub fn fixed_bytes(context: &'context melior::Context, width: u32) -> Self {
         Self::new(unsafe {
-            MlirType::from_raw(ffi::solxCreateFixedBytesType(
-                context.to_raw(),
-                width,
-            ))
+            MlirType::from_raw(ffi::solxCreateFixedBytesType(context.to_raw(), width))
         })
     }
 
@@ -432,7 +417,7 @@ impl<'context> Type<'context> {
         Self::new(unsafe {
             MlirType::from_raw(ffi::solxCreateArrayType(
                 context.to_raw(),
-                size.as_dialect_i64(),
+                i64::from(size),
                 element_type.to_raw(),
                 location as u32,
             ))
@@ -474,9 +459,7 @@ impl<'context> Type<'context> {
     /// A `sol::EnumType` whose maximum valid value is `max` (one less than the
     /// number of enum members).
     pub fn enumeration(context: &'context melior::Context, max: u32) -> Self {
-        Self::new(unsafe {
-            MlirType::from_raw(ffi::solxCreateEnumType(context.to_raw(), max))
-        })
+        Self::new(unsafe { MlirType::from_raw(ffi::solxCreateEnumType(context.to_raw(), max)) })
     }
 
     /// A `sol::FuncRefType`: an internal function pointer over `parameter_types -> result_types`.
@@ -666,141 +649,16 @@ impl<'context> Type<'context> {
         unsafe {
             Attribute::from_raw(ffi::solxCreateIntegerAttr(
                 self.inner.to_raw(),
-                sign == num::bigint::Sign::Minus,
+                sign == Sign::Minus,
                 words.len(),
                 words.as_ptr(),
             ))
         }
     }
 
-    /// Casts `value` to this (target) type, returning it unchanged when it already has this type.
-    ///
-    /// `sol.cast` is integer-only, so each non-integer kind (enum, address, contract, fixed-bytes,
-    /// reference) routes to its dedicated cast op; this is the single place that classifies and dispatches.
-    pub fn cast<'block>(
-        self,
-        value: Value<'context, 'block>,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block>
-    where
-        'context: 'block,
-    {
-        let source = value.r#type();
-        if source == self {
-            return value;
-        }
-        if source.is_enum() || self.is_enum() {
-            return Value::new(mlir_op!(
-                context,
-                block,
-                EnumCastOperation.inp(value.into_mlir()).out(self.inner)
-            ));
-        }
-        if source.is_contract() && self.is_contract() {
-            return Value::new(mlir_op!(
-                context,
-                block,
-                ContractCastOperation.inp(value.into_mlir()).out(self.inner)
-            ));
-        }
-        if source.is_address() || self.is_address() {
-            let ui160 = Self::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_ETH_ADDRESS);
-            if source.is_address() {
-                if self.is_contract() || self.is_fixed_bytes() || self == ui160 {
-                    return self.address_cast(value, context, block);
-                }
-                let as_160 = ui160.address_cast(value, context, block);
-                return self.cast(as_160, context, block);
-            }
-            if source.is_contract() || source.is_fixed_bytes() || source == ui160 {
-                return self.address_cast(value, context, block);
-            }
-            let as_160 = ui160.cast(value, context, block);
-            return self.address_cast(as_160, context, block);
-        }
-        if source.is_reference() && self.is_fixed_bytes() {
-            return Value::new(mlir_op!(
-                context,
-                block,
-                DynBytesToFixedBytesOperation
-                    .inp(value.into_mlir())
-                    .out(self.inner)
-            ));
-        }
-        if source.is_fixed_bytes() || source.is_byte() {
-            let bridge_bits = source.fixed_bytes_integer_bits();
-            if let Ok(integer) = IntegerType::try_from(self.inner)
-                && integer.width() != bridge_bits
-            {
-                let bridge = Self::unsigned(context.mlir_context, bridge_bits as usize);
-                let as_int = bridge.bytes_cast(value, context, block);
-                return self.cast(as_int, context, block);
-            }
-            return self.bytes_cast(value, context, block);
-        }
-        if self.is_fixed_bytes() || self.is_byte() {
-            let bridge_bits = self.fixed_bytes_integer_bits();
-            if let Ok(integer) = IntegerType::try_from(source.into_mlir())
-                && integer.width() != bridge_bits
-            {
-                let bridge = Self::unsigned(context.mlir_context, bridge_bits as usize);
-                let as_int = bridge.cast(value, context, block);
-                return self.bytes_cast(as_int, context, block);
-            }
-            return self.bytes_cast(value, context, block);
-        }
-        if source.is_reference() && self.is_reference() {
-            return Value::new(mlir_op!(
-                context,
-                block,
-                DataLocCastOperation.inp(value.into_mlir()).out(self.inner)
-            ));
-        }
-        Value::new(mlir_op!(
-            context,
-            block,
-            CastOperation.inp(value.into_mlir()).out(self.inner)
-        ))
-    }
-
     /// The inner melior type, for the op-construction boundary.
     pub fn into_mlir(self) -> MlirType<'context> {
         self.inner
-    }
-
-    /// Emits a `sol.bytes_cast` casting `value` to this byte / fixed-bytes / integer target.
-    fn bytes_cast<'block>(
-        self,
-        value: Value<'context, 'block>,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block>
-    where
-        'context: 'block,
-    {
-        Value::new(mlir_op!(
-            context,
-            block,
-            BytesCastOperation.inp(value.into_mlir()).out(self.inner)
-        ))
-    }
-
-    /// Emits a `sol.address_cast` to this (address-side) type.
-    fn address_cast<'block>(
-        self,
-        value: Value<'context, 'block>,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block>
-    where
-        'context: 'block,
-    {
-        Value::new(mlir_op!(
-            context,
-            block,
-            AddressCastOperation.inp(value.into_mlir()).out(self.inner)
-        ))
     }
 }
 

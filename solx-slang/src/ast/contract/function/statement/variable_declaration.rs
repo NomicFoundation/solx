@@ -51,7 +51,7 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
     };
 
     let pointer = if let Some(value) = initial_value {
-        let pointer = Pointer::stack_slot(
+        let pointer = Pointer::stack(
             AstType::new(declared_type),
             context.state,
             &block,
@@ -123,7 +123,7 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
             &current,
         );
         let pointer =
-            Pointer::stack_slot(AstType::new(declared_type), state, &current);
+            Pointer::stack(AstType::new(declared_type), state, &current);
         pointer.store(cast, state, &current);
         context
             .environment

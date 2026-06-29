@@ -65,7 +65,7 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
                     .address_type(base_location, context.state.mlir_context);
                 let address = base_value
                     .into_pointer()
-                    .entry(index_value, address_type, context.state, &block)
+                    .map(index_value, address_type, context.state, &block)
                     .into_mlir();
                 (address, element_type)
             }

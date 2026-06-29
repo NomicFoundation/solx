@@ -4,13 +4,11 @@
 
 use std::ffi::c_char;
 
-use mlir_sys::MlirBlock;
 use mlir_sys::MlirContext;
 use mlir_sys::MlirDialectHandle;
 use mlir_sys::MlirDialectRegistry;
 use mlir_sys::MlirModule;
 use mlir_sys::MlirPass;
-use mlir_sys::MlirRegion;
 
 unsafe extern "C" {
     /// Returns the dialect handle for the Sol dialect.
@@ -230,18 +228,4 @@ unsafe extern "C" {
     pub fn solxPointerTypeDataLocation(ty: mlir_sys::MlirType) -> u32;
     /// The data location ordinal of a `!sol.string` / `!sol.array` / `!sol.struct`.
     pub fn solxReferenceTypeDataLocation(ty: mlir_sys::MlirType) -> u32;
-
-    /// Returns the region that owns the given block.
-    pub fn mlirBlockGetParentRegion(block: MlirBlock) -> MlirRegion;
-}
-
-/// Returns the parent region of a block as a `RegionRef`.
-pub fn block_parent_region<'context, 'block>(
-    block: &melior::ir::BlockRef<'context, 'block>,
-) -> melior::ir::RegionRef<'context, 'block> {
-    unsafe {
-        melior::ir::RegionRef::from_raw(mlirBlockGetParentRegion(melior::ir::BlockLike::to_raw(
-            block,
-        )))
-    }
 }
