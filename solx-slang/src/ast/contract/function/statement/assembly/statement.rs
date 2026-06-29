@@ -198,7 +198,10 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
             let context_handle = context.state.mlir_context;
             let case_attributes: Vec<Attribute<'context>> = value_cases
                 .iter()
-                .map(|case| YulValue::word_attribute(&case.value().value(), context_handle))
+                .map(|case| {
+                    AstType::signless(context_handle, solx_utils::BIT_LENGTH_FIELD)
+                        .big_integer_attribute(&case.value().value())
+                })
                 .collect();
             let cases_type = RankedTensorType::new(
                 &[value_cases.len() as u64],

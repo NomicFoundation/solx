@@ -92,14 +92,12 @@ impl<'context> Function<'context> {
                 selector_value as i64,
             ));
         }
-        // A referenceable function carries a unique `id`: `sol.icall` dispatch switches over it.
         if let Some(function_id) = id {
             operation_builder = operation_builder.id(IntegerAttribute::new(
                 IntegerType::new(context.mlir_context, solx_utils::BIT_LENGTH_X64 as u32).into(),
                 function_id,
             ));
         }
-        // Selector-bearing functions and constructors carry `orig_fn_type` for the SolToYul dispatchers.
         if selector.is_some() || matches!(kind, Some(FunctionKind::Constructor)) {
             operation_builder =
                 operation_builder.orig_fn_type(TypeAttribute::new(function_type.into()));

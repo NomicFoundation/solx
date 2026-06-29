@@ -22,7 +22,7 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
     let right = node.right_operand();
     let predicate = CmpPredicate::from(node.operator());
     if let Some(function_id) =
-        Operator::user_defined_operator(context, &left, predicate.user_defined_operator())
+        Operator::user_defined_operator(context, &left, predicate.into())
     {
         let BlockAnd { value: lhs, block } = left.emit(context, block);
         let BlockAnd { value: rhs, block } = right.emit(context, block);

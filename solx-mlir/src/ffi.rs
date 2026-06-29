@@ -2,6 +2,8 @@
 //! FFI bindings for the Sol and Yul dialect C API, provided by the solx-llvm static libraries.
 //!
 
+use std::ffi::c_char;
+
 use mlir_sys::MlirBlock;
 use mlir_sys::MlirContext;
 use mlir_sys::MlirDialectHandle;
@@ -58,7 +60,7 @@ unsafe extern "C" {
     /// (Slang) pipeline, which reaches codegen-evm as LLVM IR, not Yul.
     pub fn mlirEvmLowerSetImmutables(
         module: MlirModule,
-        imm_ids: *const *const std::ffi::c_char,
+        imm_ids: *const *const c_char,
         imm_offsets: *const u64,
         imm_count: u64,
     );
@@ -89,7 +91,7 @@ unsafe extern "C" {
         magnitude: *const u64,
     ) -> mlir_sys::MlirAttribute;
 
-    /// Creates an MLIR `StringAttr` from `len` raw bytes — a Solidity string
+    /// Creates an MLIR `StringAttr` from `len` raw bytes: a Solidity string
     /// literal need not be valid UTF-8 (`hex"..."`, `"\xff"`).
     pub fn solxCreateStringAttr(
         context: MlirContext,
@@ -113,7 +115,7 @@ unsafe extern "C" {
     /// Creates a `sol::ContractType` for a contract with the given name and payability.
     pub fn solxCreateContractType(
         context: MlirContext,
-        name_ptr: *const std::ffi::c_char,
+        name_ptr: *const c_char,
         name_len: usize,
         payable: bool,
     ) -> mlir_sys::MlirType;
@@ -237,8 +239,6 @@ unsafe extern "C" {
 pub fn block_parent_region<'context, 'block>(
     block: &melior::ir::BlockRef<'context, 'block>,
 ) -> melior::ir::RegionRef<'context, 'block> {
-    // The block is attached (guaranteed by melior's ownership model).
-    // `mlirBlockGetParentRegion` returns a non-owning handle to the parent.
     unsafe {
         melior::ir::RegionRef::from_raw(mlirBlockGetParentRegion(melior::ir::BlockLike::to_raw(
             block,

@@ -3,7 +3,6 @@
 //! from the `solx-llvm` TableGen `.td` files via the `melior::dialect!` proc-macro.
 //!
 
-// The `dialect!` macro generates public items without doc comments.
 #![expect(
     missing_docs,
     reason = "melior::dialect! macro generates undocumented items"

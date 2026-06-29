@@ -1,5 +1,5 @@
 //!
-//! MLIR pipeline output produced by [`crate::Context::finalize_module`].
+//! MLIR pipeline output for a single contract.
 //!
 
 /// Captured MLIR text for a single contract.

@@ -26,6 +26,7 @@ use crate::ods::yul::*;
 /// untyped Yul-dialect peer of the Sol-dialect value.
 #[derive(Clone, Copy)]
 pub struct YulValue<'context, 'block> {
+    /// The wrapped melior value.
     pub inner: MlirValue<'context, 'block>,
 }
 
@@ -54,27 +55,6 @@ impl<'context, 'block> YulValue<'context, 'block> {
         ))
     }
 
-    /// Loads a Yul word from an `!llvm.ptr` slot.
-    pub fn load(
-        pointer: MlirValue<'context, 'block>,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Self {
-        Self::new(
-            block
-                .append_operation(llvm::load(
-                    context.mlir_context,
-                    pointer,
-                    Type::signless(context.mlir_context, BIT_LENGTH_FIELD).into_mlir(),
-                    context.location(),
-                    LoadStoreOptions::new().align(Some(Self::word_alignment(context))),
-                ))
-                .result(0)
-                .expect("llvm.load always produces one result")
-                .into(),
-        )
-    }
-
     /// Allocates a 256-bit `!llvm.ptr` stack slot for a Yul local.
     pub fn alloca(
         context: &Context<'context>,
@@ -98,6 +78,43 @@ impl<'context, 'block> YulValue<'context, 'block> {
             .into()
     }
 
+    /// Stores this word into an `!llvm.ptr` slot.
+    pub fn store(
+        self,
+        pointer: MlirValue<'context, 'block>,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) {
+        block.append_operation(llvm::store(
+            context.mlir_context,
+            self.inner,
+            pointer,
+            context.location(),
+            LoadStoreOptions::new().align(Some(Self::word_alignment(context))),
+        ));
+    }
+
+    /// Loads a Yul word from an `!llvm.ptr` slot.
+    pub fn load(
+        pointer: MlirValue<'context, 'block>,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(
+            block
+                .append_operation(llvm::load(
+                    context.mlir_context,
+                    pointer,
+                    Type::signless(context.mlir_context, BIT_LENGTH_FIELD).into_mlir(),
+                    context.location(),
+                    LoadStoreOptions::new().align(Some(Self::word_alignment(context))),
+                ))
+                .result(0)
+                .expect("llvm.load always produces one result")
+                .into(),
+        )
+    }
+
     /// Compares against `other` under `predicate` via `yul.cmp`, producing the
     /// word `1` or `0`.
     pub fn compare(
@@ -119,20 +136,9 @@ impl<'context, 'block> YulValue<'context, 'block> {
         ))
     }
 
-    /// Stores this word into an `!llvm.ptr` slot.
-    pub fn store(
-        self,
-        pointer: MlirValue<'context, 'block>,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) {
-        block.append_operation(llvm::store(
-            context.mlir_context,
-            self.inner,
-            pointer,
-            context.location(),
-            LoadStoreOptions::new().align(Some(Self::word_alignment(context))),
-        ));
+    /// The inner melior value, for the op-construction boundary.
+    pub fn into_mlir(self) -> MlirValue<'context, 'block> {
+        self.inner
     }
 
     /// The `alignment = 32 : i64` attribute every Yul-word `llvm` slot op carries.
@@ -141,11 +147,6 @@ impl<'context, 'block> YulValue<'context, 'block> {
             IntegerType::new(context.mlir_context, BIT_LENGTH_X64 as u32).into(),
             solx_utils::BYTE_LENGTH_FIELD as i64,
         )
-    }
-
-    /// The inner melior value, for the op-construction boundary.
-    pub fn into_mlir(self) -> MlirValue<'context, 'block> {
-        self.inner
     }
 }
 

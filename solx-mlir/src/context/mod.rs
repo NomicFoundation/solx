@@ -12,7 +12,11 @@ pub use self::user_defined_operator::UserDefinedOperator;
 
 use std::cell::Cell;
 use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::ffi::CString;
+use std::ffi::c_char;
 use std::sync::Once;
 
 use melior::dialect::DialectRegistry;
@@ -49,7 +53,7 @@ pub struct Context<'context> {
     pub operator_bindings: HashMap<(NodeId, UserDefinedOperator), NodeId>,
 
     /// Cross-contract references in encounter order, drained into the linker output.
-    pub dependencies: RefCell<Vec<String>>, // FIX: why are these stupid cells used here?
+    pub dependencies: RefCell<Vec<String>>,
     /// Monotonic internal-function-pointer dispatch tag; starts at 1 (0 is the null pointer).
     pub function_id_counter: Cell<i64>,
 }
@@ -218,9 +222,9 @@ impl<'context> Context<'context> {
             .map_err(|error| anyhow::anyhow!("Sol pass pipeline failed: {error}"))
     }
 
-    /// Runs the Sol-to-LLVM pipeline and splits the nested deploy/runtime modules
-    /// into separate LLVM-dialect strings (the inner module matched by
-    /// `runtime_code_identifier` is detached and stringified on its own).
+    /// Runs the Sol-to-LLVM pipeline and splits the nested deploy/runtime modules into separate
+    /// LLVM-dialect strings; the inner module matched by `runtime_code_identifier` is detached and
+    /// stringified on its own.
     pub fn finalize_module(
         self,
         runtime_code_identifier: &str,
@@ -232,8 +236,6 @@ impl<'context> Context<'context> {
 
         Self::run_sol_passes(self.mlir_context, &mut module)?;
 
-        // Detach the runtime module so the deploy text doesn't duplicate it; the
-        // deploy entry still references it via `evm.datasize`/`evm.dataoffset`.
         let llvm_runtime_source =
             Self::take_nested_module_text(&mut module, runtime_code_identifier)?;
         let llvm_deploy_source = module.as_operation().to_string();
@@ -246,49 +248,15 @@ impl<'context> Context<'context> {
         })
     }
 
-    /// Finds a nested `builtin.module` in `module`'s body whose `sym_name`
-    /// matches `target`, removes it from the parent, and returns its
-    /// textual form.
-    /// FIX: WORKING WITH TEXT IN A FUCKING COMPILER IS A FUCKING RETARDED SLOP
-    fn take_nested_module_text(module: &mut Module, target: &str) -> anyhow::Result<String> {
-        let body = module.body();
-        std::iter::successors(body.first_operation_mut(), |operation| {
-            operation.next_in_block_mut()
-        })
-        .find_map(|mut operation| {
-            if operation
-                .name()
-                .as_string_ref()
-                .as_str()
-                .expect("an MLIR operation name is valid UTF-8")
-                != Self::BUILTIN_MODULE
-            {
-                return None;
-            }
-            let symbol = operation.attribute("sym_name").ok()?;
-            let symbol_name: StringAttribute = symbol.try_into().ok()?;
-            if symbol_name.value() != target {
-                return None;
-            }
-            let text = operation.to_string();
-            operation.remove_from_parent();
-            Some(text)
-        })
-        .ok_or_else(|| anyhow::anyhow!("no module with sym_name `{target}` in Sol pass output"))
-    }
-
     /// Parses, verifies, and translates LLVM-dialect MLIR text to a raw LLVM module.
     ///
-    /// `immutables` lowers `llvm.setimmutable` (a library's library-address
-    /// immutable, which has no LLVM-IR translation) to heap stores at the given
-    /// offsets before translation; `None` leaves the module unchanged.
-    ///
-    /// FIX: I thought this crate emits MLIR. why the fuck is MLIR parsed from some shitty text? I
-    /// TOLD YOU TO FUCKING NEVER PARSE ANY FUCKING SHIT
+    /// `immutables` lowers each `llvm.setimmutable`, a library-address immutable with no LLVM-IR
+    /// translation, to heap stores at the given offsets before translation; `None` leaves the module
+    /// unchanged.
     pub fn translate_source_to_llvm(
         context: &melior::Context,
         source: &str,
-        immutables: Option<&std::collections::BTreeMap<String, std::collections::BTreeSet<u64>>>,
+        immutables: Option<&BTreeMap<String, BTreeSet<u64>>>,
     ) -> anyhow::Result<RawLlvmModule> {
         let module = Module::parse(context, source)
             .ok_or_else(|| anyhow::anyhow!("failed to parse MLIR source text"))?;
@@ -320,22 +288,52 @@ impl<'context> Context<'context> {
         }
     }
 
+    /// Finds a nested `builtin.module` in `module`'s body whose `sym_name`
+    /// matches `target`, removes it from the parent, and returns its
+    /// textual form.
+    fn take_nested_module_text(module: &mut Module, target: &str) -> anyhow::Result<String> {
+        let body = module.body();
+        std::iter::successors(body.first_operation_mut(), |operation| {
+            operation.next_in_block_mut()
+        })
+        .find_map(|mut operation| {
+            if operation
+                .name()
+                .as_string_ref()
+                .as_str()
+                .expect("an MLIR operation name is valid UTF-8")
+                != Self::BUILTIN_MODULE
+            {
+                return None;
+            }
+            let symbol = operation.attribute("sym_name").ok()?;
+            let symbol_name: StringAttribute = symbol.try_into().ok()?;
+            if symbol_name.value() != target {
+                return None;
+            }
+            let text = operation.to_string();
+            operation.remove_from_parent();
+            Some(text)
+        })
+        .ok_or_else(|| anyhow::anyhow!("no module with sym_name `{target}` in Sol pass output"))
+    }
+
     /// Lowers every `llvm.setimmutable` to heap stores at its reserved offsets via the solx-llvm C-API.
     fn lower_set_immutables(
         module: &Module,
-        immutables: &std::collections::BTreeMap<String, std::collections::BTreeSet<u64>>,
+        immutables: &BTreeMap<String, BTreeSet<u64>>,
     ) {
-        let mut id_cstrings: Vec<std::ffi::CString> = Vec::new();
+        let mut id_cstrings: Vec<CString> = Vec::new();
         let mut offsets: Vec<u64> = Vec::new();
         for (id, id_offsets) in immutables {
             for &offset in id_offsets {
                 id_cstrings.push(
-                    std::ffi::CString::new(id.as_str()).expect("immutable id has no interior NUL"),
+                    CString::new(id.as_str()).expect("immutable id has no interior NUL"),
                 );
                 offsets.push(offset);
             }
         }
-        let id_pointers: Vec<*const std::ffi::c_char> =
+        let id_pointers: Vec<*const c_char> =
             id_cstrings.iter().map(|id| id.as_ptr()).collect();
         unsafe {
             ffi::mlirEvmLowerSetImmutables(

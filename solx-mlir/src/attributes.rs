@@ -6,60 +6,7 @@ use slang_solidity_v2::ast::EqualityExpressionOperator;
 use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::InequalityExpressionOperator;
 
-use crate::UserDefinedOperator;
 use crate::ffi;
-
-sol_predicate_attribute! {
-    /// Sol dialect `sol.cmp` predicate values.
-    CmpPredicate {
-        /// Equal.
-        Eq = 0,
-        /// Not equal.
-        Ne = 1,
-        /// Less than.
-        Lt = 2,
-        /// Less than or equal.
-        Le = 3,
-        /// Greater than.
-        Gt = 4,
-        /// Greater than or equal.
-        Ge = 5,
-    }
-}
-
-impl From<EqualityExpressionOperator> for CmpPredicate {
-    fn from(operator: EqualityExpressionOperator) -> Self {
-        match operator {
-            EqualityExpressionOperator::EqualEqual(_) => Self::Eq,
-            EqualityExpressionOperator::BangEqual(_) => Self::Ne,
-        }
-    }
-}
-
-impl From<InequalityExpressionOperator> for CmpPredicate {
-    fn from(operator: InequalityExpressionOperator) -> Self {
-        match operator {
-            InequalityExpressionOperator::LessThan(_) => Self::Lt,
-            InequalityExpressionOperator::LessThanEqual(_) => Self::Le,
-            InequalityExpressionOperator::GreaterThan(_) => Self::Gt,
-            InequalityExpressionOperator::GreaterThanEqual(_) => Self::Ge,
-        }
-    }
-}
-
-impl CmpPredicate {
-    /// The [`UserDefinedOperator`] this predicate maps to.
-    pub fn user_defined_operator(self) -> UserDefinedOperator {
-        match self {
-            Self::Eq => UserDefinedOperator::Eq,
-            Self::Ne => UserDefinedOperator::Ne,
-            Self::Lt => UserDefinedOperator::Lt,
-            Self::Le => UserDefinedOperator::Le,
-            Self::Gt => UserDefinedOperator::Gt,
-            Self::Ge => UserDefinedOperator::Ge,
-        }
-    }
-}
 
 sol_dialect_attribute! {
     /// Sol dialect contract kind.
@@ -106,6 +53,44 @@ impl From<FunctionMutability> for StateMutability {
             FunctionMutability::View => Self::View,
             FunctionMutability::Payable => Self::Payable,
             FunctionMutability::NonPayable => Self::NonPayable,
+        }
+    }
+}
+
+sol_predicate_attribute! {
+    /// Sol dialect `sol.cmp` predicate values.
+    CmpPredicate {
+        /// Equal.
+        Eq = 0,
+        /// Not equal.
+        Ne = 1,
+        /// Less than.
+        Lt = 2,
+        /// Less than or equal.
+        Le = 3,
+        /// Greater than.
+        Gt = 4,
+        /// Greater than or equal.
+        Ge = 5,
+    }
+}
+
+impl From<EqualityExpressionOperator> for CmpPredicate {
+    fn from(operator: EqualityExpressionOperator) -> Self {
+        match operator {
+            EqualityExpressionOperator::EqualEqual(_) => Self::Eq,
+            EqualityExpressionOperator::BangEqual(_) => Self::Ne,
+        }
+    }
+}
+
+impl From<InequalityExpressionOperator> for CmpPredicate {
+    fn from(operator: InequalityExpressionOperator) -> Self {
+        match operator {
+            InequalityExpressionOperator::LessThan(_) => Self::Lt,
+            InequalityExpressionOperator::LessThanEqual(_) => Self::Le,
+            InequalityExpressionOperator::GreaterThan(_) => Self::Gt,
+            InequalityExpressionOperator::GreaterThanEqual(_) => Self::Ge,
         }
     }
 }

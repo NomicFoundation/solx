@@ -36,7 +36,7 @@ statement_emit!(CatchClause; |node, context, block| {
             .into();
         context.environment.bind_parameter(
             parameter.node_id(),
-            AstType::parameter(parameter.get_type().as_ref(), context.state),
+            AstType::resolve_optional(parameter.get_type(), context.state).expect("slang validated"),
             decoded,
             context.state,
             &block,
@@ -176,7 +176,7 @@ statement_emit!(TryStatement; |node, context, block| {
             }
             context.environment.bind_parameter(
                 parameter.node_id(),
-                AstType::parameter(parameter.get_type().as_ref(), context.state),
+                AstType::resolve_optional(parameter.get_type(), context.state).expect("slang validated"),
                 *result,
                 context.state,
                 &success_block,

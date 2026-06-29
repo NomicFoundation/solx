@@ -49,6 +49,7 @@ use crate::ods::sol::StringLitOperation;
 /// An MLIR value in the Sol dialect; the home for the conversions a value undergoes.
 #[derive(Clone, Copy)]
 pub struct Value<'context, 'block> {
+    /// The wrapped melior value.
     pub inner: MlirValue<'context, 'block>,
 }
 
@@ -139,25 +140,6 @@ impl<'context, 'block> Value<'context, 'block> {
         )
     }
 
-    /// A `string memory` value holding `text` verbatim, via `sol.string_lit`.
-    /// The bytes are taken as-is; a string literal need not be valid UTF-8.
-    pub fn string_literal(
-        text: &str,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Self {
-        Self::new(mlir_op!(
-            context,
-            block,
-            StringLitOperation
-                .value(StringAttribute::new(context.mlir_context, text))
-                .addr(
-                    Type::string(context.mlir_context, solx_utils::DataLocation::Memory)
-                        .into_mlir()
-                )
-        ))
-    }
-
     /// The zero of a scalar value type, built at its own representation width and cast through the type.
     pub fn zero(
         r#type: Type<'context>,
@@ -173,7 +155,6 @@ impl<'context, 'block> Value<'context, 'block> {
             );
             bits.cast(r#type, context, block)
         } else if r#type.is_contract() {
-            // address(0) reinterpreted as the contract (solc: ui160 -> address -> contract).
             let address = Self::zero(Type::address(context.mlir_context, false), context, block);
             address.cast(r#type, context, block)
         } else if let Some(width) = r#type.fixed_bytes_or_byte_width() {
@@ -193,11 +174,9 @@ impl<'context, 'block> Value<'context, 'block> {
             );
             bits.cast(r#type, context, block)
         } else if r#type.is_ext_function_ref() {
-            // A zero address + zero selector packed into the ext func ref.
             let address = Self::zero(Type::address(context.mlir_context, false), context, block);
             Self::ext_func_constant(address, 0, r#type, context, block)
         } else if r#type.is_function_ref() {
-            // An internal pointer's zero reverts when called.
             Self::new(mlir_op!(
                 context,
                 block,
@@ -208,6 +187,59 @@ impl<'context, 'block> Value<'context, 'block> {
         } else {
             unreachable!("Value::zero handles only scalar value types")
         }
+    }
+
+    /// The default value of a return position reached without an explicit `return <value>`, keyed on the Slang type.
+    pub fn type_default(
+        slang_type: Option<&SlangType>,
+        mlir_type: MlirType<'context>,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        let is_memory = |location| matches!(location, DataLocation::Memory);
+        match slang_type {
+            Some(SlangType::FixedSizeArray(array)) if is_memory(array.location()) => {
+                Self::malloc(mlir_type, None, true, context, block)
+            }
+            Some(SlangType::Struct(structure)) if is_memory(structure.location()) => {
+                Self::malloc(mlir_type, None, true, context, block)
+            }
+            Some(SlangType::Array(array)) if is_memory(array.location()) => {
+                Self::malloc(mlir_type, None, true, context, block)
+            }
+            Some(SlangType::String(_) | SlangType::Bytes(_)) => {
+                Self::malloc(mlir_type, None, false, context, block)
+            }
+            Some(
+                SlangType::Address(_)
+                | SlangType::ByteArray(_)
+                | SlangType::Enum(_)
+                | SlangType::UserDefinedValue(_)
+                | SlangType::Function(_)
+                | SlangType::Contract(_)
+                | SlangType::Interface(_),
+            ) => Self::zero(Type::new(mlir_type), context, block),
+            _ => Self::constant(0, Type::new(mlir_type), context, block),
+        }
+    }
+
+    /// A `string memory` value holding `text` verbatim, via `sol.string_lit`.
+    /// The bytes are taken as-is; a string literal need not be valid UTF-8.
+    pub fn string_literal(
+        text: &str,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            context,
+            block,
+            StringLitOperation
+                .value(StringAttribute::new(context.mlir_context, text))
+                .addr(
+                    Type::string(context.mlir_context, solx_utils::DataLocation::Memory)
+                        .into_mlir()
+                )
+        ))
     }
 
     /// `sol.malloc`: a fresh memory buffer typed as `mlir_type`. `Some` `size`
@@ -262,53 +294,42 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// The default value of a return position reached without an explicit `return <value>`, keyed on the Slang type.
-    pub fn type_default(
-        slang_type: Option<&SlangType>,
-        mlir_type: MlirType<'context>,
+    /// A selector or event topic as a `bytesN` value: `value` at `width_bytes` width cast to `fixedbytes<width_bytes>`.
+    pub fn selector_constant(
+        value: &BigInt,
+        width_bytes: u32,
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let is_memory = |location| matches!(location, DataLocation::Memory);
-        match slang_type {
-            Some(SlangType::FixedSizeArray(array)) if is_memory(array.location()) => {
-                Self::malloc(mlir_type, None, true, context, block)
-            }
-            Some(SlangType::Struct(structure)) if is_memory(structure.location()) => {
-                Self::malloc(mlir_type, None, true, context, block)
-            }
-            Some(SlangType::Array(array)) if is_memory(array.location()) => {
-                Self::malloc(mlir_type, None, true, context, block)
-            }
-            Some(SlangType::String(_) | SlangType::Bytes(_)) => {
-                // A fresh zero-length buffer (plain `sol.malloc`), not a sized `new bytes(0)`.
-                Self::malloc(mlir_type, None, false, context, block)
-            }
-            Some(
-                SlangType::Address(_)
-                | SlangType::ByteArray(_)
-                | SlangType::Enum(_)
-                | SlangType::UserDefinedValue(_)
-                | SlangType::Function(_)
-                | SlangType::Contract(_)
-                | SlangType::Interface(_),
-            ) => Self::zero(Type::new(mlir_type), context, block),
-            _ => Self::constant(0, Type::new(mlir_type), context, block),
-        }
+        let integer = Self::constant_from_bigint(
+            value,
+            Type::unsigned(
+                context.mlir_context,
+                width_bytes as usize * solx_utils::BIT_LENGTH_BYTE,
+            ),
+            context,
+            block,
+        );
+        integer.cast(
+            Type::fixed_bytes(context.mlir_context, width_bytes),
+            context,
+            block,
+        )
     }
 
-    /// `sol.gasleft`: all remaining gas as a `ui256`.
-    pub fn gas_left<B>(context: &Context<'context>, block: &B) -> Self
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
+    /// `sol.func_constant`: an internal function pointer (`!sol.func_ref<...>`) to the symbol `name`.
+    pub fn function_constant(
+        name: &str,
+        result_type: Type<'context>,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
         Self::new(mlir_op!(
             context,
             block,
-            GasLeftOperation.val(
-                Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
-            )
+            FuncConstantOperation
+                .addr(result_type.into_mlir())
+                .sym(FlatSymbolRefAttribute::new(context.mlir_context, name))
         ))
     }
 
@@ -350,6 +371,70 @@ impl<'context, 'block> Value<'context, 'block> {
         let ext_func_ref_type =
             Type::ext_func_ref(context.mlir_context, parameter_types, return_types);
         Self::ext_func_constant(address, selector, ext_func_ref_type, context, block)
+    }
+
+    /// `sol.lib_addr`: a library's linked deploy address, a placeholder the linker resolves by the library's full path.
+    pub fn library_address(
+        name: &solx_utils::ContractName,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            context,
+            block,
+            LibAddrOperation
+                ._name(StringAttribute::new(context.mlir_context, &name.full_path))
+                .val(Type::address(context.mlir_context, false).into_mlir())
+        ))
+    }
+
+    /// `sol.gasleft`: all remaining gas as a `ui256`.
+    pub fn gas_left<B>(context: &Context<'context>, block: &B) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        Self::new(mlir_op!(
+            context,
+            block,
+            GasLeftOperation.val(
+                Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
+            )
+        ))
+    }
+
+    /// `sol.new`: contract creation embedding `obj_name`'s deploy bytecode. `val`
+    /// is the forwarded wei; a `salt` selects CREATE2. The salt must be appended
+    /// before the variadic ctor args or the two transpose.
+    pub fn create_contract(
+        obj_name: &str,
+        val: Self,
+        salt: Option<Self>,
+        ctor_args: &[MlirValue<'context, 'block>],
+        result_type: Type<'context>,
+        try_call: bool,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        let mut new_builder = NewOperation::builder(context.mlir_context, context.location())
+            .obj_name(StringAttribute::new(context.mlir_context, obj_name))
+            .val(val.inner);
+        if let Some(salt) = salt {
+            new_builder = new_builder.salt(salt.inner);
+        }
+        let mut new_builder = new_builder
+            .ctor_args(ctor_args)
+            .out(result_type.into_mlir());
+        if try_call {
+            new_builder = new_builder.try_call(Attribute::unit(context.mlir_context));
+        }
+        Self::new(
+            block
+                .append_operation(new_builder.build().into())
+                .result(0)
+                .expect("sol.new always produces one result")
+                .into(),
+        )
     }
 
     /// `sol.ext_call` to a statically-resolved external callee `callee_name`, dispatched by `selector`
@@ -418,96 +503,64 @@ impl<'context, 'block> Value<'context, 'block> {
         (status, results)
     }
 
-    /// `sol.func_constant`: an internal function pointer (`!sol.func_ref<...>`) to the symbol `name`.
-    pub fn function_constant(
-        name: &str,
-        result_type: Type<'context>,
+    /// Calls this function-pointer value, returning the decoded results. Dispatch is on the value's
+    /// reference kind: an internal `func_ref` through `sol.icall`, an external `ext_func_ref` through
+    /// `sol.ext_icall` (forwarding `call_value` as `msg.value` and dropping the status).
+    pub fn call_indirect(
+        self,
+        argument_values: &[MlirValue<'context, 'block>],
+        result_types: &[MlirType<'context>],
+        call_value: Option<MlirValue<'context, 'block>>,
+        call_gas: Option<MlirValue<'context, 'block>>,
+        is_static: bool,
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
-    ) -> Self {
-        Self::new(mlir_op!(
-            context,
-            block,
-            FuncConstantOperation
-                .addr(result_type.into_mlir())
-                .sym(FlatSymbolRefAttribute::new(context.mlir_context, name))
-        ))
-    }
-
-    /// `sol.lib_addr`: a library's linked deploy address, a placeholder the linker resolves by the library's full path.
-    pub fn library_address(
-        name: &solx_utils::ContractName,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Self {
-        Self::new(mlir_op!(
-            context,
-            block,
-            LibAddrOperation
-                ._name(StringAttribute::new(context.mlir_context, &name.full_path))
-                .val(Type::address(context.mlir_context, false).into_mlir())
-        ))
-    }
-
-    /// `sol.new`: contract creation embedding `obj_name`'s deploy bytecode. `val`
-    /// is the forwarded wei; a `salt` selects CREATE2. The salt must be appended
-    /// before the variadic ctor args or the two transpose.
-    pub fn create_contract(
-        obj_name: &str,
-        val: Self,
-        salt: Option<Self>,
-        ctor_args: &[MlirValue<'context, 'block>],
-        result_type: Type<'context>,
-        try_call: bool,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Self {
-        let mut new_builder = NewOperation::builder(context.mlir_context, context.location())
-            .obj_name(StringAttribute::new(context.mlir_context, obj_name))
-            .val(val.inner);
-        if let Some(salt) = salt {
-            new_builder = new_builder.salt(salt.inner);
-        }
-        let mut new_builder = new_builder
-            .ctor_args(ctor_args)
-            .out(result_type.into_mlir());
-        // `try new C(...)` marks the creation with `try` so the conversion yields a success status
-        // instead of reverting, letting the surrounding `sol.try` run a catch handler.
-        if try_call {
-            new_builder = new_builder.try_call(Attribute::unit(context.mlir_context));
-        }
-        Self::new(
-            block
-                .append_operation(new_builder.build().into())
-                .result(0)
-                .expect("sol.new always produces one result")
-                .into(),
-        )
-    }
-
-    /// `sol.keccak256` over a byte buffer, yielding the 32-byte hash. The buffer is coerced to memory first.
-    pub fn keccak256(
-        buffer: Self,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Self {
-        let input = buffer
-            .cast(
-                Type::string(context.mlir_context, solx_utils::DataLocation::Memory),
+    ) -> Vec<MlirValue<'context, 'block>> {
+        if self.r#type().is_ext_function_ref() {
+            let value = call_value.unwrap_or_else(|| Self::uint256(0, context, block).into_mlir());
+            let gas = call_gas.unwrap_or_else(|| Self::gas_left(context, block).into_mlir());
+            let mut out_types = Vec::with_capacity(result_types.len() + 1);
+            out_types.push(
+                Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir(),
+            );
+            out_types.extend_from_slice(result_types);
+            let mut operation_builder =
+                ExtICallOperation::builder(context.mlir_context, context.location())
+                    .outs(&out_types)
+                    .callee(self.into_mlir())
+                    .callee_operands(argument_values)
+                    .gas(gas)
+                    .value(value);
+            if is_static {
+                operation_builder =
+                    operation_builder.static_call(Attribute::unit(context.mlir_context));
+            }
+            let operation = block.append_operation(operation_builder.build().into());
+            (0..result_types.len())
+                .map(|index| {
+                    operation
+                        .result(index + 1)
+                        .expect("sol.ext_icall produces a status plus its declared results")
+                        .into()
+                })
+                .collect()
+        } else {
+            let operation = block.append_operation(mlir_op_build!(
                 context,
-                block,
-            )
-            .into_mlir();
-        Self::new(mlir_op!(
-            context,
-            block,
-            Keccak256Operation
-                .addr(input)
-                .result(Type::fixed_bytes(
-                    context.mlir_context,
-                    solx_utils::BYTE_LENGTH_FIELD as u32,
-                ))
-        ))
+                ICallOperation
+                    .outs(result_types)
+                    .callee(self.into_mlir())
+                    .callee_operands(argument_values)
+            ));
+            (0..result_types.len())
+                .map(|index| {
+                    operation
+                        .result(index)
+                        .expect("sol.icall produces its declared result count")
+                        .into()
+                })
+                .collect()
+        }
     }
 
     /// `sol.encode`: the ABI-encoded `bytes memory` payload of `ins`. A `selector`,
@@ -537,27 +590,109 @@ impl<'context, 'block> Value<'context, 'block> {
         )
     }
 
-    /// A selector or event topic as a `bytesN` value: `value` at `width_bytes` width cast to `fixedbytes<width_bytes>`.
-    pub fn selector_constant(
-        value: &BigInt,
-        width_bytes: u32,
+    /// `sol.keccak256` over a byte buffer, yielding the 32-byte hash. The buffer is coerced to memory first.
+    pub fn keccak256(
+        buffer: Self,
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let integer = Self::constant_from_bigint(
-            value,
-            Type::unsigned(
-                context.mlir_context,
-                width_bytes as usize * solx_utils::BIT_LENGTH_BYTE,
-            ),
+        let input = buffer
+            .cast(
+                Type::string(context.mlir_context, solx_utils::DataLocation::Memory),
+                context,
+                block,
+            )
+            .into_mlir();
+        Self::new(mlir_op!(
             context,
             block,
+            Keccak256Operation
+                .addr(input)
+                .result(Type::fixed_bytes(
+                    context.mlir_context,
+                    solx_utils::BYTE_LENGTH_FIELD as u32,
+                ))
+        ))
+    }
+
+    /// Casts to `target_type` via the target type's cast router ([`Type::cast`]); a no-op when already that type.
+    pub fn cast(
+        self,
+        target_type: Type<'context>,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        target_type.cast(self, context, block)
+    }
+
+    /// Reinterprets the value's representation as `target_type` via `sol.conv_cast`, e.g. across the
+    /// inline-assembly boundary: a `!sol.ptr<T, Stack>` as the `!llvm.ptr` Yul operates on.
+    pub fn reinterpret(
+        self,
+        target_type: Type<'context>,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        if self.r#type() == target_type {
+            return self;
+        }
+        Self::new(mlir_op!(
+            context,
+            block,
+            ConvCastOperation
+                .inp(self.inner)
+                .out(target_type.into_mlir())
+        ))
+    }
+
+    /// Compares this value against `other` under `predicate` via `sol.cmp`,
+    /// producing an `i1`.
+    pub fn compare(
+        self,
+        other: Self,
+        predicate: CmpPredicate,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        let predicate_attribute = predicate.attribute(context.mlir_context);
+        let value: MlirValue<'context, 'block> = mlir_op!(
+            context,
+            block,
+            CmpOperation
+                .predicate(Attribute::from(predicate_attribute))
+                .lhs(self.inner)
+                .rhs(other.inner)
+                .result(
+                    Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN)
+                        .into_mlir()
+                )
         );
-        integer.cast(
-            Type::fixed_bytes(context.mlir_context, width_bytes),
+        Self::new(value)
+    }
+
+    /// Tests the value against zero, producing an `i1`. Short-circuits when already `i1`.
+    pub fn is_nonzero(
+        self,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        if self.r#type() == Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN) {
+            return self;
+        }
+        let zero = Self::constant(0, self.r#type(), context, block);
+        self.compare(zero, CmpPredicate::Ne, context, block)
+    }
+
+    /// The length of this dynamic value (array / `bytes` / `string`) as a `ui256`,
+    /// via `sol.length`.
+    pub fn length(self, context: &Context<'context>, block: &BlockRef<'context, 'block>) -> Self {
+        Self::new(mlir_op!(
             context,
             block,
-        )
+            LengthOperation.inp(self.inner).len(
+                Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
+            )
+        ))
     }
 
     /// Appends a default element to this dynamic array / `bytes` (`sol.push`), returning the element's
@@ -610,150 +745,9 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// Calls this function-pointer value, returning the decoded results. Dispatch is on the value's
-    /// reference kind: an internal `func_ref` through `sol.icall`, an external `ext_func_ref` through
-    /// `sol.ext_icall` (forwarding `call_value` as `msg.value` and dropping the status).
-    pub fn call_indirect(
-        self,
-        argument_values: &[MlirValue<'context, 'block>],
-        result_types: &[MlirType<'context>],
-        call_value: Option<MlirValue<'context, 'block>>,
-        call_gas: Option<MlirValue<'context, 'block>>,
-        is_static: bool,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Vec<MlirValue<'context, 'block>> {
-        if self.r#type().is_ext_function_ref() {
-            let value = call_value.unwrap_or_else(|| Self::uint256(0, context, block).into_mlir());
-            // A `{gas: g}` option caps the forwarded gas; without it, forward all remaining gas.
-            let gas = call_gas.unwrap_or_else(|| Self::gas_left(context, block).into_mlir());
-            let mut out_types = Vec::with_capacity(result_types.len() + 1);
-            out_types.push(
-                Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir(),
-            );
-            out_types.extend_from_slice(result_types);
-            let mut operation_builder =
-                ExtICallOperation::builder(context.mlir_context, context.location())
-                    .outs(&out_types)
-                    .callee(self.into_mlir())
-                    .callee_operands(argument_values)
-                    .gas(gas)
-                    .value(value);
-            if is_static {
-                operation_builder =
-                    operation_builder.static_call(Attribute::unit(context.mlir_context));
-            }
-            let operation = block.append_operation(operation_builder.build().into());
-            (0..result_types.len())
-                .map(|index| {
-                    operation
-                        .result(index + 1)
-                        .expect("sol.ext_icall produces a status plus its declared results")
-                        .into()
-                })
-                .collect()
-        } else {
-            let operation = block.append_operation(mlir_op_build!(
-                context,
-                ICallOperation
-                    .outs(result_types)
-                    .callee(self.into_mlir())
-                    .callee_operands(argument_values)
-            ));
-            (0..result_types.len())
-                .map(|index| {
-                    operation
-                        .result(index)
-                        .expect("sol.icall produces its declared result count")
-                        .into()
-                })
-                .collect()
-        }
-    }
-
-    /// Casts to `target_type` via the target type's cast router ([`Type::cast`]); a no-op when already that type.
-    pub fn cast(
-        self,
-        target_type: Type<'context>,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Self {
-        target_type.cast(self, context, block)
-    }
-
-    /// Reinterprets the value's representation as `target_type` via `sol.conv_cast` (e.g. across the
-    /// inline-assembly boundary: a `!sol.ptr<T, Stack>` as the `!llvm.ptr` Yul operates on).
-    pub fn reinterpret(
-        self,
-        target_type: Type<'context>,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Self {
-        if self.r#type() == target_type {
-            return self;
-        }
-        Self::new(mlir_op!(
-            context,
-            block,
-            ConvCastOperation
-                .inp(self.inner)
-                .out(target_type.into_mlir())
-        ))
-    }
-
-    /// Compares this value against `other` under `predicate` via `sol.cmp`,
-    /// producing an `i1`.
-    pub fn compare(
-        self,
-        other: Self,
-        predicate: CmpPredicate,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Self {
-        let predicate_attribute = predicate.attribute(context.mlir_context);
-        let value: MlirValue<'context, 'block> = mlir_op!(
-            context,
-            block,
-            CmpOperation
-                .predicate(Attribute::from(predicate_attribute))
-                .lhs(self.inner)
-                .rhs(other.inner)
-                .result(
-                    Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN)
-                        .into_mlir()
-                )
-        );
-        Self::new(value)
-    }
-
-    /// The length of this dynamic value (array / `bytes` / `string`) as a `ui256`,
-    /// via `sol.length`.
-    pub fn length(self, context: &Context<'context>, block: &BlockRef<'context, 'block>) -> Self {
-        Self::new(mlir_op!(
-            context,
-            block,
-            LengthOperation.inp(self.inner).len(
-                Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
-            )
-        ))
-    }
-
-    /// Tests the value against zero, producing an `i1`. Short-circuits when already `i1`.
-    pub fn is_nonzero(
-        self,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Self {
-        if self.r#type() == Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN) {
-            return self;
-        }
-        let zero = Self::constant(0, self.r#type(), context, block);
-        self.compare(zero, CmpPredicate::Ne, context, block)
-    }
-
-    /// The inner melior value, for the op-construction boundary.
-    pub fn into_mlir(self) -> MlirValue<'context, 'block> {
-        self.inner
+    /// The value's type.
+    pub fn r#type(self) -> Type<'context> {
+        Type::new(self.inner.r#type())
     }
 
     /// Views a `!sol.ptr`-typed value as a [`Pointer`] place, the inverse of [`Pointer::into_value`].
@@ -762,9 +756,9 @@ impl<'context, 'block> Value<'context, 'block> {
         Pointer::new(self.inner)
     }
 
-    /// The value's type.
-    pub fn r#type(self) -> Type<'context> {
-        Type::new(self.inner.r#type())
+    /// The inner melior value, for the op-construction boundary.
+    pub fn into_mlir(self) -> MlirValue<'context, 'block> {
+        self.inner
     }
 }
 

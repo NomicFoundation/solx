@@ -50,7 +50,7 @@ macro_rules! mlir_op {
     };
 }
 
-/// [`mlir_op!`] for a value-less op — a statement / effect such as `sol.transfer`
+/// [`mlir_op!`] for a value-less op: a statement or effect such as `sol.transfer`
 /// or `sol.log`: appends the op ([`mlir_op_build!`]) and yields `()`.
 #[macro_export]
 macro_rules! mlir_op_void {

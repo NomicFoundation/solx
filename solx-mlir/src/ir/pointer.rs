@@ -30,6 +30,7 @@ use crate::ods::sol::StoreOperation;
 /// SSA value (a `storage` / `calldata` reference is the place), so it converts to and from [`Value`] freely.
 #[derive(Clone, Copy)]
 pub struct Pointer<'context, 'block> {
+    /// The wrapped melior value.
     pub inner: MlirValue<'context, 'block>,
 }
 
@@ -61,26 +62,6 @@ impl<'context, 'block> Pointer<'context, 'block> {
         ))
     }
 
-    /// The place a named contract symbol denotes: `sol.addr_of @symbol` of `place_type`.
-    pub fn addr_of<B>(
-        symbol: &str,
-        place_type: Type<'context>,
-        context: &Context<'context>,
-        block: &B,
-    ) -> Self
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        Self::new(mlir_op!(
-            context,
-            block,
-            AddrOfOperation
-                .var(FlatSymbolRefAttribute::new(context.mlir_context, symbol))
-                .addr(place_type.into_mlir())
-        ))
-    }
-
     /// A stack slot default-initialised to the zero of `pointee`.
     pub fn default_initialized(
         pointee: Type<'context>,
@@ -94,7 +75,6 @@ impl<'context, 'block> Pointer<'context, 'block> {
                 DataLocation::Storage | DataLocation::Transient => {
                     Value::default_storage(pointee, context, block)
                 }
-                // A memory string keeps an empty buffer; arrays/structs zero-fill.
                 DataLocation::Memory => Value::malloc(
                     pointee.into_mlir(),
                     None,
@@ -129,6 +109,26 @@ impl<'context, 'block> Pointer<'context, 'block> {
         );
         slot.store(argument, context, entry_block);
         slot
+    }
+
+    /// The place a named contract symbol denotes: `sol.addr_of @symbol` of `place_type`.
+    pub fn addr_of<B>(
+        symbol: &str,
+        place_type: Type<'context>,
+        context: &Context<'context>,
+        block: &B,
+    ) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        Self::new(mlir_op!(
+            context,
+            block,
+            AddrOfOperation
+                .var(FlatSymbolRefAttribute::new(context.mlir_context, symbol))
+                .addr(place_type.into_mlir())
+        ))
     }
 
     /// Loads the value of `result_type` from this place (`sol.load`). Short-circuits when the
@@ -243,16 +243,6 @@ impl<'context, 'block> Pointer<'context, 'block> {
         ))
     }
 
-    /// The inner melior value, for the op-construction boundary.
-    pub fn into_mlir(self) -> MlirValue<'context, 'block> {
-        self.inner
-    }
-
-    /// The pointer as a [`Value`]: a `!sol.ptr` is a first-class SSA value.
-    pub fn into_value(self) -> Value<'context, 'block> {
-        Value::new(self.inner)
-    }
-
     /// The pointer type `!sol.ptr<T, Loc>`.
     pub fn r#type(self) -> Type<'context> {
         Type::new(self.inner.r#type())
@@ -261,5 +251,15 @@ impl<'context, 'block> Pointer<'context, 'block> {
     /// The pointee type `T`.
     pub fn pointee(self) -> Type<'context> {
         self.r#type().pointee()
+    }
+
+    /// The pointer as a [`Value`]: a `!sol.ptr` is a first-class SSA value.
+    pub fn into_value(self) -> Value<'context, 'block> {
+        Value::new(self.inner)
+    }
+
+    /// The inner melior value, for the op-construction boundary.
+    pub fn into_mlir(self) -> MlirValue<'context, 'block> {
+        self.inner
     }
 }
