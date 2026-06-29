@@ -95,3 +95,48 @@ macro_rules! mlir_region_op {
         ),+)
     }};
 }
+
+/// Defines a Sol-dialect attribute enum backed by a `solxCreate*Attr` FFI constructor (taking
+/// `(MlirContext, u32)`): the `#[repr(u32)]` enum plus its `attribute()` builder.
+macro_rules! sol_u32_attribute {
+    (
+        $(#[$enum_meta:meta])*
+        $name:ident => $ffi:path {
+            $($(#[$variant_meta:meta])* $variant:ident = $value:expr),+ $(,)?
+        }
+    ) => {
+        $(#[$enum_meta])*
+        #[repr(u32)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum $name {
+            $($(#[$variant_meta])* $variant = $value),+
+        }
+
+        impl $name {
+            /// Builds the corresponding Sol-dialect attribute in `context`.
+            pub fn attribute(self, context: &melior::Context) -> melior::ir::Attribute<'_> {
+                unsafe { melior::ir::Attribute::from_raw($ffi(context.to_raw(), self as u32)) }
+            }
+        }
+    };
+}
+
+/// Implements `attribute()` for a `#[repr(i64)]` comparison-predicate enum: the `i64`
+/// `IntegerAttribute` the `sol.cmp` / `yul.cmp` predicate operand demands.
+macro_rules! sol_predicate_attribute {
+    ($name:ident) => {
+        impl $name {
+            /// This predicate's encoding as the `i64` `IntegerAttribute` the predicate operand demands.
+            pub fn attribute(
+                self,
+                context: &melior::Context,
+            ) -> melior::ir::attribute::IntegerAttribute<'_> {
+                melior::ir::attribute::IntegerAttribute::new(
+                    melior::ir::r#type::IntegerType::new(context, solx_utils::BIT_LENGTH_X64 as u32)
+                        .into(),
+                    self as i64,
+                )
+            }
+        }
+    };
+}

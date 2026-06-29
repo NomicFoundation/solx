@@ -2,11 +2,6 @@
 //! Yul dialect comparison predicate values.
 //!
 
-use melior::ir::attribute::IntegerAttribute;
-use melior::ir::r#type::IntegerType;
-
-use solx_utils::BIT_LENGTH_X64;
-
 /// Yul dialect `yul.cmp` predicate values — the predicate names the comparison directly,
 /// since every Yul word is the signless `i256`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,13 +29,4 @@ pub enum YulCmpPredicate {
     Sge = 9,
 }
 
-impl YulCmpPredicate {
-    /// This predicate's encoding as the `i64` [`IntegerAttribute`] the `yul.cmp`
-    /// predicate operand demands.
-    pub fn attribute(self, context: &melior::Context) -> IntegerAttribute<'_> {
-        IntegerAttribute::new(
-            IntegerType::new(context, BIT_LENGTH_X64 as u32).into(),
-            self as i64,
-        )
-    }
-}
+sol_predicate_attribute!(YulCmpPredicate);
