@@ -50,7 +50,7 @@ impl ContractCreation {
                 AstType::resolve_signature(
                     &constructor,
                     LocationPolicy::Declared(None),
-                    &context.state.builder,
+                    context.state,
                 )
                 .0
             })
@@ -59,11 +59,11 @@ impl ContractCreation {
             value: ctor_args,
             block,
         } = self.arguments.emit_as(&parameter_types, context, block);
-        let builder = &context.state.builder;
-        let result_type = AstType::contract(builder.context, &contract_name, payable);
+        let state = context.state;
+        let result_type = AstType::contract(state.mlir(), &contract_name, payable);
         let val = match call_value {
             Some(value) => AstValue::from(value),
-            None => AstValue::uint256(0, builder, &block),
+            None => AstValue::uint256(0, state, &block),
         };
         let value = AstValue::create_contract(
             &contract_name,
@@ -72,7 +72,7 @@ impl ContractCreation {
             &ctor_args,
             result_type,
             try_call,
-            builder,
+            state,
             &block,
         )
         .into_mlir();

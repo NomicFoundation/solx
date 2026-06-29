@@ -5,7 +5,7 @@
 use melior::ir::Type;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
-use solx_mlir::Builder;
+use solx_mlir::Context;
 use solx_mlir::StateMutability;
 
 use crate::ast::LocationPolicy;
@@ -38,14 +38,14 @@ impl<'context> Signature<'context> {
     pub fn resolve(
         function: &FunctionDefinition,
         symbol_override: Option<&str>,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
     ) -> Self {
         let mlir_name = symbol_override
             .map(str::to_owned)
             .unwrap_or_else(|| function.mlir_function_name());
 
         let (mlir_parameter_types, result_types) =
-            AstType::resolve_signature(function, LocationPolicy::Declared(None), builder);
+            AstType::resolve_signature(function, LocationPolicy::Declared(None), context);
 
         let state_mutability = StateMutability::from(function.mutability());
 

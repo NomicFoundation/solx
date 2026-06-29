@@ -21,12 +21,12 @@ use crate::ast::contract::function::statement::StatementContext;
 statement_emit!(RevertStatement; |node, context, block| {
     let error = match node.error().resolve_to_definition() {
         None => {
-            let builder = &context.state.builder;
+            let state = context.state;
             mlir_op_void!(
-                builder,
+                state,
                 &block,
                 RevertOperation
-                    .signature(StringAttribute::new(builder.context, ""))
+                    .signature(StringAttribute::new(state.mlir(), ""))
                     .args(&[])
             );
             return Some(block);
@@ -51,7 +51,7 @@ statement_emit!(RevertStatement; |node, context, block| {
                     .get_type()
                     .expect("slang validated"),
                 LocationPolicy::Declared(None),
-                &context.state.builder,
+                context.state,
             )
         })
         .collect();
@@ -60,14 +60,14 @@ statement_emit!(RevertStatement; |node, context, block| {
         value: values,
         block,
     } = arguments.emit_as(&parameter_types, &emitter, block);
-    let builder = &context.state.builder;
+    let state = context.state;
     mlir_op_void!(
-        builder,
+        state,
         &block,
         RevertOperation
-            .signature(StringAttribute::new(builder.context, &signature))
+            .signature(StringAttribute::new(state.mlir(), &signature))
             .args(&values)
-            .call(Attribute::unit(builder.context))
+            .call(Attribute::unit(state.mlir()))
     );
     Some(block)
 });

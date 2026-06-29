@@ -79,7 +79,7 @@ impl EmitConstructor for ContractDefinition {
         contract_body: &BlockRef<'context, '_>,
     ) {
         let constructor = owner.constructor();
-        let builder = &scope.state.builder;
+        let state = scope.state;
 
         let (symbol, kind, function_id) = if is_most_derived {
             (
@@ -102,11 +102,8 @@ impl EmitConstructor for ContractDefinition {
 
         let (parameter_types, mutability) = match &constructor {
             Some(constructor) => {
-                let (parameter_types, _) = AstType::resolve_signature(
-                    constructor,
-                    LocationPolicy::Declared(None),
-                    builder,
-                );
+                let (parameter_types, _) =
+                    AstType::resolve_signature(constructor, LocationPolicy::Declared(None), state);
                 (
                     parameter_types,
                     StateMutability::from(constructor.mutability()),
@@ -116,7 +113,7 @@ impl EmitConstructor for ContractDefinition {
         };
 
         let signature = Function::new(symbol, parameter_types, Vec::new());
-        let entry = signature.define(None, mutability, kind, function_id, builder, contract_body);
+        let entry = signature.define(None, mutability, kind, function_id, state, contract_body);
         let region = entry.parent_region().expect("entry block has a region");
 
         let mut current_block = if is_most_derived {
@@ -143,7 +140,7 @@ impl EmitConstructor for ContractDefinition {
                     signature.parameter_types[index],
                     index,
                     &entry,
-                    builder,
+                    state,
                 );
             }
         }
@@ -186,7 +183,7 @@ impl EmitConstructor for ContractDefinition {
         }
 
         if !terminated {
-            mlir_op_void!(builder, &current_block, ReturnOperation.operands(&[]));
+            mlir_op_void!(state, &current_block, ReturnOperation.operands(&[]));
         }
     }
 
@@ -205,7 +202,7 @@ impl EmitConstructor for ContractDefinition {
         let next_constructor = next_contract
             .constructor()
             .expect("next_constructor_contract returns a contract with a constructor");
-        let builder = &scope.state.builder;
+        let state = scope.state;
 
         let arguments = base_arguments
             .get(&next_contract.node_id())
@@ -238,7 +235,7 @@ impl EmitConstructor for ContractDefinition {
                 AstType::resolve(
                     &parameter.get_type().expect("slang validated"),
                     LocationPolicy::Declared(None),
-                    builder,
+                    state,
                 )
             })
             .collect();
@@ -247,7 +244,7 @@ impl EmitConstructor for ContractDefinition {
             parameter_types,
             Vec::new(),
         );
-        next_signature.call(&operands, builder, &current_block);
+        next_signature.call(&operands, state, &current_block);
         current_block
     }
 
@@ -272,23 +269,21 @@ impl EmitConstructor for ContractDefinition {
                 continue;
             };
             let declared_type = state_variable.get_type().expect("slang validated");
-            let builder = &scope.state.builder;
+            let state = scope.state;
             let element_type =
-                AstType::resolve(&declared_type, LocationPolicy::Declared(None), builder);
-            let address_type =
-                AstType::new(element_type).address_type(slot.location, builder.context);
-            let storage_ref =
-                Pointer::addr_of(&slot.name, address_type, builder, &block).into_mlir();
+                AstType::resolve(&declared_type, LocationPolicy::Declared(None), state);
+            let address_type = AstType::new(element_type).address_type(slot.location, state.mlir());
+            let storage_ref = Pointer::addr_of(&slot.name, address_type, state, &block).into_mlir();
             let BlockAnd {
                 value,
                 block: next_block,
             } = initializer.emit(&emitter, block);
             block = next_block;
             if declared_type.is_reference_type() {
-                Pointer::new(storage_ref).copy_from(value, builder, &block);
+                Pointer::new(storage_ref).copy_from(value, state, &block);
             } else {
-                let stored_value = value.cast(AstType::new(element_type), builder, &block);
-                Pointer::new(storage_ref).store(stored_value, builder, &block);
+                let stored_value = value.cast(AstType::new(element_type), state, &block);
+                Pointer::new(storage_ref).store(stored_value, state, &block);
             }
         }
         block

@@ -59,11 +59,10 @@ impl StructConstruction {
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
-        let result_type = AstType::resolve_optional(self.call.get_type(), &context.state.builder)
+        let result_type = AstType::resolve_optional(self.call.get_type(), context.state)
             .expect("slang validated");
-        let builder = &context.state.builder;
-        let struct_address =
-            AstValue::malloc(result_type, None, false, builder, &block).into_mlir();
+        let state = context.state;
+        let struct_address = AstValue::malloc(result_type, None, false, state, &block).into_mlir();
         let struct_pointer = Pointer::new(struct_address);
         let mut block = block;
         for (index, (member, argument)) in self
@@ -77,23 +76,23 @@ impl StructConstruction {
             let field_type = AstType::resolve(
                 &field_slang_type,
                 LocationPolicy::Declared(Some(DataLocation::Memory)),
-                builder,
+                state,
             );
             let index_value = AstValue::constant(
                 index as i64,
-                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
-                builder,
+                AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_X64),
+                state,
                 &block,
             );
             let field_address =
-                struct_pointer.gep(index_value, AstType::new(field_type), false, builder, &block);
+                struct_pointer.gep(index_value, AstType::new(field_type), false, state, &block);
             let BlockAnd {
                 value: argument_value,
                 block: next_block,
             } = argument.emit(context, block);
             block = next_block;
-            let stored = argument_value.cast(AstType::new(field_type), builder, &block);
-            field_address.store(stored, builder, &block);
+            let stored = argument_value.cast(AstType::new(field_type), state, &block);
+            field_address.store(stored, state, &block);
         }
         BlockAnd {
             value: vec![struct_address],

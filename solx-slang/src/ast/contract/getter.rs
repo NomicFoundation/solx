@@ -15,7 +15,7 @@ use slang_solidity_v2::ast::StateVariableMutability;
 use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 
-use solx_mlir::Builder;
+use solx_mlir::Context;
 use solx_mlir::Function;
 use solx_mlir::StateMutability;
 use solx_mlir::ods::sol::ReturnOperation;
@@ -38,7 +38,7 @@ pub trait StructGetterLayout {
     fn struct_getter_layout<'context>(
         &self,
         struct_mlir_type: Type<'context>,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
     ) -> Option<Vec<(u64, Type<'context>, Type<'context>)>>;
 }
 
@@ -46,7 +46,7 @@ impl StructGetterLayout for StructDefinition {
     fn struct_getter_layout<'context>(
         &self,
         struct_mlir_type: Type<'context>,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
     ) -> Option<Vec<(u64, Type<'context>, Type<'context>)>> {
         let mut plan = Vec::new();
         for (member_index, member) in self.members().iter().enumerate() {
@@ -59,10 +59,10 @@ impl StructGetterLayout for StructDefinition {
                     continue;
                 }
                 SlangType::String(_) | SlangType::Bytes(_) => {
-                    AstType::string(builder.context, DataLocation::Memory).into_mlir()
+                    AstType::string(context.mlir(), DataLocation::Memory).into_mlir()
                 }
                 SlangType::Struct(_) => {
-                    AstType::resolve(&member_slang, LocationPolicy::ForceMemory, builder)
+                    AstType::resolve(&member_slang, LocationPolicy::ForceMemory, context)
                 }
                 _ => member_type,
             };
@@ -93,7 +93,7 @@ pub trait GetterSignature {
     /// members)`. `None` for a getter with no flattenable result.
     fn getter_signature<'context>(
         &self,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
     ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)>;
 
     /// The multi-level signature of a keyed (`mapping`/array) getter: the re-walk's
@@ -104,19 +104,19 @@ pub trait GetterSignature {
     fn keyed_getter_signature<'context>(
         &self,
         location: DataLocation,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
     ) -> Option<KeyedGetterSignature<'context>>;
 }
 
 impl GetterSignature for StateVariableDefinition {
     fn getter_signature<'context>(
         &self,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
     ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)> {
         self.get_type()
             .and_then(|declared_type| match &declared_type {
                 SlangType::Mapping(_) | SlangType::Array(_) | SlangType::FixedSizeArray(_) => self
-                    .keyed_getter_signature(DataLocation::Storage, builder)
+                    .keyed_getter_signature(DataLocation::Storage, context)
                     .map(|(input_types, result_types, _, _)| (input_types, result_types)),
                 SlangType::Struct(struct_type) => {
                     let Definition::Struct(struct_definition) = struct_type.definition() else {
@@ -125,9 +125,9 @@ impl GetterSignature for StateVariableDefinition {
                     let struct_mlir_type = AstType::resolve(
                         &declared_type,
                         LocationPolicy::Declared(Some(DataLocation::Storage)),
-                        builder,
+                        context,
                     );
-                    let plan = struct_definition.struct_getter_layout(struct_mlir_type, builder)?;
+                    let plan = struct_definition.struct_getter_layout(struct_mlir_type, context)?;
                     let return_types = plan
                         .iter()
                         .map(|(_, _, result_type)| *result_type)
@@ -139,7 +139,7 @@ impl GetterSignature for StateVariableDefinition {
                     vec![AstType::resolve(
                         other,
                         LocationPolicy::ForceMemory,
-                        builder,
+                        context,
                     )],
                 )),
                 other => Some((
@@ -147,7 +147,7 @@ impl GetterSignature for StateVariableDefinition {
                     vec![AstType::resolve(
                         other,
                         LocationPolicy::Declared(None),
-                        builder,
+                        context,
                     )],
                 )),
             })
@@ -156,7 +156,7 @@ impl GetterSignature for StateVariableDefinition {
     fn keyed_getter_signature<'context>(
         &self,
         location: DataLocation,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
     ) -> Option<KeyedGetterSignature<'context>> {
         let mut input_types: Vec<Type<'context>> = Vec::new();
         let mut terminal = self.get_type()?;
@@ -165,24 +165,22 @@ impl GetterSignature for StateVariableDefinition {
                 SlangType::Mapping(mapping_type) => {
                     let key = mapping_type.key_type();
                     let key_type = if key.is_reference_type() {
-                        AstType::string(builder.context, DataLocation::Memory).into_mlir()
+                        AstType::string(context.mlir(), DataLocation::Memory).into_mlir()
                     } else {
-                        AstType::resolve(&key, LocationPolicy::Declared(Some(location)), builder)
+                        AstType::resolve(&key, LocationPolicy::Declared(Some(location)), context)
                     };
                     input_types.push(key_type);
                     terminal = mapping_type.value_type();
                 }
                 SlangType::Array(array_type) => {
                     input_types.push(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir(),
+                        AstType::unsigned(context.mlir(), solx_utils::BIT_LENGTH_FIELD).into_mlir(),
                     );
                     terminal = array_type.element_type();
                 }
                 SlangType::FixedSizeArray(array_type) => {
                     input_types.push(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir(),
+                        AstType::unsigned(context.mlir(), solx_utils::BIT_LENGTH_FIELD).into_mlir(),
                     );
                     terminal = array_type.element_type();
                 }
@@ -194,16 +192,16 @@ impl GetterSignature for StateVariableDefinition {
         }
         let terminal_is_reference = matches!(&terminal, SlangType::String(_) | SlangType::Bytes(_));
         let result_type = if terminal_is_reference {
-            AstType::resolve(&terminal, LocationPolicy::ForceMemory, builder)
+            AstType::resolve(&terminal, LocationPolicy::ForceMemory, context)
         } else {
-            AstType::resolve(&terminal, LocationPolicy::Declared(Some(location)), builder)
+            AstType::resolve(&terminal, LocationPolicy::Declared(Some(location)), context)
         };
         let struct_plan = match &terminal {
             SlangType::Struct(struct_type) => {
                 let Definition::Struct(struct_definition) = struct_type.definition() else {
                     return None;
                 };
-                Some(struct_definition.struct_getter_layout(result_type, builder)?)
+                Some(struct_definition.struct_getter_layout(result_type, context)?)
             }
             SlangType::String(_) | SlangType::Bytes(_) => None,
             _ if terminal.is_reference_type() => return None,
@@ -237,7 +235,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             struct_plan: &Option<Vec<(u64, Type<'context>, Type<'context>)>>,
             result_type: Type<'context>,
             is_reference: bool,
-            builder: &Builder<'context>,
+            context: &Context<'context>,
             entry: &BlockRef<'context, 'block>,
         ) {
             match struct_plan {
@@ -246,43 +244,49 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                     for (member_index, member_type, result_member_type) in plan {
                         let index_value = AstValue::constant(
                             *member_index as i64,
-                            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
-                            builder,
+                            AstType::unsigned(context.mlir(), solx_utils::BIT_LENGTH_X64),
+                            context,
                             entry,
                         );
                         let address = Pointer::new(base)
-                            .gep(index_value, AstType::new(*member_type), false, builder, entry)
+                            .gep(
+                                index_value,
+                                AstType::new(*member_type),
+                                false,
+                                context,
+                                entry,
+                            )
                             .into_mlir();
                         let value = if member_type == result_member_type {
                             Pointer::new(address)
-                                .load(AstType::new(*result_member_type), builder, entry)
+                                .load(AstType::new(*result_member_type), context, entry)
                                 .into_mlir()
                         } else {
                             AstValue::new(address)
-                                .cast(AstType::new(*result_member_type), builder, entry)
+                                .cast(AstType::new(*result_member_type), context, entry)
                                 .into_mlir()
                         };
                         values.push(value);
                     }
-                    mlir_op_void!(builder, entry, ReturnOperation.operands(&values));
+                    mlir_op_void!(context, entry, ReturnOperation.operands(&values));
                 }
                 None => {
                     let value = if is_reference {
                         AstValue::new(base)
-                            .cast(AstType::new(result_type), builder, entry)
+                            .cast(AstType::new(result_type), context, entry)
                             .into_mlir()
                     } else {
                         Pointer::new(base)
-                            .load(AstType::new(result_type), builder, entry)
+                            .load(AstType::new(result_type), context, entry)
                             .into_mlir()
                     };
-                    mlir_op_void!(builder, entry, ReturnOperation.operands(&[value]));
+                    mlir_op_void!(context, entry, ReturnOperation.operands(&[value]));
                 }
             }
         }
 
         let state_variable = self;
-        let builder = &context.state.builder;
+        let state = context.state;
 
         let abi = match state_variable.compute_abi_entry() {
             Some(AbiEntry::Function(abi)) => abi,
@@ -304,13 +308,13 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 .expect("slang validated");
             let selector = state_variable.compute_selector().expect("slang validated");
             let slang_type = state_variable.get_type().expect("slang validated");
-            let element_type = AstType::resolve(&slang_type, LocationPolicy::ForceMemory, builder);
+            let element_type = AstType::resolve(&slang_type, LocationPolicy::ForceMemory, state);
             let entry = Function::new(signature, Vec::new(), vec![element_type]).define(
                 Some(selector),
                 StateMutability::Pure,
                 None,
                 None,
-                builder,
+                state,
                 &block,
             );
             let BlockAnd {
@@ -318,7 +322,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 block: entry,
             } = initializer.emit_as(element_type, context, entry);
             mlir_op_void!(
-                builder,
+                state,
                 &entry,
                 ReturnOperation.operands(&[value.into_mlir()])
             );
@@ -338,13 +342,13 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             let selector = state_variable.compute_selector().expect("slang validated");
 
             let Some((input_types, result_types, struct_plan, terminal_is_reference)) =
-                state_variable.keyed_getter_signature(location, builder)
+                state_variable.keyed_getter_signature(location, state)
             else {
                 return;
             };
             let container_type = AstType::resolve_state_variable(
                 &state_variable.get_type().expect("slang validated"),
-                builder,
+                state,
             );
             let result_type = result_types[0];
             let entry = Function::new(signature, input_types, result_types).define(
@@ -352,11 +356,11 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 StateMutability::View,
                 None,
                 None,
-                builder,
+                state,
                 &block,
             );
             let mut base =
-                Pointer::addr_of(&slot.name, AstType::new(container_type), builder, &entry)
+                Pointer::addr_of(&slot.name, AstType::new(container_type), state, &entry)
                     .into_mlir();
             // Re-walk the nesting; an array index passes `no_panic_bounds` so an out-of-bounds access
             // plain-reverts rather than `Panic(0x32)`.
@@ -373,18 +377,13 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                         let resolved_value = AstType::resolve(
                             &value_slang,
                             LocationPolicy::Declared(Some(location)),
-                            builder,
+                            state,
                         );
                         let level_type = AstType::new(resolved_value)
-                            .address_type(location, builder.context)
+                            .address_type(location, state.mlir())
                             .into_mlir();
                         base = Pointer::new(base)
-                            .entry(
-                                AstValue::new(arg),
-                                AstType::new(level_type),
-                                builder,
-                                &entry,
-                            )
+                            .entry(AstValue::new(arg), AstType::new(level_type), state, &entry)
                             .into_mlir();
                         index += 1;
                         current = value_slang;
@@ -397,14 +396,14 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                         let element_type = AstType::resolve(
                             &array_type.element_type(),
                             LocationPolicy::Declared(Some(location)),
-                            builder,
+                            state,
                         );
                         base = Pointer::new(base)
                             .gep(
                                 AstValue::new(arg),
                                 AstType::new(element_type),
                                 true,
-                                builder,
+                                state,
                                 &entry,
                             )
                             .into_mlir();
@@ -419,14 +418,14 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                         let element_type = AstType::resolve(
                             &array_type.element_type(),
                             LocationPolicy::Declared(Some(location)),
-                            builder,
+                            state,
                         );
                         base = Pointer::new(base)
                             .gep(
                                 AstValue::new(arg),
                                 AstType::new(element_type),
                                 true,
-                                builder,
+                                state,
                                 &entry,
                             )
                             .into_mlir();
@@ -441,7 +440,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 &struct_plan,
                 result_type,
                 terminal_is_reference,
-                builder,
+                state,
                 &entry,
             );
             return;
@@ -453,14 +452,14 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             let struct_mlir_type = AstType::resolve(
                 &declared_type,
                 LocationPolicy::Declared(Some(location)),
-                builder,
+                state,
             );
-            if let Some(plan) = struct_definition.struct_getter_layout(struct_mlir_type, builder) {
+            if let Some(plan) = struct_definition.struct_getter_layout(struct_mlir_type, state) {
                 let result_types: Vec<Type<'context>> =
                     plan.iter().map(|(_, _, result)| *result).collect();
                 let container_type = AstType::resolve_state_variable(
                     &state_variable.get_type().expect("slang validated"),
-                    builder,
+                    state,
                 );
                 let signature = state_variable
                     .compute_canonical_signature()
@@ -471,13 +470,13 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                     StateMutability::View,
                     None,
                     None,
-                    builder,
+                    state,
                     &block,
                 );
                 let base =
-                    Pointer::addr_of(&slot.name, AstType::new(container_type), builder, &entry)
+                    Pointer::addr_of(&slot.name, AstType::new(container_type), state, &entry)
                         .into_mlir();
-                return_loaded(base, &Some(plan), struct_mlir_type, false, builder, &entry);
+                return_loaded(base, &Some(plan), struct_mlir_type, false, state, &entry);
                 return;
             }
         }
@@ -488,14 +487,14 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
         let selector = state_variable.compute_selector().expect("slang validated");
         let element_type = AstType::resolve_state_variable(
             &state_variable.get_type().expect("slang validated"),
-            builder,
+            state,
         );
         let address_type = AstType::new(element_type)
-            .address_type(location, builder.context)
+            .address_type(location, state.mlir())
             .into_mlir();
         let is_reference = declared_type.is_reference_type();
         let return_type = if is_reference {
-            AstType::resolve(&declared_type, LocationPolicy::ForceMemory, builder)
+            AstType::resolve(&declared_type, LocationPolicy::ForceMemory, state)
         } else {
             element_type
         };
@@ -504,19 +503,18 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             StateMutability::View,
             None,
             None,
-            builder,
+            state,
             &block,
         );
         let value = if is_reference {
             let storage_reference =
-                Pointer::addr_of(&slot.name, AstType::new(address_type), builder, &entry)
-                    .into_mlir();
+                Pointer::addr_of(&slot.name, AstType::new(address_type), state, &entry).into_mlir();
             AstValue::new(storage_reference)
-                .cast(AstType::new(return_type), builder, &entry)
+                .cast(AstType::new(return_type), state, &entry)
                 .into_mlir()
         } else {
-            slot.load(builder, element_type, &entry)
+            slot.load(state, element_type, &entry)
         };
-        mlir_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
+        mlir_op_void!(state, &entry, ReturnOperation.operands(&[value]));
     }
 }

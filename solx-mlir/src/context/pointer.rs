@@ -13,7 +13,7 @@ use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::TypeAttribute;
 use solx_utils::DataLocation;
 
-use crate::Builder;
+use crate::Context;
 use crate::Type;
 use crate::Value;
 use crate::ods::sol::AddrOfOperation;
@@ -60,15 +60,15 @@ impl<'context, 'block> Pointer<'context, 'block> {
 
     /// Allocates a stack slot for `pointee` and returns the place — a
     /// `sol.alloca` yielding `!sol.ptr<pointee, Stack>`.
-    pub fn stack_slot<B>(pointee: Type<'context>, builder: &Builder<'context>, block: &B) -> Self
+    pub fn stack_slot<B>(pointee: Type<'context>, context: &Context<'context>, block: &B) -> Self
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
         let address_type =
-            Type::pointer(builder.context, pointee.into_mlir(), DataLocation::Stack).into_mlir();
+            Type::pointer(context.mlir(), pointee.into_mlir(), DataLocation::Stack).into_mlir();
         Self::new(mlir_op!(
-            builder,
+            context,
             block,
             AllocaOperation
                 .alloc_type(TypeAttribute::new(address_type))
@@ -80,7 +80,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
     pub fn addr_of<B>(
         symbol: &str,
         place_type: Type<'context>,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         block: &B,
     ) -> Self
     where
@@ -88,10 +88,10 @@ impl<'context, 'block> Pointer<'context, 'block> {
         'context: 'block,
     {
         Self::new(mlir_op!(
-            builder,
+            context,
             block,
             AddrOfOperation
-                .var(FlatSymbolRefAttribute::new(builder.context, symbol))
+                .var(FlatSymbolRefAttribute::new(context.mlir(), symbol))
                 .addr(place_type.into_mlir())
         ))
     }
@@ -99,27 +99,31 @@ impl<'context, 'block> Pointer<'context, 'block> {
     /// A stack slot default-initialised to the zero of `pointee`.
     pub fn default_initialized(
         pointee: Type<'context>,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let slot = Self::stack_slot(pointee, builder, block);
+        let slot = Self::stack_slot(pointee, context, block);
         if pointee.is_array() || pointee.is_struct() || pointee.is_string() {
             let default = match pointee.data_location() {
-                DataLocation::CallData => Value::default_calldata(pointee, builder, block),
+                DataLocation::CallData => Value::default_calldata(pointee, context, block),
                 DataLocation::Storage | DataLocation::Transient => {
-                    Value::default_storage(pointee, builder, block)
+                    Value::default_storage(pointee, context, block)
                 }
                 // A memory string keeps an empty buffer; arrays/structs zero-fill.
-                DataLocation::Memory => {
-                    Value::malloc(pointee.into_mlir(), None, !pointee.is_string(), builder, block)
-                }
+                DataLocation::Memory => Value::malloc(
+                    pointee.into_mlir(),
+                    None,
+                    !pointee.is_string(),
+                    context,
+                    block,
+                ),
                 DataLocation::Stack | DataLocation::Immutable => {
                     unreachable!("an aggregate default is in memory, storage, or calldata")
                 }
             };
-            slot.store(default, builder, block);
+            slot.store(default, context, block);
         } else if !pointee.is_reference() {
-            slot.store(Value::zero(pointee, builder, block), builder, block);
+            slot.store(Value::zero(pointee, context, block), context, block);
         }
         slot
     }
@@ -129,16 +133,16 @@ impl<'context, 'block> Pointer<'context, 'block> {
         pointee: Type<'context>,
         argument_index: usize,
         entry_block: &BlockRef<'context, 'block>,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
     ) -> Self {
-        let slot = Self::stack_slot(pointee, builder, entry_block);
+        let slot = Self::stack_slot(pointee, context, entry_block);
         let argument = Value::new(
             entry_block
                 .argument(argument_index)
                 .expect("argument index is within the block signature")
                 .into(),
         );
-        slot.store(argument, builder, entry_block);
+        slot.store(argument, context, entry_block);
         slot
     }
 
@@ -147,7 +151,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
     pub fn load<B>(
         self,
         result_type: Type<'context>,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         block: &B,
     ) -> Value<'context, 'block>
     where
@@ -158,20 +162,20 @@ impl<'context, 'block> Pointer<'context, 'block> {
             return self.into_value();
         }
         Value::new(mlir_op!(
-            builder,
+            context,
             block,
             LoadOperation.addr(self.inner).out(result_type.into_mlir())
         ))
     }
 
     /// Stores `value` into this place (`sol.store`).
-    pub fn store<B>(self, value: Value<'context, 'block>, builder: &Builder<'context>, block: &B)
+    pub fn store<B>(self, value: Value<'context, 'block>, context: &Context<'context>, block: &B)
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
         mlir_op_void!(
-            builder,
+            context,
             block,
             StoreOperation.val(value.into_mlir()).addr(self.inner)
         );
@@ -182,14 +186,14 @@ impl<'context, 'block> Pointer<'context, 'block> {
     pub fn copy_from<B>(
         self,
         value: Value<'context, 'block>,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         block: &B,
     ) where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
         mlir_op_void!(
-            builder,
+            context,
             block,
             CopyOperation.src(value.into_mlir()).dst(self.inner)
         );
@@ -202,7 +206,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
         index: Value<'context, 'block>,
         element_type: Type<'context>,
         no_panic_bounds: bool,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         block: &B,
     ) -> Self
     where
@@ -215,12 +219,12 @@ impl<'context, 'block> Pointer<'context, 'block> {
                 element_type.into_mlir().to_raw(),
             ))
         };
-        let mut gep = GepOperation::builder(builder.context, builder.unknown_location)
+        let mut gep = GepOperation::builder(context.mlir(), context.location())
             .base_addr(self.inner)
             .idx(index.into_mlir())
             .addr(address_type);
         if no_panic_bounds {
-            gep = gep.no_panic_bounds(Attribute::unit(builder.context));
+            gep = gep.no_panic_bounds(Attribute::unit(context.mlir()));
         }
         Self::new(
             block
@@ -237,7 +241,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
         self,
         key: Value<'context, 'block>,
         entry_type: Type<'context>,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         block: &B,
     ) -> Self
     where
@@ -245,7 +249,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
         'context: 'block,
     {
         Self::new(mlir_op!(
-            builder,
+            context,
             block,
             MapOperation
                 .mapping(self.inner)

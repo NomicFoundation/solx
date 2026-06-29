@@ -17,14 +17,14 @@ use melior::ir::operation::OperationLike;
 use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
 
-use crate::Builder;
+use crate::Context;
 use crate::FunctionKind;
 use crate::StateMutability;
 use crate::ods::sol::CallOperation;
 use crate::ods::sol::FuncOperation;
 use crate::ods::sol::ModifierOperation;
 
-/// Function call resolution metadata for the MLIR builder.
+/// Function call resolution metadata for the MLIR context.
 #[derive(Clone)]
 pub struct Function<'context> {
     /// The mangled MLIR function name.
@@ -53,7 +53,7 @@ impl<'context> Function<'context> {
     pub fn call<'block, B>(
         &self,
         operands: &[Value<'context, 'block>],
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         block: &B,
     ) -> Vec<Value<'context, 'block>>
     where
@@ -61,12 +61,9 @@ impl<'context> Function<'context> {
         'context: 'block,
     {
         let operation = block.append_operation(mlir_op_build!(
-            builder,
+            context,
             CallOperation
-                .callee(FlatSymbolRefAttribute::new(
-                    builder.context,
-                    &self.mlir_name
-                ))
+                .callee(FlatSymbolRefAttribute::new(context.mlir(), &self.mlir_name))
                 .outs(&self.return_types)
                 .operands(operands)
         ));
@@ -82,20 +79,20 @@ impl<'context> Function<'context> {
 
     /// The `!sol.func_ref<…>` type of an internal pointer to this function,
     /// built from its declared signature.
-    pub fn func_ref_type(&self, builder: &Builder<'context>) -> crate::Type<'context> {
-        crate::Type::func_ref(builder.context, &self.parameter_types, &self.return_types)
+    pub fn func_ref_type(&self, context: &Context<'context>) -> crate::Type<'context> {
+        crate::Type::func_ref(context.mlir(), &self.parameter_types, &self.return_types)
     }
 
     /// `sol.func_constant` — the internal function pointer to this function.
     pub fn pointer_constant<'block>(
         &self,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> crate::Value<'context, 'block> {
         crate::Value::function_constant(
             &self.mlir_name,
-            self.func_ref_type(builder),
-            builder,
+            self.func_ref_type(context),
+            context,
             block,
         )
     }
@@ -108,40 +105,39 @@ impl<'context> Function<'context> {
         state_mutability: StateMutability,
         kind: Option<FunctionKind>,
         id: Option<i64>,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
         let function_type =
-            FunctionType::new(builder.context, &self.parameter_types, &self.return_types);
+            FunctionType::new(context.mlir(), &self.parameter_types, &self.return_types);
         let body_region = Region::new();
         let entry_block = Block::new(
             &self
                 .parameter_types
                 .iter()
-                .map(|parameter_type| (*parameter_type, builder.unknown_location))
+                .map(|parameter_type| (*parameter_type, context.location()))
                 .collect::<Vec<_>>(),
         );
         body_region.append_block(entry_block);
 
-        let mut operation_builder =
-            FuncOperation::builder(builder.context, builder.unknown_location)
-                .sym_name(StringAttribute::new(builder.context, &self.mlir_name))
-                .function_type(TypeAttribute::new(function_type.into()))
-                .state_mutability(state_mutability.attribute(builder.context))
-                .body(body_region);
+        let mut operation_builder = FuncOperation::builder(context.mlir(), context.location())
+            .sym_name(StringAttribute::new(context.mlir(), &self.mlir_name))
+            .function_type(TypeAttribute::new(function_type.into()))
+            .state_mutability(state_mutability.attribute(context.mlir()))
+            .body(body_region);
         if let Some(function_kind) = kind {
-            operation_builder = operation_builder.kind(function_kind.attribute(builder.context));
+            operation_builder = operation_builder.kind(function_kind.attribute(context.mlir()));
         }
         if let Some(selector_value) = selector {
             operation_builder = operation_builder.selector(IntegerAttribute::new(
-                IntegerType::new(builder.context, crate::Type::SELECTOR_BIT_WIDTH).into(),
+                IntegerType::new(context.mlir(), crate::Type::SELECTOR_BIT_WIDTH).into(),
                 selector_value as i64,
             ));
         }
         // A referenceable function carries a unique `id`: `sol.icall` dispatch switches over it.
         if let Some(function_id) = id {
             operation_builder = operation_builder.id(IntegerAttribute::new(
-                IntegerType::new(builder.context, 64).into(),
+                IntegerType::new(context.mlir(), 64).into(),
                 function_id,
             ));
         }
@@ -187,22 +183,22 @@ impl<'context> Modifier<'context> {
     /// over its parameters.
     pub fn define<'block>(
         &self,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
-        let function_type = FunctionType::new(builder.context, &self.parameter_types, &[]);
+        let function_type = FunctionType::new(context.mlir(), &self.parameter_types, &[]);
         let body_region = Region::new();
         let entry_block = Block::new(
             &self
                 .parameter_types
                 .iter()
-                .map(|parameter_type| (*parameter_type, builder.unknown_location))
+                .map(|parameter_type| (*parameter_type, context.location()))
                 .collect::<Vec<_>>(),
         );
         body_region.append_block(entry_block);
 
-        let operation = ModifierOperation::builder(builder.context, builder.unknown_location)
-            .sym_name(StringAttribute::new(builder.context, &self.mlir_name))
+        let operation = ModifierOperation::builder(context.mlir(), context.location())
+            .sym_name(StringAttribute::new(context.mlir(), &self.mlir_name))
             .function_type(TypeAttribute::new(function_type.into()))
             .body(body_region)
             .build();

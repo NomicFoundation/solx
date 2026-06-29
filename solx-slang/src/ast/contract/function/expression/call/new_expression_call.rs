@@ -56,7 +56,7 @@ impl NewExpressionCall {
                 Some(AstType::resolve(
                     inner,
                     LocationPolicy::Declared(Some(DataLocation::Memory)),
-                    &context.state.builder,
+                    context.state,
                 ))
             }
             None if matches!(
@@ -65,10 +65,7 @@ impl NewExpressionCall {
                     if matches!(new_expression.type_name(), SlangTypeName::ElementaryType(_))
             ) =>
             {
-                Some(
-                    AstType::string(context.state.builder.context, DataLocation::Memory)
-                        .into_mlir(),
-                )
+                Some(AstType::string(context.state.mlir(), DataLocation::Memory).into_mlir())
             }
             _ => None,
         };
@@ -80,17 +77,17 @@ impl NewExpressionCall {
                 value: values,
                 block: current_block,
             } = positional.emit(context, block);
-            let builder = &context.state.builder;
+            let state = context.state;
             let address = match values.first() {
                 Some(&size_value) => {
                     let size = AstValue::from(size_value)
                         .cast(
-                            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                            builder,
+                            AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD),
+                            state,
                             &current_block,
                         )
                         .into_mlir();
-                    AstValue::malloc(result_type, Some(size), true, builder, &current_block)
+                    AstValue::malloc(result_type, Some(size), true, state, &current_block)
                         .into_mlir()
                 }
                 None => {

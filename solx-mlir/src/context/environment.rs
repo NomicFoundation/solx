@@ -9,7 +9,7 @@ use melior::ir::Type as MlirType;
 use melior::ir::Value;
 use slang_solidity_v2::ast::NodeId;
 
-use crate::Builder;
+use crate::Context;
 use crate::Pointer;
 use crate::Type;
 
@@ -70,12 +70,12 @@ impl<'context, 'block> Environment<'context, 'block> {
         declaration: NodeId,
         parameter_type: MlirType<'context>,
         value: Value<'context, 'block>,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) {
-        let cast = crate::Value::new(value).cast(Type::new(parameter_type), builder, block);
-        let pointer = Pointer::stack_slot(Type::new(parameter_type), builder, block);
-        pointer.store(cast, builder, block);
+        let cast = crate::Value::new(value).cast(Type::new(parameter_type), context, block);
+        let pointer = Pointer::stack_slot(Type::new(parameter_type), context, block);
+        pointer.store(cast, context, block);
         self.define_variable(declaration, pointer.into_mlir());
     }
 
@@ -86,10 +86,10 @@ impl<'context, 'block> Environment<'context, 'block> {
         mlir_type: MlirType<'context>,
         argument_index: usize,
         entry_block: &BlockRef<'context, 'block>,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
     ) {
         let pointer =
-            Pointer::from_argument(Type::new(mlir_type), argument_index, entry_block, builder);
+            Pointer::from_argument(Type::new(mlir_type), argument_index, entry_block, context);
         self.define_variable(declaration, pointer.into_mlir());
     }
 

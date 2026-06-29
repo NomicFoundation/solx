@@ -30,7 +30,7 @@ expression_emit!(PrefixExpression; |node, context, block| {
         unreachable!("`delete` is value-less; a discard site emits it, not value-position `Emit`");
     }
     let result_type =
-        AstType::resolve_optional(node.get_type(), &context.state.builder);
+        AstType::resolve_optional(node.get_type(), context.state);
     let operator = match node.operator() {
         PrefixExpressionOperator::Bang(_) => Operator::Not,
         PrefixExpressionOperator::DeleteKeyword(_) => {

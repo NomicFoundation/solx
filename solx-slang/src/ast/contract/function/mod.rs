@@ -65,7 +65,7 @@ impl EmitFunction for FunctionDefinition {
             selector,
             state_mutability,
             mlir_kind,
-        } = Signature::resolve(self, symbol_override, &scope.state.builder);
+        } = Signature::resolve(self, symbol_override, scope.state);
 
         let function_id = mlir_kind.is_none().then(|| scope.state.next_function_id());
 
@@ -75,7 +75,7 @@ impl EmitFunction for FunctionDefinition {
             state_mutability,
             mlir_kind,
             function_id,
-            &scope.state.builder,
+            scope.state,
             contract_body,
         );
 
@@ -98,7 +98,7 @@ impl EmitFunction for FunctionDefinition {
                 signature.parameter_types[index],
                 index,
                 &function_entry_block,
-                &scope.state.builder,
+                scope.state,
             );
         }
 
@@ -111,7 +111,7 @@ impl EmitFunction for FunctionDefinition {
                 } else {
                     let pointer = Pointer::default_initialized(
                         return_type,
-                        &scope.state.builder,
+                        scope.state,
                         &function_entry_block,
                     )
                     .into_mlir();
@@ -165,25 +165,25 @@ impl EmitFunction for FunctionDefinition {
             .returns()
             .map(|params| params.iter().collect::<Vec<_>>())
             .unwrap_or_default();
-        let builder = &scope.state.builder;
+        let state = scope.state;
         let values: Vec<Value<'context, 'block>> = result_types
             .iter()
             .enumerate()
             .map(
                 |(index, &return_type)| match return_slots.get(index).copied().flatten() {
                     Some(pointer) => Pointer::new(pointer)
-                        .load(AstType::new(return_type), builder, block)
+                        .load(AstType::new(return_type), state, block)
                         .into_mlir(),
                     None => {
                         let slang_type = returns
                             .get(index)
                             .and_then(|parameter| parameter.get_type());
-                        AstValue::type_default(slang_type.as_ref(), return_type, builder, block)
+                        AstValue::type_default(slang_type.as_ref(), return_type, state, block)
                             .into_mlir()
                     }
                 },
             )
             .collect();
-        mlir_op_void!(builder, block, ReturnOperation.operands(&values));
+        mlir_op_void!(state, block, ReturnOperation.operands(&values));
     }
 }

@@ -85,7 +85,7 @@ expression_emit!(
     ShiftExpression;
     |node, context, block| {
         let result_type =
-            AstType::resolve_optional(node.get_type(), &context.state.builder);
+            AstType::resolve_optional(node.get_type(), context.state);
         let (value, block) = Operator::from(node).emit_binary(
             context,
             &node.left_operand(),

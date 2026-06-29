@@ -76,10 +76,10 @@ impl EmitModifierCalls for FunctionDefinition {
         parameter_types: &[Type<'context>],
         function_block: &BlockRef<'context, 'block>,
     ) {
-        let builder = &scope.state.builder;
+        let state = scope.state;
         let block_arg_types: Vec<(Type<'context>, _)> = parameter_types
             .iter()
-            .map(|parameter_type| (*parameter_type, builder.unknown_location))
+            .map(|parameter_type| (*parameter_type, state.location()))
             .collect();
 
         for invocation in self.modifier_invocations().iter() {
@@ -141,16 +141,16 @@ impl EmitModifierCalls for FunctionDefinition {
                     argument.emit(&emitter, current_block)
                 };
                 current_block = next_block;
-                let parameter_type = AstType::parameter(parameter.get_type().as_ref(), builder);
-                let cast = value.cast(AstType::new(parameter_type), builder, &current_block);
+                let parameter_type = AstType::parameter(parameter.get_type().as_ref(), state);
+                let cast = value.cast(AstType::new(parameter_type), state, &current_block);
                 operands.push(cast.into_mlir());
             }
 
             current_block.append_operation(mlir_op_build!(
-                builder,
+                state,
                 CallOperation
                     .callee(FlatSymbolRefAttribute::new(
-                        builder.context,
+                        state.mlir(),
                         &definition.modifier_symbol()
                     ))
                     .outs(&[])
@@ -158,7 +158,7 @@ impl EmitModifierCalls for FunctionDefinition {
             ));
 
             function_block.append_operation(
-                ModifierCallBlkOperation::builder(builder.context, builder.unknown_location)
+                ModifierCallBlkOperation::builder(state.mlir(), state.location())
                     .body_region(region)
                     .build()
                     .into(),
@@ -174,7 +174,7 @@ impl EmitModifierCalls for FunctionDefinition {
         let Some(body) = self.body() else {
             return;
         };
-        let builder = &scope.state.builder;
+        let state = scope.state;
 
         let parameter_types: Vec<Type<'context>> = self
             .parameters()
@@ -183,13 +183,13 @@ impl EmitModifierCalls for FunctionDefinition {
                 AstType::resolve(
                     &parameter.get_type().expect("slang validated"),
                     LocationPolicy::Declared(None),
-                    builder,
+                    state,
                 )
             })
             .collect();
 
         let definition = Modifier::new(self.modifier_symbol(), parameter_types.clone());
-        let entry_block = definition.define(builder, contract_body);
+        let entry_block = definition.define(state, contract_body);
         let region = entry_block
             .parent_region()
             .expect("the modifier entry block belongs to a region");
@@ -201,7 +201,7 @@ impl EmitModifierCalls for FunctionDefinition {
                 parameter_types[index],
                 index,
                 &entry_block,
-                builder,
+                state,
             );
         }
 
@@ -228,7 +228,7 @@ impl EmitModifierCalls for FunctionDefinition {
         }
 
         if !terminated && current_block.terminator().is_none() {
-            current_block.append_operation(mlir_op_build!(builder, ReturnOperation.operands(&[])));
+            current_block.append_operation(mlir_op_build!(state, ReturnOperation.operands(&[])));
         }
     }
 }

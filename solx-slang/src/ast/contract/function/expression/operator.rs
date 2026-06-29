@@ -9,8 +9,8 @@ use melior::ir::Value;
 use melior::ir::ValueLike;
 use melior::ir::operation::Operation;
 
-use solx_mlir::Builder;
 use solx_mlir::CmpPredicate;
+use solx_mlir::Context;
 use solx_mlir::UserDefinedOperator;
 use solx_mlir::ods::sol::AddOperation;
 use solx_mlir::ods::sol::AndOperation;
@@ -117,11 +117,11 @@ impl Operator {
             .zip(&function.parameter_types)
             .map(|(value, &parameter_type)| {
                 value
-                    .cast(AstType::new(parameter_type), &context.state.builder, block)
+                    .cast(AstType::new(parameter_type), context.state, block)
                     .into_mlir()
             })
             .collect();
-        let results = function.call(&argument_values, &context.state.builder, block);
+        let results = function.call(&argument_values, context.state, block);
         results.into_iter().next().expect("slang validated")
     }
 
@@ -130,44 +130,44 @@ impl Operator {
     pub fn emit_sol_binary_operation<'context>(
         self,
         mode: ArithmeticMode,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         lhs: Value<'context, '_>,
         rhs: Value<'context, '_>,
     ) -> Operation<'context> {
         let checked = matches!(mode, ArithmeticMode::Checked);
         match self {
             Self::Add | Self::Increment if checked => {
-                mlir_op_build!(builder, CAddOperation.lhs(lhs).rhs(rhs))
+                mlir_op_build!(context, CAddOperation.lhs(lhs).rhs(rhs))
             }
-            Self::Add | Self::Increment => mlir_op_build!(builder, AddOperation.lhs(lhs).rhs(rhs)),
+            Self::Add | Self::Increment => mlir_op_build!(context, AddOperation.lhs(lhs).rhs(rhs)),
             Self::Subtract | Self::Decrement if checked => {
-                mlir_op_build!(builder, CSubOperation.lhs(lhs).rhs(rhs))
+                mlir_op_build!(context, CSubOperation.lhs(lhs).rhs(rhs))
             }
             Self::Subtract | Self::Decrement => {
-                mlir_op_build!(builder, SubOperation.lhs(lhs).rhs(rhs))
+                mlir_op_build!(context, SubOperation.lhs(lhs).rhs(rhs))
             }
-            Self::Multiply if checked => mlir_op_build!(builder, CMulOperation.lhs(lhs).rhs(rhs)),
-            Self::Multiply => mlir_op_build!(builder, MulOperation.lhs(lhs).rhs(rhs)),
-            Self::Divide if checked => mlir_op_build!(builder, CDivOperation.lhs(lhs).rhs(rhs)),
-            Self::Divide => mlir_op_build!(builder, DivOperation.lhs(lhs).rhs(rhs)),
-            Self::Remainder => mlir_op_build!(builder, ModOperation.lhs(lhs).rhs(rhs)),
+            Self::Multiply if checked => mlir_op_build!(context, CMulOperation.lhs(lhs).rhs(rhs)),
+            Self::Multiply => mlir_op_build!(context, MulOperation.lhs(lhs).rhs(rhs)),
+            Self::Divide if checked => mlir_op_build!(context, CDivOperation.lhs(lhs).rhs(rhs)),
+            Self::Divide => mlir_op_build!(context, DivOperation.lhs(lhs).rhs(rhs)),
+            Self::Remainder => mlir_op_build!(context, ModOperation.lhs(lhs).rhs(rhs)),
             Self::Exponentiation if checked => {
                 mlir_op_build!(
-                    builder,
+                    context,
                     CExpOperation.result(lhs.r#type()).lhs(lhs).rhs(rhs)
                 )
             }
             Self::Exponentiation => {
-                mlir_op_build!(builder, ExpOperation.result(lhs.r#type()).lhs(lhs).rhs(rhs))
+                mlir_op_build!(context, ExpOperation.result(lhs.r#type()).lhs(lhs).rhs(rhs))
             }
-            Self::BitwiseAnd => mlir_op_build!(builder, AndOperation.lhs(lhs).rhs(rhs)),
-            Self::BitwiseOr => mlir_op_build!(builder, OrOperation.lhs(lhs).rhs(rhs)),
-            Self::BitwiseXor => mlir_op_build!(builder, XorOperation.lhs(lhs).rhs(rhs)),
+            Self::BitwiseAnd => mlir_op_build!(context, AndOperation.lhs(lhs).rhs(rhs)),
+            Self::BitwiseOr => mlir_op_build!(context, OrOperation.lhs(lhs).rhs(rhs)),
+            Self::BitwiseXor => mlir_op_build!(context, XorOperation.lhs(lhs).rhs(rhs)),
             Self::ShiftLeft => {
-                mlir_op_build!(builder, ShlOperation.result(lhs.r#type()).lhs(lhs).rhs(rhs))
+                mlir_op_build!(context, ShlOperation.result(lhs.r#type()).lhs(lhs).rhs(rhs))
             }
             Self::ShiftRight => {
-                mlir_op_build!(builder, ShrOperation.result(lhs.r#type()).lhs(lhs).rhs(rhs))
+                mlir_op_build!(context, ShrOperation.result(lhs.r#type()).lhs(lhs).rhs(rhs))
             }
             _ => unreachable!(
                 "emit_sol_binary_operation called on non-arithmetic operator: {self:?}"
@@ -207,7 +207,7 @@ impl Operator {
         });
         let value = self.emit_value_binary(
             context.arithmetic_mode,
-            &context.state.builder,
+            context.state,
             lhs,
             rhs,
             result_type,
@@ -221,30 +221,32 @@ impl Operator {
     pub fn emit_value_binary<'context, 'block>(
         self,
         mode: ArithmeticMode,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         lhs: AstValue<'context, 'block>,
         rhs: AstValue<'context, 'block>,
         result_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> AstValue<'context, 'block> {
         let lhs = lhs
-            .cast(AstType::new(result_type), builder, block)
+            .cast(AstType::new(result_type), context, block)
             .into_mlir();
         // The right operand keeps its own type when it is not coerced to the result: `**` takes an
         // unsigned exponent alongside a possibly-signed base, and a shift of a `bytesN` value takes
         // an integer amount, so `sol.shl` / `sol.shr` apply to `!sol.fixedbytes<N>` directly.
         let keep_rhs = matches!(self, Operator::Exponentiation)
             || (matches!(self, Operator::ShiftLeft | Operator::ShiftRight)
-                && AstType::new(result_type).fixed_bytes_or_byte_width().is_some());
+                && AstType::new(result_type)
+                    .fixed_bytes_or_byte_width()
+                    .is_some());
         let rhs = if keep_rhs {
             rhs.into_mlir()
         } else {
-            rhs.cast(AstType::new(result_type), builder, block)
+            rhs.cast(AstType::new(result_type), context, block)
                 .into_mlir()
         };
 
         let result: Value<'context, 'block> = block
-            .append_operation(self.emit_sol_binary_operation(mode, builder, lhs, rhs))
+            .append_operation(self.emit_sol_binary_operation(mode, context, lhs, rhs))
             .result(0)
             .expect("binary operation always produces one result")
             .into();
@@ -298,21 +300,21 @@ impl Operator {
                 let BlockAnd { value, block } = operand.emit(context, block);
                 let operand_type = target_type.expect("slang validated");
                 let value = value
-                    .cast(AstType::new(operand_type), &context.state.builder, &block)
+                    .cast(AstType::new(operand_type), context.state, &block)
                     .into_mlir();
                 let result: Value<'context, 'block> =
-                    mlir_op!(&context.state.builder, block, NotOperation.value(value));
+                    mlir_op!(context.state, block, NotOperation.value(value));
                 (result.into(), block)
             }
             Operator::Not => {
                 let BlockAnd { value, block } = operand.emit(context, block);
-                let zero = AstValue::constant(0, value.r#type(), &context.state.builder, &block);
-                let cmp = value.compare(zero, CmpPredicate::Eq, &context.state.builder, &block);
+                let zero = AstValue::constant(0, value.r#type(), context.state, &block);
+                let cmp = value.compare(zero, CmpPredicate::Eq, context.state, &block);
                 let result_type = target_type.unwrap_or(
-                    AstType::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
+                    AstType::unsigned(context.state.mlir(), solx_utils::BIT_LENGTH_FIELD)
                         .into_mlir(),
                 );
-                let result = cmp.cast(AstType::new(result_type), &context.state.builder, &block);
+                let result = cmp.cast(AstType::new(result_type), context.state, &block);
                 (result, block)
             }
             Operator::Subtract => {
@@ -321,21 +323,16 @@ impl Operator {
                 let BlockAnd { value, block } = operand.emit(context, block);
                 let operand_type = target_type.expect("slang validated");
                 let value = value
-                    .cast(AstType::new(operand_type), &context.state.builder, &block)
+                    .cast(AstType::new(operand_type), context.state, &block)
                     .into_mlir();
-                let zero = AstValue::constant(
-                    0,
-                    AstType::new(operand_type),
-                    &context.state.builder,
-                    &block,
-                )
-                .into_mlir();
-                let builder = &context.state.builder;
+                let zero = AstValue::constant(0, AstType::new(operand_type), context.state, &block)
+                    .into_mlir();
+                let state = context.state;
                 let result: Value<'context, 'block> =
                     if matches!(context.arithmetic_mode, ArithmeticMode::Checked) {
-                        mlir_op!(builder, block, CSubOperation.lhs(zero).rhs(value))
+                        mlir_op!(state, block, CSubOperation.lhs(zero).rhs(value))
                     } else {
-                        mlir_op!(builder, block, SubOperation.lhs(zero).rhs(value))
+                        mlir_op!(state, block, SubOperation.lhs(zero).rhs(value))
                     };
                 (result.into(), block)
             }
@@ -364,21 +361,19 @@ impl Operator {
                     });
                 let element_type = AstType::resolve_state_variable(
                     &state_variable.get_type().expect("slang validated"),
-                    &context.state.builder,
+                    context.state,
                 );
-                let old = slot.load(&context.state.builder, element_type, block);
+                let old = slot.load(context.state, element_type, block);
                 let new_value = self.emit_step(context, old, element_type, block);
-                slot.store(&context.state.builder, new_value, element_type, block);
+                slot.store(context.state, new_value, element_type, block);
                 (old, new_value)
             }
             Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
                 let pointer = Pointer::new(context.environment.variable(definition.node_id()));
                 let element_type = pointer.pointee();
-                let old = pointer
-                    .load(element_type, &context.state.builder, block)
-                    .into_mlir();
+                let old = pointer.load(element_type, context.state, block).into_mlir();
                 let new_value = self.emit_step(context, old, element_type.into_mlir(), block);
-                pointer.store(AstValue::new(new_value), &context.state.builder, block);
+                pointer.store(AstValue::new(new_value), context.state, block);
                 (old, new_value)
             }
             None => unreachable!("slang resolves every identifier reference"),
@@ -426,10 +421,10 @@ impl Operator {
         };
         let pointer = Pointer::new(address);
         let old = pointer
-            .load(AstType::new(element_type), &context.state.builder, &block)
+            .load(AstType::new(element_type), context.state, &block)
             .into_mlir();
         let new_value = self.emit_step(context, old, element_type, &block);
-        pointer.store(AstValue::new(new_value), &context.state.builder, &block);
+        pointer.store(AstValue::new(new_value), context.state, &block);
         Some((old, new_value, block))
     }
 
@@ -441,12 +436,12 @@ impl Operator {
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        let one = AstValue::constant(1, AstType::new(element_type), &context.state.builder, block)
-            .into_mlir();
+        let one =
+            AstValue::constant(1, AstType::new(element_type), context.state, block).into_mlir();
         block
             .append_operation(self.emit_sol_binary_operation(
                 context.arithmetic_mode,
-                &context.state.builder,
+                context.state,
                 old,
                 one,
             ))

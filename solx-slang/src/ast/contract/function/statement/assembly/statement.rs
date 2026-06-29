@@ -50,12 +50,12 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
                     .node_id();
                 let slot = AstValue::from(context.environment.variable(declaration))
                     .reinterpret(
-                        AstType::llvm_ptr(context.state.builder.context),
-                        &context.state.builder,
+                        AstType::llvm_ptr(context.state.mlir()),
+                        context.state,
                         &current,
                     )
                     .into_mlir();
-                value.store(slot, &context.state.builder, &current);
+                value.store(slot, context.state, &current);
             }
             Some(current)
         }
@@ -80,12 +80,12 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
                 } else {
                     (0..variables.len()).map(|_| None).collect()
                 };
-            let builder = &context.state.builder;
+            let state = context.state;
             for (identifier, initial) in variables.iter().zip(initials) {
-                let slot = YulValue::alloca(builder, &current);
+                let slot = YulValue::alloca(state, &current);
                 let word =
-                    initial.unwrap_or_else(|| YulValue::constant(&BigInt::from(0u32), builder, &current));
-                word.store(slot, builder, &current);
+                    initial.unwrap_or_else(|| YulValue::constant(&BigInt::from(0u32), state, &current));
+                word.store(slot, state, &current);
                 context.environment.define_variable(identifier.node_id(), slot);
             }
             Some(current)
@@ -101,7 +101,7 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
             then_region.append_block(Block::new(&[]));
             let else_region = Region::new();
             let operation = block.append_operation(mlir_op_build!(
-                &context.state.builder,
+                context.state,
                 IfOperation
                     .cond(condition_value)
                     .then_region(then_region)
@@ -130,7 +130,7 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
             }
 
             let (condition_block, body_block, step_block) = mlir_region_op!(
-                &context.state.builder,
+                context.state,
                 &current,
                 ForOperation.init_args(&[]).results(&[]);
                 cond, body, step
@@ -143,7 +143,7 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
             context.region_pointer = &*condition_region as *const _;
             let BlockAnd { value: condition_value, block: condition_end } = for_statement.condition().emit(context, condition_block);
             mlir_op_void!(
-                &context.state.builder,
+                context.state,
                 &condition_end,
                 ConditionOperation.condition(condition_value).args(&[])
             );
@@ -168,11 +168,11 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
             Some(block)
         }
         YulStatement::YulBreakStatement(_) => {
-            mlir_op_void!(&context.state.builder, &block, BreakOperation);
+            mlir_op_void!(context.state, &block, BreakOperation);
             None
         }
         YulStatement::YulContinueStatement(_) => {
-            mlir_op_void!(&context.state.builder, &block, ContinueOperation);
+            mlir_op_void!(context.state, &block, ContinueOperation);
             None
         }
         YulStatement::YulSwitchStatement(switch_statement) => {
@@ -195,7 +195,7 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
                 };
             }
 
-            let context_handle = context.state.builder.context;
+            let context_handle = context.state.mlir();
             let case_attributes: Vec<Attribute<'context>> = value_cases
                 .iter()
                 .map(|case| YulValue::word_attribute(&case.value().value(), context_handle))
@@ -219,7 +219,7 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
             }
 
             let operation = current.append_operation(mlir_op_build!(
-                &context.state.builder,
+                context.state,
                 SwitchOperation
                     .arg(selector)
                     .cases(Attribute::from(cases))
@@ -248,7 +248,7 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
             match default_body {
                 Some(default_body) => default_body.emit_region_body(context, default_block),
                 None => {
-                    mlir_op_void!(&context.state.builder, &default_block, YieldOperation.operands(&[]));
+                    mlir_op_void!(context.state, &default_block, YieldOperation.operands(&[]));
                 }
             }
             Some(current)

@@ -37,7 +37,7 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
     let declared_type = AstType::resolve(
         &slang_declared_type,
         LocationPolicy::Declared(None),
-        &context.state.builder,
+        context.state,
     );
 
     let emitter = ExpressionContext::from(&*context);
@@ -53,15 +53,15 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
     let pointer = if let Some(value) = initial_value {
         let pointer = Pointer::stack_slot(
             AstType::new(declared_type),
-            &context.state.builder,
+            context.state,
             &block,
         );
-        pointer.store(AstValue::new(value), &context.state.builder, &block);
+        pointer.store(AstValue::new(value), context.state, &block);
         pointer.into_mlir()
     } else {
         Pointer::default_initialized(
             AstType::new(declared_type),
-            &context.state.builder,
+            context.state,
             &block,
         )
         .into_mlir()
@@ -111,20 +111,20 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
         let Some(declaration) = member.member() else {
             continue;
         };
-        let builder = &context.state.builder;
+        let state = context.state;
         let declared_type = AstType::resolve(
             &declaration.get_type().expect("slang validated"),
             LocationPolicy::Declared(None),
-            builder,
+            state,
         );
         let cast = AstValue::from(value).cast(
             AstType::new(declared_type),
-            builder,
+            state,
             &current,
         );
         let pointer =
-            Pointer::stack_slot(AstType::new(declared_type), builder, &current);
-        pointer.store(cast, builder, &current);
+            Pointer::stack_slot(AstType::new(declared_type), state, &current);
+        pointer.store(cast, state, &current);
         context
             .environment
             .define_variable(declaration.node_id(), pointer.into_mlir());

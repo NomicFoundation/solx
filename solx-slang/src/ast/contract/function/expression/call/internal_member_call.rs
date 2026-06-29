@@ -82,7 +82,7 @@ impl InternalMemberCall {
                 } = self
                     .arguments
                     .emit_as(&resolved.parameter_types, context, block);
-                let results = resolved.call(&argument_values, &context.state.builder, &block);
+                let results = resolved.call(&argument_values, context.state, &block);
                 BlockAnd {
                     value: results,
                     block,
@@ -98,18 +98,14 @@ impl InternalMemberCall {
                     block,
                 } = receiver.emit(context, block);
                 let self_value = self_value
-                    .cast(
-                        AstType::new(*parameter_self),
-                        &context.state.builder,
-                        &block,
-                    )
+                    .cast(AstType::new(*parameter_self), context.state, &block)
                     .into_mlir();
                 let BlockAnd {
                     value: mut argument_values,
                     block,
                 } = self.arguments.emit_as(parameter_rest, context, block);
                 argument_values.insert(0, self_value);
-                let results = resolved.call(&argument_values, &context.state.builder, &block);
+                let results = resolved.call(&argument_values, context.state, &block);
                 BlockAnd {
                     value: results,
                     block,

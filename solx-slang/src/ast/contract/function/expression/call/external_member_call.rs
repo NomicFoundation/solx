@@ -11,7 +11,7 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::NodeId;
-use solx_mlir::Builder;
+use solx_mlir::Context;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
@@ -68,7 +68,7 @@ impl ExternalMemberCall {
         call_gas: Option<Value<'context, 'block>>,
     ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
         let (callee_name, selector, parameter_types, return_types, is_static) =
-            self.resolve_call(&context.state.builder);
+            self.resolve_call(context.state);
         let BlockAnd {
             value: receiver,
             block,
@@ -77,7 +77,7 @@ impl ExternalMemberCall {
             value: argument_values,
             block,
         } = self.arguments.emit_as(&parameter_types, context, block);
-        let builder = &context.state.builder;
+        let state = context.state;
         let (_status, results) = AstValue::external_call(
             receiver,
             &callee_name,
@@ -89,7 +89,7 @@ impl ExternalMemberCall {
             call_gas,
             is_static,
             false,
-            builder,
+            state,
             &block,
         );
         BlockAnd {
@@ -112,7 +112,7 @@ impl ExternalMemberCall {
         BlockRef<'context, 'block>,
     ) {
         let (callee_name, selector, parameter_types, return_types, _is_static) =
-            self.resolve_call(&context.state.builder);
+            self.resolve_call(context.state);
         let BlockAnd {
             value: receiver,
             block,
@@ -121,7 +121,7 @@ impl ExternalMemberCall {
             value: argument_values,
             block,
         } = self.arguments.emit_as(&parameter_types, context, block);
-        let builder = &context.state.builder;
+        let state = context.state;
         let (status, results) = AstValue::external_call(
             receiver,
             &callee_name,
@@ -133,7 +133,7 @@ impl ExternalMemberCall {
             call_gas,
             false,
             true,
-            builder,
+            state,
             &block,
         );
         (status, results, block)
@@ -143,12 +143,12 @@ impl ExternalMemberCall {
     /// whether the call is to a read-only callee.
     fn resolve_call<'context>(
         &self,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
     ) -> (String, u32, Vec<Type<'context>>, Vec<Type<'context>>, bool) {
         match &self.definition {
             Definition::Function(function) => {
                 let (parameter_types, return_types) =
-                    AstType::resolve_signature(function, LocationPolicy::ForceMemory, builder);
+                    AstType::resolve_signature(function, LocationPolicy::ForceMemory, context);
                 (
                     function.mlir_function_name(),
                     function.compute_selector().expect("slang validated"),
@@ -161,7 +161,8 @@ impl ExternalMemberCall {
                 )
             }
             Definition::StateVariable(state_variable) => {
-                let Some((parameter_types, return_types)) = state_variable.getter_signature(builder)
+                let Some((parameter_types, return_types)) =
+                    state_variable.getter_signature(context)
                 else {
                     unreachable!("a public accessor with no returnable members is invalid");
                 };

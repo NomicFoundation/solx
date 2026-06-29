@@ -115,24 +115,24 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
 
 statement_emit!(ReturnStatement; |node, context, block| {
     let Some(expression) = node.expression() else {
-        let builder = &context.state.builder;
+        let state = context.state;
         let mut values = Vec::with_capacity(context.return_types.len());
         for (index, &return_type) in context.return_types.iter().enumerate() {
             let value = match context.return_slots.get(index).copied().flatten() {
                 Some(pointer) => Pointer::new(pointer)
-                    .load(AstType::new(return_type), builder, &block)
+                    .load(AstType::new(return_type), state, &block)
                     .into_mlir(),
                 None => AstValue::constant(
                     0,
                     AstType::new(return_type),
-                    builder,
+                    state,
                     &block,
                 )
                 .into_mlir(),
             };
             values.push(value);
         }
-        mlir_op_void!(builder, &block, ReturnOperation.operands(&values));
+        mlir_op_void!(state, &block, ReturnOperation.operands(&values));
         return None;
     };
 
@@ -183,7 +183,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
             value
                 .cast(
                     AstType::new(return_type),
-                    &context.state.builder,
+                    context.state,
                     &block,
                 )
                 .into_mlir()
@@ -191,7 +191,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
         .collect();
 
     mlir_op_void!(
-        &context.state.builder,
+        context.state,
         &block,
         ReturnOperation.operands(&cast_values)
     );
@@ -209,19 +209,19 @@ statement_emit!(Block; |node, context, block| {
 });
 
 statement_emit!(BreakStatement; |context, block| {
-    mlir_op_void!(&context.state.builder, &block, BreakOperation);
+    mlir_op_void!(context.state, &block, BreakOperation);
     None
 });
 
 statement_emit!(ContinueStatement; |context, block| {
-    mlir_op_void!(&context.state.builder, &block, ContinueOperation);
+    mlir_op_void!(context.state, &block, ContinueOperation);
     None
 });
 
 statement_emit!(ExpressionStatement; |node, context, block| {
     match ExpressionStatementKind::from_statement(node) {
         ExpressionStatementKind::ModifierPlaceholder => {
-            mlir_op_void!(&context.state.builder, &block, PlaceholderOperation);
+            mlir_op_void!(context.state, &block, PlaceholderOperation);
             Some(block)
         }
         ExpressionStatementKind::RevertCall(call) => {
@@ -240,12 +240,12 @@ statement_emit!(ExpressionStatement; |node, context, block| {
             };
             let block = match argument {
                 None => {
-                    let builder = &context.state.builder;
+                    let state = context.state;
                     mlir_op_void!(
-                        builder,
+                        state,
                         &block,
                         RevertOperation
-                            .signature(StringAttribute::new(builder.context, ""))
+                            .signature(StringAttribute::new(state.mlir(), ""))
                             .args(&[])
                     );
                     block
@@ -255,12 +255,12 @@ statement_emit!(ExpressionStatement; |node, context, block| {
                 {
                     let message = String::from_utf8(string_expression.value())
                         .expect("revert message is valid UTF-8");
-                    let builder = &context.state.builder;
+                    let state = context.state;
                     mlir_op_void!(
-                        builder,
+                        state,
                         &block,
                         RevertOperation
-                            .signature(StringAttribute::new(builder.context, &message))
+                            .signature(StringAttribute::new(state.mlir(), &message))
                             .args(&[])
                     );
                     block
@@ -271,20 +271,20 @@ statement_emit!(ExpressionStatement; |node, context, block| {
                         value: message_value,
                         block,
                     } = expression.emit(&emitter, block);
-                    let builder = &context.state.builder;
+                    let state = context.state;
                     let string_memory_type =
-                        AstType::string(builder.context, solx_utils::DataLocation::Memory)
+                        AstType::string(state.mlir(), solx_utils::DataLocation::Memory)
                             .into_mlir();
                     let message_value = message_value
-                        .cast(AstType::new(string_memory_type), builder, &block)
+                        .cast(AstType::new(string_memory_type), state, &block)
                         .into_mlir();
                     mlir_op_void!(
-                        builder,
+                        state,
                         &block,
                         RevertOperation
-                            .signature(StringAttribute::new(builder.context, "Error(string)"))
+                            .signature(StringAttribute::new(state.mlir(), "Error(string)"))
                             .args(&[message_value])
-                            .call(Attribute::unit(builder.context))
+                            .call(Attribute::unit(state.mlir()))
                     );
                     block
                 }

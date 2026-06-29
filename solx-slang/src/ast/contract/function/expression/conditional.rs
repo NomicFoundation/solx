@@ -50,7 +50,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
                     true_items
                         .iter()
                         .map(|item| {
-                            AstType::resolve_optional(item.get_type(), &context.state.builder)
+                            AstType::resolve_optional(item.get_type(), context.state)
                                 .expect("slang validated")
                         })
                         .collect()
@@ -59,26 +59,23 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
                     .types()
                     .iter()
                     .map(|element_type| {
-                        AstType::resolve_optional(
-                            Some(element_type.clone()),
-                            &context.state.builder,
-                        )
-                        .expect("slang validated")
+                        AstType::resolve_optional(Some(element_type.clone()), context.state)
+                            .expect("slang validated")
                     })
                     .collect(),
             };
 
-            let builder = &context.state.builder;
+            let state = context.state;
             let BlockAnd {
                 value: condition_value,
                 block,
             } = self.operand().emit(context, block);
-            let condition_boolean = condition_value.is_nonzero(builder, &block).into_mlir();
+            let condition_boolean = condition_value.is_nonzero(state, &block).into_mlir();
             let slots: Vec<Pointer<'context, 'block>> = result_types
                 .iter()
-                .map(|&result_type| Pointer::stack_slot(AstType::new(result_type), builder, &block))
+                .map(|&result_type| Pointer::stack_slot(AstType::new(result_type), state, &block))
                 .collect();
-            let (then_block, else_block) = mlir_region_op!(builder, &block, IfOperation.cond(condition_boolean); then_region, else_region);
+            let (then_block, else_block) = mlir_region_op!(state, &block, IfOperation.cond(condition_boolean); then_region, else_region);
 
             for (branch_block, branch_expression) in [
                 (then_block, &true_expression),
@@ -114,18 +111,18 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
                 for (index, value) in values.into_iter().enumerate() {
                     let cast = AstValue::from(value).cast(
                         AstType::new(result_types[index]),
-                        builder,
+                        state,
                         &current,
                     );
-                    slots[index].store(cast, builder, &current);
+                    slots[index].store(cast, state, &current);
                 }
-                mlir_op_void!(builder, &current, YieldOperation.ins(&[]));
+                mlir_op_void!(state, &current, YieldOperation.ins(&[]));
             }
 
             let mut values = Vec::with_capacity(slots.len());
             for (index, &slot) in slots.iter().enumerate() {
                 values.push(
-                    slot.load(AstType::new(result_types[index]), builder, &block)
+                    slot.load(AstType::new(result_types[index]), state, &block)
                         .into_mlir(),
                 );
             }
@@ -158,24 +155,23 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
             let function = context
                 .state
                 .resolve_function(function_definition.node_id());
-            Some(function.func_ref_type(&context.state.builder).into_mlir())
+            Some(function.func_ref_type(context.state).into_mlir())
         };
         let result_type = func_ref_type(&true_expression)
             .or_else(|| func_ref_type(&false_expression))
-            .or_else(|| AstType::resolve_optional(self.get_type(), &context.state.builder))
+            .or_else(|| AstType::resolve_optional(self.get_type(), context.state))
             .expect("slang validated");
         let BlockAnd {
             value: condition_value,
             block,
         } = self.operand().emit(context, block);
         let condition_boolean = condition_value
-            .is_nonzero(&context.state.builder, &block)
+            .is_nonzero(context.state, &block)
             .into_mlir();
 
-        let result_slot =
-            Pointer::stack_slot(AstType::new(result_type), &context.state.builder, &block);
+        let result_slot = Pointer::stack_slot(AstType::new(result_type), context.state, &block);
         let (then_block, else_block) = mlir_region_op!(
-            &context.state.builder, &block,
+            context.state, &block,
             IfOperation.cond(condition_boolean); then_region, else_region
         );
 
@@ -187,14 +183,14 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
                 value: branch_value,
                 block: branch_end,
             } = branch_expression.emit_as(result_type, context, branch_block);
-            result_slot.store(branch_value, &context.state.builder, &branch_end);
-            mlir_op_void!(&context.state.builder, &branch_end, YieldOperation.ins(&[]));
+            result_slot.store(branch_value, context.state, &branch_end);
+            mlir_op_void!(context.state, &branch_end, YieldOperation.ins(&[]));
         }
 
         BlockAnd {
             value: vec![
                 result_slot
-                    .load(AstType::new(result_type), &context.state.builder, &block)
+                    .load(AstType::new(result_type), context.state, &block)
                     .into_mlir(),
             ],
             block,
@@ -216,10 +212,10 @@ impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for ConditionalEx
             block,
         } = self.operand().emit(context, block);
         let condition_boolean = condition_value
-            .is_nonzero(&context.state.builder, &block)
+            .is_nonzero(context.state, &block)
             .into_mlir();
         let (then_block, else_block) = mlir_region_op!(
-            &context.state.builder, &block,
+            context.state, &block,
             IfOperation.cond(condition_boolean); then_region, else_region
         );
 
@@ -228,7 +224,7 @@ impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for ConditionalEx
             (else_block, &false_expression),
         ] {
             let branch_end = branch_expression.emit_for_effect(context, branch_block);
-            mlir_op_void!(&context.state.builder, &branch_end, YieldOperation.ins(&[]));
+            mlir_op_void!(context.state, &branch_end, YieldOperation.ins(&[]));
         }
 
         block
@@ -254,9 +250,9 @@ expression_emit!(ArrayExpression; |node, context, block| {
             std::mem::discriminant(&result_slang_type)
         ),
     };
-    let builder = &context.state.builder;
+    let state = context.state;
     let declared_element_type =
-        AstType::resolve(&element_slang_type, LocationPolicy::ForceMemory, builder);
+        AstType::resolve(&element_slang_type, LocationPolicy::ForceMemory, state);
     // Emit element values before fixing the element type: for a function-pointer array literal the
     // emitted values are authoritative (slang types the literal from visibility, which can disagree),
     // so adopt the value's function-ref type when it differs and rebuild the array type to match.
@@ -279,25 +275,25 @@ expression_emit!(ArrayExpression; |node, context, block| {
     let array_type = match &result_slang_type {
         SlangType::FixedSizeArray(fixed_array_type) if element_type != declared_element_type => {
             AstType::array(
-                builder.context,
+                state.mlir(),
                 solx_mlir::ArraySize::Fixed(fixed_array_type.size() as u64),
                 element_type,
                 solx_utils::DataLocation::Memory,
             )
             .into_mlir()
         }
-        _ => AstType::resolve(&result_slang_type, LocationPolicy::ForceMemory, builder),
+        _ => AstType::resolve(&result_slang_type, LocationPolicy::ForceMemory, state),
     };
     let element_values: Vec<_> = element_values
         .into_iter()
         .map(|value| {
             value
-                .cast(AstType::new(element_type), builder, &current)
+                .cast(AstType::new(element_type), state, &current)
                 .into_mlir()
         })
         .collect();
     let value: Value<'context, 'block> = mlir_op!(
-        builder,
+        state,
         &current,
         ArrayLitOperation.ins(&element_values).addr(array_type)
     );

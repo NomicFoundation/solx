@@ -98,7 +98,7 @@ impl ExternalLibraryCall {
         let (parameter_types, _) = AstType::resolve_signature(
             &self.function,
             LocationPolicy::Declared(None),
-            &context.state.builder,
+            context.state,
         );
         let return_types: Vec<_> = match self.function.returns() {
             Some(returns) => returns
@@ -115,7 +115,7 @@ impl ExternalLibraryCall {
                     AstType::resolve(
                         &parameter.get_type().expect("slang validated"),
                         policy,
-                        &context.state.builder,
+                        context.state,
                     )
                 })
                 .collect(),
@@ -131,9 +131,9 @@ impl ExternalLibraryCall {
                     value: self_value,
                     block,
                 } = receiver.emit(context, block);
-                let builder = &context.state.builder;
+                let state = context.state;
                 let self_value = self_value
-                    .cast(AstType::new(*parameter_self), builder, &block)
+                    .cast(AstType::new(*parameter_self), state, &block)
                     .into_mlir();
                 let BlockAnd {
                     value: mut rest_values,
@@ -148,27 +148,27 @@ impl ExternalLibraryCall {
                 (value, block)
             }
         };
-        let builder = &context.state.builder;
-        let address = AstValue::library_address(&library_name, builder, &current_block).into_mlir();
-        let callee_type = FunctionType::new(builder.context, &parameter_types, &return_types);
-        let gas = AstValue::gas_left(builder, &current_block).into_mlir();
-        let value = AstValue::uint256(0, builder, &current_block).into_mlir();
+        let state = context.state;
+        let address = AstValue::library_address(&library_name, state, &current_block).into_mlir();
+        let callee_type = FunctionType::new(state.mlir(), &parameter_types, &return_types);
+        let gas = AstValue::gas_left(state, &current_block).into_mlir();
+        let value = AstValue::uint256(0, state, &current_block).into_mlir();
         let selector_value =
-            AstValue::uint256(i64::from(selector), builder, &current_block).into_mlir();
+            AstValue::uint256(i64::from(selector), state, &current_block).into_mlir();
         let operation = current_block.append_operation(mlir_op_build!(
-            builder,
+            state,
             ExtCallOperation
-                .callee(StringAttribute::new(builder.context, &mlir_name))
+                .callee(StringAttribute::new(state.mlir(), &mlir_name))
                 .ins(&argument_values)
                 .addr(address)
                 .gas(gas)
                 .val(value)
                 .selector(selector_value)
-                .delegate_call(Attribute::unit(builder.context))
-                .library_call(Attribute::unit(builder.context))
+                .delegate_call(Attribute::unit(state.mlir()))
+                .library_call(Attribute::unit(state.mlir()))
                 .callee_type(TypeAttribute::new(callee_type.into()))
                 .status(AstType::signless(
-                    builder.context,
+                    state.mlir(),
                     solx_utils::BIT_LENGTH_BOOLEAN
                 ))
                 .outs(&return_types)

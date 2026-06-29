@@ -2,10 +2,10 @@
 //! MLIR compilation context for EVM code generation.
 //!
 
-pub mod builder;
 pub mod environment;
 pub mod function;
 pub mod pointer;
+pub mod try_fallback_kind;
 pub mod r#type;
 pub mod user_defined_operator;
 pub mod value;
@@ -33,15 +33,16 @@ use slang_solidity_v2::ast::NodeId;
 
 use crate::llvm_module::RawLlvmModule;
 
-use self::builder::Builder;
 use self::function::Function;
 
 /// Accumulated MLIR state threaded through the AST visitors.
 pub struct Context<'context> {
     /// The MLIR module being built.
     pub module: Module<'context>,
-    /// Cached MLIR types and emission methods.
-    pub builder: Builder<'context>,
+    /// The MLIR context with all dialects and translations registered.
+    mlir_context: &'context melior::Context,
+    /// Cached unknown source location.
+    unknown_location: Location<'context>,
     /// Resolution metadata keyed by the AST definition id of each function.
     pub function_signatures: HashMap<NodeId, Function<'context>>,
     /// MLIR type of the contract being emitted (types `this`); set by the frontend before bodies.
@@ -90,8 +91,8 @@ impl<'context> Context<'context> {
 
     /// Creates a new MLIR state with an empty module carrying the EVM-version, data-layout, and target-triple attributes.
     pub fn new(context: &'context melior::Context, evm_version: solx_utils::EVMVersion) -> Self {
-        let location = Location::unknown(context);
-        let module = Module::new(location);
+        let unknown_location = Location::unknown(context);
+        let module = Module::new(unknown_location);
 
         let evm_version_attribute = unsafe {
             Attribute::from_raw(crate::ffi::solxCreateEvmVersionAttr(
@@ -128,12 +129,23 @@ impl<'context> Context<'context> {
         Self {
             module,
             function_signatures: HashMap::new(),
-            builder: Builder::new(context),
+            mlir_context: context,
+            unknown_location,
             current_contract_type: None,
             operator_bindings: HashMap::new(),
             dependencies: RefCell::new(Vec::new()),
             function_id_counter: Cell::new(1),
         }
+    }
+
+    /// The MLIR context with all dialects and translations registered.
+    pub fn mlir(&self) -> &'context melior::Context {
+        self.mlir_context
+    }
+
+    /// The cached unknown source location.
+    pub fn location(&self) -> Location<'context> {
+        self.unknown_location
     }
 
     /// Allocates the next internal-function-pointer dispatch tag.
@@ -229,7 +241,7 @@ impl<'context> Context<'context> {
 
         let sol_source = capture_sol.then(|| module.as_operation().to_string());
 
-        Self::run_sol_passes(self.builder.context, &mut module)?;
+        Self::run_sol_passes(self.mlir_context, &mut module)?;
 
         // Detach the runtime module so the deploy text doesn't duplicate it; the
         // deploy entry still references it via `evm.datasize`/`evm.dataoffset`.

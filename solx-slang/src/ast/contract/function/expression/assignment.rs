@@ -108,7 +108,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                     block,
                 } = access.operand().emit(context, block);
                 let (new_slot, element_type) =
-                    array_value.push_slot(&base_slang_type, &context.state.builder, &block);
+                    array_value.push_slot(&base_slang_type, context.state, &block);
                 (
                     Self::from_address(new_slot.into_mlir(), element_type),
                     block,
@@ -139,14 +139,13 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         let element_type = AstType::resolve(
             &declared_type,
             LocationPolicy::Declared(None),
-            &context.state.builder,
+            context.state,
         );
         if declared_type.is_reference_type() && !matches!(declared_type, ast::Type::Mapping(_)) {
-            let address_type = AstType::new(element_type)
-                .address_type(slot.location, context.state.builder.context);
+            let address_type =
+                AstType::new(element_type).address_type(slot.location, context.state.mlir());
             let storage_ref =
-                Pointer::addr_of(&slot.name, address_type, &context.state.builder, &block)
-                    .into_mlir();
+                Pointer::addr_of(&slot.name, address_type, context.state, &block).into_mlir();
             return (Self::ReferenceCopy(storage_ref), block);
         }
         (Self::Storage(slot, element_type), block)
@@ -171,27 +170,20 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
     ) -> Value<'context, 'block> {
         match self {
             Self::Pointer(pointer, element_type) => {
-                let stored_value = AstValue::from(value).cast(
-                    AstType::new(*element_type),
-                    &context.state.builder,
-                    block,
-                );
-                Pointer::new(*pointer).store(stored_value, &context.state.builder, block);
+                let stored_value =
+                    AstValue::from(value).cast(AstType::new(*element_type), context.state, block);
+                Pointer::new(*pointer).store(stored_value, context.state, block);
                 stored_value.into_mlir()
             }
             Self::Storage(slot, element_type) => {
                 let stored_value = AstValue::from(value)
-                    .cast(AstType::new(*element_type), &context.state.builder, block)
+                    .cast(AstType::new(*element_type), context.state, block)
                     .into_mlir();
-                slot.store(&context.state.builder, stored_value, *element_type, block);
+                slot.store(context.state, stored_value, *element_type, block);
                 stored_value
             }
             Self::ReferenceCopy(address) => {
-                Pointer::new(*address).copy_from(
-                    AstValue::from(value),
-                    &context.state.builder,
-                    block,
-                );
+                Pointer::new(*address).copy_from(AstValue::from(value), context.state, block);
                 value
             }
         }
@@ -275,7 +267,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
             .fold(None, |_, (target, value)| {
                 Some(target.store(context, value, &block))
             })
-            .unwrap_or_else(|| AstValue::uint256(0, &context.state.builder, &block).into_mlir());
+            .unwrap_or_else(|| AstValue::uint256(0, context.state, &block).into_mlir());
         (result, block)
     }
 
@@ -289,22 +281,17 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         let (target, block) = Self::new(context, operand, block);
         match &target {
             Self::ReferenceCopy(reference) => {
-                mlir_op_void!(
-                    &context.state.builder,
-                    &block,
-                    DeleteOperation.reference(*reference)
-                );
+                mlir_op_void!(context.state, &block, DeleteOperation.reference(*reference));
             }
             Self::Pointer(_, element_type) | Self::Storage(_, element_type) => {
                 let slang_type = operand.get_type().expect("slang validated");
                 let zero = if slang_type.is_reference_type() {
                     let zero_init =
                         !matches!(slang_type, ast::Type::String(_) | ast::Type::Bytes(_));
-                    AstValue::malloc(*element_type, None, zero_init, &context.state.builder, &block)
+                    AstValue::malloc(*element_type, None, zero_init, context.state, &block)
                         .into_mlir()
                 } else {
-                    AstValue::zero(AstType::new(*element_type), &context.state.builder, &block)
-                        .into_mlir()
+                    AstValue::zero(AstType::new(*element_type), context.state, &block).into_mlir()
                 };
                 target.store(context, zero, &block);
             }
@@ -360,13 +347,13 @@ expression_emit!(AssignmentExpression; |node, context, block| {
             AssignmentTarget::Pointer(pointer, element_type) => {
                 let old = Pointer::new(*pointer).load(
                     AstType::new(*element_type),
-                    &context.state.builder,
+                    context.state,
                     &block,
                 );
                 (old, *element_type)
             }
             AssignmentTarget::Storage(slot, element_type) => {
-                let old = slot.load(&context.state.builder, *element_type, &block);
+                let old = slot.load(context.state, *element_type, &block);
                 (AstValue::from(old), *element_type)
             }
             AssignmentTarget::ReferenceCopy(_) => unreachable!(
@@ -376,7 +363,7 @@ expression_emit!(AssignmentExpression; |node, context, block| {
         let BlockAnd { value: rhs, block } = right.emit(context, block);
         let result = operator.emit_value_binary(
             context.arithmetic_mode,
-            &context.state.builder,
+            context.state,
             old,
             rhs,
             target_type,

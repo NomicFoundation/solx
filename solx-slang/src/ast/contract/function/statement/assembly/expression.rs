@@ -22,14 +22,14 @@ use crate::ast::contract::function::statement::assembly::YulContext;
 yul_emit!(YulExpression => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |expression, context, block| {
     match expression {
         YulExpression::YulLiteral(literal) => {
-            BlockAnd { value: YulValue::constant(&literal.value(), &context.state.builder, &block), block }
+            BlockAnd { value: YulValue::constant(&literal.value(), context.state, &block), block }
         }
         YulExpression::YulPath(path) => path.emit(context, block),
         YulExpression::YulFunctionCallExpression(call) => {
             let BlockAnd { value: values, block } = call.emit(context, block);
             let value = match values.into_iter().next() {
                 Some(value) => value,
-                None => YulValue::constant(&BigInt::from(0u32), &context.state.builder, &block),
+                None => YulValue::constant(&BigInt::from(0u32), context.state, &block),
             };
             BlockAnd { value, block }
         }
@@ -38,7 +38,7 @@ yul_emit!(YulExpression => BlockAnd<'context, 'block, YulValue<'context, 'block>
 
 yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |path, context, block| {
     let identifier = path.iter().next().expect("empty yul path");
-    let builder = &context.state.builder;
+    let state = context.state;
 
     if path.len() == 1
         && let Some(Definition::Constant(constant)) = identifier.resolve_to_definition()
@@ -53,8 +53,8 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
         );
         let BlockAnd { value, block } = initializer.emit(&emitter, block);
         let widened = value.cast(
-            AstType::signless(builder.context, solx_utils::BIT_LENGTH_FIELD),
-            builder,
+            AstType::signless(state.mlir(), solx_utils::BIT_LENGTH_FIELD),
+            state,
             &block,
         );
         return BlockAnd { value: YulValue::new(widened.into_mlir()), block };
@@ -71,11 +71,11 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
                 Some(BuiltIn::YulSlot) => {
                     let slot_word =
                         BigInt::from_bytes_be(num_bigint::Sign::Plus, &slot.slot.to_be_bytes_vec());
-                    return BlockAnd { value: YulValue::constant(&slot_word, builder, &block), block };
+                    return BlockAnd { value: YulValue::constant(&slot_word, state, &block), block };
                 }
                 Some(BuiltIn::YulOffset) => {
                     return BlockAnd {
-                        value: YulValue::constant(&BigInt::from(slot.byte_offset), builder, &block),
+                        value: YulValue::constant(&BigInt::from(slot.byte_offset), state, &block),
                         block,
                     };
                 }
@@ -94,12 +94,12 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
                         .expect("yul path head resolves to a declaration")
                         .node_id();
                     let slot = AstValue::from(context.environment.variable(declaration))
-                        .reinterpret(AstType::llvm_ptr(builder.context), builder, &block)
+                        .reinterpret(AstType::llvm_ptr(state.mlir()), state, &block)
                         .into_mlir();
-                    return BlockAnd { value: YulValue::load(slot, builder, &block), block };
+                    return BlockAnd { value: YulValue::load(slot, state, &block), block };
                 }
                 Some(BuiltIn::YulOffset) => {
-                    return BlockAnd { value: YulValue::constant(&BigInt::from(0u32), builder, &block), block };
+                    return BlockAnd { value: YulValue::constant(&BigInt::from(0u32), state, &block), block };
                 }
                 _ => {}
             }
@@ -111,7 +111,7 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
         .expect("yul variable reference resolves to a declaration")
         .node_id();
     let slot = AstValue::from(context.environment.variable(declaration))
-        .reinterpret(AstType::llvm_ptr(builder.context), builder, &block)
+        .reinterpret(AstType::llvm_ptr(state.mlir()), state, &block)
         .into_mlir();
-    BlockAnd { value: YulValue::load(slot, builder, &block), block }
+    BlockAnd { value: YulValue::load(slot, state, &block), block }
 });

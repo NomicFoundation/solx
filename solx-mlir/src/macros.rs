@@ -29,8 +29,8 @@ impl<'slice, T, const N: usize> IntoOds<&'slice [T]> for &'slice [T; N] {
 /// Builds an inlined dialect op and yields it as an `Operation`, without appending.
 #[macro_export]
 macro_rules! mlir_op_build {
-    ($builder:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
-        $operation::builder($builder.context, $builder.unknown_location)
+    ($context:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
+        $operation::builder($context.mlir(), $context.location())
             $(.$method($($crate::IntoOds::into_ods($argument)),*))*
             .build()
             .into()
@@ -41,9 +41,9 @@ macro_rules! mlir_op_build {
 /// returns its single result value. The `expect` message is derived from the op.
 #[macro_export]
 macro_rules! mlir_op {
-    ($builder:expr, $block:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
+    ($context:expr, $block:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
         $block
-            .append_operation(mlir_op_build!($builder, $operation $(.$method($($argument),*))*))
+            .append_operation(mlir_op_build!($context, $operation $(.$method($($argument),*))*))
             .result(0)
             .expect(concat!(stringify!($operation), " produces one result"))
             .into()
@@ -54,8 +54,8 @@ macro_rules! mlir_op {
 /// or `sol.log`: appends the op ([`mlir_op_build!`]) and yields `()`.
 #[macro_export]
 macro_rules! mlir_op_void {
-    ($builder:expr, $block:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
-        $block.append_operation(mlir_op_build!($builder, $operation $(.$method($($argument),*))*));
+    ($context:expr, $block:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
+        $block.append_operation(mlir_op_build!($context, $operation $(.$method($($argument),*))*));
     };
 }
 
@@ -64,7 +64,7 @@ macro_rules! mlir_op_void {
 #[macro_export]
 macro_rules! mlir_region_op {
     (
-        $builder:expr, $block:expr, $operation:ident
+        $context:expr, $block:expr, $operation:ident
         $(.$method:ident($($argument:expr),* $(,)?))*
         ; $($region:ident),+ $(,)?
     ) => {{
@@ -77,7 +77,7 @@ macro_rules! mlir_region_op {
         )+
         let operation = melior::ir::BlockLike::append_operation(
             $block,
-            $operation::builder($builder.context, $builder.unknown_location)
+            $operation::builder($context.mlir(), $context.location())
                 $(.$method($($crate::IntoOds::into_ods($argument)),*))*
                 $(.$region($region))+
                 .build()
@@ -132,8 +132,11 @@ macro_rules! sol_predicate_attribute {
                 context: &melior::Context,
             ) -> melior::ir::attribute::IntegerAttribute<'_> {
                 melior::ir::attribute::IntegerAttribute::new(
-                    melior::ir::r#type::IntegerType::new(context, solx_utils::BIT_LENGTH_X64 as u32)
-                        .into(),
+                    melior::ir::r#type::IntegerType::new(
+                        context,
+                        solx_utils::BIT_LENGTH_X64 as u32,
+                    )
+                    .into(),
                     self as i64,
                 )
             }

@@ -49,11 +49,8 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
 
         let (address, element_type) = match &base_type {
             SlangType::Mapping(_) => {
-                let element_type = AstType::resolve(
-                    &result_type,
-                    LocationPolicy::Declared(None),
-                    &context.state.builder,
-                );
+                let element_type =
+                    AstType::resolve(&result_type, LocationPolicy::Declared(None), context.state);
                 let base_location = match base_type.data_location() {
                     Some(SlangDataLocation::Inherited) => {
                         unreachable!("slang should not surface Inherited at an index-access base")
@@ -64,11 +61,11 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
                         std::mem::discriminant(&base_type)
                     ),
                 };
-                let address_type = AstType::new(element_type)
-                    .address_type(base_location, context.state.builder.context);
+                let address_type =
+                    AstType::new(element_type).address_type(base_location, context.state.mlir());
                 let address = base_value
                     .into_pointer()
-                    .entry(index_value, address_type, &context.state.builder, &block)
+                    .entry(index_value, address_type, context.state, &block)
                     .into_mlir();
                 (address, element_type)
             }
@@ -80,7 +77,7 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
                         index_value,
                         AstType::new(element_type),
                         false,
-                        &context.state.builder,
+                        context.state,
                         &block,
                     )
                     .into_mlir();
@@ -105,13 +102,13 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
             block,
         } = base.emit(context, block);
         let ui256 =
-            AstType::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
+            AstType::unsigned(context.state.mlir(), solx_utils::BIT_LENGTH_FIELD)
                 .into_mlir();
         let (start_value, block) = match node.start() {
             Some(start_expression) => {
                 let BlockAnd { value, block } = start_expression.emit(context, block);
                 let value = value
-                    .cast(AstType::new(ui256), &context.state.builder, &block)
+                    .cast(AstType::new(ui256), context.state, &block)
                     .into_mlir();
                 (value, block)
             }
@@ -119,7 +116,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
                 let zero = AstValue::constant(
                     0,
                     AstType::new(ui256),
-                    &context.state.builder,
+                    context.state,
                     &block,
                 )
                 .into_mlir();
@@ -130,13 +127,13 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
             Some(end_expression) => {
                 let BlockAnd { value, block } = end_expression.emit(context, block);
                 let value = value
-                    .cast(AstType::new(ui256), &context.state.builder, &block)
+                    .cast(AstType::new(ui256), context.state, &block)
                     .into_mlir();
                 (value, block)
             }
             None => {
                 let length = base_value
-                    .length(&context.state.builder, &block)
+                    .length(context.state, &block)
                     .into_mlir();
                 (length, block)
             }
@@ -146,11 +143,11 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
                 .get_type()
                 .expect("slang validated"),
             LocationPolicy::Declared(None),
-            &context.state.builder,
+            context.state,
         );
-        let builder = &context.state.builder;
+        let state = context.state;
         let value: Value<'context, 'block> = mlir_op!(
-            builder,
+            state,
             block,
             SliceOperation
                 .arr(base_value)
@@ -169,7 +166,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
     } = node.emit_place(context, block);
     let value = Pointer::new(address).load(
         AstType::new(element_type),
-        &context.state.builder,
+        context.state,
         &block,
     );
     if value.r#type().is_reference() {
@@ -179,10 +176,10 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
         .get_type()
         .expect("slang validated");
     let slang_expected =
-        AstType::resolve(&result_type, LocationPolicy::Declared(None), &context.state.builder);
+        AstType::resolve(&result_type, LocationPolicy::Declared(None), context.state);
     let value = value.cast(
         AstType::new(slang_expected),
-        &context.state.builder,
+        context.state,
         &block,
     );
     BlockAnd { block, value }

@@ -24,7 +24,7 @@ expression_emit!(Identifier; |node, context, block| {
             let element_type = AstType::resolve(
                 &declared_type,
                 LocationPolicy::Declared(None),
-                &context.state.builder,
+                context.state,
             );
             if matches!(
                 state_variable.mutability(),
@@ -43,7 +43,7 @@ expression_emit!(Identifier; |node, context, block| {
                     .unwrap_or_else(|| {
                         unreachable!("unregistered state variable {:?}", state_variable.node_id())
                     });
-                let value = slot.load(&context.state.builder, element_type, &block);
+                let value = slot.load(context.state, element_type, &block);
                 BlockAnd {
                     block,
                     value: value.into(),
@@ -59,7 +59,7 @@ expression_emit!(Identifier; |node, context, block| {
             }
             let pointer =
                 Pointer::new(context.environment.variable(definition.node_id()));
-            let value = pointer.load(pointer.pointee(), &context.state.builder, &block);
+            let value = pointer.load(pointer.pointee(), context.state, &block);
             BlockAnd { block, value }
         }
         Some(Definition::Constant(constant)) => {
@@ -73,7 +73,7 @@ expression_emit!(Identifier; |node, context, block| {
             let value = context
                 .state
                 .resolve_function(target_id)
-                .pointer_constant(&context.state.builder, &block);
+                .pointer_constant(context.state, &block);
             BlockAnd { block, value }
         }
         Some(Definition::Library(library)) => {
@@ -81,7 +81,7 @@ expression_emit!(Identifier; |node, context, block| {
                 library.get_file_id().to_owned(),
                 Some(library.name().name()),
             );
-            let value = AstValue::library_address(&name, &context.state.builder, &block);
+            let value = AstValue::library_address(&name, context.state, &block);
             BlockAnd { block, value }
         }
         None => unreachable!("slang resolves every identifier reference"),

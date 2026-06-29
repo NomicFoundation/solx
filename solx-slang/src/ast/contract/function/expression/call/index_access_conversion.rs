@@ -46,7 +46,7 @@ impl IndexAccessConversion {
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
-        let target_type = AstType::resolve_optional(self.call.get_type(), &context.state.builder)
+        let target_type = AstType::resolve_optional(self.call.get_type(), context.state)
             .expect("slang validated");
         let BlockAnd { value, block } = self.argument.emit_as(target_type, context, block);
         BlockAnd {

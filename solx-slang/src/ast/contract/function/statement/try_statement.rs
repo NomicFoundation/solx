@@ -36,9 +36,9 @@ statement_emit!(CatchClause; |node, context, block| {
             .into();
         context.environment.bind_parameter(
             parameter.node_id(),
-            AstType::parameter(parameter.get_type().as_ref(), &context.state.builder),
+            AstType::parameter(parameter.get_type().as_ref(), context.state),
             decoded,
-            &context.state.builder,
+            context.state,
             &block,
         );
     }
@@ -96,7 +96,7 @@ statement_emit!(TryStatement; |node, context, block| {
     }
 
     let saved_region = context.region_pointer;
-    let builder = &context.state.builder;
+    let state = context.state;
     let has_panic = panic_clause.is_some();
     let has_error = error_clause.is_some();
     let success_region = Region::new();
@@ -104,15 +104,15 @@ statement_emit!(TryStatement; |node, context, block| {
     let panic_region = Region::new();
     if has_panic {
         panic_region.append_block(Block::new(&[(
-            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
-            builder.unknown_location,
+            AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+            state.location(),
         )]));
     }
     let error_region = Region::new();
     if has_error {
         error_region.append_block(Block::new(&[(
-            AstType::string(builder.context, solx_utils::DataLocation::Memory).into_mlir(),
-            builder.unknown_location,
+            AstType::string(state.mlir(), solx_utils::DataLocation::Memory).into_mlir(),
+            state.location(),
         )]));
     }
     let fallback_region = Region::new();
@@ -123,14 +123,14 @@ statement_emit!(TryStatement; |node, context, block| {
         }
         TryFallbackKind::Bytes => {
             fallback_region.append_block(Block::new(&[(
-                AstType::string(builder.context, solx_utils::DataLocation::Memory)
+                AstType::string(state.mlir(), solx_utils::DataLocation::Memory)
                     .into_mlir(),
-                builder.unknown_location,
+                state.location(),
             )]));
         }
     }
     let operation = current_block.append_operation(mlir_op_build!(
-        builder,
+        state,
         TryOperation
             .status(status)
             .success_region(success_region)
@@ -176,16 +176,16 @@ statement_emit!(TryStatement; |node, context, block| {
             }
             context.environment.bind_parameter(
                 parameter.node_id(),
-                AstType::parameter(parameter.get_type().as_ref(), &context.state.builder),
+                AstType::parameter(parameter.get_type().as_ref(), context.state),
                 *result,
-                &context.state.builder,
+                context.state,
                 &success_block,
             );
         }
     }
     let success_end = node.body().emit(context, success_block);
     if let Some(end) = success_end {
-        mlir_op_void!(&context.state.builder, &end, YieldOperation.ins(&[]));
+        mlir_op_void!(context.state, &end, YieldOperation.ins(&[]));
     }
 
     for (catch_block, clause) in [
@@ -196,7 +196,7 @@ statement_emit!(TryStatement; |node, context, block| {
         if let Some(catch_block) = catch_block {
             let clause = clause.expect("a populated catch region implies its clause");
             if let Some(end) = clause.emit(context, catch_block) {
-                mlir_op_void!(&context.state.builder, &end, YieldOperation.ins(&[]));
+                mlir_op_void!(context.state, &end, YieldOperation.ins(&[]));
             }
         }
     }

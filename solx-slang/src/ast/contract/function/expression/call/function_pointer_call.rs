@@ -75,7 +75,7 @@ impl FunctionPointerCall {
     ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
         let function_slang_type = self.callee.get_type().expect("slang validated");
         let (parameter_types, result_types) =
-            AstType::function_pointer_signature(&function_slang_type, &context.state.builder);
+            AstType::function_pointer_signature(&function_slang_type, context.state);
         let BlockAnd {
             value: callee_value,
             block,
@@ -90,7 +90,7 @@ impl FunctionPointerCall {
             call_value,
             call_gas,
             false,
-            &context.state.builder,
+            context.state,
             &block,
         );
         BlockAnd {
@@ -114,7 +114,7 @@ impl FunctionPointerCall {
     ) {
         let function_slang_type = self.callee.get_type().expect("slang validated");
         let (parameter_types, result_types) =
-            AstType::function_pointer_signature(&function_slang_type, &context.state.builder);
+            AstType::function_pointer_signature(&function_slang_type, context.state);
         let BlockAnd {
             value: callee_value,
             block,
@@ -123,22 +123,21 @@ impl FunctionPointerCall {
             value: argument_values,
             block,
         } = self.arguments.emit_as(&parameter_types, context, block);
-        let builder = &context.state.builder;
-        let value = call_value.unwrap_or_else(|| AstValue::uint256(0, builder, &block).into_mlir());
-        let gas = call_gas.unwrap_or_else(|| AstValue::gas_left(builder, &block).into_mlir());
+        let state = context.state;
+        let value = call_value.unwrap_or_else(|| AstValue::uint256(0, state, &block).into_mlir());
+        let gas = call_gas.unwrap_or_else(|| AstValue::gas_left(state, &block).into_mlir());
         let mut out_types = Vec::with_capacity(result_types.len() + 1);
-        out_types
-            .push(AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
+        out_types.push(AstType::signless(state.mlir(), solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
         out_types.extend_from_slice(&result_types);
         let operation = block.append_operation(mlir_op_build!(
-            builder,
+            state,
             ExtICallOperation
                 .outs(&out_types)
                 .callee(callee_value.into_mlir())
                 .callee_operands(&argument_values)
                 .gas(gas)
                 .value(value)
-                .try_call(Attribute::unit(builder.context))
+                .try_call(Attribute::unit(state.mlir()))
         ));
         let status = operation
             .result(0)

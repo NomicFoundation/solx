@@ -8,7 +8,7 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 
-use solx_mlir::Builder;
+use solx_mlir::Context;
 use solx_mlir::mlir_op_build;
 use solx_mlir::ods::sol::LoadImmutableOperation;
 use solx_utils::DataLocation;
@@ -22,7 +22,7 @@ impl StorageSlot {
     /// Emits a load of this slot via `sol.addr_of` + `sol.load`.
     pub fn load<'context, 'block>(
         &self,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block>
@@ -31,9 +31,9 @@ impl StorageSlot {
     {
         if matches!(self.location, DataLocation::Immutable) {
             let operation = block.append_operation(mlir_op_build!(
-                builder,
+                context,
                 LoadImmutableOperation
-                    ._name(FlatSymbolRefAttribute::new(builder.context, &self.name))
+                    ._name(FlatSymbolRefAttribute::new(context.mlir(), &self.name))
                     .val(element_type)
             ));
             return operation
@@ -41,38 +41,38 @@ impl StorageSlot {
                 .expect("sol.load_immutable produces one result")
                 .into();
         }
-        let pointer = self.addr_of(builder, element_type, block);
+        let pointer = self.addr_of(context, element_type, block);
         pointer
-            .load(AstType::new(element_type), builder, block)
+            .load(AstType::new(element_type), context, block)
             .into_mlir()
     }
 
     /// Emits a store into this slot via `sol.addr_of` + `sol.store`.
     pub fn store<'context, 'block>(
         &self,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         value: Value<'context, 'block>,
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) where
         'context: 'block,
     {
-        let pointer = self.addr_of(builder, element_type, block);
-        pointer.store(AstValue::new(value), builder, block);
+        let pointer = self.addr_of(context, element_type, block);
+        pointer.store(AstValue::new(value), context, block);
     }
 
     /// Returns the place denoting this slot via `sol.addr_of`, typed by the element's `address_type`
     /// for the slot's location.
     fn addr_of<'context, 'block>(
         &self,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Pointer<'context, 'block>
     where
         'context: 'block,
     {
-        let place_type = AstType::new(element_type).address_type(self.location, builder.context);
-        Pointer::addr_of(&self.name, place_type, builder, block)
+        let place_type = AstType::new(element_type).address_type(self.location, context.mlir());
+        Pointer::addr_of(&self.name, place_type, context, block)
     }
 }

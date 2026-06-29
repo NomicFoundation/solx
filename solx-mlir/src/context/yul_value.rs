@@ -17,7 +17,7 @@ use num::BigInt;
 use solx_utils::BIT_LENGTH_FIELD;
 use solx_utils::BIT_LENGTH_X64;
 
-use crate::Builder;
+use crate::Context;
 use crate::IntoOds;
 use crate::Type;
 use crate::YulCmpPredicate;
@@ -65,35 +65,35 @@ impl<'context, 'block> YulValue<'context, 'block> {
     /// `yul.constant` materialising the 256-bit word `value`.
     pub fn constant(
         value: &BigInt,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
         let value_attribute =
-            IntegerAttribute::try_from(Self::word_attribute(value, builder.context))
+            IntegerAttribute::try_from(Self::word_attribute(value, context.mlir()))
                 .expect("yul.constant value is an i256 integer attribute");
         Self::new(mlir_op!(
-            builder,
+            context,
             block,
             ConstantOperation
                 .value(value_attribute)
-                .out(Type::signless(builder.context, BIT_LENGTH_FIELD).into_mlir())
+                .out(Type::signless(context.mlir(), BIT_LENGTH_FIELD).into_mlir())
         ))
     }
 
     /// Loads a Yul word from an `!llvm.ptr` slot.
     pub fn load(
         pointer: MlirValue<'context, 'block>,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
         Self::new(
             block
                 .append_operation(llvm::load(
-                    builder.context,
+                    context.mlir(),
                     pointer,
-                    Type::signless(builder.context, BIT_LENGTH_FIELD).into_mlir(),
-                    builder.unknown_location,
-                    LoadStoreOptions::new().align(Some(Self::word_alignment(builder))),
+                    Type::signless(context.mlir(), BIT_LENGTH_FIELD).into_mlir(),
+                    context.location(),
+                    LoadStoreOptions::new().align(Some(Self::word_alignment(context))),
                 ))
                 .result(0)
                 .expect("llvm.load always produces one result")
@@ -103,20 +103,20 @@ impl<'context, 'block> YulValue<'context, 'block> {
 
     /// Allocates a 256-bit `!llvm.ptr` stack slot for a Yul local.
     pub fn alloca(
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> MlirValue<'context, 'block> {
-        let count = Self::constant(&BigInt::from(1u32), builder, block);
+        let count = Self::constant(&BigInt::from(1u32), context, block);
         block
             .append_operation(llvm::alloca(
-                builder.context,
+                context.mlir(),
                 count.inner,
-                Type::llvm_ptr(builder.context).into_mlir(),
-                builder.unknown_location,
+                Type::llvm_ptr(context.mlir()).into_mlir(),
+                context.location(),
                 AllocaOptions::new()
-                    .align(Some(Self::word_alignment(builder)))
+                    .align(Some(Self::word_alignment(context)))
                     .elem_type(Some(TypeAttribute::new(
-                        Type::signless(builder.context, BIT_LENGTH_FIELD).into_mlir(),
+                        Type::signless(context.mlir(), BIT_LENGTH_FIELD).into_mlir(),
                     ))),
             ))
             .result(0)
@@ -130,18 +130,18 @@ impl<'context, 'block> YulValue<'context, 'block> {
         self,
         other: Self,
         predicate: YulCmpPredicate,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let predicate_attribute = predicate.attribute(builder.context);
+        let predicate_attribute = predicate.attribute(context.mlir());
         Self::new(mlir_op!(
-            builder,
+            context,
             block,
             CmpOperation
                 .predicate(Attribute::from(predicate_attribute))
                 .lhs(self.inner)
                 .rhs(other.inner)
-                .out(Type::signless(builder.context, BIT_LENGTH_FIELD).into_mlir())
+                .out(Type::signless(context.mlir(), BIT_LENGTH_FIELD).into_mlir())
         ))
     }
 
@@ -149,22 +149,22 @@ impl<'context, 'block> YulValue<'context, 'block> {
     pub fn store(
         self,
         pointer: MlirValue<'context, 'block>,
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) {
         block.append_operation(llvm::store(
-            builder.context,
+            context.mlir(),
             self.inner,
             pointer,
-            builder.unknown_location,
-            LoadStoreOptions::new().align(Some(Self::word_alignment(builder))),
+            context.location(),
+            LoadStoreOptions::new().align(Some(Self::word_alignment(context))),
         ));
     }
 
     /// The `alignment = 32 : i64` attribute every Yul-word `llvm` slot op carries.
-    fn word_alignment(builder: &Builder<'context>) -> IntegerAttribute<'context> {
+    fn word_alignment(context: &Context<'context>) -> IntegerAttribute<'context> {
         IntegerAttribute::new(
-            IntegerType::new(builder.context, BIT_LENGTH_X64 as u32).into(),
+            IntegerType::new(context.mlir(), BIT_LENGTH_X64 as u32).into(),
             Self::WORD_ALIGNMENT,
         )
     }

@@ -47,17 +47,17 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         (lhs, rhs, block)
     };
     if lhs.r#type() == rhs.r#type() {
-        let comparison = lhs.compare(rhs, predicate, &context.state.builder, &block);
+        let comparison = lhs.compare(rhs, predicate, context.state, &block);
         return BlockAnd { block, value: comparison };
     }
     let lhs_bytes = lhs.r#type().fixed_bytes_or_byte_width();
     let rhs_bytes = rhs.r#type().fixed_bytes_or_byte_width();
     if let Some(common_width) = lhs_bytes.into_iter().chain(rhs_bytes).max() {
-        let builder = &context.state.builder;
-        let common = AstType::fixed_bytes(builder.context, common_width).into_mlir();
-        let lhs_common = lhs.cast(AstType::new(common), builder, &block);
-        let rhs_common = rhs.cast(AstType::new(common), builder, &block);
-        let comparison = lhs_common.compare(rhs_common, predicate, builder, &block);
+        let state = context.state;
+        let common = AstType::fixed_bytes(state.mlir(), common_width).into_mlir();
+        let lhs_common = lhs.cast(AstType::new(common), state, &block);
+        let rhs_common = rhs.cast(AstType::new(common), state, &block);
+        let comparison = lhs_common.compare(rhs_common, predicate, state, &block);
         return BlockAnd { block, value: comparison };
     }
     // Widen each operand to 256 bits preserving its OWN signedness (so a negative is not
@@ -67,7 +67,7 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         IntegerType::try_from(lhs.r#type().into_mlir()).is_ok_and(|integer| integer.is_signed());
     let signed_rhs =
         IntegerType::try_from(rhs.r#type().into_mlir()).is_ok_and(|integer| integer.is_signed());
-    let mlir_context = context.state.builder.context;
+    let mlir_context = context.state.mlir();
     let signed_256 = Type::from(IntegerType::signed(mlir_context, 256));
     let unsigned_256 =
         AstType::unsigned(mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
@@ -75,12 +75,12 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
     let rhs_wide_type = if signed_rhs { signed_256 } else { unsigned_256 };
     let lhs_wide = lhs.cast(
         AstType::new(lhs_wide_type),
-        &context.state.builder,
+        context.state,
         &block,
     );
     let rhs_wide = rhs.cast(
         AstType::new(rhs_wide_type),
-        &context.state.builder,
+        context.state,
         &block,
     );
     let common = if signed_lhs || signed_rhs {
@@ -91,13 +91,13 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
     let lhs_common = if lhs_wide.r#type().into_mlir() == common {
         lhs_wide
     } else {
-        lhs_wide.cast(AstType::new(common), &context.state.builder, &block)
+        lhs_wide.cast(AstType::new(common), context.state, &block)
     };
     let rhs_common = if rhs_wide.r#type().into_mlir() == common {
         rhs_wide
     } else {
-        rhs_wide.cast(AstType::new(common), &context.state.builder, &block)
+        rhs_wide.cast(AstType::new(common), context.state, &block)
     };
-    let comparison = lhs_common.compare(rhs_common, predicate, &context.state.builder, &block);
+    let comparison = lhs_common.compare(rhs_common, predicate, context.state, &block);
     BlockAnd { block, value: comparison }
 });

@@ -96,12 +96,12 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
                 | Expression::PrefixExpression(_)
         );
         if folds && let Some(folded) = self.integer_value() {
-            let result_type = AstType::resolve_optional(self.get_type(), &context.state.builder)
-                .expect("slang validated");
+            let result_type =
+                AstType::resolve_optional(self.get_type(), context.state).expect("slang validated");
             let value = AstValue::constant_from_bigint(
                 &folded,
                 AstType::new(result_type),
-                &context.state.builder,
+                context.state,
                 &block,
             );
             return BlockAnd { block, value };
@@ -178,7 +178,7 @@ impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Expr
             }
             _ => self.emit(context, block),
         };
-        let value = value.cast(AstType::new(target_type), &context.state.builder, &block);
+        let value = value.cast(AstType::new(target_type), context.state, &block);
         BlockAnd { value, block }
     }
 }

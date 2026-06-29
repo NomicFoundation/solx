@@ -83,7 +83,7 @@ where
             Some(end) => end,
             None => region.append_block(Block::new(&[])),
         };
-        mlir_op_void!(&context.state.builder, &end, YieldOperation.operands(&[]));
+        mlir_op_void!(context.state, &end, YieldOperation.operands(&[]));
         context.region_pointer = saved_region;
     }
 }

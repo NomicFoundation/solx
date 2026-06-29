@@ -71,7 +71,7 @@ impl InheritedFunctionCall {
         } = self
             .arguments
             .emit_as(&function.parameter_types, context, block);
-        let results = function.call(&argument_values, &context.state.builder, &block);
+        let results = function.call(&argument_values, context.state, &block);
         BlockAnd {
             value: results,
             block,

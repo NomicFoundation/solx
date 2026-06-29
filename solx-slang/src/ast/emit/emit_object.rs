@@ -32,13 +32,12 @@ pub trait EmitObject {
         kind: ContractKind,
         block: &BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
-        let builder = &context.builder;
         mlir_region_op!(
-            builder,
+            context,
             block,
             ContractOperation
-                .sym_name(StringAttribute::new(builder.context, name))
-                .kind(kind.attribute(builder.context))
+                .sym_name(StringAttribute::new(context.mlir(), name))
+                .kind(kind.attribute(context.mlir()))
             ; body_region
         )
     }
@@ -51,11 +50,8 @@ pub trait EmitObject {
         functions: impl IntoIterator<Item = (FunctionDefinition, String)>,
     ) {
         for (function, symbol) in functions {
-            let (parameter_types, return_types) = Type::resolve_signature(
-                &function,
-                LocationPolicy::Declared(None),
-                &context.builder,
-            );
+            let (parameter_types, return_types) =
+                Type::resolve_signature(&function, LocationPolicy::Declared(None), context);
             context.register_function_signature(
                 function.node_id(),
                 symbol,

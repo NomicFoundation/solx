@@ -49,12 +49,12 @@ statement_emit!(EmitStatementNode; |node, context, block| {
                 .get_type()
                 .expect("slang validated"),
             LocationPolicy::Declared(None),
-            &context.state.builder,
+            context.state,
         );
         let value = value
             .cast(
                 AstType::new(parameter_type),
-                &context.state.builder,
+                context.state,
                 &current_block,
             )
             .into_mlir();
@@ -74,7 +74,7 @@ statement_emit!(EmitStatementNode; |node, context, block| {
                 .expect("slang validated"),
         )
     };
-    let builder = &context.state.builder;
+    let state = context.state;
     let combined_arguments: Vec<Value<'context, 'block>> = indexed_arguments
         .iter()
         .chain(non_indexed_arguments.iter())
@@ -83,14 +83,14 @@ statement_emit!(EmitStatementNode; |node, context, block| {
     let indexed_count = i8::try_from(indexed_arguments.len())
         .expect("slang validated");
     let indexed_count_attribute = IntegerAttribute::new(
-        Type::from(IntegerType::new(builder.context, 8)),
+        Type::from(IntegerType::new(state.mlir(), 8)),
         indexed_count.into(),
     );
-    let mut emit_builder = EmitOperation::builder(builder.context, builder.unknown_location)
+    let mut emit_builder = EmitOperation::builder(state.mlir(), state.location())
         .args(&combined_arguments)
         .indexed_args_count(indexed_count_attribute);
     if let Some(signature) = signature.as_deref() {
-        emit_builder = emit_builder.signature(StringAttribute::new(builder.context, signature));
+        emit_builder = emit_builder.signature(StringAttribute::new(state.mlir(), signature));
     }
     current_block.append_operation(emit_builder.build().into());
     Some(current_block)

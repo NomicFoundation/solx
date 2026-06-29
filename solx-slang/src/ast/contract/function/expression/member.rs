@@ -82,18 +82,18 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for MemberAccessExpre
             value: base_value,
             block,
         } = base.emit(context, block);
-        let builder = &context.state.builder;
+        let state = context.state;
 
         let index_value = AstValue::constant(
             field_index as i64,
-            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
-            builder,
+            AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_X64),
+            state,
             &block,
         );
         let element_type = base_value.r#type().element_type(field_index);
         let address = base_value
             .into_pointer()
-            .gep(index_value, element_type, false, builder, &block)
+            .gep(index_value, element_type, false, state, &block)
             .into_mlir();
         BlockAnd {
             value: Place {
@@ -131,7 +131,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 let value = context
                     .state
                     .resolve_function(function_definition.node_id())
-                    .pointer_constant(&context.state.builder, &block);
+                    .pointer_constant(context.state, &block);
                 return BlockAnd { block, value };
             }
             _ => {}
@@ -140,7 +140,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
     match node.member().resolve_to_built_in() {
         Some(builtin @ (BuiltIn::TypeMin | BuiltIn::TypeMax)) => {
             let result_type =
-                AstType::resolve_optional(node.get_type(), &context.state.builder)
+                AstType::resolve_optional(node.get_type(), context.state)
                     .expect("slang validated");
             let integer_type = IntegerType::try_from(result_type).expect("slang validated");
             let bits = AstType::new(result_type).integer_bit_width() as usize;
@@ -154,7 +154,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             let value = AstValue::constant_from_bigint(
                 &integer,
                 AstType::new(result_type),
-                &context.state.builder,
+                context.state,
                 &block,
             );
             return BlockAnd { block, value };
@@ -173,7 +173,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 unreachable!("type(E).min/max resolves to an enum definition");
             };
             let result_type =
-                AstType::resolve_optional(node.get_type(), &context.state.builder)
+                AstType::resolve_optional(node.get_type(), context.state)
                     .expect("slang validated");
             let member_count = enum_definition.members().iter().count();
             let ordinal = match builtin {
@@ -181,9 +181,9 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 BuiltIn::TypeEnumMax => member_count.saturating_sub(1) as i64,
                 _ => unreachable!("dispatched on TypeEnumMin / TypeEnumMax"),
             };
-            let builder = &context.state.builder;
-            let value = AstValue::uint256(ordinal, builder, &block)
-                .cast(AstType::new(result_type), builder, &block);
+            let state = context.state;
+            let value = AstValue::uint256(ordinal, state, &block)
+                .cast(AstType::new(result_type), state, &block);
             return BlockAnd { block, value };
         }
         Some(BuiltIn::TypeInterfaceId) => {
@@ -207,15 +207,15 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     _ => None,
                 })
                 .fold(0u32, |interface_id, selector| interface_id ^ selector);
-            let builder = &context.state.builder;
-            let integer_type = Type::from(IntegerType::unsigned(builder.context, 32));
+            let state = context.state;
+            let integer_type = Type::from(IntegerType::unsigned(state.mlir(), 32));
             let value = AstValue::constant_from_bigint(
                 &BigInt::from(interface_id),
                 AstType::new(integer_type),
-                builder,
+                state,
                 &block,
             )
-            .cast(AstType::fixed_bytes(builder.context, 4), builder, &block);
+            .cast(AstType::fixed_bytes(state.mlir(), 4), state, &block);
             return BlockAnd { block, value };
         }
         Some(BuiltIn::TypeName) => {
@@ -231,7 +231,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 Some(Definition::Interface(interface)) => interface.name().name(),
                 _ => unreachable!("type(C).name resolves to a contract or interface"),
             };
-            let value = AstValue::string_literal(&type_name, &context.state.builder, &block);
+            let value = AstValue::string_literal(&type_name, context.state, &block);
             return BlockAnd { block, value };
         }
         Some(builtin @ (BuiltIn::TypeCreationCode | BuiltIn::TypeRuntimeCode)) => {
@@ -257,14 +257,14 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 _ => contract_name,
             };
             context.state.add_dependency(object_name.clone());
-            let result_type = AstType::resolve_optional(node.get_type(), &context.state.builder)
+            let result_type = AstType::resolve_optional(node.get_type(), context.state)
                 .expect("slang validated");
-            let builder = &context.state.builder;
+            let state = context.state;
             let value: MlirValue<'context, 'block> = mlir_op!(
-                builder,
+                state,
                 &block,
                 ObjectCodeOperation
-                    .obj_name(StringAttribute::new(builder.context, &object_name))
+                    .obj_name(StringAttribute::new(state.mlir(), &object_name))
                     .out(result_type)
             );
             return BlockAnd {
@@ -277,13 +277,13 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 value: address,
                 block,
             } = node.operand().emit(context, block);
-            let builder = &context.state.builder;
+            let state = context.state;
             let value: MlirValue<'context, 'block> = mlir_op!(
-                builder,
+                state,
                 &block,
                 BalanceOperation
                     .cont_addr(address.into_mlir())
-                    .out(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+                    .out(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
             );
             return BlockAnd {
                 block,
@@ -295,13 +295,13 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 value: address,
                 block,
             } = node.operand().emit(context, block);
-            let builder = &context.state.builder;
+            let state = context.state;
             let value: MlirValue<'context, 'block> = mlir_op!(
-                builder,
+                state,
                 &block,
                 CodeHashOperation
                     .cont_addr(address.into_mlir())
-                    .out(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+                    .out(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
             );
             return BlockAnd {
                 block,
@@ -313,13 +313,13 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 value: address,
                 block,
             } = node.operand().emit(context, block);
-            let builder = &context.state.builder;
+            let state = context.state;
             let value: MlirValue<'context, 'block> = mlir_op!(
-                builder,
+                state,
                 &block,
                 CodeOperation
                     .cont_addr(address.into_mlir())
-                    .out(AstType::string(builder.context, DataLocation::Memory))
+                    .out(AstType::string(state.mlir(), DataLocation::Memory))
             );
             return BlockAnd {
                 block,
@@ -332,7 +332,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 block,
             } = node.operand().emit(context, block);
             return BlockAnd {
-                value: operand.length(&context.state.builder, &block),
+                value: operand.length(context.state, &block),
                 block,
             };
         }
@@ -349,8 +349,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 value: _operand,
                 block,
             } = node.operand().emit(context, block);
-            let builder = &context.state.builder;
-            let value = AstValue::uint256(0, builder, &block);
+            let state = context.state;
+            let value = AstValue::uint256(0, state, &block);
             return BlockAnd { block, value };
         }
         Some(
@@ -363,70 +363,70 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             | BuiltIn::Wrap
             | BuiltIn::Unwrap,
         ) => {
-            let builder = &context.state.builder;
-            let value = AstValue::uint256(0, builder, &block);
+            let state = context.state;
+            let value = AstValue::uint256(0, state, &block);
             return BlockAnd { block, value };
         }
         _ => {}
     }
-    let builder = &context.state.builder;
+    let state = context.state;
     let environment_op = match node.member().resolve_to_built_in() {
         Some(BuiltIn::TxOrigin) => {
-            Some(mlir_op_build!(builder, OriginOperation.addr(AstType::address(builder.context, false))))
+            Some(mlir_op_build!(state, OriginOperation.addr(AstType::address(state.mlir(), false))))
         }
         Some(BuiltIn::TxGasPrice) => Some(mlir_op_build!(
-            builder,
-            GasPriceOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+            state,
+            GasPriceOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::MsgSender) => {
-            Some(mlir_op_build!(builder, CallerOperation.addr(AstType::address(builder.context, false))))
+            Some(mlir_op_build!(state, CallerOperation.addr(AstType::address(state.mlir(), false))))
         }
         Some(BuiltIn::MsgValue) => Some(mlir_op_build!(
-            builder,
-            CallValueOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+            state,
+            CallValueOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::BlockTimestamp) => Some(mlir_op_build!(
-            builder,
-            TimestampOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+            state,
+            TimestampOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::BlockNumber) => Some(mlir_op_build!(
-            builder,
-            BlockNumberOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+            state,
+            BlockNumberOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::BlockCoinbase) => {
-            Some(mlir_op_build!(builder, CoinbaseOperation.addr(AstType::address(builder.context, false))))
+            Some(mlir_op_build!(state, CoinbaseOperation.addr(AstType::address(state.mlir(), false))))
         }
         Some(BuiltIn::BlockChainid) => Some(mlir_op_build!(
-            builder,
-            ChainIdOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+            state,
+            ChainIdOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::BlockBasefee) => Some(mlir_op_build!(
-            builder,
-            BaseFeeOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+            state,
+            BaseFeeOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::BlockGaslimit) => Some(mlir_op_build!(
-            builder,
-            GasLimitOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+            state,
+            GasLimitOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::BlockBlobbasefee) => Some(mlir_op_build!(
-            builder,
-            BlobBaseFeeOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+            state,
+            BlobBaseFeeOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::BlockDifficulty) => Some(mlir_op_build!(
-            builder,
-            DifficultyOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+            state,
+            DifficultyOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::BlockPrevrandao) => Some(mlir_op_build!(
-            builder,
-            PrevRandaoOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+            state,
+            PrevRandaoOperation.val(AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_FIELD))
         )),
         Some(BuiltIn::MsgSig) => Some(mlir_op_build!(
-            builder,
-            SigOperation.val(AstType::fixed_bytes(builder.context, 4))
+            state,
+            SigOperation.val(AstType::fixed_bytes(state.mlir(), 4))
         )),
         Some(BuiltIn::MsgData) => Some(mlir_op_build!(
-            builder,
-            GetCallDataOperation.addr(AstType::string(builder.context, DataLocation::CallData))
+            state,
+            GetCallDataOperation.addr(AstType::string(state.mlir(), DataLocation::CallData))
         )),
         _ => None,
     };
@@ -451,7 +451,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
         } = node.emit_place(context, block);
         let value = Pointer::new(address).load(
             AstType::new(element_type),
-            &context.state.builder,
+            context.state,
             &block,
         );
         BlockAnd { block, value }
@@ -468,11 +468,11 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             .position(|member| member.node_id() == member_definition.node_id()),
         _ => None,
     } {
-        let result_type = AstType::resolve_optional(node.get_type(), &context.state.builder)
+        let result_type = AstType::resolve_optional(node.get_type(), context.state)
             .expect("slang validated");
-        let builder = &context.state.builder;
-        let value = AstValue::uint256(ordinal as i64, builder, &block)
-            .cast(AstType::new(result_type), builder, &block);
+        let state = context.state;
+        let value = AstValue::uint256(ordinal as i64, state, &block)
+            .cast(AstType::new(result_type), state, &block);
         BlockAnd { block, value }
     } else {
         let selector_constant = match node.member().resolve_to_built_in() {
@@ -514,7 +514,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 block
             };
             let value =
-                AstValue::selector_constant(&selector, byte_width, &context.state.builder, &block);
+                AstValue::selector_constant(&selector, byte_width, context.state, &block);
             return BlockAnd { block, value };
         }
         match node.member().resolve_to_built_in() {
@@ -523,7 +523,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     value: operand_value,
                     block,
                 } = node.operand().emit(context, block);
-                let value = operand_value.ext_func_selector(&context.state.builder, &block);
+                let value = operand_value.ext_func_selector(context.state, &block);
                 BlockAnd { block, value }
             }
             Some(BuiltIn::FunctionAddress) => {
@@ -531,7 +531,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     value: operand_value,
                     block,
                 } = node.operand().emit(context, block);
-                let value = operand_value.ext_func_address(&context.state.builder, &block);
+                let value = operand_value.ext_func_address(context.state, &block);
                 BlockAnd { block, value }
             }
             _ => {
@@ -542,13 +542,13 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                         Some(library.name().name()),
                     );
                     let value =
-                        AstValue::library_address(&name, &context.state.builder, &block);
+                        AstValue::library_address(&name, context.state, &block);
                     return BlockAnd { block, value };
                 }
                 if let Some(Definition::StateVariable(state_variable)) = &member_definition {
-                    let builder = &context.state.builder;
+                    let state = context.state;
                     let Some((parameter_types, return_types)) =
-                        state_variable.getter_signature(builder)
+                        state_variable.getter_signature(state)
                     else {
                         unreachable!(
                             "a function pointer to a public accessor with no returnable members is invalid"
@@ -564,7 +564,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                         selector,
                         &parameter_types,
                         &return_types,
-                        &context.state.builder,
+                        context.state,
                         &block,
                     );
                     return BlockAnd { block, value };
@@ -576,7 +576,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     let (parameter_types, return_types) = AstType::resolve_signature(
                         &function_definition,
                         LocationPolicy::ForceMemory,
-                        &context.state.builder,
+                        context.state,
                     );
                     let BlockAnd {
                         value: receiver,
@@ -587,7 +587,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                         selector,
                         &parameter_types,
                         &return_types,
-                        &context.state.builder,
+                        context.state,
                         &block,
                     );
                     BlockAnd { block, value }
@@ -595,7 +595,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     let value = context
                         .state
                         .resolve_function(function_definition.node_id())
-                        .pointer_constant(&context.state.builder, &block);
+                        .pointer_constant(context.state, &block);
                     BlockAnd { block, value }
                 }
             }

@@ -105,17 +105,17 @@ impl TryNewExpression {
             value: contract_value,
             block: current_block,
         } = creation.emit(context, call_value, salt, true, current_block);
-        let builder = &context.state.builder;
-        let ui160 = AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_ETH_ADDRESS);
+        let state = context.state;
+        let ui160 = AstType::unsigned(state.mlir(), solx_utils::BIT_LENGTH_ETH_ADDRESS);
         let address = AstValue::from(contract_value).cast(
-            AstType::address(builder.context, false),
-            builder,
+            AstType::address(state.mlir(), false),
+            state,
             &current_block,
         );
-        let as_ui160 = address.cast(ui160, builder, &current_block);
-        let zero = AstValue::constant(0, ui160, builder, &current_block);
+        let as_ui160 = address.cast(ui160, state, &current_block);
+        let zero = AstValue::constant(0, ui160, state, &current_block);
         let status = as_ui160
-            .compare(zero, CmpPredicate::Ne, builder, &current_block)
+            .compare(zero, CmpPredicate::Ne, state, &current_block)
             .into_mlir();
         (status, vec![contract_value], current_block)
     }
