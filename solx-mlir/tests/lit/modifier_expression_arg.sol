@@ -7,18 +7,18 @@
 // CHECK-NEXT: sol.constant 7
 // CHECK-NEXT: sol.cast
 // CHECK-NEXT: sol.cadd %[[B]], %{{.*}} : ui256
-// CHECK-NEXT: sol.call @{{.*onlyPos.*}}(%{{.*}}) : (ui256) -> ()
+// CHECK-NEXT: sol.call @{{.*onlyPositive.*}}(%{{.*}}) : (ui256) -> ()
 // CHECK-NEXT: }
 // CHECK: sol.return
-// CHECK: sol.modifier @{{.*onlyPos.*}}(%arg0: ui256) {
+// CHECK: sol.modifier @{{.*onlyPositive.*}}(%arg0: ui256) {
 
 contract C {
-    modifier onlyPos(uint256 v) {
+    modifier onlyPositive(uint256 v) {
         require(v > 0);
         _;
     }
 
-    function g(uint256 a, uint256 b) public onlyPos(b + 7) returns (uint256) {
+    function g(uint256 a, uint256 b) public onlyPositive(b + 7) returns (uint256) {
         return a;
     }
 }

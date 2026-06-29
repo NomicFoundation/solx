@@ -7,10 +7,10 @@
 // CHECK:   %[[V:.*]] = sol.cast %[[C]] : ui8 to ui256
 // CHECK:   sol.return %[[V]] : ui256
 
-library Lib {
+library Library {
     uint256 internal constant BASE = 7;
 }
 
 contract C {
-    uint256 public constant DERIVED = Lib.BASE;
+    uint256 public constant DERIVED = Library.BASE;
 }

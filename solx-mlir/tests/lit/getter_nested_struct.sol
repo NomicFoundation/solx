@@ -11,6 +11,8 @@
 
 contract C {
     struct I { uint256 v; }
+
     struct S { uint256 a; I i; }
+
     S public s;
 }

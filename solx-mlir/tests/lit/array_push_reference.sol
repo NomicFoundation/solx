@@ -8,9 +8,10 @@
 
 contract C {
     struct S { uint256 a; uint256 b; }
-    S[] arr;
+
+    S[] array;
 
     function f(S memory s) external {
-        arr.push(s);
+        array.push(s);
     }
 }

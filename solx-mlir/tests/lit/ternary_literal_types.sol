@@ -1,7 +1,7 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK-LABEL: sol.func @{{.*lits.*}}(%{{.*}}: i1) -> ui256
+// CHECK-LABEL: sol.func @{{.*literals.*}}(%{{.*}}: i1) -> ui256
 // CHECK: %[[S:.*]] = sol.alloca : !sol.ptr<ui8, Stack>
 // CHECK: sol.if %{{.*}} {
 // CHECK:   sol.constant 1 : ui8
@@ -25,6 +25,7 @@
 // CHECK: sol.load %[[SS]] : !sol.ptr<!sol.string<Memory>, Stack>, !sol.string<Memory>
 
 contract C {
-    function lits(bool c) public pure returns (uint256) { return c ? 1 : 2; }
+    function literals(bool c) public pure returns (uint256) { return c ? 1 : 2; }
+
     function pick(bool c) public pure returns (string memory) { return c ? "yes" : "no"; }
 }

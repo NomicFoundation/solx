@@ -20,14 +20,22 @@ contract C {
     type B is bool;
 
     function id_a(A x) public pure returns (A) { return x; }
+
     function id_b(B x) public pure returns (B) { return x; }
+
     function id_s(S x) public pure returns (S) { return x; }
+
     function id_u(U x) public pure returns (U) { return x; }
 
     function unwrap_a(A x) public pure returns (address) { return A.unwrap(x); }
+
     function unwrap_s(S x) public pure returns (int8) { return S.unwrap(x); }
+
     function unwrap_u(U x) public pure returns (uint256) { return U.unwrap(x); }
+
     function wrap_a(address x) public pure returns (A) { return A.wrap(x); }
+
     function wrap_s(int8 x) public pure returns (S) { return S.wrap(x); }
+
     function wrap_u(uint256 x) public pure returns (U) { return U.wrap(x); }
 }

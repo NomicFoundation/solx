@@ -12,6 +12,7 @@
 // CHECK:   sol.return %[[V0]], %[[V3]] : ui256, !sol.address
 
 contract C {
-    struct S { uint256 a; mapping(uint256 => uint256) m; uint256[] arr; address b; }
+    struct S { uint256 a; mapping(uint256 => uint256) m; uint256[] array; address b; }
+
     S public s;
 }

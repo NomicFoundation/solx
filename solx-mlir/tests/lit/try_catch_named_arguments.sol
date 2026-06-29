@@ -12,8 +12,8 @@ contract A {
 }
 
 contract C {
-    function f(A inst) external returns (uint256) {
-        try inst.g({b: 11, a: 99}) returns (uint256 r) {
+    function f(A instance) external returns (uint256) {
+        try instance.g({b: 11, a: 99}) returns (uint256 r) {
             return r;
         } catch {
             return 0;

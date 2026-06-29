@@ -7,7 +7,7 @@ contract C {
     uint256 public value;
 
     function getterPointer() external view returns (uint256) {
-        function() external view returns (uint256) fp = this.value;
-        return fp();
+        function() external view returns (uint256) functionPointer = this.value;
+        return functionPointer();
     }
 }

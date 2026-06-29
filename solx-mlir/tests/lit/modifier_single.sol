@@ -13,6 +13,7 @@
 
 contract C {
     bool locked;
+
     modifier nonReentrant() {
         _;
     }

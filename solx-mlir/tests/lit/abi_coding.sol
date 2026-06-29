@@ -25,12 +25,20 @@
 
 contract C {
     function decode(bytes memory data) public pure returns (uint256) { return abi.decode(data, (uint256)); }
+
     function decodeMulti(bytes memory data) public pure returns (uint256, bool, bytes32) { return abi.decode(data, (uint256, bool, bytes32)); }
+
     function encode(uint256 x, address y) public pure returns (bytes memory) { return abi.encode(x, y); }
+
     function encodePacked(uint256 x, address y) public pure returns (bytes memory) { return abi.encodePacked(x, y); }
+
     function encodePackedMixed(string memory s, uint8 n, bytes memory b) public pure returns (bytes memory) { return abi.encodePacked(s, n, b); }
+
     function encodeWithSelector(bytes4 s, uint256 x) public pure returns (bytes memory) { return abi.encodeWithSelector(s, x); }
+
     function encodeWithSelectorLiteral(uint256 x, address y, bool z) public pure returns (bytes memory) { return abi.encodeWithSelector(0x12345678, x, y, z); }
+
     function encodeWithSelectorTwo(bytes4 s, uint256 x, address y) public pure returns (bytes memory) { return abi.encodeWithSelector(s, x, y); }
+
     function encodeWithSignature(uint256 x) public pure returns (bytes memory) { return abi.encodeWithSignature("foo(uint256)", x); }
 }

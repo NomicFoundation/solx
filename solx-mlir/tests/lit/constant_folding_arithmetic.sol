@@ -31,8 +31,12 @@ contract C {
     uint256 constant E = 1 << 100;
 
     function ra() public pure returns (uint256) { return A; }
+
     function rb() public pure returns (uint256) { return B; }
+
     function rc() public pure returns (uint256) { return C2; }
+
     function rd() public pure returns (uint8) { return D; }
+
     function re() public pure returns (uint256) { return E; }
 }

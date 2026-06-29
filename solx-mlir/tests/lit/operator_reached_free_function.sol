@@ -12,6 +12,9 @@
 
 type T is int32;
 using {add as +} for T global;
+
 function helper(T x) pure returns (T) { return x; }
+
 function add(T x, T y) pure returns (T) { return helper(x); }
+
 contract C { function f(T x, T y) public pure returns (T) { return x + y; } }

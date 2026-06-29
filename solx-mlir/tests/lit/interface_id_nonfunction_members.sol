@@ -9,6 +9,7 @@
 interface I {
     event Ping(uint256 x);
     error Bad(uint256 y);
+
     function ping() external returns (uint256);
 }
 

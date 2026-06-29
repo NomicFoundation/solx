@@ -30,8 +30,12 @@ contract C {
     bytes4 e;
 
     function getA() public view returns (uint8) { return a; }
+
     function getD() public view returns (address) { return d; }
+
     function setB(uint16 v) public { b = v; }
+
     function setC(bool v) public { c = v; }
+
     function setE(bytes4 v) public { e = v; }
 }

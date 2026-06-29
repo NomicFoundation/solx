@@ -16,9 +16,11 @@
 
 contract C {
     function a() internal pure returns (uint) { return 1; }
+
     function b() internal pure returns (uint) { return 2; }
-    function f(bool cond) public pure returns (uint) {
-        function() internal pure returns (uint) fp = cond ? a : b;
-        return fp();
+
+    function f(bool condition) public pure returns (uint) {
+        function() internal pure returns (uint) functionPointer = condition ? a : b;
+        return functionPointer();
     }
 }

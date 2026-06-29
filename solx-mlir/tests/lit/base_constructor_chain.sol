@@ -26,6 +26,7 @@
 
 contract A {
     uint256 a;
+
     constructor(uint256 va) {
         a = va;
     }
@@ -33,6 +34,7 @@ contract A {
 
 contract B is A {
     uint256 bb = 7;
+
     constructor(uint256 vb) A(vb + 10) {
         bb = vb;
     }

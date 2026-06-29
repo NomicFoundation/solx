@@ -9,6 +9,7 @@
 
 contract C {
     uint256 public received;
+
     fallback() external payable {
         received = received + msg.value;
     }

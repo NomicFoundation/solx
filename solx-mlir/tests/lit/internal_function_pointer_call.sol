@@ -12,7 +12,7 @@ contract C {
     }
 
     function run() public returns (uint256) {
-        function () internal returns (uint256) fp = g;
-        return fp();
+        function () internal returns (uint256) functionPointer = g;
+        return functionPointer();
     }
 }

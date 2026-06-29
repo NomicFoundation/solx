@@ -23,8 +23,12 @@ contract C {
     uint8 small;
 
     function getBalance() public view returns (uint96) { return balance; }
+
     function getSmall() public view returns (uint8) { return small; }
+
     function getOwner() public view returns (address) { return owner; }
+
     function getTotal() public view returns (uint256) { return total; }
+
     function getFlag() public view returns (bool) { return flag; }
 }

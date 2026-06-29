@@ -11,8 +11,8 @@ contract C {
     }
 
     function reset() public pure returns (uint256) {
-        function() internal pure returns (uint256) fp = g;
-        delete fp;
-        return fp == g ? 1 : 0;
+        function() internal pure returns (uint256) functionPointer = g;
+        delete functionPointer;
+        return functionPointer == g ? 1 : 0;
     }
 }

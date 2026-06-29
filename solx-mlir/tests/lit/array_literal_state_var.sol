@@ -8,7 +8,7 @@
 // CHECK: sol.array_lit %{{.*}}, %{{.*}}, %{{.*}} : (ui8, ui8, ui8) -> !sol.array<3 x ui8, Memory>
 // CHECK: sol.copy %{{.*}}, %{{.*}} : !sol.array<3 x ui8, Memory>, !sol.array<3 x ui256, Storage>
 
-contract ArrayLitStateVar {
+contract ArrayLiteralStateVariable {
     uint256[3] data = [1, 2, 3];
 
     function first() public view returns (uint256) {

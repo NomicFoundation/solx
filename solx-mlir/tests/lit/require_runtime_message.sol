@@ -7,7 +7,7 @@
 // CHECK:   sol.require %{{.*}}, "Error(string)"(%{{.*}} : !sol.string<Memory>) {call}
 
 contract C {
-    function check(bool cond, string memory message) public pure {
-        require(cond, message);
+    function check(bool condition, string memory message) public pure {
+        require(condition, message);
     }
 }

@@ -4,7 +4,7 @@
 // (a, b) = f ? (1, 2) : (3, 4) destructure store order: solx casts/stores right-to-left (b
 // before a); solc print-init casts/stores left-to-right (a before b).
 
-// CHECK: sol.func @{{.*}}cond{{.*}}(%arg0: i1) -> (ui256, ui256)
+// CHECK: sol.func @{{.*}}condition{{.*}}(%arg0: i1) -> (ui256, ui256)
 // CHECK: %[[A:.*]] = sol.alloca : !sol.ptr<ui256, Stack>
 // CHECK: %[[B:.*]] = sol.alloca : !sol.ptr<ui256, Stack>
 // CHECK: sol.if
@@ -20,7 +20,7 @@
 // CHECK-SOLC: sol.store %[[S1]], %[[B]] : ui256, !sol.ptr<ui256, Stack>
 
 contract C {
-    function cond(bool f) public pure returns (uint256, uint256) {
+    function condition(bool f) public pure returns (uint256, uint256) {
         uint256 a; uint256 b;
         (a, b) = f ? (1, 2) : (3, 4);
         return (a, b);

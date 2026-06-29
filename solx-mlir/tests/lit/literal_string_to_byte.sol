@@ -11,6 +11,7 @@
 
 contract C {
     bytes data;
+
     function f() public {
         data[0] = "x";
     }

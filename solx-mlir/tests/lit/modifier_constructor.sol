@@ -14,6 +14,7 @@
 
 contract C {
     uint256 x = 5;
+
     modifier setup(uint256 v) {
         require(v > 0);
         _;

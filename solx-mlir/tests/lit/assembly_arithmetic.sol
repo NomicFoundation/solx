@@ -1,7 +1,7 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @{{.*arith.*}}
+// CHECK: sol.func @{{.*arithmetic.*}}
 // CHECK: yul.add
 // CHECK: yul.mul
 // CHECK: yul.sub
@@ -17,7 +17,7 @@
 // CHECK: yul.mulmod
 
 contract C {
-    function arith(uint256 a, uint256 b) public pure returns (uint256 r) {
+    function arithmetic(uint256 a, uint256 b) public pure returns (uint256 r) {
         assembly {
             r := add(a, b)
             r := mul(r, b)

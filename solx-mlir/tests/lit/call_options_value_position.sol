@@ -16,7 +16,7 @@ interface I {
 
 contract C {
     function g(I i, uint256 v) external returns (uint256) {
-        function() external payable returns (uint256) fp = i.f{value: v};
-        return fp();
+        function() external payable returns (uint256) functionPointer = i.f{value: v};
+        return functionPointer();
     }
 }

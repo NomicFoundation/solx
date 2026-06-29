@@ -5,7 +5,7 @@
 // CHECK:   %[[COND:.*]] = sol.cmp gt
 // CHECK:   sol.require %[[COND]]
 
-// CHECK: sol.func @{{.*check_msg.*}}
+// CHECK: sol.func @{{.*check_message.*}}
 // CHECK:   %[[COND:.*]] = sol.cmp gt
 // CHECK:   sol.require %[[COND]]
 
@@ -15,7 +15,7 @@ contract C {
         return x;
     }
 
-    function check_msg(uint256 x) public pure returns (uint256) {
+    function check_message(uint256 x) public pure returns (uint256) {
         require(x > 0, "must be positive");
         return x;
     }

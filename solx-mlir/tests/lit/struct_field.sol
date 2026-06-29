@@ -31,7 +31,9 @@
 
 contract C {
     struct Inner { uint256 a; uint256 b; }
+
     struct Outer { Inner inner; uint256 extra; }
+
     Inner data;
 
     function readCalldata(Inner calldata s) external pure returns (uint256) {

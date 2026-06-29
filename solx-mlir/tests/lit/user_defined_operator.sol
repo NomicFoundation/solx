@@ -26,14 +26,23 @@
 type T is uint256;
 
 function add(T a, T b) pure returns (T) { return T.wrap(T.unwrap(a) + T.unwrap(b)); }
+
 function sub(T a, T b) pure returns (T) { return T.wrap(T.unwrap(a) - T.unwrap(b)); }
+
 function mul(T a, T b) pure returns (T) { return T.wrap(T.unwrap(a) * T.unwrap(b)); }
+
 function div(T a, T b) pure returns (T) { return T.wrap(T.unwrap(a) / T.unwrap(b)); }
+
 function rem(T a, T b) pure returns (T) { return T.wrap(T.unwrap(a) % T.unwrap(b)); }
+
 function band(T a, T b) pure returns (T) { return T.wrap(T.unwrap(a) & T.unwrap(b)); }
+
 function bor(T a, T b) pure returns (T) { return T.wrap(T.unwrap(a) | T.unwrap(b)); }
+
 function bxor(T a, T b) pure returns (T) { return T.wrap(T.unwrap(a) ^ T.unwrap(b)); }
+
 function bnot(T a) pure returns (T) { return T.wrap(~T.unwrap(a)); }
+
 function neg(T a) pure returns (T) { return T.wrap(0 - T.unwrap(a)); }
 
 using {add as +, sub as -, mul as *, div as /, rem as %, band as &, bor as |, bxor as ^, bnot as ~, neg as -} for T global;

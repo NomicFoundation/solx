@@ -15,5 +15,6 @@
 
 contract C {
     struct Point { uint256 x; uint256 y; }
+
     Point public origin;
 }

@@ -2,7 +2,7 @@
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s --check-prefixes=CHECK,CHECK-SOLC
 
 // inherited()'s virtual checked: solx binds the Derived override (cmp ne); solc print-init binds the Base modifier (cmp gt), same one qualified()'s Base.checked uses.
-// solx emits funcs then modifiers; solc interleaves func, modifier.
+// solx emits functions then modifiers; solc interleaves function, modifier.
 
 // CHECK: sol.contract @Derived
 

@@ -5,26 +5,26 @@
 // pointer; solc materializes a zero_init sol.malloc Memory buffer and sol.copy's
 // it over storage.
 
-// CHECK: sol.func @{{.*}}delArr
-// CHECK-NEXT: sol.addr_of @arr_{{[0-9]+}} : !sol.array<? x ui256, Storage>
+// CHECK: sol.func @{{.*}}deleteArray
+// CHECK-NEXT: sol.addr_of @array_{{[0-9]+}} : !sol.array<? x ui256, Storage>
 // CHECK-SOLX-NEXT: sol.delete %{{.*}} : !sol.array<? x ui256, Storage>
 // CHECK-SOLC-NEXT: sol.malloc zero_init : !sol.array<? x ui256, Memory>
 // CHECK-SOLC-NEXT: sol.copy %{{.*}}, %{{.*}} : !sol.array<? x ui256, Memory>, !sol.array<? x ui256, Storage>
 
 contract C {
-    uint256[] arr;
+    uint256[] array;
     uint256 x;
     mapping(uint256 => uint256) m;
 
-    function delArr() public {
-        delete arr;
+    function deleteArray() public {
+        delete array;
     }
 
-    function delScalar() public {
+    function deleteScalar() public {
         delete x;
     }
 
-    function delMapElem() public {
+    function deleteMapElement() public {
         delete m[3];
     }
 }

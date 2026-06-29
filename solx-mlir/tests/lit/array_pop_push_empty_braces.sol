@@ -8,13 +8,13 @@
 // CHECK:   sol.push %{{.*}} : !sol.array<{{.*}}ui256, Storage>
 
 contract C {
-    uint256[] arr;
+    uint256[] array;
 
     function popEmpty() external {
-        arr.pop({});
+        array.pop({});
     }
 
     function pushEmpty() external {
-        arr.push({});
+        array.push({});
     }
 }

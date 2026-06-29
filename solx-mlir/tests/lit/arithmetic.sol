@@ -28,6 +28,9 @@
 // CHECK: sol.func @{{.*signed_div.*}}
 // CHECK:   sol.cdiv %{{.*}}, %{{.*}} : si256
 
+// CHECK: sol.func @{{.*signed_exp.*}}
+// CHECK:   sol.cexp %{{.*}}, %{{.*}} : si256, ui8 -> si256
+
 // CHECK: sol.func @{{.*unary_neg.*}}
 // CHECK:   %{{.*}} = sol.sub %{{.*}}, %{{.*}} : si256
 
@@ -81,6 +84,10 @@ contract C {
 
     function signed_div(int256 a, int256 b) public pure returns (int256) {
         return a / b;
+    }
+
+    function signed_exp(int256 a) public pure returns (int256) {
+        return a ** 3;
     }
 
     function unary_neg(int256 a) public pure returns (int256) {

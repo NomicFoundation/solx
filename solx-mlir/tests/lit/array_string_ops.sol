@@ -18,7 +18,7 @@
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
 
 contract C {
-    uint256[] arr;
+    uint256[] array;
     bytes data;
 
     function makeLiteral(uint256 a, uint256 b, uint256 c) public pure returns (uint256[3] memory) {
@@ -30,14 +30,14 @@ contract C {
     }
 
     function popLast() public {
-        arr.pop();
+        array.pop();
     }
 
     function pushEmpty() public {
-        arr.push();
+        array.push();
     }
 
     function pushValue(uint256 x) public {
-        arr.push(x);
+        array.push(x);
     }
 }

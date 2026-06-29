@@ -15,8 +15,10 @@
 
 contract C {
     function am() public pure returns (uint256) { return addmod(2, 3, 5); }
+
     function ec() public pure returns (address) {
         return ecrecover(bytes32(uint256(1)), 27, bytes32(uint256(2)), bytes32(uint256(3)));
     }
+
     function mm() public pure returns (uint256) { return mulmod(2, 3, 5); }
 }

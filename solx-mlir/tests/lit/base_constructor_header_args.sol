@@ -15,6 +15,7 @@
 
 contract Base {
     uint256 b;
+
     constructor(uint256 v) {
         b = v;
     }

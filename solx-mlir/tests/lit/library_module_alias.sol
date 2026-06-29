@@ -17,5 +17,6 @@ library L {
 
 contract C {
     function a() public view returns (bool) { return address(M.L) == address(0); }
+
     function g(uint256 v) public view returns (uint256) { return M.L.f(v); }
 }

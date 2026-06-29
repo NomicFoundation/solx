@@ -10,6 +10,8 @@
 
 contract C {
     struct I { uint256 v; }
+
     struct S { I i; }
-    S[] public arr;
+
+    S[] public array;
 }

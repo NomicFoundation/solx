@@ -7,8 +7,9 @@
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
 
 contract C {
-    uint256 public lastLen;
+    uint256 public lastLength;
+
     fallback() external {
-        lastLen = msg.data.length;
+        lastLength = msg.data.length;
     }
 }

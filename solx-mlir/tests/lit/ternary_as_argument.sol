@@ -14,6 +14,7 @@
 
 contract C {
     function id(uint256 v) internal pure returns (uint256) { return v; }
+
     function asarg(bool c, uint256 a, uint256 b) public pure returns (uint256) {
         return id(c ? a : b);
     }

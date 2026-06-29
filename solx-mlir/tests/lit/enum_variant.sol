@@ -10,6 +10,8 @@
 
 contract C {
     enum E { A, B, C }
+
     function ev() public pure returns (E) { return E.B; }
+
     function evq() public pure returns (E) { return C.E.C; }
 }

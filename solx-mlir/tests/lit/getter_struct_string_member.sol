@@ -13,5 +13,6 @@
 
 contract C {
     struct S { uint256 a; string label; }
+
     S public s;
 }

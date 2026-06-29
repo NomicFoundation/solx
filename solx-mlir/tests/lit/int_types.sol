@@ -7,13 +7,13 @@
 // CHECK: sol.func @{{.*bool_return.*}}
 // CHECK:   %true = sol.constant true
 
-// CHECK: sol.func @{{.*int256_arith.*}}(%{{.*}}: si256, %{{.*}}: si256) -> si256
+// CHECK: sol.func @{{.*int256_arithmetic.*}}(%{{.*}}: si256, %{{.*}}: si256) -> si256
 // CHECK:   sol.cadd %{{.*}}, %{{.*}} : si256
 
-// CHECK: sol.func @{{.*uint128_arith.*}}(%{{.*}}: ui128, %{{.*}}: ui128) -> ui128
+// CHECK: sol.func @{{.*uint128_arithmetic.*}}(%{{.*}}: ui128, %{{.*}}: ui128) -> ui128
 // CHECK:   sol.cadd %{{.*}}, %{{.*}} : ui128
 
-// CHECK: sol.func @{{.*uint8_arith.*}}(%{{.*}}: ui8, %{{.*}}: ui8) -> ui8
+// CHECK: sol.func @{{.*uint8_arithmetic.*}}(%{{.*}}: ui8, %{{.*}}: ui8) -> ui8
 // CHECK:   sol.cadd %{{.*}}, %{{.*}} : ui8
 
 contract C {
@@ -25,15 +25,15 @@ contract C {
         return true;
     }
 
-    function int256_arith(int256 a, int256 b) public pure returns (int256) {
+    function int256_arithmetic(int256 a, int256 b) public pure returns (int256) {
         return a + b;
     }
 
-    function uint128_arith(uint128 a, uint128 b) public pure returns (uint128) {
+    function uint128_arithmetic(uint128 a, uint128 b) public pure returns (uint128) {
         return a + b;
     }
 
-    function uint8_arith(uint8 a, uint8 b) public pure returns (uint8) {
+    function uint8_arithmetic(uint8 a, uint8 b) public pure returns (uint8) {
         return a + b;
     }
 }

@@ -6,8 +6,8 @@
 contract C {
     string public name;
 
-    function ptr() external view returns (string memory) {
-        function() external view returns (string memory) fp = this.name;
-        return fp();
+    function pointer() external view returns (string memory) {
+        function() external view returns (string memory) functionPointer = this.name;
+        return functionPointer();
     }
 }

@@ -29,6 +29,8 @@ contract C {
     uint16 width;
 
     function bump() public { counter += 1; }
+
     function flip() public { toggled = !toggled; }
+
     function widen() public { width = width + 5; }
 }

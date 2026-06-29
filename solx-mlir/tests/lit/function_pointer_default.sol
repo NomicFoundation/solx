@@ -2,7 +2,7 @@
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s --check-prefixes=CHECK,CHECK-SOLC
 
 // internal_default's default_func_constant: solx types it to the pointer !sol.func_ref<(ui256) -> ui256>;
-// solc emits the generic !sol.func_ref<() -> ()> and leans on the store slot. The two emit the funcs in
+// solc emits the generic !sol.func_ref<() -> ()> and leans on the store slot. The two emit the functions in
 // opposite order, so each backend's body is checked under its own prefix in that order.
 
 // CHECK: sol.contract @C

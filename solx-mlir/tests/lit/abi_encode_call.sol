@@ -16,7 +16,7 @@ contract C {
 
     function g(uint256 a, bytes memory b) public {}
 
-    function viaPointer(function(uint256) external fp) public pure returns (bytes memory) {
-        return abi.encodeCall(fp, (7));
+    function viaPointer(function(uint256) external functionPointer) public pure returns (bytes memory) {
+        return abi.encodeCall(functionPointer, (7));
     }
 }

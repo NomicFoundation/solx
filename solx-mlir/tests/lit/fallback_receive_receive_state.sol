@@ -9,6 +9,7 @@
 
 contract C {
     uint256 public total;
+
     receive() external payable {
         total = total + msg.value;
     }

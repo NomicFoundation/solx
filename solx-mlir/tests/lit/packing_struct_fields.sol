@@ -25,9 +25,12 @@ contract C {
         bool c;
         address d;
     }
+
     Packed p;
 
     function readA() public view returns (uint8) { return p.a; }
+
     function readD() public view returns (address) { return p.d; }
+
     function writeB(uint16 v) public { p.b = v; }
 }

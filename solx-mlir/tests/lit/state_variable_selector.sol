@@ -8,6 +8,7 @@
 
 contract C {
     uint256 public value;
+
     function s() public view returns (bytes4) {
         return this.value.selector;
     }

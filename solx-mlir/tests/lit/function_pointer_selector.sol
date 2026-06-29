@@ -37,8 +37,8 @@ contract C {
         return this.bar.selector;
     }
 
-    function pointer_members(function() external fp) external pure returns (bytes4, address) {
-        return (fp.selector, fp.address);
+    function pointer_members(function() external functionPointer) external pure returns (bytes4, address) {
+        return (functionPointer.selector, functionPointer.address);
     }
 
     function error_selector() external pure returns (bytes4) {

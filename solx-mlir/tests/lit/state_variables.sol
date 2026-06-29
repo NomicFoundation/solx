@@ -35,13 +35,13 @@ contract C {
         return y;
     }
 
-    function set_x(uint256 val) public {
-        x = val;
+    function set_x(uint256 value) public {
+        x = value;
     }
 
     function swap() public {
-        uint256 tmp = x;
+        uint256 temporary = x;
         x = y;
-        y = tmp;
+        y = temporary;
     }
 }

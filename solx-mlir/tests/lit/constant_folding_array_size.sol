@@ -12,7 +12,7 @@ contract C {
     uint256 constant N = 3;
 
     function read() public pure returns (uint256) {
-        uint256[N * 2] memory arr;
-        return arr.length;
+        uint256[N * 2] memory array;
+        return array.length;
     }
 }

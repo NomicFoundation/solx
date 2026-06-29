@@ -6,7 +6,7 @@
 // CHECK:   sol.cadd %[[O]], %{{.*}} : ui256
 // CHECK:   sol.return %[[O]] : ui256
 
-// CHECK: sol.func @{{.*postIdx.*}}
+// CHECK: sol.func @{{.*postIndex.*}}
 // CHECK:   %[[O:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Storage>, ui256
 // CHECK:   sol.cadd %[[O]], %{{.*}} : ui256
 // CHECK:   sol.return %[[O]] : ui256
@@ -15,17 +15,22 @@
 // CHECK:   %[[N:.*]] = sol.csub %{{.*}}, %{{.*}} : ui256
 // CHECK:   sol.return %[[N]] : ui256
 
-// CHECK: sol.func @{{.*preIdx.*}}
+// CHECK: sol.func @{{.*preIndex.*}}
 // CHECK:   %[[N:.*]] = sol.cadd %{{.*}}, %{{.*}} : ui256
 // CHECK:   sol.return %[[N]] : ui256
 
 contract C {
-    uint256[] arr;
+    uint256[] array;
+
     struct S { uint256 a; }
+
     S s;
 
     function postField() public returns (uint256) { return s.a++; }
-    function postIdx() public returns (uint256) { return arr[0]++; }
+
+    function postIndex() public returns (uint256) { return array[0]++; }
+
     function preField() public returns (uint256) { return --s.a; }
-    function preIdx() public returns (uint256) { return ++arr[0]; }
+
+    function preIndex() public returns (uint256) { return ++array[0]; }
 }

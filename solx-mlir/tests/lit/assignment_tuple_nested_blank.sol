@@ -1,6 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// Nested tuple LHS with a blank slot: solx lowers both and stores right-to-left.
+// Nested tuple left-hand side with a blank slot: solx lowers both and stores right-to-left.
 // solc aborts in genLValExpr (res.size() == 1) on the nested tuple, so it cannot compile this file.
 
 // CHECK: sol.func @"blank()"

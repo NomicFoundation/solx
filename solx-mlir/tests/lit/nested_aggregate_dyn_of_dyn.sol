@@ -1,7 +1,7 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func {{.*}}innerLen{{.*}}-> ui256
+// CHECK: sol.func {{.*}}innerLength{{.*}}-> ui256
 // CHECK:   sol.gep %{{.*}}, %{{.*}} : !sol.array<? x !sol.array<? x ui256, Memory>, Memory>, ui256, !sol.ptr<!sol.array<? x ui256, Memory>, Memory>
 // CHECK:   sol.load %{{.*}} : !sol.ptr<!sol.array<? x ui256, Memory>, Memory>, !sol.array<? x ui256, Memory>
 // CHECK:   sol.length %{{.*}} : !sol.array<? x ui256, Memory>
@@ -12,7 +12,7 @@
 // CHECK:   sol.load %{{.*}} : !sol.ptr<ui256, Memory>, ui256
 
 contract C {
-    function innerLen(uint256[][] memory a, uint256 i) public pure returns (uint256) {
+    function innerLength(uint256[][] memory a, uint256 i) public pure returns (uint256) {
         return a[i].length;
     }
 

@@ -19,8 +19,10 @@
 
 contract C {
     function g() internal pure returns (uint, uint) { return (1, 2); }
+
     function h() internal pure returns (uint, uint) { return (3, 4); }
-    function f(bool cond) public pure returns (uint, uint) {
-        return cond ? g() : h();
+
+    function f(bool condition) public pure returns (uint, uint) {
+        return condition ? g() : h();
     }
 }

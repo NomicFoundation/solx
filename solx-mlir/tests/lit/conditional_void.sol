@@ -15,8 +15,11 @@
 
 contract C {
     uint256 x;
+
     function a() internal { x = 1; }
+
     function b() internal { x = 2; }
+
     function choose(bool c) public {
         c ? a() : b();
     }

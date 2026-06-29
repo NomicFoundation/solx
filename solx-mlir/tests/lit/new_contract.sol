@@ -5,6 +5,7 @@
 
 contract Created {
     uint256 public x;
+
     constructor(uint256 _x) { x = _x; }
 }
 

@@ -8,6 +8,7 @@
 
 contract C {
     struct S { uint256 a; uint256 b; }
+
     S public s;
 
     function g() external returns (uint256, uint256) {

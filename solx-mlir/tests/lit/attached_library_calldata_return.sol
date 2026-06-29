@@ -11,5 +11,6 @@ library D {
 
 contract C {
     using D for bytes;
+
     function f(bytes calldata _x) public pure returns (bytes1) { return _x.f()[0]; }
 }

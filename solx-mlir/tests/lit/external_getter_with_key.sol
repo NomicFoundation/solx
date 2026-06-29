@@ -6,12 +6,12 @@
 
 contract Other {
     mapping(uint256 => uint256) public m;
-    uint256[] public arr;
+    uint256[] public array;
 }
 
 contract C {
     function readArray(Other o, uint256 index) external view returns (uint256) {
-        return o.arr(index);
+        return o.array(index);
     }
 
     function readMapping(Other o, uint256 key) external view returns (uint256) {

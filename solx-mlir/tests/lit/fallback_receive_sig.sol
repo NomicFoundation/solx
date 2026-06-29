@@ -6,8 +6,9 @@
 // CHECK:   sol.store %{{.*}}, %{{.*}} : !sol.fixedbytes<4>, !sol.ptr<!sol.fixedbytes<4>, Storage>
 
 contract C {
-    bytes4 public lastSig;
+    bytes4 public lastSignature;
+
     fallback() external {
-        lastSig = msg.sig;
+        lastSignature = msg.sig;
     }
 }

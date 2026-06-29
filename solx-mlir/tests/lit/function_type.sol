@@ -8,13 +8,13 @@
 // CHECK:   sol.icall %{{.*}} : !sol.func_ref<(ui256) -> ui256>, (ui256) -> ui256
 
 contract C {
-    function callExternal(function(uint256) external returns (uint256) fp) public returns (uint256) {
-        return fp(3);
+    function callExternal(function(uint256) external returns (uint256) functionPointer) public returns (uint256) {
+        return functionPointer(3);
     }
 
     function callInternal() public pure returns (uint256) {
-        function(uint256) internal pure returns (uint256) fp = g;
-        return fp(7);
+        function(uint256) internal pure returns (uint256) functionPointer = g;
+        return functionPointer(7);
     }
 
     function g(uint256 x) internal pure returns (uint256) { return x; }

@@ -8,6 +8,7 @@
 contract D {
     uint256 x;
     uint256 y;
+
     constructor(uint256 a, uint256 b) {
         x = a;
         y = b;

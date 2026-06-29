@@ -12,7 +12,7 @@ contract A {
 }
 
 contract C {
-    function ext(A inst) external view returns (uint256) {
-        return inst.f({b: 99, a: 11});
+    function ext(A instance) external view returns (uint256) {
+        return instance.f({b: 99, a: 11});
     }
 }

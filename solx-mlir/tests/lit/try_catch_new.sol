@@ -12,6 +12,7 @@
 
 contract Callable {
     uint public x;
+
     constructor(uint v) { require(v != 0); x = v; }
 }
 

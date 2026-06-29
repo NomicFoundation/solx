@@ -11,7 +11,7 @@
 // CHECK: sol.return %{{[0-9]+}}, %{{[0-9]+}} : ui256, ui256
 
 contract C {
-    function f(bool cond) public pure returns (uint, uint) {
-        return cond ? (1, 2) : (3, 4);
+    function f(bool condition) public pure returns (uint, uint) {
+        return condition ? (1, 2) : (3, 4);
     }
 }

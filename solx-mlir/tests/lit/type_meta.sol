@@ -14,6 +14,7 @@
 
 interface IFoo {
     function foo(uint256 x) external returns (uint256);
+
     function bar() external view returns (bool);
 }
 
@@ -23,8 +24,12 @@ contract Other {
 
 contract C {
     function ccode() public pure returns (bytes memory) { return type(Other).creationCode; }
+
     function iid() public pure returns (bytes4) { return type(IFoo).interfaceId; }
+
     function iname() public pure returns (string memory) { return type(IFoo).name; }
+
     function nm() public pure returns (string memory) { return type(Other).name; }
+
     function rcode() public pure returns (bytes memory) { return type(Other).runtimeCode; }
 }

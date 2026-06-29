@@ -6,9 +6,9 @@
 // CHECK: sol.ext_call "{{.*}}"(%{{.*}}) at %[[A]] gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256, static_call} : !sol.address, (ui256) -> (i1, ui256)
 
 contract C {
-    uint256[] public arr;
+    uint256[] public array;
 
     function g(uint256 i) external returns (uint256) {
-        return this.arr(i);
+        return this.array(i);
     }
 }

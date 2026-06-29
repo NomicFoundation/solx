@@ -6,10 +6,10 @@
 // CHECK: fallback {
 
 contract C {
-    function() external returns (uint256) fp;
+    function() external returns (uint256) functionPointer;
 
     function f() external returns (uint256) {
-        try fp() returns (uint256 x) {
+        try functionPointer() returns (uint256 x) {
             return x;
         } catch {
             return 0;

@@ -14,5 +14,6 @@
 
 contract C {
     struct Item { uint256 id; bool ok; }
+
     Item[] public items;
 }
