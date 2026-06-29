@@ -233,13 +233,14 @@ impl<'context> Context<'context> {
 
         // Detach the runtime module so the deploy text doesn't duplicate it; the
         // deploy entry still references it via `evm.datasize`/`evm.dataoffset`.
-        let runtime_llvm = Self::take_nested_module_text(&mut module, runtime_code_identifier)?;
-        let deploy_llvm = module.as_operation().to_string();
+        let llvm_runtime_source =
+            Self::take_nested_module_text(&mut module, runtime_code_identifier)?;
+        let llvm_deploy_source = module.as_operation().to_string();
 
         Ok(crate::output::MlirOutput {
             sol_source,
-            deploy_source: deploy_llvm,
-            runtime_source: runtime_llvm,
+            llvm_deploy_source,
+            llvm_runtime_source,
             dependencies: self.dependencies.into_inner(),
         })
     }

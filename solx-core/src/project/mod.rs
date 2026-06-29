@@ -166,12 +166,12 @@ impl Project {
                 #[cfg(feature = "mlir")]
                 let result = contract.mlir.as_ref().map(|output| {
                     let runtime_code = ContractMLIR {
-                        source: output.runtime_source.clone(),
+                        source: output.llvm_runtime_source.clone(),
                         dependencies: output.dependencies.clone(),
                         runtime_code: None,
                     };
                     let deploy_code = ContractMLIR {
-                        source: output.deploy_source.clone(),
+                        source: output.llvm_deploy_source.clone(),
                         dependencies: output.dependencies.clone(),
                         runtime_code: Some(Box::new(runtime_code)),
                     };
