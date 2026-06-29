@@ -58,22 +58,6 @@ impl<'context, 'block> Value<'context, 'block> {
         Self { inner }
     }
 
-    /// The inner melior value, for the op-construction boundary.
-    pub fn into_mlir(self) -> MlirValue<'context, 'block> {
-        self.inner
-    }
-
-    /// Views a `!sol.ptr`-typed value as a [`Pointer`] place — the inverse of
-    /// [`Pointer::into_value`]. The caller must ensure this value is a pointer.
-    pub fn into_pointer(self) -> crate::Pointer<'context, 'block> {
-        crate::Pointer::new(self.inner)
-    }
-
-    /// The value's type.
-    pub fn r#type(self) -> Type<'context> {
-        Type::new(self.inner.r#type())
-    }
-
     /// Materialises a `sol.constant` of `result_type` from an `i64`-sized value.
     pub fn constant<B>(
         value: i64,
@@ -357,36 +341,6 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// The 4-byte selector of this external function-pointer value, via `sol.ext_func_selector` (`f.selector`).
-    pub fn ext_func_selector(
-        self,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Self {
-        Self::new(mlir_op!(
-            context,
-            block,
-            ExtFuncSelectorOperation
-                .func(self.inner)
-                .result(Type::fixed_bytes(context.mlir(), 4).into_mlir())
-        ))
-    }
-
-    /// The `address` component of this external function-pointer value, via `sol.ext_func_addr` (`f.address`).
-    pub fn ext_func_address(
-        self,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Self {
-        Self::new(mlir_op!(
-            context,
-            block,
-            ExtFuncAddrOperation
-                .func(self.inner)
-                .result(Type::address(context.mlir(), false).into_mlir())
-        ))
-    }
-
     /// The `!sol.ext_func_ref<…>` callee of an external interaction: `receiver` cast to `address`, packed with `selector`.
     pub fn external_callee(
         receiver: Self,
@@ -621,6 +575,36 @@ impl<'context, 'block> Value<'context, 'block> {
         (new_slot, element_type)
     }
 
+    /// The 4-byte selector of this external function-pointer value, via `sol.ext_func_selector` (`f.selector`).
+    pub fn ext_func_selector(
+        self,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            context,
+            block,
+            ExtFuncSelectorOperation
+                .func(self.inner)
+                .result(Type::fixed_bytes(context.mlir(), 4).into_mlir())
+        ))
+    }
+
+    /// The `address` component of this external function-pointer value, via `sol.ext_func_addr` (`f.address`).
+    pub fn ext_func_address(
+        self,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            context,
+            block,
+            ExtFuncAddrOperation
+                .func(self.inner)
+                .result(Type::address(context.mlir(), false).into_mlir())
+        ))
+    }
+
     /// Calls this function-pointer value, returning the decoded results. Dispatch is on the value's
     /// reference kind: an internal `func_ref` through `sol.icall`, an external `ext_func_ref` through
     /// `sol.ext_icall` (forwarding `call_value` as `msg.value` and dropping the status).
@@ -755,6 +739,22 @@ impl<'context, 'block> Value<'context, 'block> {
         }
         let zero = Self::constant(0, self.r#type(), context, block);
         self.compare(zero, CmpPredicate::Ne, context, block)
+    }
+
+    /// The inner melior value, for the op-construction boundary.
+    pub fn into_mlir(self) -> MlirValue<'context, 'block> {
+        self.inner
+    }
+
+    /// Views a `!sol.ptr`-typed value as a [`Pointer`] place — the inverse of
+    /// [`Pointer::into_value`]. The caller must ensure this value is a pointer.
+    pub fn into_pointer(self) -> crate::Pointer<'context, 'block> {
+        crate::Pointer::new(self.inner)
+    }
+
+    /// The value's type.
+    pub fn r#type(self) -> Type<'context> {
+        Type::new(self.inner.r#type())
     }
 }
 

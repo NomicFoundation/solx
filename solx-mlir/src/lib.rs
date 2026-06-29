@@ -25,7 +25,7 @@ pub use self::context::Context;
 pub use self::context::UserDefinedOperator;
 pub use self::context::environment::Environment;
 pub use self::context::function::Function;
-pub use self::context::function::Modifier;
+pub use self::context::modifier::Modifier;
 pub use self::context::pointer::Pointer;
 pub use self::context::try_fallback_kind::TryFallbackKind;
 pub use self::context::r#type::Type;

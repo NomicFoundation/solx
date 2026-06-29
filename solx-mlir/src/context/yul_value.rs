@@ -39,11 +39,6 @@ impl<'context, 'block> YulValue<'context, 'block> {
         Self { inner }
     }
 
-    /// The inner melior value, for the op-construction boundary.
-    pub fn into_mlir(self) -> MlirValue<'context, 'block> {
-        self.inner
-    }
-
     /// The signless `i256` integer attribute for a Yul word, via the FFI big-integer attribute (exceeds `i64`).
     pub fn word_attribute(
         value: &BigInt,
@@ -159,6 +154,11 @@ impl<'context, 'block> YulValue<'context, 'block> {
             context.location(),
             LoadStoreOptions::new().align(Some(Self::word_alignment(context))),
         ));
+    }
+
+    /// The inner melior value, for the op-construction boundary.
+    pub fn into_mlir(self) -> MlirValue<'context, 'block> {
+        self.inner
     }
 
     /// The `alignment = 32 : i64` attribute every Yul-word `llvm` slot op carries.

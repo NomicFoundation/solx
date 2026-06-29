@@ -38,26 +38,6 @@ impl<'context, 'block> Pointer<'context, 'block> {
         Self { inner }
     }
 
-    /// The inner melior value, for the op-construction boundary.
-    pub fn into_mlir(self) -> MlirValue<'context, 'block> {
-        self.inner
-    }
-
-    /// The pointer as a [`Value`] — a `!sol.ptr` is a first-class SSA value.
-    pub fn into_value(self) -> Value<'context, 'block> {
-        Value::new(self.inner)
-    }
-
-    /// The pointer type `!sol.ptr<T, Loc>`.
-    pub fn r#type(self) -> Type<'context> {
-        Type::new(self.inner.r#type())
-    }
-
-    /// The pointee type `T`.
-    pub fn pointee(self) -> Type<'context> {
-        self.r#type().pointee()
-    }
-
     /// Allocates a stack slot for `pointee` and returns the place — a
     /// `sol.alloca` yielding `!sol.ptr<pointee, Stack>`.
     pub fn stack_slot<B>(pointee: Type<'context>, context: &Context<'context>, block: &B) -> Self
@@ -256,5 +236,25 @@ impl<'context, 'block> Pointer<'context, 'block> {
                 .key(key.into_mlir())
                 .addr(entry_type.into_mlir())
         ))
+    }
+
+    /// The inner melior value, for the op-construction boundary.
+    pub fn into_mlir(self) -> MlirValue<'context, 'block> {
+        self.inner
+    }
+
+    /// The pointer as a [`Value`] — a `!sol.ptr` is a first-class SSA value.
+    pub fn into_value(self) -> Value<'context, 'block> {
+        Value::new(self.inner)
+    }
+
+    /// The pointer type `!sol.ptr<T, Loc>`.
+    pub fn r#type(self) -> Type<'context> {
+        Type::new(self.inner.r#type())
+    }
+
+    /// The pointee type `T`.
+    pub fn pointee(self) -> Type<'context> {
+        self.r#type().pointee()
     }
 }

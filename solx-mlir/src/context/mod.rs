@@ -4,6 +4,7 @@
 
 pub mod environment;
 pub mod function;
+pub mod modifier;
 pub mod pointer;
 pub mod try_fallback_kind;
 pub mod r#type;
