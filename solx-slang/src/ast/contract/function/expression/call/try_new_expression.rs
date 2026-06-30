@@ -20,8 +20,8 @@ use crate::ast::contract::function::expression::call::call_arguments::CallArgume
 use crate::ast::contract::function::expression::call::contract_creation::ContractCreation;
 use crate::ast::contract::function::expression::call_options::CallOptions;
 
-/// A `try new C(args)` contract creation, resolved from the `try` expression (the other shape,
-/// besides an external call, that carries a real catch path), so [`Self::emit`] is an infallible emitter.
+/// A `try new C(args)` contract creation, resolved from the `try` expression. Besides an external
+/// call, this is the other shape that carries a real catch path, so [`Self::emit`] is an infallible emitter.
 pub struct TryNewExpression {
     /// The `{value: v}` / `{salt: s}` options layer, if any (`new C{value: v}(args)`).
     options: Option<CallOptionsExpression>,
@@ -32,8 +32,8 @@ pub struct TryNewExpression {
 }
 
 impl TryNewExpression {
-    /// Lowerable only when the `try` wraps a contract creation `new C(args)` (optionally in a
-    /// call-options layer); a dynamic-aggregate `new T[](n)` / `new bytes(n)` or any other shape
+    /// Classifies only when the `try` wraps a contract creation `new C(args)`, optionally in a
+    /// call-options layer; a dynamic-aggregate `new T[](n)` / `new bytes(n)` or any other shape
     /// yields `None`.
     pub fn from_expression(expression: &Expression) -> Option<Self> {
         let Expression::FunctionCallExpression(call) = expression else {

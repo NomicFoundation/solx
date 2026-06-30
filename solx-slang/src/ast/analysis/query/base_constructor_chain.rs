@@ -1,7 +1,7 @@
 //!
 //! Base-constructor chaining over the C3 linearisation (pure-Slang).
 //!
-//! An inheritance chain lowers into one `sol.func` per constructor: the most-derived constructor
+//! An inheritance chain emits one `sol.func` per constructor: the most-derived constructor
 //! (`kind = #Constructor`) and one plain internal `sol.func` per other constructor in the
 //! linearisation. Each such function `sol.call`s the *next* constructor in the chain, passing the
 //! invocation arguments supplied for that base: whether written as an inline `is Base(args)` on the
@@ -19,7 +19,7 @@ use slang_solidity_v2::ast::NodeId;
 use crate::ast::analysis::query::MatchLinearisedBase;
 use crate::ast::analysis::query::PositionalArguments;
 
-/// Resolves the base-constructor call chain a contract's construction lowers to.
+/// Resolves the base-constructor call chain a contract's construction emits.
 pub trait BaseConstructorChain {
     /// Collects, for the whole C3 hierarchy, the invocation arguments supplied to each base
     /// constructor: keyed by the base *contract*'s node id, valued by the argument expressions and

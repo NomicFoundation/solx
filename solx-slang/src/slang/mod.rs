@@ -2,10 +2,6 @@
 //! Slang Solidity frontend implementation.
 //!
 
-use crate::ast::EmitObject;
-use crate::ast::analysis::query::MethodIdentifiers;
-use crate::ast::contract::ObjectScope;
-use crate::ast::operator_binding::OperatorBindings;
 pub mod compilation_config;
 
 use std::collections::BTreeMap;
@@ -22,6 +18,11 @@ use slang_solidity_v2_common::evm_targets::EvmTarget;
 use solx_core::Frontend;
 use solx_standard_json::CollectableError;
 use solx_standard_json::output::error::source_location::SourceLocation;
+
+use crate::ast::EmitObject;
+use crate::ast::analysis::query::MethodIdentifiers;
+use crate::ast::contract::ObjectScope;
+use crate::ast::operator_binding::OperatorBindings;
 
 use self::compilation_config::CompilationConfig;
 

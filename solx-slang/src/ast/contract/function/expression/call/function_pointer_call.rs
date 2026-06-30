@@ -10,7 +10,6 @@ use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::Type as SlangType;
-
 use solx_mlir::ods::sol::ExtICallOperation;
 
 use crate::ast::BlockAnd;

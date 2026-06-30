@@ -56,20 +56,20 @@ impl ContractCreation {
             })
             .unwrap_or_default();
         let BlockAnd {
-            value: ctor_args,
+            value: constructor_arguments,
             block,
         } = self.arguments.emit_as(&parameter_types, context, block);
         let state = context.state;
         let result_type = AstType::contract(state.mlir_context, &contract_name, payable);
-        let val = match call_value {
+        let call_value_or_zero = match call_value {
             Some(value) => AstValue::from(value),
             None => AstValue::uint256(0, state, &block),
         };
         let value = AstValue::create_contract(
             &contract_name,
-            val,
+            call_value_or_zero,
             salt.map(AstValue::from),
-            &ctor_args,
+            &constructor_arguments,
             result_type,
             try_call,
             state,

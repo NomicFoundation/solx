@@ -1,29 +1,29 @@
 //!
-//! The MLIR symbol name a Slang function definition lowers to.
+//! The MLIR symbol name a Slang function definition is emitted under.
 //!
 
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::FunctionDefinition;
 
-/// The MLIR symbol name a function definition lowers to: the one naming authority both definitions
-/// and call sites route through, so a function and its callers agree on the symbol.
+/// The MLIR symbol name a function definition is emitted under: the one naming authority both
+/// definitions and call sites route through, so a function and its callers agree on the symbol.
 pub trait MlirSymbolName {
     /// The unique MLIR symbol name for this function: an externally-callable function uses Slang's
     /// canonical ABI signature, an internal one its internal signature.
     fn mlir_function_name(&self) -> String;
 
     /// This function's MLIR symbol qualified by its node id, so two free functions of the same
-    /// signature (reachable together via an alias) do not collide.
+    /// signature, reachable together via an alias, do not collide.
     fn node_id_qualified_symbol(&self) -> String;
 
     /// The MLIR symbol of this modifier definition: its name suffixed with its node id, so two
-    /// like-named modifiers (an inherited override chain) resolve to distinct `sol.modifier` defs.
+    /// like-named modifiers in an inherited override chain resolve to distinct `sol.modifier` defs.
     /// The same authority names both the `sol.modifier` def and the invoking `sol.call`.
     fn modifier_symbol(&self) -> String;
 
-    /// The MLIR symbol of this constructor when emitted as a base-constructor `sol.func` (a plain
+    /// The MLIR symbol of this constructor when emitted as a base-constructor `sol.func`: a plain
     /// internal function the construction chain `sol.call`s into, distinct from the most-derived
-    /// `constructor()` def). Suffixed with its node id so each base contract's constructor resolves to
+    /// `constructor()` def. Suffixed with its node id so each base contract's constructor resolves to
     /// its own symbol, with the chaining call routing through the same authority.
     fn base_constructor_symbol(&self) -> String;
 }
@@ -51,7 +51,7 @@ impl MlirSymbolName for FunctionDefinition {
         let name = self
             .name()
             .map(|identifier| identifier.name())
-            .unwrap_or_else(|| "modifier".to_owned());
+            .expect("a modifier definition has a name");
         format!("{name}_{}", self.node_id())
     }
 

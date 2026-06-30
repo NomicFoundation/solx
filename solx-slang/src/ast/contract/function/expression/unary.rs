@@ -1,6 +1,6 @@
 //!
 //! Unary expression emission: prefix and postfix operators. Each node bridges
-//! to the [`Operator`] it applies, which lowers itself.
+//! to the [`Operator`] it applies, which emits itself.
 //!
 
 use melior::ir::BlockRef;

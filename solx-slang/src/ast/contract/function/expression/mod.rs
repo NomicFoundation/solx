@@ -2,8 +2,6 @@
 //! Expression emission to MLIR SSA values.
 //!
 
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
 pub mod arithmetic;
 pub mod arithmetic_mode;
 pub mod assignment;
@@ -36,12 +34,14 @@ use crate::ast::BlockAnd;
 use crate::ast::EmitAs;
 use crate::ast::EmitExpression;
 use crate::ast::EmitForEffect;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::expression::assignment::AssignmentTarget;
 use crate::ast::contract::storage_layout::StorageSlot;
 
-/// Lowers Solidity expressions to MLIR SSA values.
+/// Emits Solidity expressions to MLIR SSA values.
 pub struct ExpressionContext<'state, 'context, 'block> {
     /// The shared MLIR context.
     pub state: &'state Context<'context>,

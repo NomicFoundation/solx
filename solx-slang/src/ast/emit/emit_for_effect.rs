@@ -7,8 +7,8 @@ use melior::ir::BlockRef;
 
 use crate::ast::contract::function::expression::ExpressionContext;
 
-/// Emits an expression in statement position (`f();`, a for-loop step) for its side effects,
-/// discarding the value. The value-less producers (a void call, `delete`) lower here.
+/// Emits an expression in statement position, such as `f();` or a for-loop step, for its side
+/// effects, discarding the value. The value-less producers, a void call or `delete`, emit here.
 pub trait EmitForEffect<'context: 'block, 'block> {
     /// Emits this expression for its side effects, returning the continuation.
     fn emit_for_effect<'state>(

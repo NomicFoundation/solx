@@ -8,8 +8,8 @@ use crate::ast::contract::function::statement::assembly::YulContext;
 
 /// Emits an inline-assembly (Yul) node to MLIR, appending operations to `block`.
 ///
-/// Implemented per node directly on the Slang AST type (the orphan rule forbids an inherent method).
-/// The context is `&mut YulContext` (a Yul `let` declares variables); `Output` is associated because
+/// Implemented per node directly on the Slang AST type, since the orphan rule forbids an inherent method.
+/// The context is `&mut YulContext`, since a Yul `let` declares variables; `Output` is associated because
 /// the family is not uniform. Emission never fails: slang validated the source.
 pub trait EmitYul<'context: 'block, 'block> {
     /// The node's result: a continuation, or a value (or values) paired with one.

@@ -37,14 +37,12 @@ impl CompilationBuilderConfig for CompilationConfig {
         source_file_identifier: &str,
         import_path: &str,
     ) -> Result<String, UnresolvedImport> {
-        let path = import_path;
-
-        if self.sources.contains_key(path) {
-            return Ok(path.to_owned());
+        if self.sources.contains_key(import_path) {
+            return Ok(import_path.to_owned());
         }
 
         if let Some(dir) = Path::new(source_file_identifier).parent() {
-            let resolved = dir.join(path);
+            let resolved = dir.join(import_path);
             let mut normalized = Vec::new();
             for component in resolved.components() {
                 match component {

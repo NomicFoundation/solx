@@ -26,15 +26,15 @@ pub struct Signature<'context> {
     pub selector: Option<u32>,
     /// The Sol dialect state mutability.
     pub state_mutability: StateMutability,
-    /// The Sol dialect function kind (constructor / fallback / receive), or `None`
+    /// The Sol dialect function kind: constructor, fallback, or receive; `None`
     /// for a regular function.
     pub mlir_kind: Option<solx_mlir::FunctionKind>,
 }
 
 impl<'context> Signature<'context> {
     /// Resolves the MLIR signature of `function`: symbol, parameter and result
-    /// types, selector, mutability, and kind. A `symbol_override` (a free / library /
-    /// shadowed-base function) carries no public selector or special function kind.
+    /// types, selector, mutability, and kind. A `symbol_override`, for a free, library, or
+    /// shadowed-base function, carries no public selector or special function kind.
     pub fn resolve(
         function: &FunctionDefinition,
         symbol_override: Option<&str>,
@@ -65,7 +65,7 @@ impl<'context> Signature<'context> {
             Some(_) => (None, None),
         };
 
-        Signature {
+        Self {
             mlir_name,
             mlir_parameter_types,
             result_types,

@@ -11,7 +11,6 @@ use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::TypeName as SlangTypeName;
-use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
@@ -55,7 +54,7 @@ impl NewExpressionCall {
             Some(inner @ (SlangType::Array(_) | SlangType::Bytes(_) | SlangType::String(_))) => {
                 Some(AstType::resolve(
                     inner,
-                    LocationPolicy::Declared(Some(DataLocation::Memory)),
+                    LocationPolicy::Declared(Some(solx_utils::DataLocation::Memory)),
                     context.state,
                 ))
             }
@@ -65,7 +64,10 @@ impl NewExpressionCall {
                     if matches!(new_expression.type_name(), SlangTypeName::ElementaryType(_))
             ) =>
             {
-                Some(AstType::string(context.state.mlir_context, DataLocation::Memory).into_mlir())
+                Some(
+                    AstType::string(context.state.mlir_context, solx_utils::DataLocation::Memory)
+                        .into_mlir(),
+                )
             }
             _ => None,
         };

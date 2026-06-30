@@ -1,5 +1,5 @@
 //!
-//! The deployable-object emission trait: a contract or library lowers itself to
+//! The deployable-object emission trait: a contract or library emits itself as
 //! a `sol.contract`.
 //!
 
@@ -16,8 +16,8 @@ use solx_mlir::ods::sol::ContractOperation;
 
 use crate::ast::contract::ObjectScope;
 
-/// Lowers a top-level definition to one deployable `sol.contract`, threading `&mut Context`.
-/// Implemented by `ContractDefinition` and `LibraryDefinition` (a library omits the constructor / state steps).
+/// Emits a top-level definition as one deployable `sol.contract`, threading `&mut Context`.
+/// Implemented by `ContractDefinition` and `LibraryDefinition`, where a library omits the constructor and state steps.
 pub trait EmitObject {
     /// Emits this definition as a deployable `sol.contract` with its functions.
     fn emit(&self, context: &mut Context, scope: &ObjectScope);

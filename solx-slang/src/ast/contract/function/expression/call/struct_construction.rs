@@ -9,7 +9,6 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StructDefinition;
-use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
@@ -75,7 +74,7 @@ impl StructConstruction {
             let field_slang_type = member.get_type().expect("slang validated");
             let field_type = AstType::resolve(
                 &field_slang_type,
-                LocationPolicy::Declared(Some(DataLocation::Memory)),
+                LocationPolicy::Declared(Some(solx_utils::DataLocation::Memory)),
                 state,
             );
             let index_value = AstValue::constant(

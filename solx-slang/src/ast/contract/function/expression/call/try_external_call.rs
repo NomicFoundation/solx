@@ -11,8 +11,8 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::external_member_call::ExternalMemberCall;
 use crate::ast::contract::function::expression::call_options::CallOptions;
 
-/// A `try recv.f(args)` external member call (a function or a generated getter, with positional or
-/// named arguments), resolved from the `try` expression, so [`Self::emit`] is an infallible emitter.
+/// A `try recv.f(args)` external member call, a function or a generated getter taking positional or
+/// named arguments, resolved from the `try` expression, so [`Self::emit`] is an infallible emitter.
 pub struct TryExternalCall {
     /// The `{value: v}` / `{gas: g}` options layer, if any (`recv.f{value: v}(args)`).
     options: Option<CallOptionsExpression>,
@@ -21,8 +21,8 @@ pub struct TryExternalCall {
 }
 
 impl TryExternalCall {
-    /// Lowerable only when the `try` wraps an external member call `recv.f(args)` (optionally in a
-    /// call-options layer); any other shape yields `None`.
+    /// Classifies only when the `try` wraps an external member call `recv.f(args)`, optionally in a
+    /// call-options layer; any other shape yields `None`.
     pub fn from_expression(expression: &Expression) -> Option<Self> {
         let Expression::FunctionCallExpression(call) = expression else {
             return None;

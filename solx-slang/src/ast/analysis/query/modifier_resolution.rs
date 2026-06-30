@@ -16,12 +16,12 @@ pub trait ModifierResolution {
     /// first).
     fn linearised_modifiers(&self) -> Vec<FunctionDefinition>;
 
-    /// The most-derived body-bearing modifier per name, across the C3 linearisation (modifiers can't
-    /// be overloaded, so the name uniquely keys an override chain).
+    /// The most-derived body-bearing modifier per name, across the C3 linearisation: modifiers cannot
+    /// be overloaded, so the name uniquely keys an override chain.
     fn most_derived_modifiers_by_name(&self) -> HashMap<String, FunctionDefinition>;
 
     /// Re-dispatches a virtual modifier invocation to its most-derived body-bearing implementation.
-    /// `None` (keep lexical resolution) for a qualified `Base.m` or a modifier outside this hierarchy.
+    /// `None`, keeping lexical resolution, for a qualified `Base.m` or a modifier outside this hierarchy.
     fn resolve_modifier_override(
         &self,
         invocation: &ModifierInvocation,

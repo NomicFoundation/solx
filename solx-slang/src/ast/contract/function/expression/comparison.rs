@@ -63,10 +63,8 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
     // Widen each operand to 256 bits preserving its OWN signedness (so a negative is not
     // reinterpreted as a huge unsigned), then compare as signed if either is signed. A plain
     // ui256 default would make `(-10) < 10` a false unsigned comparison.
-    let signed_lhs =
-        IntegerType::try_from(lhs.r#type().into_mlir()).is_ok_and(|integer| integer.is_signed());
-    let signed_rhs =
-        IntegerType::try_from(rhs.r#type().into_mlir()).is_ok_and(|integer| integer.is_signed());
+    let signed_lhs = lhs.r#type().is_signed();
+    let signed_rhs = rhs.r#type().is_signed();
     let mlir_context = context.state.mlir_context;
     let signed_256 = Type::from(IntegerType::signed(mlir_context, 256));
     let unsigned_256 =
@@ -88,16 +86,8 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
     } else {
         unsigned_256
     };
-    let lhs_common = if lhs_wide.r#type().into_mlir() == common {
-        lhs_wide
-    } else {
-        lhs_wide.cast(AstType::new(common), context.state, &block)
-    };
-    let rhs_common = if rhs_wide.r#type().into_mlir() == common {
-        rhs_wide
-    } else {
-        rhs_wide.cast(AstType::new(common), context.state, &block)
-    };
+    let lhs_common = lhs_wide.cast(AstType::new(common), context.state, &block);
+    let rhs_common = rhs_wide.cast(AstType::new(common), context.state, &block);
     let comparison = lhs_common.compare(rhs_common, predicate, context.state, &block);
     BlockAnd { block, value: comparison }
 });

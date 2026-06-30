@@ -193,13 +193,12 @@ impl MemberBuiltinCall {
                 } else {
                     payload_value
                 };
-                let operation = block.append_operation(
-                    DecodeOperation::builder(state.mlir_context, state.location())
+                let operation = block.append_operation(mlir_op_build!(
+                    state,
+                    DecodeOperation
                         .addr(payload_value.into_mlir())
-                        .outs(&result_types)
-                        .build()
-                        .into(),
-                );
+                        .outs(result_types.as_slice())
+                ));
                 let values = (0..result_types.len())
                     .map(|index| {
                         operation
@@ -518,12 +517,10 @@ impl MemberBuiltinCall {
                             );
                             (None, block)
                         } else {
-                            let base_slang_type =
-                                self.access.operand().get_type().expect("slang validated");
                             let BlockAnd {
                                 value: array_value,
                                 block,
-                            } = self.access.operand().emit(context, block);
+                            } = base.emit(context, block);
                             let (new_slot, element_type) =
                                 array_value.push_slot(&base_slang_type, context.state, &block);
                             let new_slot = new_slot.into_mlir();

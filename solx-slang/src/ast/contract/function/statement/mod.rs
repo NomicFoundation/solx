@@ -52,11 +52,11 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::storage_layout::StorageSlot;
 
-/// Lowers Solidity statements to MLIR operations; threads `Some(block)` or `None` when control diverges.
+/// Emits Solidity statements to MLIR operations; threads `Some(block)` or `None` when control diverges.
 pub struct StatementContext<'state, 'context, 'block> {
     /// The shared MLIR context.
     pub state: &'state Context<'context>,
-    /// Variable environment (mutable for new declarations and loop targets).
+    /// Variable environment, mutable for new declarations and loop targets.
     pub environment: &'state mut Environment<'context, 'block>,
     /// Contract-local dispatch metadata.
     pub dispatch: &'state ContractDispatch,
@@ -70,7 +70,7 @@ pub struct StatementContext<'state, 'context, 'block> {
     /// The function's return slots, parallel to `return_types` (`None` for an unnamed return); a bare
     /// `return;` and the epilogue load these so the `sol.return` arity matches.
     pub return_slots: &'state [Option<Value<'context, 'block>>],
-    /// Arithmetic overflow-checking mode (Checked by default, Unchecked inside `unchecked {}`).
+    /// Arithmetic overflow-checking mode: Checked by default, Unchecked inside `unchecked {}`.
     pub arithmetic_mode: ArithmeticMode,
 }
 
@@ -118,7 +118,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
         let state = context.state;
         let mut values = Vec::with_capacity(context.return_types.len());
         for (index, &return_type) in context.return_types.iter().enumerate() {
-            let value = match context.return_slots.get(index).copied().flatten() {
+            let value = match context.return_slots[index] {
                 Some(pointer) => Pointer::new(pointer)
                     .load(AstType::new(return_type), state, &block)
                     .into_mlir(),

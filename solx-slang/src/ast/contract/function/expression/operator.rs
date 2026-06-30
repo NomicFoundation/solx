@@ -175,7 +175,7 @@ impl Operator {
         }
     }
 
-    /// Lowers a binary expression `left <op> right` to its result value, dispatching to a bound
+    /// Emits a binary expression `left <op> right` to its result value, dispatching to a bound
     /// user-defined operator when present. With no `target_type`, the wider operand type is selected.
     pub fn emit_binary<'context, 'block>(
         self,
@@ -318,8 +318,8 @@ impl Operator {
                 (result, block)
             }
             Operator::Subtract => {
-                // `-x` lowers to `0 - x`, checked or unchecked per the active arithmetic mode (as
-                // the binary subtraction path does); checked negation reverts on `-type(intN).min`.
+                // `-x` is emitted as `0 - x`, checked or unchecked per the active arithmetic mode,
+                // as the binary subtraction path does; checked negation reverts on `-type(intN).min`.
                 let BlockAnd { value, block } = operand.emit(context, block);
                 let operand_type = target_type.expect("slang validated");
                 let value = value

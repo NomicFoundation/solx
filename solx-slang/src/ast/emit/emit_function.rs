@@ -1,5 +1,5 @@
 //!
-//! The function-definition emission trait: a function lowers itself to a
+//! The function-definition emission trait: a function emits itself as a
 //! `sol.func`.
 //!
 
@@ -9,7 +9,7 @@ use melior::ir::Value;
 
 use crate::ast::contract::function::FunctionScope;
 
-/// Lowers a function definition to a `sol.func`. A contract / library threads the
+/// Emits a function definition as a `sol.func`. A contract or library threads the
 /// emission via the shared [`FunctionScope`]; the node carries the projection.
 pub trait EmitFunction {
     /// Emits a `sol.func` under the function's canonical (dispatchable) symbol.

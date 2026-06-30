@@ -647,6 +647,11 @@ impl<'context> Type<'context> {
         }
     }
 
+    /// Whether this is a signed integer type; false for any non-integer type.
+    pub fn is_signed(self) -> bool {
+        IntegerType::try_from(self.inner).is_ok_and(|integer| integer.is_signed())
+    }
+
     /// The bit width of an integer type, or 256 for any non-integer type.
     pub fn integer_bit_width(self) -> u32 {
         IntegerType::try_from(self.inner).map_or(solx_utils::BIT_LENGTH_FIELD as u32, |integer| {

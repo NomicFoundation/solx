@@ -46,8 +46,8 @@ use crate::ast::contract::function::expression::call_options::CallOptions;
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCallExpression {
     type Output = BlockAnd<'context, 'block, Vec<Value<'context, 'block>>>;
 
-    /// Emits a function call, yielding its result values in declaration order (none for a void callee,
-    /// one common, several for a tuple-returning call). The resolved callee selects the shape directly.
+    /// Emits a function call, yielding its result values in declaration order: none for a void callee,
+    /// one for a common callee, several for a tuple-returning call. The resolved callee selects the shape directly.
     fn emit<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,

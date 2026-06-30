@@ -5,7 +5,7 @@
 //! `IsolatedFromAbove` block carrying a fresh copy of `f`'s whole parameter list as block arguments,
 //! which evaluates the invocation's arguments and `sol.call`s the modifier. The blocks sit at the top
 //! of `f`, before `f`'s inlined body. Each invoked modifier definition is emitted once as a contract-
-//! level `sol.modifier`, with its `_;` lowered to `sol.placeholder`.
+//! level `sol.modifier`, with its `_;` emitted as `sol.placeholder`.
 //!
 
 use melior::ir::Block;

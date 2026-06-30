@@ -12,10 +12,10 @@ use solx_utils::DataLocation;
 
 use crate::ast::contract::storage_layout::StorageSlot;
 
-/// A contract's storage layout: state variable node ID → its storage slot.
+/// A contract's storage layout: state variable node ID to its storage slot.
 pub trait StorageLayout {
-    /// The layout re-keyed from Slang's ABI (persistent, transient, and immutable
-    /// layouts), never re-packed here. Empty when the ABI is unavailable.
+    /// The layout re-keyed from Slang's ABI, covering the persistent, transient, and immutable
+    /// layouts, never re-packed here. Empty when the ABI is unavailable.
     fn storage_layout(&self) -> HashMap<NodeId, StorageSlot>;
 }
 

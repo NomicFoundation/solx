@@ -2,6 +2,7 @@
 //! Control flow statement emission: if/else, for, while, do-while.
 //!
 
+use melior::ir::Block;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::RegionLike;
@@ -27,7 +28,6 @@ use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::statement::StatementContext;
-use melior::ir::Block;
 
 statement_emit!(IfStatement; |node, context, block| {
     let condition_expression = node.condition();

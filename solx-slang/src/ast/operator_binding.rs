@@ -12,6 +12,7 @@ use std::collections::HashSet;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::SourceUnitMember;
 use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::UsingClause;
 use slang_solidity_v2::ast::UsingOperator;
@@ -20,13 +21,12 @@ use slang_solidity_v2::compilation::CompilationUnit;
 use solx_mlir::UserDefinedOperator;
 
 use crate::ast::contract::function::expression::operator::Operator;
-use slang_solidity_v2::ast::SourceUnitMember;
 
 /// User-defined operator bindings gathered from a compilation unit.
 pub struct OperatorBindings {
-    /// Maps `(udvt_definition_id, operator)` to the bound function's node id.
+    /// Maps `(udvt_definition_id, operator)` to the bound function's node identifier.
     pub map: HashMap<(NodeId, UserDefinedOperator), NodeId>,
-    /// The bound operator functions, to be registered and emitted (deduplicated).
+    /// The bound operator functions, to be registered and emitted, deduplicated.
     pub functions: Vec<FunctionDefinition>,
 }
 
@@ -92,7 +92,7 @@ impl OperatorBindings {
         Self { map, functions }
     }
 
-    /// Maps the typed [`UsingOperator`] token → [`UserDefinedOperator`] (`arity == 1` splits `Minus` into `Neg` vs `Sub`).
+    /// Maps the typed [`UsingOperator`] token to a [`UserDefinedOperator`]: with `arity == 1`, `Minus` splits into `Neg` versus `Sub`.
     pub fn map_using_operator(operator: &UsingOperator, arity: usize) -> UserDefinedOperator {
         match operator {
             UsingOperator::Plus(_) => UserDefinedOperator::Add,
@@ -114,7 +114,7 @@ impl OperatorBindings {
         }
     }
 
-    /// The user-defined binary operator for an [`Operator`], when one exists (else `None`).
+    /// The user-defined binary operator for an [`Operator`], when one exists.
     pub fn binary_operator(operator: Operator) -> Option<UserDefinedOperator> {
         Some(match operator {
             Operator::Add => UserDefinedOperator::Add,
@@ -129,8 +129,8 @@ impl OperatorBindings {
         })
     }
 
-    /// The user-defined unary operator for an [`Operator`] (`Subtract` → `Neg`,
-    /// `BitwiseNot` → `BitNot`; else `None`).
+    /// The user-defined unary operator for an [`Operator`]: `Subtract` to `Neg`, `BitwiseNot` to
+    /// `BitNot`.
     pub fn unary_operator(operator: Operator) -> Option<UserDefinedOperator> {
         Some(match operator {
             Operator::Subtract => UserDefinedOperator::Neg,

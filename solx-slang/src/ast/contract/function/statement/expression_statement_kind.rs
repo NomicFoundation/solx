@@ -10,7 +10,7 @@ use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
 /// The emission kind of a discarded expression statement, classified once so dispatch is a single
-/// `match`. The variants are mutually exclusive and tested in order (an earlier match wins).
+/// `match`. The variants are mutually exclusive and tested in order, so an earlier match wins.
 pub enum ExpressionStatementKind {
     /// The modifier `_;` placeholder: hands off to the wrapped body / next stage.
     ModifierPlaceholder,

@@ -27,7 +27,7 @@ use crate::ast::contract::storage_layout::StorageSlot;
 pub struct YulContext<'frame, 'context, 'block> {
     /// The shared MLIR context.
     pub state: &'frame Context<'context>,
-    /// Variable environment (mutable for Yul `let` declarations).
+    /// Variable environment, mutable for Yul `let` declarations.
     pub environment: &'frame mut Environment<'context, 'block>,
     /// Contract-local dispatch metadata.
     pub dispatch: &'frame ContractDispatch,

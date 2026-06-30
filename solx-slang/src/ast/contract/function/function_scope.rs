@@ -1,5 +1,5 @@
 //!
-//! The scope threaded through a function's (and constructor's) emission.
+//! The scope threaded through a function's and constructor's emission.
 //!
 
 use std::collections::HashMap;
@@ -16,7 +16,7 @@ use crate::ast::contract::storage_layout::StorageSlot;
 pub struct FunctionScope<'state, 'context> {
     /// The shared MLIR context.
     pub state: &'state Context<'context>,
-    /// Containing contract (`None` for a library's functions, which have no constructor / state).
+    /// Containing contract; `None` for a library's functions, which have no constructor or state.
     pub contract: Option<&'state ContractDefinition>,
     /// Contract-local dispatch metadata.
     pub dispatch: &'state ContractDispatch,

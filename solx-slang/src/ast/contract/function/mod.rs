@@ -171,20 +171,18 @@ impl EmitFunction for FunctionDefinition {
         let values: Vec<Value<'context, 'block>> = result_types
             .iter()
             .enumerate()
-            .map(
-                |(index, &return_type)| match return_slots.get(index).copied().flatten() {
-                    Some(pointer) => Pointer::new(pointer)
-                        .load(AstType::new(return_type), state, block)
-                        .into_mlir(),
-                    None => {
-                        let slang_type = returns
-                            .get(index)
-                            .and_then(|parameter| parameter.get_type());
-                        AstValue::type_default(slang_type.as_ref(), return_type, state, block)
-                            .into_mlir()
-                    }
-                },
-            )
+            .map(|(index, &return_type)| match return_slots[index] {
+                Some(pointer) => Pointer::new(pointer)
+                    .load(AstType::new(return_type), state, block)
+                    .into_mlir(),
+                None => {
+                    let slang_type = returns
+                        .get(index)
+                        .and_then(|parameter| parameter.get_type());
+                    AstValue::type_default(slang_type.as_ref(), return_type, state, block)
+                        .into_mlir()
+                }
+            })
             .collect();
         mlir_op_void!(state, block, ReturnOperation.operands(&values));
     }

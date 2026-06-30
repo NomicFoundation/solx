@@ -9,9 +9,9 @@ use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::LibraryDefinition;
 
-/// The ABI `method_identifiers` map: externally-dispatchable signature → 4-byte selector (lower-case hex).
+/// The ABI `method_identifiers` map: externally-dispatchable signature to 4-byte selector, lower-case hex.
 pub trait MethodIdentifiers {
-    /// The signature → selector map for this object's externally-callable members.
+    /// The signature to selector map for this object's externally-callable members.
     fn method_identifiers(&self) -> BTreeMap<String, String>;
 }
 

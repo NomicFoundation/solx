@@ -209,7 +209,7 @@ impl EmitConstructor for ContractDefinition {
             .map(|spec| spec.arguments.as_slice())
             .unwrap_or_default();
 
-        // Each argument keeps its OWN type (not the base constructor's parameter type); the
+        // Each argument keeps its own type, not the base constructor's parameter type; the
         // `sol.call` carries the implicit-castable operand/parameter mismatch, so no cast here.
         let mut operands: Vec<Value<'context, 'block>> = Vec::with_capacity(arguments.len());
         for argument in arguments.iter() {

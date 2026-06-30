@@ -23,6 +23,7 @@ use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionVisibility;
 use slang_solidity_v2::ast::LibraryDefinition;
@@ -47,6 +48,7 @@ use crate::ast::Type as AstType;
 use crate::ast::analysis::query::StorageLayout;
 use crate::ast::analysis::walk::free_function::FreeCallCollector;
 use crate::ast::analysis::walk::library::LibraryCallCollector;
+use crate::ast::analysis::walk::super_call::SuperDispatch;
 use crate::ast::emit::EmitConstructor;
 use crate::ast::emit::EmitModifierCalls;
 
@@ -54,8 +56,7 @@ impl EmitObject for ContractDefinition {
     fn emit(&self, context: &mut Context, scope: &ObjectScope) {
         let contract_name = self.name().name();
 
-        let super_dispatch =
-            crate::ast::analysis::walk::super_call::SuperDispatch::build_super_dispatch(self);
+        let super_dispatch = SuperDispatch::build_super_dispatch(self);
         let dispatch = ContractDispatch::from_super_dispatch(&super_dispatch);
         let shadowed_functions: Vec<_> = super_dispatch
             .shadowed
@@ -141,11 +142,13 @@ impl EmitObject for ContractDefinition {
             );
             let state = &*context;
             if matches!(slot.location, DataLocation::Immutable) {
-                let operation = ImmutableOperation::builder(state.mlir_context, state.location())
-                    .sym_name(StringAttribute::new(state.mlir_context, &slot.name))
-                    .r#type(TypeAttribute::new(element_type))
-                    .build();
-                contract_body.append_operation(operation.into());
+                mlir_op_void!(
+                    state,
+                    contract_body,
+                    ImmutableOperation
+                        .sym_name(StringAttribute::new(state.mlir_context, &slot.name))
+                        .r#type(TypeAttribute::new(element_type))
+                );
                 continue;
             }
             let slot_attribute: IntegerAttribute =
@@ -228,7 +231,7 @@ impl EmitObject for ContractDefinition {
         }
 
         let mut emitted_modifiers: HashSet<NodeId> = HashSet::new();
-        let mut invoked_modifiers: Vec<slang_solidity_v2::ast::FunctionDefinition> = Vec::new();
+        let mut invoked_modifiers: Vec<FunctionDefinition> = Vec::new();
         {
             let modifier_scope =
                 FunctionScope::new(context, Some(self), &dispatch, &storage_layout);
@@ -237,7 +240,7 @@ impl EmitObject for ContractDefinition {
             // contract's own: `emit_constructor` emits a `sol.func` for each base constructor in the
             // linearisation, and each may invoke (override-resolved) modifiers whose `sol.modifier`
             // definitions must be emitted here, or the base constructor's `sol.modifier_call_blk`
-            // would reference a dangling symbol (a null MLIR value that crashes lowering).
+            // would reference a dangling symbol, a null MLIR value that crashes a later pass.
             for base in self.linearised_bases() {
                 if let ContractBase::Contract(base_contract) = base
                     && let Some(constructor) = base_contract.constructor()

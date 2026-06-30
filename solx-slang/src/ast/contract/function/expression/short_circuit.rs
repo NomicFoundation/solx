@@ -1,6 +1,6 @@
 //!
 //! Short-circuit logical expression emission: `&&` and `||`. Each node bridges
-//! to its [`LogicalOperator`], which lowers itself.
+//! to its [`LogicalOperator`], which emits itself.
 //!
 
 use melior::ir::BlockRef;

@@ -7,7 +7,7 @@ use melior::ir::BlockRef;
 use crate::ast::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 
-/// Emits a node coerced to an expected MLIR type (a node's argument / initialiser coercion).
+/// Emits a node coerced to an expected MLIR type: a node's argument or initialiser coercion.
 ///
 /// Most expressions emit then cast to the target. The exception is a string literal, which toward
 /// `bytesN` / `byte` materialises as a compile-time fixed-bytes constant rather than a runtime

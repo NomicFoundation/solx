@@ -2,7 +2,7 @@
 //! Super / C3 virtual-dispatch precompute pass.
 //!
 //! Re-resolves a contract's `super.f(...)` and virtual internal calls against its C3 linearisation,
-//! producing the `redirect` / `shadowed` / `virtual_redirect` maps contract lowering carries.
+//! producing the `redirect` / `shadowed` / `virtual_redirect` maps contract emission carries.
 //!
 
 use std::collections::HashMap;
@@ -42,7 +42,7 @@ pub struct SuperDispatch {
 impl SuperDispatch {
     /// Re-resolves every `super` call reachable from `contract`'s functions and
     /// constructor against its C3 linearisation.
-    pub fn build_super_dispatch(contract: &ContractDefinition) -> SuperDispatch {
+    pub fn build_super_dispatch(contract: &ContractDefinition) -> Self {
         let mro: Vec<ContractDefinition> = contract
             .linearised_bases()
             .into_iter()
@@ -57,7 +57,7 @@ impl SuperDispatch {
             .map(|function| function.node_id())
             .collect();
 
-        let mut dispatch = SuperDispatch::default();
+        let mut dispatch = Self::default();
 
         let mut most_derived_by_signature: HashMap<String, NodeId> = HashMap::new();
         for function in contract.linearised_functions() {
@@ -98,7 +98,7 @@ impl SuperDispatch {
         // (`contract C is Base(Other.f())`), which no function body contains; collect those
         // up front so each gets a `redirect` entry.
         for base_contract in mro.iter() {
-            let mut collector = SuperDispatch::default();
+            let mut collector = Self::default();
             for inheritance in base_contract.inheritance_types().iter() {
                 accept_inheritance_type(&inheritance, &mut collector);
             }
@@ -123,7 +123,7 @@ impl SuperDispatch {
             if !walked.insert(function.node_id()) {
                 continue;
             }
-            let mut collector = SuperDispatch::default();
+            let mut collector = Self::default();
             accept_function_definition(&function, &mut collector);
             for (access_id, lexical_target) in collector.super_calls {
                 let signature = lexical_target.mlir_function_name();

@@ -9,7 +9,6 @@ use melior::ir::Value;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 
 use solx_mlir::Context;
-use solx_mlir::mlir_op_build;
 use solx_mlir::ods::sol::LoadImmutableOperation;
 use solx_utils::DataLocation;
 
@@ -30,19 +29,16 @@ impl StorageSlot {
         'context: 'block,
     {
         if matches!(self.location, DataLocation::Immutable) {
-            let operation = block.append_operation(mlir_op_build!(
+            return mlir_op!(
                 context,
+                block,
                 LoadImmutableOperation
                     ._name(FlatSymbolRefAttribute::new(
                         context.mlir_context,
                         &self.name
                     ))
                     .val(element_type)
-            ));
-            return operation
-                .result(0)
-                .expect("sol.load_immutable produces one result")
-                .into();
+            );
         }
         let pointer = self.addr_of(context, element_type, block);
         pointer

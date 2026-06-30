@@ -1,5 +1,5 @@
 //!
-//! The compilation-unit inputs an object's (contract / library) emission consults.
+//! The compilation-unit inputs a contract's or library's object emission consults.
 //!
 
 use slang_solidity_v2::ast::FunctionDefinition;
@@ -7,7 +7,7 @@ use slang_solidity_v2::ast::FunctionDefinition;
 /// The compilation-unit function inputs threaded into object emission, kept off `solx_mlir::Context`
 /// so the Slang AST stays off the MLIR builder.
 pub struct ObjectScope<'state> {
-    /// The unit's file-level (free) functions; the object emits the ones it
+    /// The unit's file-level free functions; the object emits the ones it
     /// transitively reaches.
     pub free_functions: &'state [FunctionDefinition],
     /// The unit's operator-bound functions (`using {f as op} for T global;`),

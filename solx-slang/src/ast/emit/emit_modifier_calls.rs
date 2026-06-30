@@ -14,8 +14,8 @@ use crate::ast::contract::function::FunctionScope;
 /// Emits a function's (or constructor's) modifier invocations as `sol.modifier_call_blk` ops, and
 /// resolves the invoked modifier definitions so the contract can emit their `sol.modifier` defs.
 pub trait EmitModifierCalls {
-    /// The override-resolved, body-bearing modifier definitions this function invokes, in source order
-    /// (base-constructor invocations excluded). The contract dedups these into `sol.modifier` defs.
+    /// The override-resolved, body-bearing modifier definitions this function invokes, in source
+    /// order, with base-constructor invocations excluded. The contract dedups these into `sol.modifier` defs.
     fn resolve_invoked_modifiers<'state, 'context>(
         &self,
         scope: &FunctionScope<'state, 'context>,
@@ -33,7 +33,7 @@ pub trait EmitModifierCalls {
     );
 
     /// Emits this modifier definition as a contract-level `sol.modifier`: its parameters as block
-    /// arguments spilled to stack slots, its statements with `_;` lowered to `sol.placeholder`, and a
+    /// arguments spilled to stack slots, its statements with `_;` emitted as `sol.placeholder`, and a
     /// terminating `sol.return`.
     fn emit_modifier_definition<'state, 'context>(
         &self,

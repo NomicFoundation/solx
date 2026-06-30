@@ -12,8 +12,8 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::function_pointer_call::FunctionPointerCall;
 use crate::ast::contract::function::expression::call_options::CallOptions;
 
-/// A `try fp(args)` call through an externally-visible function pointer (optionally in a call-options
-/// layer), resolved from the `try` expression so [`Self::emit`] is an infallible emitter.
+/// A `try fp(args)` call through an externally-visible function pointer, optionally in a call-options
+/// layer, resolved from the `try` expression so [`Self::emit`] is an infallible emitter.
 pub struct TryFunctionPointerCall {
     /// The `{value: v}` / `{gas: g}` options layer, if any (`fp{value: v}(args)`).
     options: Option<CallOptionsExpression>,
@@ -22,8 +22,8 @@ pub struct TryFunctionPointerCall {
 }
 
 impl TryFunctionPointerCall {
-    /// Lowerable only when the `try` wraps a call through an externally-visible function pointer
-    /// (optionally in a call-options layer); an internal pointer (invalid in `try`) or any other
+    /// Classifies only when the `try` wraps a call through an externally-visible function pointer,
+    /// optionally in a call-options layer; an internal pointer, invalid in `try`, or any other
     /// shape yields `None`.
     pub fn from_expression(expression: &Expression) -> Option<Self> {
         let Expression::FunctionCallExpression(call) = expression else {

@@ -46,28 +46,30 @@ impl LibraryCallCollector {
             .iter()
             .map(|function| function.node_id())
             .collect();
-        let free_ids: HashSet<NodeId> = free_functions.iter().map(|f| f.node_id()).collect();
+        let free_ids: HashSet<NodeId> = free_functions
+            .iter()
+            .map(|function| function.node_id())
+            .collect();
         let mut walk = ReachabilityWalk::new(contract, extra_roots);
         let mut library_ids: HashSet<NodeId> = HashSet::new();
 
         while let Some(function) = walk.next_body() {
-            let mut collector = LibraryCallCollector {
+            let mut collector = Self {
                 origin: if library_ids.contains(&function.node_id()) {
                     BodyOrigin::Library
                 } else {
                     BodyOrigin::Contract
                 },
-                ..LibraryCallCollector::default()
+                ..Self::default()
             };
             accept_function_definition(&function, &mut collector);
             let member_reached = collector
                 .functions
                 .into_iter()
-                .filter(|f| !own.contains(&f.node_id()));
-            let bare_reached = collector
-                .bare_functions
-                .into_iter()
-                .filter(|f| !own.contains(&f.node_id()) && !free_ids.contains(&f.node_id()));
+                .filter(|function| !own.contains(&function.node_id()));
+            let bare_reached = collector.bare_functions.into_iter().filter(|function| {
+                !own.contains(&function.node_id()) && !free_ids.contains(&function.node_id())
+            });
             for library_function in member_reached.chain(bare_reached) {
                 if !walk.is_collected(library_function.node_id()) {
                     library_ids.insert(library_function.node_id());

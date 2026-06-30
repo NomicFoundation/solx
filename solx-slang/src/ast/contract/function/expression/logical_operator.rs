@@ -1,5 +1,5 @@
 //!
-//! Short-circuit logical operator (`&&` / `||`), which lowers itself.
+//! Short-circuit logical operator (`&&` / `||`), which emits itself.
 //!
 
 use melior::ir::BlockLike;
