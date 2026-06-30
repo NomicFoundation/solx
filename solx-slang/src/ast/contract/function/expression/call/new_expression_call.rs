@@ -8,7 +8,6 @@ use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
-use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::TypeName as SlangTypeName;
 
@@ -17,6 +16,7 @@ use crate::ast::EmitExpression;
 use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
+use crate::ast::analysis::query::ParameterNodeIds;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 use crate::ast::contract::function::expression::call::contract_creation::ContractCreation;
@@ -108,15 +108,9 @@ impl NewExpressionCall {
         let Definition::Contract(contract_definition) = contract_type.definition() else {
             unreachable!("Slang ContractType always references a Contract definition");
         };
-        let parameter_ids: Vec<NodeId> = contract_definition
+        let parameter_ids = contract_definition
             .constructor()
-            .map(|constructor| {
-                constructor
-                    .parameters()
-                    .iter()
-                    .map(|parameter| parameter.node_id())
-                    .collect()
-            })
+            .map(|constructor| constructor.parameters().node_ids())
             .unwrap_or_default();
         let ordered_arguments = CallArguments::for_parameter_ids(&self.arguments, &parameter_ids);
         let creation = ContractCreation::new(contract_definition, ordered_arguments);

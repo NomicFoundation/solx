@@ -11,6 +11,7 @@ use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::NodeId;
 
 use crate::ast::BlockAnd;
+use crate::ast::analysis::query::ParameterNodeIds;
 use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
@@ -43,12 +44,10 @@ impl InheritedFunctionCall {
         let target_id = dispatch
             .resolve_super(access.node_id())
             .expect("a super/base call has a recorded redirect target");
-        let parameter_ids: Vec<NodeId> = match access.member().resolve_to_definition() {
-            Some(Definition::Function(function_definition)) => function_definition
-                .parameters()
-                .iter()
-                .map(|parameter| parameter.node_id())
-                .collect(),
+        let parameter_ids = match access.member().resolve_to_definition() {
+            Some(Definition::Function(function_definition)) => {
+                function_definition.parameters().node_ids()
+            }
             _ => unreachable!("a super/base call resolves its member to a function"),
         };
         Some(Self {

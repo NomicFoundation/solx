@@ -10,7 +10,6 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::MemberAccessExpression;
-use slang_solidity_v2::ast::NodeId;
 use solx_mlir::Context;
 
 use crate::ast::BlockAnd;
@@ -18,6 +17,7 @@ use crate::ast::EmitExpression;
 use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
+use crate::ast::analysis::query::ParameterNodeIds;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
@@ -42,11 +42,7 @@ impl ExternalMemberCall {
         let definition = access.member().resolve_to_definition()?;
         let arguments = match &definition {
             Definition::Function(function) if function.compute_selector().is_some() => {
-                let parameter_ids: Vec<NodeId> = function
-                    .parameters()
-                    .iter()
-                    .map(|parameter| parameter.node_id())
-                    .collect();
+                let parameter_ids = function.parameters().node_ids();
                 CallArguments::for_parameter_ids(arguments, &parameter_ids)
             }
             Definition::StateVariable(_) => CallArguments::positional(arguments),

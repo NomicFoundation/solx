@@ -9,7 +9,6 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
-use slang_solidity_v2::ast::NodeId;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
@@ -17,6 +16,7 @@ use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::analysis::query::MemberAccessOperand;
+use crate::ast::analysis::query::ParameterNodeIds;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
@@ -58,11 +58,7 @@ impl ExternalLibraryCall {
         let library_operand = access.operand();
         let self_receiver = (!MemberAccessOperand(&library_operand).is_namespace_qualifier())
             .then_some(library_operand);
-        let parameter_ids: Vec<NodeId> = function
-            .parameters()
-            .iter()
-            .map(|parameter| parameter.node_id())
-            .collect();
+        let parameter_ids = function.parameters().node_ids();
         let arguments = if self_receiver.is_some() {
             CallArguments::after_receiver(arguments, &parameter_ids)
         } else {

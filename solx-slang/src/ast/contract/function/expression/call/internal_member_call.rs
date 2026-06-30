@@ -9,12 +9,12 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
-use slang_solidity_v2::ast::NodeId;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
 use crate::ast::Type as AstType;
 use crate::ast::analysis::query::MemberAccessOperand;
+use crate::ast::analysis::query::ParameterNodeIds;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 
@@ -42,11 +42,7 @@ impl InternalMemberCall {
         if function.compute_selector().is_some() {
             return None;
         }
-        let parameter_ids: Vec<NodeId> = function
-            .parameters()
-            .iter()
-            .map(|parameter| parameter.node_id())
-            .collect();
+        let parameter_ids = function.parameters().node_ids();
         let operand = access.operand();
         let (receiver, arguments) = if MemberAccessOperand(&operand).is_namespace_qualifier() {
             (

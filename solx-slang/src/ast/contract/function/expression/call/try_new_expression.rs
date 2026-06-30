@@ -8,13 +8,13 @@ use slang_solidity_v2::ast::CallOptionsExpression;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
-use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::CmpPredicate;
 
 use crate::ast::BlockAnd;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
+use crate::ast::analysis::query::ParameterNodeIds;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 use crate::ast::contract::function::expression::call::contract_creation::ContractCreation;
@@ -58,15 +58,9 @@ impl TryNewExpression {
         let Definition::Contract(contract_definition) = contract_type.definition() else {
             return None;
         };
-        let parameter_ids: Vec<NodeId> = contract_definition
+        let parameter_ids = contract_definition
             .constructor()
-            .map(|constructor| {
-                constructor
-                    .parameters()
-                    .iter()
-                    .map(|parameter| parameter.node_id())
-                    .collect()
-            })
+            .map(|constructor| constructor.parameters().node_ids())
             .unwrap_or_default();
         let arguments = CallArguments::for_parameter_ids(&call.arguments(), &parameter_ids);
         Some(Self {

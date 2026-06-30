@@ -10,6 +10,7 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 
 use crate::ast::BlockAnd;
+use crate::ast::analysis::query::ParameterNodeIds;
 use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
@@ -36,11 +37,7 @@ impl IdentifierFunctionCall {
         else {
             return None;
         };
-        let parameter_ids: Vec<NodeId> = function_definition
-            .parameters()
-            .iter()
-            .map(|parameter| parameter.node_id())
-            .collect();
+        let parameter_ids = function_definition.parameters().node_ids();
         Some(Self {
             target_id: dispatch.resolve_virtual(function_definition.node_id()),
             arguments: CallArguments::for_parameter_ids(arguments, &parameter_ids),
