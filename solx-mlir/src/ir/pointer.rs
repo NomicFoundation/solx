@@ -5,8 +5,6 @@
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Type as MlirType;
-use melior::ir::TypeLike;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
 use melior::ir::attribute::FlatSymbolRefAttribute;
@@ -15,7 +13,6 @@ use melior::ir::attribute::TypeAttribute;
 use crate::Context;
 use crate::Type;
 use crate::Value;
-use crate::ffi;
 use crate::ods::sol::AddrOfOperation;
 use crate::ods::sol::AllocaOperation;
 use crate::ods::sol::CopyOperation;
@@ -187,7 +184,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
     }
 
     /// Steps to the place of element `element_type` at `index` within this aggregate place (`sol.gep`).
-    /// The result pointer type is derived C-side by `sol::GepOp::getResultType`.
+    /// The result place type comes from [`Type::gep_result_type`].
     pub fn gep<B>(
         self,
         index: Value<'context, 'block>,
@@ -200,16 +197,11 @@ impl<'context, 'block> Pointer<'context, 'block> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let address_type = unsafe {
-            MlirType::from_raw(ffi::mlirSolGepGetResultType(
-                self.inner.r#type().to_raw(),
-                element_type.into_mlir().to_raw(),
-            ))
-        };
+        let address_type = self.r#type().gep_result_type(element_type);
         let mut gep = GepOperation::builder(context.mlir_context, context.location())
             .base_addr(self.inner)
             .idx(index.into_mlir())
-            .addr(address_type);
+            .addr(address_type.into_mlir());
         if no_panic_bounds {
             gep = gep.no_panic_bounds(Attribute::unit(context.mlir_context));
         }

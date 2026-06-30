@@ -605,6 +605,17 @@ impl<'context> Type<'context> {
         })
     }
 
+    /// The place type a `sol.gep` step yields, given this `!sol.ptr` base type and an
+    /// `element_type`, derived C-side by `sol::GepOp::getResultType`.
+    pub fn gep_result_type(self, element_type: Self) -> Self {
+        Self::new(unsafe {
+            MlirType::from_raw(ffi::mlirSolGepGetResultType(
+                self.inner.to_raw(),
+                element_type.inner.to_raw(),
+            ))
+        })
+    }
+
     /// The place type addressing an element of `self` at `location`: a reference element in `Storage` /
     /// `CallData` is its own place, every other element a `!sol.ptr<self, location>`.
     pub fn address_type(

@@ -451,10 +451,6 @@ impl<'context, 'block> Value<'context, 'block> {
     /// at `receiver` cast to `address`. Returns the success status and the decoded results. With
     /// `try_call` the status is surfaced for a `try`/`catch`; otherwise the call reverts on failure and
     /// the caller discards the status. A `view`/`pure` callee passes `is_static` for a `STATICCALL`.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "sol.ext_call's operand set maps one-to-one to these arguments"
-    )]
     pub fn external_call(
         receiver: Self,
         callee_name: &str,

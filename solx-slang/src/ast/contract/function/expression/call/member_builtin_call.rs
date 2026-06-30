@@ -158,10 +158,10 @@ impl MemberBuiltinCall {
                     .result(1)
                     .expect("a bare call always produces return data")
                     .into();
-                return BlockAnd {
+                BlockAnd {
                     value: vec![status, ret_data],
                     block,
-                };
+                }
             }
             BuiltIn::AbiDecode => {
                 let ArgumentsDeclaration::PositionalArguments(positional) = &self.arguments else {
@@ -208,10 +208,10 @@ impl MemberBuiltinCall {
                             .into()
                     })
                     .collect();
-                return BlockAnd {
+                BlockAnd {
                     value: values,
                     block,
-                };
+                }
             }
             BuiltIn::Wrap | BuiltIn::Unwrap => {
                 let ArgumentsDeclaration::PositionalArguments(positional) = &self.arguments else {
@@ -225,10 +225,10 @@ impl MemberBuiltinCall {
                         .into_mlir(),
                     None => value.into_mlir(),
                 };
-                return BlockAnd {
+                BlockAnd {
                     value: vec![result],
                     block,
-                };
+                }
             }
             member_built_in => {
                 if matches!(member_built_in, BuiltIn::ArrayPop | BuiltIn::ArrayPush)

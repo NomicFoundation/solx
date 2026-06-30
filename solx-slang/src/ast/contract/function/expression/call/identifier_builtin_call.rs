@@ -274,8 +274,7 @@ impl IdentifierBuiltinCall {
         let condition = self
             .arguments
             .expressions
-            .iter()
-            .next()
+            .first()
             .expect("assert has one argument");
         let BlockAnd {
             value: condition_value,
