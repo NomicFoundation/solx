@@ -7,5 +7,3 @@ pub mod emit;
 pub mod keyed_signature;
 pub mod member;
 pub mod signature;
-
-pub use self::signature::Signature;
