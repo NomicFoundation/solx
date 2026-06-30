@@ -16,7 +16,6 @@ use melior::ir::RegionLike;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::attribute::FlatSymbolRefAttribute;
-use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::Parameter;
 
@@ -31,7 +30,6 @@ use crate::ast::EmitExpression;
 use crate::ast::EmitStatement;
 use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
-use crate::ast::analysis::query::ModifierResolution;
 use crate::ast::analysis::query::PositionalArguments;
 use crate::ast::contract::function::FunctionScope;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -45,28 +43,10 @@ impl EmitModifierCalls for FunctionDefinition {
         &self,
         scope: &FunctionScope<'state, 'context>,
     ) -> Vec<FunctionDefinition> {
-        let mut resolved = Vec::new();
-        for invocation in self.modifier_invocations().iter() {
-            let lexical = match invocation.name().resolve_to_definition() {
-                Some(Definition::Modifier(modifier)) => modifier,
-                _ => match scope
-                    .contract
-                    .and_then(|contract| contract.resolve_qualified_modifier(&invocation))
-                {
-                    Some(modifier) => modifier,
-                    None => continue,
-                },
-            };
-            let definition = scope
-                .contract
-                .and_then(|contract| contract.resolve_modifier_override(&invocation, &lexical))
-                .unwrap_or(lexical);
-            if definition.body().is_none() {
-                continue;
-            }
-            resolved.push(definition);
-        }
-        resolved
+        self.modifier_invocations()
+            .iter()
+            .filter_map(|invocation| scope.resolve_modifier_invocation(&invocation))
+            .collect()
     }
 
     fn emit_modifier_call_blocks<'state, 'context, 'block>(
@@ -83,23 +63,9 @@ impl EmitModifierCalls for FunctionDefinition {
             .collect();
 
         for invocation in self.modifier_invocations().iter() {
-            let lexical = match invocation.name().resolve_to_definition() {
-                Some(Definition::Modifier(modifier)) => modifier,
-                _ => match scope
-                    .contract
-                    .and_then(|contract| contract.resolve_qualified_modifier(&invocation))
-                {
-                    Some(modifier) => modifier,
-                    None => continue,
-                },
-            };
-            let definition = scope
-                .contract
-                .and_then(|contract| contract.resolve_modifier_override(&invocation, &lexical))
-                .unwrap_or(lexical);
-            if definition.body().is_none() {
+            let Some(definition) = scope.resolve_modifier_invocation(&invocation) else {
                 continue;
-            }
+            };
 
             // The `sol.modifier_call_blk` region has one `IsolatedFromAbove`, terminator-free block
             // whose arguments are a fresh copy of the whole wrapped-function parameter list; invocation
