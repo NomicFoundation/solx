@@ -79,23 +79,13 @@ pub fn get_last_contract(
                             .sources
                             .get(path)
                             .and_then(|source| source.ast.as_ref())
-                        && let Some(name) = slang_contract_names_in_source_order(ast)
+                        && let Some(name) = slang_object_names_in_source_order(ast)
                             .into_iter()
                             .rev()
                             .find(|name| contracts.contains_key(name.as_str()))
                     {
                         return Ok(
                             solx_utils::ContractName::new(path.clone(), Some(name)).full_path
-                        );
-                    }
-                }
-                for (path, _source) in sources.iter().rev() {
-                    if let Some(contracts) = output.contracts.get(path)
-                        && let Some((name, _)) = contracts.last_key_value()
-                    {
-                        return Ok(
-                            solx_utils::ContractName::new(path.clone(), Some(name.clone()))
-                                .full_path,
                         );
                     }
                 }
@@ -200,13 +190,23 @@ fn last_contract_name(
         .ok_or_else(|| anyhow::anyhow!("The last contract not found in the AST"))
 }
 
+///
+/// Names of the deployable top-level objects in a Slang CST AST, in source order: a contract,
+/// library, or interface. Slang's CST gives each its own node type, unlike the solc AST where
+/// a library is a `ContractDefinition` with a `contractKind`, so all three are matched here.
+///
 #[cfg(feature = "slang-ast")]
-fn slang_contract_names_in_source_order(ast: &serde_json::Value) -> Vec<String> {
+fn slang_object_names_in_source_order(ast: &serde_json::Value) -> Vec<String> {
     ast["members"]
         .as_array()
         .into_iter()
         .flatten()
-        .filter(|member| member["type"] == "ContractDefinition")
+        .filter(|member| {
+            matches!(
+                member["type"].as_str(),
+                Some("ContractDefinition" | "LibraryDefinition" | "InterfaceDefinition")
+            )
+        })
         .filter_map(|member| member["name"]["text"].as_str().map(str::to_owned))
         .collect()
 }

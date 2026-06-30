@@ -42,7 +42,7 @@ impl From<AddressSpace> for DataLocation {
 impl TryFrom<u32> for DataLocation {
     type Error = u32;
 
-    /// Recovers a data location from its dialect ordinal — the inverse of the
+    /// Recovers a data location from its dialect ordinal, the inverse of the
     /// `#[repr(u32)]` discriminant. An ordinal outside the six known locations is
     /// returned verbatim as the error.
     fn try_from(ordinal: u32) -> Result<Self, Self::Error> {
