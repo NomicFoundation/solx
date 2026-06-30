@@ -32,6 +32,7 @@ use solx_mlir::ods::sol::XorOperation;
 
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 
@@ -260,12 +261,7 @@ impl Operator {
         operand: &Expression,
         block: BlockRef<'context, 'block>,
     ) -> (AstValue<'context, 'block>, BlockRef<'context, 'block>) {
-        if let Some((old, _new, block)) =
-            self.emit_increment_decrement_indexed(context, operand, block)
-        {
-            return (old.into(), block);
-        }
-        let (old, _) = self.emit_increment_decrement(context, operand, &block);
+        let (old, _new, block) = self.emit_increment_decrement(context, operand, block);
         (old.into(), block)
     }
 
@@ -288,12 +284,8 @@ impl Operator {
 
         match self {
             Operator::Increment | Operator::Decrement => {
-                if let Some((_old, new_value, block)) =
-                    self.emit_increment_decrement_indexed(context, operand, block)
-                {
-                    return (new_value.into(), block);
-                }
-                let (_old, new_value) = self.emit_increment_decrement(context, operand, &block);
+                let (_old, new_value, block) =
+                    self.emit_increment_decrement(context, operand, block);
                 (new_value.into(), block)
             }
             Operator::BitwiseNot => {
@@ -340,17 +332,41 @@ impl Operator {
         }
     }
 
-    /// Loads, increments or decrements, stores, and returns `(old, new)` for an identifier lvalue.
+    /// Loads an incrementable lvalue, applies the `++` / `--` step, stores it, and returns
+    /// `(old, new, continuation block)`. The operand's expression kind selects the lvalue's place,
+    /// resolved here so neither caller probes for it: an identifier names a variable or
+    /// state-variable slot; an index or member access is a computed pointer that may open a block.
     fn emit_increment_decrement<'context, 'block>(
         self,
         context: &ExpressionContext<'_, 'context, 'block>,
         operand: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> (
+        Value<'context, 'block>,
+        Value<'context, 'block>,
+        BlockRef<'context, 'block>,
+    ) {
+        match operand {
+            Expression::Identifier(identifier) => {
+                let (old, new_value) =
+                    self.emit_increment_decrement_variable(context, identifier, &block);
+                (old, new_value, block)
+            }
+            Expression::IndexAccessExpression(_) | Expression::MemberAccessExpression(_) => {
+                self.emit_increment_decrement_place(context, operand, block)
+            }
+            _ => unreachable!("unsupported operand for {self:?}"),
+        }
+    }
+
+    /// Loads, increments or decrements, stores, and returns `(old, new)` for a named lvalue: a
+    /// state variable addressed by its storage slot, or a stack variable or parameter by pointer.
+    fn emit_increment_decrement_variable<'context, 'block>(
+        self,
+        context: &ExpressionContext<'_, 'context, 'block>,
+        identifier: &Identifier,
         block: &BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, Value<'context, 'block>) {
-        let Expression::Identifier(identifier) = operand else {
-            unreachable!("unsupported operand for {self:?}");
-        };
-
         match identifier.resolve_to_definition() {
             Some(Definition::StateVariable(state_variable)) => {
                 let slot = context
@@ -383,17 +399,18 @@ impl Operator {
         }
     }
 
-    /// Emits `++` / `--` on a *computed* lvalue such as `a[i]` or a struct field; `None` otherwise.
-    fn emit_increment_decrement_indexed<'context, 'block>(
+    /// Loads, increments or decrements, stores, and returns `(old, new, continuation block)` for a
+    /// computed lvalue such as `a[i]` or a struct field, whose address may open a new block.
+    fn emit_increment_decrement_place<'context, 'block>(
         self,
         context: &ExpressionContext<'_, 'context, 'block>,
         operand: &Expression,
         block: BlockRef<'context, 'block>,
-    ) -> Option<(
+    ) -> (
         Value<'context, 'block>,
         Value<'context, 'block>,
         BlockRef<'context, 'block>,
-    )> {
+    ) {
         let (address, element_type, block) = match operand {
             Expression::IndexAccessExpression(index_access) => {
                 let BlockAnd {
@@ -417,7 +434,7 @@ impl Operator {
                 } = access.emit_place(context, block);
                 (address, element_type, block)
             }
-            _ => return None,
+            _ => unreachable!("a computed increment lvalue is an index or member access"),
         };
         let pointer = Pointer::new(address);
         let old = pointer
@@ -425,7 +442,7 @@ impl Operator {
             .into_mlir();
         let new_value = self.emit_step(context, old, element_type, &block);
         pointer.store(AstValue::new(new_value), context.state, &block);
-        Some((old, new_value, block))
+        (old, new_value, block)
     }
 
     /// Applies the `++` / `--` step to a loaded value: adds or subtracts a typed `1`, honoring the arithmetic mode.
