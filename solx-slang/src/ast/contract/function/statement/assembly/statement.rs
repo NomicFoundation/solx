@@ -165,7 +165,7 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
             Some(block)
         }
         YulStatement::YulLeaveStatement(_) => {
-            Some(block)
+            unimplemented!("a yul `leave` nested in control flow is not supported by the inliner")
         }
         YulStatement::YulBreakStatement(_) => {
             mlir_op_void!(context.state, &block, BreakOperation);
