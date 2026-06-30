@@ -11,6 +11,7 @@
 // CHECK:   sol.for cond {
 // CHECK:     sol.condition %{{.*}}
 // CHECK:   } body {
+// CHECK:     sol.cadd %
 // CHECK:     sol.yield
 // CHECK:   } step {
 // CHECK:     sol.add %
