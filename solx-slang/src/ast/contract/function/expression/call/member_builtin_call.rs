@@ -269,8 +269,10 @@ impl MemberBuiltinCall {
                 let (value, block) = match member_built_in {
                     BuiltIn::AddressSend => {
                         let state = context.state;
-                        let BlockAnd { value: addr, block } =
-                            self.access.operand().emit(context, block);
+                        let BlockAnd {
+                            value: address,
+                            block,
+                        } = self.access.operand().emit(context, block);
                         let BlockAnd {
                             value: values,
                             block,
@@ -286,7 +288,7 @@ impl MemberBuiltinCall {
                             state,
                             block,
                             SendOperation
-                                .addr(addr)
+                                .addr(address)
                                 .val(amount)
                                 .status(AstType::signless(
                                     state.mlir_context,
@@ -297,8 +299,10 @@ impl MemberBuiltinCall {
                     }
                     BuiltIn::AddressTransfer => {
                         let state = context.state;
-                        let BlockAnd { value: addr, block } =
-                            self.access.operand().emit(context, block);
+                        let BlockAnd {
+                            value: address,
+                            block,
+                        } = self.access.operand().emit(context, block);
                         let BlockAnd {
                             value: values,
                             block,
@@ -310,7 +314,7 @@ impl MemberBuiltinCall {
                                 &block,
                             )
                             .into_mlir();
-                        mlir_op_void!(state, block, TransferOperation.addr(addr).val(amount));
+                        mlir_op_void!(state, block, TransferOperation.addr(address).val(amount));
                         (None, block)
                     }
                     BuiltIn::AbiEncode => {

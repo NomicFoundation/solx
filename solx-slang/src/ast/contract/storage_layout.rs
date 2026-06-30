@@ -3,7 +3,6 @@
 //!
 
 use ruint::aliases::U256;
-use solx_utils::DataLocation;
 
 /// Storage location of a state variable in contract storage.
 #[derive(Debug, Clone)]
@@ -16,7 +15,7 @@ pub struct StorageSlot {
     /// MLIR symbol name, formatted as `{label}_{node_id}`.
     pub name: String,
     /// Storage class: `Storage` selects SLOAD/SSTORE, `Transient` (EIP-1153) selects TLOAD/TSTORE.
-    pub location: DataLocation,
+    pub location: solx_utils::DataLocation,
 }
 
 impl StorageSlot {
@@ -26,7 +25,7 @@ impl StorageSlot {
         byte_offset: u32,
         label: &str,
         node_id: impl std::fmt::Display,
-        location: DataLocation,
+        location: solx_utils::DataLocation,
     ) -> Self {
         Self {
             slot,

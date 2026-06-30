@@ -2,9 +2,6 @@
 //! Statement emission to MLIR operations.
 //!
 
-use crate::ast::Pointer;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
 pub mod assembly;
 pub mod control_flow;
 pub mod event;
@@ -48,6 +45,9 @@ use crate::ast::EmitExpression;
 use crate::ast::EmitForEffect;
 use crate::ast::EmitStatement;
 use crate::ast::EmitValues;
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;

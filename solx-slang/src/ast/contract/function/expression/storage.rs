@@ -10,7 +10,6 @@ use melior::ir::attribute::FlatSymbolRefAttribute;
 
 use solx_mlir::Context;
 use solx_mlir::ods::sol::LoadImmutableOperation;
-use solx_utils::DataLocation;
 
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
@@ -28,7 +27,7 @@ impl StorageSlot {
     where
         'context: 'block,
     {
-        if matches!(self.location, DataLocation::Immutable) {
+        if matches!(self.location, solx_utils::DataLocation::Immutable) {
             return mlir_op!(
                 context,
                 block,

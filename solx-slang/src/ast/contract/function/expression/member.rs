@@ -35,7 +35,6 @@ use solx_mlir::ods::sol::OriginOperation;
 use solx_mlir::ods::sol::PrevRandaoOperation;
 use solx_mlir::ods::sol::SigOperation;
 use solx_mlir::ods::sol::TimestampOperation;
-use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
@@ -311,7 +310,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 &block,
                 CodeOperation
                     .cont_addr(address.into_mlir())
-                    .out(AstType::string(state.mlir_context, DataLocation::Memory))
+                    .out(AstType::string(state.mlir_context, solx_utils::DataLocation::Memory))
             );
             return BlockAnd {
                 block,
@@ -408,7 +407,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
         )),
         Some(BuiltIn::MsgData) => Some(mlir_op_build!(
             state,
-            GetCallDataOperation.addr(AstType::string(state.mlir_context, DataLocation::CallData))
+            GetCallDataOperation.addr(AstType::string(state.mlir_context, solx_utils::DataLocation::CallData))
         )),
         _ => None,
     };

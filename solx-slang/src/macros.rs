@@ -86,11 +86,11 @@ macro_rules! statement_emit {
     };
 }
 
-/// The inline-assembly (Yul) counterpart of [`statement_emit`] / [`expression_emit`]:
+/// The inline-assembly, or Yul, counterpart of [`statement_emit`] / [`expression_emit`]:
 /// generates `impl EmitYul` for a Yul node. The context is `&mut YulContext`, since a Yul
 /// `let` declares variables; the output is stated per node because Yul never
-/// diverges solx control flow: a statement yields its continuation `BlockRef`
-/// (not an `Option`), an expression its `(word, continuation)` pair. The closure
+/// diverges solx control flow: a statement yields its continuation `BlockRef`,
+/// not an `Option`, an expression its `(word, continuation)` pair. The closure
 /// binds the node (`|node, context, block|`). Names resolve against the call
 /// site's imports.
 macro_rules! yul_emit {

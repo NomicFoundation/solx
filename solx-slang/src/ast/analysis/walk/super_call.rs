@@ -159,7 +159,7 @@ impl SuperDispatch {
     }
 
     /// Returns the MRO index of the contract that lexically defines `node_id`.
-    pub fn defining_index(mro: &[ContractDefinition], node_id: NodeId) -> Option<usize> {
+    fn defining_index(mro: &[ContractDefinition], node_id: NodeId) -> Option<usize> {
         mro.iter().position(|contract| {
             contract
                 .functions()
@@ -188,7 +188,7 @@ impl SuperDispatch {
     /// Records one resolved super/base target into the dispatch maps,
     /// scheduling the shadowed override (if any) for emission under its
     /// contract-qualified symbol.
-    pub fn record_target(
+    fn record_target(
         dispatch: &mut SuperDispatch,
         shadowed_ids: &mut HashSet<NodeId>,
         to_walk: &mut Vec<(usize, FunctionDefinition)>,

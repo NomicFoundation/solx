@@ -10,7 +10,6 @@ use slang_solidity_v2::ast::IndexAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::ods::sol::SliceOperation;
-use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
@@ -55,7 +54,7 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
                     Some(SlangDataLocation::Inherited) => {
                         unreachable!("slang should not surface Inherited at an index-access base")
                     }
-                    Some(other) => DataLocation::from_slang(other, None),
+                    Some(other) => solx_utils::DataLocation::from_slang(other, None),
                     None => unreachable!(
                         "index access on a value-typed base is not yet wired: {:?}",
                         std::mem::discriminant(&base_type)

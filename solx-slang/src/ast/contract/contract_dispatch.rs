@@ -18,14 +18,6 @@ pub struct ContractDispatch {
 }
 
 impl ContractDispatch {
-    /// Builds dispatch metadata from the super-dispatch precompute pass.
-    pub fn from_super_dispatch(super_dispatch: &SuperDispatch) -> Self {
-        Self {
-            super_redirect: super_dispatch.redirect.clone(),
-            virtual_redirect: super_dispatch.virtual_redirect.clone(),
-        }
-    }
-
     /// Resolves a super/base member access target.
     pub fn resolve_super(&self, access_id: NodeId) -> Option<NodeId> {
         self.super_redirect.get(&access_id).copied()
@@ -37,5 +29,15 @@ impl ContractDispatch {
             .get(&definition_id)
             .copied()
             .unwrap_or(definition_id)
+    }
+}
+
+impl From<&SuperDispatch> for ContractDispatch {
+    /// Builds dispatch metadata from the super-dispatch precompute pass.
+    fn from(super_dispatch: &SuperDispatch) -> Self {
+        Self {
+            super_redirect: super_dispatch.redirect.clone(),
+            virtual_redirect: super_dispatch.virtual_redirect.clone(),
+        }
     }
 }

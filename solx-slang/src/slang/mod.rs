@@ -67,7 +67,7 @@ impl Slang {
         Ok(builder.build())
     }
 
-    /// Gathers every file-level (free) function: not part of any contract's linearised set, so
+    /// Gathers every file-level, or free, function: not part of any contract's linearised set, so
     /// collected once and handed to each contract emitter.
     fn gather_free_functions(unit: &CompilationUnit) -> Vec<FunctionDefinition> {
         unit.file_ids()

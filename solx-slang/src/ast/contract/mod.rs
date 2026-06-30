@@ -34,7 +34,6 @@ use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::ods::sol::ImmutableOperation;
 use solx_mlir::ods::sol::StateVarOperation;
-use solx_utils::DataLocation;
 
 use self::contract_dispatch::ContractDispatch;
 use self::function::FunctionScope;
@@ -58,7 +57,7 @@ impl EmitObject for ContractDefinition {
         let contract_name = self.name().name();
 
         let super_dispatch = SuperDispatch::build_super_dispatch(self);
-        let dispatch = ContractDispatch::from_super_dispatch(&super_dispatch);
+        let dispatch = ContractDispatch::from(&super_dispatch);
         let shadowed_functions: Vec<_> = super_dispatch
             .shadowed
             .iter()
@@ -142,7 +141,7 @@ impl EmitObject for ContractDefinition {
                 context,
             );
             let state = &*context;
-            if matches!(slot.location, DataLocation::Immutable) {
+            if matches!(slot.location, solx_utils::DataLocation::Immutable) {
                 mlir_op_void!(
                     state,
                     contract_body,
@@ -169,7 +168,7 @@ impl EmitObject for ContractDefinition {
                 .r#type(TypeAttribute::new(element_type))
                 .slot(slot_attribute)
                 .byte_offset(byte_offset_attribute);
-            if matches!(slot.location, DataLocation::Transient) {
+            if matches!(slot.location, solx_utils::DataLocation::Transient) {
                 operation = operation.transient(Attribute::unit(state.mlir_context));
             }
             contract_body.append_operation(operation.build().into());

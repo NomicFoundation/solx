@@ -2,9 +2,6 @@
 //! Function definition emission to Sol dialect MLIR.
 //!
 
-use crate::ast::Pointer;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
 pub mod expression;
 pub mod function_scope;
 pub mod mlir_symbol_name;
@@ -26,6 +23,9 @@ use self::signature::Signature;
 use self::statement::StatementContext;
 use crate::ast::EmitFunction;
 use crate::ast::EmitStatement;
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::emit::EmitModifierCalls;
 
 pub use self::function_scope::FunctionScope;
@@ -162,7 +162,7 @@ impl EmitFunction for FunctionDefinition {
     ) {
         let returns: Vec<_> = self
             .returns()
-            .map(|params| params.iter().collect::<Vec<_>>())
+            .map(|parameters| parameters.iter().collect::<Vec<_>>())
             .unwrap_or_default();
         let state = scope.state;
         let values: Vec<Value<'context, 'block>> = result_types

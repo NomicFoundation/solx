@@ -71,7 +71,7 @@ impl TryNewExpression {
     }
 
     /// Emits the creation with `try` semantics, returning the success status flag, the created
-    /// contract (the single declared result), and the continuation block.
+    /// contract, the single declared result, and the continuation block.
     pub fn emit<'state, 'context, 'block>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,

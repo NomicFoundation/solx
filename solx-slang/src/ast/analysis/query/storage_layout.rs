@@ -8,7 +8,6 @@ use ruint::aliases::U256;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableMutability;
-use solx_utils::DataLocation;
 
 use crate::ast::contract::storage_layout::StorageSlot;
 
@@ -35,7 +34,7 @@ impl StorageLayout for ContractDefinition {
                         item.offset() as u32,
                         item.label(),
                         item.node_id(),
-                        DataLocation::Storage,
+                        solx_utils::DataLocation::Storage,
                     ),
                 )
             })
@@ -48,7 +47,7 @@ impl StorageLayout for ContractDefinition {
                     item.offset() as u32,
                     item.label(),
                     item.node_id(),
-                    DataLocation::Transient,
+                    solx_utils::DataLocation::Transient,
                 ),
             );
         }
@@ -60,7 +59,13 @@ impl StorageLayout for ContractDefinition {
             let label = variable.name().name();
             layout.insert(
                 node_id,
-                StorageSlot::new(U256::ZERO, 0, &label, node_id, DataLocation::Immutable),
+                StorageSlot::new(
+                    U256::ZERO,
+                    0,
+                    &label,
+                    node_id,
+                    solx_utils::DataLocation::Immutable,
+                ),
             );
         }
         layout

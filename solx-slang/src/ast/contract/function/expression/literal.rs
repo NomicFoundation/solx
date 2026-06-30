@@ -17,7 +17,6 @@ use slang_solidity_v2::ast::StringExpression;
 use slang_solidity_v2::ast::ThisKeyword;
 use slang_solidity_v2::ast::TrueKeyword;
 use solx_mlir::ods::sol::ThisOperation;
-use solx_utils::BIT_LENGTH_BYTE;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitAs;
@@ -92,7 +91,7 @@ impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Stri
             let byte = self.value().first().copied().unwrap_or(0);
             let ui8 = Type::from(IntegerType::unsigned(
                 state.mlir_context,
-                BIT_LENGTH_BYTE as u32,
+                solx_utils::BIT_LENGTH_BYTE as u32,
             ));
             let integer = AstValue::constant_from_bigint(
                 &BigInt::from(byte),
@@ -111,7 +110,7 @@ impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Stri
             let integer_value = BigInt::from_bytes_be(Sign::Plus, &buffer);
             let integer_type = Type::from(IntegerType::unsigned(
                 state.mlir_context,
-                width * BIT_LENGTH_BYTE as u32,
+                width * solx_utils::BIT_LENGTH_BYTE as u32,
             ));
             let integer = AstValue::constant_from_bigint(
                 &integer_value,

@@ -30,7 +30,7 @@ pub trait EmitConstructor {
     /// Emits one constructor as a `sol.func`: `owner`'s constructor with its parameters, mutability,
     /// body, and modifiers, chaining into the next constructor. The most-derived one (`is_most_derived`)
     /// additionally carries `kind = #Constructor` and runs the whole hierarchy's state-variable
-    /// initializers; a base constructor is a plain internal func with a referenceable `id`.
+    /// initializers; a base constructor is a plain internal func with a referenceable `identifier`.
     fn emit_constructor_func<'state, 'context>(
         &self,
         scope: &FunctionScope<'state, 'context>,
