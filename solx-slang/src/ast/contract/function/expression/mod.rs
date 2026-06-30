@@ -23,6 +23,7 @@ use std::collections::HashMap;
 
 use melior::ir::BlockRef;
 use melior::ir::Type;
+use melior::ir::Value as MlirValue;
 use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
@@ -34,6 +35,7 @@ use crate::ast::BlockAnd;
 use crate::ast::EmitAs;
 use crate::ast::EmitExpression;
 use crate::ast::EmitForEffect;
+use crate::ast::EmitValues;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::contract_dispatch::ContractDispatch;
@@ -207,6 +209,36 @@ impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for Expression {
             }
             Expression::NewExpression(_) => block,
             _ => self.emit(context, block).block,
+        }
+    }
+}
+
+impl<'context: 'block, 'block> EmitValues<'context, 'block> for Expression {
+    /// A tuple yields its elements; a call or conditional its result list.
+    fn emit_values<'state>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> BlockAnd<'context, 'block, Vec<MlirValue<'context, 'block>>> {
+        match self {
+            Expression::TupleExpression(tuple) => {
+                let items = tuple.items();
+                let mut values = Vec::with_capacity(items.len());
+                let mut block = block;
+                for item in items.iter() {
+                    let inner = item.expression().expect("slang validated");
+                    let BlockAnd { value, block: next } = inner.emit(context, block);
+                    values.push(value.into_mlir());
+                    block = next;
+                }
+                BlockAnd {
+                    value: values,
+                    block,
+                }
+            }
+            Expression::FunctionCallExpression(call) => call.emit(context, block),
+            Expression::ConditionalExpression(conditional) => conditional.emit(context, block),
+            _ => unreachable!("a multi-valued expression is a tuple, call, or conditional"),
         }
     }
 }

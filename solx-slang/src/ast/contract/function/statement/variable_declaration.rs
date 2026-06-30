@@ -4,7 +4,6 @@
 
 use melior::ir::BlockRef;
 
-use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MultiTypedDeclaration;
 use slang_solidity_v2::ast::SingleTypedDeclaration;
 use slang_solidity_v2::ast::VariableDeclarationStatement;
@@ -12,8 +11,8 @@ use slang_solidity_v2::ast::VariableDeclarationTarget;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitAs;
-use crate::ast::EmitExpression;
 use crate::ast::EmitStatement;
+use crate::ast::EmitValues;
 use crate::ast::LocationPolicy;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
@@ -79,33 +78,10 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
 
     let emitter = ExpressionContext::from(&*context);
 
-    let (values, current) = match &expression {
-        Expression::TupleExpression(tuple) => {
-            let items = tuple.items();
-            let mut values = Vec::with_capacity(items.len());
-            let mut current = block;
-            for item in items.iter() {
-                let inner = item
-                    .expression()
-                    .expect("slang validated");
-                let BlockAnd { value, block: next } = inner.emit(&emitter, current);
-                values.push(value.into_mlir());
-                current = next;
-            }
-            (values, current)
-        }
-        Expression::FunctionCallExpression(call) => {
-            let BlockAnd { value, block } = call.emit(&emitter, block);
-            (value, block)
-        }
-        Expression::ConditionalExpression(conditional) => {
-            let BlockAnd { value, block } = conditional.emit(&emitter, block);
-            (value, block)
-        }
-        _ => unreachable!(
-            "tuple deconstruction with this right-hand side shape is not yet supported"
-        ),
-    };
+    let BlockAnd {
+        value: values,
+        block: current,
+    } = expression.emit_values(&emitter, block);
 
     for (member, value) in elements.iter().zip(values) {
         let Some(declaration) = member.member() else {

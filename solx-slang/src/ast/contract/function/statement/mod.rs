@@ -47,6 +47,7 @@ use crate::ast::EmitAs;
 use crate::ast::EmitExpression;
 use crate::ast::EmitForEffect;
 use crate::ast::EmitStatement;
+use crate::ast::EmitValues;
 use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
@@ -139,37 +140,9 @@ statement_emit!(ReturnStatement; |node, context, block| {
     let emitter = ExpressionContext::from(&*context);
     let expression = expression.unwrap_parentheses();
 
-    let (values, block) = if let Expression::TupleExpression(tuple) = &expression
-        && tuple.items().len() > 1
-    {
-        let items = tuple.items();
-        let mut values = Vec::with_capacity(items.len());
-        let mut current = block;
-        for item in items.iter() {
-            let inner = item
-                .expression()
-                .expect("slang validated");
-            let BlockAnd { value, block: next } = inner.emit(&emitter, current);
-            values.push(value);
-            current = next;
-        }
-        (values, current)
-    } else if context.return_types.len() > 1 {
-        let BlockAnd { value: values, block } = match &expression {
-            Expression::FunctionCallExpression(call) => {
-                call.emit(&emitter, block)
-            }
-            Expression::ConditionalExpression(conditional) => {
-                conditional.emit(&emitter, block)
-            }
-            _ => {
-                unreachable!("a multi-value return is a tuple, call, or conditional expression")
-            }
-        };
-        (
-            values.into_iter().map(AstValue::from).collect(),
-            block,
-        )
+    let (values, block) = if context.return_types.len() > 1 {
+        let BlockAnd { value: values, block } = expression.emit_values(&emitter, block);
+        (values.into_iter().map(AstValue::from).collect(), block)
     } else {
         let return_type = context.return_types[0];
         let BlockAnd { value, block } = expression.emit_as(return_type, &emitter, block);

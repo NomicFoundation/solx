@@ -20,6 +20,7 @@ use crate::ast::BlockAnd;
 use crate::ast::EmitAs;
 use crate::ast::EmitExpression;
 use crate::ast::EmitForEffect;
+use crate::ast::EmitValues;
 use crate::ast::LocationPolicy;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
@@ -81,33 +82,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
                 (then_block, &true_expression),
                 (else_block, &false_expression),
             ] {
-                let (values, current) = match branch_expression {
-                    Expression::TupleExpression(tuple) => {
-                        let mut values = Vec::new();
-                        let mut current = branch_block;
-                        for item in tuple.items().iter() {
-                            let inner = item.expression().expect(
-                                "a multi-value conditional tuple element has an inner expression",
-                            );
-                            let BlockAnd { value, block: next } = inner.emit(context, current);
-                            values.push(value.into_mlir());
-                            current = next;
-                        }
-                        (values, current)
-                    }
-                    Expression::FunctionCallExpression(call) => {
-                        let BlockAnd { value, block } = call.emit(context, branch_block);
-                        (value, block)
-                    }
-                    Expression::ConditionalExpression(nested) => {
-                        let BlockAnd { value, block } = nested.emit(context, branch_block);
-                        (value, block)
-                    }
-                    other => unreachable!(
-                        "multi-value conditional branch of this expression kind is not supported: {:?}",
-                        std::mem::discriminant(other)
-                    ),
-                };
+                let BlockAnd {
+                    value: values,
+                    block: current,
+                } = branch_expression.emit_values(context, branch_block);
                 for (index, value) in values.into_iter().enumerate() {
                     let cast = AstValue::from(value).cast(
                         AstType::new(result_types[index]),

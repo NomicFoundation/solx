@@ -18,6 +18,7 @@ use crate::ast::BlockAnd;
 use crate::ast::EmitAs;
 use crate::ast::EmitExpression;
 use crate::ast::EmitPlace;
+use crate::ast::EmitValues;
 use crate::ast::LocationPolicy;
 use crate::ast::Place;
 use crate::ast::Pointer;
@@ -228,15 +229,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                 let BlockAnd {
                     value: values,
                     block: next,
-                } = match rhs {
-                    Expression::FunctionCallExpression(call) => call.emit(context, block),
-                    Expression::ConditionalExpression(conditional) => {
-                        conditional.emit(context, block)
-                    }
-                    _ => unreachable!(
-                        "tuple assignment with this right-hand side shape is not yet supported"
-                    ),
-                };
+                } = rhs.emit_values(context, block);
                 block = next;
                 for (lvalue, value) in lhs.items().iter().zip(values) {
                     if let Some(lvalue) = lvalue.expression() {
