@@ -224,7 +224,7 @@ impl Frontend for Slang {
             let source_unit = file.ast();
 
             // Emit every contract as its own deployable object. The `catch_unwind` isolates each:
-            // a contract that cannot yet be lowered is simply absent from the artifacts, so its gap
+            // a contract that cannot yet be emitted is simply absent from the artifacts, so its gap
             // never aborts the file's other contracts. An `abstract contract` is never deployed.
             for contract in source_unit.contracts().iter() {
                 if contract.is_abstract() {
@@ -248,7 +248,14 @@ impl Frontend for Slang {
                         )
                     },
                 ));
-                let _ = emitted;
+                if let Ok(Err(error)) = emitted {
+                    output
+                        .errors
+                        .push(solx_standard_json::OutputError::new_warning(format!(
+                            "contract '{}' was not emitted: {error}",
+                            contract.name().name()
+                        )));
+                }
             }
 
             // Emit every library as its own deployable object, including internal-only ones: the
