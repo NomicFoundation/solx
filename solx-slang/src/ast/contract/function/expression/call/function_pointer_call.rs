@@ -2,20 +2,16 @@
 //! Solidity function-pointer call.
 //!
 
-use melior::ir::Attribute;
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::Type as SlangType;
-use solx_mlir::ods::sol::ExtICallOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
 use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 
@@ -122,36 +118,16 @@ impl FunctionPointerCall {
             value: argument_values,
             block,
         } = self.arguments.emit_as(&parameter_types, context, block);
-        let state = context.state;
-        let value = call_value.unwrap_or_else(|| AstValue::uint256(0, state, &block).into_mlir());
-        let gas = call_gas.unwrap_or_else(|| AstValue::gas_left(state, &block).into_mlir());
-        let mut out_types = Vec::with_capacity(result_types.len() + 1);
-        out_types.push(
-            AstType::signless(state.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir(),
+        let (status, results) = callee_value.external_call_indirect(
+            &argument_values,
+            &result_types,
+            call_value,
+            call_gas,
+            false,
+            true,
+            context.state,
+            &block,
         );
-        out_types.extend_from_slice(&result_types);
-        let operation = block.append_operation(mlir_op_build!(
-            state,
-            ExtICallOperation
-                .outs(&out_types)
-                .callee(callee_value.into_mlir())
-                .callee_operands(&argument_values)
-                .gas(gas)
-                .value(value)
-                .try_call(Attribute::unit(state.mlir_context))
-        ));
-        let status = operation
-            .result(0)
-            .expect("sol.ext_icall try produces a status result")
-            .into();
-        let results = (0..result_types.len())
-            .map(|index| {
-                operation
-                    .result(index + 1)
-                    .expect("sol.ext_icall try produces a status plus its declared results")
-                    .into()
-            })
-            .collect();
         (status, results, block)
     }
 }

@@ -526,33 +526,17 @@ impl<'context, 'block> Value<'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> Vec<MlirValue<'context, 'block>> {
         if self.r#type().is_ext_function_ref() {
-            let value = call_value.unwrap_or_else(|| Self::uint256(0, context, block).into_mlir());
-            let gas = call_gas.unwrap_or_else(|| Self::gas_left(context, block).into_mlir());
-            let mut out_types = Vec::with_capacity(result_types.len() + 1);
-            out_types.push(
-                Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir(),
+            let (_status, results) = self.external_call_indirect(
+                argument_values,
+                result_types,
+                call_value,
+                call_gas,
+                is_static,
+                false,
+                context,
+                block,
             );
-            out_types.extend_from_slice(result_types);
-            let mut operation_builder =
-                ExtICallOperation::builder(context.mlir_context, context.location())
-                    .outs(&out_types)
-                    .callee(self.into_mlir())
-                    .callee_operands(argument_values)
-                    .gas(gas)
-                    .value(value);
-            if is_static {
-                operation_builder =
-                    operation_builder.static_call(Attribute::unit(context.mlir_context));
-            }
-            let operation = block.append_operation(operation_builder.build().into());
-            (0..result_types.len())
-                .map(|index| {
-                    operation
-                        .result(index + 1)
-                        .expect("sol.ext_icall produces a status plus its declared results")
-                        .into()
-                })
-                .collect()
+            results
         } else {
             let operation = block.append_operation(mlir_op_build!(
                 context,
@@ -570,6 +554,59 @@ impl<'context, 'block> Value<'context, 'block> {
                 })
                 .collect()
         }
+    }
+
+    /// `sol.ext_icall` through this external function-pointer value, returning the success status and
+    /// the decoded results. With `try_call` the status is surfaced for a `try`/`catch`; otherwise the
+    /// caller discards it. `is_static` selects a `STATICCALL` for a `view`/`pure` pointer.
+    pub fn external_call_indirect(
+        self,
+        argument_values: &[MlirValue<'context, 'block>],
+        result_types: &[MlirType<'context>],
+        call_value: Option<MlirValue<'context, 'block>>,
+        call_gas: Option<MlirValue<'context, 'block>>,
+        is_static: bool,
+        try_call: bool,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> (
+        MlirValue<'context, 'block>,
+        Vec<MlirValue<'context, 'block>>,
+    ) {
+        let value = call_value.unwrap_or_else(|| Self::uint256(0, context, block).into_mlir());
+        let gas = call_gas.unwrap_or_else(|| Self::gas_left(context, block).into_mlir());
+        let mut out_types = Vec::with_capacity(result_types.len() + 1);
+        out_types
+            .push(Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
+        out_types.extend_from_slice(result_types);
+        let mut operation_builder =
+            ExtICallOperation::builder(context.mlir_context, context.location())
+                .outs(&out_types)
+                .callee(self.into_mlir())
+                .callee_operands(argument_values)
+                .gas(gas)
+                .value(value);
+        if is_static {
+            operation_builder =
+                operation_builder.static_call(Attribute::unit(context.mlir_context));
+        }
+        if try_call {
+            operation_builder = operation_builder.try_call(Attribute::unit(context.mlir_context));
+        }
+        let operation = block.append_operation(operation_builder.build().into());
+        let status = operation
+            .result(0)
+            .expect("sol.ext_icall produces a status result")
+            .into();
+        let results = (0..result_types.len())
+            .map(|index| {
+                operation
+                    .result(index + 1)
+                    .expect("sol.ext_icall produces a status plus its declared results")
+                    .into()
+            })
+            .collect();
+        (status, results)
     }
 
     /// `sol.encode`: the ABI-encoded `bytes memory` payload of `ins`. A `selector`,
