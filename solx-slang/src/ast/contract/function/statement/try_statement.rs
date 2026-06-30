@@ -18,9 +18,7 @@ use solx_mlir::ods::sol::YieldOperation;
 use crate::ast::EmitStatement;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::call::try_external_call::TryExternalCall;
-use crate::ast::contract::function::expression::call::try_function_pointer_call::TryFunctionPointerCall;
-use crate::ast::contract::function::expression::call::try_new_expression::TryNewExpression;
+use crate::ast::contract::function::expression::call::try_call_kind::TryCallKind;
 use crate::ast::contract::function::statement::StatementContext;
 
 /// The `catch` clause a `sol.try` carries, selecting how its fallback region is shaped.
@@ -60,16 +58,10 @@ statement_emit!(TryStatement; |node, context, block| {
 
     let (status, results, current_block) = {
         let emitter = ExpressionContext::from(&*context);
-        if let Some(call) = TryExternalCall::from_expression(&expression) {
-            call.emit(&emitter, block)
-        } else if let Some(new) = TryNewExpression::from_expression(&expression) {
-            new.emit(&emitter, block)
-        } else if let Some(call) = TryFunctionPointerCall::from_expression(&expression) {
-            call.emit(&emitter, block)
-        } else {
-            unreachable!(
-                "a try expression is an external call, an external function-pointer call, or a contract creation"
-            )
+        match TryCallKind::from_expression(&expression) {
+            TryCallKind::External(call) => call.emit(&emitter, block),
+            TryCallKind::NewExpression(new) => new.emit(&emitter, block),
+            TryCallKind::FunctionPointer(call) => call.emit(&emitter, block),
         }
     };
 
