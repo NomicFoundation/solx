@@ -51,30 +51,26 @@ impl SuperDispatch {
                 ContractBase::Interface(_) => None,
             })
             .collect();
-        let most_derived_ids: HashSet<NodeId> = contract
-            .linearised_functions()
+        let linearised_functions = contract.linearised_functions();
+        let most_derived_ids: HashSet<NodeId> = linearised_functions
             .iter()
             .map(|function| function.node_id())
             .collect();
 
         let mut dispatch = Self::default();
 
-        let mut most_derived_by_signature: HashMap<String, NodeId> = HashMap::new();
-        for function in contract.linearised_functions() {
-            most_derived_by_signature
-                .entry(function.mlir_function_name())
-                .or_insert_with(|| function.node_id());
-        }
         for base_contract in mro.iter() {
             for function in base_contract.functions() {
                 let node_id = function.node_id();
                 if most_derived_ids.contains(&node_id) {
                     continue;
                 }
-                if let Some(&target) = most_derived_by_signature.get(&function.mlir_function_name())
-                    && target != node_id
+                if let Some(target) = linearised_functions
+                    .iter()
+                    .find(|most_derived| most_derived.overrides(&function))
+                    && target.node_id() != node_id
                 {
-                    dispatch.virtual_redirect.insert(node_id, target);
+                    dispatch.virtual_redirect.insert(node_id, target.node_id());
                 }
             }
         }
@@ -126,9 +122,8 @@ impl SuperDispatch {
             let mut collector = Self::default();
             accept_function_definition(&function, &mut collector);
             for (access_id, lexical_target) in collector.super_calls {
-                let signature = lexical_target.mlir_function_name();
                 let Some((target_index, target)) =
-                    Self::resolve_super_target(&mro, from_index, &signature)
+                    Self::resolve_super_target(&mro, from_index, &lexical_target)
                 else {
                     continue;
                 };
@@ -173,16 +168,16 @@ impl SuperDispatch {
         })
     }
 
-    /// Finds the `super` target of `signature` for a call at `from_index`: the first *implemented*
-    /// function with that signature in a strictly more-base contract (a bodyless declaration is skipped).
+    /// Finds the `super` target for `lexical_target` at `from_index`: the first *implemented*
+    /// function it overrides in a strictly more-base contract (a bodyless declaration is skipped).
     fn resolve_super_target(
         mro: &[ContractDefinition],
         from_index: usize,
-        signature: &str,
+        lexical_target: &FunctionDefinition,
     ) -> Option<(usize, FunctionDefinition)> {
         for (index, contract) in mro.iter().enumerate().skip(from_index + 1) {
             for function in contract.functions() {
-                if function.body().is_some() && function.mlir_function_name() == signature {
+                if function.body().is_some() && lexical_target.overrides(&function) {
                     return Some((index, function));
                 }
             }
