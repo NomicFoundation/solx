@@ -2,20 +2,14 @@
 //! External calls to library functions.
 //!
 
-use melior::ir::Attribute;
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
-use melior::ir::attribute::StringAttribute;
-use melior::ir::attribute::TypeAttribute;
-use melior::ir::r#type::FunctionType;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::NodeId;
-use solx_mlir::ods::sol::ExtCallOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
@@ -149,38 +143,17 @@ impl ExternalLibraryCall {
             }
         };
         let state = context.state;
-        let address = AstValue::library_address(&library_name, state, &current_block).into_mlir();
-        let callee_type = FunctionType::new(state.mlir_context, &parameter_types, &return_types);
-        let gas = AstValue::gas_left(state, &current_block).into_mlir();
-        let value = AstValue::uint256(0, state, &current_block).into_mlir();
-        let selector_value =
-            AstValue::uint256(i64::from(selector), state, &current_block).into_mlir();
-        let operation = current_block.append_operation(mlir_op_build!(
+        let address = AstValue::library_address(&library_name, state, &current_block);
+        let results = AstValue::library_call(
+            address,
+            &mlir_name,
+            selector,
+            &parameter_types,
+            &argument_values,
+            &return_types,
             state,
-            ExtCallOperation
-                .callee(StringAttribute::new(state.mlir_context, &mlir_name))
-                .ins(&argument_values)
-                .addr(address)
-                .gas(gas)
-                .val(value)
-                .selector(selector_value)
-                .delegate_call(Attribute::unit(state.mlir_context))
-                .library_call(Attribute::unit(state.mlir_context))
-                .callee_type(TypeAttribute::new(callee_type.into()))
-                .status(AstType::signless(
-                    state.mlir_context,
-                    solx_utils::BIT_LENGTH_BOOLEAN
-                ))
-                .outs(&return_types)
-        ));
-        let results = (0..return_types.len())
-            .map(|index| {
-                operation
-                    .result(index + 1)
-                    .expect("sol.ext_call produces the declared results")
-                    .into()
-            })
-            .collect();
+            &current_block,
+        );
         BlockAnd {
             value: results,
             block: current_block,

@@ -512,6 +512,51 @@ impl<'context, 'block> Value<'context, 'block> {
         (status, results)
     }
 
+    /// `sol.ext_call` to a library function `callee_name` at its deployed `address`, dispatched by
+    /// `selector`. A library call is always a `DELEGATECALL`, so it carries the `delegate_call` and
+    /// `library_call` markers, reverts on failure, and discards the status.
+    pub fn library_call(
+        address: Self,
+        callee_name: &str,
+        selector: u32,
+        parameter_types: &[MlirType<'context>],
+        argument_values: &[MlirValue<'context, 'block>],
+        result_types: &[MlirType<'context>],
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Vec<MlirValue<'context, 'block>> {
+        let gas = Self::gas_left(context, block).into_mlir();
+        let value = Self::uint256(0, context, block).into_mlir();
+        let selector_value = Self::uint256(i64::from(selector), context, block).into_mlir();
+        let callee_type = FunctionType::new(context.mlir_context, parameter_types, result_types);
+        let operation = block.append_operation(mlir_op_build!(
+            context,
+            ExtCallOperation
+                .callee(StringAttribute::new(context.mlir_context, callee_name))
+                .ins(argument_values)
+                .addr(address.into_mlir())
+                .gas(gas)
+                .val(value)
+                .selector(selector_value)
+                .delegate_call(Attribute::unit(context.mlir_context))
+                .library_call(Attribute::unit(context.mlir_context))
+                .callee_type(TypeAttribute::new(callee_type.into()))
+                .status(Type::signless(
+                    context.mlir_context,
+                    solx_utils::BIT_LENGTH_BOOLEAN
+                ))
+                .outs(result_types)
+        ));
+        (0..result_types.len())
+            .map(|index| {
+                operation
+                    .result(index + 1)
+                    .expect("sol.ext_call produces the declared results")
+                    .into()
+            })
+            .collect()
+    }
+
     /// Calls this function-pointer value, returning the decoded results. Dispatch is on the value's
     /// reference kind: an internal `func_ref` through `sol.icall`, an external `ext_func_ref` through
     /// `sol.ext_icall`, forwarding `call_value` as `msg.value` and dropping the status.
