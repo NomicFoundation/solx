@@ -21,7 +21,7 @@ use crate::ast::analysis::query::ParameterNodeIds;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
-use crate::ast::contract::getter::GetterSignature;
+use crate::ast::contract::getter::Signature;
 
 /// An external member call to a function or generated getter.
 pub struct ExternalMemberCall {
