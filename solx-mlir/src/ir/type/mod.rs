@@ -27,7 +27,7 @@ use crate::ffi;
 use self::array_size::ArraySize;
 use self::location_policy::LocationPolicy;
 
-/// An MLIR type in the Sol dialect: type construction, the kind predicates, and property queries.
+/// A thin wrapper over a `melior` type handle in the Sol dialect.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Type<'context> {
     /// The wrapped melior type.
@@ -35,7 +35,7 @@ pub struct Type<'context> {
 }
 
 impl<'context> Type<'context> {
-    /// Bit width of a Solidity function selector (4 bytes).
+    /// Bit width of a Solidity function selector: 4 bytes.
     pub const SELECTOR_BIT_WIDTH: u32 = solx_utils::BIT_LENGTH_X32 as u32;
 
     /// Wraps a melior type.
@@ -43,7 +43,7 @@ impl<'context> Type<'context> {
         Self { inner }
     }
 
-    /// Resolves a Slang semantic type to its MLIR (Sol dialect) type.
+    /// Resolves a Slang semantic type to its MLIR Sol-dialect type.
     ///
     /// `policy` picks each reference type's data location: the declared location, or memory forced for
     /// the external ABI representation; the `Struct` arm carries the parent's location into members.
@@ -143,9 +143,8 @@ impl<'context> Type<'context> {
             SlangType::Struct(struct_type) => {
                 let struct_location = policy.data_location(struct_type.location());
                 let member_policy = policy.within_struct(struct_location);
-                let struct_definition = match struct_type.definition() {
-                    Definition::Struct(definition) => definition,
-                    _ => unreachable!("Slang StructType always references a Struct definition"),
+                let Definition::Struct(struct_definition) = struct_type.definition() else {
+                    unreachable!("Slang StructType always references a Struct definition")
                 };
                 let mut member_types = Vec::new();
                 for member in struct_definition.members().iter() {
@@ -155,9 +154,8 @@ impl<'context> Type<'context> {
                 Self::structure(context.mlir_context, &member_types, struct_location).into_mlir()
             }
             SlangType::Contract(contract_type) => {
-                let contract_definition = match contract_type.definition() {
-                    Definition::Contract(definition) => definition,
-                    _ => unreachable!("Slang ContractType always references a Contract definition"),
+                let Definition::Contract(contract_definition) = contract_type.definition() else {
+                    unreachable!("Slang ContractType always references a Contract definition")
                 };
                 Self::contract(
                     context.mlir_context,
@@ -167,13 +165,9 @@ impl<'context> Type<'context> {
                 .into_mlir()
             }
             SlangType::Interface(interface_type) => {
-                let interface_definition = match interface_type.definition() {
-                    Definition::Interface(definition) => definition,
-                    _ => {
-                        unreachable!(
-                            "Slang InterfaceType always references an Interface definition"
-                        )
-                    }
+                let Definition::Interface(interface_definition) = interface_type.definition()
+                else {
+                    unreachable!("Slang InterfaceType always references an Interface definition")
                 };
                 Self::contract(
                     context.mlir_context,
@@ -183,16 +177,17 @@ impl<'context> Type<'context> {
                 .into_mlir()
             }
             SlangType::Enum(enum_type) => {
-                let enum_definition = match enum_type.definition() {
-                    Definition::Enum(definition) => definition,
-                    _ => unreachable!("Slang EnumType always references an Enum definition"),
+                let Definition::Enum(enum_definition) = enum_type.definition() else {
+                    unreachable!("Slang EnumType always references an Enum definition")
                 };
                 let member_count = enum_definition.members().iter().count();
                 let max = u8::try_from(member_count - 1).expect("enum member count fits in u8");
                 Self::enumeration(context.mlir_context, max.into()).into_mlir()
             }
-            SlangType::UserDefinedValue(udvt) => {
-                let target_type = udvt.target_type().expect("slang validated");
+            SlangType::UserDefinedValue(user_defined_value_type) => {
+                let target_type = user_defined_value_type
+                    .target_type()
+                    .expect("slang validated");
                 Self::resolve(&target_type, policy, context)
             }
             SlangType::Function(function_type) => {
@@ -221,7 +216,7 @@ impl<'context> Type<'context> {
         }
     }
 
-    /// Resolves a possibly-absent Slang type (the `Option`-lift over [`Self::resolve`]).
+    /// Resolves a possibly-absent Slang type: the `Option`-lift over [`Self::resolve`].
     pub fn resolve_optional(
         slang_type: Option<SlangType>,
         context: &Context<'context>,
@@ -233,8 +228,7 @@ impl<'context> Type<'context> {
         ))
     }
 
-    /// Resolves a state variable's declared type (Slang always types one) in its
-    /// declared location.
+    /// Resolves a state variable's declared type, which Slang always supplies, in its declared location.
     pub fn resolve_state_variable(
         slang_type: &SlangType,
         context: &Context<'context>,
@@ -264,8 +258,8 @@ impl<'context> Type<'context> {
         }
     }
 
-    /// Resolves a function's `(parameter_types, return_types)` from Slang to MLIR under `policy`
-    /// (the declared signature, or the external ABI signature that forces reference types to memory).
+    /// Resolves a function's `(parameter_types, return_types)` from Slang to MLIR under `policy`: the
+    /// declared signature, or the external ABI signature that forces reference types to memory.
     pub fn resolve_signature(
         function: &FunctionDefinition,
         policy: LocationPolicy,
@@ -305,7 +299,7 @@ impl<'context> Type<'context> {
         (parameter_types, result_types)
     }
 
-    /// The MLIR element type and data location of a dynamic-array / `bytes` base (the `.push` receiver).
+    /// The MLIR element type and data location of a dynamic-array / `bytes` base, the `.push` receiver.
     pub fn dynamic_array_element(
         base_type: &SlangType,
         context: &Context<'context>,
@@ -445,7 +439,10 @@ impl<'context> Type<'context> {
         member_types: &[MlirType<'context>],
         location: solx_utils::DataLocation,
     ) -> Self {
-        let raw_types: Vec<mlir_sys::MlirType> = member_types.iter().map(|t| t.to_raw()).collect();
+        let raw_types: Vec<mlir_sys::MlirType> = member_types
+            .iter()
+            .map(|member_type| member_type.to_raw())
+            .collect();
         Self::new(unsafe {
             MlirType::from_raw(ffi::solxCreateStructType(
                 context.to_raw(),
@@ -456,8 +453,7 @@ impl<'context> Type<'context> {
         })
     }
 
-    /// A `sol::EnumType` whose maximum valid value is `max` (one less than the
-    /// number of enum members).
+    /// A `sol::EnumType` whose maximum valid value is `max`, one less than the number of enum members.
     pub fn enumeration(context: &'context melior::Context, max: u32) -> Self {
         Self::new(unsafe { MlirType::from_raw(ffi::solxCreateEnumType(context.to_raw(), max)) })
     }
@@ -468,8 +464,14 @@ impl<'context> Type<'context> {
         parameter_types: &[MlirType<'context>],
         result_types: &[MlirType<'context>],
     ) -> Self {
-        let parameters: Vec<_> = parameter_types.iter().map(|t| t.to_raw()).collect();
-        let results: Vec<_> = result_types.iter().map(|t| t.to_raw()).collect();
+        let parameters: Vec<_> = parameter_types
+            .iter()
+            .map(|parameter_type| parameter_type.to_raw())
+            .collect();
+        let results: Vec<_> = result_types
+            .iter()
+            .map(|result_type| result_type.to_raw())
+            .collect();
         Self::new(unsafe {
             MlirType::from_raw(ffi::solxCreateFuncRefType(
                 context.to_raw(),
@@ -487,8 +489,14 @@ impl<'context> Type<'context> {
         parameter_types: &[MlirType<'context>],
         result_types: &[MlirType<'context>],
     ) -> Self {
-        let parameters: Vec<_> = parameter_types.iter().map(|t| t.to_raw()).collect();
-        let results: Vec<_> = result_types.iter().map(|t| t.to_raw()).collect();
+        let parameters: Vec<_> = parameter_types
+            .iter()
+            .map(|parameter_type| parameter_type.to_raw())
+            .collect();
+        let results: Vec<_> = result_types
+            .iter()
+            .map(|result_type| result_type.to_raw())
+            .collect();
         Self::new(unsafe {
             MlirType::from_raw(ffi::solxCreateExtFuncRefType(
                 context.to_raw(),
@@ -566,7 +574,7 @@ impl<'context> Type<'context> {
         unsafe { ffi::solxIsPointerType(self.inner.to_raw()) }
     }
 
-    /// The pointee type `T` of a `!sol.ptr<T, Loc>` (the caller must ensure this is a pointer).
+    /// The pointee type `T` of a `!sol.ptr<T, Loc>`; the caller must ensure this is a pointer.
     pub fn pointee(self) -> Self {
         Self::new(unsafe {
             MlirType::from_raw(ffi::solxPointerTypePointeeType(self.inner.to_raw()))
@@ -587,7 +595,7 @@ impl<'context> Type<'context> {
         })
     }
 
-    /// The element / field type reached by stepping into this aggregate (the index is ignored for non-structs).
+    /// The element / field type reached by stepping into this aggregate: the index is ignored for non-structs.
     pub fn element_type(self, field_index: usize) -> Self {
         Self::new(unsafe {
             MlirType::from_raw(ffi::mlirSolGetEltType(

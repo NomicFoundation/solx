@@ -4526,6 +4526,7 @@ dependencies = [
  "anyhow",
  "cc",
  "clap",
+ "indexmap 2.14.0",
  "inkwell",
  "melior",
  "mlir-sys",

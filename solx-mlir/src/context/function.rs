@@ -25,19 +25,20 @@ use crate::Value;
 use crate::ods::sol::CallOperation;
 use crate::ods::sol::FuncOperation;
 
-/// Function call resolution metadata for the MLIR context.
+/// Cached signature of a lowered function: its mangled symbol and MLIR-interned parameter and
+/// return types, so a call site emits `sol.call` without re-resolving the signature.
 #[derive(Clone)]
 pub struct Function<'context> {
     /// The mangled MLIR function name.
     pub mlir_name: String,
-    /// Parameter types (MLIR-interned, exact types from the function signature).
+    /// Parameter types, MLIR-interned, exact from the function signature.
     pub parameter_types: Vec<MlirType<'context>>,
-    /// Return types (MLIR-interned, exact types from the function signature).
+    /// Return types, MLIR-interned, exact from the function signature.
     pub return_types: Vec<MlirType<'context>>,
 }
 
 impl<'context> Function<'context> {
-    /// Creates a new function metadata entry.
+    /// Records a function's mangled name and interned signature for later call and define lookups.
     pub fn new(
         mlir_name: String,
         parameter_types: Vec<MlirType<'context>>,
@@ -51,13 +52,13 @@ impl<'context> Function<'context> {
     }
 
     /// Emits this function's `sol.func` definition with an empty entry block, returned for the body.
-    /// `selector` / `kind` / `id` are the optional dispatch attributes.
+    /// `selector` / `kind` / `dispatch_identifier` are the optional dispatch attributes.
     pub fn define<'block>(
         &self,
         selector: Option<u32>,
         state_mutability: StateMutability,
         kind: Option<FunctionKind>,
-        id: Option<i64>,
+        dispatch_identifier: Option<i64>,
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
@@ -92,7 +93,7 @@ impl<'context> Function<'context> {
                 selector_value as i64,
             ));
         }
-        if let Some(function_id) = id {
+        if let Some(function_id) = dispatch_identifier {
             operation_builder = operation_builder.id(IntegerAttribute::new(
                 IntegerType::new(context.mlir_context, solx_utils::BIT_LENGTH_X64 as u32).into(),
                 function_id,

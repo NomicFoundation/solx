@@ -16,13 +16,14 @@ use std::ffi::CString;
 use std::ffi::c_char;
 use std::sync::Once;
 
+use indexmap::IndexSet;
 use melior::dialect::DialectRegistry;
 use melior::ir::Attribute;
 use melior::ir::AttributeLike;
 use melior::ir::BlockLike;
 use melior::ir::Location;
 use melior::ir::Module;
-use melior::ir::Type;
+use melior::ir::Type as MlirType;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationLike;
 use melior::ir::operation::OperationMutLike;
@@ -43,18 +44,18 @@ pub struct Context<'context> {
     pub mlir_context: &'context melior::Context,
     /// The MLIR module being built.
     pub module: Module<'context>,
-    /// MLIR type of the contract being emitted (types `this`); set by the frontend before bodies.
-    pub current_contract_type: Option<Type<'context>>,
+    /// MLIR type of the contract being emitted, the type of `this`; set by the frontend before bodies.
+    pub current_contract_type: Option<MlirType<'context>>,
 
-    /// Resolution metadata keyed by the AST definition id of each function.
+    /// Resolution metadata keyed by the AST definition identifier of each function.
     pub function_signatures: HashMap<NodeId, Function<'context>>,
     /// User-defined operator bindings, keyed by `(udvt_definition_id, operator)` to the bound function.
     pub operator_bindings: HashMap<(NodeId, UserDefinedOperator), NodeId>,
 
     /// Cross-contract references in encounter order, drained into the linker output.
-    pub dependencies: RefCell<Vec<String>>,
-    /// Monotonic internal-function-pointer dispatch tag; starts at 1 (0 is the null pointer).
-    pub function_id_counter: Cell<i64>,
+    pub dependencies: RefCell<IndexSet<String>>,
+    /// Monotonic internal-function-pointer dispatch tag; starts at 1, where 0 is the null pointer.
+    pub function_identifier_counter: Cell<i64>,
 }
 
 impl<'context> Context<'context> {
@@ -103,8 +104,8 @@ impl<'context> Context<'context> {
             current_contract_type: None,
             function_signatures: HashMap::new(),
             operator_bindings: HashMap::new(),
-            dependencies: RefCell::new(Vec::new()),
-            function_id_counter: Cell::new(1),
+            dependencies: RefCell::new(IndexSet::new()),
+            function_identifier_counter: Cell::new(1),
         }
     }
 
@@ -143,39 +144,38 @@ impl<'context> Context<'context> {
     }
 
     /// Allocates the next internal-function-pointer dispatch tag.
-    pub fn next_function_id(&self) -> i64 {
-        let id = self.function_id_counter.get();
-        self.function_id_counter.set(id + 1);
-        id
+    pub fn next_function_identifier(&self) -> i64 {
+        let identifier = self.function_identifier_counter.get();
+        self.function_identifier_counter.set(identifier + 1);
+        identifier
     }
 
-    /// Records a cross-contract reference (object name); duplicates ignored.
+    /// Records a cross-contract reference by object name; duplicates ignored.
     pub fn add_dependency(&self, name: String) {
-        let mut dependencies = self.dependencies.borrow_mut();
-        if !dependencies.iter().any(|existing| existing == &name) {
-            dependencies.push(name);
-        }
+        self.dependencies.borrow_mut().insert(name);
     }
 
-    /// Registers a function signature keyed by its AST definition id.
+    /// Registers a function signature keyed by its AST definition identifier.
     pub fn register_function_signature(
         &mut self,
-        definition_id: NodeId,
+        definition_identifier: NodeId,
         mlir_name: String,
-        parameter_types: Vec<Type<'context>>,
-        return_types: Vec<Type<'context>>,
+        parameter_types: Vec<MlirType<'context>>,
+        return_types: Vec<MlirType<'context>>,
     ) {
         self.function_signatures.insert(
-            definition_id,
+            definition_identifier,
             Function::new(mlir_name, parameter_types, return_types),
         );
     }
 
-    /// Resolves a registered function by definition id (panics if unregistered, an internal invariant).
-    pub fn resolve_function(&self, definition_id: NodeId) -> &Function<'context> {
+    /// Resolves a registered function by definition identifier; panics if unregistered, an internal invariant.
+    pub fn resolve_function(&self, definition_identifier: NodeId) -> &Function<'context> {
         self.function_signatures
-            .get(&definition_id)
-            .unwrap_or_else(|| panic!("undefined function for definition {definition_id:?}"))
+            .get(&definition_identifier)
+            .unwrap_or_else(|| {
+                panic!("undefined function for definition {definition_identifier:?}")
+            })
     }
 
     /// Runs the Sol-to-LLVM conversion pass pipeline on `module` in place.
@@ -237,7 +237,7 @@ impl<'context> Context<'context> {
             sol_source,
             llvm_deploy_source,
             llvm_runtime_source,
-            dependencies: self.dependencies.into_inner(),
+            dependencies: self.dependencies.into_inner().into_iter().collect(),
         })
     }
 
@@ -313,20 +313,25 @@ impl<'context> Context<'context> {
 
     /// Lowers every `llvm.setimmutable` to heap stores at its reserved offsets via the solx-llvm C-API.
     fn lower_set_immutables(module: &Module, immutables: &BTreeMap<String, BTreeSet<u64>>) {
-        let mut id_cstrings: Vec<CString> = Vec::new();
+        let mut identifier_cstrings: Vec<CString> = Vec::new();
         let mut offsets: Vec<u64> = Vec::new();
-        for (id, id_offsets) in immutables {
-            for &offset in id_offsets {
-                id_cstrings
-                    .push(CString::new(id.as_str()).expect("immutable id has no interior NUL"));
+        for (identifier, identifier_offsets) in immutables {
+            for &offset in identifier_offsets {
+                identifier_cstrings.push(
+                    CString::new(identifier.as_str())
+                        .expect("immutable identifier has no interior NUL"),
+                );
                 offsets.push(offset);
             }
         }
-        let id_pointers: Vec<*const c_char> = id_cstrings.iter().map(|id| id.as_ptr()).collect();
+        let identifier_pointers: Vec<*const c_char> = identifier_cstrings
+            .iter()
+            .map(|identifier| identifier.as_ptr())
+            .collect();
         unsafe {
             ffi::mlirEvmLowerSetImmutables(
                 module.to_raw(),
-                id_pointers.as_ptr(),
+                identifier_pointers.as_ptr(),
                 offsets.as_ptr(),
                 offsets.len() as u64,
             );

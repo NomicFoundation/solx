@@ -261,24 +261,24 @@ impl<'context, 'block> Value<'context, 'block> {
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let mut op_builder =
+        let mut operation_builder =
             MallocOperation::builder(context.mlir_context, context.location()).addr(mlir_type);
         if let Some(size) = size {
-            op_builder = op_builder.size(size);
+            operation_builder = operation_builder.size(size);
         }
         if zero_init {
-            op_builder = op_builder.zero_init(Attribute::unit(context.mlir_context));
+            operation_builder = operation_builder.zero_init(Attribute::unit(context.mlir_context));
         }
         Self::new(
             block
-                .append_operation(op_builder.build().into())
+                .append_operation(operation_builder.build().into())
                 .result(0)
                 .expect("sol.malloc produces one result")
                 .into(),
         )
     }
 
-    /// `sol.default_storage` - the default value of a storage or transient aggregate.
+    /// `sol.default_storage`: the default value of a storage or transient aggregate.
     pub fn default_storage(
         r#type: Type<'context>,
         context: &Context<'context>,
@@ -291,7 +291,7 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// `sol.default_calldata` - the default value of a calldata aggregate.
+    /// `sol.default_calldata`: the default value of a calldata aggregate.
     pub fn default_calldata(
         r#type: Type<'context>,
         context: &Context<'context>,
@@ -413,34 +413,34 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// `sol.new`: contract creation embedding `obj_name`'s deploy bytecode. `val`
+    /// `sol.new`: contract creation embedding `object_name`'s deploy bytecode. `value`
     /// is the forwarded wei; a `salt` selects CREATE2. The salt must be appended
-    /// before the variadic ctor args or the two transpose.
+    /// before the variadic constructor arguments or the two transpose.
     pub fn create_contract(
-        obj_name: &str,
-        val: Self,
+        object_name: &str,
+        value: Self,
         salt: Option<Self>,
-        ctor_args: &[MlirValue<'context, 'block>],
+        constructor_arguments: &[MlirValue<'context, 'block>],
         result_type: Type<'context>,
         try_call: bool,
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let mut new_builder = NewOperation::builder(context.mlir_context, context.location())
-            .obj_name(StringAttribute::new(context.mlir_context, obj_name))
-            .val(val.inner);
+        let mut operation_builder = NewOperation::builder(context.mlir_context, context.location())
+            .obj_name(StringAttribute::new(context.mlir_context, object_name))
+            .val(value.inner);
         if let Some(salt) = salt {
-            new_builder = new_builder.salt(salt.inner);
+            operation_builder = operation_builder.salt(salt.inner);
         }
-        let mut new_builder = new_builder
-            .ctor_args(ctor_args)
+        let mut operation_builder = operation_builder
+            .ctor_args(constructor_arguments)
             .out(result_type.into_mlir());
         if try_call {
-            new_builder = new_builder.try_call(Attribute::unit(context.mlir_context));
+            operation_builder = operation_builder.try_call(Attribute::unit(context.mlir_context));
         }
         Self::new(
             block
-                .append_operation(new_builder.build().into())
+                .append_operation(operation_builder.build().into())
                 .result(0)
                 .expect("sol.new always produces one result")
                 .into(),
@@ -451,7 +451,10 @@ impl<'context, 'block> Value<'context, 'block> {
     /// at `receiver` cast to `address`. Returns the success status and the decoded results. With
     /// `try_call` the status is surfaced for a `try`/`catch`; otherwise the call reverts on failure and
     /// the caller discards the status. A `view`/`pure` callee passes `is_static` for a `STATICCALL`.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "sol.ext_call's operand set maps one-to-one to these arguments"
+    )]
     pub fn external_call(
         receiver: Self,
         callee_name: &str,
@@ -515,7 +518,7 @@ impl<'context, 'block> Value<'context, 'block> {
 
     /// Calls this function-pointer value, returning the decoded results. Dispatch is on the value's
     /// reference kind: an internal `func_ref` through `sol.icall`, an external `ext_func_ref` through
-    /// `sol.ext_icall` (forwarding `call_value` as `msg.value` and dropping the status).
+    /// `sol.ext_icall`, forwarding `call_value` as `msg.value` and dropping the status.
     pub fn call_indirect(
         self,
         argument_values: &[MlirValue<'context, 'block>],
@@ -582,18 +585,22 @@ impl<'context, 'block> Value<'context, 'block> {
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let mut op_builder = EncodeOperation::builder(context.mlir_context, context.location())
-            .ins(ins)
-            .res(Type::string(context.mlir_context, solx_utils::DataLocation::Memory).into_mlir());
+        let mut operation_builder =
+            EncodeOperation::builder(context.mlir_context, context.location())
+                .ins(ins)
+                .res(
+                    Type::string(context.mlir_context, solx_utils::DataLocation::Memory)
+                        .into_mlir(),
+                );
         if let Some(selector_value) = selector {
-            op_builder = op_builder.selector(selector_value);
+            operation_builder = operation_builder.selector(selector_value);
         }
         if packed {
-            op_builder = op_builder.packed(Attribute::unit(context.mlir_context));
+            operation_builder = operation_builder.packed(Attribute::unit(context.mlir_context));
         }
         Self::new(
             block
-                .append_operation(op_builder.build().into())
+                .append_operation(operation_builder.build().into())
                 .result(0)
                 .expect("sol.encode always produces one result")
                 .into(),
@@ -775,8 +782,7 @@ impl<'context, 'block> Value<'context, 'block> {
         self.compare(zero, CmpPredicate::Ne, context, block)
     }
 
-    /// The length of this dynamic value (array / `bytes` / `string`) as a `ui256`,
-    /// via `sol.length`.
+    /// The length of this dynamic array, `bytes`, or `string` value as a `ui256`, via `sol.length`.
     pub fn length(self, context: &Context<'context>, block: &BlockRef<'context, 'block>) -> Self {
         Self::new(mlir_op!(
             context,
@@ -807,7 +813,7 @@ impl<'context, 'block> Value<'context, 'block> {
         (new_slot, element_type)
     }
 
-    /// The 4-byte selector of this external function-pointer value, via `sol.ext_func_selector` (`f.selector`).
+    /// The 4-byte selector of this external function-pointer value, via `sol.ext_func_selector`.
     pub fn ext_func_selector(
         self,
         context: &Context<'context>,
@@ -823,7 +829,7 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// The `address` component of this external function-pointer value, via `sol.ext_func_addr` (`f.address`).
+    /// The `address` component of this external function-pointer value, via `sol.ext_func_addr`.
     pub fn ext_func_address(
         self,
         context: &Context<'context>,
@@ -841,12 +847,6 @@ impl<'context, 'block> Value<'context, 'block> {
     /// The value's type.
     pub fn r#type(self) -> Type<'context> {
         Type::new(self.inner.r#type())
-    }
-
-    /// Views a `!sol.ptr`-typed value as a [`Pointer`] place, the inverse of [`Pointer::into_value`].
-    /// The caller must ensure this value is a pointer.
-    pub fn into_pointer(self) -> Pointer<'context, 'block> {
-        Pointer::new(self.inner)
     }
 
     /// The inner melior value, for the op-construction boundary.
@@ -890,6 +890,13 @@ impl<'context, 'block> Value<'context, 'block> {
 impl<'context, 'block> From<MlirValue<'context, 'block>> for Value<'context, 'block> {
     fn from(inner: MlirValue<'context, 'block>) -> Self {
         Self::new(inner)
+    }
+}
+
+impl<'context, 'block> From<Pointer<'context, 'block>> for Value<'context, 'block> {
+    /// A `!sol.ptr` place is itself a first-class SSA value; both wrap the same handle.
+    fn from(pointer: Pointer<'context, 'block>) -> Self {
+        Self::new(pointer.into_mlir())
     }
 }
 

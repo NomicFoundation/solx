@@ -14,12 +14,12 @@ use crate::Pointer;
 use crate::Type;
 use crate::Value;
 
-/// Tracks variable places (alloca'd pointers) for lexical scoping.
+/// Tracks variable places, the alloca'd pointers, for lexical scoping.
 ///
 /// Bindings are keyed by each declaration's Slang `NodeId`, so same-named locals across scopes
 /// stay distinct. Lookups search from the innermost scope outward.
 pub struct Environment<'context, 'block> {
-    /// Stack of scopes, each mapping a declaration's `NodeId` to its place (scope 0 holds parameters).
+    /// Stack of scopes, each mapping a declaration's `NodeId` to its place; scope 0 holds parameters.
     pub scopes: Vec<HashMap<NodeId, MlirValue<'context, 'block>>>,
     /// Declarations bound directly to an SSA value: a read yields the value with no `sol.load`. Used
     /// inside a `sol.modifier_call_blk`, whose `IsolatedFromAbove` block exposes the wrapping

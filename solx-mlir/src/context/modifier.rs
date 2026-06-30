@@ -7,7 +7,7 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Region;
 use melior::ir::RegionLike;
-use melior::ir::Type;
+use melior::ir::Type as MlirType;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
 use melior::ir::operation::OperationLike;
@@ -21,24 +21,24 @@ use crate::ods::sol::ModifierOperation;
 /// Its body is the modifier's statements with each `_;` lowered to `sol.placeholder`, terminated by
 /// `sol.return`. The downstream `sol.modifier_call_blk` references it by its `sym_name` symbol.
 pub struct Modifier<'context> {
-    /// The mangled MLIR symbol name (shared with the invoking `sol.call`).
+    /// The mangled MLIR symbol name, shared with the invoking `sol.call`.
     pub mlir_name: String,
-    /// Parameter types (MLIR-interned, exact types from the modifier signature).
-    pub parameter_types: Vec<Type<'context>>,
+    /// Parameter types, MLIR-interned, exact from the modifier signature.
+    pub parameter_types: Vec<MlirType<'context>>,
 }
 
 impl<'context> Modifier<'context> {
-    /// Creates a new modifier definition descriptor.
-    pub fn new(mlir_name: String, parameter_types: Vec<Type<'context>>) -> Self {
+    /// Records a modifier's mangled symbol and interned parameter types; `define` later materializes the op.
+    pub fn new(mlir_name: String, parameter_types: Vec<MlirType<'context>>) -> Self {
         Self {
             mlir_name,
             parameter_types,
         }
     }
 
-    /// Emits this `sol.modifier` definition with an empty entry block (its parameters as block
-    /// arguments), returned for the body. A modifier has no results, so its `FunctionType` is `() -> ()`
-    /// over its parameters.
+    /// Emits this `sol.modifier` definition with an empty entry block whose arguments are its
+    /// parameters, returned for the body. A modifier has no results, so its `FunctionType` is
+    /// `() -> ()` over its parameters.
     pub fn define<'block>(
         &self,
         context: &Context<'context>,

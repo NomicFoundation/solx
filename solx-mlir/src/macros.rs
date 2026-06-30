@@ -8,12 +8,15 @@
 //! `sol.try`'s conditional catch regions are built by hand.
 //!
 
-/// Coerces one op-builder setter argument to the type the ODS setter expects (identity for most types).
+/// Coerces an op-builder setter argument to the type the ODS setter expects.
 pub trait IntoOds<T> {
     /// Converts `self` into the setter's argument type.
     fn into_ods(self) -> T;
 }
 
+// A local trait rather than `From`/`Into`: the orphan rule forbids implementing `From` for the
+// foreign melior types the domain conversions target, so the macro routes every setter argument
+// through this trait. The reflexive impl is the identity for an argument already of the setter's type.
 impl<T> IntoOds<T> for T {
     fn into_ods(self) -> T {
         self
@@ -43,7 +46,7 @@ macro_rules! mlir_op_build {
 macro_rules! mlir_op {
     ($context:expr, $block:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
         $block
-            .append_operation(mlir_op_build!($context, $operation $(.$method($($argument),*))*))
+            .append_operation($crate::mlir_op_build!($context, $operation $(.$method($($argument),*))*))
             .result(0)
             .expect(concat!(stringify!($operation), " produces one result"))
             .into()
@@ -55,7 +58,7 @@ macro_rules! mlir_op {
 #[macro_export]
 macro_rules! mlir_op_void {
     ($context:expr, $block:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
-        $block.append_operation(mlir_op_build!($context, $operation $(.$method($($argument),*))*));
+        $block.append_operation($crate::mlir_op_build!($context, $operation $(.$method($($argument),*))*));
     };
 }
 

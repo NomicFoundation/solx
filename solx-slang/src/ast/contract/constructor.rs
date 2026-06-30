@@ -96,7 +96,7 @@ impl EmitConstructor for ContractDefinition {
                     )
                     .base_constructor_symbol(),
                 None,
-                Some(scope.state.next_function_id()),
+                Some(scope.state.next_function_identifier()),
             )
         };
 

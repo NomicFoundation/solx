@@ -18,7 +18,8 @@ use crate::Context;
 use crate::IntoOds;
 use crate::Type;
 use crate::YulCmpPredicate;
-use crate::ods::yul::*;
+use crate::ods::yul::CmpOperation;
+use crate::ods::yul::ConstantOperation;
 
 /// A Yul value: the signless `i256` word every inline-assembly computation produces, the
 /// untyped Yul-dialect peer of the Sol-dialect value.

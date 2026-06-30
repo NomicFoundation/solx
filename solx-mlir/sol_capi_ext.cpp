@@ -1,12 +1,18 @@
-/*
- * C wrappers for Sol dialect attribute and type creation.
- *
- * The Sol dialect's C API (mlir-c/Dialect/Sol.h) does not expose
- * constructors for several attributes (e.g. ContractKindAttr,
- * StateMutabilityAttr) or types (e.g. PointerType, AddressType,
- * ContractType). These thin wrappers call the generated C++ get()
- * methods via extern "C" linkage so Rust can create them through FFI.
- */
+//===- sol_capi_ext.cpp - C wrappers for Sol dialect attrs and types ------===//
+//
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
+//===----------------------------------------------------------------------===//
+//
+// The Sol dialect C API (mlir-c/Dialect/Sol.h) does not expose constructors for
+// several attributes (e.g. ContractKindAttr, StateMutabilityAttr) or types
+// (e.g. PointerType, AddressType, ContractType). These thin wrappers call the
+// generated C++ get() methods via extern "C" linkage so Rust can create them
+// through FFI.
+//
+//===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Sol/Sol.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -66,14 +72,6 @@ MlirAttribute solxCreateIntegerAttr(MlirType ty, bool isNegative,
     return mlirIntegerAttrGetFromWords(ty, value.getNumWords(), value.getRawData());
 }
 
-MlirAttribute solxCreateStringAttr(MlirContext ctx, const uint8_t *data,
-                                   size_t len) {
-    // A Solidity string literal need not be valid UTF-8 (`hex"..."`,
-    // `"\xff"`); a `StringAttr` stores the raw bytes verbatim.
-    return mlirStringAttrGet(
-        ctx, mlirStringRefCreate(reinterpret_cast<const char *>(data), len));
-}
-
 MlirType solxCreatePointerType(MlirContext ctx, MlirType elementType, uint32_t dataLocation) {
     if (dataLocation > 5) abort();
     auto *context = unwrap(ctx);
@@ -87,10 +85,10 @@ MlirType solxCreateAddressType(MlirContext ctx, bool payable) {
     return wrap(mlir::sol::AddressType::get(context, payable));
 }
 
-MlirType solxCreateContractType(MlirContext ctx, const char *name_ptr,
-                                size_t name_len, bool payable) {
+MlirType solxCreateContractType(MlirContext ctx, const char *namePtr,
+                                size_t nameLen, bool payable) {
     auto *context = unwrap(ctx);
-    llvm::StringRef name(name_ptr, name_len);
+    llvm::StringRef name(namePtr, nameLen);
     return wrap(mlir::sol::ContractType::get(context, name, payable));
 }
 
@@ -119,22 +117,22 @@ MlirType solxCreateArrayType(MlirContext ctx, int64_t size, MlirType elementType
     return wrap(mlir::sol::ArrayType::get(context, size, unwrap(elementType), location));
 }
 
-MlirType solxCreateMappingType(MlirContext ctx, MlirType keyType, MlirType valType) {
+MlirType solxCreateMappingType(MlirContext ctx, MlirType keyType, MlirType valueType) {
     auto *context = unwrap(ctx);
-    return wrap(mlir::sol::MappingType::get(context, unwrap(keyType), unwrap(valType)));
+    return wrap(mlir::sol::MappingType::get(context, unwrap(keyType), unwrap(valueType)));
 }
 
-MlirType solxCreateStructType(MlirContext ctx, const MlirType *member_types,
-                              size_t member_count, uint32_t dataLocation) {
+MlirType solxCreateStructType(MlirContext ctx, const MlirType *memberTypes,
+                              size_t memberCount, uint32_t dataLocation) {
     if (dataLocation > 5) abort();
     auto *context = unwrap(ctx);
-    std::vector<mlir::Type> mems;
-    mems.reserve(member_count);
-    for (size_t i = 0; i < member_count; i++) {
-        mems.push_back(unwrap(member_types[i]));
+    std::vector<mlir::Type> members;
+    members.reserve(memberCount);
+    for (size_t i = 0; i < memberCount; i++) {
+        members.push_back(unwrap(memberTypes[i]));
     }
     auto location = static_cast<mlir::sol::DataLocation>(dataLocation);
-    return wrap(mlir::sol::StructType::get(context, mems, location));
+    return wrap(mlir::sol::StructType::get(context, members, location));
 }
 
 MlirType solxCreateEnumType(MlirContext ctx, uint32_t max) {
@@ -142,38 +140,38 @@ MlirType solxCreateEnumType(MlirContext ctx, uint32_t max) {
     return wrap(mlir::sol::EnumType::get(context, max));
 }
 
-MlirType solxCreateFuncRefType(MlirContext ctx, const MlirType *param_types,
-                               size_t param_count, const MlirType *result_types,
-                               size_t result_count) {
+MlirType solxCreateFuncRefType(MlirContext ctx, const MlirType *paramTypes,
+                               size_t paramCount, const MlirType *resultTypes,
+                               size_t resultCount) {
     auto *context = unwrap(ctx);
     std::vector<mlir::Type> params;
-    params.reserve(param_count);
-    for (size_t i = 0; i < param_count; i++) {
-        params.push_back(unwrap(param_types[i]));
+    params.reserve(paramCount);
+    for (size_t i = 0; i < paramCount; i++) {
+        params.push_back(unwrap(paramTypes[i]));
     }
     std::vector<mlir::Type> results;
-    results.reserve(result_count);
-    for (size_t i = 0; i < result_count; i++) {
-        results.push_back(unwrap(result_types[i]));
+    results.reserve(resultCount);
+    for (size_t i = 0; i < resultCount; i++) {
+        results.push_back(unwrap(resultTypes[i]));
     }
     auto fnTy = mlir::FunctionType::get(context, params, results);
     return wrap(mlir::sol::FuncRefType::get(context, fnTy));
 }
 
-MlirType solxCreateExtFuncRefType(MlirContext ctx, const MlirType *param_types,
-                                  size_t param_count,
-                                  const MlirType *result_types,
-                                  size_t result_count) {
+MlirType solxCreateExtFuncRefType(MlirContext ctx, const MlirType *paramTypes,
+                                  size_t paramCount,
+                                  const MlirType *resultTypes,
+                                  size_t resultCount) {
     auto *context = unwrap(ctx);
     std::vector<mlir::Type> params;
-    params.reserve(param_count);
-    for (size_t i = 0; i < param_count; i++) {
-        params.push_back(unwrap(param_types[i]));
+    params.reserve(paramCount);
+    for (size_t i = 0; i < paramCount; i++) {
+        params.push_back(unwrap(paramTypes[i]));
     }
     std::vector<mlir::Type> results;
-    results.reserve(result_count);
-    for (size_t i = 0; i < result_count; i++) {
-        results.push_back(unwrap(result_types[i]));
+    results.reserve(resultCount);
+    for (size_t i = 0; i < resultCount; i++) {
+        results.push_back(unwrap(resultTypes[i]));
     }
     auto fnTy = mlir::FunctionType::get(context, params, results);
     return wrap(mlir::sol::ExtFuncRefType::get(context, fnTy));
@@ -182,7 +180,7 @@ MlirType solxCreateExtFuncRefType(MlirContext ctx, const MlirType *param_types,
 /*
  * Type predicates.
  *
- * Typed `isa<>` introspection for Sol-dialect types — never textual AsmPrinter
+ * Typed `isa<>` introspection for Sol-dialect types, never textual AsmPrinter
  * matching (which silently miscompiles if the type printer drifts). One
  * predicate per Sol type; the Rust side composes categories (reference,
  * address-like).

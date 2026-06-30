@@ -67,7 +67,9 @@ impl EmitFunction for FunctionDefinition {
             mlir_kind,
         } = Signature::resolve(self, symbol_override, scope.state);
 
-        let function_id = mlir_kind.is_none().then(|| scope.state.next_function_id());
+        let function_id = mlir_kind
+            .is_none()
+            .then(|| scope.state.next_function_identifier());
 
         let signature = Function::new(mlir_name, mlir_parameter_types, result_types);
         let function_entry_block = signature.define(

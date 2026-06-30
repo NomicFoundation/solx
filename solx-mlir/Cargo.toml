@@ -12,6 +12,7 @@ cc = "1.2.60"
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+indexmap = "2.14"
 num.workspace = true
 melior = { git = "https://github.com/NomicFoundation/melior", rev = "193e8252ca5d2774555b3e2f29ec8b97f28f5d38", features = ["ods-dialects", "helpers"] }
 serde.workspace = true

@@ -51,28 +51,28 @@ unsafe extern "C" {
     pub fn mlirCreateConversionReconcileUnrealizedCastsPass() -> MlirPass;
 
     /// Lowers each `llvm.setimmutable` op in `module` to heap stores at its
-    /// immutable's reserved offsets, then erases it. The id -> offsets mapping is
-    /// passed flattened: `imm_ids[i]` reserves offset `imm_offsets[i]` (one entry
-    /// per (id, offset) pair, `imm_count` entries). An op whose id is absent is
-    /// erased as a no-op. Mirrors the EVM-assembly `setimmutable` for the MLIR
-    /// (Slang) pipeline, which reaches codegen-evm as LLVM IR, not Yul.
+    /// immutable's reserved offsets, then erases it. The identifier-to-offsets mapping is
+    /// passed flattened: `immutable_identifiers[i]` reserves offset `immutable_offsets[i]`, one
+    /// entry per identifier-offset pair, `immutable_count` entries. An op whose identifier is
+    /// absent is erased as a no-op. Mirrors the EVM-assembly `setimmutable` for the MLIR
+    /// Slang pipeline, which reaches codegen-evm as LLVM IR, not Yul.
     pub fn mlirEvmLowerSetImmutables(
         module: MlirModule,
-        imm_ids: *const *const c_char,
-        imm_offsets: *const u64,
-        imm_count: u64,
+        immutable_identifiers: *const *const c_char,
+        immutable_offsets: *const u64,
+        immutable_count: u64,
     );
 
-    /// Creates a `ContractKindAttr` (0=Interface, 1=Contract, 2=Library).
+    /// Creates a `ContractKindAttr`: 0=Interface, 1=Contract, 2=Library.
     pub fn solxCreateContractKindAttr(context: MlirContext, kind: u32) -> mlir_sys::MlirAttribute;
 
-    /// Creates a `StateMutabilityAttr` (0=Pure, 1=View, 2=NonPayable, 3=Payable).
+    /// Creates a `StateMutabilityAttr`: 0=Pure, 1=View, 2=NonPayable, 3=Payable.
     pub fn solxCreateStateMutabilityAttr(
         context: MlirContext,
         mutability: u32,
     ) -> mlir_sys::MlirAttribute;
 
-    /// Creates a `FunctionKindAttr` (0=Constructor, 1=Fallback, 2=Receive).
+    /// Creates a `FunctionKindAttr`: 0=Constructor, 1=Fallback, 2=Receive.
     pub fn solxCreateFunctionKindAttr(context: MlirContext, kind: u32) -> mlir_sys::MlirAttribute;
 
     /// Creates an `EvmVersionAttr`.
@@ -89,18 +89,10 @@ unsafe extern "C" {
         magnitude: *const u64,
     ) -> mlir_sys::MlirAttribute;
 
-    /// Creates an MLIR `StringAttr` from `len` raw bytes: a Solidity string
-    /// literal need not be valid UTF-8 (`hex"..."`, `"\xff"`).
-    pub fn solxCreateStringAttr(
-        context: MlirContext,
-        data: *const u8,
-        len: usize,
-    ) -> mlir_sys::MlirAttribute;
-
     /// Creates a `sol::PointerType` with the given element type and data location.
     ///
-    /// `data_location` maps to `mlir::sol::DataLocation` (0=Storage, 1=CallData,
-    /// 2=Memory, 3=Stack, 4=Immutable, 5=Transient).
+    /// `data_location` maps to `mlir::sol::DataLocation`: 0=Storage, 1=CallData, 2=Memory, 3=Stack,
+    /// 4=Immutable, 5=Transient.
     pub fn solxCreatePointerType(
         context: MlirContext,
         element_type: mlir_sys::MlirType,
@@ -120,8 +112,8 @@ unsafe extern "C" {
 
     /// Creates a `sol::StringType` with the given data location.
     ///
-    /// `data_location` maps to `mlir::sol::DataLocation` (0=Storage, 1=CallData,
-    /// 2=Memory, 3=Stack, 4=Immutable, 5=Transient).
+    /// `data_location` maps to `mlir::sol::DataLocation`: 0=Storage, 1=CallData, 2=Memory, 3=Stack,
+    /// 4=Immutable, 5=Transient.
     pub fn solxCreateStringType(context: MlirContext, data_location: u32) -> mlir_sys::MlirType;
 
     /// Creates a `sol::FixedBytesType` of the given byte width.
@@ -188,8 +180,7 @@ unsafe extern "C" {
     pub fn solxIsContractType(ty: mlir_sys::MlirType) -> bool;
     /// Whether `ty` is a `!sol.fixedbytes<N>`.
     pub fn solxIsFixedBytesType(ty: mlir_sys::MlirType) -> bool;
-    /// The byte width `N` of a `!sol.fixedbytes<N>` (the caller must ensure `ty`
-    /// is a fixed-bytes type).
+    /// The byte width `N` of a `!sol.fixedbytes<N>`; the caller must ensure `ty` is a fixed-bytes type.
     pub fn solxFixedBytesTypeSize(ty: mlir_sys::MlirType) -> u32;
     /// Whether `ty` is the single `!sol.byte` (the `bytes`/`string` element).
     pub fn solxIsByteType(ty: mlir_sys::MlirType) -> bool;
@@ -209,21 +200,21 @@ unsafe extern "C" {
     pub fn solxIsPointerType(ty: mlir_sys::MlirType) -> bool;
 
     /// Returns the element type of a non-mapping reference type. For
-    /// struct types, `struct_field_idx` selects the member.
-    pub fn mlirSolGetEltType(ty: mlir_sys::MlirType, struct_field_idx: u64) -> mlir_sys::MlirType;
+    /// struct types, `struct_field_index` selects the member.
+    pub fn mlirSolGetEltType(ty: mlir_sys::MlirType, struct_field_index: u64)
+    -> mlir_sys::MlirType;
 
     /// Returns the result type of a `sol.gep` whose base has type
-    /// `base_addr_ty` and whose pointee is `element_type`.
+    /// `base_address_type` and whose pointee is `element_type`.
     pub fn mlirSolGepGetResultType(
-        base_addr_ty: mlir_sys::MlirType,
+        base_address_type: mlir_sys::MlirType,
         element_type: mlir_sys::MlirType,
     ) -> mlir_sys::MlirType;
 
-    /// The pointee type `T` of a `!sol.ptr<T, Loc>` (the caller must ensure `ty`
-    /// is a pointer type).
+    /// The pointee type `T` of a `!sol.ptr<T, Loc>`; the caller must ensure `ty` is a pointer type.
     pub fn solxPointerTypePointeeType(ty: mlir_sys::MlirType) -> mlir_sys::MlirType;
     /// The data location `Loc` of a `!sol.ptr<T, Loc>` as a `mlir::sol::DataLocation`
-    /// ordinal (0=Storage, 1=CallData, 2=Memory, 3=Stack, 4=Immutable, 5=Transient);
+    /// ordinal: 0=Storage, 1=CallData, 2=Memory, 3=Stack, 4=Immutable, 5=Transient;
     /// the caller must ensure `ty` is a pointer type.
     pub fn solxPointerTypeDataLocation(ty: mlir_sys::MlirType) -> u32;
     /// The data location ordinal of a `!sol.string` / `!sol.array` / `!sol.struct`.

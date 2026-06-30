@@ -63,16 +63,14 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
                 };
                 let address_type = AstType::new(element_type)
                     .address_type(base_location, context.state.mlir_context);
-                let address = base_value
-                    .into_pointer()
+                let address = Pointer::from(base_value)
                     .map(index_value, address_type, context.state, &block)
                     .into_mlir();
                 (address, element_type)
             }
             _ => {
                 let element_type = base_value.r#type().element_type(0).into_mlir();
-                let address = base_value
-                    .into_pointer()
+                let address = Pointer::from(base_value)
                     .gep(
                         index_value,
                         AstType::new(element_type),

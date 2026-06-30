@@ -26,7 +26,8 @@ use crate::ods::sol::StoreOperation;
 
 /// A `!sol.ptr<T, Loc>` place: a typed address into stack / memory / storage / calldata, and the
 /// load, store, and element-stepping operations it supports. A `!sol.ptr` is itself a first-class
-/// SSA value (a `storage` / `calldata` reference is the place), so it converts to and from [`Value`] freely.
+/// SSA value: a `storage` / `calldata` reference is itself the place, so it converts to and from
+/// [`Value`] freely.
 #[derive(Clone, Copy)]
 pub struct Pointer<'context, 'block> {
     /// The wrapped melior value.
@@ -34,7 +35,7 @@ pub struct Pointer<'context, 'block> {
 }
 
 impl<'context, 'block> Pointer<'context, 'block> {
-    /// Wraps a place value: a `!sol.ptr<...>`, or a by-reference `Storage` / `CallData` aggregate (its own place).
+    /// Wraps a place value: a `!sol.ptr<...>`, or a by-reference `Storage` / `CallData` aggregate.
     pub fn new(inner: MlirValue<'context, 'block>) -> Self {
         Self { inner }
     }
@@ -133,7 +134,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
     }
 
     /// Loads the value of `result_type` from this place (`sol.load`). Short-circuits when the
-    /// place already *is* the value (a reference element in `Storage` / `CallData`).
+    /// place already *is* the value: a reference element in `Storage` / `CallData`.
     pub fn load<B>(
         self,
         result_type: Type<'context>,
@@ -145,7 +146,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
         'context: 'block,
     {
         if self.r#type() == result_type {
-            return self.into_value();
+            return self.into();
         }
         Value::new(mlir_op!(
             context,
@@ -254,13 +255,15 @@ impl<'context, 'block> Pointer<'context, 'block> {
         self.r#type().pointee()
     }
 
-    /// The pointer as a [`Value`]: a `!sol.ptr` is a first-class SSA value.
-    pub fn into_value(self) -> Value<'context, 'block> {
-        Value::new(self.inner)
-    }
-
     /// The inner melior value, for the op-construction boundary.
     pub fn into_mlir(self) -> MlirValue<'context, 'block> {
         self.inner
+    }
+}
+
+impl<'context, 'block> From<Value<'context, 'block>> for Pointer<'context, 'block> {
+    /// A `!sol.ptr` value is itself a place; both wrap the same SSA handle.
+    fn from(value: Value<'context, 'block>) -> Self {
+        Self::new(value.into_mlir())
     }
 }
