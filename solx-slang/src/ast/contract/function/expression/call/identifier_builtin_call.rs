@@ -12,7 +12,6 @@ use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
-use slang_solidity_v2::ast::NodeId;
 use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::AssertOperation;
 use solx_mlir::ods::sol::BlobHashOperation;
@@ -29,6 +28,7 @@ use crate::ast::EmitExpression;
 use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
+use crate::ast::analysis::query::ParameterNodeIds;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 
@@ -338,21 +338,12 @@ impl IdentifierBuiltinCall {
                     let signature = error_definition
                         .compute_canonical_signature()
                         .expect("slang validated");
-                    let parameters = error_definition.parameters();
-                    let parameter_ids: Vec<NodeId> = parameters
-                        .iter()
-                        .map(|parameter| parameter.node_id())
-                        .collect();
-                    let parameter_types: Vec<_> = parameters
-                        .iter()
-                        .map(|parameter| {
-                            AstType::resolve(
-                                &parameter.get_type().expect("slang validated"),
-                                LocationPolicy::Declared(None),
-                                context.state,
-                            )
-                        })
-                        .collect();
+                    let parameter_ids = error_definition.parameters().node_ids();
+                    let parameter_types = AstType::resolve_parameters(
+                        &error_definition.parameters(),
+                        LocationPolicy::Declared(None),
+                        context.state,
+                    );
                     let error_arguments =
                         CallArguments::for_parameter_ids(&error_call.arguments(), &parameter_ids);
                     let BlockAnd {

@@ -99,9 +99,10 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
             return_values.push(YulValue::load(slot, context.state, &current));
         }
         context.environment.exit_scope();
-        if let Some(depth) = context.yul_inline_depth.get_mut(&name) {
-            *depth = depth.saturating_sub(1);
-        }
+        *context
+            .yul_inline_depth
+            .get_mut(&name)
+            .expect("inline depth recorded on entry") -= 1;
         return BlockAnd { value: return_values, block: current };
     };
 

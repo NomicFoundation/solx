@@ -17,7 +17,7 @@ use slang_solidity_v2::ast::DataLocation;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::LiteralKind;
-use slang_solidity_v2::ast::Parameter;
+use slang_solidity_v2::ast::Parameters;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::Context;
@@ -265,19 +265,30 @@ impl<'context> Type<'context> {
         policy: LocationPolicy,
         context: &Context<'context>,
     ) -> (Vec<MlirType<'context>>, Vec<MlirType<'context>>) {
-        let resolve = |parameter: Parameter| {
-            Self::resolve(
-                &parameter.get_type().expect("slang validated"),
-                policy,
-                context,
-            )
-        };
-        let parameter_types = function.parameters().iter().map(&resolve).collect();
+        let parameter_types = Self::resolve_parameters(&function.parameters(), policy, context);
         let return_types = match function.returns() {
-            Some(returns) => returns.iter().map(&resolve).collect(),
+            Some(returns) => Self::resolve_parameters(&returns, policy, context),
             None => Vec::new(),
         };
         (parameter_types, return_types)
+    }
+
+    /// Resolves a parameter list's declared MLIR types from Slang, in declaration order.
+    pub fn resolve_parameters(
+        parameters: &Parameters,
+        policy: LocationPolicy,
+        context: &Context<'context>,
+    ) -> Vec<MlirType<'context>> {
+        parameters
+            .iter()
+            .map(|parameter| {
+                Self::resolve(
+                    &parameter.get_type().expect("slang validated"),
+                    policy,
+                    context,
+                )
+            })
+            .collect()
     }
 
     /// Resolves a function-pointer callee type's `(parameter_types, result_types)` from Slang to MLIR.

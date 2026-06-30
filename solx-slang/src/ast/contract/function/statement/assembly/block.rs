@@ -2,6 +2,8 @@
 //! Yul block emission: function-definition hoisting and the statement walk.
 //!
 
+use std::collections::HashSet;
+
 use melior::ir::Block;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
@@ -14,7 +16,7 @@ use crate::ast::EmitYul;
 use crate::ast::contract::function::statement::assembly::YulContext;
 
 yul_emit!(YulBlock => Option<BlockRef<'context, 'block>>; |yul_block, context, block| {
-    let saved_functions: Vec<String> = context.yul_functions.keys().cloned().collect();
+    let saved_functions: HashSet<String> = context.yul_functions.keys().cloned().collect();
     for statement in yul_block.statements().iter() {
         if let YulStatement::YulFunctionDefinition(definition) = &statement {
             context

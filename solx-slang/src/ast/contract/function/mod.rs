@@ -160,9 +160,6 @@ impl EmitFunction for FunctionDefinition {
         return_slots: &[Option<Value<'context, 'block>>],
         block: &BlockRef<'context, 'block>,
     ) {
-        if block.terminator().is_some() {
-            return;
-        }
         let returns: Vec<_> = self
             .returns()
             .map(|params| params.iter().collect::<Vec<_>>())

@@ -15,13 +15,11 @@ use melior::ir::Region;
 use melior::ir::RegionLike;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::attribute::FlatSymbolRefAttribute;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::Parameter;
 
 use solx_mlir::Environment;
 use solx_mlir::Modifier;
-use solx_mlir::ods::sol::CallOperation;
 use solx_mlir::ods::sol::ModifierCallBlkOperation;
 use solx_mlir::ods::sol::ReturnOperation;
 
@@ -92,6 +90,7 @@ impl EmitModifierCalls for FunctionDefinition {
                 .unwrap_or_default();
             let mut current_block = block;
             let mut operands: Vec<Value<'context, '_>> = Vec::new();
+            let mut parameter_types: Vec<Type<'context>> = Vec::new();
             for (parameter, argument) in definition.parameters().iter().zip(argument_expressions) {
                 let BlockAnd {
                     value,
@@ -111,25 +110,19 @@ impl EmitModifierCalls for FunctionDefinition {
                     .expect("slang validated");
                 let cast = value.cast(AstType::new(parameter_type), state, &current_block);
                 operands.push(cast.into_mlir());
+                parameter_types.push(parameter_type);
             }
 
-            current_block.append_operation(mlir_op_build!(
+            Modifier::new(definition.modifier_symbol(), parameter_types).call(
+                &operands,
                 state,
-                CallOperation
-                    .callee(FlatSymbolRefAttribute::new(
-                        state.mlir_context,
-                        &definition.modifier_symbol()
-                    ))
-                    .outs(&[])
-                    .operands(&operands)
-            ));
-
-            function_block.append_operation(
-                ModifierCallBlkOperation::builder(state.mlir_context, state.location())
-                    .body_region(region)
-                    .build()
-                    .into(),
+                &current_block,
             );
+
+            function_block.append_operation(mlir_op_build!(
+                state,
+                ModifierCallBlkOperation.body_region(region)
+            ));
         }
     }
 
@@ -194,7 +187,7 @@ impl EmitModifierCalls for FunctionDefinition {
             }
         }
 
-        if !terminated && current_block.terminator().is_none() {
+        if !terminated {
             current_block.append_operation(mlir_op_build!(state, ReturnOperation.operands(&[])));
         }
     }

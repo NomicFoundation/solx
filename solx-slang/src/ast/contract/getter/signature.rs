@@ -129,7 +129,6 @@ impl Signature for StateVariableDefinition {
                 Some(Member::layout(&struct_definition, result_type, context)?)
             }
             SlangType::String(_) | SlangType::Bytes(_) => None,
-            _ if terminal.is_reference_type() => return None,
             _ => None,
         };
         let result_types: Vec<Type<'context>> = match &members {

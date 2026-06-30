@@ -14,6 +14,7 @@ use crate::ast::BlockAnd;
 use crate::ast::EmitStatement;
 use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
+use crate::ast::analysis::query::ParameterNodeIds;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 use crate::ast::contract::function::statement::StatementContext;
@@ -34,27 +35,14 @@ statement_emit!(RevertStatement; |node, context, block| {
         Some(Definition::Error(error)) => error,
         Some(_) => unreachable!("slang resolves a revert target to an error definition"),
     };
-    let signature = error
-        .compute_canonical_signature()
-        .expect("slang validated");
-    let parameters = error.parameters();
-    let parameter_ids = parameters
-        .iter()
-        .map(|parameter| parameter.node_id())
-        .collect::<Vec<_>>();
+    let signature = error.compute_canonical_signature().expect("slang validated");
+    let parameter_ids = error.parameters().node_ids();
+    let parameter_types = AstType::resolve_parameters(
+        &error.parameters(),
+        LocationPolicy::Declared(None),
+        context.state,
+    );
     let arguments = CallArguments::for_parameter_ids(&node.arguments(), &parameter_ids);
-    let parameter_types: Vec<_> = parameters
-        .iter()
-        .map(|parameter| {
-            AstType::resolve(
-                &parameter
-                    .get_type()
-                    .expect("slang validated"),
-                LocationPolicy::Declared(None),
-                context.state,
-            )
-        })
-        .collect();
     let emitter = ExpressionContext::from(&*context);
     let BlockAnd {
         value: values,

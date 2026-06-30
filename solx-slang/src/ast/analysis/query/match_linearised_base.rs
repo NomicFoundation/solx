@@ -27,9 +27,7 @@ impl MatchLinearisedBase for IdentifierPath {
         mro: &[ContractDefinition],
         mro_node_ids: &HashSet<NodeId>,
     ) -> Option<ContractDefinition> {
-        let base_definition = self
-            .resolve_to_definition()
-            .or_else(|| self.iter().last()?.resolve_to_definition());
+        let base_definition = self.resolve_to_definition();
         let Some(Definition::Contract(base_contract)) = base_definition else {
             return None;
         };

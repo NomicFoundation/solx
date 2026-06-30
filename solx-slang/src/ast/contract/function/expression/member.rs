@@ -4,7 +4,6 @@
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Type;
 use melior::ir::Value as MlirValue;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::r#type::IntegerType;
@@ -136,7 +135,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             _ => {}
         }
     }
-    match node.member().resolve_to_built_in() {
+    let built_in = node.member().resolve_to_built_in();
+    match &built_in {
         Some(builtin @ (BuiltIn::TypeMin | BuiltIn::TypeMax)) => {
             let result_type =
                 AstType::resolve_optional(node.get_type(), context.state)
@@ -206,15 +206,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     _ => None,
                 })
                 .fold(0u32, |interface_id, selector| interface_id ^ selector);
-            let state = context.state;
-            let integer_type = Type::from(IntegerType::unsigned(state.mlir_context, 32));
-            let value = AstValue::constant_from_bigint(
-                &BigInt::from(interface_id),
-                AstType::new(integer_type),
-                state,
-                &block,
-            )
-            .cast(AstType::fixed_bytes(state.mlir_context, 4), state, &block);
+            let value =
+                AstValue::selector_constant(&BigInt::from(interface_id), 4, context.state, &block);
             return BlockAnd { block, value };
         }
         Some(BuiltIn::TypeName) => {
@@ -342,18 +335,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             | BuiltIn::AddressDelegatecall
             | BuiltIn::AddressStaticcall
             | BuiltIn::ArrayPop
-            | BuiltIn::ArrayPush,
-        ) => {
-            let BlockAnd {
-                value: _operand,
-                block,
-            } = node.operand().emit(context, block);
-            let state = context.state;
-            let value = AstValue::uint256(0, state, &block);
-            return BlockAnd { block, value };
-        }
-        Some(
-            BuiltIn::AbiEncode
+            | BuiltIn::ArrayPush
+            | BuiltIn::AbiEncode
             | BuiltIn::AbiEncodePacked
             | BuiltIn::AbiEncodeWithSelector
             | BuiltIn::AbiEncodeWithSignature
@@ -362,14 +345,14 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             | BuiltIn::Wrap
             | BuiltIn::Unwrap,
         ) => {
-            let state = context.state;
-            let value = AstValue::uint256(0, state, &block);
-            return BlockAnd { block, value };
+            unreachable!(
+                "address/array/abi/wrap member builtins are only valid as a call callee, intercepted upstream"
+            )
         }
         _ => {}
     }
     let state = context.state;
-    let environment_op = match node.member().resolve_to_built_in() {
+    let environment_op = match &built_in {
         Some(BuiltIn::TxOrigin) => {
             Some(mlir_op_build!(state, OriginOperation.addr(AstType::address(state.mlir_context, false))))
         }
@@ -440,6 +423,15 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             value: value.into(),
         };
     }
+    let emit_operand_effect = |block: BlockRef<'context, 'block>| -> BlockRef<'context, 'block> {
+        if let Expression::MemberAccessExpression(inner) = node.operand()
+            && !MemberAccessOperand(&inner.operand()).is_namespace_or_type()
+        {
+            inner.operand().emit_for_effect(context, block)
+        } else {
+            block
+        }
+    };
     if matches!(node.operand().get_type(), Some(SlangType::Struct(_))) {
         let BlockAnd {
             value: Place {
@@ -473,19 +465,26 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
         let value = AstValue::uint256(ordinal as i64, state, &block)
             .cast(AstType::new(result_type), state, &block);
         BlockAnd { block, value }
+    } else if matches!(&built_in, Some(BuiltIn::FunctionSelector)) {
+        let static_selector = match MemberAccessOperand(&node.operand()).resolve() {
+            Some(Definition::Function(function)) => function.compute_selector(),
+            Some(Definition::StateVariable(state_variable)) => state_variable.compute_selector(),
+            _ => None,
+        };
+        if let Some(selector) = static_selector {
+            let block = emit_operand_effect(block);
+            let value =
+                AstValue::selector_constant(&BigInt::from(selector), 4, context.state, &block);
+            return BlockAnd { block, value };
+        }
+        let BlockAnd {
+            value: operand_value,
+            block,
+        } = node.operand().emit(context, block);
+        let value = operand_value.ext_func_selector(context.state, &block);
+        BlockAnd { block, value }
     } else {
-        let selector_constant = match node.member().resolve_to_built_in() {
-            Some(BuiltIn::FunctionSelector) => match MemberAccessOperand(&node.operand()).resolve() {
-                Some(Definition::Function(function)) => {
-                    function
-                        .compute_selector()
-                        .map(|selector| (BigInt::from(selector), 4))
-                }
-                Some(Definition::StateVariable(state_variable)) => {
-                    state_variable.compute_selector().map(|selector| (BigInt::from(selector), 4))
-                }
-                _ => None,
-            },
+        let selector_constant = match &built_in {
             Some(BuiltIn::ErrorSelector) => {
                 let Some(Definition::Error(error)) = MemberAccessOperand(&node.operand()).resolve()
                 else {
@@ -498,33 +497,18 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 else {
                     unreachable!("slang resolves an event `.selector` base to an event definition");
                 };
-                let signature = event.compute_canonical_signature().expect("slang validated");
-                let hash = solx_utils::Keccak256Hash::from_slice(signature.as_bytes());
-                Some((BigInt::from_bytes_be(Sign::Plus, hash.as_bytes()), 32))
+                let topic = event.compute_event_topic().expect("slang validated");
+                Some((BigInt::from_bytes_be(Sign::Plus, &topic), 32))
             }
             _ => None,
         };
         if let Some((selector, byte_width)) = selector_constant {
-            let block = if let Expression::MemberAccessExpression(inner) = node.operand()
-                && !MemberAccessOperand(&inner.operand()).is_namespace_or_type()
-            {
-                inner.operand().emit_for_effect(context, block)
-            } else {
-                block
-            };
+            let block = emit_operand_effect(block);
             let value =
                 AstValue::selector_constant(&selector, byte_width, context.state, &block);
             return BlockAnd { block, value };
         }
-        match node.member().resolve_to_built_in() {
-            Some(BuiltIn::FunctionSelector) => {
-                let BlockAnd {
-                    value: operand_value,
-                    block,
-                } = node.operand().emit(context, block);
-                let value = operand_value.ext_func_selector(context.state, &block);
-                BlockAnd { block, value }
-            }
+        match &built_in {
             Some(BuiltIn::FunctionAddress) => {
                 let BlockAnd {
                     value: operand_value,

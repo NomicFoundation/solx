@@ -18,6 +18,7 @@ use crate::ast::EmitExpression;
 use crate::ast::EmitStatement;
 use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
+use crate::ast::analysis::query::ParameterNodeIds;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 use crate::ast::contract::function::statement::StatementContext;
@@ -27,36 +28,28 @@ statement_emit!(EmitStatementNode; |node, context, block| {
         unreachable!("slang resolves an emit target to an event definition");
     };
     let parameters = event_definition.parameters();
-    let parameter_ids = parameters
-        .iter()
-        .map(|parameter| parameter.node_id())
-        .collect::<Vec<_>>();
+    let parameter_ids = parameters.node_ids();
+    let parameter_types =
+        AstType::resolve_parameters(&parameters, LocationPolicy::Declared(None), context.state);
     let arguments = CallArguments::for_parameter_ids(&node.arguments(), &parameter_ids);
 
     let emitter = ExpressionContext::from(&*context);
     let mut indexed_arguments: Vec<Value<'context, 'block>> = Vec::new();
     let mut non_indexed_arguments: Vec<Value<'context, 'block>> = Vec::new();
     let mut current_block = block;
-    for (parameter, argument) in parameters.iter().zip(arguments.expressions.iter()) {
+    for ((parameter, argument), parameter_type) in parameters
+        .iter()
+        .zip(arguments.expressions.iter())
+        .zip(parameter_types.iter())
+    {
         let BlockAnd {
             value,
             block: next_block,
         } = argument.emit(&emitter, current_block);
         current_block = next_block;
         let indexed = parameter.is_indexed();
-        let parameter_type = AstType::resolve(
-            &parameter
-                .get_type()
-                .expect("slang validated"),
-            LocationPolicy::Declared(None),
-            context.state,
-        );
         let value = value
-            .cast(
-                AstType::new(parameter_type),
-                context.state,
-                &current_block,
-            )
+            .cast(AstType::new(*parameter_type), context.state, &current_block)
             .into_mlir();
         if indexed {
             indexed_arguments.push(value);

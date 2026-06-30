@@ -49,9 +49,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             state_variable.mutability(),
             StateVariableMutability::Constant
         ) {
-            if !abi.inputs().is_empty() {
-                return;
-            }
             let Some(initializer) = state_variable.value() else {
                 return;
             };

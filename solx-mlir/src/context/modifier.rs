@@ -8,12 +8,15 @@ use melior::ir::BlockRef;
 use melior::ir::Region;
 use melior::ir::RegionLike;
 use melior::ir::Type as MlirType;
+use melior::ir::Value as MlirValue;
+use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
 use melior::ir::operation::OperationLike;
 use melior::ir::r#type::FunctionType;
 
 use crate::Context;
+use crate::ods::sol::CallOperation;
 use crate::ods::sol::ModifierOperation;
 
 /// A `sol.modifier` definition: a `FunctionOpInterface` op like `sol.func`, but with no results.
@@ -66,5 +69,27 @@ impl<'context> Modifier<'context> {
             .expect("modifier has one region")
             .first_block()
             .expect("modifier body has entry block")
+    }
+
+    /// Emits a `sol.call` to this modifier. A modifier has no results, so the call yields none.
+    pub fn call<'block, B>(
+        &self,
+        operands: &[MlirValue<'context, 'block>],
+        context: &Context<'context>,
+        block: &B,
+    ) where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block.append_operation(mlir_op_build!(
+            context,
+            CallOperation
+                .callee(FlatSymbolRefAttribute::new(
+                    context.mlir_context,
+                    &self.mlir_name
+                ))
+                .outs(&[])
+                .operands(operands)
+        ));
     }
 }
