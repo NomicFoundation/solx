@@ -20,6 +20,7 @@ use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
 use melior::ir::r#type::IntegerType;
+use num_bigint::BigInt;
 use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
@@ -152,10 +153,13 @@ impl EmitObject for ContractDefinition {
                 continue;
             }
             let slot_attribute: IntegerAttribute =
-                Attribute::parse(state.mlir_context, &format!("{} : i256", slot.slot))
-                    .expect("valid slot literal")
+                AstType::signless(state.mlir_context, solx_utils::BIT_LENGTH_FIELD)
+                    .big_integer_attribute(&BigInt::from_bytes_be(
+                        num_bigint::Sign::Plus,
+                        &slot.slot.to_be_bytes_vec(),
+                    ))
                     .try_into()
-                    .expect("slot literal is an integer attribute");
+                    .expect("a signless integer attribute");
             let byte_offset_attribute = IntegerAttribute::new(
                 IntegerType::new(state.mlir_context, solx_utils::BIT_LENGTH_X32 as u32).into(),
                 slot.byte_offset.into(),
