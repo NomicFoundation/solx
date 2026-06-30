@@ -57,7 +57,7 @@ impl StorageLayout for ContractDefinition {
                 continue;
             }
             let node_id = variable.node_id();
-            let label = variable.name().unparse().to_string();
+            let label = variable.name().name();
             layout.insert(
                 node_id,
                 StorageSlot::new(U256::ZERO, 0, &label, node_id, DataLocation::Immutable),
