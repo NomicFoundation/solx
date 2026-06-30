@@ -231,14 +231,10 @@ impl Operator {
         let lhs = lhs
             .cast(AstType::new(result_type), context, block)
             .into_mlir();
-        // The right operand keeps its own type when it is not coerced to the result: `**` takes an
-        // unsigned exponent alongside a possibly-signed base, and a shift of a `bytesN` value takes
-        // an integer amount, so `sol.shl` / `sol.shr` apply to `!sol.fixedbytes<N>` directly.
-        let keep_rhs = matches!(self, Operator::Exponentiation)
-            || (matches!(self, Operator::ShiftLeft | Operator::ShiftRight)
-                && AstType::new(result_type)
-                    .fixed_bytes_or_byte_width()
-                    .is_some());
+        let keep_rhs = matches!(
+            self,
+            Operator::Exponentiation | Operator::ShiftLeft | Operator::ShiftRight
+        );
         let rhs = if keep_rhs {
             rhs.into_mlir()
         } else {

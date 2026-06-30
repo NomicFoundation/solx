@@ -22,6 +22,15 @@
 // CHECK: sol.func @{{.*signed_shr.*}}
 // CHECK:   sol.shr %{{.*}}, %{{.*}} : si256
 
+// CHECK: sol.func @{{.*wide_amount_sar.*}}
+// CHECK:   sol.shr %{{.*}}, %{{.*}} : si8, ui256
+
+// CHECK: sol.func @{{.*wide_amount_shl.*}}
+// CHECK:   sol.shl %{{.*}}, %{{.*}} : ui8, ui256
+
+// CHECK: sol.func @{{.*wide_amount_shr.*}}
+// CHECK:   sol.shr %{{.*}}, %{{.*}} : ui8, ui256
+
 contract C {
     function bit_and(uint256 a, uint256 b) public pure returns (uint256) {
         return a & b;
@@ -49,5 +58,17 @@ contract C {
 
     function signed_shr(int256 a, uint256 b) public pure returns (int256) {
         return a >> b;
+    }
+
+    function wide_amount_sar(int8 value, uint256 amount) public pure returns (int8) {
+        return value >> amount;
+    }
+
+    function wide_amount_shl(uint8 value, uint256 amount) public pure returns (uint8) {
+        return value << amount;
+    }
+
+    function wide_amount_shr(uint8 value, uint256 amount) public pure returns (uint8) {
+        return value >> amount;
     }
 }
