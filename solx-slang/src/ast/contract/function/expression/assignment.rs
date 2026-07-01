@@ -11,6 +11,7 @@ use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::AssignmentExpression;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::TupleExpression;
 
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
@@ -24,6 +25,7 @@ use crate::ast::contract::function::expression::operator::Operator;
 use crate::ast::emit::emit_as::EmitAs;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_place::EmitPlace;
+use crate::ast::emit::emit_values::EmitValues;
 
 /// Assignment target resolved from the Slang binder.
 enum AssignmentTarget<'context, 'block> {
@@ -36,17 +38,14 @@ enum AssignmentTarget<'context, 'block> {
     Storage(StorageSlot, Type<'context>),
 }
 
-impl<'context: 'block, 'block> EmitExpression<'context, 'block> for AssignmentExpression {
-    type Output = BlockAnd<'context, 'block, Value<'context, 'block>>;
-
-    /// Emits an assignment expression (`=`, `+=`, `-=`, `*=`).
-    fn emit<'state>(
-        &self,
+impl<'context: 'block, 'block> AssignmentTarget<'context, 'block> {
+    /// Resolves a single left-hand-side expression to its assignment target.
+    fn new<'state>(
         context: &ExpressionContext<'state, 'context, 'block>,
+        target_expression: &Expression,
         block: BlockRef<'context, 'block>,
-    ) -> Self::Output {
-        let left = self.left_operand();
-        let (target, block) = match &left {
+    ) -> (Self, BlockRef<'context, 'block>) {
+        match target_expression {
             Expression::Identifier(identifier) => {
                 let name = identifier.name();
                 let target = match identifier.resolve_to_definition() {
@@ -115,15 +114,142 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for AssignmentEx
             }
             _ => unimplemented!(
                 "assignment target {:?} is not yet supported",
-                std::mem::discriminant(&left)
+                std::mem::discriminant(target_expression)
             ),
-        };
+        }
+    }
 
-        let element_type = match &target {
+    /// The declared element type stored at this target.
+    fn element_type(&self) -> Type<'context> {
+        match self {
             AssignmentTarget::Pointer(_, element_type)
             | AssignmentTarget::Storage(_, element_type) => *element_type,
-        };
+        }
+    }
+
+    /// Coerces `value` to this target's element type and stores it, returning the stored value.
+    fn store<'state>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        value: Value<'context, 'block>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        match self {
+            AssignmentTarget::Pointer(pointer, element_type) => {
+                let stored_value = TypeConversion::from_target_type(*element_type, context.state)
+                    .emit(value, context.state, block);
+                Pointer::new(*pointer).store(AstValue::new(stored_value), context.state, block);
+                stored_value
+            }
+            AssignmentTarget::Storage(slot, element_type) => {
+                let stored_value = TypeConversion::from_target_type(*element_type, context.state)
+                    .emit(value, context.state, block);
+                context.emit_storage_store(slot, stored_value, *element_type, block);
+                stored_value
+            }
+        }
+    }
+
+    /// Collects the `(lvalue, value)` bindings of a destructuring assignment `(a, b, …) = rhs`,
+    /// evaluating every value before any store, so `(a, b) = (b, a)` swaps. A blank slot discards
+    /// its right-hand-side element.
+    fn destructure<'state>(
+        context: &ExpressionContext<'state, 'context, 'block>,
+        lhs: &TupleExpression,
+        rhs: &Expression,
+        mut block: BlockRef<'context, 'block>,
+    ) -> (
+        Vec<(Expression, Value<'context, 'block>)>,
+        BlockRef<'context, 'block>,
+    ) {
+        let mut bindings = Vec::new();
+        match rhs {
+            Expression::TupleExpression(rhs) => {
+                for (lvalue, rhs) in lhs.items().iter().zip(rhs.items().iter()) {
+                    let rhs = rhs.expression().expect("slang validates tuple element");
+                    match (lvalue.expression(), &rhs) {
+                        (
+                            Some(Expression::TupleExpression(lvalue)),
+                            Expression::TupleExpression(_),
+                        ) => {
+                            let (nested, next) = Self::destructure(context, &lvalue, &rhs, block);
+                            bindings.extend(nested);
+                            block = next;
+                        }
+                        (Some(lvalue), _) => {
+                            let BlockAnd { value, block: next } = rhs.emit(context, block);
+                            bindings.push((lvalue, value));
+                            block = next;
+                        }
+                        (None, Expression::TupleExpression(_)) => {}
+                        (None, _) => block = rhs.emit(context, block).block,
+                    }
+                }
+            }
+            _ => {
+                let BlockAnd {
+                    value: values,
+                    block: next,
+                } = rhs.emit_values(context, block);
+                block = next;
+                for (lvalue, value) in lhs.items().iter().zip(values) {
+                    if let Some(lvalue) = lvalue.expression() {
+                        bindings.push((lvalue, value));
+                    }
+                }
+            }
+        }
+        (bindings, block)
+    }
+
+    /// Resolves each lvalue left-to-right against the pre-assignment state, then stores right-to-left
+    /// so the leftmost write to an aliased destination wins. Returns the last stored value, or a zero
+    /// when every slot is blank.
+    fn store_all<'state>(
+        context: &ExpressionContext<'state, 'context, 'block>,
+        bindings: Vec<(Expression, Value<'context, 'block>)>,
+        mut block: BlockRef<'context, 'block>,
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
+        let mut targets = Vec::with_capacity(bindings.len());
+        for (lvalue, value) in bindings {
+            let (target, next) = Self::new(context, &lvalue, block);
+            block = next;
+            targets.push((target, value));
+        }
+        let result = targets
+            .into_iter()
+            .rev()
+            .fold(None, |_, (target, value)| {
+                Some(target.store(context, value, &block))
+            })
+            .unwrap_or_else(|| {
+                let field_type =
+                    AstType::unsigned(context.state.mlir_context, solx_utils::BIT_LENGTH_FIELD);
+                AstValue::constant(0, field_type, context.state, &block).into_mlir()
+            });
+        (result, block)
+    }
+}
+
+impl<'context: 'block, 'block> EmitExpression<'context, 'block> for AssignmentExpression {
+    type Output = BlockAnd<'context, 'block, Value<'context, 'block>>;
+
+    /// Emits an assignment expression (`=`, `+=`, `-=`, `*=`).
+    fn emit<'state>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> Self::Output {
+        let left = self.left_operand().unwrap_parentheses();
         let right = self.right_operand();
+        if let Expression::TupleExpression(tuple) = &left {
+            let (bindings, block) = AssignmentTarget::destructure(context, tuple, &right, block);
+            let (value, block) = AssignmentTarget::store_all(context, bindings, block);
+            return BlockAnd { block, value };
+        }
+
+        let (target, block) = AssignmentTarget::new(context, &left, block);
+        let element_type = target.element_type();
         let (value, block) = if matches!(
             self.operator(),
             ast::AssignmentExpressionOperator::Equal(_)
@@ -197,20 +323,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for AssignmentEx
             (result, block)
         };
 
-        let value = match &target {
-            AssignmentTarget::Pointer(pointer, element_type) => {
-                let stored_value = TypeConversion::from_target_type(*element_type, context.state)
-                    .emit(value, context.state, &block);
-                Pointer::new(*pointer).store(AstValue::new(stored_value), context.state, &block);
-                stored_value
-            }
-            AssignmentTarget::Storage(slot, element_type) => {
-                let stored_value = TypeConversion::from_target_type(*element_type, context.state)
-                    .emit(value, context.state, &block);
-                context.emit_storage_store(slot, stored_value, *element_type, &block);
-                stored_value
-            }
-        };
+        let value = target.store(context, value, &block);
         BlockAnd { block, value }
     }
 }
