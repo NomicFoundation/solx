@@ -5,29 +5,29 @@
 /// Function definition lowering to Sol dialect MLIR.
 pub mod function;
 
-use slang_solidity_v2::ast::ContractDefinition;
-use slang_solidity_v2::ast::ContractMember;
-use slang_solidity_v2::ast::FunctionKind;
-use slang_solidity_v2::ast::FunctionMutability;
-
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
 use melior::ir::r#type::IntegerType;
+use slang_solidity_v2::ast::ContractDefinition;
+use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::FunctionKind;
+use slang_solidity_v2::ast::FunctionMutability;
 
 use solx_mlir::Context;
 use solx_mlir::Type as AstType;
 use solx_mlir::ods::sol::ContractOperation;
 use solx_mlir::ods::sol::StateVarOperation;
 
-use self::function::FunctionEmitter;
-use self::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::analysis::query::storage_layout::StorageLayout;
 use crate::ast::emit::emit_constructor::EmitConstructor;
 use crate::ast::emit::emit_function::EmitFunction;
 use crate::ast::emit::emit_object::EmitObject;
+
+use self::function::FunctionEmitter;
+use self::function::expression::call::type_conversion::TypeConversion;
 
 /// Lowers a Solidity contract to Sol dialect MLIR.
 ///
@@ -41,9 +41,6 @@ impl ContractEmitter {
     /// a `payable` `fallback()` function). Single source of truth for payability
     /// derivation — used both when emitting the `sol.contract` op and when
     /// resolving `SlangType::Contract` to a `Sol_ContractType`.
-    // TODO: walk the inheritance tree like solc does (`receiveFunction` /
-    // `fallbackFunction` on `ContractDefinition`, `ContractType::isPayable`)
-    // and move this helper into Slang.
     pub fn is_contract_payable(contract: &ContractDefinition) -> bool {
         contract.functions().iter().any(|function| {
             matches!(function.kind(), FunctionKind::Receive)
@@ -97,8 +94,6 @@ impl EmitObject for ContractDefinition {
             body_region
         );
 
-        // TODO: emit declarations for inherited state variables once derived
-        // contracts compile through this path.
         for member in self.members().iter() {
             let ContractMember::StateVariableDefinition(state_variable) = member else {
                 continue;
@@ -135,7 +130,6 @@ impl EmitObject for ContractDefinition {
         );
         context.current_contract_type = None;
 
-        // Slang's `functions()` filters out Constructor and Modifier kinds.
         for function in self.functions() {
             context.current_contract_type = Some(contract_type);
             function.emit(

@@ -103,20 +103,20 @@ impl<'context> Context<'context> {
         }
 
         let target = solx_utils::Target::EVM;
-        let data_layout_attr: Attribute<'_> =
+        let data_layout_attribute: Attribute<'_> =
             StringAttribute::new(context, target.data_layout()).into();
-        let target_triple_attr: Attribute<'_> =
+        let target_triple_attribute: Attribute<'_> =
             StringAttribute::new(context, target.triple()).into();
         unsafe {
             mlir_sys::mlirOperationSetAttributeByName(
                 module.as_operation().to_raw(),
                 mlir_sys::mlirStringRefCreateFromCString(c"llvm.data_layout".as_ptr()),
-                data_layout_attr.to_raw(),
+                data_layout_attribute.to_raw(),
             );
             mlir_sys::mlirOperationSetAttributeByName(
                 module.as_operation().to_raw(),
                 mlir_sys::mlirStringRefCreateFromCString(c"llvm.target_triple".as_ptr()),
-                target_triple_attr.to_raw(),
+                target_triple_attribute.to_raw(),
             );
         }
 

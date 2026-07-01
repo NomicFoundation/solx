@@ -50,7 +50,6 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
     /// an unhandled case surfaces immediately rather than silently miscompiling.
     pub fn emit(&mut self, unit: &SourceUnit) -> Option<(String, BTreeMap<String, String>)> {
         let contracts = unit.contracts();
-        // TODO: support multiple contracts
         let contract = contracts.first()?;
 
         let name = contract.name().name();

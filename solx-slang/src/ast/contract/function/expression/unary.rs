@@ -115,10 +115,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 BlockAnd { block, value }
             }
             Operator::Subtract => {
-                // Unary negation uses unchecked subtraction. Checked negation
-                // requires signed-type awareness (e.g. -INT_MIN should revert
-                // in checked mode) which needs a dedicated op — not sol.csub,
-                // since the operand may be in an unsigned literal type.
                 let BlockAnd { value, block } = operand.emit(self, block);
                 let operand_type = target_type.unwrap_or_else(|| value.r#type());
                 let value = TypeConversion::from_target_type(operand_type, self.state)

@@ -98,12 +98,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// `node.get_type()` if the node doesn't have typing information, for example when
     /// there are unresolved references or semantic errors.
     /// Panics on types that `TypeConversion::resolve_slang_type` does not yet handle.
-    // TODO: slang's binder does not fold binary expressions of literal operands —
-    // its typing rules return the type of one operand (e.g. type of the left
-    // operand for shifts), so `1 << 100` gets typed as ui8 (the type of `1`)
-    // and constant subexpressions overflow at that width. solc folds via
-    // `RationalNumberType::binaryOperatorResult`, sizing the result to fit the
-    // folded value. Either teach slang to fold, or fold here before lowering.
     pub fn resolve_slang_type(&self, slang_type: Option<SlangType>) -> Option<Type<'context>> {
         Some(TypeConversion::resolve_slang_type(
             &slang_type?,

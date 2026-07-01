@@ -5,10 +5,10 @@
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Expression;
+
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;

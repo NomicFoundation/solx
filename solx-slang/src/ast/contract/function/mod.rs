@@ -30,9 +30,9 @@ use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::ReturnOperation;
 
+use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
-use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::emit::emit_constructor::EmitConstructor;
 use crate::ast::emit::emit_function::EmitFunction;
@@ -254,8 +254,6 @@ impl EmitFunction for FunctionDefinition {
                 let return_type = result_types[index];
                 let pointer =
                     Pointer::stack(AstType::new(return_type), emitter.state, &function_entry_block);
-                // TODO: replace with a typed-zero helper covering address, fixed-bytes, and
-                // memory-resident types (e.g. `0x60` for empty `string`/`bytes` memory).
                 if IntegerType::try_from(return_type).is_ok() {
                     let zero = AstValue::constant(
                         0,

@@ -1,7 +1,6 @@
 //! Tuple deconstruction statement lowering.
 
 use melior::ir::BlockRef;
-
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MultiTypedDeclaration;
 use slang_solidity_v2::ast::SingleTypedDeclaration;

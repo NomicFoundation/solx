@@ -317,7 +317,6 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
                             .build()
                             .into()
                     }
-                    // TODO: split this catch-all so non-built-in member accesses (struct fields, etc.) and unimplemented built-ins surface distinct errors.
                     _ => unimplemented!("unsupported member access: {}", access.member().name()),
                 };
                 let value = block
@@ -446,9 +445,6 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             op_builder = op_builder.packed(Attribute::unit(context.mlir_context));
         }
         let mut operation: Operation = op_builder.build().into();
-        // TODO: drop this manual segment-sizes plumbing once the melior op-builder
-        // macro emits `operand_segment_sizes` automatically for ops with variadic
-        // or optional operand groups.
         let ins_count = i32::try_from(ins.len()).expect("encode argument count fits in i32");
         let segment_sizes = DenseI32ArrayAttribute::new(
             context.mlir_context,
