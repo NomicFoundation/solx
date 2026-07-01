@@ -9,6 +9,7 @@ pub mod variable_declaration;
 
 use std::collections::HashMap;
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Region;
 use melior::ir::Type;
@@ -19,6 +20,9 @@ use slang_solidity_v2::ast::Statements;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
+use solx_mlir::ods::sol::BreakOperation;
+use solx_mlir::ods::sol::ContinueOperation;
+use solx_mlir::ods::sol::ReturnOperation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
@@ -172,7 +176,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         &self,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        self.state.builder.emit_sol_break(&block);
+        mlir_op_void!(self.state, &block, BreakOperation);
         Ok(None)
     }
 
@@ -181,7 +185,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         &self,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        self.state.builder.emit_sol_continue(&block);
+        mlir_op_void!(self.state, &block, ContinueOperation);
         Ok(None)
     }
 
@@ -197,7 +201,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let Some(expression) = return_statement.expression() else {
-            self.state.builder.emit_sol_return(&[], &block);
+            mlir_op_void!(self.state, &block, ReturnOperation.operands(&[]));
             return Ok(None);
         };
 
@@ -232,15 +236,15 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             .into_iter()
             .zip(self.return_types.iter())
             .map(|(value, &return_type)| {
-                TypeConversion::from_target_type(return_type, &self.state.builder).emit(
+                TypeConversion::from_target_type(return_type, self.state).emit(
                     value,
-                    &self.state.builder,
+                    self.state,
                     &block,
                 )
             })
             .collect();
 
-        self.state.builder.emit_sol_return(&cast_values, &block);
+        mlir_op_void!(self.state, &block, ReturnOperation.operands(&cast_values));
         Ok(None)
     }
 }

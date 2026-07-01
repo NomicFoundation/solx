@@ -11,6 +11,10 @@ use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
+
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::expression::operator::Operator;
@@ -56,7 +60,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         let element_type = TypeConversion::resolve_slang_type(
                             &declared_type,
                             None,
-                            &self.state.builder,
+                            self.state,
                         );
                         AssignmentTarget::Storage(slot, element_type)
                     }
@@ -127,10 +131,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             };
             let (old, target_type) = match &target {
                 AssignmentTarget::Pointer(pointer, element_type) => {
-                    let old = self
-                        .state
-                        .builder
-                        .emit_sol_load(*pointer, *element_type, &block)?;
+                    let old = Pointer::new(*pointer)
+                        .load(AstType::new(*element_type), self.state, &block)
+                        .into_mlir();
                     (old, *element_type)
                 }
                 AssignmentTarget::Storage(slot, element_type) => {
@@ -139,21 +142,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 }
             };
             let (rhs, block) = self.emit_value(&right, block)?;
-            let old = TypeConversion::from_target_type(target_type, &self.state.builder).emit(
-                old,
-                &self.state.builder,
-                &block,
-            );
-            let rhs = TypeConversion::from_target_type(target_type, &self.state.builder).emit(
-                rhs,
-                &self.state.builder,
-                &block,
-            );
+            let old = TypeConversion::from_target_type(target_type, self.state)
+                .emit(old, self.state, &block);
+            let rhs = TypeConversion::from_target_type(target_type, self.state)
+                .emit(rhs, self.state, &block);
             let result = block
                 .append_operation(operator.emit_sol_binary_operation(
                     self.checked,
-                    self.state.builder.context,
-                    self.state.builder.unknown_location,
+                    self.state.mlir_context,
+                    self.state.location(),
                     old,
                     rhs,
                 ))
@@ -165,22 +162,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
         let result = match &target {
             AssignmentTarget::Pointer(pointer, element_type) => {
-                let stored_value = TypeConversion::from_target_type(
-                    *element_type,
-                    &self.state.builder,
-                )
-                .emit(value, &self.state.builder, &block);
-                self.state
-                    .builder
-                    .emit_sol_store(stored_value, *pointer, &block);
+                let stored_value = TypeConversion::from_target_type(*element_type, self.state)
+                    .emit(value, self.state, &block);
+                Pointer::new(*pointer).store(AstValue::new(stored_value), self.state, &block);
                 stored_value
             }
             AssignmentTarget::Storage(slot, element_type) => {
-                let stored_value = TypeConversion::from_target_type(
-                    *element_type,
-                    &self.state.builder,
-                )
-                .emit(value, &self.state.builder, &block);
+                let stored_value = TypeConversion::from_target_type(*element_type, self.state)
+                    .emit(value, self.state, &block);
                 self.emit_storage_store(slot, stored_value, *element_type, &block);
                 stored_value
             }

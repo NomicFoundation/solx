@@ -11,6 +11,10 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
+
 use crate::ast::contract::function::expression::ExpressionEmitter;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
@@ -29,10 +33,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         else {
             return Ok(None);
         };
-        let value = self
-            .state
-            .builder
-            .emit_sol_load(address, element_type, &block)?;
+        let value = Pointer::new(address)
+            .load(AstType::new(element_type), self.state, &block)
+            .into_mlir();
         Ok(Some((value, block)))
     }
 
@@ -69,18 +72,22 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .ok_or_else(|| anyhow::anyhow!("unknown struct member: {member_name}"))?;
 
         let (base_value, block) = self.emit_value(&base, block)?;
-        let builder = &self.state.builder;
 
-        let index_value = builder.emit_sol_constant(field_index as i64, builder.types.ui64, &block);
-        // SAFETY: `mlirSolGetEltType` returns a valid MlirType from
-        // `sol::getEltType` on the C++ side.
+        let index_value = AstValue::constant(
+            field_index as i64,
+            AstType::unsigned(self.state.mlir_context, solx_utils::BIT_LENGTH_X64),
+            self.state,
+            &block,
+        );
         let element_type = unsafe {
             Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
                 base_value.r#type().to_raw(),
                 field_index as u64,
             ))
         };
-        let address = builder.emit_sol_gep(base_value, index_value, element_type, &block);
+        let address = Pointer::new(base_value)
+            .gep(index_value, AstType::new(element_type), self.state, &block)
+            .into_mlir();
         Ok(Some((address, element_type, block)))
     }
 }

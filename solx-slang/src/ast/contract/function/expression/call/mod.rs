@@ -17,6 +17,11 @@ use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StructDefinition;
+
+use solx_mlir::Function;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
@@ -64,15 +69,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .next()
                 .expect("len checked to be 1 above");
             let (value, block) = self.expression_emitter.emit_value(&first, block)?;
-            let builder = &self.expression_emitter.state.builder;
+            let context = self.expression_emitter.state;
 
             let target_type = self
                 .expression_emitter
                 .resolve_slang_type(call.get_type())
                 .ok_or_else(|| anyhow::anyhow!("unresolved type conversion target"))?;
 
-            let result =
-                TypeConversion::from_target_type(target_type, builder).emit(value, builder, &block);
+            let result = TypeConversion::from_target_type(target_type, context)
+                .emit(value, context, &block);
             return Ok((Some(result), block));
         }
 
@@ -122,20 +127,25 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .with_context(|| format!("resolving callee '{}'", callee_identifier.name()))?;
 
         if return_types.is_empty() {
-            self.expression_emitter.state.builder.emit_sol_call(
+            Function::call(
                 mlir_name,
                 &argument_values,
                 &[],
+                self.expression_emitter.state,
                 &current_block,
             )?;
             Ok((None, current_block))
         } else {
-            let result = self
-                .expression_emitter
-                .state
-                .builder
-                .emit_sol_call(mlir_name, &argument_values, return_types, &current_block)?
-                .expect("function call always produces at least one result");
+            let result = Function::call(
+                mlir_name,
+                &argument_values,
+                return_types,
+                self.expression_emitter.state,
+                &current_block,
+            )?
+            .into_iter()
+            .next()
+            .expect("function call always produces at least one result");
             Ok((Some(result), current_block))
         }
     }
@@ -148,8 +158,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         positional_arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let builder = &self.expression_emitter.state.builder;
-        let struct_address = builder.emit_sol_malloc(result_type, &block);
+        let context = self.expression_emitter.state;
+        let struct_address = AstValue::malloc(AstType::new(result_type), context, &block);
 
         let mut block = block;
         for (index, (member, argument)) in struct_definition
@@ -162,24 +172,30 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let field_type = TypeConversion::resolve_slang_type(
                 &field_slang_type,
                 Some(DataLocation::Memory),
-                builder,
+                context,
             );
-            let index_value = builder.emit_sol_constant(index as i64, builder.types.ui64, &block);
-            let field_address =
-                builder.emit_sol_gep(struct_address, index_value, field_type, &block);
+            let index_value = AstValue::constant(
+                index as i64,
+                AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_X64),
+                context,
+                &block,
+            );
+            let field_address = Pointer::from(struct_address).gep(
+                index_value,
+                AstType::new(field_type),
+                context,
+                &block,
+            );
 
             let (argument_value, next_block) =
                 self.expression_emitter.emit_value(&argument, block)?;
             block = next_block;
-            let stored = TypeConversion::from_target_type(field_type, builder).emit(
-                argument_value,
-                builder,
-                &block,
-            );
-            builder.emit_sol_store(stored, field_address, &block);
+            let stored = TypeConversion::from_target_type(field_type, context)
+                .emit(argument_value, context, &block);
+            field_address.store(AstValue::new(stored), context, &block);
         }
 
-        Ok((struct_address, block))
+        Ok((struct_address.into_mlir(), block))
     }
 
     /// Emits a direct, named function call and returns all of its result
@@ -219,11 +235,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .emit_call_setup(&function_definition, positional_arguments, block)
             .with_context(|| format!("resolving callee '{}'", callee_identifier.name()))?;
 
-        let results = self
-            .expression_emitter
-            .state
-            .builder
-            .emit_sol_call_results(mlir_name, &argument_values, return_types, &current_block)?;
+        let results = Function::call(
+            mlir_name,
+            &argument_values,
+            return_types,
+            self.expression_emitter.state,
+            &current_block,
+        )?;
         Ok((results, current_block))
     }
 
@@ -259,10 +277,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .state
             .resolve_function(function_definition.node_id())?;
 
-        let builder = &self.expression_emitter.state.builder;
+        let context = self.expression_emitter.state;
         for (value, &param_type) in argument_values.iter_mut().zip(parameter_types) {
-            let conversion = TypeConversion::from_target_type(param_type, builder);
-            *value = conversion.emit(*value, builder, &current_block);
+            let conversion = TypeConversion::from_target_type(param_type, context);
+            *value = conversion.emit(*value, context, &current_block);
         }
 
         Ok((mlir_name, argument_values, return_types, current_block))

@@ -11,6 +11,9 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 
 use solx_mlir::CmpPredicate;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::NotOperation;
 use solx_mlir::ods::sol::SubOperation;
 
@@ -35,29 +38,29 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (rhs, block) = self.emit_value(right, block)?;
         let (lhs, block) = self.emit_value(left, block)?;
         let result_type = target_type.unwrap_or_else(|| {
-            let lhs_width = solx_mlir::TypeFactory::integer_bit_width(lhs.r#type());
-            let rhs_width = solx_mlir::TypeFactory::integer_bit_width(rhs.r#type());
+            let lhs_width = AstType::new(lhs.r#type()).integer_bit_width();
+            let rhs_width = AstType::new(rhs.r#type()).integer_bit_width();
             if lhs_width >= rhs_width {
                 lhs.r#type()
             } else {
                 rhs.r#type()
             }
         });
-        let lhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
+        let lhs = TypeConversion::from_target_type(result_type, self.state).emit(
             lhs,
-            &self.state.builder,
+            self.state,
             &block,
         );
-        let rhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
+        let rhs = TypeConversion::from_target_type(result_type, self.state).emit(
             rhs,
-            &self.state.builder,
+            self.state,
             &block,
         );
         let value = block
             .append_operation(operator.emit_sol_binary_operation(
                 self.checked,
-                self.state.builder.context,
-                self.state.builder.unknown_location,
+                self.state.mlir_context,
+                self.state.location(),
                 lhs,
                 rhs,
             ))
@@ -97,13 +100,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Operator::BitwiseNot => {
                 let (value, block) = self.emit_value(operand, block)?;
                 let operand_type = target_type.unwrap_or_else(|| value.r#type());
-                let value = TypeConversion::from_target_type(operand_type, &self.state.builder)
-                    .emit(value, &self.state.builder, &block);
+                let value = TypeConversion::from_target_type(operand_type, self.state)
+                    .emit(value, self.state, &block);
                 let result = block
                     .append_operation(
                         NotOperation::builder(
-                            self.state.builder.context,
-                            self.state.builder.unknown_location,
+                            self.state.mlir_context,
+                            self.state.location(),
                         )
                         .value(value)
                         .build()
@@ -116,17 +119,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
             Operator::Not => {
                 let (value, block) = self.emit_value(operand, block)?;
-                let zero = self
-                    .state
-                    .builder
-                    .emit_sol_constant(0, value.r#type(), &block);
-                let cmp = self
-                    .state
-                    .builder
-                    .emit_sol_cmp(value, zero, CmpPredicate::Eq, &block);
-                let result_type = target_type.unwrap_or(self.state.builder.types.ui256);
-                let result = TypeConversion::from_target_type(result_type, &self.state.builder)
-                    .emit(cmp, &self.state.builder, &block);
+                let zero =
+                    AstValue::constant(0, AstType::new(value.r#type()), self.state, &block)
+                        .into_mlir();
+                let cmp = AstValue::new(value)
+                    .compare(AstValue::new(zero), CmpPredicate::Eq, self.state, &block)
+                    .into_mlir();
+                let result_type = target_type.unwrap_or(
+                    AstType::unsigned(self.state.mlir_context, solx_utils::BIT_LENGTH_FIELD)
+                        .into_mlir(),
+                );
+                let result = TypeConversion::from_target_type(result_type, self.state)
+                    .emit(cmp, self.state, &block);
                 Ok((result, block))
             }
             Operator::Subtract => {
@@ -136,17 +140,16 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 // since the operand may be in an unsigned literal type.
                 let (value, block) = self.emit_value(operand, block)?;
                 let operand_type = target_type.unwrap_or_else(|| value.r#type());
-                let value = TypeConversion::from_target_type(operand_type, &self.state.builder)
-                    .emit(value, &self.state.builder, &block);
-                let zero = self
-                    .state
-                    .builder
-                    .emit_sol_constant(0, operand_type, &block);
+                let value = TypeConversion::from_target_type(operand_type, self.state)
+                    .emit(value, self.state, &block);
+                let zero =
+                    AstValue::constant(0, AstType::new(operand_type), self.state, &block)
+                        .into_mlir();
                 let result = block
                     .append_operation(
                         SubOperation::builder(
-                            self.state.builder.context,
-                            self.state.builder.unknown_location,
+                            self.state.mlir_context,
+                            self.state.location(),
                         )
                         .lhs(zero)
                         .rhs(value)
@@ -185,15 +188,17 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .ok_or_else(|| anyhow::anyhow!("unregistered state variable: {name}"))?;
                 let element_type = TypeConversion::resolve_state_variable_type(
                     &state_variable,
-                    &self.state.builder,
+                    self.state,
                 )?;
                 let old = self.emit_storage_load(slot, element_type, block)?;
-                let one = self.state.builder.emit_sol_constant(1, element_type, block);
+                let one =
+                    AstValue::constant(1, AstType::new(element_type), self.state, block)
+                        .into_mlir();
                 let new_value = block
                     .append_operation(operator.emit_sol_binary_operation(
                         self.checked,
-                        self.state.builder.context,
-                        self.state.builder.unknown_location,
+                        self.state.mlir_context,
+                        self.state.location(),
                         old,
                         one,
                     ))
@@ -205,23 +210,24 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
             Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                 let (pointer, element_type) = self.environment.variable_with_type(&name);
-                let old = self
-                    .state
-                    .builder
-                    .emit_sol_load(pointer, element_type, block)?;
-                let typed_one = self.state.builder.emit_sol_constant(1, element_type, block);
+                let old = Pointer::new(pointer)
+                    .load(AstType::new(element_type), self.state, block)
+                    .into_mlir();
+                let typed_one =
+                    AstValue::constant(1, AstType::new(element_type), self.state, block)
+                        .into_mlir();
                 let new_value = block
                     .append_operation(operator.emit_sol_binary_operation(
                         self.checked,
-                        self.state.builder.context,
-                        self.state.builder.unknown_location,
+                        self.state.mlir_context,
+                        self.state.location(),
                         old,
                         typed_one,
                     ))
                     .result(0)
                     .expect("binary operation always produces one result")
                     .into();
-                self.state.builder.emit_sol_store(new_value, pointer, block);
+                Pointer::new(pointer).store(AstValue::new(new_value), self.state, block);
                 Ok((old, new_value))
             }
             None => anyhow::bail!("unresolved identifier: {name}"),

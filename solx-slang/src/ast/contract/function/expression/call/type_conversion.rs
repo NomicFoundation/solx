@@ -14,6 +14,12 @@ use slang_solidity_v2::ast::Parameter;
 use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use solx_mlir::ArraySize;
+use solx_mlir::CmpPredicate;
+use solx_mlir::Context;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
+
 use crate::ast::contract::ContractEmitter;
 
 /// Classification of Solidity type conversions.
@@ -39,24 +45,26 @@ impl<'context> TypeConversion<'context> {
     pub fn resolve_slang_type(
         slang_type: &SlangType,
         inherited_location: Option<solx_utils::DataLocation>,
-        builder: &solx_mlir::Builder<'context>,
+        context: &Context<'context>,
     ) -> Type<'context> {
         match slang_type {
             SlangType::Integer(integer_type) => {
                 let bits = integer_type.bits();
                 if integer_type.is_signed() {
-                    Type::from(IntegerType::signed(builder.context, bits))
+                    Type::from(IntegerType::signed(context.mlir_context, bits))
                 } else {
-                    Type::from(IntegerType::unsigned(builder.context, bits))
+                    Type::from(IntegerType::unsigned(context.mlir_context, bits))
                 }
             }
             SlangType::Boolean(_) => Type::from(IntegerType::new(
-                builder.context,
+                context.mlir_context,
                 solx_utils::BIT_LENGTH_BOOLEAN as u32,
             )),
-            SlangType::Address(_) => builder.types.sol_address,
+            SlangType::Address(_) => AstType::address(context.mlir_context, false).into_mlir(),
             SlangType::Literal(literal_type) => match literal_type.kind() {
-                LiteralKind::Address { .. } => builder.types.sol_address,
+                LiteralKind::Address { .. } => {
+                    AstType::address(context.mlir_context, false).into_mlir()
+                }
                 LiteralKind::Integer { value } => {
                     let bits = Self::integer_bits_required(&value) as usize;
                     let bits = bits
@@ -64,21 +72,24 @@ impl<'context> TypeConversion<'context> {
                         .max(solx_utils::BIT_LENGTH_BYTE);
                     let bits = u32::try_from(bits).expect("bit size fits in 32 bits");
                     if value.is_negative() {
-                        Type::from(IntegerType::signed(builder.context, bits))
+                        Type::from(IntegerType::signed(context.mlir_context, bits))
                     } else {
-                        Type::from(IntegerType::unsigned(builder.context, bits))
+                        Type::from(IntegerType::unsigned(context.mlir_context, bits))
                     }
                 }
                 LiteralKind::HexInteger { bytes, .. } => {
                     let bits = bytes * solx_utils::BIT_LENGTH_BYTE as u32;
-                    Type::from(IntegerType::unsigned(builder.context, bits))
+                    Type::from(IntegerType::unsigned(context.mlir_context, bits))
                 }
                 LiteralKind::String { .. } => {
-                    builder.types.string(solx_utils::DataLocation::Memory)
+                    AstType::string(context.mlir_context, solx_utils::DataLocation::Memory)
+                        .into_mlir()
                 }
-                LiteralKind::HexString { bytes } => builder
-                    .types
-                    .fixed_bytes(bytes.try_into().expect("hex string length fits in u32")),
+                LiteralKind::HexString { bytes } => AstType::fixed_bytes(
+                    context.mlir_context,
+                    bytes.try_into().expect("hex string length fits in u32"),
+                )
+                .into_mlir(),
                 LiteralKind::Rational { .. } => unimplemented!(
                     "MLIR type resolution is not yet implemented for rational literals"
                 ),
@@ -88,56 +99,62 @@ impl<'context> TypeConversion<'context> {
                     string_type.location(),
                     inherited_location,
                 );
-                builder.types.string(location)
+                AstType::string(context.mlir_context, location).into_mlir()
             }
             SlangType::Bytes(bytes_type) => {
                 let location =
                     solx_utils::DataLocation::from_slang(bytes_type.location(), inherited_location);
-                builder.types.string(location)
+                AstType::string(context.mlir_context, location).into_mlir()
             }
             SlangType::ByteArray(byte_array_type) => {
-                builder.types.fixed_bytes(byte_array_type.width())
+                AstType::fixed_bytes(context.mlir_context, byte_array_type.width()).into_mlir()
             }
             SlangType::Array(array_type) => {
                 let element_type = Self::resolve_slang_type(
                     &array_type.element_type(),
                     inherited_location,
-                    builder,
+                    context,
                 );
                 let location =
                     solx_utils::DataLocation::from_slang(array_type.location(), inherited_location);
-                builder
-                    .types
-                    .array(solx_mlir::ArraySize::Dynamic, element_type, location)
+                AstType::array(
+                    context.mlir_context,
+                    ArraySize::Dynamic,
+                    element_type,
+                    location,
+                )
+                .into_mlir()
             }
             SlangType::FixedSizeArray(fixed_array_type) => {
                 let element_type = Self::resolve_slang_type(
                     &fixed_array_type.element_type(),
                     inherited_location,
-                    builder,
+                    context,
                 );
                 let location = solx_utils::DataLocation::from_slang(
                     fixed_array_type.location(),
                     inherited_location,
                 );
-                builder.types.array(
-                    solx_mlir::ArraySize::Fixed(fixed_array_type.size() as u64),
+                AstType::array(
+                    context.mlir_context,
+                    ArraySize::Fixed(fixed_array_type.size() as u64),
                     element_type,
                     location,
                 )
+                .into_mlir()
             }
             SlangType::Mapping(mapping_type) => {
                 let key_type = Self::resolve_slang_type(
                     &mapping_type.key_type(),
                     Some(solx_utils::DataLocation::Storage),
-                    builder,
+                    context,
                 );
                 let value_type = Self::resolve_slang_type(
                     &mapping_type.value_type(),
                     Some(solx_utils::DataLocation::Storage),
-                    builder,
+                    context,
                 );
-                builder.types.mapping(key_type, value_type)
+                AstType::mapping(context.mlir_context, key_type, value_type).into_mlir()
             }
             SlangType::Struct(struct_type) => {
                 let struct_location = solx_utils::DataLocation::from_slang(
@@ -148,9 +165,6 @@ impl<'context> TypeConversion<'context> {
                     Definition::Struct(definition) => definition,
                     _ => unreachable!("Slang StructType always references a Struct definition"),
                 };
-                // TODO(v2): move struct-member type resolution into Slang itself
-                // so consumers don't have to walk `members()` and propagate the
-                // struct's data location by hand.
                 let mut member_types = Vec::new();
                 for member in struct_definition.members().iter() {
                     let member_slang_type = member
@@ -159,20 +173,22 @@ impl<'context> TypeConversion<'context> {
                     member_types.push(Self::resolve_slang_type(
                         &member_slang_type,
                         Some(struct_location),
-                        builder,
+                        context,
                     ));
                 }
-                builder.types.structure(&member_types, struct_location)
+                AstType::structure(context.mlir_context, &member_types, struct_location).into_mlir()
             }
             SlangType::Contract(contract_type) => {
                 let contract_definition = match contract_type.definition() {
                     Definition::Contract(definition) => definition,
                     _ => unreachable!("Slang ContractType always references a Contract definition"),
                 };
-                builder.types.contract(
+                AstType::contract(
+                    context.mlir_context,
                     contract_definition.name().name().as_str(),
                     ContractEmitter::is_contract_payable(&contract_definition),
                 )
+                .into_mlir()
             }
             SlangType::Interface(interface_type) => {
                 let interface_definition = match interface_type.definition() {
@@ -181,11 +197,12 @@ impl<'context> TypeConversion<'context> {
                         "Slang InterfaceType always references an Interface definition"
                     ),
                 };
-                // Interfaces are never `payable` themselves; payability lives
-                // on the address-cast at the call site.
-                builder
-                    .types
-                    .contract(interface_definition.name().name().as_str(), false)
+                AstType::contract(
+                    context.mlir_context,
+                    interface_definition.name().name().as_str(),
+                    false,
+                )
+                .into_mlir()
             }
             SlangType::Enum(enum_type) => {
                 let enum_definition = match enum_type.definition() {
@@ -193,23 +210,19 @@ impl<'context> TypeConversion<'context> {
                     _ => unreachable!("Slang EnumType always references an Enum definition"),
                 };
                 let member_count = enum_definition.members().iter().count();
-                // Solidity caps enums at 256 members, so the max enumerator
-                // index always fits in a `u8`.
                 let max = u8::try_from(member_count - 1).expect("enum member count fits in u8");
-                builder.types.enumeration(max.into())
+                AstType::enumeration(context.mlir_context, max.into()).into_mlir()
             }
             SlangType::UserDefinedValue(udvt) => {
                 let target_type = udvt
                     .target_type()
                     .expect("UDVT target type resolved by semantic analysis");
-                Self::resolve_slang_type(&target_type, inherited_location, builder)
+                Self::resolve_slang_type(&target_type, inherited_location, context)
             }
             _ => unimplemented!("unsupported Slang type"),
         }
     }
 
-    // TODO: Remove when nomicFoundation/slang#1793 is merged and we can instead
-    // depend on `LiteralType::mobile_type()` for literal type conversion.
     fn integer_bits_required(value: &BigInt) -> u32 {
         if value.is_negative() {
             let magnitude_minus_one = -value - 1u32;
@@ -220,13 +233,11 @@ impl<'context> TypeConversion<'context> {
     }
 
     /// Classifies a target type into the appropriate conversion variant.
-    pub fn from_target_type(
-        target_type: Type<'context>,
-        builder: &solx_mlir::Builder<'context>,
-    ) -> Self {
-        if target_type == builder.types.i1 {
+    pub fn from_target_type(target_type: Type<'context>, context: &Context<'context>) -> Self {
+        if target_type == AstType::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir()
+        {
             Self::Bool
-        } else if target_type == builder.types.sol_address {
+        } else if target_type == AstType::address(context.mlir_context, false).into_mlir() {
             Self::Address
         } else {
             Self::Cast(target_type)
@@ -234,10 +245,12 @@ impl<'context> TypeConversion<'context> {
     }
 
     /// Returns the MLIR target type this conversion produces.
-    pub fn to_target_type(&self, builder: &solx_mlir::Builder<'context>) -> Type<'context> {
+    pub fn to_target_type(&self, context: &Context<'context>) -> Type<'context> {
         match self {
-            Self::Bool => builder.types.i1,
-            Self::Address => builder.types.sol_address,
+            Self::Bool => {
+                AstType::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir()
+            }
+            Self::Address => AstType::address(context.mlir_context, false).into_mlir(),
             Self::Cast(target_type) => *target_type,
         }
     }
@@ -245,19 +258,19 @@ impl<'context> TypeConversion<'context> {
     /// Resolves the declared Solidity type of a state variable to an MLIR type.
     pub fn resolve_state_variable_type(
         state_variable: &StateVariableDefinition,
-        builder: &solx_mlir::Builder<'context>,
+        context: &Context<'context>,
     ) -> anyhow::Result<Type<'context>> {
         let name = state_variable.name().name();
         let slang_type = state_variable
             .get_type()
             .ok_or_else(|| anyhow::anyhow!("unresolved type for state variable: {name}"))?;
-        Ok(Self::resolve_slang_type(&slang_type, None, builder))
+        Ok(Self::resolve_slang_type(&slang_type, None, context))
     }
 
     /// Resolves a function's parameter and return types from Slang AST to MLIR.
     pub fn resolve_function_types(
         function: &FunctionDefinition,
-        builder: &solx_mlir::Builder<'context>,
+        context: &Context<'context>,
     ) -> (Vec<Type<'context>>, Vec<Type<'context>>) {
         let resolve = |parameter: Parameter| {
             Self::resolve_slang_type(
@@ -265,7 +278,7 @@ impl<'context> TypeConversion<'context> {
                     .get_type()
                     .expect("parameter type resolved by semantic analysis"),
                 None,
-                builder,
+                context,
             )
         };
         let parameter_types = function.parameters().iter().map(&resolve).collect();
@@ -280,32 +293,41 @@ impl<'context> TypeConversion<'context> {
     pub fn emit<'block>(
         self,
         value: melior::ir::Value<'context, 'block>,
-        builder: &solx_mlir::Builder<'context>,
+        context: &Context<'context>,
         block: &melior::ir::BlockRef<'context, 'block>,
     ) -> melior::ir::Value<'context, 'block>
     where
         'context: 'block,
     {
-        if value.r#type() == self.to_target_type(builder) {
+        if value.r#type() == self.to_target_type(context) {
             return value;
         }
         match self {
             Self::Bool => {
-                let zero = builder.emit_sol_constant(0, value.r#type(), block);
-                builder.emit_sol_cmp(value, zero, solx_mlir::CmpPredicate::Ne, block)
+                let zero = AstValue::constant(
+                    0,
+                    AstType::new(value.r#type()),
+                    context,
+                    block,
+                );
+                AstValue::new(value)
+                    .compare(zero, CmpPredicate::Ne, context, block)
+                    .into_mlir()
             }
             Self::Address => {
-                let address_type = builder.types.sol_address;
-                let truncated = if melior::ir::r#type::IntegerType::try_from(value.r#type()).is_ok()
-                {
-                    let ui160 = builder.types.ui160;
-                    builder.emit_sol_cast(value, ui160, block)
+                let address_type = AstType::address(context.mlir_context, false);
+                let truncated = if IntegerType::try_from(value.r#type()).is_ok() {
+                    let ui160 =
+                        AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_ETH_ADDRESS);
+                    AstValue::new(value).cast(ui160, context, block)
                 } else {
-                    value
+                    AstValue::new(value)
                 };
-                builder.emit_sol_address_cast(truncated, address_type, block)
+                truncated.address_cast(address_type, context, block).into_mlir()
             }
-            Self::Cast(target_type) => builder.emit_sol_cast(value, target_type, block),
+            Self::Cast(target_type) => AstValue::new(value)
+                .cast(AstType::new(target_type), context, block)
+                .into_mlir(),
         }
     }
 }

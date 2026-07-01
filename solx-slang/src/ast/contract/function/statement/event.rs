@@ -80,11 +80,11 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     .get_type()
                     .expect("parameter type resolved by semantic analysis"),
                 None,
-                &self.state.builder,
+                self.state,
             );
-            let value = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(
+            let value = TypeConversion::from_target_type(parameter_type, self.state).emit(
                 value,
-                &self.state.builder,
+                self.state,
                 &current_block,
             );
             if indexed {
@@ -128,7 +128,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         non_indexed_arguments: &[Value<'context, 'block>],
         block: &BlockRef<'context, 'block>,
     ) {
-        let builder = &self.state.builder;
         let combined_arguments: Vec<Value<'context, 'block>> = indexed_arguments
             .iter()
             .chain(non_indexed_arguments.iter())
@@ -137,14 +136,16 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let indexed_count = i8::try_from(indexed_arguments.len())
             .expect("EVM events have at most four indexed arguments");
         let indexed_count_attribute = IntegerAttribute::new(
-            Type::from(IntegerType::new(builder.context, 8)),
+            Type::from(IntegerType::new(self.state.mlir_context, 8)),
             indexed_count.into(),
         );
-        let mut emit_builder = EmitOperation::builder(builder.context, builder.unknown_location)
-            .args(&combined_arguments)
-            .indexed_args_count(indexed_count_attribute);
+        let mut emit_builder =
+            EmitOperation::builder(self.state.mlir_context, self.state.location())
+                .args(&combined_arguments)
+                .indexed_args_count(indexed_count_attribute);
         if let Some(signature) = signature {
-            emit_builder = emit_builder.signature(StringAttribute::new(builder.context, signature));
+            emit_builder =
+                emit_builder.signature(StringAttribute::new(self.state.mlir_context, signature));
         }
         block.append_operation(emit_builder.build().into());
     }
