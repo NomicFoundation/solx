@@ -15,50 +15,64 @@ use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 
-use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::block_and::BlockAnd;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::CallContext;
+use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_place::EmitPlace;
+use crate::ast::place::Place;
 
-impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
-    /// Lowers `s.field` for a struct base to `sol.gep`, followed by a
-    /// `sol.load` of the addressed field unless the field already IS the
-    /// value (non-ptr-ref-in-storage rule).
-    ///
-    /// Returns `Ok(None)` when the base is not a struct (e.g. `msg.sender`),
-    /// so the caller can fall back to built-in member access lowering.
-    pub fn emit_struct_field(
+impl<'context: 'block, 'block> EmitExpression<'context, 'block> for MemberAccessExpression {
+    type Output = BlockAnd<'context, 'block, Value<'context, 'block>>;
+
+    /// Lowers `s.field` for a struct base to `sol.gep` + `sol.load`, or falls back to a built-in
+    /// member access (e.g. `msg.sender`) when the base is not a struct.
+    fn emit<'state>(
         &self,
-        access: &MemberAccessExpression,
+        context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<(Value<'context, 'block>, BlockRef<'context, 'block>)>> {
-        let Some((address, element_type, block)) = self.emit_struct_field_address(access, block)?
-        else {
-            return Ok(None);
-        };
-        let value = Pointer::new(address)
-            .load(AstType::new(element_type), self.state, &block)
-            .into_mlir();
-        Ok(Some((value, block)))
+    ) -> Self::Output {
+        if let Some(BlockAnd {
+            value: place,
+            block,
+        }) = context.emit_struct_field_place(self, block)
+        {
+            let value = Pointer::new(place.address)
+                .load(AstType::new(place.element_type), context.state, &block)
+                .into_mlir();
+            return BlockAnd { block, value };
+        }
+        let (value, block) = CallContext::new(context).emit_member_access(self, block);
+        BlockAnd { block, value }
     }
+}
 
-    /// Emits the address yielded by `s.field` together with the field's
-    /// element MLIR type, without the trailing `sol.load`.
-    ///
-    /// Shared between the value-producing read path
-    /// ([`Self::emit_struct_field`]) and the lvalue write path in
-    /// `emit_assignment`. Returns `Ok(None)` when the base is not a struct.
-    pub fn emit_struct_field_address(
+impl<'context: 'block, 'block> EmitPlace<'context, 'block> for MemberAccessExpression {
+    /// Emits the address yielded by `s.field` together with the field's element MLIR type, without
+    /// the trailing `sol.load`. Panics when the base is not a struct, which the assignment lvalue
+    /// path guarantees.
+    fn emit_place<'state>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> BlockAnd<'context, 'block, Place<'context, 'block>> {
+        context
+            .emit_struct_field_place(self, block)
+            .expect("slang validates a member-access lvalue resolves to a struct field")
+    }
+}
+
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
+    /// Emits the address yielded by `s.field` when the base is a struct, returning `None` otherwise
+    /// so the caller can fall back to built-in member-access lowering.
+    fn emit_struct_field_place(
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<
-        Option<(
-            Value<'context, 'block>,
-            Type<'context>,
-            BlockRef<'context, 'block>,
-        )>,
-    > {
+    ) -> Option<BlockAnd<'context, 'block, Place<'context, 'block>>> {
         let base = access.operand();
-        let Some(SlangType::Struct(struct_type)) = base.get_type() else {
-            return Ok(None);
+        let SlangType::Struct(struct_type) = base.get_type()? else {
+            return None;
         };
         let Definition::Struct(struct_definition) = struct_type.definition() else {
             unreachable!("slang StructType always references a Struct definition");
@@ -69,9 +83,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .members()
             .iter()
             .position(|member| member.name().name() == member_name)
-            .ok_or_else(|| anyhow::anyhow!("unknown struct member: {member_name}"))?;
+            .expect("slang validates the accessed member exists");
 
-        let (base_value, block) = self.emit_value(&base, block)?;
+        let BlockAnd {
+            value: base_value,
+            block,
+        } = base.emit(self, block);
 
         let index_value = AstValue::constant(
             field_index as i64,
@@ -88,6 +105,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let address = Pointer::new(base_value)
             .gep(index_value, AstType::new(element_type), self.state, &block)
             .into_mlir();
-        Ok(Some((address, element_type, block)))
+        Some(BlockAnd {
+            block,
+            value: Place {
+                address,
+                element_type,
+            },
+        })
     }
 }

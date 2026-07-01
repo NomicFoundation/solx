@@ -7,8 +7,18 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
+use slang_solidity_v2::ast;
+use slang_solidity_v2::ast::AdditiveExpression;
+use slang_solidity_v2::ast::BitwiseAndExpression;
+use slang_solidity_v2::ast::BitwiseOrExpression;
+use slang_solidity_v2::ast::BitwiseXorExpression;
 use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::ExponentiationExpression;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::MultiplicativeExpression;
+use slang_solidity_v2::ast::PostfixExpression;
+use slang_solidity_v2::ast::PrefixExpression;
+use slang_solidity_v2::ast::ShiftExpression;
 
 use solx_mlir::CmpPredicate;
 use solx_mlir::Pointer;
@@ -17,11 +27,135 @@ use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::NotOperation;
 use solx_mlir::ods::sol::SubOperation;
 
-use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::block_and::BlockAnd;
+use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::expression::operator::Operator;
+use crate::ast::emit::emit_expression::EmitExpression;
 
-impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
+expression_emit!(AdditiveExpression; |node, context, block| {
+    let result_type = context.resolve_slang_type(node.get_type());
+    let operator = match node.operator() {
+        ast::AdditiveExpressionOperator::Plus(_) => Operator::Add,
+        ast::AdditiveExpressionOperator::Minus(_) => Operator::Subtract,
+    };
+    let BlockAnd { value, block } = context.emit_binary_op(
+        &node.left_operand(),
+        &node.right_operand(),
+        operator,
+        result_type,
+        block,
+    );
+    BlockAnd { block, value }
+});
+
+expression_emit!(MultiplicativeExpression; |node, context, block| {
+    let result_type = context.resolve_slang_type(node.get_type());
+    let operator = match node.operator() {
+        ast::MultiplicativeExpressionOperator::Asterisk(_) => Operator::Multiply,
+        ast::MultiplicativeExpressionOperator::Percent(_) => Operator::Remainder,
+        ast::MultiplicativeExpressionOperator::Slash(_) => Operator::Divide,
+    };
+    let BlockAnd { value, block } = context.emit_binary_op(
+        &node.left_operand(),
+        &node.right_operand(),
+        operator,
+        result_type,
+        block,
+    );
+    BlockAnd { block, value }
+});
+
+expression_emit!(ExponentiationExpression; |node, context, block| {
+    let target_type = context.resolve_slang_type(node.get_type());
+    let BlockAnd { value, block } = context.emit_binary_op(
+        &node.left_operand(),
+        &node.right_operand(),
+        Operator::Exponentiation,
+        target_type,
+        block,
+    );
+    BlockAnd { block, value }
+});
+
+expression_emit!(BitwiseAndExpression; |node, context, block| {
+    let result_type = context.resolve_slang_type(node.get_type());
+    let BlockAnd { value, block } = context.emit_binary_op(
+        &node.left_operand(),
+        &node.right_operand(),
+        Operator::BitwiseAnd,
+        result_type,
+        block,
+    );
+    BlockAnd { block, value }
+});
+
+expression_emit!(BitwiseOrExpression; |node, context, block| {
+    let result_type = context.resolve_slang_type(node.get_type());
+    let BlockAnd { value, block } = context.emit_binary_op(
+        &node.left_operand(),
+        &node.right_operand(),
+        Operator::BitwiseOr,
+        result_type,
+        block,
+    );
+    BlockAnd { block, value }
+});
+
+expression_emit!(BitwiseXorExpression; |node, context, block| {
+    let result_type = context.resolve_slang_type(node.get_type());
+    let BlockAnd { value, block } = context.emit_binary_op(
+        &node.left_operand(),
+        &node.right_operand(),
+        Operator::BitwiseXor,
+        result_type,
+        block,
+    );
+    BlockAnd { block, value }
+});
+
+expression_emit!(ShiftExpression; |node, context, block| {
+    let result_type = context.resolve_slang_type(node.get_type());
+    let operator = match node.operator() {
+        ast::ShiftExpressionOperator::GreaterThanGreaterThan(_) => Operator::ShiftRight,
+        ast::ShiftExpressionOperator::GreaterThanGreaterThanGreaterThan(_) => Operator::ShiftRight,
+        ast::ShiftExpressionOperator::LessThanLessThan(_) => Operator::ShiftLeft,
+    };
+    let BlockAnd { value, block } = context.emit_binary_op(
+        &node.left_operand(),
+        &node.right_operand(),
+        operator,
+        result_type,
+        block,
+    );
+    BlockAnd { block, value }
+});
+
+expression_emit!(PostfixExpression; |node, context, block| {
+    let operator = match node.operator() {
+        ast::PostfixExpressionOperator::MinusMinus(_) => Operator::Decrement,
+        ast::PostfixExpressionOperator::PlusPlus(_) => Operator::Increment,
+    };
+    let BlockAnd { value, block } = context.emit_postfix(&node.operand(), operator, block);
+    BlockAnd { block, value }
+});
+
+expression_emit!(PrefixExpression; |node, context, block| {
+    let result_type = context.resolve_slang_type(node.get_type());
+    let operator = match node.operator() {
+        ast::PrefixExpressionOperator::Bang(_) => Operator::Not,
+        ast::PrefixExpressionOperator::DeleteKeyword(_) => Operator::Delete,
+        ast::PrefixExpressionOperator::Minus(_) => Operator::Subtract,
+        ast::PrefixExpressionOperator::MinusMinus(_) => Operator::Decrement,
+        ast::PrefixExpressionOperator::PlusPlus(_) => Operator::Increment,
+        ast::PrefixExpressionOperator::Tilde(_) => Operator::BitwiseNot,
+    };
+    let BlockAnd { value, block } =
+        context.emit_prefix(operator, &node.operand(), result_type, block);
+    BlockAnd { block, value }
+});
+
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits a binary arithmetic Sol dialect operation.
     ///
     /// When `target_type` is `Some`, both operands are cast to that type and
@@ -34,9 +168,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         operator: Operator,
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let (rhs, block) = self.emit_value(right, block)?;
-        let (lhs, block) = self.emit_value(left, block)?;
+    ) -> BlockAnd<'context, 'block, Value<'context, 'block>> {
+        let BlockAnd { value: rhs, block } = right.emit(self, block);
+        let BlockAnd { value: lhs, block } = left.emit(self, block);
         let result_type = target_type.unwrap_or_else(|| {
             let lhs_width = AstType::new(lhs.r#type()).integer_bit_width();
             let rhs_width = AstType::new(rhs.r#type()).integer_bit_width();
@@ -67,7 +201,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .result(0)
             .expect("binary operation always produces one result")
             .into();
-        Ok((value, block))
+        BlockAnd { block, value }
     }
 
     /// Emits postfix `++` or `--` (returns the old value).
@@ -76,9 +210,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         operand: &Expression,
         operator: Operator,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let (old, _) = self.emit_increment_decrement(operand, operator, &block)?;
-        Ok((old, block))
+    ) -> BlockAnd<'context, 'block, Value<'context, 'block>> {
+        let (old, _) = self.emit_increment_decrement(operand, operator, &block);
+        BlockAnd { block, value: old }
     }
 
     /// Emits prefix operators: `!`, `-`, `~`, `++`, `--`.
@@ -91,34 +225,34 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         operand: &Expression,
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> BlockAnd<'context, 'block, Value<'context, 'block>> {
         match operator {
             Operator::Increment | Operator::Decrement => {
-                let (_old, new_value) = self.emit_increment_decrement(operand, operator, &block)?;
-                Ok((new_value, block))
+                let (_old, new_value) = self.emit_increment_decrement(operand, operator, &block);
+                BlockAnd {
+                    block,
+                    value: new_value,
+                }
             }
             Operator::BitwiseNot => {
-                let (value, block) = self.emit_value(operand, block)?;
+                let BlockAnd { value, block } = operand.emit(self, block);
                 let operand_type = target_type.unwrap_or_else(|| value.r#type());
                 let value = TypeConversion::from_target_type(operand_type, self.state)
                     .emit(value, self.state, &block);
-                let result = block
+                let value = block
                     .append_operation(
-                        NotOperation::builder(
-                            self.state.mlir_context,
-                            self.state.location(),
-                        )
-                        .value(value)
-                        .build()
-                        .into(),
+                        NotOperation::builder(self.state.mlir_context, self.state.location())
+                            .value(value)
+                            .build()
+                            .into(),
                     )
                     .result(0)
                     .expect("sol.not always produces one result")
                     .into();
-                Ok((result, block))
+                BlockAnd { block, value }
             }
             Operator::Not => {
-                let (value, block) = self.emit_value(operand, block)?;
+                let BlockAnd { value, block } = operand.emit(self, block);
                 let zero =
                     AstValue::constant(0, AstType::new(value.r#type()), self.state, &block)
                         .into_mlir();
@@ -129,39 +263,36 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     AstType::unsigned(self.state.mlir_context, solx_utils::BIT_LENGTH_FIELD)
                         .into_mlir(),
                 );
-                let result = TypeConversion::from_target_type(result_type, self.state)
+                let value = TypeConversion::from_target_type(result_type, self.state)
                     .emit(cmp, self.state, &block);
-                Ok((result, block))
+                BlockAnd { block, value }
             }
             Operator::Subtract => {
                 // Unary negation uses unchecked subtraction. Checked negation
                 // requires signed-type awareness (e.g. -INT_MIN should revert
                 // in checked mode) which needs a dedicated op — not sol.csub,
                 // since the operand may be in an unsigned literal type.
-                let (value, block) = self.emit_value(operand, block)?;
+                let BlockAnd { value, block } = operand.emit(self, block);
                 let operand_type = target_type.unwrap_or_else(|| value.r#type());
                 let value = TypeConversion::from_target_type(operand_type, self.state)
                     .emit(value, self.state, &block);
                 let zero =
                     AstValue::constant(0, AstType::new(operand_type), self.state, &block)
                         .into_mlir();
-                let result = block
+                let value = block
                     .append_operation(
-                        SubOperation::builder(
-                            self.state.mlir_context,
-                            self.state.location(),
-                        )
-                        .lhs(zero)
-                        .rhs(value)
-                        .build()
-                        .into(),
+                        SubOperation::builder(self.state.mlir_context, self.state.location())
+                            .lhs(zero)
+                            .rhs(value)
+                            .build()
+                            .into(),
                     )
                     .result(0)
                     .expect("sol.sub always produces one result")
                     .into();
-                Ok((result, block))
+                BlockAnd { block, value }
             }
-            _ => anyhow::bail!("unsupported prefix operator: {operator:?}"),
+            _ => unreachable!("unsupported prefix operator: {operator:?}"),
         }
     }
 
@@ -174,9 +305,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         operand: &Expression,
         operator: Operator,
         block: &BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, Value<'context, 'block>)> {
+    ) -> (Value<'context, 'block>, Value<'context, 'block>) {
         let Expression::Identifier(identifier) = operand else {
-            anyhow::bail!("unsupported operand for {operator:?}");
+            unreachable!("unsupported operand for {operator:?}");
         };
         let name = identifier.name();
 
@@ -185,12 +316,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let slot = self
                     .storage_layout
                     .get(&state_variable.node_id())
-                    .ok_or_else(|| anyhow::anyhow!("unregistered state variable: {name}"))?;
-                let element_type = TypeConversion::resolve_state_variable_type(
-                    &state_variable,
-                    self.state,
-                )?;
-                let old = self.emit_storage_load(slot, element_type, block)?;
+                    .expect("state variable is registered in the storage layout");
+                let element_type =
+                    TypeConversion::resolve_state_variable_type(&state_variable, self.state);
+                let old = self.emit_storage_load(slot, element_type, block);
                 let one =
                     AstValue::constant(1, AstType::new(element_type), self.state, block)
                         .into_mlir();
@@ -206,7 +335,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .expect("binary operation always produces one result")
                     .into();
                 self.emit_storage_store(slot, new_value, element_type, block);
-                Ok((old, new_value))
+                (old, new_value)
             }
             Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                 let (pointer, element_type) = self.environment.variable_with_type(&name);
@@ -228,10 +357,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .expect("binary operation always produces one result")
                     .into();
                 Pointer::new(pointer).store(AstValue::new(new_value), self.state, block);
-                Ok((old, new_value))
+                (old, new_value)
             }
-            None => anyhow::bail!("unresolved identifier: {name}"),
-            Some(_) => anyhow::bail!("unsupported operand for {operator:?}: {name}"),
+            None => unreachable!("slang resolves every identifier reference: {name}"),
+            Some(_) => unreachable!("unsupported operand for {operator:?}: {name}"),
         }
     }
 }

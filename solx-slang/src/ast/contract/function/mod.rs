@@ -31,10 +31,13 @@ use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::ReturnOperation;
 
-use self::expression::ExpressionEmitter;
-use self::expression::call::type_conversion::TypeConversion;
-use self::statement::StatementEmitter;
-use self::storage_slot::StorageSlot;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::statement::StatementContext;
+use crate::ast::contract::function::storage_slot::StorageSlot;
+use crate::ast::emit::emit_constructor::EmitConstructor;
+use crate::ast::emit::emit_function::EmitFunction;
+use crate::ast::emit::emit_statement::EmitStatement;
 
 /// Lowers a Solidity function definition to a `sol.func` operation.
 pub struct FunctionEmitter<'state, 'context> {
@@ -60,177 +63,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             contract,
             storage_layout,
         }
-    }
-
-    /// Emits a `sol.func` for the given function definition into the given
-    /// contract body block.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the function body contains unsupported statements.
-    ///
-    /// # Panics
-    ///
-    /// Panics if an entry block is not attached to a region, which is
-    /// unreachable because `Function::define` always creates a region.
-    pub fn emit_sol(
-        &self,
-        function: &FunctionDefinition,
-        contract_body: &BlockRef<'context, '_>,
-    ) -> anyhow::Result<String> {
-        let Some(ref body) = function.body() else {
-            // Abstract or interface function — no codegen needed.
-            return Ok(Self::mlir_function_name(function));
-        };
-
-        let parameters = function.parameters();
-        let mlir_name = Self::mlir_function_name(function);
-
-        let (mlir_parameter_types, result_types) =
-            TypeConversion::resolve_function_types(function, self.state);
-
-        let selector = function.compute_selector();
-
-        let state_mutability = Self::map_state_mutability(function);
-
-        let mlir_kind = match function.kind() {
-            FunctionKind::Constructor => Some(solx_mlir::FunctionKind::Constructor),
-            FunctionKind::Fallback => Some(solx_mlir::FunctionKind::Fallback),
-            FunctionKind::Receive => Some(solx_mlir::FunctionKind::Receive),
-            FunctionKind::Regular => None,
-            FunctionKind::Modifier => unreachable!("modifiers are filtered before emission"),
-        };
-
-        let function_entry_block = Function::new(
-            mlir_name.clone(),
-            mlir_parameter_types.clone(),
-            result_types.clone(),
-        )
-        .define(selector, state_mutability, mlir_kind, self.state, contract_body);
-
-        let mut environment = Environment::new();
-
-        // Create allocas for parameters and bind to environment.
-        for (index, parameter) in parameters.iter().enumerate() {
-            let parameter_name = parameter
-                .name()
-                .map(|id| id.name())
-                .unwrap_or_else(|| "_".to_owned());
-            let parameter_type = mlir_parameter_types[index];
-            let parameter_value: Value<'context, '_> = function_entry_block.argument(index)?.into();
-            let pointer =
-                Pointer::stack(AstType::new(parameter_type), self.state, &function_entry_block);
-            pointer.store(
-                AstValue::new(parameter_value),
-                self.state,
-                &function_entry_block,
-            );
-
-            environment.define_variable(parameter_name, pointer.into_mlir(), parameter_type);
-        }
-
-        let mut return_slots: Vec<Option<Value<'context, '_>>> = Vec::new();
-        if let Some(returns) = function.returns() {
-            for (index, parameter) in returns.iter().enumerate() {
-                let Some(identifier) = parameter.name() else {
-                    return_slots.push(None);
-                    continue;
-                };
-                let return_type = result_types[index];
-                let pointer =
-                    Pointer::stack(AstType::new(return_type), self.state, &function_entry_block);
-                // TODO: replace with a typed-zero helper covering address, fixed-bytes, and
-                // memory-resident types (e.g. `0x60` for empty `string`/`bytes` memory).
-                if IntegerType::try_from(return_type).is_ok() {
-                    let zero = AstValue::constant(
-                        0,
-                        AstType::new(return_type),
-                        self.state,
-                        &function_entry_block,
-                    );
-                    pointer.store(zero, self.state, &function_entry_block);
-                } else {
-                    unimplemented!(
-                        "zero-initialization for non-integer named return: {return_type}"
-                    );
-                }
-                let pointer = pointer.into_mlir();
-                environment.define_variable(identifier.name(), pointer, return_type);
-                return_slots.push(Some(pointer));
-            }
-        }
-
-        let region = function_entry_block
-            .parent_region()
-            .expect("entry block belongs to a region");
-        let mut current_block = function_entry_block;
-
-        // State variable initializers run at the top of the constructor body,
-        // before any user-written statements.
-        if matches!(function.kind(), FunctionKind::Constructor) {
-            let emitter =
-                ExpressionEmitter::new(self.state, &environment, self.storage_layout, true);
-            current_block = emitter.emit_state_var_initializers(self.contract, current_block)?;
-        }
-
-        let mut terminated = false;
-        for statement in body.statements().iter() {
-            let mut emitter = StatementEmitter::new(
-                self.state,
-                &mut environment,
-                &region,
-                self.storage_layout,
-                &result_types,
-            );
-            match emitter.emit(&statement, current_block)? {
-                Some(next) => current_block = next,
-                None => {
-                    terminated = true;
-                    break;
-                }
-            }
-        }
-
-        if !terminated {
-            self.emit_default_return(&result_types, &return_slots, &current_block);
-        }
-
-        Ok(mlir_name)
-    }
-
-    /// Emits the contract's constructor as a `sol.func`.
-    ///
-    /// Dispatches to [`Self::emit_sol`] when the contract declares one,
-    /// otherwise emits a `constructor()` running just the state-variable
-    /// initializers.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if a state-variable initializer has an unresolved
-    /// type or contains unsupported constructs, or if the explicit
-    /// constructor body contains unsupported statements.
-    ///
-    /// # Panics
-    ///
-    /// Panics if an entry block is not attached to a region, which is
-    /// unreachable because `Function::define` always creates a region.
-    pub fn emit_constructor(&self, contract_body: &BlockRef<'context, '_>) -> anyhow::Result<()> {
-        if let Some(constructor) = self.contract.constructor() {
-            self.emit_sol(&constructor, contract_body)?;
-            return Ok(());
-        }
-        let entry = Function::new("constructor()".to_owned(), Vec::new(), Vec::new()).define(
-            None,
-            StateMutability::NonPayable,
-            Some(solx_mlir::FunctionKind::Constructor),
-            self.state,
-            contract_body,
-        );
-        let environment = Environment::new();
-        let emitter = ExpressionEmitter::new(self.state, &environment, self.storage_layout, true);
-        let block = emitter.emit_state_var_initializers(self.contract, entry)?;
-        mlir_op_void!(self.state, &block, ReturnOperation.operands(&[]));
-        Ok(())
     }
 
     /// Builds the MLIR function name as `{name}({types})`.
@@ -351,5 +183,163 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             FunctionMutability::Payable => StateMutability::Payable,
             FunctionMutability::NonPayable => StateMutability::NonPayable,
         }
+    }
+}
+
+impl EmitFunction for FunctionDefinition {
+    /// Emits a `sol.func` for this function definition into the given contract body block.
+    fn emit<'context>(
+        &self,
+        emitter: &FunctionEmitter<'_, 'context>,
+        contract_body: &BlockRef<'context, '_>,
+    ) -> String {
+        let mlir_name = FunctionEmitter::mlir_function_name(self);
+        let Some(ref body) = self.body() else {
+            return mlir_name;
+        };
+
+        let parameters = self.parameters();
+
+        let (mlir_parameter_types, result_types) =
+            TypeConversion::resolve_function_types(self, emitter.state);
+
+        let selector = self.compute_selector();
+
+        let state_mutability = FunctionEmitter::map_state_mutability(self);
+
+        let mlir_kind = match self.kind() {
+            FunctionKind::Constructor => Some(solx_mlir::FunctionKind::Constructor),
+            FunctionKind::Fallback => Some(solx_mlir::FunctionKind::Fallback),
+            FunctionKind::Receive => Some(solx_mlir::FunctionKind::Receive),
+            FunctionKind::Regular => None,
+            FunctionKind::Modifier => unreachable!("modifiers are filtered before emission"),
+        };
+
+        let function_entry_block = Function::new(
+            mlir_name.clone(),
+            mlir_parameter_types.clone(),
+            result_types.clone(),
+        )
+        .define(selector, state_mutability, mlir_kind, emitter.state, contract_body);
+
+        let mut environment = Environment::new();
+
+        for (index, parameter) in parameters.iter().enumerate() {
+            let parameter_name = parameter
+                .name()
+                .map(|id| id.name())
+                .unwrap_or_else(|| "_".to_owned());
+            let parameter_type = mlir_parameter_types[index];
+            let parameter_value: Value<'context, '_> = function_entry_block
+                .argument(index)
+                .expect("function entry block has one argument per parameter")
+                .into();
+            let pointer =
+                Pointer::stack(AstType::new(parameter_type), emitter.state, &function_entry_block);
+            pointer.store(
+                AstValue::new(parameter_value),
+                emitter.state,
+                &function_entry_block,
+            );
+
+            environment.define_variable(parameter_name, pointer.into_mlir(), parameter_type);
+        }
+
+        let mut return_slots: Vec<Option<Value<'context, '_>>> = Vec::new();
+        if let Some(returns) = self.returns() {
+            for (index, parameter) in returns.iter().enumerate() {
+                let Some(identifier) = parameter.name() else {
+                    return_slots.push(None);
+                    continue;
+                };
+                let return_type = result_types[index];
+                let pointer =
+                    Pointer::stack(AstType::new(return_type), emitter.state, &function_entry_block);
+                // TODO: replace with a typed-zero helper covering address, fixed-bytes, and
+                // memory-resident types (e.g. `0x60` for empty `string`/`bytes` memory).
+                if IntegerType::try_from(return_type).is_ok() {
+                    let zero = AstValue::constant(
+                        0,
+                        AstType::new(return_type),
+                        emitter.state,
+                        &function_entry_block,
+                    );
+                    pointer.store(zero, emitter.state, &function_entry_block);
+                } else {
+                    unimplemented!(
+                        "zero-initialization for non-integer named return: {return_type}"
+                    );
+                }
+                let pointer = pointer.into_mlir();
+                environment.define_variable(identifier.name(), pointer, return_type);
+                return_slots.push(Some(pointer));
+            }
+        }
+
+        let region = function_entry_block
+            .parent_region()
+            .expect("entry block belongs to a region");
+        let mut current_block = function_entry_block;
+
+        if matches!(self.kind(), FunctionKind::Constructor) {
+            let expression_context = ExpressionContext::new(
+                emitter.state,
+                &environment,
+                emitter.storage_layout,
+                true,
+            );
+            current_block =
+                expression_context.emit_state_var_initializers(emitter.contract, current_block);
+        }
+
+        let mut terminated = false;
+        for statement in body.statements().iter() {
+            let mut statement_context = StatementContext::new(
+                emitter.state,
+                &mut environment,
+                &region,
+                emitter.storage_layout,
+                &result_types,
+            );
+            match statement.emit(&mut statement_context, current_block) {
+                Some(next) => current_block = next,
+                None => {
+                    terminated = true;
+                    break;
+                }
+            }
+        }
+
+        if !terminated {
+            emitter.emit_default_return(&result_types, &return_slots, &current_block);
+        }
+
+        mlir_name
+    }
+}
+
+impl EmitConstructor for ContractDefinition {
+    /// Emits the contract's `constructor()` `sol.func`, threaded via the shared [`FunctionEmitter`].
+    fn emit_constructor<'context>(
+        &self,
+        emitter: &FunctionEmitter<'_, 'context>,
+        contract_body: &BlockRef<'context, '_>,
+    ) {
+        if let Some(constructor) = self.constructor() {
+            constructor.emit(emitter, contract_body);
+            return;
+        }
+        let entry = Function::new("constructor()".to_owned(), Vec::new(), Vec::new()).define(
+            None,
+            StateMutability::NonPayable,
+            Some(solx_mlir::FunctionKind::Constructor),
+            emitter.state,
+            contract_body,
+        );
+        let environment = Environment::new();
+        let expression_context =
+            ExpressionContext::new(emitter.state, &environment, emitter.storage_layout, true);
+        let block = expression_context.emit_state_var_initializers(emitter.contract, entry);
+        mlir_op_void!(emitter.state, &block, ReturnOperation.operands(&[]));
     }
 }

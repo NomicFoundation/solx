@@ -55,51 +55,41 @@ use solx_mlir::ods::sol::SigOperation;
 use solx_mlir::ods::sol::TimestampOperation;
 use solx_mlir::ods::sol::TransferOperation;
 
-use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::block_and::BlockAnd;
+use crate::ast::contract::function::expression::call::CallContext;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::emit::emit_expression::EmitExpression;
 
-impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
-    /// Tries to emit `callee(arguments)` as a Solidity built-in.
+impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context, 'block> {
+    /// Tries to emit `callee(arguments)` as a Solidity built-in invoked by bare identifier.
     ///
-    /// Resolves the callee via slang's binder to a [`BuiltIn`] variant.
-    /// On match, returns `Ok(Some((value, block)))`, where `value` is
-    /// `Some(...)` for value-producing built-ins (e.g. `gasleft()`) and
-    /// `None` for statement-style built-ins (e.g. `assert`, `require`).
-    /// Returns `Ok(None)` if the callee is not a built-in and the caller
-    /// should fall through to generic dispatch.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the callee is a built-in but its arguments are
-    /// malformed (e.g. non-string `require` message).
-    pub fn try_emit_built_in_call(
+    /// Resolves the callee via slang's binder to a [`BuiltIn`] variant. On match, returns
+    /// `Some((value, block))`, where `value` is `Some(...)` for value-producing built-ins
+    /// (e.g. `gasleft()`) and `None` for statement-style built-ins (e.g. `assert`, `require`).
+    /// Returns `None` if the callee is not a built-in.
+    pub(super) fn try_emit_built_in_call(
         &self,
         callee: &Expression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
+    ) -> Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let Expression::Identifier(identifier) = callee else {
-            return Ok(None);
+            return None;
         };
-        let Some(built_in) = identifier.resolve_to_built_in() else {
-            return Ok(None);
-        };
+        let built_in = identifier.resolve_to_built_in()?;
         match built_in {
             BuiltIn::Assert if arguments.len() == 1 => {
                 let condition = arguments.iter().next().expect("argument count verified");
-                Ok(Some((None, self.emit_assert(&condition, block)?)))
+                Some((None, self.emit_assert(&condition, block)))
             }
             BuiltIn::Require if matches!(arguments.len(), 1 | 2) => {
                 let mut iter = arguments.iter();
                 let condition = iter.next().expect("argument count verified");
                 let message = iter.next();
-                Ok(Some((
-                    None,
-                    self.emit_require(&condition, message.as_ref(), block)?,
-                )))
+                Some((None, self.emit_require(&condition, message.as_ref(), block)))
             }
             BuiltIn::Gasleft if arguments.is_empty() => {
-                let context = self.expression_emitter.state;
+                let context = self.expression_context.state;
                 let value = block
                     .append_operation(
                         GasLeftOperation::builder(context.mlir_context, context.location())
@@ -110,11 +100,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .result(0)
                     .expect("gasleft always produces one result")
                     .into();
-                Ok(Some((Some(value), block)))
+                Some((Some(value), block))
             }
             BuiltIn::Keccak256 if arguments.len() == 1 => {
-                let (values, block) = self.emit_argument_values(arguments, block)?;
-                let context = self.expression_emitter.state;
+                let (values, block) = self.emit_argument_values(arguments, block);
+                let context = self.expression_context.state;
                 let value = block
                     .append_operation(
                         Keccak256Operation::builder(context.mlir_context, context.location())
@@ -126,11 +116,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .result(0)
                     .expect("keccak256 always produces one result")
                     .into();
-                Ok(Some((Some(value), block)))
+                Some((Some(value), block))
             }
             BuiltIn::Sha256 if arguments.len() == 1 => {
-                let (values, block) = self.emit_argument_values(arguments, block)?;
-                let context = self.expression_emitter.state;
+                let (values, block) = self.emit_argument_values(arguments, block);
+                let context = self.expression_context.state;
                 let value = block
                     .append_operation(
                         Sha256Operation::builder(context.mlir_context, context.location())
@@ -142,11 +132,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .result(0)
                     .expect("sha256 always produces one result")
                     .into();
-                Ok(Some((Some(value), block)))
+                Some((Some(value), block))
             }
             BuiltIn::Ripemd160 if arguments.len() == 1 => {
-                let (values, block) = self.emit_argument_values(arguments, block)?;
-                let context = self.expression_emitter.state;
+                let (values, block) = self.emit_argument_values(arguments, block);
+                let context = self.expression_context.state;
                 let value = block
                     .append_operation(
                         Ripemd160Operation::builder(context.mlir_context, context.location())
@@ -158,11 +148,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .result(0)
                     .expect("ripemd160 always produces one result")
                     .into();
-                Ok(Some((Some(value), block)))
+                Some((Some(value), block))
             }
             BuiltIn::Ecrecover if arguments.len() == 4 => {
-                let (values, block) = self.emit_argument_values(arguments, block)?;
-                let context = self.expression_emitter.state;
+                let (values, block) = self.emit_argument_values(arguments, block);
+                let context = self.expression_context.state;
                 let value = block
                     .append_operation(
                         EcrecoverOperation::builder(context.mlir_context, context.location())
@@ -177,11 +167,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .result(0)
                     .expect("ecrecover always produces one result")
                     .into();
-                Ok(Some((Some(value), block)))
+                Some((Some(value), block))
             }
             BuiltIn::Addmod if arguments.len() == 3 => {
-                let (values, block) = self.emit_argument_values(arguments, block)?;
-                let context = self.expression_emitter.state;
+                let (values, block) = self.emit_argument_values(arguments, block);
+                let context = self.expression_context.state;
                 let value = block
                     .append_operation(
                         AddModOperation::builder(context.mlir_context, context.location())
@@ -194,11 +184,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .result(0)
                     .expect("addmod always produces one result")
                     .into();
-                Ok(Some((Some(value), block)))
+                Some((Some(value), block))
             }
             BuiltIn::Mulmod if arguments.len() == 3 => {
-                let (values, block) = self.emit_argument_values(arguments, block)?;
-                let context = self.expression_emitter.state;
+                let (values, block) = self.emit_argument_values(arguments, block);
+                let context = self.expression_context.state;
                 let value = block
                     .append_operation(
                         MulModOperation::builder(context.mlir_context, context.location())
@@ -211,9 +201,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .result(0)
                     .expect("mulmod always produces one result")
                     .into();
-                Ok(Some((Some(value), block)))
+                Some((Some(value), block))
             }
-            _ => Ok(None),
+            _ => None,
         }
     }
 
@@ -222,21 +212,20 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// rather than from the operands (e.g. `abi.decode(payload, (T))`).
     ///
     /// Resolves the callee's member access to a [`BuiltIn`] variant and
-    /// dispatches to the matching handler. Returns `Ok(Some((value, block)))`
-    /// on match, `Ok(None)` if no handler matched and the caller should
-    /// fall through to other dispatch.
-    pub fn try_emit_built_in_call_expression(
+    /// dispatches to the matching handler. Returns `Some((value, block))`
+    /// on match, `None` otherwise.
+    pub(super) fn try_emit_built_in_call_expression(
         &self,
         call: &FunctionCallExpression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<(Value<'context, 'block>, BlockRef<'context, 'block>)>> {
+    ) -> Option<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let Expression::MemberAccessExpression(access) = call.operand() else {
-            return Ok(None);
+            return None;
         };
         match access.member().resolve_to_built_in() {
-            Some(BuiltIn::AbiDecode) => self.emit_abi_decode(call, arguments, block).map(Some),
-            _ => Ok(None),
+            Some(BuiltIn::AbiDecode) => Some(self.emit_abi_decode(call, arguments, block)),
+            _ => None,
         }
     }
 
@@ -246,18 +235,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// and lowers it to the matching `sol.*` operation. Address-base intrinsics
     /// (`address.balance`, `address.codehash`, `address.code`) first evaluate
     /// the address operand and pass it as the operation's container address.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the member access does not resolve to a recognized
-    /// EVM intrinsic.
-    pub fn emit_built_in_member_access(
+    pub(super) fn emit_built_in_member_access(
         &self,
         access: &MemberAccessExpression,
         arguments: Option<&PositionalArguments>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let context = self.expression_emitter.state;
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let context = self.expression_context.state;
         match access.member().resolve_to_built_in() {
             Some(BuiltIn::AddressBalance) => {
                 self.emit_unary_member_intrinsic(access, block, |address_value| {
@@ -295,10 +279,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }),
             Some(BuiltIn::AddressSend) => {
                 let arguments = arguments.expect("send is a member-access call");
-                let (addr, block) = self
-                    .expression_emitter
-                    .emit_value(&access.operand(), block)?;
-                let (values, block) = self.emit_argument_values(arguments, block)?;
+                let BlockAnd { value: addr, block } =
+                    access.operand().emit(self.expression_context, block);
+                let (values, block) = self.emit_argument_values(arguments, block);
                 let value = block
                     .append_operation(
                         SendOperation::builder(context.mlir_context, context.location())
@@ -311,14 +294,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .result(0)
                     .expect("send always produces one result")
                     .into();
-                Ok((Some(value), block))
+                (Some(value), block)
             }
             Some(BuiltIn::AddressTransfer) => {
                 let arguments = arguments.expect("transfer is a member-access call");
-                let (addr, block) = self
-                    .expression_emitter
-                    .emit_value(&access.operand(), block)?;
-                let (values, block) = self.emit_argument_values(arguments, block)?;
+                let BlockAnd { value: addr, block } =
+                    access.operand().emit(self.expression_context, block);
+                let (values, block) = self.emit_argument_values(arguments, block);
                 block.append_operation(
                     TransferOperation::builder(context.mlir_context, context.location())
                         .addr(addr)
@@ -326,27 +308,27 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                         .build()
                         .into(),
                 );
-                Ok((None, block))
+                (None, block)
             }
             Some(BuiltIn::AbiEncode) => {
                 let arguments = arguments.expect("abi.encode is a member-access call");
-                let (values, block) = self.emit_argument_values(arguments, block)?;
+                let (values, block) = self.emit_argument_values(arguments, block);
                 let result = self.emit_sol_encode(&values, None, false, &block);
-                Ok((Some(result), block))
+                (Some(result), block)
             }
             Some(BuiltIn::AbiEncodePacked) => {
                 let arguments = arguments.expect("abi.encodePacked is a member-access call");
-                let (values, block) = self.emit_argument_values(arguments, block)?;
+                let (values, block) = self.emit_argument_values(arguments, block);
                 let result = self.emit_sol_encode(&values, None, true, &block);
-                Ok((Some(result), block))
+                (Some(result), block)
             }
             Some(BuiltIn::AbiEncodeWithSelector) => {
                 let arguments = arguments.expect("abi.encodeWithSelector is a member-access call");
-                let (mut values, block) = self.emit_argument_values(arguments, block)?;
+                let (mut values, block) = self.emit_argument_values(arguments, block);
                 let selector =
                     AstValue::new(values.remove(0)).cast(AstType::new(AstType::fixed_bytes(context.mlir_context, 4).into_mlir()), context, &block).into_mlir();
                 let result = self.emit_sol_encode(&values, Some(selector), false, &block);
-                Ok((Some(result), block))
+                (Some(result), block)
             }
             Some(BuiltIn::AbiEncodeWithSignature) => {
                 let arguments = arguments.expect("abi.encodeWithSignature is a member-access call");
@@ -384,12 +366,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let mut values = Vec::with_capacity(arguments.len() - 1);
                 let mut current = block;
                 for argument in iter {
-                    let (value, next) = self.expression_emitter.emit_value(&argument, current)?;
+                    let BlockAnd { value, block: next } =
+                        argument.emit(self.expression_context, current);
                     values.push(value);
                     current = next;
                 }
                 let result = self.emit_sol_encode(&values, Some(selector_value), false, &current);
-                Ok((Some(result), current))
+                (Some(result), current)
             }
             Some(BuiltIn::ArrayPop) => self.emit_array_pop(access, block),
             Some(BuiltIn::ArrayPush) => {
@@ -489,14 +472,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                             .into()
                     }
                     // TODO: split this catch-all so non-built-in member accesses (struct fields, etc.) and unimplemented built-ins surface distinct errors.
-                    _ => anyhow::bail!("unsupported member access: {}", access.member().name()),
+                    _ => unimplemented!("unsupported member access: {}", access.member().name()),
                 };
                 let value = block
                     .append_operation(operation)
                     .result(0)
                     .expect("intrinsic always produces one result")
                     .into();
-                Ok((Some(value), block))
+                (Some(value), block)
             }
         }
     }
@@ -506,13 +489,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let (array_value, block) = self
-            .expression_emitter
-            .emit_value(&access.operand(), block)?;
-        let context = self.expression_emitter.state;
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let BlockAnd { value: array_value, block } =
+            access.operand().emit(self.expression_context, block);
+        let context = self.expression_context.state;
         AstValue::new(array_value).pop(context, &block);
-        Ok((None, block))
+        (None, block)
     }
 
     /// Emits `arr.push(x)` / `arr.push()` / `bytes.push()` as `sol.push`,
@@ -523,16 +505,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         access: &MemberAccessExpression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let base = access.operand();
         let base_slang_type = base
             .get_type()
-            .ok_or_else(|| anyhow::anyhow!("base of array push has no resolved type"))?;
+            .expect("base of array push has a resolved type");
         let value_argument = arguments.iter().next();
         if value_argument.is_some() && matches!(&base_slang_type, SlangType::Bytes(_)) {
             unimplemented!("bytes.push(x) lowers to sol.push_string, which is not yet wired");
         }
-        let context = self.expression_emitter.state;
+        let context = self.expression_context.state;
 
         let (element_type, slang_location) = match &base_slang_type {
             SlangType::Array(array_type) => (
@@ -552,18 +534,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             other => solx_utils::DataLocation::from_slang(other, None),
         };
 
-        let (array_value, block) = self.expression_emitter.emit_value(&base, block)?;
+        let BlockAnd { value: array_value, block } = base.emit(self.expression_context, block);
         let address_type = AstType::pointer(context.mlir_context, element_type, base_location).into_mlir();
         let new_slot = AstValue::new(array_value).push(AstType::new(address_type), context, &block).into_mlir();
 
         let Some(value_argument) = value_argument else {
-            return Ok((Some(new_slot), block));
+            return (Some(new_slot), block);
         };
-        let (value, block) = self.expression_emitter.emit_value(&value_argument, block)?;
+        let BlockAnd { value, block } = value_argument.emit(self.expression_context, block);
         let cast_value =
             TypeConversion::from_target_type(element_type, context).emit(value, context, &block);
         Pointer::new(new_slot).store(AstValue::new(cast_value), context, &block);
-        Ok((None, block))
+        (None, block)
     }
 
     /// Emits an intrinsic whose single operand is the receiver of a member
@@ -577,19 +559,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
         build_op: F,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>)
     where
         F: FnOnce(Value<'context, 'block>) -> Operation<'context>,
     {
-        let (address_value, block) = self
-            .expression_emitter
-            .emit_value(&access.operand(), block)?;
+        let BlockAnd { value: address_value, block } =
+            access.operand().emit(self.expression_context, block);
         let value = block
             .append_operation(build_op(address_value))
             .result(0)
             .expect("unary member intrinsic always produces one result")
             .into();
-        Ok((Some(value), block))
+        (Some(value), block)
     }
 
     /// Emits each positional argument and returns the resulting values
@@ -598,15 +579,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         &self,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let mut values = Vec::with_capacity(arguments.len());
         let mut current = block;
         for argument in arguments.iter() {
-            let (value, next) = self.expression_emitter.emit_value(&argument, current)?;
+            let BlockAnd { value, block: next } = argument.emit(self.expression_context, current);
             values.push(value);
             current = next;
         }
-        Ok((values, current))
+        (values, current)
     }
 
     /// Emits a `sol.encode` operation producing a `bytes memory` payload.
@@ -625,7 +606,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         packed: bool,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        let context = self.expression_emitter.state;
+        let context = self.expression_context.state;
         let mut op_builder = EncodeOperation::builder(context.mlir_context, context.location())
             .ins(ins)
             .res(AstType::string(context.mlir_context, solx_utils::DataLocation::Memory).into_mlir());
@@ -662,21 +643,20 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         call: &FunctionCallExpression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let payload_expression = arguments
             .iter()
             .next()
             .expect("slang validates the payload argument");
-        let (payload_value, block) = self
-            .expression_emitter
-            .emit_value(&payload_expression, block)?;
+        let BlockAnd { value: payload_value, block } =
+            payload_expression.emit(self.expression_context, block);
         let return_slang_type = call
             .get_type()
             .expect("abi.decode call is typed by the binder");
         if matches!(return_slang_type, SlangType::Tuple(_)) {
             unimplemented!("abi.decode returning multiple values is not yet supported");
         }
-        let context = self.expression_emitter.state;
+        let context = self.expression_context.state;
         let result_type = TypeConversion::resolve_slang_type(&return_slang_type, None, context);
         let value = block
             .append_operation(
@@ -689,7 +669,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .result(0)
             .expect("abi.decode single-result always produces one value")
             .into();
-        Ok((value, block))
+        (value, block)
     }
 
     /// Emits an `assert(condition)` built-in via `sol.assert`.
@@ -697,14 +677,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         &self,
         condition: &Expression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
-        let (condition_value, block) = self.expression_emitter.emit_value(condition, block)?;
+    ) -> BlockRef<'context, 'block> {
+        let BlockAnd { value: condition_value, block } =
+            condition.emit(self.expression_context, block);
         let condition_boolean = self
-            .expression_emitter
+            .expression_context
             .emit_is_nonzero(condition_value, &block);
-        let context = self.expression_emitter.state;
+        let context = self.expression_context.state;
         mlir_op_void!(context, &block, AssertOperation.cond(condition_boolean));
-        Ok(block)
+        block
     }
 
     /// Emits a `require(condition)` or `require(condition, message)` built-in
@@ -718,54 +699,47 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         condition: &Expression,
         message: Option<&Expression>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
-        let (condition_value, block) = self.expression_emitter.emit_value(condition, block)?;
+    ) -> BlockRef<'context, 'block> {
+        let BlockAnd { value: condition_value, block } =
+            condition.emit(self.expression_context, block);
         let condition_boolean = self
-            .expression_emitter
+            .expression_context
             .emit_is_nonzero(condition_value, &block);
-        let context = self.expression_emitter.state;
+        let context = self.expression_context.state;
         match message {
             Some(Expression::StringExpression(string_expression)) => {
                 let bytes = string_expression.value();
                 let literal = String::from_utf8(bytes).expect("require message is valid UTF-8");
-                {
-                    let mut operation_builder =
-                        RequireOperation::builder(context.mlir_context, context.location())
-                            .cond(condition_boolean)
-                            .args(&[]);
-                    operation_builder = operation_builder
+                let operation_builder =
+                    RequireOperation::builder(context.mlir_context, context.location())
+                        .cond(condition_boolean)
+                        .args(&[])
                         .msg(melior::ir::attribute::StringAttribute::new(context.mlir_context, &literal));
-                    block.append_operation(operation_builder.build().into());
-                }
-                Ok(block)
+                block.append_operation(operation_builder.build().into());
+                block
             }
             Some(expression) => {
-                let (message_value, block) =
-                    self.expression_emitter.emit_value(expression, block)?;
+                let BlockAnd { value: message_value, block } =
+                    expression.emit(self.expression_context, block);
                 let string_memory_type = AstType::string(context.mlir_context, solx_utils::DataLocation::Memory).into_mlir();
                 let message_value = TypeConversion::from_target_type(string_memory_type, context)
                     .emit(message_value, context, &block);
-                {
-                    let mut operation_builder =
-                        RequireOperation::builder(context.mlir_context, context.location())
-                            .cond(condition_boolean)
-                            .args(&[message_value]);
-                    operation_builder = operation_builder
-                        .msg(melior::ir::attribute::StringAttribute::new(context.mlir_context, "Error(string)"));
-                    operation_builder = operation_builder.call(melior::ir::Attribute::unit(context.mlir_context));
-                    block.append_operation(operation_builder.build().into());
-                }
-                Ok(block)
+                let operation_builder =
+                    RequireOperation::builder(context.mlir_context, context.location())
+                        .cond(condition_boolean)
+                        .args(&[message_value])
+                        .msg(melior::ir::attribute::StringAttribute::new(context.mlir_context, "Error(string)"))
+                        .call(melior::ir::Attribute::unit(context.mlir_context));
+                block.append_operation(operation_builder.build().into());
+                block
             }
             None => {
-                {
-                    let operation_builder =
-                        RequireOperation::builder(context.mlir_context, context.location())
-                            .cond(condition_boolean)
-                            .args(&[]);
-                    block.append_operation(operation_builder.build().into());
-                }
-                Ok(block)
+                let operation_builder =
+                    RequireOperation::builder(context.mlir_context, context.location())
+                        .cond(condition_boolean)
+                        .args(&[]);
+                block.append_operation(operation_builder.build().into());
+                block
             }
         }
     }

@@ -259,12 +259,11 @@ impl<'context> TypeConversion<'context> {
     pub fn resolve_state_variable_type(
         state_variable: &StateVariableDefinition,
         context: &Context<'context>,
-    ) -> anyhow::Result<Type<'context>> {
-        let name = state_variable.name().name();
+    ) -> Type<'context> {
         let slang_type = state_variable
             .get_type()
-            .ok_or_else(|| anyhow::anyhow!("unresolved type for state variable: {name}"))?;
-        Ok(Self::resolve_slang_type(&slang_type, None, context))
+            .expect("binder types every state variable");
+        Self::resolve_slang_type(&slang_type, None, context)
     }
 
     /// Resolves a function's parameter and return types from Slang AST to MLIR.
