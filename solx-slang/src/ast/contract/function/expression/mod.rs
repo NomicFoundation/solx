@@ -18,11 +18,19 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
-use operator::Operator;
-use slang_solidity_v2::ast;
+use slang_solidity_v2::ast::ArrayExpression;
+use slang_solidity_v2::ast::ConditionalExpression;
+use slang_solidity_v2::ast::DecimalNumberExpression;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::FalseKeyword;
+use slang_solidity_v2::ast::HexNumberExpression;
+use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::StringExpression;
+use slang_solidity_v2::ast::ThisKeyword;
+use slang_solidity_v2::ast::TrueKeyword;
+use slang_solidity_v2::ast::TupleExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::CmpPredicate;
@@ -36,11 +44,16 @@ use solx_mlir::ods::sol::ThisOperation;
 use solx_mlir::ods::sol::YieldOperation;
 use solx_utils::DataLocation;
 
-use self::call::type_conversion::TypeConversion;
+use crate::ast::block_and::BlockAnd;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::storage_slot::StorageSlot;
+use crate::ast::emit::emit_as::EmitAs;
+use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_for_effect::EmitForEffect;
+use crate::ast::emit::emit_values::EmitValues;
 
 /// Lowers Solidity expressions to MLIR SSA values.
-pub struct ExpressionEmitter<'state, 'context, 'block> {
+pub struct ExpressionContext<'state, 'context, 'block> {
     /// The shared MLIR context.
     pub state: &'state Context<'context>,
     /// Variable environment.
@@ -54,7 +67,7 @@ pub struct ExpressionEmitter<'state, 'context, 'block> {
     pub checked: bool,
 }
 
-impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Creates a new expression emitter.
     pub fn new(
         state: &'state Context<'context>,
@@ -67,364 +80,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             environment,
             storage_layout,
             checked,
-        }
-    }
-
-    /// Emits MLIR for an expression that must produce a value.
-    ///
-    /// Delegates to [`Self::emit`] and returns an error for void expressions
-    /// (e.g. calls to functions with no return value).
-    pub fn emit_value(
-        &self,
-        expression: &Expression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let (value, block) = self.emit(expression, block)?;
-        let value = value.ok_or_else(|| anyhow::anyhow!("expression produced no value"))?;
-        Ok((value, block))
-    }
-
-    /// Emits MLIR for an expression, appending operations to `block`.
-    ///
-    /// Returns `None` for void expressions (calls with no return value).
-    /// Use [`Self::emit_value`] when a value is required.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the expression contains unsupported constructs.
-    pub fn emit(
-        &self,
-        expression: &Expression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        match expression {
-            Expression::DecimalNumberExpression(decimal_number) => {
-                let value = decimal_number.integer_value().ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "decimal literal cannot be lowered: it must evaluate to an integer \
-                         after applying any units"
-                    )
-                })?;
-                let result_type = self
-                    .resolve_slang_type(decimal_number.get_type())
-                    .expect("binder types every decimal literal node");
-                let constant =
-                    AstValue::constant_from_bigint(&value, AstType::new(result_type), self.state, &block)
-                        .into_mlir();
-                Ok((Some(constant), block))
-            }
-            Expression::HexNumberExpression(hex_number) => {
-                let value = hex_number
-                    .integer_value()
-                    .expect("hex literals always evaluate to integers");
-                let result_type = self
-                    .resolve_slang_type(hex_number.get_type())
-                    .expect("binder types every hex literal node");
-                let constant =
-                    AstValue::constant_from_bigint(&value, AstType::new(result_type), self.state, &block)
-                        .into_mlir();
-                Ok((Some(constant), block))
-            }
-            Expression::TrueKeyword(_) => {
-                let constant = AstValue::boolean(true, self.state, &block).into_mlir();
-                Ok((Some(constant), block))
-            }
-            Expression::FalseKeyword(_) => {
-                let constant = AstValue::boolean(false, self.state, &block).into_mlir();
-                Ok((Some(constant), block))
-            }
-            Expression::ThisKeyword(_) => {
-                let contract_type = self
-                    .state
-                    .current_contract_type
-                    .ok_or_else(|| anyhow::anyhow!("sol.this emitted outside a contract"))?;
-                let value = mlir_op!(
-                    self.state,
-                    &block,
-                    ThisOperation.addr(contract_type)
-                );
-                Ok((Some(value), block))
-            }
-            Expression::StringExpression(string_expression) => {
-                let bytes = string_expression.value();
-                let text = std::str::from_utf8(&bytes).expect("string literal is valid UTF-8");
-                let value = AstValue::string_literal(text, self.state, &block).into_mlir();
-                Ok((Some(value), block))
-            }
-            Expression::Identifier(identifier) => {
-                let name = identifier.name();
-                match identifier.resolve_to_definition() {
-                    Some(Definition::StateVariable(state_variable)) => {
-                        let slot = self
-                            .storage_layout
-                            .get(&state_variable.node_id())
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("unregistered state variable: {name}")
-                            })?;
-                        let declared_type = state_variable.get_type().ok_or_else(|| {
-                            anyhow::anyhow!("unresolved type for state variable: {name}")
-                        })?;
-                        let element_type = TypeConversion::resolve_slang_type(
-                            &declared_type,
-                            None,
-                            self.state,
-                        );
-                        let address = Pointer::addr_of(
-                            &slot.name,
-                            AstType::new(Self::address_type(
-                                self.state,
-                                element_type,
-                                DataLocation::Storage,
-                                &declared_type,
-                            )),
-                            self.state,
-                            &block,
-                        );
-                        let value = address
-                            .load(AstType::new(element_type), self.state, &block)
-                            .into_mlir();
-                        Ok((Some(value), block))
-                    }
-                    Some(Definition::Variable(_) | Definition::Parameter(_)) => {
-                        let (pointer, element_type) = self.environment.variable_with_type(&name);
-                        let value = Pointer::new(pointer)
-                            .load(AstType::new(element_type), self.state, &block)
-                            .into_mlir();
-                        Ok((Some(value), block))
-                    }
-                    Some(Definition::Constant(constant)) => {
-                        let initializer = constant
-                            .value()
-                            .ok_or_else(|| anyhow::anyhow!("constant {name} has no initializer"))?;
-                        self.emit(&initializer, block)
-                    }
-                    None => anyhow::bail!("unresolved identifier: {name}"),
-                    Some(_) => anyhow::bail!("unsupported identifier reference: {name}"),
-                }
-            }
-            Expression::AssignmentExpression(assign) => self
-                .emit_assignment(assign, block)
-                .map(|(value, block)| (Some(value), block)),
-            Expression::AdditiveExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                let operator = match expression.operator() {
-                    ast::AdditiveExpressionOperator::Plus(_) => Operator::Add,
-                    ast::AdditiveExpressionOperator::Minus(_) => Operator::Subtract,
-                };
-                self.emit_binary_op(&left, &right, operator, result_type, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::MultiplicativeExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                let operator = match expression.operator() {
-                    ast::MultiplicativeExpressionOperator::Asterisk(_) => Operator::Multiply,
-                    ast::MultiplicativeExpressionOperator::Percent(_) => Operator::Remainder,
-                    ast::MultiplicativeExpressionOperator::Slash(_) => Operator::Divide,
-                };
-                self.emit_binary_op(&left, &right, operator, result_type, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::ExponentiationExpression(expression) => {
-                let target_type = self.resolve_slang_type(expression.get_type());
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, Operator::Exponentiation, target_type, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::EqualityExpression(expression) => {
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                let predicate = match expression.operator() {
-                    ast::EqualityExpressionOperator::BangEqual(_) => CmpPredicate::Ne,
-                    ast::EqualityExpressionOperator::EqualEqual(_) => CmpPredicate::Eq,
-                };
-                self.emit_comparison(&left, &right, predicate, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::InequalityExpression(expression) => {
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                let predicate = match expression.operator() {
-                    ast::InequalityExpressionOperator::GreaterThan(_) => CmpPredicate::Gt,
-                    ast::InequalityExpressionOperator::GreaterThanEqual(_) => CmpPredicate::Ge,
-                    ast::InequalityExpressionOperator::LessThan(_) => CmpPredicate::Lt,
-                    ast::InequalityExpressionOperator::LessThanEqual(_) => CmpPredicate::Le,
-                };
-                self.emit_comparison(&left, &right, predicate, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::AndExpression(expression) => {
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                self.emit_and(&left, &right, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::OrExpression(expression) => {
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                self.emit_or(&left, &right, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::PostfixExpression(expression) => {
-                let operand = expression.operand();
-                let operator = match expression.operator() {
-                    ast::PostfixExpressionOperator::MinusMinus(_) => Operator::Decrement,
-                    ast::PostfixExpressionOperator::PlusPlus(_) => Operator::Increment,
-                };
-                self.emit_postfix(&operand, operator, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::PrefixExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
-                let operator = match expression.operator() {
-                    ast::PrefixExpressionOperator::Bang(_) => Operator::Not,
-                    ast::PrefixExpressionOperator::DeleteKeyword(_) => Operator::Delete,
-                    ast::PrefixExpressionOperator::Minus(_) => Operator::Subtract,
-                    ast::PrefixExpressionOperator::MinusMinus(_) => Operator::Decrement,
-                    ast::PrefixExpressionOperator::PlusPlus(_) => Operator::Increment,
-                    ast::PrefixExpressionOperator::Tilde(_) => Operator::BitwiseNot,
-                };
-                let operand = expression.operand();
-                self.emit_prefix(operator, &operand, result_type, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::BitwiseAndExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, Operator::BitwiseAnd, result_type, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::BitwiseOrExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, Operator::BitwiseOr, result_type, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::BitwiseXorExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, Operator::BitwiseXor, result_type, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::ShiftExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                let operator = match expression.operator() {
-                    ast::ShiftExpressionOperator::GreaterThanGreaterThan(_) => Operator::ShiftRight,
-                    ast::ShiftExpressionOperator::GreaterThanGreaterThanGreaterThan(_) => {
-                        Operator::ShiftRight
-                    }
-                    ast::ShiftExpressionOperator::LessThanLessThan(_) => Operator::ShiftLeft,
-                };
-                self.emit_binary_op(&left, &right, operator, result_type, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::FunctionCallExpression(call) => {
-                self::call::CallEmitter::new(self).emit_function_call(call, block)
-            }
-            Expression::TupleExpression(tuple) => {
-                let items = tuple.items();
-                // TODO: support multi-value tuples (e.g. tuple deconstruction)
-                anyhow::ensure!(items.len() == 1, "multi-value tuples not yet supported");
-                let item = items.iter().next().expect("length checked to be 1 above");
-                let inner = item
-                    .expression()
-                    .ok_or_else(|| anyhow::anyhow!("empty tuple element"))?;
-                self.emit(&inner, block)
-            }
-            Expression::ConditionalExpression(conditional) => {
-                let result_type = self.resolve_slang_type(conditional.get_type()).unwrap_or_else(
-                    || AstType::unsigned(self.state.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
-                );
-                let condition = conditional.operand();
-                let (condition_value, block) = self.emit_value(&condition, block)?;
-                let condition_boolean = self.emit_is_nonzero(condition_value, &block);
-
-                let result_slot =
-                    Pointer::stack(AstType::new(result_type), self.state, &block);
-                let (then_block, else_block) = mlir_region_op!(
-                    self.state, &block,
-                    IfOperation.cond(condition_boolean); then_region, else_region
-                );
-
-                let true_expression = conditional.true_expression();
-                let (then_value, then_end) = self.emit_value(&true_expression, then_block)?;
-                let then_cast = TypeConversion::from_target_type(result_type, self.state)
-                    .emit(then_value, self.state, &then_end);
-                result_slot.store(AstValue::new(then_cast), self.state, &then_end);
-                mlir_op_void!(self.state, &then_end, YieldOperation.ins(&[]));
-
-                let false_expression = conditional.false_expression();
-                let (else_value, else_end) = self.emit_value(&false_expression, else_block)?;
-                let else_cast = TypeConversion::from_target_type(result_type, self.state)
-                    .emit(else_value, self.state, &else_end);
-                result_slot.store(AstValue::new(else_cast), self.state, &else_end);
-                mlir_op_void!(self.state, &else_end, YieldOperation.ins(&[]));
-
-                let result = result_slot
-                    .load(AstType::new(result_type), self.state, &block)
-                    .into_mlir();
-
-                Ok((Some(result), block))
-            }
-            Expression::ArrayExpression(array_expression) => {
-                let result_slang_type = array_expression
-                    .get_type()
-                    .expect("slang types every array literal");
-                let element_slang_type = match &result_slang_type {
-                    SlangType::FixedSizeArray(fixed_array_type) => fixed_array_type.element_type(),
-                    SlangType::Array(array_type) => array_type.element_type(),
-                    _ => anyhow::bail!(
-                        "array literal has unexpected result type: {:?}",
-                        std::mem::discriminant(&result_slang_type)
-                    ),
-                };
-                let array_type =
-                    TypeConversion::resolve_slang_type(&result_slang_type, None, self.state);
-                let element_type =
-                    TypeConversion::resolve_slang_type(&element_slang_type, None, self.state);
-                let mut element_values = Vec::new();
-                let mut current = block;
-                for item in array_expression.items().iter() {
-                    let (value, next) = self.emit_value(&item, current)?;
-                    let cast_value = TypeConversion::from_target_type(element_type, self.state)
-                        .emit(value, self.state, &next);
-                    element_values.push(cast_value);
-                    current = next;
-                }
-                let value = AstValue::array_literal(
-                    &element_values,
-                    AstType::new(array_type),
-                    self.state,
-                    &current,
-                )
-                .into_mlir();
-                Ok((Some(value), current))
-            }
-            Expression::MemberAccessExpression(access) => {
-                if let Some((value, block)) = self.emit_struct_field(access, block)? {
-                    Ok((Some(value), block))
-                } else {
-                    self::call::CallEmitter::new(self)
-                        .emit_member_access(access, block)
-                        .map(|(value, block)| (Some(value), block))
-                }
-            }
-            Expression::IndexAccessExpression(index_access) => {
-                self.emit_index_access(index_access, block)
-            }
-            _ => anyhow::bail!(
-                "unsupported expression: {:?}",
-                std::mem::discriminant(expression)
-            ),
         }
     }
 
@@ -472,7 +127,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// element is itself a reference type and lives in `Storage` or
     /// `CallData`, the result address IS the element type rather than a
     /// pointer to it.
-    fn address_type(
+    pub(crate) fn address_type(
         context: &Context<'context>,
         element_type: Type<'context>,
         base_location: DataLocation,
@@ -490,3 +145,310 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         }
     }
 }
+
+impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
+    type Output = BlockAnd<'context, 'block, Value<'context, 'block>>;
+
+    /// Dispatches an expression to its variant's emission.
+    fn emit<'state>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> Self::Output {
+        match self {
+            Expression::DecimalNumberExpression(inner) => inner.emit(context, block),
+            Expression::HexNumberExpression(inner) => inner.emit(context, block),
+            Expression::TrueKeyword(inner) => inner.emit(context, block),
+            Expression::FalseKeyword(inner) => inner.emit(context, block),
+            Expression::ThisKeyword(inner) => inner.emit(context, block),
+            Expression::StringExpression(inner) => inner.emit(context, block),
+            Expression::Identifier(inner) => inner.emit(context, block),
+            Expression::AssignmentExpression(inner) => inner.emit(context, block),
+            Expression::AdditiveExpression(inner) => inner.emit(context, block),
+            Expression::MultiplicativeExpression(inner) => inner.emit(context, block),
+            Expression::ExponentiationExpression(inner) => inner.emit(context, block),
+            Expression::EqualityExpression(inner) => inner.emit(context, block),
+            Expression::InequalityExpression(inner) => inner.emit(context, block),
+            Expression::AndExpression(inner) => inner.emit(context, block),
+            Expression::OrExpression(inner) => inner.emit(context, block),
+            Expression::PostfixExpression(inner) => inner.emit(context, block),
+            Expression::PrefixExpression(inner) => inner.emit(context, block),
+            Expression::BitwiseAndExpression(inner) => inner.emit(context, block),
+            Expression::BitwiseOrExpression(inner) => inner.emit(context, block),
+            Expression::BitwiseXorExpression(inner) => inner.emit(context, block),
+            Expression::ShiftExpression(inner) => inner.emit(context, block),
+            Expression::FunctionCallExpression(inner) => {
+                let BlockAnd { mut value, block } = inner.emit_values(context, block);
+                BlockAnd {
+                    value: value.remove(0),
+                    block,
+                }
+            }
+            Expression::TupleExpression(inner) => inner.emit(context, block),
+            Expression::ConditionalExpression(inner) => inner.emit(context, block),
+            Expression::ArrayExpression(inner) => inner.emit(context, block),
+            Expression::MemberAccessExpression(inner) => inner.emit(context, block),
+            Expression::IndexAccessExpression(inner) => inner.emit(context, block),
+            _ => unreachable!(
+                "unsupported expression: {:?}",
+                std::mem::discriminant(self)
+            ),
+        }
+    }
+}
+
+impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for Expression {
+    /// Emits this expression for its side effects, discarding the value.
+    fn emit_for_effect<'state>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> BlockRef<'context, 'block> {
+        match self {
+            Expression::FunctionCallExpression(call) => call.emit_values(context, block).block,
+            _ => self.emit(context, block).block,
+        }
+    }
+}
+
+impl<'context: 'block, 'block> EmitValues<'context, 'block> for Expression {
+    /// A tuple yields its elements; a call its result list.
+    fn emit_values<'state>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
+        match self {
+            Expression::TupleExpression(tuple) => {
+                let items = tuple.items();
+                let mut values = Vec::with_capacity(items.len());
+                let mut block = block;
+                for item in items.iter() {
+                    let inner = item.expression().expect("slang validates tuple element");
+                    let BlockAnd { value, block: next } = inner.emit(context, block);
+                    values.push(value);
+                    block = next;
+                }
+                BlockAnd {
+                    value: values,
+                    block,
+                }
+            }
+            Expression::FunctionCallExpression(call) => call.emit_values(context, block),
+            _ => unreachable!("a multi-valued expression is a tuple or call"),
+        }
+    }
+}
+
+impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Expression {
+    type Output = Value<'context, 'block>;
+
+    /// Emits this expression coerced to `target_type`.
+    fn emit_as<'state>(
+        &self,
+        target_type: Type<'context>,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> BlockAnd<'context, 'block, Value<'context, 'block>> {
+        let BlockAnd { value, block } = self.emit(context, block);
+        let value = TypeConversion::from_target_type(target_type, context.state).emit(
+            value,
+            context.state,
+            &block,
+        );
+        BlockAnd { value, block }
+    }
+}
+
+expression_emit!(DecimalNumberExpression; |node, context, block| {
+    let value = node.integer_value().expect(
+        "decimal literal must evaluate to an integer after applying any units",
+    );
+    let result_type = context
+        .resolve_slang_type(node.get_type())
+        .expect("binder types every decimal literal node");
+    let value = AstValue::constant_from_bigint(
+        &value,
+        AstType::new(result_type),
+        context.state,
+        &block,
+    )
+    .into_mlir();
+    BlockAnd { block, value }
+});
+
+expression_emit!(HexNumberExpression; |node, context, block| {
+    let value = node
+        .integer_value()
+        .expect("hex literals always evaluate to integers");
+    let result_type = context
+        .resolve_slang_type(node.get_type())
+        .expect("binder types every hex literal node");
+    let value = AstValue::constant_from_bigint(
+        &value,
+        AstType::new(result_type),
+        context.state,
+        &block,
+    )
+    .into_mlir();
+    BlockAnd { block, value }
+});
+
+expression_emit!(TrueKeyword; |context, block| {
+    let value = AstValue::boolean(true, context.state, &block).into_mlir();
+    BlockAnd { block, value }
+});
+
+expression_emit!(FalseKeyword; |context, block| {
+    let value = AstValue::boolean(false, context.state, &block).into_mlir();
+    BlockAnd { block, value }
+});
+
+expression_emit!(ThisKeyword; |context, block| {
+    let contract_type = context
+        .state
+        .current_contract_type
+        .expect("sol.this emitted outside a contract");
+    let value = mlir_op!(context.state, &block, ThisOperation.addr(contract_type));
+    BlockAnd { block, value }
+});
+
+expression_emit!(StringExpression; |node, context, block| {
+    let bytes = node.value();
+    let text = std::str::from_utf8(&bytes).expect("string literal is valid UTF-8");
+    let value = AstValue::string_literal(text, context.state, &block).into_mlir();
+    BlockAnd { block, value }
+});
+
+expression_emit!(Identifier; |node, context, block| {
+    let name = node.name();
+    match node.resolve_to_definition() {
+        Some(Definition::StateVariable(state_variable)) => {
+            let slot = context
+                .storage_layout
+                .get(&state_variable.node_id())
+                .expect("state variable is registered in the storage layout");
+            let declared_type = state_variable
+                .get_type()
+                .expect("binder types every state variable");
+            let element_type =
+                TypeConversion::resolve_slang_type(&declared_type, None, context.state);
+            let address = Pointer::addr_of(
+                &slot.name,
+                AstType::new(ExpressionContext::address_type(
+                    context.state,
+                    element_type,
+                    DataLocation::Storage,
+                    &declared_type,
+                )),
+                context.state,
+                &block,
+            );
+            let value = address
+                .load(AstType::new(element_type), context.state, &block)
+                .into_mlir();
+            BlockAnd { block, value }
+        }
+        Some(Definition::Variable(_) | Definition::Parameter(_)) => {
+            let (pointer, element_type) = context.environment.variable_with_type(&name);
+            let value = Pointer::new(pointer)
+                .load(AstType::new(element_type), context.state, &block)
+                .into_mlir();
+            BlockAnd { block, value }
+        }
+        Some(Definition::Constant(constant)) => {
+            let initializer = constant.value().expect("constant has an initializer");
+            initializer.emit(context, block)
+        }
+        None => unreachable!("slang resolves every identifier reference: {name}"),
+        Some(_) => unreachable!("unsupported identifier reference: {name}"),
+    }
+});
+
+expression_emit!(TupleExpression; |node, context, block| {
+    let items = node.items();
+    let item = items.iter().next().expect("slang validates non-empty tuple");
+    let inner = item.expression().expect("tuple element is non-empty");
+    inner.emit(context, block)
+});
+
+expression_emit!(ConditionalExpression; |node, context, block| {
+    let result_type = context.resolve_slang_type(node.get_type()).unwrap_or_else(|| {
+        AstType::unsigned(context.state.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
+    });
+    let condition = node.operand();
+    let BlockAnd {
+        value: condition_value,
+        block,
+    } = condition.emit(context, block);
+    let condition_boolean = context.emit_is_nonzero(condition_value, &block);
+
+    let result_slot = Pointer::stack(AstType::new(result_type), context.state, &block);
+    let (then_block, else_block) = mlir_region_op!(
+        context.state, &block,
+        IfOperation.cond(condition_boolean); then_region, else_region
+    );
+
+    let true_expression = node.true_expression();
+    let BlockAnd {
+        value: then_value,
+        block: then_end,
+    } = true_expression.emit(context, then_block);
+    let then_cast = TypeConversion::from_target_type(result_type, context.state)
+        .emit(then_value, context.state, &then_end);
+    result_slot.store(AstValue::new(then_cast), context.state, &then_end);
+    mlir_op_void!(context.state, &then_end, YieldOperation.ins(&[]));
+
+    let false_expression = node.false_expression();
+    let BlockAnd {
+        value: else_value,
+        block: else_end,
+    } = false_expression.emit(context, else_block);
+    let else_cast = TypeConversion::from_target_type(result_type, context.state)
+        .emit(else_value, context.state, &else_end);
+    result_slot.store(AstValue::new(else_cast), context.state, &else_end);
+    mlir_op_void!(context.state, &else_end, YieldOperation.ins(&[]));
+
+    let value = result_slot
+        .load(AstType::new(result_type), context.state, &block)
+        .into_mlir();
+    BlockAnd { block, value }
+});
+
+expression_emit!(ArrayExpression; |node, context, block| {
+    let result_slang_type = node
+        .get_type()
+        .expect("slang types every array literal");
+    let element_slang_type = match &result_slang_type {
+        SlangType::FixedSizeArray(fixed_array_type) => fixed_array_type.element_type(),
+        SlangType::Array(array_type) => array_type.element_type(),
+        _ => unreachable!(
+            "array literal has unexpected result type: {:?}",
+            std::mem::discriminant(&result_slang_type)
+        ),
+    };
+    let array_type =
+        TypeConversion::resolve_slang_type(&result_slang_type, None, context.state);
+    let element_type =
+        TypeConversion::resolve_slang_type(&element_slang_type, None, context.state);
+    let mut element_values = Vec::new();
+    let mut current = block;
+    for item in node.items().iter() {
+        let BlockAnd { value, block: next } = item.emit(context, current);
+        let cast_value = TypeConversion::from_target_type(element_type, context.state)
+            .emit(value, context.state, &next);
+        element_values.push(cast_value);
+        current = next;
+    }
+    let value = AstValue::array_literal(
+        &element_values,
+        AstType::new(array_type),
+        context.state,
+        &current,
+    )
+    .into_mlir();
+    BlockAnd {
+        block: current,
+        value,
+    }
+});

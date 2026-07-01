@@ -2,8 +2,14 @@
 //! Slang AST lowering to MLIR.
 //!
 
+/// A produced value paired with the block emission continues in.
+pub mod block_and;
 /// Contract definition lowering to Sol dialect MLIR.
 pub mod contract;
+/// Slang AST emission traits.
+pub mod emit;
+/// A storable location: an address pointer plus its element type.
+pub mod place;
 
 use std::collections::BTreeMap;
 
@@ -12,7 +18,7 @@ use slang_solidity_v2::ast::SourceUnit;
 
 use solx_mlir::Context;
 
-use self::contract::ContractEmitter;
+use self::emit::emit_object::EmitObject;
 
 /// Walks a Slang AST and lowers its contract definitions to MLIR.
 pub struct AstEmitter<'state, 'context> {
@@ -35,24 +41,18 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
     /// Source files containing only interfaces, libraries, or abstract
     /// contracts are skipped without error.
     ///
-    /// # Errors
-    ///
-    /// Returns an error if code generation encounters unsupported constructs.
     /// Returns `Some((contract_name, method_identifiers))` if a contract was
     /// emitted, `None` otherwise.
-    pub fn emit(
-        &mut self,
-        unit: &SourceUnit,
-    ) -> anyhow::Result<Option<(String, BTreeMap<String, String>)>> {
+    ///
+    /// A construct the frontend does not yet support panics out of emission; that is deliberate, so
+    /// an unhandled case surfaces immediately rather than silently miscompiling.
+    pub fn emit(&mut self, unit: &SourceUnit) -> Option<(String, BTreeMap<String, String>)> {
         let contracts = unit.contracts();
         // TODO: support multiple contracts
-        let Some(contract) = contracts.first() else {
-            return Ok(None);
-        };
+        let contract = contracts.first()?;
 
         let name = contract.name().name();
-        let mut emitter = ContractEmitter::new(self.state);
-        emitter.emit(contract)?;
+        contract.emit(self.state);
 
         let mut method_identifiers = BTreeMap::new();
         for contract_member in contract.members().iter() {
@@ -68,6 +68,6 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
             method_identifiers.insert(signature, format!("{selector:08x}"));
         }
 
-        Ok(Some((name, method_identifiers)))
+        Some((name, method_identifiers))
     }
 }

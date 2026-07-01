@@ -18,9 +18,11 @@ use slang_solidity_v2::ast::RevertStatement;
 
 use solx_mlir::ods::sol::RevertOperation;
 
-use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
-use crate::ast::contract::function::statement::StatementEmitter;
+use crate::ast::contract::function::statement::StatementContext;
+use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_statement::EmitStatement;
 
 /// Identifier the parser uses to recognize the Solidity `revert` built-in.
 pub const IDENTIFIER: &str = "revert";
@@ -33,96 +35,64 @@ struct EvaluatedRevertArguments<'context, 'block> {
     block: BlockRef<'context, 'block>,
 }
 
-impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
-    /// Emits a `sol.revert` for a `revert ErrorName(args);` statement.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the error path resolves to a non-Error definition,
-    /// the canonical signature cannot be computed, named arguments cannot be
-    /// matched to error parameters, or any argument expression cannot be
-    /// lowered.
-    ///
-    /// # Returns
-    ///
-    /// Returns the block after the `sol.revert` op. `sol.revert` is not a
-    /// terminator at the dialect level, so codegen continues in the same
-    /// block; the function epilogue (or an enclosing region's yield) supplies
-    /// the structural terminator.
-    pub fn emit_revert(
-        &self,
-        revert: &RevertStatement,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let error = match revert.error().resolve_to_definition() {
-            None => {
-                self.append_sol_revert("", &[], false, &block);
-                return Ok(Some(block));
-            }
-            Some(Definition::Error(error)) => error,
-            Some(_) => anyhow::bail!("revert target does not resolve to an error definition"),
-        };
-        let signature = error.compute_canonical_signature().ok_or_else(|| {
-            anyhow::anyhow!(
-                "cannot compute canonical signature for error `{}`",
-                error.name().name()
-            )
-        })?;
-        let parameters = error.parameters();
-        let mut evaluated = match revert.arguments() {
-            ArgumentsDeclaration::PositionalArguments(positional) => {
-                self.emit_revert_argument_values(positional.iter(), block)?
-            }
-            ArgumentsDeclaration::NamedArguments(named) => {
-                let ordered = Self::order_named_revert_arguments(&named, &parameters)?;
-                self.emit_revert_argument_values(ordered, block)?
-            }
-        };
-        for (value, parameter) in evaluated.values.iter_mut().zip(parameters.iter()) {
-            let parameter_type = TypeConversion::resolve_slang_type(
-                &parameter
-                    .get_type()
-                    .expect("parameter type resolved by semantic analysis"),
-                None,
-                self.state,
-            );
-            *value = TypeConversion::from_target_type(parameter_type, self.state).emit(
-                *value,
-                self.state,
-                &evaluated.block,
-            );
+statement_emit!(RevertStatement; |node, context, block| {
+    let error = match node.error().resolve_to_definition() {
+        None => {
+            context.append_sol_revert("", &[], false, &block);
+            return Some(block);
         }
-        self.append_sol_revert(&signature, &evaluated.values, true, &evaluated.block);
-        Ok(Some(evaluated.block))
+        Some(Definition::Error(error)) => error,
+        Some(_) => unreachable!("revert target resolves to an error definition"),
+    };
+    let signature = error
+        .compute_canonical_signature()
+        .expect("canonical signature is computable for a custom error");
+    let parameters = error.parameters();
+    let mut evaluated = match node.arguments() {
+        ArgumentsDeclaration::PositionalArguments(positional) => {
+            context.emit_revert_argument_values(positional.iter(), block)
+        }
+        ArgumentsDeclaration::NamedArguments(named) => {
+            let ordered = StatementContext::order_named_revert_arguments(&named, &parameters);
+            context.emit_revert_argument_values(ordered, block)
+        }
+    };
+    for (value, parameter) in evaluated.values.iter_mut().zip(parameters.iter()) {
+        let parameter_type = TypeConversion::resolve_slang_type(
+            &parameter
+                .get_type()
+                .expect("parameter type resolved by semantic analysis"),
+            None,
+            context.state,
+        );
+        *value = TypeConversion::from_target_type(parameter_type, context.state).emit(
+            *value,
+            context.state,
+            &evaluated.block,
+        );
     }
+    context.append_sol_revert(&signature, &evaluated.values, true, &evaluated.block);
+    Some(evaluated.block)
+});
 
+impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Emits a `sol.revert` for the call form `revert()` or `revert("message")`.
     ///
-    /// # Errors
-    ///
-    /// Returns an error if the arguments are not positional, more than one
-    /// argument is supplied, the message argument is not a string literal, or
-    /// the message is empty (which would emit ambiguous bytecode under the
-    /// current Sol dialect; `revert()` is the no-data form).
-    ///
-    /// # Returns
-    ///
-    /// Returns the block after the `sol.revert` op. `sol.revert` is not a
-    /// terminator at the dialect level, so codegen continues in the same
-    /// block; the function epilogue (or an enclosing region's yield) supplies
-    /// the structural terminator.
-    pub fn emit_revert_call(
+    /// `sol.revert` is not a terminator at the dialect level, so codegen continues in the same
+    /// block; the function epilogue (or an enclosing region's yield) supplies the structural
+    /// terminator.
+    pub(super) fn emit_revert_call(
         &self,
         call: &FunctionCallExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+    ) -> Option<BlockRef<'context, 'block>> {
         let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
         else {
-            anyhow::bail!("only positional arguments supported");
+            unreachable!("revert call uses positional arguments");
         };
         let mut arguments = positional_arguments.iter();
         let message_argument = arguments.next();
-        anyhow::ensure!(
+        assert!(
             arguments.next().is_none(),
             "revert accepts at most one argument"
         );
@@ -131,16 +101,16 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Some(Expression::StringExpression(string_expression)) => {
                 let message = String::from_utf8(string_expression.value())
                     .expect("revert message is valid UTF-8");
-                anyhow::ensure!(
+                assert!(
                     !message.is_empty(),
                     "revert(\"\") would emit ambiguous bytecode under the current Sol dialect; use revert() for no-data revert"
                 );
                 message
             }
-            Some(_) => anyhow::bail!("revert message must be a string literal"),
+            Some(_) => unreachable!("revert message is a string literal"),
         };
         self.append_sol_revert(&signature, &[], false, &block);
-        Ok(Some(block))
+        Some(block)
     }
 
     /// Appends a `sol.revert` carrying `signature` and the evaluated `args`; `is_custom_error` marks
@@ -166,7 +136,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     fn order_named_revert_arguments(
         named_arguments: &NamedArguments,
         error_parameters: &Parameters,
-    ) -> anyhow::Result<Vec<Expression>> {
+    ) -> Vec<Expression> {
         let mut arguments = HashMap::new();
         for argument in named_arguments.iter() {
             match arguments.entry(argument.name().name()) {
@@ -174,7 +144,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     entry.insert(argument.value());
                 }
                 Entry::Occupied(entry) => {
-                    anyhow::bail!("duplicate named revert argument `{}`", entry.key());
+                    unreachable!("slang rejects a duplicate named revert argument `{}`", entry.key());
                 }
             }
         }
@@ -183,60 +153,42 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         for parameter in error_parameters.iter() {
             let parameter_name = parameter
                 .name()
-                .ok_or_else(|| {
-                    anyhow::anyhow!("cannot match named revert argument to unnamed error parameter")
-                })?
+                .expect("a named-argument custom error has named parameters")
                 .name();
-            let argument = arguments.remove(&parameter_name).ok_or_else(|| {
-                anyhow::anyhow!("missing named revert argument `{parameter_name}`")
-            })?;
+            let argument = arguments
+                .remove(&parameter_name)
+                .expect("slang matches every named revert argument to a parameter");
             ordered_arguments.push(argument);
         }
 
-        anyhow::ensure!(
-            arguments.is_empty(),
-            "unknown named revert argument(s): {}",
-            arguments
-                .keys()
-                .map(String::as_str)
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-
-        Ok(ordered_arguments)
+        ordered_arguments
     }
 
     /// Evaluates revert argument expressions left-to-right, threading the
     /// current MLIR block through each evaluation.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any argument expression cannot be lowered.
     fn emit_revert_argument_values<Arguments>(
         &self,
         arguments: Arguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<EvaluatedRevertArguments<'context, 'block>>
+    ) -> EvaluatedRevertArguments<'context, 'block>
     where
         Arguments: IntoIterator<Item = Expression>,
     {
-        let emitter = ExpressionEmitter::new(
-            self.state,
-            self.environment,
-            self.storage_layout,
-            self.checked,
-        );
+        let expression_context = self.expression_context();
         let mut values = Vec::new();
         let mut current_block = block;
         for argument in arguments {
-            let (value, next_block) = emitter.emit_value(&argument, current_block)?;
+            let BlockAnd {
+                value,
+                block: next_block,
+            } = argument.emit(&expression_context, current_block);
             values.push(value);
             current_block = next_block;
         }
 
-        Ok(EvaluatedRevertArguments {
+        EvaluatedRevertArguments {
             values,
             block: current_block,
-        })
+        }
     }
 }

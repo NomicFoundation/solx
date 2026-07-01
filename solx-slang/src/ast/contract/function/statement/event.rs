@@ -12,112 +12,85 @@ use melior::ir::attribute::StringAttribute;
 use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
-use slang_solidity_v2::ast::EmitStatement;
+use slang_solidity_v2::ast::EmitStatement as EmitStatementNode;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NamedArguments;
 use slang_solidity_v2::ast::Parameters;
 use solx_mlir::ods::sol::EmitOperation;
 
-use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
-use crate::ast::contract::function::statement::StatementEmitter;
+use crate::ast::contract::function::statement::StatementContext;
+use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_statement::EmitStatement;
 
-impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
-    /// Lowers an `emit Event(args);` statement to a `sol.emit` operation.
-    ///
-    /// Resolves the event definition, classifies each argument as indexed
-    /// or non-indexed per the event's parameter declaration, evaluates
-    /// argument expressions in declaration order, and emits the op with
-    /// the canonical signature (or `None` for anonymous events).
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the emit target does not resolve to an event,
-    /// the canonical signature cannot be computed, the argument count does
-    /// not match the event's parameter count, named arguments cannot be
-    /// matched to parameters, or any argument expression cannot be lowered.
-    pub fn emit_event(
-        &self,
-        emit_statement: &EmitStatement,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let Some(Definition::Event(event_definition)) =
-            emit_statement.event().resolve_to_definition()
-        else {
-            anyhow::bail!("emit target does not resolve to an event definition");
-        };
-        let parameters = event_definition.parameters();
-        let ordered_arguments = match &emit_statement.arguments() {
-            ArgumentsDeclaration::PositionalArguments(positional) => {
-                positional.iter().collect::<Vec<_>>()
-            }
-            ArgumentsDeclaration::NamedArguments(named) => {
-                Self::order_named_event_arguments(named, &parameters)?
-            }
-        };
-        anyhow::ensure!(
-            ordered_arguments.len() == parameters.len(),
-            "event argument count {} does not match parameter count {}",
-            ordered_arguments.len(),
-            parameters.len()
-        );
-
-        let emitter = ExpressionEmitter::new(
-            self.state,
-            self.environment,
-            self.storage_layout,
-            self.checked,
-        );
-        let mut indexed_arguments: Vec<Value<'context, 'block>> = Vec::new();
-        let mut non_indexed_arguments: Vec<Value<'context, 'block>> = Vec::new();
-        let mut current_block = block;
-        for (parameter, argument) in parameters.iter().zip(ordered_arguments) {
-            let (value, next_block) = emitter.emit_value(&argument, current_block)?;
-            current_block = next_block;
-            let indexed = parameter.is_indexed();
-            let parameter_type = TypeConversion::resolve_slang_type(
-                &parameter
-                    .get_type()
-                    .expect("parameter type resolved by semantic analysis"),
-                None,
-                self.state,
-            );
-            let value = TypeConversion::from_target_type(parameter_type, self.state).emit(
-                value,
-                self.state,
-                &current_block,
-            );
-            if indexed {
-                // TODO: indexed reference-type parameters (string, bytes,
-                // arrays, structs) must store the keccak256 hash of their
-                // encoded value as the topic, not the value itself. That
-                // lowering is not supported by solc-MLIR yet.
-                indexed_arguments.push(value);
-            } else {
-                non_indexed_arguments.push(value);
-            }
+statement_emit!(EmitStatementNode; |node, context, block| {
+    let Some(Definition::Event(event_definition)) = node.event().resolve_to_definition() else {
+        unreachable!("emit target resolves to an event definition");
+    };
+    let parameters = event_definition.parameters();
+    let ordered_arguments = match &node.arguments() {
+        ArgumentsDeclaration::PositionalArguments(positional) => {
+            positional.iter().collect::<Vec<_>>()
         }
+        ArgumentsDeclaration::NamedArguments(named) => {
+            StatementContext::order_named_event_arguments(named, &parameters)
+        }
+    };
 
-        let signature = if event_definition.is_anonymous() {
-            None
-        } else {
-            Some(
-                event_definition
-                    .compute_canonical_signature()
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("cannot compute canonical signature for event")
-                    })?,
-            )
-        };
-        self.append_sol_emit(
-            signature.as_deref(),
-            &indexed_arguments,
-            &non_indexed_arguments,
+    let expression_context = context.expression_context();
+    let mut indexed_arguments: Vec<Value<'context, 'block>> = Vec::new();
+    let mut non_indexed_arguments: Vec<Value<'context, 'block>> = Vec::new();
+    let mut current_block = block;
+    for (parameter, argument) in parameters.iter().zip(ordered_arguments) {
+        let BlockAnd {
+            value,
+            block: next_block,
+        } = argument.emit(&expression_context, current_block);
+        current_block = next_block;
+        let indexed = parameter.is_indexed();
+        let parameter_type = TypeConversion::resolve_slang_type(
+            &parameter
+                .get_type()
+                .expect("parameter type resolved by semantic analysis"),
+            None,
+            context.state,
+        );
+        let value = TypeConversion::from_target_type(parameter_type, context.state).emit(
+            value,
+            context.state,
             &current_block,
         );
-        Ok(Some(current_block))
+        if indexed {
+            // TODO: indexed reference-type parameters (string, bytes,
+            // arrays, structs) must store the keccak256 hash of their
+            // encoded value as the topic, not the value itself. That
+            // lowering is not supported by solc-MLIR yet.
+            indexed_arguments.push(value);
+        } else {
+            non_indexed_arguments.push(value);
+        }
     }
 
+    let signature = if event_definition.is_anonymous() {
+        None
+    } else {
+        Some(
+            event_definition
+                .compute_canonical_signature()
+                .expect("canonical signature is computable for a named event"),
+        )
+    };
+    context.append_sol_emit(
+        signature.as_deref(),
+        &indexed_arguments,
+        &non_indexed_arguments,
+        &current_block,
+    );
+    Some(current_block)
+});
+
+impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Appends a `sol.emit` operation with the given indexed and non-indexed
     /// arguments. EVM events have at most four indexed topics, so the count
     /// always fits in the dialect's `i8` `indexedArgsCount` attribute.
@@ -154,7 +127,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     fn order_named_event_arguments(
         named_arguments: &NamedArguments,
         event_parameters: &Parameters,
-    ) -> anyhow::Result<Vec<Expression>> {
+    ) -> Vec<Expression> {
         let mut arguments = HashMap::new();
         for argument in named_arguments.iter() {
             match arguments.entry(argument.name().name()) {
@@ -162,7 +135,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     entry.insert(argument.value());
                 }
                 Entry::Occupied(entry) => {
-                    anyhow::bail!("duplicate named event argument `{}`", entry.key());
+                    unreachable!("slang rejects a duplicate named event argument `{}`", entry.key());
                 }
             }
         }
@@ -171,26 +144,14 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         for parameter in event_parameters.iter() {
             let parameter_name = parameter
                 .name()
-                .ok_or_else(|| {
-                    anyhow::anyhow!("cannot match named event argument to unnamed event parameter")
-                })?
+                .expect("a named-argument event has named parameters")
                 .name();
-            let argument = arguments.remove(&parameter_name).ok_or_else(|| {
-                anyhow::anyhow!("missing named event argument `{parameter_name}`")
-            })?;
+            let argument = arguments
+                .remove(&parameter_name)
+                .expect("slang matches every named event argument to a parameter");
             ordered_arguments.push(argument);
         }
 
-        anyhow::ensure!(
-            arguments.is_empty(),
-            "unknown named event argument(s): {}",
-            arguments
-                .keys()
-                .map(String::as_str)
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-
-        Ok(ordered_arguments)
+        ordered_arguments
     }
 }

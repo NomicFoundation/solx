@@ -8,6 +8,7 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use slang_solidity_v2::ast;
+use slang_solidity_v2::ast::AssignmentExpression;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 
@@ -15,10 +16,13 @@ use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 
-use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::block_and::BlockAnd;
+use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::expression::operator::Operator;
 use crate::ast::contract::function::storage_slot::StorageSlot;
+use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_place::EmitPlace;
 
 /// Assignment target resolved from the Slang binder.
 enum AssignmentTarget<'context, 'block> {
@@ -31,41 +35,44 @@ enum AssignmentTarget<'context, 'block> {
     Storage(StorageSlot, Type<'context>),
 }
 
-impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
+impl<'context: 'block, 'block> EmitExpression<'context, 'block> for AssignmentExpression {
+    type Output = BlockAnd<'context, 'block, Value<'context, 'block>>;
+
     /// Emits an assignment expression (`=`, `+=`, `-=`, `*=`).
-    pub fn emit_assignment(
+    fn emit<'state>(
         &self,
-        assign: &slang_solidity_v2::ast::AssignmentExpression,
+        context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let left = assign.left_operand();
+    ) -> Self::Output {
+        let left = self.left_operand();
         let (target, block) = match &left {
             Expression::Identifier(identifier) => {
                 let name = identifier.name();
                 let target = match identifier.resolve_to_definition() {
                     Some(Definition::StateVariable(state_variable)) => {
-                        let declared_type = state_variable.get_type().ok_or_else(|| {
-                            anyhow::anyhow!("unresolved type for state variable: {name}")
-                        })?;
+                        let declared_type = state_variable
+                            .get_type()
+                            .expect("binder types every state variable");
                         if declared_type.is_reference_type() {
                             unimplemented!(
                                 "assignment to a reference-typed state variable is not yet supported"
                             );
                         }
-                        let slot = self
+                        let slot = context
                             .storage_layout
                             .get(&state_variable.node_id())
-                            .ok_or_else(|| anyhow::anyhow!("unregistered state variable: {name}"))?
+                            .expect("state variable is registered in the storage layout")
                             .clone();
                         let element_type = TypeConversion::resolve_slang_type(
                             &declared_type,
                             None,
-                            self.state,
+                            context.state,
                         );
                         AssignmentTarget::Storage(slot, element_type)
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
-                        let (pointer, element_type) = self.environment.variable_with_type(&name);
+                        let (pointer, element_type) =
+                            context.environment.variable_with_type(&name);
                         AssignmentTarget::Pointer(pointer, element_type)
                     }
                     None => unreachable!("slang resolves every identifier reference"),
@@ -76,25 +83,34 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 (target, block)
             }
             Expression::IndexAccessExpression(index_access) => {
-                let (address, element_type, block) =
-                    self.emit_index_access_address(index_access, block)?;
-                if address.r#type() == element_type {
+                let BlockAnd {
+                    value: place,
+                    block,
+                } = index_access.emit_place(context, block);
+                if place.address.r#type() == place.element_type {
                     unimplemented!(
                         "assignment to a reference-typed `a[i]` element in storage/calldata is not yet supported"
                     );
                 }
-                (AssignmentTarget::Pointer(address, element_type), block)
+                (
+                    AssignmentTarget::Pointer(place.address, place.element_type),
+                    block,
+                )
             }
             Expression::MemberAccessExpression(access) => {
-                let (address, element_type, block) = self
-                    .emit_struct_field_address(access, block)?
-                    .expect("slang validates a member-access lvalue resolves to a struct field");
-                if address.r#type() == element_type {
+                let BlockAnd {
+                    value: place,
+                    block,
+                } = access.emit_place(context, block);
+                if place.address.r#type() == place.element_type {
                     unimplemented!(
                         "assignment to a reference-typed struct field in storage/calldata is not yet supported"
                     );
                 }
-                (AssignmentTarget::Pointer(address, element_type), block)
+                (
+                    AssignmentTarget::Pointer(place.address, place.element_type),
+                    block,
+                )
             }
             _ => unimplemented!(
                 "assignment target {:?} is not yet supported",
@@ -102,14 +118,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             ),
         };
 
-        let right = assign.right_operand();
+        let right = self.right_operand();
         let (value, block) = if matches!(
-            assign.operator(),
+            self.operator(),
             ast::AssignmentExpressionOperator::Equal(_)
         ) {
-            self.emit_value(&right, block)?
+            let BlockAnd { value, block } = right.emit(context, block);
+            (value, block)
         } else {
-            let operator = match assign.operator() {
+            let operator = match self.operator() {
                 ast::AssignmentExpressionOperator::AmpersandEqual(_) => Operator::BitwiseAnd,
                 ast::AssignmentExpressionOperator::AsteriskEqual(_) => Operator::Multiply,
                 ast::AssignmentExpressionOperator::BarEqual(_) => Operator::BitwiseOr,
@@ -132,25 +149,25 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             let (old, target_type) = match &target {
                 AssignmentTarget::Pointer(pointer, element_type) => {
                     let old = Pointer::new(*pointer)
-                        .load(AstType::new(*element_type), self.state, &block)
+                        .load(AstType::new(*element_type), context.state, &block)
                         .into_mlir();
                     (old, *element_type)
                 }
                 AssignmentTarget::Storage(slot, element_type) => {
-                    let old = self.emit_storage_load(slot, *element_type, &block)?;
+                    let old = context.emit_storage_load(slot, *element_type, &block);
                     (old, *element_type)
                 }
             };
-            let (rhs, block) = self.emit_value(&right, block)?;
-            let old = TypeConversion::from_target_type(target_type, self.state)
-                .emit(old, self.state, &block);
-            let rhs = TypeConversion::from_target_type(target_type, self.state)
-                .emit(rhs, self.state, &block);
+            let BlockAnd { value: rhs, block } = right.emit(context, block);
+            let old = TypeConversion::from_target_type(target_type, context.state)
+                .emit(old, context.state, &block);
+            let rhs = TypeConversion::from_target_type(target_type, context.state)
+                .emit(rhs, context.state, &block);
             let result = block
                 .append_operation(operator.emit_sol_binary_operation(
-                    self.checked,
-                    self.state.mlir_context,
-                    self.state.location(),
+                    context.checked,
+                    context.state.mlir_context,
+                    context.state.location(),
                     old,
                     rhs,
                 ))
@@ -160,20 +177,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             (result, block)
         };
 
-        let result = match &target {
+        let value = match &target {
             AssignmentTarget::Pointer(pointer, element_type) => {
-                let stored_value = TypeConversion::from_target_type(*element_type, self.state)
-                    .emit(value, self.state, &block);
-                Pointer::new(*pointer).store(AstValue::new(stored_value), self.state, &block);
+                let stored_value = TypeConversion::from_target_type(*element_type, context.state)
+                    .emit(value, context.state, &block);
+                Pointer::new(*pointer).store(AstValue::new(stored_value), context.state, &block);
                 stored_value
             }
             AssignmentTarget::Storage(slot, element_type) => {
-                let stored_value = TypeConversion::from_target_type(*element_type, self.state)
-                    .emit(value, self.state, &block);
-                self.emit_storage_store(slot, stored_value, *element_type, &block);
+                let stored_value = TypeConversion::from_target_type(*element_type, context.state)
+                    .emit(value, context.state, &block);
+                context.emit_storage_store(slot, stored_value, *element_type, &block);
                 stored_value
             }
         };
-        Ok((result, block))
+        BlockAnd { block, value }
     }
 }
