@@ -5,13 +5,10 @@
 /// Function definition lowering to Sol dialect MLIR.
 pub mod function;
 
-use std::collections::HashMap;
-
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
-use slang_solidity_v2::ast::NodeId;
 
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
@@ -27,7 +24,7 @@ use solx_mlir::ods::sol::StateVarOperation;
 
 use self::function::FunctionEmitter;
 use self::function::expression::call::type_conversion::TypeConversion;
-use self::function::storage_slot::StorageSlot;
+use crate::ast::analysis::query::storage_layout::StorageLayout;
 use crate::ast::emit::emit_constructor::EmitConstructor;
 use crate::ast::emit::emit_function::EmitFunction;
 use crate::ast::emit::emit_object::EmitObject;
@@ -74,31 +71,6 @@ impl ContractEmitter {
             );
         }
     }
-
-    /// Computes the storage layout using slang-solidity's ABI computation.
-    ///
-    /// Returns a mapping from state variable node ID to its storage slot
-    /// (slot index and byte offset within the slot). Returns an empty map
-    /// if the ABI is unavailable.
-    fn compute_storage_layout(contract: &ContractDefinition) -> HashMap<NodeId, StorageSlot> {
-        let Some(abi) = contract.compute_abi() else {
-            return HashMap::new();
-        };
-        abi.storage_layout()
-            .iter()
-            .map(|item| {
-                (
-                    item.node_id(),
-                    StorageSlot::new(
-                        item.slot(),
-                        item.offset() as u32,
-                        item.label(),
-                        item.node_id(),
-                    ),
-                )
-            })
-            .collect()
-    }
 }
 
 impl EmitObject for ContractDefinition {
@@ -107,7 +79,7 @@ impl EmitObject for ContractDefinition {
         let contract_name = self.name().name();
 
         ContractEmitter::pre_register_functions(context, self);
-        let storage_layout = ContractEmitter::compute_storage_layout(self);
+        let storage_layout = self.storage_layout();
 
         let contract_type = AstType::contract(
             context.mlir_context,

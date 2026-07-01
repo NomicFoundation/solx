@@ -4,7 +4,6 @@
 
 pub mod expression;
 pub mod statement;
-pub mod storage_slot;
 
 use std::collections::HashMap;
 
@@ -33,8 +32,8 @@ use solx_mlir::ods::sol::ReturnOperation;
 
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::contract::function::statement::StatementContext;
-use crate::ast::contract::function::storage_slot::StorageSlot;
 use crate::ast::emit::emit_constructor::EmitConstructor;
 use crate::ast::emit::emit_function::EmitFunction;
 use crate::ast::emit::emit_statement::EmitStatement;
