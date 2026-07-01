@@ -137,6 +137,19 @@ unsafe extern "C" {
     /// (one less than the number of enum members).
     pub fn solxCreateEnumType(context: MlirContext, max: u32) -> mlir_sys::MlirType;
 
+    /// Creates a `sol::FuncRefType` (internal function pointer) over the
+    /// signature `param_types -> result_types`.
+    pub fn solxCreateFuncRefType(
+        context: MlirContext,
+        param_types: *const mlir_sys::MlirType,
+        param_count: usize,
+        result_types: *const mlir_sys::MlirType,
+        result_count: usize,
+    ) -> mlir_sys::MlirType;
+
+    /// Whether the type is a `sol::FuncRefType` (internal function pointer).
+    pub fn solxIsFuncRefType(ty: mlir_sys::MlirType) -> bool;
+
     /// Returns the element type of a non-mapping reference type. For
     /// struct types, `struct_field_idx` selects the member.
     pub fn mlirSolGetEltType(ty: mlir_sys::MlirType, struct_field_idx: u64) -> mlir_sys::MlirType;

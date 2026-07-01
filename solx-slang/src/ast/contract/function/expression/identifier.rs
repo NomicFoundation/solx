@@ -55,6 +55,16 @@ expression_emit!(Identifier; |node, context, block| {
             let initializer = constant.value().expect("constant has an initializer");
             initializer.emit(context, block)
         }
+        Some(Definition::Function(function_definition)) => {
+            let value = context
+                .state
+                .function_signatures
+                .get(&function_definition.node_id())
+                .expect("bare function name resolves to a registered signature")
+                .pointer_constant(context.state, &block)
+                .into_mlir();
+            BlockAnd { block, value }
+        }
         None => unreachable!("slang resolves every identifier reference: {name}"),
         Some(_) => unreachable!("unsupported identifier reference: {name}"),
     }

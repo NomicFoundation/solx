@@ -4,8 +4,11 @@
 
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
+use melior::ir::BlockRef;
+use melior::ir::Type as MlirType;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
+use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use num::BigInt;
@@ -22,8 +25,11 @@ use crate::ods::sol::CastOperation;
 use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::DefaultCallDataOperation;
+use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::DefaultStorageOperation;
 use crate::ods::sol::EnumCastOperation;
+use crate::ods::sol::FuncConstantOperation;
+use crate::ods::sol::ICallOperation;
 use crate::ods::sol::MallocOperation;
 use crate::ods::sol::PopOperation;
 use crate::ods::sol::PushOperation;
@@ -215,6 +221,61 @@ impl<'context, 'block> Value<'context, 'block> {
             block,
             ArrayLitOperation.ins(elements).addr(array_type.into_mlir())
         ))
+    }
+
+    /// `sol.func_constant`: an internal function pointer (`!sol.func_ref<...>`) to the symbol `name`.
+    pub fn function_constant(
+        name: &str,
+        result_type: Type<'context>,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            context,
+            block,
+            FuncConstantOperation
+                .addr(result_type.into_mlir())
+                .sym(FlatSymbolRefAttribute::new(context.mlir_context, name))
+        ))
+    }
+
+    /// `sol.default_func_constant`: the zero internal function pointer of `result_type`, which reverts
+    /// when called; the `delete` reset of a function-pointer lvalue.
+    pub fn function_pointer_zero(
+        result_type: Type<'context>,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            context,
+            block,
+            DefaultFuncConstantOperation.addr(result_type.into_mlir())
+        ))
+    }
+
+    /// Calls this internal function-pointer value through `sol.icall`, returning the decoded results.
+    pub fn call_indirect(
+        self,
+        argument_values: &[MlirValue<'context, 'block>],
+        result_types: &[MlirType<'context>],
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Vec<MlirValue<'context, 'block>> {
+        let operation = block.append_operation(mlir_op_build!(
+            context,
+            ICallOperation
+                .outs(result_types)
+                .callee(self.into_mlir())
+                .callee_operands(argument_values)
+        ));
+        (0..result_types.len())
+            .map(|index| {
+                operation
+                    .result(index)
+                    .expect("sol.icall produces its declared result count")
+                    .into()
+            })
+            .collect()
     }
 
     /// Casts to `target_type` via `sol.cast`, a no-op when already that type.
