@@ -28,7 +28,8 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
         block: BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let context = self.expression_context.state;
-        let struct_address = AstValue::malloc(AstType::new(result_type), context, &block);
+        let struct_address =
+            AstValue::malloc(AstType::new(result_type), None, false, context, &block);
 
         let mut block = block;
         for (index, (member, argument)) in struct_definition

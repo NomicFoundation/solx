@@ -13,6 +13,7 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::abi::AbiEntry;
+use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ElementaryType;
 use slang_solidity_v2::ast::Expression;
@@ -29,6 +30,7 @@ use solx_mlir::StateMutability;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::ReturnOperation;
+use solx_utils::DataLocation;
 
 use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -252,6 +254,7 @@ impl EmitFunction for FunctionDefinition {
                     continue;
                 };
                 let return_type = result_types[index];
+                let slang_type = parameter.get_type().expect("slang types every return");
                 let pointer =
                     Pointer::stack(AstType::new(return_type), emitter.state, &function_entry_block);
                 if IntegerType::try_from(return_type).is_ok() {
@@ -262,6 +265,39 @@ impl EmitFunction for FunctionDefinition {
                         &function_entry_block,
                     );
                     pointer.store(zero, emitter.state, &function_entry_block);
+                } else if let Some(slang_location) = match &slang_type {
+                    ast::Type::Array(array) => Some(array.location()),
+                    ast::Type::FixedSizeArray(array) => Some(array.location()),
+                    ast::Type::Struct(structure) => Some(structure.location()),
+                    ast::Type::String(string) => Some(string.location()),
+                    ast::Type::Bytes(bytes) => Some(bytes.location()),
+                    _ => None,
+                } {
+                    let default = match DataLocation::from_slang(slang_location, None) {
+                        DataLocation::CallData => AstValue::default_calldata(
+                            AstType::new(return_type),
+                            emitter.state,
+                            &function_entry_block,
+                        ),
+                        DataLocation::Storage | DataLocation::Transient => {
+                            AstValue::default_storage(
+                                AstType::new(return_type),
+                                emitter.state,
+                                &function_entry_block,
+                            )
+                        }
+                        DataLocation::Memory => AstValue::malloc(
+                            AstType::new(return_type),
+                            None,
+                            !matches!(slang_type, ast::Type::String(_) | ast::Type::Bytes(_)),
+                            emitter.state,
+                            &function_entry_block,
+                        ),
+                        DataLocation::Stack | DataLocation::Immutable => {
+                            unreachable!("a reference aggregate is in storage, calldata, or memory")
+                        }
+                    };
+                    pointer.store(default, emitter.state, &function_entry_block);
                 } else {
                     unimplemented!(
                         "zero-initialization for non-integer named return: {return_type}"

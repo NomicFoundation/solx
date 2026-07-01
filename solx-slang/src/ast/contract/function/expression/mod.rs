@@ -25,6 +25,7 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use melior::ir::r#type::TypeLike;
+use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
@@ -38,6 +39,7 @@ use solx_utils::DataLocation;
 
 use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::block_and::BlockAnd;
+use crate::ast::contract::function::expression::assignment::AssignmentTarget;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::emit::emit_as::EmitAs;
 use crate::ast::emit::emit_expression::EmitExpression;
@@ -218,6 +220,14 @@ impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for Expression {
     ) -> BlockRef<'context, 'block> {
         match self {
             Expression::FunctionCallExpression(call) => call.emit_values(context, block).block,
+            Expression::PrefixExpression(prefix)
+                if matches!(
+                    prefix.operator(),
+                    ast::PrefixExpressionOperator::DeleteKeyword(_)
+                ) =>
+            {
+                AssignmentTarget::delete(context, &prefix.operand().unwrap_parentheses(), block)
+            }
             _ => self.emit(context, block).block,
         }
     }

@@ -39,10 +39,15 @@ expression_emit!(PostfixExpression; |node, context, block| {
 });
 
 expression_emit!(PrefixExpression; |node, context, block| {
+    if let ast::PrefixExpressionOperator::DeleteKeyword(_) = node.operator() {
+        unreachable!("`delete` is value-less; a discard site emits it, not value-position `Emit`");
+    }
     let result_type = context.resolve_slang_type(node.get_type());
     let operator = match node.operator() {
         ast::PrefixExpressionOperator::Bang(_) => Operator::Not,
-        ast::PrefixExpressionOperator::DeleteKeyword(_) => Operator::Delete,
+        ast::PrefixExpressionOperator::DeleteKeyword(_) => {
+            unreachable!("`delete` is routed before prefix-operator classification")
+        }
         ast::PrefixExpressionOperator::Minus(_) => Operator::Subtract,
         ast::PrefixExpressionOperator::MinusMinus(_) => Operator::Decrement,
         ast::PrefixExpressionOperator::PlusPlus(_) => Operator::Increment,

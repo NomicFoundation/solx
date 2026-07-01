@@ -16,6 +16,8 @@ use slang_solidity_v2::ast::TupleExpression;
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
+use solx_mlir::ods::sol::DeleteOperation;
+use solx_utils::DataLocation;
 
 use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::block_and::BlockAnd;
@@ -28,7 +30,7 @@ use crate::ast::emit::emit_place::EmitPlace;
 use crate::ast::emit::emit_values::EmitValues;
 
 /// Assignment target resolved from the Slang binder.
-enum AssignmentTarget<'context, 'block> {
+pub enum AssignmentTarget<'context, 'block> {
     /// Address-typed pointer with its declared element type.
     ///
     /// Covers local variables, function parameters, and the result of an
@@ -36,6 +38,8 @@ enum AssignmentTarget<'context, 'block> {
     Pointer(Value<'context, 'block>, Type<'context>),
     /// State variable — storage slot and declared element type.
     Storage(StorageSlot, Type<'context>),
+    /// Reference-typed location: the destination into which the RHS reference's contents are copied via `sol.copy`.
+    ReferenceCopy(Value<'context, 'block>),
 }
 
 impl<'context: 'block, 'block> AssignmentTarget<'context, 'block> {
@@ -53,11 +57,6 @@ impl<'context: 'block, 'block> AssignmentTarget<'context, 'block> {
                         let declared_type = state_variable
                             .get_type()
                             .expect("binder types every state variable");
-                        if declared_type.is_reference_type() {
-                            unimplemented!(
-                                "assignment to a reference-typed state variable is not yet supported"
-                            );
-                        }
                         let slot = context
                             .storage_layout
                             .get(&state_variable.node_id())
@@ -68,7 +67,26 @@ impl<'context: 'block, 'block> AssignmentTarget<'context, 'block> {
                             None,
                             context.state,
                         );
-                        AssignmentTarget::Storage(slot, element_type)
+                        if declared_type.is_reference_type()
+                            && !matches!(declared_type, ast::Type::Mapping(_))
+                        {
+                            let address_type = ExpressionContext::address_type(
+                                context.state,
+                                element_type,
+                                DataLocation::Storage,
+                                &declared_type,
+                            );
+                            let storage_ref = Pointer::addr_of(
+                                &slot.name,
+                                AstType::new(address_type),
+                                context.state,
+                                &block,
+                            )
+                            .into_mlir();
+                            AssignmentTarget::ReferenceCopy(storage_ref)
+                        } else {
+                            AssignmentTarget::Storage(slot, element_type)
+                        }
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                         let (pointer, element_type) =
@@ -87,30 +105,14 @@ impl<'context: 'block, 'block> AssignmentTarget<'context, 'block> {
                     value: place,
                     block,
                 } = index_access.emit_place(context, block);
-                if place.address.r#type() == place.element_type {
-                    unimplemented!(
-                        "assignment to a reference-typed `a[i]` element in storage/calldata is not yet supported"
-                    );
-                }
-                (
-                    AssignmentTarget::Pointer(place.address, place.element_type),
-                    block,
-                )
+                (Self::from_address(place.address, place.element_type), block)
             }
             Expression::MemberAccessExpression(access) => {
                 let BlockAnd {
                     value: place,
                     block,
                 } = access.emit_place(context, block);
-                if place.address.r#type() == place.element_type {
-                    unimplemented!(
-                        "assignment to a reference-typed struct field in storage/calldata is not yet supported"
-                    );
-                }
-                (
-                    AssignmentTarget::Pointer(place.address, place.element_type),
-                    block,
-                )
+                (Self::from_address(place.address, place.element_type), block)
             }
             _ => unimplemented!(
                 "assignment target {:?} is not yet supported",
@@ -119,15 +121,20 @@ impl<'context: 'block, 'block> AssignmentTarget<'context, 'block> {
         }
     }
 
-    /// The declared element type stored at this target.
-    fn element_type(&self) -> Type<'context> {
-        match self {
-            AssignmentTarget::Pointer(_, element_type)
-            | AssignmentTarget::Storage(_, element_type) => *element_type,
+    /// Classifies a computed lvalue `address` into its target: a reference element, whose address
+    /// type is its element type, becomes a [`Self::ReferenceCopy`], any other a [`Self::Pointer`].
+    fn from_address(address: Value<'context, 'block>, element_type: Type<'context>) -> Self {
+        if address.r#type() == element_type {
+            AssignmentTarget::ReferenceCopy(address)
+        } else {
+            AssignmentTarget::Pointer(address, element_type)
         }
     }
 
     /// Coerces `value` to this target's element type and stores it, returning the stored value.
+    ///
+    /// A reference-typed target copies the RHS reference's contents in via `sol.copy` rather than
+    /// coercing and scalar-storing.
     fn store<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -146,6 +153,10 @@ impl<'context: 'block, 'block> AssignmentTarget<'context, 'block> {
                     .emit(value, context.state, block);
                 context.emit_storage_store(slot, stored_value, *element_type, block);
                 stored_value
+            }
+            AssignmentTarget::ReferenceCopy(address) => {
+                Pointer::new(*address).copy_from(AstValue::new(value), context.state, block);
+                value
             }
         }
     }
@@ -229,6 +240,48 @@ impl<'context: 'block, 'block> AssignmentTarget<'context, 'block> {
             });
         (result, block)
     }
+
+    /// Emits `delete x` — resets the lvalue to its zero. A reference-typed storage aggregate is
+    /// deep-cleared via `sol.delete`; a reference-typed memory aggregate resets to a fresh
+    /// zero-filled buffer; a value lvalue resets to its typed zero.
+    pub fn delete<'state>(
+        context: &ExpressionContext<'state, 'context, 'block>,
+        operand: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> BlockRef<'context, 'block> {
+        let (target, block) = Self::new(context, operand, block);
+        match &target {
+            AssignmentTarget::ReferenceCopy(reference) => {
+                mlir_op_void!(context.state, &block, DeleteOperation.reference(*reference));
+            }
+            AssignmentTarget::Pointer(_, element_type)
+            | AssignmentTarget::Storage(_, element_type) => {
+                let slang_type = operand.get_type().expect("slang types every lvalue");
+                let zero = if slang_type.is_reference_type() {
+                    let zero_init =
+                        !matches!(slang_type, ast::Type::String(_) | ast::Type::Bytes(_));
+                    AstValue::malloc(
+                        AstType::new(*element_type),
+                        None,
+                        zero_init,
+                        context.state,
+                        &block,
+                    )
+                    .into_mlir()
+                } else {
+                    AstValue::constant(
+                        0,
+                        AstType::unsigned(context.state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
+                        context.state,
+                        &block,
+                    )
+                    .into_mlir()
+                };
+                target.store(context, zero, &block);
+            }
+        }
+        block
+    }
 }
 
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for AssignmentExpression {
@@ -249,17 +302,18 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for AssignmentEx
         }
 
         let (target, block) = AssignmentTarget::new(context, &left, block);
-        let element_type = target.element_type();
         let (value, block) = if matches!(
             self.operator(),
             ast::AssignmentExpressionOperator::Equal(_)
         ) {
-            match &right {
-                Expression::StringExpression(string_literal)
-                    if context.is_byte(element_type) =>
-                {
+            match (&target, &right) {
+                (
+                    AssignmentTarget::Pointer(_, element_type)
+                    | AssignmentTarget::Storage(_, element_type),
+                    Expression::StringExpression(string_literal),
+                ) if context.is_byte(*element_type) => {
                     let BlockAnd { value, block } =
-                        string_literal.emit_as(element_type, context, block);
+                        string_literal.emit_as(*element_type, context, block);
                     (value, block)
                 }
                 _ => {
@@ -299,6 +353,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for AssignmentEx
                     let old = context.emit_storage_load(slot, *element_type, &block);
                     (old, *element_type)
                 }
+                AssignmentTarget::ReferenceCopy(_) => unreachable!(
+                    "a compound assignment to a reference-typed lvalue is rejected by the type checker"
+                ),
             };
             let BlockAnd { value: rhs, block } = right.emit(context, block);
             let old = TypeConversion::from_target_type(target_type, context.state)
