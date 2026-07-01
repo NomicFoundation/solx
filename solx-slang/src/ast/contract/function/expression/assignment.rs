@@ -161,8 +161,12 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for AssignmentEx
             let BlockAnd { value: rhs, block } = right.emit(context, block);
             let old = TypeConversion::from_target_type(target_type, context.state)
                 .emit(old, context.state, &block);
-            let rhs = TypeConversion::from_target_type(target_type, context.state)
-                .emit(rhs, context.state, &block);
+            let rhs = if matches!(operator, Operator::ShiftLeft | Operator::ShiftRight) {
+                rhs
+            } else {
+                TypeConversion::from_target_type(target_type, context.state)
+                    .emit(rhs, context.state, &block)
+            };
             let result = block
                 .append_operation(operator.emit_sol_binary_operation(
                     context.checked,

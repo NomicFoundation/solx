@@ -3,6 +3,7 @@
 //!
 
 use melior::ir::BlockRef;
+use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use slang_solidity_v2::ast;
@@ -16,7 +17,6 @@ use solx_mlir::Value as AstValue;
 
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::emit::emit_expression::EmitExpression;
 
 expression_emit!(EqualityExpression; |node, context, block| {
@@ -38,7 +38,11 @@ expression_emit!(InequalityExpression; |node, context, block| {
 });
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Emits a `sol.cmp` comparison.
+    /// Emits a `sol.cmp` comparison, reconciling operands of differing types first.
+    ///
+    /// Two different-width fixed-bytes operands are widened left and compared as fixed-bytes;
+    /// two integers of differing widths widen to the wider operand type, comparing as signed when
+    /// either side is signed so a negative is not read as a large unsigned value.
     pub fn emit_comparison(
         &self,
         left: &Expression,
@@ -48,24 +52,42 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     ) -> BlockAnd<'context, 'block, Value<'context, 'block>> {
         let BlockAnd { value: lhs, block } = left.emit(self, block);
         let BlockAnd { value: rhs, block } = right.emit(self, block);
-        let common_type = if lhs.r#type() == rhs.r#type() {
-            lhs.r#type()
+        let lhs_type = lhs.r#type();
+        let rhs_type = rhs.r#type();
+        let value = if lhs_type == rhs_type {
+            AstValue::new(lhs)
+                .compare(AstValue::new(rhs), predicate, self.state, &block)
+                .into_mlir()
+        } else if let Some(width) = self
+            .fixed_bytes_width(lhs_type)
+            .into_iter()
+            .chain(self.fixed_bytes_width(rhs_type))
+            .max()
+        {
+            let common = AstType::fixed_bytes(self.state.mlir_context, width);
+            let lhs = AstValue::new(lhs).bytes_cast(common, self.state, &block);
+            let rhs = AstValue::new(rhs).bytes_cast(common, self.state, &block);
+            lhs.compare(rhs, predicate, self.state, &block).into_mlir()
         } else {
-            AstType::unsigned(self.state.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
+            let common = if AstType::new(lhs_type).integer_bit_width()
+                >= AstType::new(rhs_type).integer_bit_width()
+            {
+                lhs_type
+            } else {
+                rhs_type
+            };
+            let lhs = AstValue::new(lhs).cast(AstType::new(common), self.state, &block);
+            let rhs = AstValue::new(rhs).cast(AstType::new(common), self.state, &block);
+            lhs.compare(rhs, predicate, self.state, &block).into_mlir()
         };
-        let lhs = TypeConversion::from_target_type(common_type, self.state).emit(
-            lhs,
-            self.state,
-            &block,
-        );
-        let rhs = TypeConversion::from_target_type(common_type, self.state).emit(
-            rhs,
-            self.state,
-            &block,
-        );
-        let value = AstValue::new(lhs)
-            .compare(AstValue::new(rhs), predicate, self.state, &block)
-            .into_mlir();
         BlockAnd { block, value }
+    }
+
+    /// The byte width of `candidate` if it is a `!sol.fixedbytes<N>` type, matched by reconstruction
+    /// over the `bytes1 ..= bytes32` range; `None` for any other type.
+    fn fixed_bytes_width(&self, candidate: Type<'context>) -> Option<u32> {
+        (1..=solx_utils::BYTE_LENGTH_FIELD as u32).find(|&width| {
+            candidate == AstType::fixed_bytes(self.state.mlir_context, width).into_mlir()
+        })
     }
 }
