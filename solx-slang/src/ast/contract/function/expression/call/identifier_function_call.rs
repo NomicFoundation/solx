@@ -5,8 +5,9 @@
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::FunctionDefinition;
-use slang_solidity_v2::ast::PositionalArguments;
+use slang_solidity_v2::ast::NodeId;
 
 use solx_mlir::Function;
 
@@ -16,11 +17,12 @@ use crate::ast::contract::function::expression::call::type_conversion::TypeConve
 use crate::ast::emit::emit_expression::EmitExpression;
 
 impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context, 'block> {
-    /// Emits a direct, named function call, returning all of its result values in declaration order.
+    /// Emits a direct function call `f(a, b)` or `f({b: .., a: ..})`, returning all of its result
+    /// values in declaration order.
     pub(super) fn emit_function_call(
         &self,
         function_definition: &FunctionDefinition,
-        arguments: &PositionalArguments,
+        arguments: &ArgumentsDeclaration,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
         let (mlir_name, argument_values, return_types, block) =
@@ -39,12 +41,12 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
         }
     }
 
-    /// Emits argument values for a named call, resolves the callee's MLIR
-    /// signature, and casts each argument to its declared parameter type.
+    /// Emits argument values for a direct call in parameter-declaration order, resolves the callee's
+    /// MLIR signature, and casts each argument to its declared parameter type.
     fn emit_call_setup<'a>(
         &'a self,
         function_definition: &FunctionDefinition,
-        arguments: &PositionalArguments,
+        arguments: &ArgumentsDeclaration,
         block: BlockRef<'context, 'block>,
     ) -> (
         &'a str,
@@ -52,9 +54,17 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
         &'a [Type<'context>],
         BlockRef<'context, 'block>,
     ) {
-        let mut argument_values = Vec::new();
+        let parameter_ids: Vec<NodeId> = function_definition
+            .parameters()
+            .iter()
+            .map(|parameter| parameter.node_id())
+            .collect();
+        let ordered_arguments = arguments
+            .ordered_by(&parameter_ids)
+            .expect("slang matches every call argument to a parameter");
+        let mut argument_values = Vec::with_capacity(ordered_arguments.len());
         let mut current_block = block;
-        for argument in arguments.iter() {
+        for argument in ordered_arguments {
             let BlockAnd { value, block: next } = argument.emit(self.expression_context, current_block);
             argument_values.push(value);
             current_block = next;
