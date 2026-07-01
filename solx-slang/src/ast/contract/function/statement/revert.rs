@@ -16,6 +16,7 @@ use slang_solidity_v2::ast::NamedArguments;
 use slang_solidity_v2::ast::Parameters;
 use slang_solidity_v2::ast::RevertStatement;
 
+use solx_mlir::Type as AstType;
 use solx_mlir::ods::sol::RevertOperation;
 
 use crate::ast::block_and::BlockAnd;
@@ -76,7 +77,13 @@ statement_emit!(RevertStatement; |node, context, block| {
 });
 
 impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
-    /// Emits a `sol.revert` for the call form `revert()` or `revert("message")`.
+    /// Emits a `sol.revert` for the call form `revert()`, `revert({})`,
+    /// `revert("message")`, or `revert(expression)`.
+    ///
+    /// A no-data revert covers `revert()` and the degenerate empty
+    /// named-argument list `revert({})`. A non-empty string literal bakes its
+    /// message into the op. Any other message is evaluated at runtime and
+    /// ABI-encoded under the `Error(string)` selector via the `call` form.
     ///
     /// `sol.revert` is not a terminator at the dialect level, so codegen continues in the same
     /// block; the function epilogue (or an enclosing region's yield) supplies the structural
@@ -86,30 +93,49 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         call: &FunctionCallExpression,
         block: BlockRef<'context, 'block>,
     ) -> Option<BlockRef<'context, 'block>> {
-        let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
-        else {
-            unreachable!("revert call uses positional arguments");
+        let message_argument = match &call.arguments() {
+            ArgumentsDeclaration::PositionalArguments(positional_arguments) => {
+                let mut arguments = positional_arguments.iter();
+                let message_argument = arguments.next();
+                assert!(
+                    arguments.next().is_none(),
+                    "revert accepts at most one argument"
+                );
+                message_argument
+            }
+            ArgumentsDeclaration::NamedArguments(named_arguments) => {
+                assert!(
+                    named_arguments.iter().next().is_none(),
+                    "revert accepts only an empty named-argument list"
+                );
+                None
+            }
         };
-        let mut arguments = positional_arguments.iter();
-        let message_argument = arguments.next();
-        assert!(
-            arguments.next().is_none(),
-            "revert accepts at most one argument"
-        );
-        let signature: String = match message_argument {
-            None => String::new(),
-            Some(Expression::StringExpression(string_expression)) => {
+        let block = match message_argument {
+            None => {
+                self.append_sol_revert("", &[], false, &block);
+                block
+            }
+            Some(Expression::StringExpression(string_expression))
+                if !string_expression.value().is_empty() =>
+            {
                 let message = String::from_utf8(string_expression.value())
                     .expect("revert message is valid UTF-8");
-                assert!(
-                    !message.is_empty(),
-                    "revert(\"\") would emit ambiguous bytecode under the current Sol dialect; use revert() for no-data revert"
-                );
-                message
+                self.append_sol_revert(&message, &[], false, &block);
+                block
             }
-            Some(_) => unreachable!("revert message is a string literal"),
+            Some(expression) => {
+                let expression_context = self.expression_context();
+                let BlockAnd { value, block } = expression.emit(&expression_context, block);
+                let string_memory_type =
+                    AstType::string(self.state.mlir_context, solx_utils::DataLocation::Memory)
+                        .into_mlir();
+                let message_value = TypeConversion::from_target_type(string_memory_type, self.state)
+                    .emit(value, self.state, &block);
+                self.append_sol_revert("Error(string)", &[message_value], true, &block);
+                block
+            }
         };
-        self.append_sol_revert(&signature, &[], false, &block);
         Some(block)
     }
 
