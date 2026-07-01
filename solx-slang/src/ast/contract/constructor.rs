@@ -15,24 +15,24 @@ use slang_solidity_v2::ast::NodeId;
 
 use solx_mlir::Environment;
 use solx_mlir::Function;
+use solx_mlir::LocationPolicy;
+use solx_mlir::Pointer;
 use solx_mlir::StateMutability;
+use solx_mlir::Type as AstType;
 use solx_mlir::ods::sol::ReturnOperation;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitExpression;
-use crate::ast::EmitStatement;
-use crate::ast::LocationPolicy;
-use crate::ast::Pointer;
-use crate::ast::Type as AstType;
-use crate::ast::analysis::query::BaseConstructorArguments;
-use crate::ast::analysis::query::BaseConstructorChain;
-use crate::ast::contract::function::FunctionScope;
+use crate::ast::analysis::query::base_constructor_chain::BaseConstructorArguments;
+use crate::ast::analysis::query::base_constructor_chain::BaseConstructorChain;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
+use crate::ast::contract::function::function_scope::FunctionScope;
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 use crate::ast::contract::function::statement::StatementContext;
-use crate::ast::emit::EmitConstructor;
-use crate::ast::emit::EmitModifierCalls;
+use crate::ast::emit::emit_constructor::EmitConstructor;
+use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_modifier_calls::EmitModifierCalls;
+use crate::ast::emit::emit_statement::EmitStatement;
 
 impl EmitConstructor for ContractDefinition {
     fn emit_constructor<'state, 'context>(
@@ -48,9 +48,8 @@ impl EmitConstructor for ContractDefinition {
                 ContractBase::Interface(_) => None,
             })
             .collect();
-        let mro_node_ids = mro.iter().map(|base| base.node_id()).collect();
 
-        let base_arguments = self.base_constructor_arguments(&mro, &mro_node_ids);
+        let base_arguments = self.base_constructor_arguments(&mro);
 
         self.emit_constructor_func(scope, self, &mro, &base_arguments, true, contract_body);
 
@@ -114,10 +113,9 @@ impl EmitConstructor for ContractDefinition {
 
         let signature = Function::new(symbol, parameter_types, Vec::new());
         let entry = signature.define(None, mutability, kind, function_id, state, contract_body);
-        let region = entry.parent_region().expect("entry block has a region");
 
         let mut current_block = if is_most_derived {
-            self.emit_state_var_initializers(scope, entry)
+            self.emit_state_variable_initializers(scope, entry)
         } else {
             entry
         };
@@ -166,7 +164,6 @@ impl EmitConstructor for ContractDefinition {
                     scope.state,
                     &mut environment,
                     scope.dispatch,
-                    &region,
                     scope.storage_layout,
                     &return_types,
                     &[],
@@ -248,7 +245,7 @@ impl EmitConstructor for ContractDefinition {
         current_block
     }
 
-    fn emit_state_var_initializers<'state, 'context, 'block>(
+    fn emit_state_variable_initializers<'state, 'context, 'block>(
         &self,
         scope: &FunctionScope<'state, 'context>,
         mut block: BlockRef<'context, 'block>,

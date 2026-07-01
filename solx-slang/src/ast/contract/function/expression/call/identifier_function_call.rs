@@ -9,8 +9,8 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 
-use crate::ast::BlockAnd;
-use crate::ast::analysis::query::ParameterNodeIds;
+use crate::ast::analysis::query::node_ids::ParameterNodeIds;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
@@ -51,16 +51,6 @@ impl IdentifierFunctionCall {
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
         let function = context.state.resolve_function(self.target_id);
-        let BlockAnd {
-            value: argument_values,
-            block,
-        } = self
-            .arguments
-            .emit_as(&function.parameter_types, context, block);
-        let results = function.call(&argument_values, context.state, &block);
-        BlockAnd {
-            value: results,
-            block,
-        }
+        self.arguments.emit_call(function, context, block)
     }
 }

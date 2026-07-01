@@ -10,16 +10,14 @@ pub mod external_member_call;
 pub mod function_pointer_call;
 pub mod identifier_builtin_call;
 pub mod identifier_function_call;
-pub mod index_access_conversion;
 pub mod inherited_function_call;
 pub mod internal_member_call;
 pub mod member_builtin_call;
 pub mod new_expression_call;
 pub mod positional_arguments;
 pub mod struct_construction;
+pub mod try_call;
 pub mod try_call_kind;
-pub mod try_external_call;
-pub mod try_function_pointer_call;
 pub mod try_new_expression;
 pub mod type_conversion;
 
@@ -28,11 +26,11 @@ use melior::ir::Value;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitExpression;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_kind::CallKind;
 use crate::ast::contract::function::expression::call_options::CallOptions;
+use crate::ast::emit::emit_expression::EmitExpression;
 
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCallExpression {
     type Output = BlockAnd<'context, 'block, Vec<Value<'context, 'block>>>;
@@ -71,7 +69,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             CallKind::InternalMemberCall(call) => call.emit(context, block),
             CallKind::ExternalMemberCall(call) => call.emit(context, block, call_value, call_gas),
             CallKind::NewExpressionCall(call) => call.emit(context, block, call_value, salt),
-            CallKind::IndexAccessConversion(call) => call.emit(context, block),
             CallKind::IdentifierFunctionCall(call) => call.emit(context, block),
         }
     }

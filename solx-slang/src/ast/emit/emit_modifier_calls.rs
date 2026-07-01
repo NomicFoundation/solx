@@ -9,9 +9,9 @@ use melior::ir::Type;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::Parameter;
 
-use crate::ast::contract::function::FunctionScope;
+use crate::ast::contract::function::function_scope::FunctionScope;
 
-/// Emits a function's (or constructor's) modifier invocations as `sol.modifier_call_blk` ops, and
+/// Emits a function's or constructor's modifier invocations as `sol.modifier_call_blk` ops, and
 /// resolves the invoked modifier definitions so the contract can emit their `sol.modifier` defs.
 pub trait EmitModifierCalls {
     /// The override-resolved, body-bearing modifier definitions this function invokes, in source

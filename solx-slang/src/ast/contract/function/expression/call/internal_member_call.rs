@@ -10,13 +10,14 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitExpression;
-use crate::ast::Type as AstType;
-use crate::ast::analysis::query::MemberAccessOperand;
-use crate::ast::analysis::query::ParameterNodeIds;
+use solx_mlir::Type as AstType;
+
+use crate::ast::analysis::query::member_access_operand::MemberAccessOperand;
+use crate::ast::analysis::query::node_ids::ParameterNodeIds;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
+use crate::ast::emit::emit_expression::EmitExpression;
 
 /// A member call to an internal function.
 pub struct InternalMemberCall {
@@ -71,19 +72,7 @@ impl InternalMemberCall {
     ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
         let resolved = context.state.resolve_function(self.function.node_id());
         match &self.receiver {
-            None => {
-                let BlockAnd {
-                    value: argument_values,
-                    block,
-                } = self
-                    .arguments
-                    .emit_as(&resolved.parameter_types, context, block);
-                let results = resolved.call(&argument_values, context.state, &block);
-                BlockAnd {
-                    value: results,
-                    block,
-                }
-            }
+            None => self.arguments.emit_call(resolved, context, block),
             Some(receiver) => {
                 let (parameter_self, parameter_rest) = resolved
                     .parameter_types

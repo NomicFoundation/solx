@@ -6,10 +6,10 @@ use melior::ir::Type;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 use solx_mlir::Context;
+use solx_mlir::LocationPolicy;
 use solx_mlir::StateMutability;
+use solx_mlir::Type as AstType;
 
-use crate::ast::LocationPolicy;
-use crate::ast::Type as AstType;
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 
 /// The resolved MLIR signature of a function: its symbol name, parameter and
@@ -21,7 +21,7 @@ pub struct Signature<'context> {
     /// The Sol-typed parameter types.
     pub mlir_parameter_types: Vec<Type<'context>>,
     /// The Sol-typed result types, parallel to the function's returns.
-    pub result_types: Vec<Type<'context>>,
+    pub mlir_result_types: Vec<Type<'context>>,
     /// The 4-byte public selector, when the function is externally dispatched.
     pub selector: Option<u32>,
     /// The Sol dialect state mutability.
@@ -33,7 +33,7 @@ pub struct Signature<'context> {
 
 impl<'context> Signature<'context> {
     /// Resolves the MLIR signature of `function`: symbol, parameter and result
-    /// types, selector, mutability, and kind. A `symbol_override`, for a free, library, or
+    /// types, selector, mutability, and kind. A `symbol_override`, for a free or
     /// shadowed-base function, carries no public selector or special function kind.
     pub fn resolve(
         function: &FunctionDefinition,
@@ -44,7 +44,7 @@ impl<'context> Signature<'context> {
             .map(str::to_owned)
             .unwrap_or_else(|| function.mlir_function_name());
 
-        let (mlir_parameter_types, result_types) =
+        let (mlir_parameter_types, mlir_result_types) =
             AstType::resolve_signature(function, LocationPolicy::Declared(None), context);
 
         let state_mutability = StateMutability::from(function.mutability());
@@ -68,7 +68,7 @@ impl<'context> Signature<'context> {
         Self {
             mlir_name,
             mlir_parameter_types,
-            result_types,
+            mlir_result_types,
             selector,
             state_mutability,
             mlir_kind,

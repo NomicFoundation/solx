@@ -18,13 +18,13 @@
 /// and hex integer literals, state their body once. The closure binds the node
 /// (`|node, context, block|`) or omits it when unused (`|context, block|`);
 /// `context` is the `&ExpressionContext`. Names resolve against the call site's
-/// imports; the [`Value`] output type is referenced by absolute path, so a body
+/// imports; the [`solx_mlir::Value`] output type is referenced by absolute path, so a body
 /// may keep its own `melior::ir::Value` import for intermediate values.
 macro_rules! expression_emit {
     ($($node:ty),+ ; |$bound:ident, $context:ident, $block:ident| $body:block) => {
         $(
             impl<'context: 'block, 'block> EmitExpression<'context, 'block> for $node {
-                type Output = BlockAnd<'context, 'block, $crate::ast::Value<'context, 'block>>;
+                type Output = BlockAnd<'context, 'block, ::solx_mlir::Value<'context, 'block>>;
 
                 fn emit<'state>(
                     &self,
@@ -40,7 +40,7 @@ macro_rules! expression_emit {
     ($($node:ty),+ ; |$context:ident, $block:ident| $body:block) => {
         $(
             impl<'context: 'block, 'block> EmitExpression<'context, 'block> for $node {
-                type Output = BlockAnd<'context, 'block, $crate::ast::Value<'context, 'block>>;
+                type Output = BlockAnd<'context, 'block, ::solx_mlir::Value<'context, 'block>>;
 
                 fn emit<'state>(
                     &self,
@@ -88,9 +88,9 @@ macro_rules! statement_emit {
 
 /// The inline-assembly, or Yul, counterpart of [`statement_emit`] / [`expression_emit`]:
 /// generates `impl EmitYul` for a Yul node. The context is `&mut YulContext`, since a Yul
-/// `let` declares variables; the output is stated per node because Yul never
-/// diverges solx control flow: a statement yields its continuation `BlockRef`,
-/// not an `Option`, an expression its `(word, continuation)` pair. The closure
+/// `let` declares variables; the output is stated per node because the family is not uniform: a
+/// statement yields its continuation `BlockRef`, or `None` when `break`/`continue` diverges, and an
+/// expression yields its word paired with a continuation. The closure
 /// binds the node (`|node, context, block|`). Names resolve against the call
 /// site's imports.
 macro_rules! yul_emit {

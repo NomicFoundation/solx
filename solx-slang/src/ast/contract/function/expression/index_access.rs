@@ -9,17 +9,17 @@ use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::IndexAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use solx_mlir::LocationPolicy;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::SliceOperation;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitExpression;
-use crate::ast::EmitPlace;
-use crate::ast::LocationPolicy;
-use crate::ast::Place;
-use crate::ast::Pointer;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_place::EmitPlace;
+use crate::ast::place::Place;
 
 impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpression {
     /// Emits the address `a[i]` / `m[k]` denotes with the element type, without the load.
@@ -29,7 +29,9 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Place<'context, 'block>> {
         if self.end().is_some() {
-            unreachable!("range index (a[i:j]) is not yet supported");
+            unreachable!(
+                "a slice a[i:j] is emitted in value position, never as an assignable place"
+            );
         }
 
         let base = self.operand();

@@ -10,14 +10,13 @@
 //!
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 
-use crate::ast::analysis::query::MatchLinearisedBase;
-use crate::ast::analysis::query::PositionalArguments;
+use crate::ast::analysis::query::match_linearised_base::MatchLinearisedBase;
+use crate::ast::analysis::query::positional_arguments::PositionalArguments;
 
 /// Resolves the base-constructor call chain a contract's construction emits.
 pub trait BaseConstructorChain {
@@ -29,11 +28,10 @@ pub trait BaseConstructorChain {
     fn base_constructor_arguments(
         &self,
         mro: &[ContractDefinition],
-        mro_node_ids: &HashSet<NodeId>,
     ) -> HashMap<NodeId, BaseConstructorArguments>;
 
     /// The constructor that comes next in the chain after `contract`: the first contract strictly
-    /// after it in the C3 linearisation (most-derived first) that declares a constructor, or `None`
+    /// after it in the C3 linearisation, most-derived first, that declares a constructor, or `None`
     /// when the rest of the chain contributes none.
     fn next_constructor_contract(
         &self,
@@ -43,12 +41,12 @@ pub trait BaseConstructorChain {
 }
 
 /// The invocation arguments supplied to one base constructor, with the contract whose scope evaluates
-/// them. The arguments are evaluated in the *declaring* contract's constructor scope (its parameters),
-/// inside that contract's constructor `sol.func`.
+/// them. The arguments are evaluated in the *declaring* contract's constructor scope, binding its
+/// parameters, inside that contract's constructor `sol.func`.
 pub struct BaseConstructorArguments {
     /// The argument expressions passed to the base constructor.
     pub arguments: Vec<Expression>,
-    /// The contract that declares the invocation (its constructor scope evaluates the arguments).
+    /// The contract that declares the invocation; its constructor scope evaluates the arguments.
     pub declaring_contract: ContractDefinition,
 }
 
@@ -56,7 +54,6 @@ impl BaseConstructorChain for ContractDefinition {
     fn base_constructor_arguments(
         &self,
         mro: &[ContractDefinition],
-        mro_node_ids: &HashSet<NodeId>,
     ) -> HashMap<NodeId, BaseConstructorArguments> {
         let mut collected: HashMap<NodeId, BaseConstructorArguments> = HashMap::new();
         for declaring_contract in mro.iter() {
@@ -68,17 +65,16 @@ impl BaseConstructorChain for ContractDefinition {
                     else {
                         continue;
                     };
-                    let Some(base_contract) =
-                        invocation.name().match_linearised_base(mro, mro_node_ids)
-                    else {
+                    let Some(base_contract) = invocation.name().match_linearised_base(mro) else {
                         continue;
                     };
-                    collected
-                        .entry(base_contract.node_id())
-                        .or_insert(BaseConstructorArguments {
+                    collected.insert(
+                        base_contract.node_id(),
+                        BaseConstructorArguments {
                             arguments,
                             declaring_contract: declaring_contract.clone(),
-                        });
+                        },
+                    );
                 }
             }
             for inheritance in declaring_contract.inheritance_types().iter() {
@@ -88,18 +84,16 @@ impl BaseConstructorChain for ContractDefinition {
                 else {
                     continue;
                 };
-                let Some(base_contract) = inheritance
-                    .type_name()
-                    .match_linearised_base(mro, mro_node_ids)
-                else {
+                let Some(base_contract) = inheritance.type_name().match_linearised_base(mro) else {
                     continue;
                 };
-                collected
-                    .entry(base_contract.node_id())
-                    .or_insert(BaseConstructorArguments {
+                collected.insert(
+                    base_contract.node_id(),
+                    BaseConstructorArguments {
                         arguments,
                         declaring_contract: declaring_contract.clone(),
-                    });
+                    },
+                );
             }
         }
         collected

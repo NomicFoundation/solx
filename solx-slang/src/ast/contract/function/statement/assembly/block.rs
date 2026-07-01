@@ -8,20 +8,21 @@ use melior::ir::Block;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::RegionLike;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::YulBlock;
 use slang_solidity_v2::ast::YulStatement;
-use solx_mlir::ods::yul::*;
+use solx_mlir::ods::yul::YieldOperation;
 
-use crate::ast::EmitYul;
 use crate::ast::contract::function::statement::assembly::YulContext;
+use crate::ast::emit::emit_yul::EmitYul;
 
 yul_emit!(YulBlock => Option<BlockRef<'context, 'block>>; |yul_block, context, block| {
-    let saved_functions: HashSet<String> = context.yul_functions.keys().cloned().collect();
+    let saved_functions: HashSet<NodeId> = context.yul_functions.keys().copied().collect();
     for statement in yul_block.statements().iter() {
         if let YulStatement::YulFunctionDefinition(definition) = &statement {
             context
                 .yul_functions
-                .insert(definition.name().name(), definition.clone());
+                .insert(definition.node_id(), definition.clone());
         }
     }
 
@@ -40,11 +41,11 @@ yul_emit!(YulBlock => Option<BlockRef<'context, 'block>>; |yul_block, context, b
         }
     }
 
-    let added: Vec<String> = context
+    let added: Vec<NodeId> = context
         .yul_functions
         .keys()
         .filter(|key| !saved_functions.contains(*key))
-        .cloned()
+        .copied()
         .collect();
     for key in added {
         context.yul_functions.remove(&key);
@@ -79,13 +80,10 @@ where
         let region = target_block
             .parent_region()
             .expect("region body block has a parent region");
-        let saved_region = context.region_pointer;
-        context.region_pointer = &*region as *const _;
         let end = match self.emit(context, target_block) {
             Some(end) => end,
             None => region.append_block(Block::new(&[])),
         };
         mlir_op_void!(context.state, &end, YieldOperation.operands(&[]));
-        context.region_pointer = saved_region;
     }
 }

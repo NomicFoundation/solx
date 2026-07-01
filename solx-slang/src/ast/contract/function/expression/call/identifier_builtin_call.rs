@@ -12,6 +12,9 @@ use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use solx_mlir::LocationPolicy;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::AssertOperation;
 use solx_mlir::ods::sol::BlobHashOperation;
@@ -23,14 +26,12 @@ use solx_mlir::ods::sol::Ripemd160Operation;
 use solx_mlir::ods::sol::SelfdestructOperation;
 use solx_mlir::ods::sol::Sha256Operation;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitExpression;
-use crate::ast::LocationPolicy;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
-use crate::ast::analysis::query::ParameterNodeIds;
+use crate::ast::analysis::query::member_access_operand::MemberAccessOperand;
+use crate::ast::analysis::query::node_ids::ParameterNodeIds;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
+use crate::ast::emit::emit_expression::EmitExpression;
 
 /// A Solidity built-in called by identifier.
 pub struct IdentifierBuiltinCall {
@@ -265,7 +266,7 @@ impl IdentifierBuiltinCall {
         }
     }
 
-    /// Emits `assert`.
+    /// Emits the `assert` builtin as a `sol.assert` op: an unrecoverable panic carrying no message.
     pub fn emit_assert<'state, 'context: 'block, 'block>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -294,7 +295,7 @@ impl IdentifierBuiltinCall {
         }
     }
 
-    /// Emits `require`.
+    /// Emits the `require` builtin as a `sol.require` op, threading its optional string or custom-error message.
     pub fn emit_require<'state, 'context: 'block, 'block>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -327,13 +328,8 @@ impl IdentifierBuiltinCall {
             }
             Some(expression) => {
                 if let Expression::FunctionCallExpression(error_call) = expression
-                    && let Some(Definition::Error(error_definition)) = (match error_call.operand() {
-                        Expression::Identifier(identifier) => identifier.resolve_to_definition(),
-                        Expression::MemberAccessExpression(access) => {
-                            access.member().resolve_to_definition()
-                        }
-                        _ => None,
-                    })
+                    && let Some(Definition::Error(error_definition)) =
+                        MemberAccessOperand(&error_call.operand()).resolve()
                 {
                     let signature = error_definition
                         .compute_canonical_signature()

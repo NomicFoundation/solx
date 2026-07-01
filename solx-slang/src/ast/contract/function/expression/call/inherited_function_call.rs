@@ -10,8 +10,8 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::NodeId;
 
-use crate::ast::BlockAnd;
-use crate::ast::analysis::query::ParameterNodeIds;
+use crate::ast::analysis::query::node_ids::ParameterNodeIds;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
@@ -36,14 +36,11 @@ impl InheritedFunctionCall {
         let Expression::MemberAccessExpression(access) = callee else {
             return None;
         };
-        if !matches!(access.operand(), Expression::SuperKeyword(_))
-            && dispatch.resolve_super(access.node_id()).is_none()
-        {
+        let redirect = dispatch.resolve_super(access.node_id());
+        if !matches!(access.operand(), Expression::SuperKeyword(_)) && redirect.is_none() {
             return None;
         }
-        let target_id = dispatch
-            .resolve_super(access.node_id())
-            .expect("a super/base call has a recorded redirect target");
+        let target_id = redirect.expect("a super/base call has a recorded redirect target");
         let parameter_ids = match access.member().resolve_to_definition() {
             Some(Definition::Function(function_definition)) => {
                 function_definition.parameters().node_ids()
@@ -64,16 +61,6 @@ impl InheritedFunctionCall {
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
         let function = context.state.resolve_function(self.target_id);
-        let BlockAnd {
-            value: argument_values,
-            block,
-        } = self
-            .arguments
-            .emit_as(&function.parameter_types, context, block);
-        let results = function.call(&argument_values, context.state, &block);
-        BlockAnd {
-            value: results,
-            block,
-        }
+        self.arguments.emit_call(function, context, block)
     }
 }

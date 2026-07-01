@@ -13,7 +13,6 @@ use crate::ast::contract::function::expression::call::external_member_call::Exte
 use crate::ast::contract::function::expression::call::function_pointer_call::FunctionPointerCall;
 use crate::ast::contract::function::expression::call::identifier_builtin_call::IdentifierBuiltinCall;
 use crate::ast::contract::function::expression::call::identifier_function_call::IdentifierFunctionCall;
-use crate::ast::contract::function::expression::call::index_access_conversion::IndexAccessConversion;
 use crate::ast::contract::function::expression::call::inherited_function_call::InheritedFunctionCall;
 use crate::ast::contract::function::expression::call::internal_member_call::InternalMemberCall;
 use crate::ast::contract::function::expression::call::member_builtin_call::MemberBuiltinCall;
@@ -27,7 +26,7 @@ use crate::ast::contract::function::expression::call::type_conversion::TypeConve
 pub enum CallKind {
     /// The callee names a struct, so the call builds a struct value from its members.
     StructConstruction(StructConstruction),
-    /// A one-argument elementary or user-defined-value-type conversion.
+    /// A one-argument elementary, user-defined-value-type, or array-type conversion.
     TypeConversion(TypeConversion),
     /// A call through a function-typed value rather than a named function.
     FunctionPointerCall(FunctionPointerCall),
@@ -45,8 +44,6 @@ pub enum CallKind {
     ExternalMemberCall(ExternalMemberCall),
     /// A `new C(...)` / `new bytes(...)` contract or dynamic-array creation.
     NewExpressionCall(NewExpressionCall),
-    /// An array-type cast written with an index-access callee (`uint8[](value)`).
-    IndexAccessConversion(IndexAccessConversion),
     /// A direct call to a named function, resolved through virtual dispatch.
     IdentifierFunctionCall(IdentifierFunctionCall),
 }
@@ -89,8 +86,8 @@ impl CallKind {
         if let Some(inner) = NewExpressionCall::from_call(call, callee) {
             return Self::NewExpressionCall(inner);
         }
-        if let Some(inner) = IndexAccessConversion::from_call(call, callee) {
-            return Self::IndexAccessConversion(inner);
+        if let Some(inner) = TypeConversion::from_index_access(call, callee) {
+            return Self::TypeConversion(inner);
         }
         if let Some(inner) = IdentifierFunctionCall::from_callee(callee, arguments, dispatch) {
             return Self::IdentifierFunctionCall(inner);

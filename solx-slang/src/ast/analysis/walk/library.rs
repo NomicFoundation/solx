@@ -34,8 +34,8 @@ pub struct LibraryCallCollector {
 }
 
 impl LibraryCallCollector {
-    /// Returns the library functions reachable from `contract`'s own functions (deduplicated by node
-    /// id, excluding contract-own and free functions). `extra_roots` are extra bodies to walk.
+    /// Returns the library functions reachable from `contract`'s own functions, deduplicated by node
+    /// id, excluding contract-own and free functions. `extra_roots` are extra bodies to walk.
     pub fn reachable_library_functions(
         contract: &ContractDefinition,
         free_functions: &[FunctionDefinition],
@@ -71,9 +71,7 @@ impl LibraryCallCollector {
                 !own.contains(&function.node_id()) && !free_ids.contains(&function.node_id())
             });
             for library_function in member_reached.chain(bare_reached) {
-                if !walk.is_collected(library_function.node_id()) {
-                    library_ids.insert(library_function.node_id());
-                }
+                library_ids.insert(library_function.node_id());
                 walk.reach(library_function);
             }
             for reached_function in collector.reached {

@@ -7,10 +7,10 @@ use melior::ir::BlockRef;
 use slang_solidity_v2::ast::AndExpression;
 use slang_solidity_v2::ast::OrExpression;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitExpression;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::logical_operator::LogicalOperator;
+use crate::ast::emit::emit_expression::EmitExpression;
 
 impl From<&AndExpression> for LogicalOperator {
     fn from(_node: &AndExpression) -> Self {

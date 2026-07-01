@@ -12,7 +12,7 @@ use crate::ast::contract::function::statement::assembly::YulContext;
 /// The context is `&mut YulContext`, since a Yul `let` declares variables; `Output` is associated because
 /// the family is not uniform. Emission never fails: slang validated the source.
 pub trait EmitYul<'context: 'block, 'block> {
-    /// The node's result: a continuation, or a value (or values) paired with one.
+    /// The node's result: a continuation, or one or more values paired with one.
     type Output;
 
     /// Emits this Yul node into `block`.

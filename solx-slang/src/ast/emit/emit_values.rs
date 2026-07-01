@@ -5,7 +5,7 @@
 use melior::ir::BlockRef;
 use melior::ir::Value;
 
-use crate::ast::BlockAnd;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 /// Emits a multi-valued expression to all its values: a tuple yields its elements, a call or a

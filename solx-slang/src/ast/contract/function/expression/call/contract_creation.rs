@@ -6,10 +6,11 @@ use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ContractDefinition;
 
-use crate::ast::BlockAnd;
-use crate::ast::LocationPolicy;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
+use solx_mlir::LocationPolicy;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
+
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 

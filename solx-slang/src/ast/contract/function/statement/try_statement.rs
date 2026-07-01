@@ -12,14 +12,14 @@ use melior::ir::operation::OperationLike;
 use slang_solidity_v2::ast::CatchClause;
 use slang_solidity_v2::ast::TryStatement;
 use slang_solidity_v2::ast::Type as SlangType;
+use solx_mlir::Type as AstType;
 use solx_mlir::ods::sol::TryOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
-use crate::ast::EmitStatement;
-use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::try_call_kind::TryCallKind;
 use crate::ast::contract::function::statement::StatementContext;
+use crate::ast::emit::emit_statement::EmitStatement;
 
 /// The `catch` clause a `sol.try` carries, selecting how its fallback region is shaped.
 #[derive(Clone, Copy)]
@@ -33,8 +33,6 @@ enum TryFallbackKind {
 }
 
 statement_emit!(CatchClause; |node, context, block| {
-    let region = block.parent_region().expect("block belongs to a region");
-    context.region_pointer = &*region as *const _;
     if let Some(error) = node.error()
         && let Some(parameter) = error.parameters().iter().next()
     {
@@ -97,7 +95,6 @@ statement_emit!(TryStatement; |node, context, block| {
         }
     }
 
-    let saved_region = context.region_pointer;
     let state = context.state;
     let has_panic = panic_clause.is_some();
     let has_error = error_clause.is_some();
@@ -167,10 +164,6 @@ statement_emit!(TryStatement; |node, context, block| {
             .expect("fallback region has a block")
     });
 
-    let success_region = success_block
-        .parent_region()
-        .expect("block belongs to a region");
-    context.region_pointer = &*success_region as *const _;
     if let Some(parameters) = node.returns() {
         for (parameter, result) in parameters.iter().zip(results.iter()) {
             if parameter.name().is_none() {
@@ -203,6 +196,5 @@ statement_emit!(TryStatement; |node, context, block| {
         }
     }
 
-    context.region_pointer = saved_region;
     Some(current_block)
 });

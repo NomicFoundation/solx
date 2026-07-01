@@ -4,9 +4,9 @@
 
 use melior::ir::BlockRef;
 
-use crate::ast::BlockAnd;
-use crate::ast::Place;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::place::Place;
 
 /// Emits the [`Place`] an assignable expression denotes, its `!sol.ptr` and element type, without
 /// the load or store, so a read and an assignment share one address computation.

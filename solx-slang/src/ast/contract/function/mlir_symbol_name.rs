@@ -44,7 +44,7 @@ impl MlirSymbolName for FunctionDefinition {
     }
 
     fn node_id_qualified_symbol(&self) -> String {
-        format!("{}#{:?}", self.mlir_function_name(), self.node_id())
+        format!("{}_{}", self.mlir_function_name(), self.node_id())
     }
 
     fn modifier_symbol(&self) -> String {
@@ -56,6 +56,6 @@ impl MlirSymbolName for FunctionDefinition {
     }
 
     fn base_constructor_symbol(&self) -> String {
-        format!("constructor#{}", self.node_id())
+        format!("constructor_{}", self.node_id())
     }
 }

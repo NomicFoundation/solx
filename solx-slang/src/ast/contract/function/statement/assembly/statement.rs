@@ -15,15 +15,21 @@ use num_bigint::BigInt;
 use slang_solidity_v2::ast::YulExpression;
 use slang_solidity_v2::ast::YulStatement;
 use slang_solidity_v2::ast::YulSwitchCase;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_mlir::YulValue;
-use solx_mlir::ods::yul::*;
+use solx_mlir::ods::yul::BreakOperation;
+use solx_mlir::ods::yul::ConditionOperation;
+use solx_mlir::ods::yul::ContinueOperation;
+use solx_mlir::ods::yul::ForOperation;
+use solx_mlir::ods::yul::IfOperation;
+use solx_mlir::ods::yul::SwitchOperation;
+use solx_mlir::ods::yul::YieldOperation;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitYul;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::statement::assembly::YulContext;
 use crate::ast::contract::function::statement::assembly::block::EmitRegionBody;
+use crate::ast::emit::emit_yul::EmitYul;
 
 yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, context, block| {
     match statement {
@@ -136,18 +142,12 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
                 cond, body, step
             );
 
-            let condition_region = condition_block
-                .parent_region()
-                .expect("yul.for cond block has a parent region");
-            let saved_region = context.region_pointer;
-            context.region_pointer = &*condition_region as *const _;
             let BlockAnd { value: condition_value, block: condition_end } = for_statement.condition().emit(context, condition_block);
             mlir_op_void!(
                 context.state,
                 &condition_end,
                 ConditionOperation.condition(condition_value).args(&[])
             );
-            context.region_pointer = saved_region;
 
             for_statement.body().emit_region_body(context, body_block);
             for_statement.iterator().emit_region_body(context, step_block);

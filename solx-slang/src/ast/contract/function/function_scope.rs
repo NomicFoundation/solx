@@ -12,7 +12,7 @@ use slang_solidity_v2::ast::NodeId;
 
 use solx_mlir::Context;
 
-use crate::ast::analysis::query::ModifierResolution;
+use crate::ast::analysis::query::modifier_resolution::ModifierResolution;
 use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::storage_layout::StorageSlot;
 
@@ -44,18 +44,15 @@ impl<'state, 'context> FunctionScope<'state, 'context> {
         }
     }
 
-    /// Resolves a modifier invocation to the body-bearing definition to emit, or `None` to skip it
-    /// (unresolvable, or a modifier with no body). Applies lexical resolution, qualified-name
-    /// fallback, then virtual override re-dispatch.
+    /// Resolves a modifier invocation to the body-bearing definition to emit, or `None` to skip a
+    /// non-modifier invocation or a bodyless modifier. Applies lexical resolution, then virtual
+    /// override re-dispatch.
     pub fn resolve_modifier_invocation(
         &self,
         invocation: &ModifierInvocation,
     ) -> Option<FunctionDefinition> {
-        let lexical = match invocation.name().resolve_to_definition() {
-            Some(Definition::Modifier(modifier)) => modifier,
-            _ => self
-                .contract
-                .and_then(|contract| contract.resolve_qualified_modifier(invocation))?,
+        let Some(Definition::Modifier(lexical)) = invocation.name().resolve_to_definition() else {
+            return None;
         };
         let definition = self
             .contract

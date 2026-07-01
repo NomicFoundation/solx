@@ -9,11 +9,10 @@ use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Context;
-
-use crate::ast::LocationPolicy;
-use crate::ast::Pointer;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
+use solx_mlir::LocationPolicy;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 
 /// A returnable member of a struct getter. A scalar member loads its value; a reference member is
 /// returned as its reinterpreted address, the two told apart by whether `stored_type` equals

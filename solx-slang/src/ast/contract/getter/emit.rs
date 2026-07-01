@@ -13,20 +13,20 @@ use slang_solidity_v2::ast::StateVariableMutability;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Function;
+use solx_mlir::LocationPolicy;
+use solx_mlir::Pointer;
 use solx_mlir::StateMutability;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::ReturnOperation;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitAs;
-use crate::ast::EmitExpression;
-use crate::ast::LocationPolicy;
-use crate::ast::Pointer;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::getter::keyed_signature::KeyedSignature;
 use crate::ast::contract::getter::member::Member;
 use crate::ast::contract::getter::signature::Signature;
+use crate::ast::emit::emit_as::EmitAs;
+use crate::ast::emit::emit_expression::EmitExpression;
 
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariableDefinition {
     type Output = ();
@@ -37,26 +37,20 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) {
-        let state_variable = self;
         let state = context.state;
 
-        let abi = match state_variable.compute_abi_entry() {
+        let abi = match self.compute_abi_entry() {
             Some(AbiEntry::Function(abi)) => abi,
             _ => return,
         };
+        let signature = self.compute_canonical_signature().expect("slang validated");
+        let selector = self.compute_selector().expect("slang validated");
 
-        if matches!(
-            state_variable.mutability(),
-            StateVariableMutability::Constant
-        ) {
-            let Some(initializer) = state_variable.value() else {
+        if matches!(self.mutability(), StateVariableMutability::Constant) {
+            let Some(initializer) = self.value() else {
                 return;
             };
-            let signature = state_variable
-                .compute_canonical_signature()
-                .expect("slang validated");
-            let selector = state_variable.compute_selector().expect("slang validated");
-            let slang_type = state_variable.get_type().expect("slang validated");
+            let slang_type = self.get_type().expect("slang validated");
             let element_type = AstType::resolve(&slang_type, LocationPolicy::ForceMemory, state);
             let entry = Function::new(signature, Vec::new(), vec![element_type]).define(
                 Some(selector),
@@ -78,26 +72,21 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             return;
         }
 
-        let Some(slot) = context.storage_layout.get(&state_variable.node_id()) else {
+        let Some(slot) = context.storage_layout.get(&self.node_id()) else {
             return;
         };
         let location = slot.location;
-        let declared_type = state_variable.get_type().expect("slang validated");
+        let declared_type = self.get_type().expect("slang validated");
 
         if !abi.inputs().is_empty() {
-            let signature = state_variable
-                .compute_canonical_signature()
-                .expect("slang validated");
-            let selector = state_variable.compute_selector().expect("slang validated");
-
             let Some(KeyedSignature {
                 input_types,
                 result_types,
                 members,
                 terminal_is_reference,
-            }) = state_variable.keyed_signature(location, state)
+            }) = self.keyed_signature(location, state)
             else {
-                return;
+                unreachable!("a keyed public accessor has a returnable keyed signature");
             };
             let container_type = AstType::resolve_state_variable(&declared_type, state);
             let result_type = result_types[0];
@@ -224,10 +213,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 let result_types: Vec<Type<'context>> =
                     members.iter().map(|member| member.result_type).collect();
                 let container_type = AstType::resolve_state_variable(&declared_type, state);
-                let signature = state_variable
-                    .compute_canonical_signature()
-                    .expect("slang validated");
-                let selector = state_variable.compute_selector().expect("slang validated");
                 let entry = Function::new(signature, Vec::new(), result_types).define(
                     Some(selector),
                     StateMutability::View,
@@ -248,10 +233,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             }
         }
 
-        let signature = state_variable
-            .compute_canonical_signature()
-            .expect("slang validated");
-        let selector = state_variable.compute_selector().expect("slang validated");
         let element_type = AstType::resolve_state_variable(&declared_type, state);
         let address_type = AstType::new(element_type)
             .address_type(location, state.mlir_context)

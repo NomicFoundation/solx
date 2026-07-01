@@ -33,9 +33,9 @@ pub struct SuperDispatch {
     /// Virtual dispatch: shadowed base function node id -> most-derived override
     /// node id of the same signature.
     pub virtual_redirect: HashMap<NodeId, NodeId>,
-    /// `super.f` accesses gathered by the visitor (working state).
+    /// Working state: the `super.f` accesses gathered by the visitor.
     super_calls: Vec<(NodeId, FunctionDefinition)>,
-    /// `Base.f` accesses gathered by the visitor (working state).
+    /// Working state: the `Base.f` accesses gathered by the visitor.
     base_calls: Vec<(NodeId, FunctionDefinition)>,
 }
 
@@ -122,11 +122,9 @@ impl SuperDispatch {
             let mut collector = Self::default();
             accept_function_definition(&function, &mut collector);
             for (access_id, lexical_target) in collector.super_calls {
-                let Some((target_index, target)) =
+                let (target_index, target) =
                     Self::resolve_super_target(&mro, from_index, &lexical_target)
-                else {
-                    continue;
-                };
+                        .expect("slang validated: a super call resolves to an implemented base");
                 Self::record_target(
                     &mut dispatch,
                     &mut shadowed_ids,
@@ -169,7 +167,7 @@ impl SuperDispatch {
     }
 
     /// Finds the `super` target for `lexical_target` at `from_index`: the first *implemented*
-    /// function it overrides in a strictly more-base contract (a bodyless declaration is skipped).
+    /// function it overrides in a strictly more-base contract; a bodyless declaration is skipped.
     fn resolve_super_target(
         mro: &[ContractDefinition],
         from_index: usize,
@@ -186,7 +184,7 @@ impl SuperDispatch {
     }
 
     /// Records one resolved super/base target into the dispatch maps,
-    /// scheduling the shadowed override (if any) for emission under its
+    /// scheduling any shadowed override for emission under its
     /// contract-qualified symbol.
     fn record_target(
         dispatch: &mut SuperDispatch,

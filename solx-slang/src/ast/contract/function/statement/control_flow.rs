@@ -6,13 +6,14 @@ use melior::ir::Block;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::RegionLike;
+use melior::ir::RegionRef;
 use slang_solidity_v2::ast::DoWhileStatement;
 use slang_solidity_v2::ast::ForStatement;
 use slang_solidity_v2::ast::ForStatementCondition;
 use slang_solidity_v2::ast::ForStatementInitialization;
 use slang_solidity_v2::ast::IfStatement;
-use slang_solidity_v2::ast::Statement;
 use slang_solidity_v2::ast::WhileStatement;
+use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::ConditionOperation;
 use solx_mlir::ods::sol::DoWhileOperation;
 use solx_mlir::ods::sol::ForOperation;
@@ -20,14 +21,43 @@ use solx_mlir::ods::sol::IfOperation;
 use solx_mlir::ods::sol::WhileOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitExpression;
-use crate::ast::EmitForEffect;
-use crate::ast::EmitStatement;
-use crate::ast::Value as AstValue;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::statement::StatementContext;
+use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_for_effect::EmitForEffect;
+use crate::ast::emit::emit_statement::EmitStatement;
+
+/// Terminates a Sol op region with `sol.yield`: at `end` if the body fell through to it, otherwise
+/// in a fresh dead block, since a body that diverged (return/break/continue) leaves the region with
+/// no fall-through block to carry the terminator.
+trait YieldTerminator<'context, 'block> {
+    fn terminate_with_yield(
+        &self,
+        context: &StatementContext<'_, 'context, 'block>,
+        end: Option<BlockRef<'context, 'block>>,
+    );
+}
+
+impl<'context, 'block> YieldTerminator<'context, 'block> for RegionRef<'context, '_> {
+    fn terminate_with_yield(
+        &self,
+        context: &StatementContext<'_, 'context, 'block>,
+        end: Option<BlockRef<'context, 'block>>,
+    ) {
+        match end {
+            Some(end) => {
+                mlir_op_void!(context.state, &end, YieldOperation.ins(&[]));
+            }
+            None => {
+                let dead_block = Block::new(&[]);
+                mlir_op_void!(context.state, &dead_block, YieldOperation.ins(&[]));
+                self.append_block(dead_block);
+            }
+        }
+    }
+}
 
 statement_emit!(IfStatement; |node, context, block| {
     let condition_expression = node.condition();
@@ -48,31 +78,14 @@ statement_emit!(IfStatement; |node, context, block| {
     let then_region = then_block.parent_region().expect("block belongs to a region");
     let else_region = else_block.parent_region().expect("block belongs to a region");
 
-    let saved_region = context.region_pointer;
-    context.region_pointer = &*then_region as *const _;
     let then_end = node.body().emit(context, then_block);
-    if let Some(then_end) = then_end {
-        mlir_op_void!(context.state, &then_end, YieldOperation.ins(&[]));
-    } else {
-        let dead_block = Block::new(&[]);
-        mlir_op_void!(context.state, &dead_block, YieldOperation.ins(&[]));
-        then_region.append_block(dead_block);
-    }
+    then_region.terminate_with_yield(context, then_end);
 
     if let Some(ref else_statement) = node.else_branch() {
-        context.region_pointer = &*else_region as *const _;
         let else_end = else_statement.emit(context, else_block);
-        if let Some(else_end) = else_end {
-            mlir_op_void!(context.state, &else_end, YieldOperation.ins(&[]));
-        } else {
-            let dead_block = Block::new(&[]);
-            mlir_op_void!(context.state, &dead_block, YieldOperation.ins(&[]));
-            else_region.append_block(dead_block);
-        }
-        context.region_pointer = saved_region;
+        else_region.terminate_with_yield(context, else_end);
     } else {
-        mlir_op_void!(context.state, &else_block, YieldOperation.ins(&[]));
-        context.region_pointer = saved_region;
+        else_region.terminate_with_yield(context, Some(else_block));
     }
 
     Some(block)
@@ -82,25 +95,13 @@ statement_emit!(ForStatement; |node, context, block| {
     context.environment.enter_scope();
 
     let block = match node.initialization() {
-        ForStatementInitialization::VariableDeclarationStatement(declaration) => {
-            let statement = Statement::VariableDeclarationStatement(declaration);
-            match statement.emit(context, block) {
-                Some(block) => block,
-                None => {
-                    context.environment.exit_scope();
-                    return None;
-                }
-            }
-        }
+        ForStatementInitialization::VariableDeclarationStatement(declaration) => declaration
+            .emit(context, block)
+            .expect("a variable declaration statement does not diverge"),
         ForStatementInitialization::ExpressionStatement(expression_statement) => {
-            let statement = Statement::ExpressionStatement(expression_statement);
-            match statement.emit(context, block) {
-                Some(block) => block,
-                None => {
-                    context.environment.exit_scope();
-                    return None;
-                }
-            }
+            expression_statement
+                .emit(context, block)
+                .expect("an expression statement does not diverge")
         }
         ForStatementInitialization::Semicolon(_) => block,
     };
@@ -108,7 +109,6 @@ statement_emit!(ForStatement; |node, context, block| {
     let (condition_block, body_block, step_block) =
         mlir_region_op!(context.state, &block, ForOperation; cond, body, step);
     let body_region = body_block.parent_region().expect("block belongs to a region");
-    let saved_region = context.region_pointer;
 
     match node.condition() {
         ForStatementCondition::ExpressionStatement(expression_statement) => {
@@ -138,11 +138,8 @@ statement_emit!(ForStatement; |node, context, block| {
         }
     }
 
-    context.region_pointer = &*body_region as *const _;
     let body_end = node.body().emit(context, body_block);
-    if let Some(body_end) = body_end {
-        mlir_op_void!(context.state, &body_end, YieldOperation.ins(&[]));
-    }
+    body_region.terminate_with_yield(context, body_end);
 
     if let Some(ref iterator_expression) = node.iterator() {
         let emitter = ExpressionContext::new(
@@ -158,7 +155,6 @@ statement_emit!(ForStatement; |node, context, block| {
         mlir_op_void!(context.state, &step_block, YieldOperation.ins(&[]));
     }
 
-    context.region_pointer = saved_region;
     context.environment.exit_scope();
     Some(block)
 });
@@ -167,7 +163,6 @@ statement_emit!(WhileStatement; |node, context, block| {
     let (condition_block, body_block) =
         mlir_region_op!(context.state, &block, WhileOperation; cond, body);
     let body_region = body_block.parent_region().expect("block belongs to a region");
-    let saved_region = context.region_pointer;
 
     let emitter = ExpressionContext::from(&*context);
     let BlockAnd {
@@ -183,13 +178,9 @@ statement_emit!(WhileStatement; |node, context, block| {
         ConditionOperation.condition(condition_boolean)
     );
 
-    context.region_pointer = &*body_region as *const _;
     let body_end = node.body().emit(context, body_block);
-    if let Some(body_end) = body_end {
-        mlir_op_void!(context.state, &body_end, YieldOperation.ins(&[]));
-    }
+    body_region.terminate_with_yield(context, body_end);
 
-    context.region_pointer = saved_region;
     Some(block)
 });
 
@@ -197,13 +188,9 @@ statement_emit!(DoWhileStatement; |node, context, block| {
     let (body_block, condition_block) =
         mlir_region_op!(context.state, &block, DoWhileOperation; body, cond);
     let body_region = body_block.parent_region().expect("block belongs to a region");
-    let saved_region = context.region_pointer;
 
-    context.region_pointer = &*body_region as *const _;
     let body_end = node.body().emit(context, body_block);
-    if let Some(body_end) = body_end {
-        mlir_op_void!(context.state, &body_end, YieldOperation.ins(&[]));
-    }
+    body_region.terminate_with_yield(context, body_end);
 
     let emitter = ExpressionContext::from(&*context);
     let BlockAnd {
@@ -219,6 +206,5 @@ statement_emit!(DoWhileStatement; |node, context, block| {
         ConditionOperation.condition(condition_boolean)
     );
 
-    context.region_pointer = saved_region;
     Some(block)
 });

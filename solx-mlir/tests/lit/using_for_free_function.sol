@@ -6,8 +6,8 @@
 
 // CHECK: sol.contract @C
 // CHECK-SOLX: sol.func @{{.*}}f{{.*}}(%{{.*}}: ui256) -> ui256
-// CHECK-SOLX:   sol.call @{{.*}}double{{.*}}(%{{.*}}) : (ui256) -> ui256
-// CHECK-SOLX: sol.func @{{.*}}double{{.*}}(%{{.*}}: ui256) -> ui256
+// CHECK-SOLX:   sol.call @{{.*}}double{{.*}}_[[D:[0-9]+]]"(%{{.*}}) : (ui256) -> ui256
+// CHECK-SOLX: sol.func @{{.*}}double{{.*}}_[[D]]"(%{{.*}}: ui256) -> ui256
 // CHECK-SOLX:   sol.cmul
 // CHECK-SOLC: sol.func @{{.*}}double{{.*}}(%{{.*}}: ui256) -> ui256
 // CHECK-SOLC:   sol.cmul

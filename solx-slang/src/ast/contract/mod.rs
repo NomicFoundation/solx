@@ -9,8 +9,6 @@ pub mod getter;
 pub mod object_scope;
 pub mod storage_layout;
 
-pub use self::object_scope::ObjectScope;
-
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -32,25 +30,26 @@ use slang_solidity_v2::ast::NodeId;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
+use solx_mlir::Type as AstType;
 use solx_mlir::ods::sol::ImmutableOperation;
 use solx_mlir::ods::sol::StateVarOperation;
 
 use self::contract_dispatch::ContractDispatch;
-use self::function::FunctionScope;
 use self::function::expression::ExpressionContext;
 use self::function::expression::arithmetic_mode::ArithmeticMode;
 use self::function::mlir_symbol_name::MlirSymbolName;
+use self::object_scope::ObjectScope;
 use self::storage_layout::StorageSlot;
-use crate::ast::EmitExpression;
-use crate::ast::EmitFunction;
-use crate::ast::EmitObject;
-use crate::ast::Type as AstType;
-use crate::ast::analysis::query::StorageLayout;
+use crate::ast::analysis::query::storage_layout::StorageLayout;
 use crate::ast::analysis::walk::free_function::FreeCallCollector;
 use crate::ast::analysis::walk::library::LibraryCallCollector;
 use crate::ast::analysis::walk::super_call::SuperDispatch;
-use crate::ast::emit::EmitConstructor;
-use crate::ast::emit::EmitModifierCalls;
+use crate::ast::contract::function::function_scope::FunctionScope;
+use crate::ast::emit::emit_constructor::EmitConstructor;
+use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_function::EmitFunction;
+use crate::ast::emit::emit_modifier_calls::EmitModifierCalls;
+use crate::ast::emit::emit_object::EmitObject;
 
 impl EmitObject for ContractDefinition {
     fn emit(&self, context: &mut Context, scope: &ObjectScope) {
@@ -241,7 +240,7 @@ impl EmitObject for ContractDefinition {
             let mut wrapped_functions = self.linearised_functions();
             // Collect modifiers from every constructor in the C3 chain, not just the most-derived
             // contract's own: `emit_constructor` emits a `sol.func` for each base constructor in the
-            // linearisation, and each may invoke (override-resolved) modifiers whose `sol.modifier`
+            // linearisation, and each may invoke override-resolved modifiers whose `sol.modifier`
             // definitions must be emitted here, or the base constructor's `sol.modifier_call_blk`
             // would reference a dangling symbol, a null MLIR value that crashes a later pass.
             for base in self.linearised_bases() {

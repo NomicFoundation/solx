@@ -14,7 +14,7 @@ use solx_mlir::LocationPolicy;
 use solx_mlir::Type;
 use solx_mlir::ods::sol::ContractOperation;
 
-use crate::ast::contract::ObjectScope;
+use crate::ast::contract::object_scope::ObjectScope;
 
 /// Emits a top-level definition as one deployable `sol.contract`, threading `&mut Context`.
 /// Implemented by `ContractDefinition` and `LibraryDefinition`, where a library omits the constructor and state steps.
@@ -43,7 +43,7 @@ pub trait EmitObject {
     }
 
     /// Resolves and registers each `(function, symbol)`'s MLIR signature so a call resolves before
-    /// any body is emitted (the caller supplies the symbol per site).
+    /// any body is emitted; the caller supplies the symbol per site.
     fn register_signatures(
         &self,
         context: &mut Context,

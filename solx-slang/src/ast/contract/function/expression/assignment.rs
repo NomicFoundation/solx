@@ -12,21 +12,21 @@ use slang_solidity_v2::ast::AssignmentExpression;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::TupleExpression;
+use solx_mlir::LocationPolicy;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::DeleteOperation;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitAs;
-use crate::ast::EmitExpression;
-use crate::ast::EmitPlace;
-use crate::ast::EmitValues;
-use crate::ast::LocationPolicy;
-use crate::ast::Place;
-use crate::ast::Pointer;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
 use crate::ast::contract::storage_layout::StorageSlot;
+use crate::ast::emit::emit_as::EmitAs;
+use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_place::EmitPlace;
+use crate::ast::emit::emit_values::EmitValues;
+use crate::ast::place::Place;
 
 /// Assignment target resolved from the Slang binder.
 pub enum AssignmentTarget<'context, 'block> {

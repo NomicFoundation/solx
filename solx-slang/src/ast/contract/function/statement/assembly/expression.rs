@@ -8,16 +8,16 @@ use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::YulExpression;
 use slang_solidity_v2::ast::YulPath;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_mlir::YulValue;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitExpression;
-use crate::ast::EmitYul;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::statement::assembly::YulContext;
+use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_yul::EmitYul;
 
 yul_emit!(YulExpression => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |expression, context, block| {
     match expression {
@@ -62,7 +62,8 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
 
     if path.len() == 2 {
         let parts: Vec<_> = path.iter().collect();
-        if let Some(Definition::StateVariable(state_variable)) = parts[0].resolve_to_definition() {
+        let head_definition = parts[0].resolve_to_definition();
+        if let Some(Definition::StateVariable(state_variable)) = &head_definition {
             let slot = context
                 .storage_layout
                 .get(&state_variable.node_id())
@@ -84,13 +85,13 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
         }
 
         if matches!(
-            parts[0].resolve_to_definition(),
+            head_definition,
             Some(Definition::Variable(_) | Definition::Parameter(_))
         ) {
             match parts[1].resolve_to_built_in() {
                 Some(BuiltIn::YulSlot) => {
-                    let declaration = parts[0]
-                        .resolve_to_definition()
+                    let declaration = head_definition
+                        .as_ref()
                         .expect("yul path head resolves to a declaration")
                         .node_id();
                     let slot = AstValue::from(context.environment.variable(declaration))

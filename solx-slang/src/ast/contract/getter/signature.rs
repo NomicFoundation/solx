@@ -8,9 +8,9 @@ use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Context;
+use solx_mlir::LocationPolicy;
+use solx_mlir::Type as AstType;
 
-use crate::ast::LocationPolicy;
-use crate::ast::Type as AstType;
 use crate::ast::contract::getter::keyed_signature::KeyedSignature;
 use crate::ast::contract::getter::member::Member;
 

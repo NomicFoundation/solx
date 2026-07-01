@@ -16,14 +16,14 @@ use slang_solidity_v2::ast::HexNumberExpression;
 use slang_solidity_v2::ast::StringExpression;
 use slang_solidity_v2::ast::ThisKeyword;
 use slang_solidity_v2::ast::TrueKeyword;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::ThisOperation;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitAs;
-use crate::ast::EmitExpression;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::emit::emit_as::EmitAs;
+use crate::ast::emit::emit_expression::EmitExpression;
 
 expression_emit!(DecimalNumberExpression, HexNumberExpression; |node, context, block| {
     let value = node
@@ -69,8 +69,8 @@ expression_emit!(ThisKeyword; |context, block| {
 
 expression_emit!(StringExpression; |node, context, block| {
     let bytes = node.value();
-    // The bytes are read only as bytes by `StringAttribute::new`, never as UTF-8 (a Solidity
-    // literal may be non-UTF-8, e.g. `"\xff"`), so the unchecked conversion is sound and a checked
+    // The bytes are read only as bytes by `StringAttribute::new`, never as UTF-8: a Solidity
+    // literal may be non-UTF-8, e.g. `"\xff"`, so the unchecked conversion is sound and a checked
     // `from_utf8` would wrongly reject valid input.
     let literal = unsafe { std::str::from_utf8_unchecked(&bytes) };
     let value = AstValue::string_literal(literal, context.state, &block);
@@ -88,6 +88,8 @@ impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Stri
     ) -> BlockAnd<'context, 'block, AstValue<'context, 'block>> {
         let state = context.state;
         if AstType::new(target_type).is_byte() {
+            // A string literal shorter than the target byte type is right-zero-padded, so an empty
+            // literal yields the zero byte; the `unwrap_or(0)` is that defined padding, not a fallback.
             let byte = self.value().first().copied().unwrap_or(0);
             let ui8 = Type::from(IntegerType::unsigned(
                 state.mlir_context,

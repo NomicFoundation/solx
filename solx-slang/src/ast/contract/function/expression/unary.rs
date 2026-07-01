@@ -9,11 +9,12 @@ use slang_solidity_v2::ast::PostfixExpressionOperator;
 use slang_solidity_v2::ast::PrefixExpression;
 use slang_solidity_v2::ast::PrefixExpressionOperator;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitExpression;
-use crate::ast::Type as AstType;
+use solx_mlir::Type as AstType;
+
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
+use crate::ast::emit::emit_expression::EmitExpression;
 
 expression_emit!(PostfixExpression; |node, context, block| {
     let operand = node.operand().unwrap_parentheses();

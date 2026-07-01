@@ -15,7 +15,6 @@ use std::collections::HashMap;
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Region;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::attribute::StringAttribute;
@@ -32,6 +31,9 @@ use slang_solidity_v2::ast::UncheckedBlock;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::BreakOperation;
 use solx_mlir::ods::sol::ContinueOperation;
 use solx_mlir::ods::sol::PlaceholderOperation;
@@ -39,19 +41,16 @@ use solx_mlir::ods::sol::ReturnOperation;
 use solx_mlir::ods::sol::RevertOperation;
 
 use self::expression_statement_kind::ExpressionStatementKind;
-use crate::ast::BlockAnd;
-use crate::ast::EmitAs;
-use crate::ast::EmitExpression;
-use crate::ast::EmitForEffect;
-use crate::ast::EmitStatement;
-use crate::ast::EmitValues;
-use crate::ast::Pointer;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::storage_layout::StorageSlot;
+use crate::ast::emit::emit_as::EmitAs;
+use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_for_effect::EmitForEffect;
+use crate::ast::emit::emit_statement::EmitStatement;
+use crate::ast::emit::emit_values::EmitValues;
 
 /// Emits Solidity statements to MLIR operations; threads `Some(block)` or `None` when control diverges.
 pub struct StatementContext<'state, 'context, 'block> {
@@ -61,9 +60,6 @@ pub struct StatementContext<'state, 'context, 'block> {
     pub environment: &'state mut Environment<'context, 'block>,
     /// Contract-local dispatch metadata.
     pub dispatch: &'state ContractDispatch,
-    /// The current region for new blocks. A raw pointer to switch between Sol op regions without
-    /// lifetime conflicts; re-pointed by direct assignment.
-    pub region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
     pub storage_layout: &'state HashMap<NodeId, StorageSlot>,
     /// The function's declared return types, for `emit_return` to cast to.
@@ -75,7 +71,29 @@ pub struct StatementContext<'state, 'context, 'block> {
     pub arithmetic_mode: ArithmeticMode,
 }
 
-/// Builds an [`ExpressionContext`] from a statement context (propagating its arithmetic mode).
+impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
+    /// Creates a new statement emitter.
+    pub fn new(
+        state: &'state Context<'context>,
+        environment: &'state mut Environment<'context, 'block>,
+        dispatch: &'state ContractDispatch,
+        storage_layout: &'state HashMap<NodeId, StorageSlot>,
+        return_types: &'state [Type<'context>],
+        return_slots: &'state [Option<Value<'context, 'block>>],
+    ) -> Self {
+        Self {
+            state,
+            environment,
+            dispatch,
+            storage_layout,
+            return_types,
+            return_slots,
+            arithmetic_mode: ArithmeticMode::Checked,
+        }
+    }
+}
+
+/// Builds an [`ExpressionContext`] from a statement context, propagating its arithmetic mode.
 impl<'state, 'context, 'block> From<&'state StatementContext<'_, 'context, 'block>>
     for ExpressionContext<'state, 'context, 'block>
 {
@@ -87,30 +105,6 @@ impl<'state, 'context, 'block> From<&'state StatementContext<'_, 'context, 'bloc
             statement.storage_layout,
             statement.arithmetic_mode,
         )
-    }
-}
-
-impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
-    /// Creates a new statement emitter.
-    pub fn new(
-        state: &'state Context<'context>,
-        environment: &'state mut Environment<'context, 'block>,
-        dispatch: &'state ContractDispatch,
-        region: &Region<'context>,
-        storage_layout: &'state HashMap<NodeId, StorageSlot>,
-        return_types: &'state [Type<'context>],
-        return_slots: &'state [Option<Value<'context, 'block>>],
-    ) -> Self {
-        Self {
-            state,
-            environment,
-            dispatch,
-            region_pointer: region as *const Region<'context>,
-            storage_layout,
-            return_types,
-            return_slots,
-            arithmetic_mode: ArithmeticMode::Checked,
-        }
     }
 }
 

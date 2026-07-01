@@ -26,6 +26,12 @@
 // CHECK: sol.func @{{.*infinite_for.*}}
 // CHECK:     sol.constant true
 
+// CHECK: sol.func @{{.*loop_diverge.*}}
+// CHECK:   } body {
+// CHECK:     sol.return
+// CHECK-NEXT: no predecessors
+// CHECK-NEXT: sol.yield
+
 // CHECK: sol.func @{{.*while_loop.*}}
 // CHECK:   sol.while {
 // CHECK:     sol.condition %{{.*}}
@@ -79,6 +85,13 @@ contract C {
                 return i;
             }
         }
+    }
+
+    function loop_diverge(uint256 n) public pure returns (uint256) {
+        for (uint256 i = 0; i < n; i++) {
+            return i;
+        }
+        return 0;
     }
 
     function while_loop(uint256 n) public pure returns (uint256) {

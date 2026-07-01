@@ -92,28 +92,6 @@ impl OperatorBindings {
         Self { map, functions }
     }
 
-    /// Maps the typed [`UsingOperator`] token to a [`UserDefinedOperator`]: with `arity == 1`, `Minus` splits into `Neg` versus `Sub`.
-    pub fn map_using_operator(operator: &UsingOperator, arity: usize) -> UserDefinedOperator {
-        match operator {
-            UsingOperator::Plus(_) => UserDefinedOperator::Add,
-            UsingOperator::Minus(_) if arity == 1 => UserDefinedOperator::Neg,
-            UsingOperator::Minus(_) => UserDefinedOperator::Sub,
-            UsingOperator::Asterisk(_) => UserDefinedOperator::Mul,
-            UsingOperator::Slash(_) => UserDefinedOperator::Div,
-            UsingOperator::Percent(_) => UserDefinedOperator::Rem,
-            UsingOperator::Ampersand(_) => UserDefinedOperator::BitAnd,
-            UsingOperator::Bar(_) => UserDefinedOperator::BitOr,
-            UsingOperator::Caret(_) => UserDefinedOperator::BitXor,
-            UsingOperator::EqualEqual(_) => UserDefinedOperator::Eq,
-            UsingOperator::BangEqual(_) => UserDefinedOperator::Ne,
-            UsingOperator::LessThan(_) => UserDefinedOperator::Lt,
-            UsingOperator::LessThanEqual(_) => UserDefinedOperator::Le,
-            UsingOperator::GreaterThan(_) => UserDefinedOperator::Gt,
-            UsingOperator::GreaterThanEqual(_) => UserDefinedOperator::Ge,
-            UsingOperator::Tilde(_) => UserDefinedOperator::BitNot,
-        }
-    }
-
     /// The user-defined binary operator for an [`Operator`], when one exists.
     pub fn binary_operator(operator: Operator) -> Option<UserDefinedOperator> {
         Some(match operator {
@@ -137,5 +115,27 @@ impl OperatorBindings {
             Operator::BitwiseNot => UserDefinedOperator::BitNot,
             _ => return None,
         })
+    }
+
+    /// Maps the typed [`UsingOperator`] token to a [`UserDefinedOperator`]: with `arity == 1`, `Minus` splits into `Neg` versus `Sub`.
+    fn map_using_operator(operator: &UsingOperator, arity: usize) -> UserDefinedOperator {
+        match operator {
+            UsingOperator::Plus(_) => UserDefinedOperator::Add,
+            UsingOperator::Minus(_) if arity == 1 => UserDefinedOperator::Neg,
+            UsingOperator::Minus(_) => UserDefinedOperator::Sub,
+            UsingOperator::Asterisk(_) => UserDefinedOperator::Mul,
+            UsingOperator::Slash(_) => UserDefinedOperator::Div,
+            UsingOperator::Percent(_) => UserDefinedOperator::Rem,
+            UsingOperator::Ampersand(_) => UserDefinedOperator::BitAnd,
+            UsingOperator::Bar(_) => UserDefinedOperator::BitOr,
+            UsingOperator::Caret(_) => UserDefinedOperator::BitXor,
+            UsingOperator::EqualEqual(_) => UserDefinedOperator::Eq,
+            UsingOperator::BangEqual(_) => UserDefinedOperator::Ne,
+            UsingOperator::LessThan(_) => UserDefinedOperator::Lt,
+            UsingOperator::LessThanEqual(_) => UserDefinedOperator::Le,
+            UsingOperator::GreaterThan(_) => UserDefinedOperator::Gt,
+            UsingOperator::GreaterThanEqual(_) => UserDefinedOperator::Ge,
+            UsingOperator::Tilde(_) => UserDefinedOperator::BitNot,
+        }
     }
 }

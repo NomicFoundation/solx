@@ -1,8 +1,8 @@
 //!
 //! Collection of free functions referenced by a contract.
 //!
-//! Free functions are not part of any contract's linearised set, so this walks a contract's functions
-//! (transitively) and returns every free function it calls by name, for the emitter to register.
+//! Free functions are not in any contract's linearised set, so this walks a contract's functions and
+//! returns every free function referenced, called or used as a value, for the emitter to register.
 //!
 
 use std::collections::HashSet;
@@ -10,7 +10,6 @@ use std::collections::HashSet;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
-use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::visitor::Visitor;
@@ -18,8 +17,7 @@ use slang_solidity_v2::ast::visitor::accept_function_definition;
 
 use crate::ast::analysis::walk::reachability::ReachabilityWalk;
 
-/// Visitor that records every `f(...)` call whose callee is a plain identifier
-/// resolving to one of the source unit's free functions.
+/// Records every bare-identifier reference to a source-unit free function, called or used as a value.
 pub struct FreeCallCollector {
     /// Node ids of the source unit's free functions.
     free_ids: HashSet<NodeId>,
@@ -59,8 +57,8 @@ impl FreeCallCollector {
 }
 
 impl Visitor for FreeCallCollector {
-    fn enter_function_call_expression(&mut self, node: &FunctionCallExpression) -> bool {
-        if let Expression::Identifier(identifier) = node.operand()
+    fn enter_expression(&mut self, node: &Expression) -> bool {
+        if let Expression::Identifier(identifier) = node
             && let Some(Definition::Function(function)) = identifier.resolve_to_definition()
             && self.free_ids.contains(&function.node_id())
         {

@@ -9,16 +9,17 @@ use slang_solidity_v2::ast::SingleTypedDeclaration;
 use slang_solidity_v2::ast::VariableDeclarationStatement;
 use slang_solidity_v2::ast::VariableDeclarationTarget;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitAs;
-use crate::ast::EmitStatement;
-use crate::ast::EmitValues;
-use crate::ast::LocationPolicy;
-use crate::ast::Pointer;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
+use solx_mlir::LocationPolicy;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
+
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
+use crate::ast::emit::emit_as::EmitAs;
+use crate::ast::emit::emit_statement::EmitStatement;
+use crate::ast::emit::emit_values::EmitValues;
 
 statement_emit!(VariableDeclarationStatement; |node, context, block| {
     match node.target() {

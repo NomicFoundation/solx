@@ -11,7 +11,10 @@ use melior::ir::operation::Operation;
 
 use solx_mlir::CmpPredicate;
 use solx_mlir::Context;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
 use solx_mlir::UserDefinedOperator;
+use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::AddOperation;
 use solx_mlir::ods::sol::AndOperation;
 use solx_mlir::ods::sol::CAddOperation;
@@ -36,16 +39,13 @@ use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitExpression;
-use crate::ast::EmitPlace;
-use crate::ast::Place;
-use crate::ast::Pointer;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
+use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_place::EmitPlace;
 use crate::ast::operator_binding::OperatorBindings;
+use crate::ast::place::Place;
 
 /// Solidity operator, bridged from slang's typed per-expression operator enums.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -298,10 +298,7 @@ impl Operator {
                 let BlockAnd { value, block } = operand.emit(context, block);
                 let zero = AstValue::constant(0, value.r#type(), context.state, &block);
                 let cmp = value.compare(zero, CmpPredicate::Eq, context.state, &block);
-                let result_type = target_type.unwrap_or(
-                    AstType::unsigned(context.state.mlir_context, solx_utils::BIT_LENGTH_FIELD)
-                        .into_mlir(),
-                );
+                let result_type = target_type.expect("slang validated");
                 let result = cmp.cast(AstType::new(result_type), context.state, &block);
                 (result, block)
             }

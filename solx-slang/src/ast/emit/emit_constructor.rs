@@ -12,8 +12,8 @@ use slang_solidity_v2::ast::NodeId;
 
 use solx_mlir::Environment;
 
-use crate::ast::analysis::query::BaseConstructorArguments;
-use crate::ast::contract::function::FunctionScope;
+use crate::ast::analysis::query::base_constructor_chain::BaseConstructorArguments;
+use crate::ast::contract::function::function_scope::FunctionScope;
 
 /// Synthesises a contract's deploy-time construction as a chain of `sol.func`s: the most-derived
 /// `constructor()` (`kind = #Constructor`) and one plain internal `sol.func` per other constructor in
@@ -55,7 +55,7 @@ pub trait EmitConstructor {
 
     /// Emits every state-variable inline initializer in the C3-linearised hierarchy, in order: a
     /// derived contract runs its bases' initializers and side effects.
-    fn emit_state_var_initializers<'state, 'context, 'block>(
+    fn emit_state_variable_initializers<'state, 'context, 'block>(
         &self,
         scope: &FunctionScope<'state, 'context>,
         block: BlockRef<'context, 'block>,

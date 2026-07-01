@@ -15,6 +15,10 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
+use solx_mlir::LocationPolicy;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::BareCallOperation;
 use solx_mlir::ods::sol::BareDelegateCallOperation;
 use solx_mlir::ods::sol::BareStaticCallOperation;
@@ -25,14 +29,10 @@ use solx_mlir::ods::sol::PushStringOperation;
 use solx_mlir::ods::sol::SendOperation;
 use solx_mlir::ods::sol::TransferOperation;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitAs;
-use crate::ast::EmitExpression;
-use crate::ast::LocationPolicy;
-use crate::ast::Pointer;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::emit::emit_as::EmitAs;
+use crate::ast::emit::emit_expression::EmitExpression;
 
 /// A Solidity built-in called through member access.
 pub struct MemberBuiltinCall {
@@ -230,41 +230,85 @@ impl MemberBuiltinCall {
                 }
             }
             member_built_in => {
-                if matches!(member_built_in, BuiltIn::ArrayPop | BuiltIn::ArrayPush)
-                    && matches!(&self.arguments,
-                        ArgumentsDeclaration::NamedArguments(named) if named.iter().next().is_none())
-                {
-                    let base_slang_type =
-                        self.access.operand().get_type().expect("slang validated");
+                if matches!(member_built_in, BuiltIn::ArrayPop | BuiltIn::ArrayPush) {
+                    let value_argument = match &self.arguments {
+                        ArgumentsDeclaration::PositionalArguments(positional) => {
+                            positional.iter().next()
+                        }
+                        ArgumentsDeclaration::NamedArguments(named)
+                            if named.iter().next().is_none() =>
+                        {
+                            None
+                        }
+                        _ => unreachable!("array push/pop takes at most one positional argument"),
+                    };
+                    let base = self.access.operand();
+                    let base_slang_type = base.get_type().expect("slang validated");
+                    if let BuiltIn::ArrayPop = member_built_in {
+                        let BlockAnd {
+                            value: array_value,
+                            block,
+                        } = base.emit(context, block);
+                        mlir_op_void!(context.state, &block, PopOperation.inp(array_value));
+                        return BlockAnd {
+                            value: vec![],
+                            block,
+                        };
+                    }
+                    if let (SlangType::Bytes(_), Some(value_argument)) =
+                        (&base_slang_type, &value_argument)
+                    {
+                        let BlockAnd {
+                            value: bytes_reference,
+                            block,
+                        } = base.emit(context, block);
+                        let byte_target =
+                            AstType::fixed_bytes(context.state.mlir_context, 1).into_mlir();
+                        let BlockAnd { value, block } =
+                            value_argument.emit_as(byte_target, context, block);
+                        let state = context.state;
+                        let byte_value = value.into_mlir();
+                        mlir_op_void!(
+                            state,
+                            &block,
+                            PushStringOperation.addr(bytes_reference).value(byte_value)
+                        );
+                        return BlockAnd {
+                            value: vec![],
+                            block,
+                        };
+                    }
                     let BlockAnd {
                         value: array_value,
                         block,
-                    } = self.access.operand().emit(context, block);
-                    let state = context.state;
-                    let result = match member_built_in {
-                        BuiltIn::ArrayPop => {
-                            mlir_op_void!(state, &block, PopOperation.inp(array_value));
-                            vec![]
-                        }
-                        _ => {
-                            let (new_slot, element_type) =
-                                array_value.push_slot(&base_slang_type, state, &block);
-                            vec![
-                                Pointer::new(new_slot.into_mlir())
-                                    .load(AstType::new(element_type), state, &block)
-                                    .into_mlir(),
-                            ]
-                        }
+                    } = base.emit(context, block);
+                    let (new_slot, element_type) =
+                        array_value.push_slot(&base_slang_type, context.state, &block);
+                    let new_slot = new_slot.into_mlir();
+                    let Some(value_argument) = value_argument else {
+                        let loaded = Pointer::new(new_slot)
+                            .load(AstType::new(element_type), context.state, &block)
+                            .into_mlir();
+                        return BlockAnd {
+                            value: vec![loaded],
+                            block,
+                        };
                     };
+                    if AstType::new(element_type).is_reference() {
+                        let BlockAnd { value, block } = value_argument.emit(context, block);
+                        Pointer::new(new_slot).copy_from(value, context.state, &block);
+                    } else {
+                        let BlockAnd { value, block } =
+                            value_argument.emit_as(element_type, context, block);
+                        Pointer::new(new_slot).store(value, context.state, &block);
+                    }
                     return BlockAnd {
-                        value: result,
+                        value: vec![],
                         block,
                     };
                 }
                 let ArgumentsDeclaration::PositionalArguments(positional) = &self.arguments else {
-                    unreachable!(
-                        "named arguments on a member built-in are invalid (other than empty `pop`/`push` braces)"
-                    );
+                    unreachable!("named arguments on a member built-in are invalid");
                 };
                 let (value, block) = match member_built_in {
                     BuiltIn::AddressSend => {
@@ -488,67 +532,6 @@ impl MemberBuiltinCall {
                         )
                         .into_mlir();
                         (Some(result), current)
-                    }
-                    BuiltIn::ArrayPop => {
-                        let BlockAnd {
-                            value: array_value,
-                            block,
-                        } = self.access.operand().emit(context, block);
-                        mlir_op_void!(context.state, &block, PopOperation.inp(array_value));
-                        (None, block)
-                    }
-                    BuiltIn::ArrayPush => {
-                        let base = self.access.operand();
-                        let base_slang_type = base.get_type().expect("slang validated");
-                        let value_argument = positional.iter().next();
-                        if let (SlangType::Bytes(_), Some(value_argument)) =
-                            (&base_slang_type, &value_argument)
-                        {
-                            let BlockAnd {
-                                value: bytes_reference,
-                                block,
-                            } = base.emit(context, block);
-                            let byte_target =
-                                AstType::fixed_bytes(context.state.mlir_context, 1).into_mlir();
-                            let BlockAnd { value, block } =
-                                value_argument.emit_as(byte_target, context, block);
-                            let state = context.state;
-                            let byte_value = value.into_mlir();
-                            mlir_op_void!(
-                                state,
-                                &block,
-                                PushStringOperation.addr(bytes_reference).value(byte_value)
-                            );
-                            (None, block)
-                        } else {
-                            let BlockAnd {
-                                value: array_value,
-                                block,
-                            } = base.emit(context, block);
-                            let (new_slot, element_type) =
-                                array_value.push_slot(&base_slang_type, context.state, &block);
-                            let new_slot = new_slot.into_mlir();
-                            let Some(value_argument) = value_argument else {
-                                let state = context.state;
-                                let loaded = Pointer::new(new_slot)
-                                    .load(AstType::new(element_type), state, &block)
-                                    .into_mlir();
-                                return BlockAnd {
-                                    value: vec![loaded],
-                                    block,
-                                };
-                            };
-                            if AstType::new(element_type).is_reference() {
-                                let BlockAnd { value, block } = value_argument.emit(context, block);
-                                Pointer::new(new_slot).copy_from(value, context.state, &block);
-                                (None, block)
-                            } else {
-                                let BlockAnd { value, block } =
-                                    value_argument.emit_as(element_type, context, block);
-                                Pointer::new(new_slot).store(value, context.state, &block);
-                                (None, block)
-                            }
-                        }
                     }
                     BuiltIn::StringConcat | BuiltIn::BytesConcat => {
                         let BlockAnd {

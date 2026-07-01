@@ -6,15 +6,15 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::Expression;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::IfOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitExpression;
-use crate::ast::Pointer;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::emit::emit_expression::EmitExpression;
 
 /// A short-circuit logical operator (`&&` / `||`).
 pub enum LogicalOperator {
@@ -34,22 +34,22 @@ impl LogicalOperator {
     /// only in the branch the LHS does NOT short-circuit; the other branch keeps the short-circuit value.
     pub fn emit<'context, 'block>(
         self,
-        emitter: &ExpressionContext<'_, 'context, 'block>,
+        context: &ExpressionContext<'_, 'context, 'block>,
         left: &Expression,
         right: &Expression,
         block: BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let short_circuit_value = self.short_circuit_value();
-        let BlockAnd { value: lhs, block } = left.emit(emitter, block);
-        let lhs_bool = lhs.is_nonzero(emitter.state, &block).into_mlir();
+        let BlockAnd { value: lhs, block } = left.emit(context, block);
+        let lhs_bool = lhs.is_nonzero(context.state, &block).into_mlir();
 
-        let i1_type = AstType::signless(emitter.state.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN);
-        let result_ptr = Pointer::stack(i1_type, emitter.state, &block);
-        let default_value = AstValue::boolean(short_circuit_value, emitter.state, &block);
-        result_ptr.store(default_value, emitter.state, &block);
+        let i1_type = AstType::signless(context.state.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN);
+        let result_ptr = Pointer::stack(i1_type, context.state, &block);
+        let default_value = AstValue::boolean(short_circuit_value, context.state, &block);
+        result_ptr.store(default_value, context.state, &block);
 
         let (then_block, else_block) = mlir_region_op!(
-            emitter.state, &block,
+            context.state, &block,
             IfOperation.cond(lhs_bool); then_region, else_region
         );
         let (rhs_block, short_circuit_block) = if short_circuit_value {
@@ -61,13 +61,13 @@ impl LogicalOperator {
         let BlockAnd {
             value: rhs,
             block: rhs_end,
-        } = right.emit(emitter, rhs_block);
-        let rhs_bool = rhs.is_nonzero(emitter.state, &rhs_end);
-        result_ptr.store(rhs_bool, emitter.state, &rhs_end);
-        mlir_op_void!(emitter.state, &rhs_end, YieldOperation.ins(&[]));
-        mlir_op_void!(emitter.state, &short_circuit_block, YieldOperation.ins(&[]));
+        } = right.emit(context, rhs_block);
+        let rhs_bool = rhs.is_nonzero(context.state, &rhs_end);
+        result_ptr.store(rhs_bool, context.state, &rhs_end);
+        mlir_op_void!(context.state, &rhs_end, YieldOperation.ins(&[]));
+        mlir_op_void!(context.state, &short_circuit_block, YieldOperation.ins(&[]));
 
-        let result = result_ptr.load(i1_type, emitter.state, &block).into_mlir();
+        let result = result_ptr.load(i1_type, context.state, &block).into_mlir();
         (result, block)
     }
 }

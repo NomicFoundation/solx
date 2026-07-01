@@ -4,15 +4,13 @@
 //!
 
 use melior::ir::BlockRef;
-use melior::ir::Type;
-use melior::ir::Value;
 
-use crate::ast::contract::function::FunctionScope;
+use crate::ast::contract::function::function_scope::FunctionScope;
 
 /// Emits a function definition as a `sol.func`. A contract or library threads the
 /// emission via the shared [`FunctionScope`]; the node carries the projection.
 pub trait EmitFunction {
-    /// Emits a `sol.func` under the function's canonical (dispatchable) symbol.
+    /// Emits a `sol.func` under the function's canonical, dispatchable symbol.
     fn emit<'state, 'context>(
         &self,
         scope: &FunctionScope<'state, 'context>,
@@ -20,7 +18,7 @@ pub trait EmitFunction {
     );
 
     /// Emits the function under an explicit `symbol` with no public selector:
-    /// for free and library functions, resolved by node id, never dispatched.
+    /// for free and shadowed-base functions, never dispatched.
     fn emit_with_symbol<'state, 'context>(
         &self,
         scope: &FunctionScope<'state, 'context>,
@@ -37,15 +35,5 @@ pub trait EmitFunction {
         scope: &FunctionScope<'state, 'context>,
         symbol_override: Option<&str>,
         contract_body: &BlockRef<'context, '_>,
-    );
-
-    /// Emits a default `sol.return` when the block lacks a terminator, loading
-    /// named-return slots and materialising a typed default for the rest.
-    fn emit_default_return<'state, 'context, 'block>(
-        &self,
-        scope: &FunctionScope<'state, 'context>,
-        result_types: &[Type<'context>],
-        return_slots: &[Option<Value<'context, 'block>>],
-        block: &BlockRef<'context, 'block>,
     );
 }

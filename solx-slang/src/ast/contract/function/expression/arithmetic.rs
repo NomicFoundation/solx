@@ -14,11 +14,12 @@ use slang_solidity_v2::ast::MultiplicativeExpressionOperator;
 use slang_solidity_v2::ast::ShiftExpression;
 use slang_solidity_v2::ast::ShiftExpressionOperator;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitExpression;
-use crate::ast::Type as AstType;
+use solx_mlir::Type as AstType;
+
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
+use crate::ast::emit::emit_expression::EmitExpression;
 
 impl From<&AdditiveExpression> for Operator {
     fn from(node: &AdditiveExpression) -> Self {

@@ -6,17 +6,18 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use num_bigint::BigInt;
 use slang_solidity_v2::ast::BuiltIn;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::YulExpression;
 use slang_solidity_v2::ast::YulFunctionCallExpression;
 use slang_solidity_v2::ast::YulStatement;
+use solx_mlir::Type as AstType;
 use solx_mlir::YulCmpPredicate;
 use solx_mlir::YulValue;
 use solx_mlir::ods::yul::*;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitYul;
-use crate::ast::Type as AstType;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::statement::assembly::YulContext;
+use crate::ast::emit::emit_yul::EmitYul;
 
 yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'context, 'block>>>; |call, context, block| {
     let YulExpression::YulPath(path) = call.operand() else {
@@ -37,15 +38,18 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
         .collect();
 
     let Some(opcode) = callee.resolve_to_built_in() else {
-        let name = callee.name();
-        let depth = context.yul_inline_depth.entry(name.clone()).or_insert(0);
+        let function_id = callee
+            .resolve_to_definition()
+            .expect("yul function call resolves to a definition")
+            .node_id();
+        let depth = context.yul_inline_depth.entry(function_id).or_insert(0);
         if *depth >= 1 {
-            unimplemented!("recursive yul function `{name}` cannot be inlined");
+            unimplemented!("recursive yul function `{}` cannot be inlined", callee.name());
         }
         *depth += 1;
         let definition = context
             .yul_functions
-            .get(&name)
+            .get(&function_id)
             .cloned()
             .expect("yul function not registered");
         let parameters: Vec<_> = definition.parameters().iter().collect();
@@ -67,13 +71,16 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
             context.environment.define_variable(return_identifier.node_id(), slot);
         }
 
-        let mut hoisted: Vec<String> = Vec::new();
+        let mut hoisted: Vec<NodeId> = Vec::new();
         for inner in definition.body().statements().iter() {
             if let YulStatement::YulFunctionDefinition(nested) = &inner {
-                let nested_name = nested.name().name();
-                if !context.yul_functions.contains_key(&nested_name) {
-                    context.yul_functions.insert(nested_name.clone(), nested.clone());
-                    hoisted.push(nested_name);
+                let nested_id = nested.node_id();
+                if context
+                    .yul_functions
+                    .insert(nested_id, nested.clone())
+                    .is_none()
+                {
+                    hoisted.push(nested_id);
                 }
             }
         }
@@ -89,8 +96,8 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
                 None => break,
             }
         }
-        for nested_name in hoisted.iter() {
-            context.yul_functions.remove(nested_name);
+        for nested_id in hoisted.iter() {
+            context.yul_functions.remove(nested_id);
         }
 
         let mut return_values = Vec::with_capacity(returns.len());
@@ -101,7 +108,7 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
         context.environment.exit_scope();
         *context
             .yul_inline_depth
-            .get_mut(&name)
+            .get_mut(&function_id)
             .expect("inline depth recorded on entry") -= 1;
         return BlockAnd { value: return_values, block: current };
     };

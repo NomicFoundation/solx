@@ -3,19 +3,17 @@
 //!
 
 use melior::ir::BlockRef;
-use melior::ir::Type as MlirType;
-use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::EqualityExpression;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::InequalityExpression;
 use solx_mlir::CmpPredicate;
+use solx_mlir::Type as AstType;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitAs;
-use crate::ast::EmitExpression;
-use crate::ast::Type as AstType;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
+use crate::ast::emit::emit_as::EmitAs;
+use crate::ast::emit::emit_expression::EmitExpression;
 
 expression_emit!(EqualityExpression, InequalityExpression; |node, context, block| {
     let left = node.left_operand();
@@ -58,10 +56,10 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         .max()
     {
         AstType::fixed_bytes(state.mlir_context, width)
-    } else if lhs_type.is_signed() || rhs_type.is_signed() {
-        AstType::new(MlirType::from(IntegerType::signed(state.mlir_context, 256)))
+    } else if lhs_type.integer_bit_width() >= rhs_type.integer_bit_width() {
+        lhs_type
     } else {
-        AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD)
+        rhs_type
     };
     let comparison = lhs
         .cast(common, state, &block)

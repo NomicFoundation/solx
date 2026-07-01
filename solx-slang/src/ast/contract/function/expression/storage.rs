@@ -9,11 +9,11 @@ use melior::ir::Value;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 
 use solx_mlir::Context;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::LoadImmutableOperation;
 
-use crate::ast::Pointer;
-use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
 use crate::ast::contract::storage_layout::StorageSlot;
 
 impl StorageSlot {

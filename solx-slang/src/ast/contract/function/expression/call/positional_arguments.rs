@@ -9,10 +9,11 @@ use melior::ir::Value;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::PositionalArguments;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitAs;
-use crate::ast::EmitExpression;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
+use crate::ast::emit::emit_as::EmitAs;
+use crate::ast::emit::emit_expression::EmitExpression;
 
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for PositionalArguments {
     type Output = BlockAnd<'context, 'block, Vec<Value<'context, 'block>>>;
@@ -23,17 +24,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for PositionalAr
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> Self::Output {
-        let mut values = Vec::with_capacity(self.len());
-        let mut block = block;
-        for argument in self.iter() {
-            let BlockAnd { value, block: next } = argument.emit(context, block);
-            values.push(value.into_mlir());
-            block = next;
-        }
-        BlockAnd {
-            value: values,
-            block,
-        }
+        CallArguments::ordered(self.iter().collect()).emit(context, block)
     }
 }
 

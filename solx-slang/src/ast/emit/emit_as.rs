@@ -4,7 +4,7 @@
 
 use melior::ir::BlockRef;
 
-use crate::ast::BlockAnd;
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 /// Emits a node coerced to an expected MLIR type: a node's argument or initialiser coercion.
