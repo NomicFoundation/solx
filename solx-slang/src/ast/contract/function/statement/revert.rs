@@ -3,8 +3,11 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
+use melior::ir::Attribute;
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
+use melior::ir::attribute::StringAttribute;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
@@ -12,6 +15,8 @@ use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::NamedArguments;
 use slang_solidity_v2::ast::Parameters;
 use slang_solidity_v2::ast::RevertStatement;
+
+use solx_mlir::ods::sol::RevertOperation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
@@ -51,7 +56,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let error = match revert.error().resolve_to_definition() {
             None => {
-                self.state.builder.emit_sol_revert("", &[], false, &block);
+                self.append_sol_revert("", &[], false, &block);
                 return Ok(Some(block));
             }
             Some(Definition::Error(error)) => error,
@@ -79,17 +84,15 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     .get_type()
                     .expect("parameter type resolved by semantic analysis"),
                 None,
-                &self.state.builder,
+                self.state,
             );
-            *value = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(
+            *value = TypeConversion::from_target_type(parameter_type, self.state).emit(
                 *value,
-                &self.state.builder,
+                self.state,
                 &evaluated.block,
             );
         }
-        self.state
-            .builder
-            .emit_sol_revert(&signature, &evaluated.values, true, &evaluated.block);
+        self.append_sol_revert(&signature, &evaluated.values, true, &evaluated.block);
         Ok(Some(evaluated.block))
     }
 
@@ -136,10 +139,27 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             Some(_) => anyhow::bail!("revert message must be a string literal"),
         };
-        self.state
-            .builder
-            .emit_sol_revert(&signature, &[], false, &block);
+        self.append_sol_revert(&signature, &[], false, &block);
         Ok(Some(block))
+    }
+
+    /// Appends a `sol.revert` carrying `signature` and the evaluated `args`; `is_custom_error` marks
+    /// a custom-error revert with the `call` unit attribute.
+    fn append_sol_revert(
+        &self,
+        signature: &str,
+        args: &[Value<'context, 'block>],
+        is_custom_error: bool,
+        block: &BlockRef<'context, 'block>,
+    ) {
+        let mut operation_builder =
+            RevertOperation::builder(self.state.mlir_context, self.state.location())
+                .signature(StringAttribute::new(self.state.mlir_context, signature))
+                .args(args);
+        if is_custom_error {
+            operation_builder = operation_builder.call(Attribute::unit(self.state.mlir_context));
+        }
+        block.append_operation(operation_builder.build().into());
     }
 
     /// Orders named revert arguments by the custom error's parameter declaration order.

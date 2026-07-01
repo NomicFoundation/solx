@@ -13,7 +13,17 @@ use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::NodeId;
 
+use melior::ir::Attribute;
+use melior::ir::BlockLike;
+use melior::ir::attribute::IntegerAttribute;
+use melior::ir::attribute::StringAttribute;
+use melior::ir::attribute::TypeAttribute;
+use melior::ir::r#type::IntegerType;
+
 use solx_mlir::Context;
+use solx_mlir::Type as AstType;
+use solx_mlir::ods::sol::ContractOperation;
+use solx_mlir::ods::sol::StateVarOperation;
 
 use self::function::FunctionEmitter;
 use self::function::expression::call::type_conversion::TypeConversion;
@@ -62,19 +72,20 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         self.pre_register_functions(contract);
         let storage_layout = Self::compute_storage_layout(contract);
 
-        let contract_type = self
-            .state
-            .builder
-            .types
-            .contract(&contract_name, Self::is_contract_payable(contract));
-
-        // Emit sol.contract and functions.
-        let module_body = self.state.module.body();
-        let contract_body = self.state.builder.emit_sol_contract(
+        let contract_type = AstType::contract(
+            self.state.mlir_context,
             &contract_name,
-            // TODO: investigate how other contract kinds (e.g. interface, library) should be represented in MLIR
-            solx_mlir::ContractKind::Contract,
-            &module_body,
+            Self::is_contract_payable(contract),
+        )
+        .into_mlir();
+
+        let module_body = self.state.module.body();
+        let contract_body = mlir_region_op!(
+            self.state, &module_body,
+            ContractOperation
+                .sym_name(StringAttribute::new(self.state.mlir_context, &contract_name))
+                .kind(solx_mlir::ContractKind::Contract.attribute(self.state.mlir_context));
+            body_region
         );
 
         // TODO: emit declarations for inherited state variables once derived
@@ -87,13 +98,24 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 continue;
             };
             let element_type =
-                TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder)?;
-            self.state.builder.emit_sol_state_var(
-                &slot.name,
-                slot.slot,
-                slot.byte_offset,
-                element_type,
+                TypeConversion::resolve_state_variable_type(&state_variable, self.state)?;
+            let slot_attribute: IntegerAttribute =
+                Attribute::parse(self.state.mlir_context, &format!("{} : i256", slot.slot))
+                    .expect("valid slot literal")
+                    .try_into()
+                    .expect("slot literal is an integer attribute");
+            let byte_offset_attribute = IntegerAttribute::new(
+                IntegerType::new(self.state.mlir_context, solx_utils::BIT_LENGTH_X32 as u32).into(),
+                slot.byte_offset.into(),
+            );
+            mlir_op_void!(
+                self.state,
                 &contract_body,
+                StateVarOperation
+                    .sym_name(StringAttribute::new(self.state.mlir_context, &slot.name))
+                    .r#type(TypeAttribute::new(element_type))
+                    .slot(slot_attribute)
+                    .byte_offset(byte_offset_attribute)
             );
         }
 
@@ -122,7 +144,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             }
             let mlir_name = FunctionEmitter::mlir_function_name(&function);
             let (parameter_types, return_types) =
-                TypeConversion::resolve_function_types(&function, &self.state.builder);
+                TypeConversion::resolve_function_types(&function, self.state);
 
             self.state.register_function_signature(
                 function.node_id(),

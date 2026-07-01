@@ -2,11 +2,17 @@
 //! Comparison and short-circuit logical expression lowering.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use slang_solidity_v2::ast::Expression;
 use solx_mlir::CmpPredicate;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
+use solx_mlir::ods::sol::IfOperation;
+use solx_mlir::ods::sol::YieldOperation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
@@ -29,19 +35,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let common_type = if lhs.r#type() == rhs.r#type() {
             lhs.r#type()
         } else {
-            self.state.builder.types.ui256
+            AstType::unsigned(self.state.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
         };
-        let lhs = TypeConversion::from_target_type(common_type, &self.state.builder).emit(
+        let lhs = TypeConversion::from_target_type(common_type, self.state).emit(
             lhs,
-            &self.state.builder,
+            self.state,
             &block,
         );
-        let rhs = TypeConversion::from_target_type(common_type, &self.state.builder).emit(
+        let rhs = TypeConversion::from_target_type(common_type, self.state).emit(
             rhs,
-            &self.state.builder,
+            self.state,
             &block,
         );
-        let comparison = self.state.builder.emit_sol_cmp(lhs, rhs, predicate, &block);
+        let comparison =
+            AstValue::new(lhs).compare(AstValue::new(rhs), predicate, self.state, &block).into_mlir();
         Ok((comparison, block))
     }
 
@@ -62,30 +69,24 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (lhs, block) = self.emit_value(left, block)?;
         let lhs_bool = self.emit_is_nonzero(lhs, &block);
 
-        let i1_type = self.state.builder.types.i1;
-        let result_ptr = self.state.builder.emit_sol_alloca(i1_type, &block);
-        let false_value = self.state.builder.emit_bool(false, &block);
-        self.state
-            .builder
-            .emit_sol_store(false_value, result_ptr, &block);
+        let i1_type =
+            AstType::signless(self.state.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir();
+        let result_ptr = Pointer::stack(AstType::new(i1_type), self.state, &block).into_mlir();
+        let false_value = AstValue::boolean(false, self.state, &block).into_mlir();
+        Pointer::new(result_ptr).store(AstValue::new(false_value), self.state, &block);
 
-        let (then_block, else_block) = self.state.builder.emit_sol_if(lhs_bool, &block);
+        let (then_block, else_block) =
+            mlir_region_op!(self.state, &block, IfOperation.cond(lhs_bool); then_region, else_region);
 
-        // Then: LHS was true — evaluate RHS and store result.
         let (rhs, then_end) = self.emit_value(right, then_block)?;
         let rhs_bool = self.emit_is_nonzero(rhs, &then_end);
-        self.state
-            .builder
-            .emit_sol_store(rhs_bool, result_ptr, &then_end);
-        self.state.builder.emit_sol_yield(&then_end);
+        Pointer::new(result_ptr).store(AstValue::new(rhs_bool), self.state, &then_end);
+        mlir_op_void!(self.state, &then_end, YieldOperation.ins(&[]));
 
-        // Else: LHS was false — result stays false.
-        self.state.builder.emit_sol_yield(&else_block);
+        mlir_op_void!(self.state, &else_block, YieldOperation.ins(&[]));
 
-        let result = self
-            .state
-            .builder
-            .emit_sol_load(result_ptr, i1_type, &block)?;
+        let result =
+            Pointer::new(result_ptr).load(AstType::new(i1_type), self.state, &block).into_mlir();
         Ok((result, block))
     }
 
@@ -106,30 +107,24 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (lhs, block) = self.emit_value(left, block)?;
         let lhs_bool = self.emit_is_nonzero(lhs, &block);
 
-        let i1_type = self.state.builder.types.i1;
-        let result_ptr = self.state.builder.emit_sol_alloca(i1_type, &block);
-        let true_value = self.state.builder.emit_bool(true, &block);
-        self.state
-            .builder
-            .emit_sol_store(true_value, result_ptr, &block);
+        let i1_type =
+            AstType::signless(self.state.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir();
+        let result_ptr = Pointer::stack(AstType::new(i1_type), self.state, &block).into_mlir();
+        let true_value = AstValue::boolean(true, self.state, &block).into_mlir();
+        Pointer::new(result_ptr).store(AstValue::new(true_value), self.state, &block);
 
-        let (then_block, else_block) = self.state.builder.emit_sol_if(lhs_bool, &block);
+        let (then_block, else_block) =
+            mlir_region_op!(self.state, &block, IfOperation.cond(lhs_bool); then_region, else_region);
 
-        // Then: LHS was true — result stays true.
-        self.state.builder.emit_sol_yield(&then_block);
+        mlir_op_void!(self.state, &then_block, YieldOperation.ins(&[]));
 
-        // Else: LHS was false — evaluate RHS and store result.
         let (rhs, else_end) = self.emit_value(right, else_block)?;
         let rhs_bool = self.emit_is_nonzero(rhs, &else_end);
-        self.state
-            .builder
-            .emit_sol_store(rhs_bool, result_ptr, &else_end);
-        self.state.builder.emit_sol_yield(&else_end);
+        Pointer::new(result_ptr).store(AstValue::new(rhs_bool), self.state, &else_end);
+        mlir_op_void!(self.state, &else_end, YieldOperation.ins(&[]));
 
-        let result = self
-            .state
-            .builder
-            .emit_sol_load(result_ptr, i1_type, &block)?;
+        let result =
+            Pointer::new(result_ptr).load(AstType::new(i1_type), self.state, &block).into_mlir();
         Ok((result, block))
     }
 }

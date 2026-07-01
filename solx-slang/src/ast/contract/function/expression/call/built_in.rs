@@ -18,7 +18,11 @@ use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::AddModOperation;
+use solx_mlir::ods::sol::AssertOperation;
 use solx_mlir::ods::sol::BalanceOperation;
 use solx_mlir::ods::sol::BaseFeeOperation;
 use solx_mlir::ods::sol::BlobBaseFeeOperation;
@@ -43,6 +47,7 @@ use solx_mlir::ods::sol::LengthOperation;
 use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::OriginOperation;
 use solx_mlir::ods::sol::PrevRandaoOperation;
+use solx_mlir::ods::sol::RequireOperation;
 use solx_mlir::ods::sol::Ripemd160Operation;
 use solx_mlir::ods::sol::SendOperation;
 use solx_mlir::ods::sol::Sha256Operation;
@@ -94,11 +99,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 )))
             }
             BuiltIn::Gasleft if arguments.is_empty() => {
-                let builder = &self.expression_emitter.state.builder;
+                let context = self.expression_emitter.state;
                 let value = block
                     .append_operation(
-                        GasLeftOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
+                        GasLeftOperation::builder(context.mlir_context, context.location())
+                            .val(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
                             .build()
                             .into(),
                     )
@@ -109,12 +114,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             BuiltIn::Keccak256 if arguments.len() == 1 => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.expression_emitter.state.builder;
+                let context = self.expression_emitter.state;
                 let value = block
                     .append_operation(
-                        Keccak256Operation::builder(builder.context, builder.unknown_location)
+                        Keccak256Operation::builder(context.mlir_context, context.location())
                             .addr(values[0])
-                            .result(builder.types.fixed_bytes(32))
+                            .result(AstType::fixed_bytes(context.mlir_context, 32).into_mlir())
                             .build()
                             .into(),
                     )
@@ -125,12 +130,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             BuiltIn::Sha256 if arguments.len() == 1 => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.expression_emitter.state.builder;
+                let context = self.expression_emitter.state;
                 let value = block
                     .append_operation(
-                        Sha256Operation::builder(builder.context, builder.unknown_location)
+                        Sha256Operation::builder(context.mlir_context, context.location())
                             .data(values[0])
-                            .result(builder.types.fixed_bytes(32))
+                            .result(AstType::fixed_bytes(context.mlir_context, 32).into_mlir())
                             .build()
                             .into(),
                     )
@@ -141,12 +146,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             BuiltIn::Ripemd160 if arguments.len() == 1 => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.expression_emitter.state.builder;
+                let context = self.expression_emitter.state;
                 let value = block
                     .append_operation(
-                        Ripemd160Operation::builder(builder.context, builder.unknown_location)
+                        Ripemd160Operation::builder(context.mlir_context, context.location())
                             .data(values[0])
-                            .result(builder.types.fixed_bytes(20))
+                            .result(AstType::fixed_bytes(context.mlir_context, 20).into_mlir())
                             .build()
                             .into(),
                     )
@@ -157,15 +162,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             BuiltIn::Ecrecover if arguments.len() == 4 => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.expression_emitter.state.builder;
+                let context = self.expression_emitter.state;
                 let value = block
                     .append_operation(
-                        EcrecoverOperation::builder(builder.context, builder.unknown_location)
+                        EcrecoverOperation::builder(context.mlir_context, context.location())
                             .hash(values[0])
                             .v(values[1])
                             .r(values[2])
                             .s(values[3])
-                            .result(builder.types.sol_address)
+                            .result(AstType::address(context.mlir_context, false).into_mlir())
                             .build()
                             .into(),
                     )
@@ -176,10 +181,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             BuiltIn::Addmod if arguments.len() == 3 => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.expression_emitter.state.builder;
+                let context = self.expression_emitter.state;
                 let value = block
                     .append_operation(
-                        AddModOperation::builder(builder.context, builder.unknown_location)
+                        AddModOperation::builder(context.mlir_context, context.location())
                             .x(values[0])
                             .y(values[1])
                             .r#mod(values[2])
@@ -193,10 +198,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             BuiltIn::Mulmod if arguments.len() == 3 => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.expression_emitter.state.builder;
+                let context = self.expression_emitter.state;
                 let value = block
                     .append_operation(
-                        MulModOperation::builder(builder.context, builder.unknown_location)
+                        MulModOperation::builder(context.mlir_context, context.location())
                             .x(values[0])
                             .y(values[1])
                             .r#mod(values[2])
@@ -252,39 +257,39 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         arguments: Option<&PositionalArguments>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let builder = &self.expression_emitter.state.builder;
+        let context = self.expression_emitter.state;
         match access.member().resolve_to_built_in() {
             Some(BuiltIn::AddressBalance) => {
                 self.emit_unary_member_intrinsic(access, block, |address_value| {
-                    BalanceOperation::builder(builder.context, builder.unknown_location)
+                    BalanceOperation::builder(context.mlir_context, context.location())
                         .cont_addr(address_value)
-                        .out(builder.types.ui256)
+                        .out(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
                         .build()
                         .into()
                 })
             }
             Some(BuiltIn::AddressCodehash) => {
                 self.emit_unary_member_intrinsic(access, block, |address_value| {
-                    CodeHashOperation::builder(builder.context, builder.unknown_location)
+                    CodeHashOperation::builder(context.mlir_context, context.location())
                         .cont_addr(address_value)
-                        .out(builder.types.ui256)
+                        .out(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
                         .build()
                         .into()
                 })
             }
             Some(BuiltIn::AddressCode) => {
                 self.emit_unary_member_intrinsic(access, block, |address_value| {
-                    CodeOperation::builder(builder.context, builder.unknown_location)
+                    CodeOperation::builder(context.mlir_context, context.location())
                         .cont_addr(address_value)
-                        .out(builder.types.sol_string_memory)
+                        .out(AstType::string(context.mlir_context, solx_utils::DataLocation::Memory).into_mlir())
                         .build()
                         .into()
                 })
             }
             Some(BuiltIn::Length) => self.emit_unary_member_intrinsic(access, block, |operand| {
-                LengthOperation::builder(builder.context, builder.unknown_location)
+                LengthOperation::builder(context.mlir_context, context.location())
                     .inp(operand)
-                    .len(builder.types.ui256)
+                    .len(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
                     .build()
                     .into()
             }),
@@ -296,10 +301,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let (values, block) = self.emit_argument_values(arguments, block)?;
                 let value = block
                     .append_operation(
-                        SendOperation::builder(builder.context, builder.unknown_location)
+                        SendOperation::builder(context.mlir_context, context.location())
                             .addr(addr)
                             .val(values[0])
-                            .status(builder.types.i1)
+                            .status(AstType::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir())
                             .build()
                             .into(),
                     )
@@ -315,7 +320,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .emit_value(&access.operand(), block)?;
                 let (values, block) = self.emit_argument_values(arguments, block)?;
                 block.append_operation(
-                    TransferOperation::builder(builder.context, builder.unknown_location)
+                    TransferOperation::builder(context.mlir_context, context.location())
                         .addr(addr)
                         .val(values[0])
                         .build()
@@ -339,7 +344,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let arguments = arguments.expect("abi.encodeWithSelector is a member-access call");
                 let (mut values, block) = self.emit_argument_values(arguments, block)?;
                 let selector =
-                    builder.emit_sol_cast(values.remove(0), builder.types.fixed_bytes(4), &block);
+                    AstValue::new(values.remove(0)).cast(AstType::new(AstType::fixed_bytes(context.mlir_context, 4).into_mlir()), context, &block).into_mlir();
                 let result = self.emit_sol_encode(&values, Some(selector), false, &block);
                 Ok((Some(result), block))
             }
@@ -359,16 +364,17 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .try_into()
                     .expect("keccak256 always yields 32 bytes");
                 let selector_word = u32::from_be_bytes(selector_bytes);
-                let selector_int = builder.emit_sol_constant(
+                let selector_int = AstValue::constant(
                     i64::from(selector_word),
-                    Type::from(IntegerType::unsigned(builder.context, 32)),
+                    AstType::new(Type::from(IntegerType::unsigned(context.mlir_context, 32))),
+                    context,
                     &block,
-                );
+                ).into_mlir();
                 let selector_value = block
                     .append_operation(
-                        BytesCastOperation::builder(builder.context, builder.unknown_location)
+                        BytesCastOperation::builder(context.mlir_context, context.location())
                             .inp(selector_int)
-                            .out(builder.types.fixed_bytes(4))
+                            .out(AstType::fixed_bytes(context.mlir_context, 4).into_mlir())
                             .build()
                             .into(),
                     )
@@ -393,92 +399,92 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             resolved => {
                 let operation = match resolved {
                     Some(BuiltIn::TxOrigin) => {
-                        OriginOperation::builder(builder.context, builder.unknown_location)
-                            .addr(builder.types.sol_address)
+                        OriginOperation::builder(context.mlir_context, context.location())
+                            .addr(AstType::address(context.mlir_context, false).into_mlir())
                             .build()
                             .into()
                     }
                     Some(BuiltIn::TxGasPrice) => {
-                        GasPriceOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
+                        GasPriceOperation::builder(context.mlir_context, context.location())
+                            .val(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
                             .build()
                             .into()
                     }
                     Some(BuiltIn::MsgSender) => {
-                        CallerOperation::builder(builder.context, builder.unknown_location)
-                            .addr(builder.types.sol_address)
+                        CallerOperation::builder(context.mlir_context, context.location())
+                            .addr(AstType::address(context.mlir_context, false).into_mlir())
                             .build()
                             .into()
                     }
                     Some(BuiltIn::MsgValue) => {
-                        CallValueOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
+                        CallValueOperation::builder(context.mlir_context, context.location())
+                            .val(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
                             .build()
                             .into()
                     }
                     Some(BuiltIn::BlockTimestamp) => {
-                        TimestampOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
+                        TimestampOperation::builder(context.mlir_context, context.location())
+                            .val(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
                             .build()
                             .into()
                     }
                     Some(BuiltIn::BlockNumber) => {
-                        BlockNumberOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
+                        BlockNumberOperation::builder(context.mlir_context, context.location())
+                            .val(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
                             .build()
                             .into()
                     }
                     Some(BuiltIn::BlockCoinbase) => {
-                        CoinbaseOperation::builder(builder.context, builder.unknown_location)
-                            .addr(builder.types.sol_address)
+                        CoinbaseOperation::builder(context.mlir_context, context.location())
+                            .addr(AstType::address(context.mlir_context, false).into_mlir())
                             .build()
                             .into()
                     }
                     Some(BuiltIn::BlockChainid) => {
-                        ChainIdOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
+                        ChainIdOperation::builder(context.mlir_context, context.location())
+                            .val(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
                             .build()
                             .into()
                     }
                     Some(BuiltIn::BlockBasefee) => {
-                        BaseFeeOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
+                        BaseFeeOperation::builder(context.mlir_context, context.location())
+                            .val(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
                             .build()
                             .into()
                     }
                     Some(BuiltIn::BlockGaslimit) => {
-                        GasLimitOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
+                        GasLimitOperation::builder(context.mlir_context, context.location())
+                            .val(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
                             .build()
                             .into()
                     }
                     Some(BuiltIn::BlockBlobbasefee) => {
-                        BlobBaseFeeOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
+                        BlobBaseFeeOperation::builder(context.mlir_context, context.location())
+                            .val(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
                             .build()
                             .into()
                     }
                     Some(BuiltIn::BlockDifficulty) => {
-                        DifficultyOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
+                        DifficultyOperation::builder(context.mlir_context, context.location())
+                            .val(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
                             .build()
                             .into()
                     }
                     Some(BuiltIn::BlockPrevrandao) => {
-                        PrevRandaoOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
+                        PrevRandaoOperation::builder(context.mlir_context, context.location())
+                            .val(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
                             .build()
                             .into()
                     }
                     Some(BuiltIn::MsgSig) => {
-                        SigOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.fixed_bytes(4))
+                        SigOperation::builder(context.mlir_context, context.location())
+                            .val(AstType::fixed_bytes(context.mlir_context, 4).into_mlir())
                             .build()
                             .into()
                     }
                     Some(BuiltIn::MsgData) => {
-                        GetCallDataOperation::builder(builder.context, builder.unknown_location)
-                            .addr(builder.types.string(solx_utils::DataLocation::CallData))
+                        GetCallDataOperation::builder(context.mlir_context, context.location())
+                            .addr(AstType::string(context.mlir_context, solx_utils::DataLocation::CallData).into_mlir())
                             .build()
                             .into()
                     }
@@ -504,10 +510,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let (array_value, block) = self
             .expression_emitter
             .emit_value(&access.operand(), block)?;
-        self.expression_emitter
-            .state
-            .builder
-            .emit_sol_pop(array_value, &block);
+        let context = self.expression_emitter.state;
+        AstValue::new(array_value).pop(context, &block);
         Ok((None, block))
     }
 
@@ -528,14 +532,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         if value_argument.is_some() && matches!(&base_slang_type, SlangType::Bytes(_)) {
             unimplemented!("bytes.push(x) lowers to sol.push_string, which is not yet wired");
         }
-        let builder = &self.expression_emitter.state.builder;
+        let context = self.expression_emitter.state;
 
         let (element_type, slang_location) = match &base_slang_type {
             SlangType::Array(array_type) => (
-                TypeConversion::resolve_slang_type(&array_type.element_type(), None, builder),
+                TypeConversion::resolve_slang_type(&array_type.element_type(), None, context),
                 array_type.location(),
             ),
-            SlangType::Bytes(bytes_type) => (builder.types.fixed_bytes(1), bytes_type.location()),
+            SlangType::Bytes(bytes_type) => (AstType::fixed_bytes(context.mlir_context, 1).into_mlir(), bytes_type.location()),
             other => unreachable!(
                 "Solidity's .push is a member of dynamic arrays and bytes only; got {:?}",
                 std::mem::discriminant(other)
@@ -549,16 +553,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         };
 
         let (array_value, block) = self.expression_emitter.emit_value(&base, block)?;
-        let address_type = builder.types.pointer(element_type, base_location);
-        let new_slot = builder.emit_sol_push(array_value, address_type, &block);
+        let address_type = AstType::pointer(context.mlir_context, element_type, base_location).into_mlir();
+        let new_slot = AstValue::new(array_value).push(AstType::new(address_type), context, &block).into_mlir();
 
         let Some(value_argument) = value_argument else {
             return Ok((Some(new_slot), block));
         };
         let (value, block) = self.expression_emitter.emit_value(&value_argument, block)?;
         let cast_value =
-            TypeConversion::from_target_type(element_type, builder).emit(value, builder, &block);
-        builder.emit_sol_store(cast_value, new_slot, &block);
+            TypeConversion::from_target_type(element_type, context).emit(value, context, &block);
+        Pointer::new(new_slot).store(AstValue::new(cast_value), context, &block);
         Ok((None, block))
     }
 
@@ -621,15 +625,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         packed: bool,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        let builder = &self.expression_emitter.state.builder;
-        let mut op_builder = EncodeOperation::builder(builder.context, builder.unknown_location)
+        let context = self.expression_emitter.state;
+        let mut op_builder = EncodeOperation::builder(context.mlir_context, context.location())
             .ins(ins)
-            .res(builder.types.sol_string_memory);
+            .res(AstType::string(context.mlir_context, solx_utils::DataLocation::Memory).into_mlir());
         if let Some(selector_value) = selector {
             op_builder = op_builder.selector(selector_value);
         }
         if packed {
-            op_builder = op_builder.packed(Attribute::unit(builder.context));
+            op_builder = op_builder.packed(Attribute::unit(context.mlir_context));
         }
         let mut operation: Operation = op_builder.build().into();
         // TODO: drop this manual segment-sizes plumbing once the melior op-builder
@@ -637,7 +641,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // or optional operand groups.
         let ins_count = i32::try_from(ins.len()).expect("encode argument count fits in i32");
         let segment_sizes = DenseI32ArrayAttribute::new(
-            builder.context,
+            context.mlir_context,
             &[ins_count, i32::from(selector.is_some())],
         );
         operation.set_inherent_attribute("operand_segment_sizes", segment_sizes.into());
@@ -672,11 +676,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         if matches!(return_slang_type, SlangType::Tuple(_)) {
             unimplemented!("abi.decode returning multiple values is not yet supported");
         }
-        let builder = &self.expression_emitter.state.builder;
-        let result_type = TypeConversion::resolve_slang_type(&return_slang_type, None, builder);
+        let context = self.expression_emitter.state;
+        let result_type = TypeConversion::resolve_slang_type(&return_slang_type, None, context);
         let value = block
             .append_operation(
-                DecodeOperation::builder(builder.context, builder.unknown_location)
+                DecodeOperation::builder(context.mlir_context, context.location())
                     .addr(payload_value)
                     .outs(&[result_type])
                     .build()
@@ -698,10 +702,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let condition_boolean = self
             .expression_emitter
             .emit_is_nonzero(condition_value, &block);
-        self.expression_emitter
-            .state
-            .builder
-            .emit_sol_assert(condition_boolean, &block);
+        let context = self.expression_emitter.state;
+        mlir_op_void!(context, &block, AssertOperation.cond(condition_boolean));
         Ok(block)
     }
 
@@ -721,31 +723,48 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let condition_boolean = self
             .expression_emitter
             .emit_is_nonzero(condition_value, &block);
-        let builder = &self.expression_emitter.state.builder;
+        let context = self.expression_emitter.state;
         match message {
             Some(Expression::StringExpression(string_expression)) => {
                 let bytes = string_expression.value();
                 let literal = String::from_utf8(bytes).expect("require message is valid UTF-8");
-                builder.emit_sol_require(condition_boolean, Some(&literal), &[], false, &block);
+                {
+                    let mut operation_builder =
+                        RequireOperation::builder(context.mlir_context, context.location())
+                            .cond(condition_boolean)
+                            .args(&[]);
+                    operation_builder = operation_builder
+                        .msg(melior::ir::attribute::StringAttribute::new(context.mlir_context, &literal));
+                    block.append_operation(operation_builder.build().into());
+                }
                 Ok(block)
             }
             Some(expression) => {
                 let (message_value, block) =
                     self.expression_emitter.emit_value(expression, block)?;
-                let string_memory_type = builder.types.string(solx_utils::DataLocation::Memory);
-                let message_value = TypeConversion::from_target_type(string_memory_type, builder)
-                    .emit(message_value, builder, &block);
-                builder.emit_sol_require(
-                    condition_boolean,
-                    Some("Error(string)"),
-                    &[message_value],
-                    true,
-                    &block,
-                );
+                let string_memory_type = AstType::string(context.mlir_context, solx_utils::DataLocation::Memory).into_mlir();
+                let message_value = TypeConversion::from_target_type(string_memory_type, context)
+                    .emit(message_value, context, &block);
+                {
+                    let mut operation_builder =
+                        RequireOperation::builder(context.mlir_context, context.location())
+                            .cond(condition_boolean)
+                            .args(&[message_value]);
+                    operation_builder = operation_builder
+                        .msg(melior::ir::attribute::StringAttribute::new(context.mlir_context, "Error(string)"));
+                    operation_builder = operation_builder.call(melior::ir::Attribute::unit(context.mlir_context));
+                    block.append_operation(operation_builder.build().into());
+                }
                 Ok(block)
             }
             None => {
-                builder.emit_sol_require(condition_boolean, None, &[], false, &block);
+                {
+                    let operation_builder =
+                        RequireOperation::builder(context.mlir_context, context.location())
+                            .cond(condition_boolean)
+                            .args(&[]);
+                    block.append_operation(operation_builder.build().into());
+                }
                 Ok(block)
             }
         }

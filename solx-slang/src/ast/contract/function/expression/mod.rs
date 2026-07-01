@@ -25,11 +25,15 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 
-use solx_mlir::Builder;
 use solx_mlir::CmpPredicate;
 use solx_mlir::Context;
 use solx_mlir::Environment;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
+use solx_mlir::ods::sol::IfOperation;
 use solx_mlir::ods::sol::ThisOperation;
+use solx_mlir::ods::sol::YieldOperation;
 use solx_utils::DataLocation;
 
 use self::call::type_conversion::TypeConversion;
@@ -104,10 +108,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let result_type = self
                     .resolve_slang_type(decimal_number.get_type())
                     .expect("binder types every decimal literal node");
-                let constant = self
-                    .state
-                    .builder
-                    .emit_constant(&value, result_type, &block);
+                let constant =
+                    AstValue::constant_from_bigint(&value, AstType::new(result_type), self.state, &block)
+                        .into_mlir();
                 Ok((Some(constant), block))
             }
             Expression::HexNumberExpression(hex_number) => {
@@ -117,18 +120,17 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let result_type = self
                     .resolve_slang_type(hex_number.get_type())
                     .expect("binder types every hex literal node");
-                let constant = self
-                    .state
-                    .builder
-                    .emit_constant(&value, result_type, &block);
+                let constant =
+                    AstValue::constant_from_bigint(&value, AstType::new(result_type), self.state, &block)
+                        .into_mlir();
                 Ok((Some(constant), block))
             }
             Expression::TrueKeyword(_) => {
-                let constant = self.state.builder.emit_bool(true, &block);
+                let constant = AstValue::boolean(true, self.state, &block).into_mlir();
                 Ok((Some(constant), block))
             }
             Expression::FalseKeyword(_) => {
-                let constant = self.state.builder.emit_bool(false, &block);
+                let constant = AstValue::boolean(false, self.state, &block).into_mlir();
                 Ok((Some(constant), block))
             }
             Expression::ThisKeyword(_) => {
@@ -136,23 +138,17 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .state
                     .current_contract_type
                     .ok_or_else(|| anyhow::anyhow!("sol.this emitted outside a contract"))?;
-                let operation = ThisOperation::builder(
-                    self.state.builder.context,
-                    self.state.builder.unknown_location,
-                )
-                .addr(contract_type)
-                .build();
-                let value = block
-                    .append_operation(operation.into())
-                    .result(0)
-                    .expect("sol.this always produces one result")
-                    .into();
+                let value = mlir_op!(
+                    self.state,
+                    &block,
+                    ThisOperation.addr(contract_type)
+                );
                 Ok((Some(value), block))
             }
             Expression::StringExpression(string_expression) => {
                 let bytes = string_expression.value();
                 let text = std::str::from_utf8(&bytes).expect("string literal is valid UTF-8");
-                let value = self.state.builder.emit_sol_string_lit(text, &block);
+                let value = AstValue::string_literal(text, self.state, &block).into_mlir();
                 Ok((Some(value), block))
             }
             Expression::Identifier(identifier) => {
@@ -171,30 +167,29 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         let element_type = TypeConversion::resolve_slang_type(
                             &declared_type,
                             None,
-                            &self.state.builder,
+                            self.state,
                         );
-                        let address = self.state.builder.emit_sol_addr_of(
+                        let address = Pointer::addr_of(
                             &slot.name,
-                            Self::address_type(
-                                &self.state.builder,
+                            AstType::new(Self::address_type(
+                                self.state,
                                 element_type,
                                 DataLocation::Storage,
                                 &declared_type,
-                            ),
+                            )),
+                            self.state,
                             &block,
                         );
-                        let value =
-                            self.state
-                                .builder
-                                .emit_sol_load(address, element_type, &block)?;
+                        let value = address
+                            .load(AstType::new(element_type), self.state, &block)
+                            .into_mlir();
                         Ok((Some(value), block))
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                         let (pointer, element_type) = self.environment.variable_with_type(&name);
-                        let value =
-                            self.state
-                                .builder
-                                .emit_sol_load(pointer, element_type, &block)?;
+                        let value = Pointer::new(pointer)
+                            .load(AstType::new(element_type), self.state, &block)
+                            .into_mlir();
                         Ok((Some(value), block))
                     }
                     Some(Definition::Constant(constant)) => {
@@ -346,39 +341,37 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 self.emit(&inner, block)
             }
             Expression::ConditionalExpression(conditional) => {
-                let result_type = self
-                    .resolve_slang_type(conditional.get_type())
-                    .unwrap_or(self.state.builder.types.ui256);
+                let result_type = self.resolve_slang_type(conditional.get_type()).unwrap_or_else(
+                    || AstType::unsigned(self.state.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+                );
                 let condition = conditional.operand();
                 let (condition_value, block) = self.emit_value(&condition, block)?;
                 let condition_boolean = self.emit_is_nonzero(condition_value, &block);
 
-                let result_slot = self.state.builder.emit_sol_alloca(result_type, &block);
-                let (then_block, else_block) =
-                    self.state.builder.emit_sol_if(condition_boolean, &block);
+                let result_slot =
+                    Pointer::stack(AstType::new(result_type), self.state, &block);
+                let (then_block, else_block) = mlir_region_op!(
+                    self.state, &block,
+                    IfOperation.cond(condition_boolean); then_region, else_region
+                );
 
                 let true_expression = conditional.true_expression();
                 let (then_value, then_end) = self.emit_value(&true_expression, then_block)?;
-                let then_cast = TypeConversion::from_target_type(result_type, &self.state.builder)
-                    .emit(then_value, &self.state.builder, &then_end);
-                self.state
-                    .builder
-                    .emit_sol_store(then_cast, result_slot, &then_end);
-                self.state.builder.emit_sol_yield(&then_end);
+                let then_cast = TypeConversion::from_target_type(result_type, self.state)
+                    .emit(then_value, self.state, &then_end);
+                result_slot.store(AstValue::new(then_cast), self.state, &then_end);
+                mlir_op_void!(self.state, &then_end, YieldOperation.ins(&[]));
 
                 let false_expression = conditional.false_expression();
                 let (else_value, else_end) = self.emit_value(&false_expression, else_block)?;
-                let else_cast = TypeConversion::from_target_type(result_type, &self.state.builder)
-                    .emit(else_value, &self.state.builder, &else_end);
-                self.state
-                    .builder
-                    .emit_sol_store(else_cast, result_slot, &else_end);
-                self.state.builder.emit_sol_yield(&else_end);
+                let else_cast = TypeConversion::from_target_type(result_type, self.state)
+                    .emit(else_value, self.state, &else_end);
+                result_slot.store(AstValue::new(else_cast), self.state, &else_end);
+                mlir_op_void!(self.state, &else_end, YieldOperation.ins(&[]));
 
-                let result = self
-                    .state
-                    .builder
-                    .emit_sol_load(result_slot, result_type, &block)?;
+                let result = result_slot
+                    .load(AstType::new(result_type), self.state, &block)
+                    .into_mlir();
 
                 Ok((Some(result), block))
             }
@@ -394,21 +387,26 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         std::mem::discriminant(&result_slang_type)
                     ),
                 };
-                let builder = &self.state.builder;
                 let array_type =
-                    TypeConversion::resolve_slang_type(&result_slang_type, None, builder);
+                    TypeConversion::resolve_slang_type(&result_slang_type, None, self.state);
                 let element_type =
-                    TypeConversion::resolve_slang_type(&element_slang_type, None, builder);
+                    TypeConversion::resolve_slang_type(&element_slang_type, None, self.state);
                 let mut element_values = Vec::new();
                 let mut current = block;
                 for item in array_expression.items().iter() {
                     let (value, next) = self.emit_value(&item, current)?;
-                    let cast_value = TypeConversion::from_target_type(element_type, builder)
-                        .emit(value, builder, &next);
+                    let cast_value = TypeConversion::from_target_type(element_type, self.state)
+                        .emit(value, self.state, &next);
                     element_values.push(cast_value);
                     current = next;
                 }
-                let value = builder.emit_sol_array_lit(&element_values, array_type, &current);
+                let value = AstValue::array_literal(
+                    &element_values,
+                    AstType::new(array_type),
+                    self.state,
+                    &current,
+                )
+                .into_mlir();
                 Ok((Some(value), current))
             }
             Expression::MemberAccessExpression(access) => {
@@ -439,16 +437,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         value: Value<'context, 'block>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        if solx_mlir::TypeFactory::integer_bit_width(value.r#type()) == 1 {
+        if AstType::new(value.r#type()).integer_bit_width() == 1 {
             return value;
         }
-        let zero = self
-            .state
-            .builder
-            .emit_sol_constant(0, value.r#type(), block);
-        self.state
-            .builder
-            .emit_sol_cmp(value, zero, CmpPredicate::Ne, block)
+        let zero = AstValue::constant(0, AstType::new(value.r#type()), self.state, block);
+        AstValue::new(value)
+            .compare(zero, CmpPredicate::Ne, self.state, block)
+            .into_mlir()
     }
 
     /// Resolves the Solidity type from Slang to an MLIR type.
@@ -467,7 +462,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         Some(TypeConversion::resolve_slang_type(
             &slang_type?,
             None,
-            &self.state.builder,
+            self.state,
         ))
     }
 
@@ -478,7 +473,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// `CallData`, the result address IS the element type rather than a
     /// pointer to it.
     fn address_type(
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         element_type: Type<'context>,
         base_location: DataLocation,
         result_type: &SlangType,
@@ -491,7 +486,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         {
             element_type
         } else {
-            builder.types.pointer(element_type, base_location)
+            AstType::pointer(context.mlir_context, element_type, base_location).into_mlir()
         }
     }
 }

@@ -11,6 +11,9 @@ use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::IndexAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
@@ -29,19 +32,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let (address, element_type, block) = self.emit_index_access_address(index_access, block)?;
-        let value = self
-            .state
-            .builder
-            .emit_sol_load(address, element_type, &block)?;
+        let value = Pointer::new(address).load(AstType::new(element_type), self.state, &block);
         let result_type = index_access
             .get_type()
             .expect("slang types every index-access expression");
         let slang_expected =
-            TypeConversion::resolve_slang_type(&result_type, None, &self.state.builder);
-        let value = self
-            .state
-            .builder
-            .emit_sol_bytes_cast(value, slang_expected, &block);
+            TypeConversion::resolve_slang_type(&result_type, None, self.state);
+        let value = value
+            .bytes_cast(AstType::new(slang_expected), self.state, &block)
+            .into_mlir();
         Ok((Some(value), block))
     }
 
@@ -81,34 +80,29 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (address, element_type) = match &base_type {
             SlangType::Mapping(_) => {
                 let element_type =
-                    TypeConversion::resolve_slang_type(&result_type, None, &self.state.builder);
+                    TypeConversion::resolve_slang_type(&result_type, None, self.state);
                 let base_location = Self::resolve_base_location(&base_type);
                 let address_type = Self::address_type(
-                    &self.state.builder,
+                    self.state,
                     element_type,
                     base_location,
                     &result_type,
                 );
-                let address =
-                    self.state
-                        .builder
-                        .emit_sol_map(base_value, index_value, address_type, &block);
+                let address = Pointer::new(base_value)
+                    .map(AstValue::new(index_value), AstType::new(address_type), self.state, &block)
+                    .into_mlir();
                 (address, element_type)
             }
             _ => {
-                // SAFETY: `mlirSolGetEltType` returns a valid MlirType from
-                // `sol::getEltType` on the C++ side; the struct-field index
-                // is ignored for non-struct base types.
                 let element_type = unsafe {
                     Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
                         base_value.r#type().to_raw(),
                         0,
                     ))
                 };
-                let address =
-                    self.state
-                        .builder
-                        .emit_sol_gep(base_value, index_value, element_type, &block);
+                let address = Pointer::new(base_value)
+                    .gep(AstValue::new(index_value), AstType::new(element_type), self.state, &block)
+                    .into_mlir();
                 (address, element_type)
             }
         };

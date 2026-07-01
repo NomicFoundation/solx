@@ -9,6 +9,9 @@ use melior::ir::Value;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Expression;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
@@ -24,9 +27,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Value<'context, 'block>> {
         let pointer = self.emit_storage_addr_of(slot, element_type, block);
-        self.state
-            .builder
-            .emit_sol_load(pointer, element_type, block)
+        Ok(Pointer::new(pointer)
+            .load(AstType::new(element_type), self.state, block)
+            .into_mlir())
     }
 
     /// Emits a storage store via `sol.addr_of` + `sol.store`.
@@ -38,7 +41,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) {
         let pointer = self.emit_storage_addr_of(slot, element_type, block);
-        self.state.builder.emit_sol_store(value, pointer, block);
+        Pointer::new(pointer).store(AstValue::new(value), self.state, block);
     }
 
     /// Emits every state-variable inline initializer (`T x = <expr>;`)
@@ -76,19 +79,24 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     state_variable.name().name()
                 )
             })?;
-            let builder = &self.state.builder;
-            let element_type = TypeConversion::resolve_slang_type(&declared_type, None, builder);
-            let address_type =
-                Self::address_type(builder, element_type, DataLocation::Storage, &declared_type);
-            let storage_ref = builder.emit_sol_addr_of(&slot.name, address_type, &block);
+            let element_type =
+                TypeConversion::resolve_slang_type(&declared_type, None, self.state);
+            let address_type = Self::address_type(
+                self.state,
+                element_type,
+                DataLocation::Storage,
+                &declared_type,
+            );
+            let storage_ref =
+                Pointer::addr_of(&slot.name, AstType::new(address_type), self.state, &block);
             let (value, next_block) = self.emit_value(&initializer, block)?;
             block = next_block;
             if declared_type.is_reference_type() {
-                builder.emit_sol_copy(value, storage_ref, &block);
+                storage_ref.copy_from(AstValue::new(value), self.state, &block);
             } else {
-                let stored_value = TypeConversion::from_target_type(element_type, builder)
-                    .emit(value, builder, &block);
-                builder.emit_sol_store(stored_value, storage_ref, &block);
+                let stored_value = TypeConversion::from_target_type(element_type, self.state)
+                    .emit(value, self.state, &block);
+                storage_ref.store(AstValue::new(stored_value), self.state, &block);
             }
         }
         Ok(block)
@@ -101,13 +109,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        let pointer_type = self
-            .state
-            .builder
-            .types
-            .pointer(element_type, DataLocation::Storage);
-        self.state
-            .builder
-            .emit_sol_addr_of(&slot.name, pointer_type, block)
+        let pointer_type =
+            AstType::pointer(self.state.mlir_context, element_type, DataLocation::Storage)
+                .into_mlir();
+        Pointer::addr_of(&slot.name, AstType::new(pointer_type), self.state, block).into_mlir()
     }
 }
