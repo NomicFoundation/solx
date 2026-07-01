@@ -126,9 +126,12 @@ expression_emit!(ShiftExpression; |node, context, block| {
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits a binary arithmetic Sol dialect operation.
     ///
-    /// When `target_type` is `Some`, both operands are cast to that type and
+    /// When `target_type` is `Some`, the left operand is cast to that type and
     /// the result has that type (matching solc's type-annotated MLIR output).
-    /// When `None`, selects the wider operand type by bit width.
+    /// When `None`, selects the wider operand type by bit width. Exponentiation
+    /// and the shifts keep their right operand's own type: `sol.exp`/`sol.cexp`
+    /// take an unsigned exponent alongside a possibly-signed base, and a shift
+    /// amount is a plain integer, never the (possibly fixed-bytes) result type.
     pub fn emit_binary_op(
         &self,
         left: &Expression,
@@ -153,11 +156,18 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             self.state,
             &block,
         );
-        let rhs = TypeConversion::from_target_type(result_type, self.state).emit(
-            rhs,
-            self.state,
-            &block,
-        );
+        let rhs = if matches!(
+            operator,
+            Operator::Exponentiation | Operator::ShiftLeft | Operator::ShiftRight
+        ) {
+            rhs
+        } else {
+            TypeConversion::from_target_type(result_type, self.state).emit(
+                rhs,
+                self.state,
+                &block,
+            )
+        };
         let value = block
             .append_operation(operator.emit_sol_binary_operation(
                 self.checked,
