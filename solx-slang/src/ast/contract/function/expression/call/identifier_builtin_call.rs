@@ -5,8 +5,12 @@
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
+use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::BuiltIn;
+use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::ErrorDefinition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::PositionalArguments;
 
 use solx_mlir::Type as AstType;
@@ -192,8 +196,10 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
     /// via `sol.require`.
     ///
     /// Literal string messages lower to `sol.require %cond, "msg" : ()`. A
-    /// non-literal expression evaluates at runtime and is ABI-encoded under
-    /// the `Error(string)` selector via the `call` form of `sol.require`.
+    /// `require(cond, CustomError(args))` lowers to the `call` form carrying the
+    /// error's canonical signature and ABI-encoded arguments. Any other runtime
+    /// expression evaluates at runtime and is ABI-encoded under the
+    /// `Error(string)` selector via the `call` form of `sol.require`.
     fn emit_require(
         &self,
         condition: &Expression,
@@ -217,6 +223,18 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
                         .msg(melior::ir::attribute::StringAttribute::new(context.mlir_context, &literal));
                 block.append_operation(operation_builder.build().into());
                 block
+            }
+            Some(Expression::FunctionCallExpression(error_call))
+                if let Expression::Identifier(identifier) = error_call.operand()
+                    && let Some(Definition::Error(error_definition)) =
+                        identifier.resolve_to_definition() =>
+            {
+                self.emit_require_custom_error(
+                    condition_boolean,
+                    &error_definition,
+                    &error_call.arguments(),
+                    block,
+                )
             }
             Some(expression) => {
                 let BlockAnd { value: message_value, block } =
@@ -242,5 +260,55 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
                 block
             }
         }
+    }
+
+    /// Emits `require(condition, CustomError(args))` as the `call` form of
+    /// `sol.require`, carrying the error's canonical signature and its
+    /// ABI-encoded arguments coerced to the declared parameter types.
+    fn emit_require_custom_error(
+        &self,
+        condition_boolean: Value<'context, 'block>,
+        error_definition: &ErrorDefinition,
+        arguments: &ArgumentsDeclaration,
+        block: BlockRef<'context, 'block>,
+    ) -> BlockRef<'context, 'block> {
+        let signature = error_definition
+            .compute_canonical_signature()
+            .expect("canonical signature is computable for a custom error");
+        let parameters = error_definition.parameters();
+        let parameter_ids: Vec<NodeId> =
+            parameters.iter().map(|parameter| parameter.node_id()).collect();
+        let ordered_arguments = arguments
+            .ordered_by(&parameter_ids)
+            .expect("slang matches every require custom-error argument to a parameter");
+        let context = self.expression_context.state;
+        let mut argument_values = Vec::with_capacity(ordered_arguments.len());
+        let mut current_block = block;
+        for (parameter, argument) in parameters.iter().zip(ordered_arguments) {
+            let BlockAnd { value, block: next_block } =
+                argument.emit(self.expression_context, current_block);
+            current_block = next_block;
+            let parameter_type = TypeConversion::resolve_slang_type(
+                &parameter
+                    .get_type()
+                    .expect("parameter type resolved by semantic analysis"),
+                None,
+                context,
+            );
+            let value = TypeConversion::from_target_type(parameter_type, context).emit(
+                value,
+                context,
+                &current_block,
+            );
+            argument_values.push(value);
+        }
+        let operation_builder =
+            RequireOperation::builder(context.mlir_context, context.location())
+                .cond(condition_boolean)
+                .args(&argument_values)
+                .msg(melior::ir::attribute::StringAttribute::new(context.mlir_context, &signature))
+                .call(melior::ir::Attribute::unit(context.mlir_context));
+        current_block.append_operation(operation_builder.build().into());
+        current_block
     }
 }
