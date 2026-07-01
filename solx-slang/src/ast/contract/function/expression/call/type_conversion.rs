@@ -31,6 +31,10 @@ pub enum TypeConversion<'context> {
     Bool,
     /// `address(x)` / `payable(x)` — `sol.cast` to ui160 then `sol.address_cast`.
     Address,
+    /// `bytesN(x)` / `byte(x)` and the reverse `uintN(bytesN)` — `sol.bytes_cast` to target.
+    BytesCast(Type<'context>),
+    /// `E(x)` and the reverse `uint8(E)` — `sol.enum_cast` between an enum and its backing integer.
+    EnumCast(Type<'context>),
     /// Integer type cast — `sol.cast` to target.
     Cast(Type<'context>),
 }
@@ -244,6 +248,29 @@ impl<'context> TypeConversion<'context> {
         }
     }
 
+    /// Classifies an explicit `T(x)` conversion from its Slang source and target types.
+    ///
+    /// An enumeration on either side routes through `sol.enum_cast`, and a fixed-width byte type on
+    /// either side through `sol.bytes_cast`; the Slang types disambiguate the reverse `uintN(bytesN)`
+    /// and `uint8(E)` directions that the MLIR target alone cannot. Any other conversion defers to the
+    /// target-typed classification.
+    pub fn from_slang_conversion(
+        source: &SlangType,
+        target: &SlangType,
+        target_type: Type<'context>,
+        context: &Context<'context>,
+    ) -> Self {
+        if matches!(source, SlangType::Enum(_)) || matches!(target, SlangType::Enum(_)) {
+            Self::EnumCast(target_type)
+        } else if matches!(source, SlangType::ByteArray(_))
+            || matches!(target, SlangType::ByteArray(_))
+        {
+            Self::BytesCast(target_type)
+        } else {
+            Self::from_target_type(target_type, context)
+        }
+    }
+
     /// Returns the MLIR target type this conversion produces.
     pub fn to_target_type(&self, context: &Context<'context>) -> Type<'context> {
         match self {
@@ -251,7 +278,9 @@ impl<'context> TypeConversion<'context> {
                 AstType::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir()
             }
             Self::Address => AstType::address(context.mlir_context, false).into_mlir(),
-            Self::Cast(target_type) => *target_type,
+            Self::BytesCast(target_type) | Self::EnumCast(target_type) | Self::Cast(target_type) => {
+                *target_type
+            }
         }
     }
 
@@ -324,6 +353,12 @@ impl<'context> TypeConversion<'context> {
                 };
                 truncated.address_cast(address_type, context, block).into_mlir()
             }
+            Self::BytesCast(target_type) => AstValue::new(value)
+                .bytes_cast(AstType::new(target_type), context, block)
+                .into_mlir(),
+            Self::EnumCast(target_type) => AstValue::new(value)
+                .enum_cast(AstType::new(target_type), context, block)
+                .into_mlir(),
             Self::Cast(target_type) => AstValue::new(value)
                 .cast(AstType::new(target_type), context, block)
                 .into_mlir(),

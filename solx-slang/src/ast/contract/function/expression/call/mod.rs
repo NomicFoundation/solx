@@ -21,7 +21,9 @@ use slang_solidity_v2::ast::PositionalArguments;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_kind::CallKind;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::emit::emit_as::EmitAs;
+use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_values::EmitValues;
 
 /// Lowers function call and member access expressions to MLIR.
@@ -94,7 +96,12 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
         Self { expression_context }
     }
 
-    /// Emits an explicit one-argument type conversion (`uint256(x)`, `address(x)`).
+    /// Emits an explicit one-argument type conversion (`uint256(x)`, `bytes4(x)`, `E(x)`).
+    ///
+    /// A string literal toward a `byte` / `bytesN` target folds to a fixed-bytes constant through
+    /// [`EmitAs`]. Every other conversion classifies from its Slang source and target types, so that
+    /// the reverse `uintN(bytesN)` and `uint8(E)` directions route through `sol.bytes_cast` and
+    /// `sol.enum_cast` rather than the integer `sol.cast`.
     fn emit_type_conversion(
         &self,
         call: &FunctionCallExpression,
@@ -102,12 +109,25 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
         block: BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let first = arguments.iter().next().expect("type conversion has one argument");
+        let target_slang = call.get_type().expect("slang types every type conversion target");
         let target_type = self
             .expression_context
-            .resolve_slang_type(call.get_type())
+            .resolve_slang_type(Some(target_slang.clone()))
             .expect("slang types every type conversion target");
-        let BlockAnd { value, block } =
-            first.emit_as(target_type, self.expression_context, block);
+        if let Expression::StringExpression(_) = first {
+            let BlockAnd { value, block } =
+                first.emit_as(target_type, self.expression_context, block);
+            return (value, block);
+        }
+        let source_slang = first.get_type().expect("slang types every conversion operand");
+        let BlockAnd { value, block } = first.emit(self.expression_context, block);
+        let value = TypeConversion::from_slang_conversion(
+            &source_slang,
+            &target_slang,
+            target_type,
+            self.expression_context.state,
+        )
+        .emit(value, self.expression_context.state, &block);
         (value, block)
     }
 
