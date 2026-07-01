@@ -52,13 +52,14 @@ impl<'context> Function<'context> {
 
     /// Emits this function's `sol.func` definition with an entry block whose arguments carry the
     /// parameter types, returned for the body. `selector` / `kind` are the optional dispatch
-    /// attributes; an original function type is attached for selector-dispatched, constructor, and
-    /// fallback functions.
+    /// attributes; `dispatch_identifier` is the internal-function-pointer dispatch tag; an original
+    /// function type is attached for selector-dispatched, constructor, and fallback functions.
     pub fn define<'block>(
         &self,
         selector: Option<u32>,
         state_mutability: StateMutability,
         kind: Option<FunctionKind>,
+        dispatch_identifier: Option<i64>,
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
@@ -91,6 +92,12 @@ impl<'context> Function<'context> {
             operation_builder = operation_builder.selector(IntegerAttribute::new(
                 IntegerType::new(context.mlir_context, Type::SELECTOR_BIT_WIDTH).into(),
                 selector_value as i64,
+            ));
+        }
+        if let Some(function_id) = dispatch_identifier {
+            operation_builder = operation_builder.id(IntegerAttribute::new(
+                IntegerType::new(context.mlir_context, solx_utils::BIT_LENGTH_X64 as u32).into(),
+                function_id,
             ));
         }
         if selector.is_some()
@@ -134,5 +141,24 @@ impl<'context> Function<'context> {
             results.push(operation.result(index)?.into());
         }
         Ok(results)
+    }
+
+    /// The `!sol.func_ref<...>` type of an internal pointer to this function, built from its
+    /// declared signature.
+    pub fn func_ref_type(&self, context: &Context<'context>) -> Type<'context> {
+        Type::func_ref(
+            context.mlir_context,
+            &self.parameter_types,
+            &self.return_types,
+        )
+    }
+
+    /// `sol.func_constant`: the internal function pointer to this function.
+    pub fn pointer_constant<'block>(
+        &self,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> crate::Value<'context, 'block> {
+        crate::Value::function_constant(&self.mlir_name, self.func_ref_type(context), context, block)
     }
 }

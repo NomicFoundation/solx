@@ -4,6 +4,7 @@
 
 pub mod call_arguments;
 pub mod call_kind;
+pub mod function_pointer_call;
 pub mod identifier_builtin_call;
 pub mod identifier_function_call;
 pub mod member_builtin_call;
@@ -66,6 +67,9 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
                     block,
                     value: vec![value],
                 }
+            }
+            CallKind::FunctionPointerCall(callee) => {
+                emitter.emit_function_pointer_call(&callee, &emitter.positional(&arguments), block)
             }
             CallKind::IdentifierBuiltinCall => {
                 let (value, block) =

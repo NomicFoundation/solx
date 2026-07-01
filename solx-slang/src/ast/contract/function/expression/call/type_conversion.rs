@@ -223,8 +223,43 @@ impl<'context> TypeConversion<'context> {
                     .expect("UDVT target type resolved by semantic analysis");
                 Self::resolve_slang_type(&target_type, inherited_location, context)
             }
+            SlangType::Function(function_type) => {
+                if function_type.is_externally_visible() {
+                    unimplemented!("external function-pointer types are not yet supported");
+                }
+                let (parameter_types, result_types) =
+                    Self::function_pointer_signature(slang_type, context);
+                AstType::func_ref(context.mlir_context, &parameter_types, &result_types).into_mlir()
+            }
             _ => unimplemented!("unsupported Slang type"),
         }
+    }
+
+    /// Resolves a function-pointer callee type's `(parameter_types, result_types)` from Slang to MLIR:
+    /// the declared parameter types, and the flattened result types where `void` is empty and a tuple
+    /// return expands per element.
+    pub fn function_pointer_signature(
+        callee_type: &SlangType,
+        context: &Context<'context>,
+    ) -> (Vec<Type<'context>>, Vec<Type<'context>>) {
+        let SlangType::Function(function_type) = callee_type else {
+            unreachable!("an indirect-call callee is always a function type");
+        };
+        let parameter_types = function_type
+            .parameter_types()
+            .iter()
+            .map(|parameter_type| Self::resolve_slang_type(parameter_type, None, context))
+            .collect();
+        let result_types = match function_type.return_type() {
+            SlangType::Void(_) => Vec::new(),
+            SlangType::Tuple(tuple_type) => tuple_type
+                .types()
+                .iter()
+                .map(|element_type| Self::resolve_slang_type(element_type, None, context))
+                .collect(),
+            other => vec![Self::resolve_slang_type(&other, None, context)],
+        };
+        (parameter_types, result_types)
     }
 
     fn integer_bits_required(value: &BigInt) -> u32 {

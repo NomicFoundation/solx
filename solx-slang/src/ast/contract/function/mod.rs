@@ -216,12 +216,21 @@ impl EmitFunction for FunctionDefinition {
             FunctionKind::Modifier => unreachable!("modifiers are filtered before emission"),
         };
 
+        let dispatch_identifier = mlir_kind.is_none().then(|| emitter.state.next_function_id());
+
         let function_entry_block = Function::new(
             mlir_name.clone(),
             mlir_parameter_types.clone(),
             result_types.clone(),
         )
-        .define(selector, state_mutability, mlir_kind, emitter.state, contract_body);
+        .define(
+            selector,
+            state_mutability,
+            mlir_kind,
+            dispatch_identifier,
+            emitter.state,
+            contract_body,
+        );
 
         let mut environment = Environment::new();
 
@@ -384,6 +393,7 @@ impl EmitConstructor for ContractDefinition {
             None,
             StateMutability::NonPayable,
             Some(solx_mlir::FunctionKind::Constructor),
+            None,
             emitter.state,
             contract_body,
         );

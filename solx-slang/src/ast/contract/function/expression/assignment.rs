@@ -268,6 +268,13 @@ impl<'context: 'block, 'block> AssignmentTarget<'context, 'block> {
                         &block,
                     )
                     .into_mlir()
+                } else if AstType::new(*element_type).is_function_ref() {
+                    AstValue::function_pointer_zero(
+                        AstType::new(*element_type),
+                        context.state,
+                        &block,
+                    )
+                    .into_mlir()
                 } else {
                     AstValue::constant(
                         0,

@@ -151,6 +151,36 @@ impl<'context> Type<'context> {
         Self::new(unsafe { MlirType::from_raw(ffi::solxCreateEnumType(context.to_raw(), max)) })
     }
 
+    /// A `sol::FuncRefType`: an internal function pointer over `parameter_types -> result_types`.
+    pub fn func_ref(
+        context: &'context melior::Context,
+        parameter_types: &[MlirType<'context>],
+        result_types: &[MlirType<'context>],
+    ) -> Self {
+        let parameters: Vec<_> = parameter_types
+            .iter()
+            .map(|parameter_type| parameter_type.to_raw())
+            .collect();
+        let results: Vec<_> = result_types
+            .iter()
+            .map(|result_type| result_type.to_raw())
+            .collect();
+        Self::new(unsafe {
+            MlirType::from_raw(ffi::solxCreateFuncRefType(
+                context.to_raw(),
+                parameters.as_ptr(),
+                parameters.len(),
+                results.as_ptr(),
+                results.len(),
+            ))
+        })
+    }
+
+    /// Whether this is a Sol internal function reference (`!sol.func_ref<...>`).
+    pub fn is_function_ref(self) -> bool {
+        unsafe { ffi::solxIsFuncRefType(self.inner.to_raw()) }
+    }
+
     /// The bit width of an integer type, or 256 for any non-integer type.
     pub fn integer_bit_width(self) -> u32 {
         IntegerType::try_from(self.inner).map_or(solx_utils::BIT_LENGTH_FIELD as u32, |integer| {

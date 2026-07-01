@@ -5,6 +5,7 @@
 pub mod environment;
 pub mod function;
 
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::sync::Once;
 
@@ -39,6 +40,8 @@ pub struct Context<'context> {
     /// The MLIR type of the contract currently being emitted, used to type
     /// `this` expressions. Frontends set this before emitting function bodies.
     pub current_contract_type: Option<Type<'context>>,
+    /// Monotonic internal-function-pointer dispatch tag; starts at 1, where 0 is the null pointer.
+    function_id_counter: Cell<i64>,
 }
 
 impl<'context> Context<'context> {
@@ -125,12 +128,20 @@ impl<'context> Context<'context> {
             module,
             function_signatures: HashMap::new(),
             current_contract_type: None,
+            function_id_counter: Cell::new(1),
         }
     }
 
     /// The unknown source location.
     pub fn location(&self) -> Location<'context> {
         Location::unknown(self.mlir_context)
+    }
+
+    /// Allocates the next internal-function-pointer dispatch tag.
+    pub fn next_function_id(&self) -> i64 {
+        let id = self.function_id_counter.get();
+        self.function_id_counter.set(id + 1);
+        id
     }
 
     /// Registers a function signature keyed by its AST definition id.
