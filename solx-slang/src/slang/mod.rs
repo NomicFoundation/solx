@@ -47,6 +47,9 @@ impl Slang {
     ///
     /// Uses the `CompilationBuilder` to parse all sources and resolve imports.
     ///
+    /// EVM built-in availability is gated on the target, but solx handles
+    /// EVM-version targeting downstream, so every built-in is admitted here.
+    ///
     /// # Errors
     ///
     /// Returns an error if the compilation builder fails to initialize or
@@ -61,8 +64,6 @@ impl Slang {
                     self.version.default
                 )
             })?;
-        // The Slang frontend gates EVM built-in availability on the target; solx
-        // handles EVM-version targeting downstream, so admit every built-in here.
         let mut builder = CompilationBuilder::create(version, EvmTarget::LATEST, configuration);
 
         for path in paths.iter() {

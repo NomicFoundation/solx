@@ -6,7 +6,6 @@
 //! structs, builders with type-state enforcement, and accessor methods.
 //!
 
-// The `dialect!` macro generates public items without doc comments.
 #![expect(
     missing_docs,
     reason = "melior::dialect! macro generates undocumented items"

@@ -16,6 +16,7 @@ use slang_solidity_v2::ast::EmitStatement as EmitStatementNode;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NamedArguments;
 use slang_solidity_v2::ast::Parameters;
+
 use solx_mlir::ods::sol::EmitOperation;
 
 use crate::ast::block_and::BlockAnd;
@@ -62,10 +63,6 @@ statement_emit!(EmitStatementNode; |node, context, block| {
             &current_block,
         );
         if indexed {
-            // TODO: indexed reference-type parameters (string, bytes,
-            // arrays, structs) must store the keccak256 hash of their
-            // encoded value as the topic, not the value itself. That
-            // lowering is not supported by solc-MLIR yet.
             indexed_arguments.push(value);
         } else {
             non_indexed_arguments.push(value);

@@ -27,7 +27,6 @@ use solx_mlir::ods::sol::XorOperation;
 /// Solidity operator parsed from source text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operator {
-    // ---- Arithmetic ----
     /// `+`
     Add,
     /// `-`
@@ -41,7 +40,6 @@ pub enum Operator {
     /// `**`
     Exponentiation,
 
-    // ---- Arithmetic assignment ----
     /// `+=`
     AddAssign,
     /// `-=`
@@ -53,7 +51,6 @@ pub enum Operator {
     /// `%=`
     RemainderAssign,
 
-    // ---- Bitwise ----
     /// `&`
     BitwiseAnd,
     /// `|`
@@ -67,7 +64,6 @@ pub enum Operator {
     /// `~`
     BitwiseNot,
 
-    // ---- Bitwise assignment ----
     /// `&=`
     BitwiseAndAssign,
     /// `|=`
@@ -79,7 +75,6 @@ pub enum Operator {
     /// `>>=`
     ShiftRightAssign,
 
-    // ---- Comparison ----
     /// `==`
     Equal,
     /// `!=`
@@ -95,13 +90,11 @@ pub enum Operator {
     /// `!`
     Not,
 
-    // ---- Step ----
     /// `++`
     Increment,
     /// `--`
     Decrement,
 
-    // ---- Other ----
     /// `delete`
     Delete,
 }
