@@ -224,7 +224,7 @@ impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for Expression {
 }
 
 impl<'context: 'block, 'block> EmitValues<'context, 'block> for Expression {
-    /// A tuple yields its elements; a call its result list.
+    /// A tuple yields its elements; a call or a tuple-valued conditional its result list.
     fn emit_values<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -247,7 +247,10 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for Expression {
                 }
             }
             Expression::FunctionCallExpression(call) => call.emit_values(context, block),
-            _ => unreachable!("a multi-valued expression is a tuple or call"),
+            Expression::ConditionalExpression(conditional) => {
+                conditional.emit_values(context, block)
+            }
+            _ => unreachable!("a multi-valued expression is a tuple, call, or conditional"),
         }
     }
 }

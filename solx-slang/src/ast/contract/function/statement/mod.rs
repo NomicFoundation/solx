@@ -182,9 +182,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
     };
 
     let expression_context = context.expression_context();
-    let (values, block) = if let Expression::TupleExpression(tuple) = &expression
-        && tuple.items().len() > 1
-    {
+    let (values, block) = if context.return_types.len() > 1 {
         let BlockAnd { value, block } = expression.emit_values(&expression_context, block);
         (value, block)
     } else {

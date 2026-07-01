@@ -104,7 +104,9 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             value: values,
             block: current,
         } = match &expression {
-            Expression::TupleExpression(_) | Expression::FunctionCallExpression(_) => {
+            Expression::TupleExpression(_)
+            | Expression::FunctionCallExpression(_)
+            | Expression::ConditionalExpression(_) => {
                 expression.emit_values(&expression_context, block)
             }
             _ => unimplemented!(
