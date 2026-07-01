@@ -10,12 +10,13 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::MemberAccessExpression;
+
 use solx_mlir::Context;
 use solx_mlir::LocationPolicy;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 
-use crate::ast::analysis::query::node_ids::ParameterNodeIds;
+use crate::ast::analysis::query::parameter_node_ids::ParameterNodeIds;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
@@ -56,7 +57,7 @@ impl ExternalMemberCall {
         })
     }
 
-    /// Emits the external call.
+    /// Emits the external call, reverting on failure and discarding the status flag.
     pub fn emit<'state, 'context: 'block, 'block>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -64,6 +65,27 @@ impl ExternalMemberCall {
         call_value: Option<Value<'context, 'block>>,
         call_gas: Option<Value<'context, 'block>>,
     ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
+        let (_status, results, block) = self.emit_call(context, block, call_value, call_gas, false);
+        BlockAnd {
+            value: results,
+            block,
+        }
+    }
+
+    /// Emits the `sol.ext_call` with its receiver and arguments. `try_call` surfaces the success
+    /// status for a `try`/`catch`; without it the op reverts on failure.
+    fn emit_call<'state, 'context: 'block, 'block>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+        call_value: Option<Value<'context, 'block>>,
+        call_gas: Option<Value<'context, 'block>>,
+        try_call: bool,
+    ) -> (
+        Value<'context, 'block>,
+        Vec<Value<'context, 'block>>,
+        BlockRef<'context, 'block>,
+    ) {
         let (callee_name, selector, parameter_types, return_types, is_static) =
             self.resolve_call(context.state);
         let BlockAnd {
@@ -75,7 +97,7 @@ impl ExternalMemberCall {
             block,
         } = self.arguments.emit_as(&parameter_types, context, block);
         let state = context.state;
-        let (_status, results) = AstValue::external_call(
+        let (status, results) = AstValue::external_call(
             receiver,
             &callee_name,
             selector,
@@ -85,14 +107,11 @@ impl ExternalMemberCall {
             call_value,
             call_gas,
             is_static,
-            false,
+            try_call,
             state,
             &block,
         );
-        BlockAnd {
-            value: results,
-            block,
-        }
+        (status, results, block)
     }
 
     /// Resolves the callee's MLIR name, ABI selector, Sol-typed parameter and result types, and
@@ -149,31 +168,6 @@ impl EmitTry for ExternalMemberCall {
         Vec<Value<'context, 'block>>,
         BlockRef<'context, 'block>,
     ) {
-        let (callee_name, selector, parameter_types, return_types, is_static) =
-            self.resolve_call(context.state);
-        let BlockAnd {
-            value: receiver,
-            block,
-        } = self.access.operand().emit(context, block);
-        let BlockAnd {
-            value: argument_values,
-            block,
-        } = self.arguments.emit_as(&parameter_types, context, block);
-        let state = context.state;
-        let (status, results) = AstValue::external_call(
-            receiver,
-            &callee_name,
-            selector,
-            &parameter_types,
-            &argument_values,
-            &return_types,
-            call_value,
-            call_gas,
-            is_static,
-            true,
-            state,
-            &block,
-        );
-        (status, results, block)
+        self.emit_call(context, block, call_value, call_gas, true)
     }
 }

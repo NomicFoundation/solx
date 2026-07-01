@@ -10,7 +10,7 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::NodeId;
 
-use crate::ast::analysis::query::node_ids::ParameterNodeIds;
+use crate::ast::analysis::query::parameter_node_ids::ParameterNodeIds;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::expression::ExpressionContext;

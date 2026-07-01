@@ -6,13 +6,12 @@
 use std::collections::HashMap;
 
 use melior::ir::BlockRef;
-
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::NodeId;
 
 use solx_mlir::Environment;
 
-use crate::ast::analysis::query::base_constructor_chain::BaseConstructorArguments;
+use crate::ast::analysis::query::base_constructor_arguments::BaseConstructorArguments;
 use crate::ast::contract::function::function_scope::FunctionScope;
 
 /// Synthesises a contract's deploy-time construction as a chain of `sol.func`s: the most-derived

@@ -6,6 +6,7 @@ use melior::ir::BlockRef;
 use slang_solidity_v2::ast::EqualityExpression;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::InequalityExpression;
+
 use solx_mlir::CmpPredicate;
 use solx_mlir::Type as AstType;
 

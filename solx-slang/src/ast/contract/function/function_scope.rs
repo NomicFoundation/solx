@@ -5,7 +5,6 @@
 use std::collections::HashMap;
 
 use melior::ir::Type;
-
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;

@@ -627,23 +627,6 @@ impl<'context, 'block> Value<'context, 'block> {
         (status, results)
     }
 
-    /// Collects `count` operation results starting at `offset` as MLIR values; the leading result of
-    /// a `sol.ext_call` / `sol.ext_icall` is the status flag, skipped with an `offset` of 1.
-    fn operation_results(
-        operation: OperationRef<'context, 'block>,
-        offset: usize,
-        count: usize,
-    ) -> Vec<MlirValue<'context, 'block>> {
-        (offset..offset + count)
-            .map(|index| {
-                operation
-                    .result(index)
-                    .expect("the call operation produces its declared results")
-                    .into()
-            })
-            .collect()
-    }
-
     /// `sol.encode`: the ABI-encoded `bytes memory` payload of `ins`. A `selector`,
     /// when present, is prepended as the leading 4 bytes; `packed` selects `abi.encodePacked`.
     pub fn abi_encode(
@@ -952,6 +935,23 @@ impl<'context, 'block> Value<'context, 'block> {
                 .inp(self.into_mlir())
                 .out(target_type.into_mlir())
         ))
+    }
+
+    /// Collects `count` operation results starting at `offset` as MLIR values; the leading result of
+    /// a `sol.ext_call` / `sol.ext_icall` is the status flag, skipped with an `offset` of 1.
+    fn operation_results(
+        operation: OperationRef<'context, 'block>,
+        offset: usize,
+        count: usize,
+    ) -> Vec<MlirValue<'context, 'block>> {
+        (offset..offset + count)
+            .map(|index| {
+                operation
+                    .result(index)
+                    .expect("the call operation produces its declared results")
+                    .into()
+            })
+            .collect()
     }
 }
 

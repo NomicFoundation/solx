@@ -5,7 +5,6 @@
 
 use melior::ir::BlockRef;
 use melior::ir::Type;
-
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::Parameter;
 

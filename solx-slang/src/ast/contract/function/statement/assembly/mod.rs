@@ -13,6 +13,7 @@ use melior::ir::BlockRef;
 use slang_solidity_v2::ast::AssemblyStatement;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::YulFunctionDefinition;
+
 use solx_mlir::Context;
 use solx_mlir::Environment;
 

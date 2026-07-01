@@ -40,7 +40,6 @@ use solx_mlir::ods::sol::PlaceholderOperation;
 use solx_mlir::ods::sol::ReturnOperation;
 use solx_mlir::ods::sol::RevertOperation;
 
-use self::expression_statement_kind::ExpressionStatementKind;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -51,6 +50,8 @@ use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_for_effect::EmitForEffect;
 use crate::ast::emit::emit_statement::EmitStatement;
 use crate::ast::emit::emit_values::EmitValues;
+
+use self::expression_statement_kind::ExpressionStatementKind;
 
 /// Emits Solidity statements to MLIR operations; threads `Some(block)` or `None` when control diverges.
 pub struct StatementContext<'state, 'context, 'block> {

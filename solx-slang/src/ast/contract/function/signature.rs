@@ -5,6 +5,7 @@
 use melior::ir::Type;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
+
 use solx_mlir::Context;
 use solx_mlir::LocationPolicy;
 use solx_mlir::StateMutability;

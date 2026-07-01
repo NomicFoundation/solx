@@ -12,6 +12,7 @@ use melior::ir::operation::OperationLike;
 use slang_solidity_v2::ast::CatchClause;
 use slang_solidity_v2::ast::TryStatement;
 use slang_solidity_v2::ast::Type as SlangType;
+
 use solx_mlir::Type as AstType;
 use solx_mlir::ods::sol::TryOperation;
 use solx_mlir::ods::sol::YieldOperation;

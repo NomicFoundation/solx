@@ -8,6 +8,11 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use melior::ir::operation::Operation;
+use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::Identifier;
+use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::CmpPredicate;
 use solx_mlir::Context;
@@ -32,12 +37,6 @@ use solx_mlir::ods::sol::ShlOperation;
 use solx_mlir::ods::sol::ShrOperation;
 use solx_mlir::ods::sol::SubOperation;
 use solx_mlir::ods::sol::XorOperation;
-
-use slang_solidity_v2::ast::Definition;
-use slang_solidity_v2::ast::Expression;
-use slang_solidity_v2::ast::Identifier;
-use slang_solidity_v2::ast::NodeId;
-use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;

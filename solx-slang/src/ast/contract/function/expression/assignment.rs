@@ -12,6 +12,7 @@ use slang_solidity_v2::ast::AssignmentExpression;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::TupleExpression;
+
 use solx_mlir::LocationPolicy;
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;

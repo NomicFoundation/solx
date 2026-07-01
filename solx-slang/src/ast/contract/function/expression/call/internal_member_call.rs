@@ -13,7 +13,7 @@ use slang_solidity_v2::ast::MemberAccessExpression;
 use solx_mlir::Type as AstType;
 
 use crate::ast::analysis::query::member_access_operand::MemberAccessOperand;
-use crate::ast::analysis::query::node_ids::ParameterNodeIds;
+use crate::ast::analysis::query::parameter_node_ids::ParameterNodeIds;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;

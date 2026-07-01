@@ -83,7 +83,7 @@ impl Signature for StateVariableDefinition {
         let mut input_types: Vec<Type<'context>> = Vec::new();
         let mut terminal = self.get_type()?;
         loop {
-            match &terminal {
+            let element_slang = match &terminal {
                 SlangType::Mapping(mapping_type) => {
                     let key = mapping_type.key_type();
                     let key_type = if key.is_reference_type() {
@@ -94,23 +94,16 @@ impl Signature for StateVariableDefinition {
                     };
                     input_types.push(key_type);
                     terminal = mapping_type.value_type();
+                    continue;
                 }
-                SlangType::Array(array_type) => {
-                    input_types.push(
-                        AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir(),
-                    );
-                    terminal = array_type.element_type();
-                }
-                SlangType::FixedSizeArray(array_type) => {
-                    input_types.push(
-                        AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir(),
-                    );
-                    terminal = array_type.element_type();
-                }
+                SlangType::Array(array_type) => array_type.element_type(),
+                SlangType::FixedSizeArray(array_type) => array_type.element_type(),
                 _ => break,
-            }
+            };
+            input_types.push(
+                AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+            );
+            terminal = element_slang;
         }
         if input_types.is_empty() {
             return None;

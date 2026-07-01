@@ -494,7 +494,7 @@ impl<'context> Type<'context> {
         })
     }
 
-    /// A `sol::ExtFuncRefType`: an external function reference (address and selector) over `parameter_types -> result_types`.
+    /// A `sol::ExtFuncRefType`: an external function reference, an address and selector, over `parameter_types -> result_types`.
     pub fn ext_func_ref(
         context: &'context melior::Context,
         parameter_types: &[MlirType<'context>],
@@ -569,7 +569,7 @@ impl<'context> Type<'context> {
         self.is_string() || self.is_array() || self.is_struct() || self.is_mapping()
     }
 
-    /// Whether this is a Sol function reference of either kind (internal or external).
+    /// Whether this is a Sol function reference of either kind, internal or external.
     pub fn is_function_ref(self) -> bool {
         let raw = self.inner.to_raw();
         unsafe { ffi::solxIsFuncRefType(raw) || ffi::solxIsExtFuncRefType(raw) }

@@ -21,7 +21,7 @@ use solx_mlir::StateMutability;
 use solx_mlir::Type as AstType;
 use solx_mlir::ods::sol::ReturnOperation;
 
-use crate::ast::analysis::query::base_constructor_chain::BaseConstructorArguments;
+use crate::ast::analysis::query::base_constructor_arguments::BaseConstructorArguments;
 use crate::ast::analysis::query::base_constructor_chain::BaseConstructorChain;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;

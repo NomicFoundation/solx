@@ -21,12 +21,13 @@ use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::ReturnOperation;
 
-use self::function_scope::FunctionScope;
-use self::signature::Signature;
-use self::statement::StatementContext;
 use crate::ast::emit::emit_function::EmitFunction;
 use crate::ast::emit::emit_modifier_calls::EmitModifierCalls;
 use crate::ast::emit::emit_statement::EmitStatement;
+
+use self::function_scope::FunctionScope;
+use self::signature::Signature;
+use self::statement::StatementContext;
 
 impl EmitFunction for FunctionDefinition {
     fn emit<'state, 'context>(

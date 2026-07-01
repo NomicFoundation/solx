@@ -11,6 +11,7 @@ use melior::ir::RegionLike;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::YulBlock;
 use slang_solidity_v2::ast::YulStatement;
+
 use solx_mlir::ods::yul::YieldOperation;
 
 use crate::ast::contract::function::statement::assembly::YulContext;

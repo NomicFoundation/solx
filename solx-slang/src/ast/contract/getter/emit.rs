@@ -39,17 +39,16 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
     ) {
         let state = context.state;
 
-        let abi = match self.compute_abi_entry() {
-            Some(AbiEntry::Function(abi)) => abi,
-            _ => return,
+        let Some(AbiEntry::Function(abi)) = self.compute_abi_entry() else {
+            return;
         };
         let signature = self.compute_canonical_signature().expect("slang validated");
         let selector = self.compute_selector().expect("slang validated");
 
         if matches!(self.mutability(), StateVariableMutability::Constant) {
-            let Some(initializer) = self.value() else {
-                return;
-            };
+            let initializer = self
+                .value()
+                .expect("a constant state variable is initialized");
             let slang_type = self.get_type().expect("slang validated");
             let element_type = AstType::resolve(&slang_type, LocationPolicy::ForceMemory, state);
             let entry = Function::new(signature, Vec::new(), vec![element_type]).define(
@@ -72,9 +71,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             return;
         }
 
-        let Some(slot) = context.storage_layout.get(&self.node_id()) else {
-            return;
-        };
+        let slot = context
+            .storage_layout
+            .get(&self.node_id())
+            .expect("a public non-constant state variable has a storage slot");
         let location = slot.location;
         let declared_type = self.get_type().expect("slang validated");
 
@@ -101,12 +101,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             let mut base =
                 Pointer::addr_of(&slot.name, AstType::new(container_type), state, &entry)
                     .into_mlir();
-            // An array index passes `no_panic_bounds` so an out-of-bounds access plain-reverts
-            // rather than `Panic(0x32)`.
             let mut current = declared_type.clone();
             let mut index = 0usize;
             loop {
-                match &current {
+                let element_slang = match &current {
                     SlangType::Mapping(mapping_type) => {
                         let argument: Value<'context, 'block> = entry
                             .argument(index)
@@ -131,53 +129,34 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                             .into_mlir();
                         index += 1;
                         current = value_slang;
+                        continue;
                     }
-                    SlangType::Array(array_type) => {
-                        let argument: Value<'context, 'block> = entry
-                            .argument(index)
-                            .expect("argument index is within the block signature")
-                            .into();
-                        let element_type = AstType::resolve(
-                            &array_type.element_type(),
-                            LocationPolicy::Declared(Some(location)),
-                            state,
-                        );
-                        base = Pointer::new(base)
-                            .gep(
-                                AstValue::new(argument),
-                                AstType::new(element_type),
-                                true,
-                                state,
-                                &entry,
-                            )
-                            .into_mlir();
-                        index += 1;
-                        current = array_type.element_type();
-                    }
-                    SlangType::FixedSizeArray(array_type) => {
-                        let argument: Value<'context, 'block> = entry
-                            .argument(index)
-                            .expect("argument index is within the block signature")
-                            .into();
-                        let element_type = AstType::resolve(
-                            &array_type.element_type(),
-                            LocationPolicy::Declared(Some(location)),
-                            state,
-                        );
-                        base = Pointer::new(base)
-                            .gep(
-                                AstValue::new(argument),
-                                AstType::new(element_type),
-                                true,
-                                state,
-                                &entry,
-                            )
-                            .into_mlir();
-                        index += 1;
-                        current = array_type.element_type();
-                    }
+                    SlangType::Array(array_type) => array_type.element_type(),
+                    SlangType::FixedSizeArray(array_type) => array_type.element_type(),
                     _ => break,
-                }
+                };
+                let argument: Value<'context, 'block> = entry
+                    .argument(index)
+                    .expect("argument index is within the block signature")
+                    .into();
+                let element_type = AstType::resolve(
+                    &element_slang,
+                    LocationPolicy::Declared(Some(location)),
+                    state,
+                );
+                // An array index passes `no_panic_bounds` so an out-of-bounds access plain-reverts
+                // rather than `Panic(0x32)`.
+                base = Pointer::new(base)
+                    .gep(
+                        AstValue::new(argument),
+                        AstType::new(element_type),
+                        true,
+                        state,
+                        &entry,
+                    )
+                    .into_mlir();
+                index += 1;
+                current = element_slang;
             }
             let return_values: Vec<_> = match &members {
                 Some(members) => members

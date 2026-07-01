@@ -15,6 +15,7 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
+
 use solx_mlir::LocationPolicy;
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;

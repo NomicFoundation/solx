@@ -8,6 +8,7 @@ use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::YulExpression;
 use slang_solidity_v2::ast::YulPath;
+
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 use solx_mlir::YulValue;
@@ -28,10 +29,10 @@ yul_emit!(YulExpression => BlockAnd<'context, 'block, YulValue<'context, 'block>
         YulExpression::YulPath(path) => path.emit(context, block),
         YulExpression::YulFunctionCallExpression(call) => {
             let BlockAnd { value: values, block } = call.emit(context, block);
-            let value = match values.into_iter().next() {
-                Some(value) => value,
-                None => YulValue::constant(&BigInt::from(0u32), context.state, &block),
-            };
+            let value = values
+                .into_iter()
+                .next()
+                .expect("a yul call in expression position yields one value");
             BlockAnd { value, block }
         }
     }

@@ -9,7 +9,7 @@ use slang_solidity_v2::ast::DataLocation;
 pub enum LocationPolicy {
     /// Use each reference type's declared location, substituting the carried location for `Inherited` members.
     Declared(Option<solx_utils::DataLocation>),
-    /// Force every reference type to `Memory`: the external (ABI) representation,
+    /// Force every reference type to `Memory`: the external ABI representation,
     /// where `calldata` cannot cross the call boundary.
     ForceMemory,
 }

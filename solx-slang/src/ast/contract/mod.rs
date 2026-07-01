@@ -34,12 +34,6 @@ use solx_mlir::Type as AstType;
 use solx_mlir::ods::sol::ImmutableOperation;
 use solx_mlir::ods::sol::StateVarOperation;
 
-use self::contract_dispatch::ContractDispatch;
-use self::function::expression::ExpressionContext;
-use self::function::expression::arithmetic_mode::ArithmeticMode;
-use self::function::mlir_symbol_name::MlirSymbolName;
-use self::object_scope::ObjectScope;
-use self::storage_layout::StorageSlot;
 use crate::ast::analysis::query::storage_layout::StorageLayout;
 use crate::ast::analysis::walk::free_function::FreeCallCollector;
 use crate::ast::analysis::walk::library::LibraryCallCollector;
@@ -50,6 +44,13 @@ use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_function::EmitFunction;
 use crate::ast::emit::emit_modifier_calls::EmitModifierCalls;
 use crate::ast::emit::emit_object::EmitObject;
+
+use self::contract_dispatch::ContractDispatch;
+use self::function::expression::ExpressionContext;
+use self::function::expression::arithmetic_mode::ArithmeticMode;
+use self::function::mlir_symbol_name::MlirSymbolName;
+use self::object_scope::ObjectScope;
+use self::storage_layout::StorageSlot;
 
 impl EmitObject for ContractDefinition {
     fn emit(&self, context: &mut Context, scope: &ObjectScope) {

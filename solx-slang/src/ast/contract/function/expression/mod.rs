@@ -4,6 +4,7 @@
 
 pub mod arithmetic;
 pub mod arithmetic_mode;
+pub mod array_expression;
 pub mod assignment;
 pub mod call;
 pub mod call_options;
@@ -17,6 +18,7 @@ pub mod member;
 pub mod operator;
 pub mod short_circuit;
 pub mod storage;
+pub mod tuple_expression;
 pub mod unary;
 
 use std::collections::HashMap;

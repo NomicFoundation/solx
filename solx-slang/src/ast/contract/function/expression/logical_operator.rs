@@ -6,6 +6,7 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::Expression;
+
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;

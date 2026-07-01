@@ -8,6 +8,7 @@ use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
+
 use solx_mlir::Function;
 
 use crate::ast::block_and::BlockAnd;

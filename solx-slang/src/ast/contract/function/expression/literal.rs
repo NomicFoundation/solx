@@ -16,6 +16,7 @@ use slang_solidity_v2::ast::HexNumberExpression;
 use slang_solidity_v2::ast::StringExpression;
 use slang_solidity_v2::ast::ThisKeyword;
 use slang_solidity_v2::ast::TrueKeyword;
+
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::ThisOperation;

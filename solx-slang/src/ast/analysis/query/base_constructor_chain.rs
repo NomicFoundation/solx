@@ -12,9 +12,9 @@
 use std::collections::HashMap;
 
 use slang_solidity_v2::ast::ContractDefinition;
-use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 
+use crate::ast::analysis::query::base_constructor_arguments::BaseConstructorArguments;
 use crate::ast::analysis::query::match_linearised_base::MatchLinearisedBase;
 use crate::ast::analysis::query::positional_arguments::PositionalArguments;
 
@@ -38,16 +38,6 @@ pub trait BaseConstructorChain {
         contract: &ContractDefinition,
         mro: &[ContractDefinition],
     ) -> Option<ContractDefinition>;
-}
-
-/// The invocation arguments supplied to one base constructor, with the contract whose scope evaluates
-/// them. The arguments are evaluated in the *declaring* contract's constructor scope, binding its
-/// parameters, inside that contract's constructor `sol.func`.
-pub struct BaseConstructorArguments {
-    /// The argument expressions passed to the base constructor.
-    pub arguments: Vec<Expression>,
-    /// The contract that declares the invocation; its constructor scope evaluates the arguments.
-    pub declaring_contract: ContractDefinition,
 }
 
 impl BaseConstructorChain for ContractDefinition {

@@ -111,7 +111,7 @@ impl<'context> Function<'context> {
             .expect("func body has entry block")
     }
 
-    /// Emits a `sol.call` to this function (an internal call by symbol), returning its results in order.
+    /// Emits a `sol.call` to this function, an internal call by symbol, returning its results in order.
     pub fn call<'block, B>(
         &self,
         operands: &[MlirValue<'context, 'block>],

@@ -15,6 +15,7 @@ use num_bigint::BigInt;
 use slang_solidity_v2::ast::YulExpression;
 use slang_solidity_v2::ast::YulStatement;
 use slang_solidity_v2::ast::YulSwitchCase;
+
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 use solx_mlir::YulValue;
@@ -97,7 +98,10 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
             Some(current)
         }
         YulStatement::YulExpression(expression) => {
-            let BlockAnd { block: current, .. } = expression.emit(context, block);
+            let YulExpression::YulFunctionCallExpression(call) = &expression else {
+                unreachable!("a yul expression statement is a function call");
+            };
+            let BlockAnd { block: current, .. } = call.emit(context, block);
             Some(current)
         }
         YulStatement::YulIfStatement(if_statement) => {

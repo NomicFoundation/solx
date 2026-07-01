@@ -5,6 +5,7 @@
 use std::collections::BTreeMap;
 use std::path::Component;
 use std::path::Path;
+use std::path::PathBuf;
 
 use slang_solidity_v2::compilation::CompilationBuilderConfig;
 use slang_solidity_v2::diagnostics::kinds::compilation::MissingFile;
@@ -60,7 +61,7 @@ impl CompilationBuilderConfig for CompilationConfig {
                     other => normalized.push(other),
                 }
             }
-            let clean: std::path::PathBuf = normalized.into_iter().collect();
+            let clean: PathBuf = normalized.into_iter().collect();
             let key = clean.to_string_lossy().replace('\\', "/");
             if self.sources.contains_key(&key) {
                 return Ok(key);

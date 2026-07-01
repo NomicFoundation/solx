@@ -5,7 +5,6 @@
 
 use melior::ir::BlockRef;
 use melior::ir::attribute::StringAttribute;
-
 use slang_solidity_v2::ast::FunctionDefinition;
 
 use solx_mlir::Context;
