@@ -25,13 +25,16 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::expression::operator::Operator;
 use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_place::EmitPlace;
+use crate::ast::place::Place;
 
 expression_emit!(PostfixExpression; |node, context, block| {
     let operator = match node.operator() {
         ast::PostfixExpressionOperator::MinusMinus(_) => Operator::Decrement,
         ast::PostfixExpressionOperator::PlusPlus(_) => Operator::Increment,
     };
-    let BlockAnd { value, block } = context.emit_postfix(&node.operand(), operator, block);
+    let operand = node.operand().unwrap_parentheses();
+    let BlockAnd { value, block } = context.emit_postfix(&operand, operator, block);
     BlockAnd { block, value }
 });
 
@@ -45,8 +48,9 @@ expression_emit!(PrefixExpression; |node, context, block| {
         ast::PrefixExpressionOperator::PlusPlus(_) => Operator::Increment,
         ast::PrefixExpressionOperator::Tilde(_) => Operator::BitwiseNot,
     };
+    let operand = node.operand().unwrap_parentheses();
     let BlockAnd { value, block } =
-        context.emit_prefix(operator, &node.operand(), result_type, block);
+        context.emit_prefix(operator, &operand, result_type, block);
     BlockAnd { block, value }
 });
 
@@ -58,6 +62,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         operator: Operator,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Value<'context, 'block>> {
+        if let Some((old, _new, block)) =
+            self.emit_increment_decrement_indexed(operand, operator, block)
+        {
+            return BlockAnd { block, value: old };
+        }
         let (old, _) = self.emit_increment_decrement(operand, operator, &block);
         BlockAnd { block, value: old }
     }
@@ -75,6 +84,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     ) -> BlockAnd<'context, 'block, Value<'context, 'block>> {
         match operator {
             Operator::Increment | Operator::Decrement => {
+                if let Some((_old, new_value, block)) =
+                    self.emit_increment_decrement_indexed(operand, operator, block)
+                {
+                    return BlockAnd {
+                        block,
+                        value: new_value,
+                    };
+                }
                 let (_old, new_value) = self.emit_increment_decrement(operand, operator, &block);
                 BlockAnd {
                     block,
@@ -137,6 +154,54 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             }
             _ => unreachable!("unsupported prefix operator: {operator:?}"),
         }
+    }
+
+    /// Loads, increments or decrements, stores, and returns `(old, new, continuation block)` for a
+    /// computed lvalue such as `a[i]` or a struct field, addressed via [`EmitPlace`]. Returns `None`
+    /// for any other operand, so the caller falls back to the named-lvalue path.
+    fn emit_increment_decrement_indexed(
+        &self,
+        operand: &Expression,
+        operator: Operator,
+        block: BlockRef<'context, 'block>,
+    ) -> Option<(
+        Value<'context, 'block>,
+        Value<'context, 'block>,
+        BlockRef<'context, 'block>,
+    )> {
+        let BlockAnd {
+            value:
+                Place {
+                    address,
+                    element_type,
+                },
+            block,
+        } = match operand {
+            Expression::IndexAccessExpression(index_access) => {
+                index_access.emit_place(self, block)
+            }
+            Expression::MemberAccessExpression(access) => access.emit_place(self, block),
+            _ => return None,
+        };
+        let pointer = Pointer::new(address);
+        let old = pointer
+            .load(AstType::new(element_type), self.state, &block)
+            .into_mlir();
+        let one =
+            AstValue::constant(1, AstType::new(element_type), self.state, &block).into_mlir();
+        let new_value = block
+            .append_operation(operator.emit_sol_binary_operation(
+                self.checked,
+                self.state.mlir_context,
+                self.state.location(),
+                old,
+                one,
+            ))
+            .result(0)
+            .expect("binary operation always produces one result")
+            .into();
+        pointer.store(AstValue::new(new_value), self.state, &block);
+        Some((old, new_value, block))
     }
 
     /// Loads, increments or decrements, stores, and returns `(old, new)`.
