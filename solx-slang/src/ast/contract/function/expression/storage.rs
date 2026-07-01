@@ -7,7 +7,6 @@ use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
-use slang_solidity_v2::ast::Expression;
 
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
@@ -67,9 +66,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let Some(initializer) = state_variable.value() else {
                 continue;
             };
-            if matches!(initializer, Expression::ArrayExpression(_)) {
-                unimplemented!("array-literal state variable initializers are not yet supported");
-            }
             let declared_type = state_variable
                 .get_type()
                 .expect("binder types every state variable");

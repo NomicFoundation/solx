@@ -298,6 +298,24 @@ impl EmitFunction for FunctionDefinition {
                         }
                     };
                     pointer.store(default, emitter.state, &function_entry_block);
+                } else if matches!(&slang_type, ast::Type::Contract(_) | ast::Type::Interface(_)) {
+                    let address_type = AstType::address(emitter.state.mlir_context, false);
+                    let zero = AstValue::constant(
+                        0,
+                        AstType::unsigned(
+                            emitter.state.mlir_context,
+                            solx_utils::BIT_LENGTH_ETH_ADDRESS,
+                        ),
+                        emitter.state,
+                        &function_entry_block,
+                    )
+                    .address_cast(address_type, emitter.state, &function_entry_block)
+                    .address_cast(
+                        AstType::new(return_type),
+                        emitter.state,
+                        &function_entry_block,
+                    );
+                    pointer.store(zero, emitter.state, &function_entry_block);
                 } else {
                     unimplemented!(
                         "zero-initialization for non-integer named return: {return_type}"

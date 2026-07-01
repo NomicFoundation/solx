@@ -2,6 +2,7 @@
 //! Index access expression lowering: `a[i]`, `m[k]`, `s[i]`.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -14,6 +15,8 @@ use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
+use solx_mlir::ods::sol::LengthOperation;
+use solx_mlir::ods::sol::SliceOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::block_and::BlockAnd;
@@ -32,11 +35,65 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for IndexAccessE
     /// `bytes` the C++ element type is `!sol.byte`; a `sol.bytes_cast`
     /// widens it to `!sol.fixedbytes<1>` to match Solidity's `bytes1`
     /// typing. `sol.bytes_cast` is a no-op for matching types.
+    ///
+    /// A slice `a[start:end]` instead produces a sub-array value via
+    /// `sol.slice`. An omitted `start` defaults to `0`; an omitted `end`
+    /// defaults to the operand's `sol.length`; both indices widen to `ui256`.
     fn emit<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> Self::Output {
+        if self.is_slice() {
+            let base = self.operand();
+            let BlockAnd {
+                value: base_value,
+                block,
+            } = base.emit(context, block);
+            let ui256 =
+                AstType::unsigned(context.state.mlir_context, solx_utils::BIT_LENGTH_FIELD);
+            let (start_value, block) = match self.start() {
+                Some(start_expression) => {
+                    let BlockAnd { value, block } = start_expression.emit(context, block);
+                    let value = AstValue::new(value).cast(ui256, context.state, &block).into_mlir();
+                    (value, block)
+                }
+                None => {
+                    let zero = AstValue::constant(0, ui256, context.state, &block).into_mlir();
+                    (zero, block)
+                }
+            };
+            let (end_value, block) = match self.end() {
+                Some(end_expression) => {
+                    let BlockAnd { value, block } = end_expression.emit(context, block);
+                    let value = AstValue::new(value).cast(ui256, context.state, &block).into_mlir();
+                    (value, block)
+                }
+                None => {
+                    let length: Value<'context, 'block> = mlir_op!(
+                        context.state,
+                        &block,
+                        LengthOperation.inp(base_value).len(ui256.into_mlir())
+                    );
+                    (length, block)
+                }
+            };
+            let result_slang_type = self
+                .get_type()
+                .expect("slang types every index-access expression");
+            let result_type =
+                TypeConversion::resolve_slang_type(&result_slang_type, None, context.state);
+            let value: Value<'context, 'block> = mlir_op!(
+                context.state,
+                &block,
+                SliceOperation
+                    .arr(base_value)
+                    .start(start_value)
+                    .end(end_value)
+                    .res(result_type)
+            );
+            return BlockAnd { block, value };
+        }
         let BlockAnd {
             value: place,
             block,
@@ -66,8 +123,10 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Place<'context, 'block>> {
-        if self.end().is_some() {
-            unimplemented!("range index (a[i:j]) is not yet supported");
+        if self.is_slice() {
+            unreachable!(
+                "a slice a[i:j] is emitted in value position, never as an assignable place"
+            );
         }
 
         let base = self.operand();
