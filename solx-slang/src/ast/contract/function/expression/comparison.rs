@@ -3,7 +3,6 @@
 //!
 
 use melior::ir::BlockRef;
-use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use slang_solidity_v2::ast;
@@ -59,9 +58,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .compare(AstValue::new(rhs), predicate, self.state, &block)
                 .into_mlir()
         } else if let Some(width) = self
-            .fixed_bytes_width(lhs_type)
+            .fixed_bytes_or_byte_width(lhs_type)
             .into_iter()
-            .chain(self.fixed_bytes_width(rhs_type))
+            .chain(self.fixed_bytes_or_byte_width(rhs_type))
             .max()
         {
             let common = AstType::fixed_bytes(self.state.mlir_context, width);
@@ -81,13 +80,5 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             lhs.compare(rhs, predicate, self.state, &block).into_mlir()
         };
         BlockAnd { block, value }
-    }
-
-    /// The byte width of `candidate` if it is a `!sol.fixedbytes<N>` type, matched by reconstruction
-    /// over the `bytes1 ..= bytes32` range; `None` for any other type.
-    fn fixed_bytes_width(&self, candidate: Type<'context>) -> Option<u32> {
-        (1..=solx_utils::BYTE_LENGTH_FIELD as u32).find(|&width| {
-            candidate == AstType::fixed_bytes(self.state.mlir_context, width).into_mlir()
-        })
     }
 }

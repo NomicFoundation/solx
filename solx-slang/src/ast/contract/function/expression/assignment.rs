@@ -21,6 +21,7 @@ use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::expression::operator::Operator;
+use crate::ast::emit::emit_as::EmitAs;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_place::EmitPlace;
 
@@ -118,13 +119,28 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for AssignmentEx
             ),
         };
 
+        let element_type = match &target {
+            AssignmentTarget::Pointer(_, element_type)
+            | AssignmentTarget::Storage(_, element_type) => *element_type,
+        };
         let right = self.right_operand();
         let (value, block) = if matches!(
             self.operator(),
             ast::AssignmentExpressionOperator::Equal(_)
         ) {
-            let BlockAnd { value, block } = right.emit(context, block);
-            (value, block)
+            match &right {
+                Expression::StringExpression(string_literal)
+                    if context.is_byte(element_type) =>
+                {
+                    let BlockAnd { value, block } =
+                        string_literal.emit_as(element_type, context, block);
+                    (value, block)
+                }
+                _ => {
+                    let BlockAnd { value, block } = right.emit(context, block);
+                    (value, block)
+                }
+            }
         } else {
             let operator = match self.operator() {
                 ast::AssignmentExpressionOperator::AmpersandEqual(_) => Operator::BitwiseAnd,

@@ -14,6 +14,7 @@ use solx_mlir::Value as AstValue;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::statement::StatementContext;
+use crate::ast::emit::emit_as::EmitAs;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_statement::EmitStatement;
 use crate::ast::emit::emit_values::EmitValues;
@@ -47,12 +48,26 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
 
         let expression_context = self.expression_context();
         let (block, initial_value) = if let Some(ref initializer_expression) = declaration.value() {
-            let BlockAnd {
-                value: initial_value,
-                block,
-            } = initializer_expression.emit(&expression_context, block);
-            let cast_value = TypeConversion::from_target_type(declared_type, self.state)
-                .emit(initial_value, self.state, &block);
+            let (block, cast_value) = match initializer_expression {
+                Expression::StringExpression(string_literal)
+                    if expression_context
+                        .fixed_bytes_or_byte_width(declared_type)
+                        .is_some() =>
+                {
+                    let BlockAnd { value, block } =
+                        string_literal.emit_as(declared_type, &expression_context, block);
+                    (block, value)
+                }
+                _ => {
+                    let BlockAnd {
+                        value: initial_value,
+                        block,
+                    } = initializer_expression.emit(&expression_context, block);
+                    let cast_value = TypeConversion::from_target_type(declared_type, self.state)
+                        .emit(initial_value, self.state, &block);
+                    (block, cast_value)
+                }
+            };
             (block, Some(cast_value))
         } else {
             (block, None)

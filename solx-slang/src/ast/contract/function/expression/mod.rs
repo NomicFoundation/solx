@@ -24,6 +24,7 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
+use melior::ir::r#type::TypeLike;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
@@ -129,6 +130,32 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             AstType::pointer(context.mlir_context, element_type, base_location).into_mlir()
         }
     }
+
+    /// Whether `candidate` is the single-byte `!sol.byte`, the element type of `bytes` / `string`.
+    ///
+    /// The dialect exposes no byte-type query and Rust cannot construct `!sol.byte` directly, so it
+    /// is matched against the element type of a `!sol.string`.
+    pub fn is_byte(&self, candidate: Type<'context>) -> bool {
+        let string_type =
+            AstType::string(self.state.mlir_context, DataLocation::Memory).into_mlir();
+        let byte_type =
+            unsafe { Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(string_type.to_raw(), 0)) };
+        candidate == byte_type
+    }
+
+    /// The byte width of a fixed-width byte type: `N` for `!sol.fixedbytes<N>`, `1` for the single
+    /// `!sol.byte`, and `None` for any other type.
+    ///
+    /// The dialect exposes no width query, so each `bytes1 ..= bytes32` type is reconstructed and
+    /// matched by equality.
+    pub fn fixed_bytes_or_byte_width(&self, candidate: Type<'context>) -> Option<u32> {
+        if self.is_byte(candidate) {
+            return Some(1);
+        }
+        (1..=solx_utils::BYTE_LENGTH_FIELD as u32).find(|&width| {
+            candidate == AstType::fixed_bytes(self.state.mlir_context, width).into_mlir()
+        })
+    }
 }
 
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
@@ -229,12 +256,18 @@ impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Expr
     type Output = Value<'context, 'block>;
 
     /// Emits this expression coerced to `target_type`.
+    ///
+    /// A string literal toward a `byte` / `bytesN` target materialises directly in that
+    /// representation; every other expression emits then casts.
     fn emit_as<'state>(
         &self,
         target_type: Type<'context>,
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Value<'context, 'block>> {
+        if let Expression::StringExpression(string_literal) = self {
+            return string_literal.emit_as(target_type, context, block);
+        }
         let BlockAnd { value, block } = self.emit(context, block);
         let value = TypeConversion::from_target_type(target_type, context.state).emit(
             value,
