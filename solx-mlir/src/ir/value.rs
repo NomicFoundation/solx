@@ -23,6 +23,7 @@ use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::DefaultCallDataOperation;
 use crate::ods::sol::DefaultStorageOperation;
+use crate::ods::sol::EnumCastOperation;
 use crate::ods::sol::MallocOperation;
 use crate::ods::sol::PopOperation;
 use crate::ods::sol::PushOperation;
@@ -278,6 +279,26 @@ impl<'context, 'block> Value<'context, 'block> {
             context,
             block,
             AddressCastOperation
+                .inp(self.into_mlir())
+                .out(target_type.into_mlir())
+        ))
+    }
+
+    /// Casts to `target_type` via `sol.enum_cast`, between an enumeration and its backing integer.
+    pub fn enum_cast<B>(
+        self,
+        target_type: Type<'context>,
+        context: &Context<'context>,
+        block: &B,
+    ) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        Self::new(mlir_op!(
+            context,
+            block,
+            EnumCastOperation
                 .inp(self.into_mlir())
                 .out(target_type.into_mlir())
         ))

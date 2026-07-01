@@ -33,6 +33,7 @@ use solx_mlir::ods::sol::ChainIdOperation;
 use solx_mlir::ods::sol::CodeHashOperation;
 use solx_mlir::ods::sol::CodeOperation;
 use solx_mlir::ods::sol::CoinbaseOperation;
+use solx_mlir::ods::sol::ConcatOperation;
 use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::DifficultyOperation;
 use solx_mlir::ods::sol::EncodeOperation;
@@ -42,6 +43,7 @@ use solx_mlir::ods::sol::GetCallDataOperation;
 use solx_mlir::ods::sol::LengthOperation;
 use solx_mlir::ods::sol::OriginOperation;
 use solx_mlir::ods::sol::PrevRandaoOperation;
+use solx_mlir::ods::sol::PushStringOperation;
 use solx_mlir::ods::sol::SendOperation;
 use solx_mlir::ods::sol::SigOperation;
 use solx_mlir::ods::sol::TimestampOperation;
@@ -220,6 +222,22 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
                 let result = self.emit_sol_encode(&values, Some(selector_value), false, &current);
                 (Some(result), current)
             }
+            Some(BuiltIn::BytesConcat | BuiltIn::StringConcat) => {
+                let arguments = arguments.expect("bytes.concat / string.concat is a member-access call");
+                let (values, block) = self.emit_argument_values(arguments, block);
+                let result = block
+                    .append_operation(
+                        ConcatOperation::builder(context.mlir_context, context.location())
+                            .args(&values)
+                            .result(AstType::string(context.mlir_context, solx_utils::DataLocation::Memory).into_mlir())
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("sol.concat always produces one result")
+                    .into();
+                (Some(result), block)
+            }
             Some(BuiltIn::ArrayPop) => self.emit_array_pop(access, block),
             Some(BuiltIn::ArrayPush) => {
                 let arguments = arguments.expect("array push is a member-access call");
@@ -356,10 +374,22 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             .get_type()
             .expect("base of array push has a resolved type");
         let value_argument = arguments.iter().next();
-        if value_argument.is_some() && matches!(&base_slang_type, SlangType::Bytes(_)) {
-            unimplemented!("bytes.push(x) lowers to sol.push_string, which is not yet wired");
-        }
         let context = self.expression_context.state;
+        if let (SlangType::Bytes(_), Some(value_argument)) = (&base_slang_type, &value_argument) {
+            let byte_type = AstType::fixed_bytes(context.mlir_context, 1);
+            let BlockAnd { value: bytes_reference, block } =
+                base.emit(self.expression_context, block);
+            let BlockAnd { value, block } = value_argument.emit(self.expression_context, block);
+            let byte_value = AstValue::new(value).bytes_cast(byte_type, context, &block);
+            block.append_operation(
+                PushStringOperation::builder(context.mlir_context, context.location())
+                    .addr(bytes_reference)
+                    .value(byte_value.into_mlir())
+                    .build()
+                    .into(),
+            );
+            return (None, block);
+        }
 
         let (element_type, slang_location) = match &base_slang_type {
             SlangType::Array(array_type) => (
