@@ -16,7 +16,7 @@ use solx_utils::DataLocation;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::call::CallContext;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
-use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_as::EmitAs;
 
 impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context, 'block> {
     /// Emits a struct-literal constructor `S(a, b, c)` in memory.
@@ -58,12 +58,10 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             );
 
             let BlockAnd {
-                value: argument_value,
+                value: stored,
                 block: next_block,
-            } = argument.emit(self.expression_context, block);
+            } = argument.emit_as(field_type, self.expression_context, block);
             block = next_block;
-            let stored = TypeConversion::from_target_type(field_type, context)
-                .emit(argument_value, context, &block);
             field_address.store(AstValue::new(stored), context, &block);
         }
 
