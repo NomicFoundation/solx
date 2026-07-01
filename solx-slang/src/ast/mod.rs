@@ -2,6 +2,8 @@
 //! Slang AST lowering to MLIR.
 //!
 
+/// Pure-Slang semantic queries solx derives from the AST for emission.
+pub mod analysis;
 /// A produced value paired with the block emission continues in.
 pub mod block_and;
 /// Contract definition lowering to Sol dialect MLIR.
@@ -13,11 +15,11 @@ pub mod place;
 
 use std::collections::BTreeMap;
 
-use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::SourceUnit;
 
 use solx_mlir::Context;
 
+use self::analysis::query::method_identifiers::MethodIdentifiers;
 use self::emit::emit_object::EmitObject;
 
 /// Walks a Slang AST and lowers its contract definitions to MLIR.
@@ -54,20 +56,6 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
         let name = contract.name().name();
         contract.emit(self.state);
 
-        let mut method_identifiers = BTreeMap::new();
-        for contract_member in contract.members().iter() {
-            let ContractMember::FunctionDefinition(function) = contract_member else {
-                continue;
-            };
-            let Some(signature) = function.compute_canonical_signature() else {
-                continue;
-            };
-            let Some(selector) = function.compute_selector() else {
-                continue;
-            };
-            method_identifiers.insert(signature, format!("{selector:08x}"));
-        }
-
-        Some((name, method_identifiers))
+        Some((name, contract.method_identifiers()))
     }
 }

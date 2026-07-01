@@ -14,10 +14,10 @@ use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 use solx_utils::DataLocation;
 
+use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
-use crate::ast::contract::function::storage_slot::StorageSlot;
 use crate::ast::emit::emit_expression::EmitExpression;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
