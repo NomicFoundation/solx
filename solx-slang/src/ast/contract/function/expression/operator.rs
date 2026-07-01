@@ -94,9 +94,6 @@ pub enum Operator {
     Increment,
     /// `--`
     Decrement,
-
-    /// `delete`
-    Delete,
 }
 
 impl Operator {

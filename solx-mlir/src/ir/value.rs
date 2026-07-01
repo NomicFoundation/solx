@@ -21,6 +21,8 @@ use crate::ods::sol::BytesCastOperation;
 use crate::ods::sol::CastOperation;
 use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConstantOperation;
+use crate::ods::sol::DefaultCallDataOperation;
+use crate::ods::sol::DefaultStorageOperation;
 use crate::ods::sol::MallocOperation;
 use crate::ods::sol::PopOperation;
 use crate::ods::sol::PushOperation;
@@ -132,9 +134,42 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// `sol.malloc`: a fresh memory buffer typed as `result_type`, for a memory aggregate constructed
-    /// via a literal.
-    pub fn malloc<B>(result_type: Type<'context>, context: &Context<'context>, block: &B) -> Self
+    /// `sol.malloc`: a fresh memory buffer typed as `result_type`. `Some` `size` allocates a
+    /// dynamically-sized buffer; `zero_init` zero-fills it.
+    pub fn malloc<B>(
+        result_type: Type<'context>,
+        size: Option<MlirValue<'context, 'block>>,
+        zero_init: bool,
+        context: &Context<'context>,
+        block: &B,
+    ) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let mut builder = MallocOperation::builder(context.mlir_context, context.location())
+            .addr(result_type.into_mlir());
+        if let Some(size) = size {
+            builder = builder.size(size);
+        }
+        if zero_init {
+            builder = builder.zero_init(Attribute::unit(context.mlir_context));
+        }
+        Self::new(
+            block
+                .append_operation(builder.build().into())
+                .result(0)
+                .expect("sol.malloc produces one result")
+                .into(),
+        )
+    }
+
+    /// `sol.default_storage`: the default value of a storage or transient aggregate.
+    pub fn default_storage<B>(
+        result_type: Type<'context>,
+        context: &Context<'context>,
+        block: &B,
+    ) -> Self
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
@@ -142,7 +177,24 @@ impl<'context, 'block> Value<'context, 'block> {
         Self::new(mlir_op!(
             context,
             block,
-            MallocOperation.addr(result_type.into_mlir())
+            DefaultStorageOperation.result(result_type.into_mlir())
+        ))
+    }
+
+    /// `sol.default_calldata`: the default value of a calldata aggregate.
+    pub fn default_calldata<B>(
+        result_type: Type<'context>,
+        context: &Context<'context>,
+        block: &B,
+    ) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        Self::new(mlir_op!(
+            context,
+            block,
+            DefaultCallDataOperation.result(result_type.into_mlir())
         ))
     }
 
