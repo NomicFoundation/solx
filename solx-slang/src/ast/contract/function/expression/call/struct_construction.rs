@@ -18,7 +18,7 @@ use solx_mlir::Value as AstValue;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
-use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_as::EmitAs;
 
 /// A struct construction call.
 pub struct StructConstruction {
@@ -87,11 +87,10 @@ impl StructConstruction {
             let field_address =
                 struct_pointer.gep(index_value, AstType::new(field_type), false, state, &block);
             let BlockAnd {
-                value: argument_value,
+                value: stored,
                 block: next_block,
-            } = argument.emit(context, block);
+            } = argument.emit_as(field_type, context, block);
             block = next_block;
-            let stored = argument_value.cast(AstType::new(field_type), state, &block);
             field_address.store(stored, state, &block);
         }
         BlockAnd {

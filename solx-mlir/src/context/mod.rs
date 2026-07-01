@@ -44,8 +44,6 @@ pub struct Context<'context> {
     pub mlir_context: &'context melior::Context,
     /// The MLIR module being built.
     pub module: Module<'context>,
-    /// MLIR type of the contract being emitted, the type of `this`; set by the frontend before bodies.
-    pub current_contract_type: Option<MlirType<'context>>,
 
     /// Resolution metadata keyed by the AST definition identifier of each function.
     pub function_signatures: HashMap<NodeId, Function<'context>>,
@@ -101,7 +99,6 @@ impl<'context> Context<'context> {
         Self {
             mlir_context: context,
             module,
-            current_contract_type: None,
             function_signatures: HashMap::new(),
             operator_bindings: HashMap::new(),
             dependencies: RefCell::new(IndexSet::new()),

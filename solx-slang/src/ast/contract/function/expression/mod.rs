@@ -53,6 +53,8 @@ pub struct ExpressionContext<'state, 'context, 'block> {
     pub dispatch: &'state ContractDispatch,
     /// State variable node ID to storage slot mapping.
     pub storage_layout: &'state HashMap<NodeId, StorageSlot>,
+    /// MLIR type of the contract or library being emitted, the type of `this`.
+    pub contract_type: Option<Type<'context>>,
     /// Arithmetic overflow-checking mode; Checked by default, Unchecked inside `unchecked {}` and for-loop steps.
     pub arithmetic_mode: ArithmeticMode,
 }
@@ -64,6 +66,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         environment: &'state Environment<'context, 'block>,
         dispatch: &'state ContractDispatch,
         storage_layout: &'state HashMap<NodeId, StorageSlot>,
+        contract_type: Option<Type<'context>>,
         arithmetic_mode: ArithmeticMode,
     ) -> Self {
         Self {
@@ -71,6 +74,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             environment,
             dispatch,
             storage_layout,
+            contract_type,
             arithmetic_mode,
         }
     }

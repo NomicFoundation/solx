@@ -165,6 +165,7 @@ impl EmitConstructor for ContractDefinition {
                     &mut environment,
                     scope.dispatch,
                     scope.storage_layout,
+                    scope.contract_type,
                     &return_types,
                     &[],
                 );
@@ -184,6 +185,9 @@ impl EmitConstructor for ContractDefinition {
         }
     }
 
+    /// Emits the `sol.call` to the next base constructor in the MRO chain. Each argument is passed
+    /// at its own type rather than the base parameter type; the emitted `sol.call` carries the
+    /// implicit-castable operand/parameter mismatch, so no operand cast is emitted here.
     fn emit_next_constructor_call<'state, 'context, 'block>(
         &self,
         scope: &FunctionScope<'state, 'context>,
@@ -206,8 +210,6 @@ impl EmitConstructor for ContractDefinition {
             .map(|spec| spec.arguments.as_slice())
             .unwrap_or_default();
 
-        // Each argument keeps its own type, not the base constructor's parameter type; the
-        // `sol.call` carries the implicit-castable operand/parameter mismatch, so no cast here.
         let mut operands: Vec<Value<'context, 'block>> = Vec::with_capacity(arguments.len());
         for argument in arguments.iter() {
             let emitter = ExpressionContext::new(
@@ -215,6 +217,7 @@ impl EmitConstructor for ContractDefinition {
                 environment,
                 scope.dispatch,
                 scope.storage_layout,
+                scope.contract_type,
                 ArithmeticMode::Checked,
             );
             let BlockAnd {
@@ -256,6 +259,7 @@ impl EmitConstructor for ContractDefinition {
             &environment,
             scope.dispatch,
             scope.storage_layout,
+            scope.contract_type,
             ArithmeticMode::Checked,
         );
         for state_variable in self.linearised_state_variables() {

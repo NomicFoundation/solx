@@ -38,41 +38,41 @@ impl Signature for StateVariableDefinition {
         &self,
         context: &Context<'context>,
     ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)> {
-        self.get_type()
-            .and_then(|declared_type| match &declared_type {
-                SlangType::Mapping(_) | SlangType::Array(_) | SlangType::FixedSizeArray(_) => self
-                    .keyed_signature(solx_utils::DataLocation::Storage, context)
-                    .map(|signature| (signature.input_types, signature.result_types)),
-                SlangType::Struct(struct_type) => {
-                    let Definition::Struct(struct_definition) = struct_type.definition() else {
-                        return None;
-                    };
-                    let struct_mlir_type = AstType::resolve(
-                        &declared_type,
-                        LocationPolicy::Declared(Some(solx_utils::DataLocation::Storage)),
-                        context,
-                    );
-                    let members = Member::layout(&struct_definition, struct_mlir_type, context)?;
-                    let return_types = members.iter().map(|member| member.result_type).collect();
-                    Some((Vec::new(), return_types))
-                }
-                other if other.is_reference_type() => Some((
-                    Vec::new(),
-                    vec![AstType::resolve(
-                        other,
-                        LocationPolicy::ForceMemory,
-                        context,
-                    )],
-                )),
-                other => Some((
-                    Vec::new(),
-                    vec![AstType::resolve(
-                        other,
-                        LocationPolicy::Declared(None),
-                        context,
-                    )],
-                )),
-            })
+        let declared_type = self.get_type().expect("slang validated");
+        match &declared_type {
+            SlangType::Mapping(_) | SlangType::Array(_) | SlangType::FixedSizeArray(_) => self
+                .keyed_signature(solx_utils::DataLocation::Storage, context)
+                .map(|signature| (signature.input_types, signature.result_types)),
+            SlangType::Struct(struct_type) => {
+                let Definition::Struct(struct_definition) = struct_type.definition() else {
+                    return None;
+                };
+                let struct_mlir_type = AstType::resolve(
+                    &declared_type,
+                    LocationPolicy::Declared(Some(solx_utils::DataLocation::Storage)),
+                    context,
+                );
+                let members = Member::layout(&struct_definition, struct_mlir_type, context)?;
+                let return_types = members.iter().map(|member| member.result_type).collect();
+                Some((Vec::new(), return_types))
+            }
+            other if other.is_reference_type() => Some((
+                Vec::new(),
+                vec![AstType::resolve(
+                    other,
+                    LocationPolicy::ForceMemory,
+                    context,
+                )],
+            )),
+            other => Some((
+                Vec::new(),
+                vec![AstType::resolve(
+                    other,
+                    LocationPolicy::Declared(None),
+                    context,
+                )],
+            )),
+        }
     }
 
     fn keyed_signature<'context>(

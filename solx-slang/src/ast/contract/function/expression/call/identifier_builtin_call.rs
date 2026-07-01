@@ -267,7 +267,7 @@ impl IdentifierBuiltinCall {
     }
 
     /// Emits the `assert` builtin as a `sol.assert` op: an unrecoverable panic carrying no message.
-    pub fn emit_assert<'state, 'context: 'block, 'block>(
+    fn emit_assert<'state, 'context: 'block, 'block>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
@@ -296,7 +296,7 @@ impl IdentifierBuiltinCall {
     }
 
     /// Emits the `require` builtin as a `sol.require` op, threading its optional string or custom-error message.
-    pub fn emit_require<'state, 'context: 'block, 'block>(
+    fn emit_require<'state, 'context: 'block, 'block>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,

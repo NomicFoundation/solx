@@ -95,7 +95,6 @@ impl FunctionPointerCall {
             block,
         }
     }
-
 }
 
 impl EmitTry for FunctionPointerCall {

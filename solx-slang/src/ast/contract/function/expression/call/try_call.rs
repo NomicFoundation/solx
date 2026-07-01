@@ -6,6 +6,7 @@
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
+use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::CallOptionsExpression;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::Type as SlangType;
@@ -41,9 +42,16 @@ pub struct TryCall<T> {
     inner: T,
 }
 
-impl TryCall<ExternalMemberCall> {
-    /// Classifies `try recv.f(args)`, optionally in a call-options layer; any other shape yields `None`.
-    pub fn from_expression(expression: &Expression) -> Option<Self> {
+impl<T> TryCall<T> {
+    /// Splits a `try` call expression into its optional `{value}` / `{gas}` options layer, the
+    /// callee, and the argument list; any non-call shape yields `None`.
+    fn split_call(
+        expression: &Expression,
+    ) -> Option<(
+        Option<CallOptionsExpression>,
+        Expression,
+        ArgumentsDeclaration,
+    )> {
         let Expression::FunctionCallExpression(call) = expression else {
             return None;
         };
@@ -54,7 +62,15 @@ impl TryCall<ExternalMemberCall> {
             }
             operand => (None, operand),
         };
-        let inner = ExternalMemberCall::from_callee(&callee, &call.arguments())?;
+        Some((options, callee, call.arguments()))
+    }
+}
+
+impl TryCall<ExternalMemberCall> {
+    /// Classifies `try recv.f(args)`, optionally in a call-options layer; any other shape yields `None`.
+    pub fn from_expression(expression: &Expression) -> Option<Self> {
+        let (options, callee, arguments) = Self::split_call(expression)?;
+        let inner = ExternalMemberCall::from_callee(&callee, &arguments)?;
         Some(Self { options, inner })
     }
 }
@@ -63,23 +79,14 @@ impl TryCall<FunctionPointerCall> {
     /// Classifies `try fp(args)` through an externally-visible function pointer, optionally in a
     /// call-options layer; an internal pointer, invalid in `try`, or any other shape yields `None`.
     pub fn from_expression(expression: &Expression) -> Option<Self> {
-        let Expression::FunctionCallExpression(call) = expression else {
-            return None;
-        };
-        let (options, callee) = match call.operand() {
-            Expression::CallOptionsExpression(options) => {
-                let callee = options.operand();
-                (Some(options), callee)
-            }
-            operand => (None, operand),
-        };
+        let (options, callee, arguments) = Self::split_call(expression)?;
         if !matches!(
             callee.get_type(),
             Some(SlangType::Function(function_type)) if function_type.is_externally_visible()
         ) {
             return None;
         }
-        let inner = FunctionPointerCall::from_callee(&callee, &call.arguments())?;
+        let inner = FunctionPointerCall::from_callee(&callee, &arguments)?;
         Some(Self { options, inner })
     }
 }

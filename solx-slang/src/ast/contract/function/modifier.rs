@@ -47,6 +47,10 @@ impl EmitModifierCalls for FunctionDefinition {
             .collect()
     }
 
+    /// Emits a `sol.modifier_call_blk` region for each modifier invocation. Each region holds one
+    /// `IsolatedFromAbove`, terminator-free block whose arguments are a fresh copy of the wrapped
+    /// function's whole parameter list, so invocation arguments reference those block arguments
+    /// rather than the wrapped function's entry-block arguments.
     fn emit_modifier_call_blocks<'state, 'context, 'block>(
         &self,
         scope: &FunctionScope<'state, 'context>,
@@ -65,9 +69,6 @@ impl EmitModifierCalls for FunctionDefinition {
                 continue;
             };
 
-            // The `sol.modifier_call_blk` region has one `IsolatedFromAbove`, terminator-free block
-            // whose arguments are a fresh copy of the whole wrapped-function parameter list; invocation
-            // arguments must reference these block arguments, not `f`'s entry-block arguments.
             let region = Region::new();
             let block = Block::new(&block_arg_types);
             region.append_block(block);
@@ -101,6 +102,7 @@ impl EmitModifierCalls for FunctionDefinition {
                         &environment,
                         scope.dispatch,
                         scope.storage_layout,
+                        scope.contract_type,
                         ArithmeticMode::Checked,
                     );
                     argument.emit(&emitter, current_block)
@@ -171,6 +173,7 @@ impl EmitModifierCalls for FunctionDefinition {
                 &mut environment,
                 scope.dispatch,
                 scope.storage_layout,
+                scope.contract_type,
                 &return_types,
                 &[],
             );

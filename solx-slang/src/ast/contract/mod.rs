@@ -173,12 +173,16 @@ impl EmitObject for ContractDefinition {
             contract_body.append_operation(operation.build().into());
         }
 
-        context.current_contract_type = Some(contract_type);
         self.emit_constructor(
-            &FunctionScope::new(context, Some(self), &dispatch, &storage_layout),
+            &FunctionScope::new(
+                context,
+                Some(self),
+                Some(contract_type),
+                &dispatch,
+                &storage_layout,
+            ),
             &contract_body,
         );
-        context.current_contract_type = None;
 
         let getter_selectors: HashSet<u32> = self
             .linearised_state_variables()
@@ -204,39 +208,57 @@ impl EmitObject for ContractDefinition {
             {
                 continue;
             }
-            context.current_contract_type = Some(contract_type);
             function.emit(
-                &FunctionScope::new(context, Some(self), &dispatch, &storage_layout),
+                &FunctionScope::new(
+                    context,
+                    Some(self),
+                    Some(contract_type),
+                    &dispatch,
+                    &storage_layout,
+                ),
+                None,
                 &contract_body,
             );
-            context.current_contract_type = None;
         }
 
         for (symbol, function) in &super_dispatch.shadowed {
-            context.current_contract_type = Some(contract_type);
-            function.emit_with_symbol(
-                &FunctionScope::new(context, Some(self), &dispatch, &storage_layout),
-                symbol,
+            function.emit(
+                &FunctionScope::new(
+                    context,
+                    Some(self),
+                    Some(contract_type),
+                    &dispatch,
+                    &storage_layout,
+                ),
+                Some(symbol),
                 &contract_body,
             );
-            context.current_contract_type = None;
         }
 
         for free in reached_free_functions.iter() {
-            context.current_contract_type = Some(contract_type);
-            free.emit_with_symbol(
-                &FunctionScope::new(context, Some(self), &dispatch, &storage_layout),
-                &free.node_id_qualified_symbol(),
+            free.emit(
+                &FunctionScope::new(
+                    context,
+                    Some(self),
+                    Some(contract_type),
+                    &dispatch,
+                    &storage_layout,
+                ),
+                Some(free.node_id_qualified_symbol().as_str()),
                 &contract_body,
             );
-            context.current_contract_type = None;
         }
 
         let mut emitted_modifiers: HashSet<NodeId> = HashSet::new();
         let mut invoked_modifiers: Vec<FunctionDefinition> = Vec::new();
         {
-            let modifier_scope =
-                FunctionScope::new(context, Some(self), &dispatch, &storage_layout);
+            let modifier_scope = FunctionScope::new(
+                context,
+                Some(self),
+                Some(contract_type),
+                &dispatch,
+                &storage_layout,
+            );
             let mut wrapped_functions = self.linearised_functions();
             // Collect modifiers from every constructor in the C3 chain, not just the most-derived
             // contract's own: `emit_constructor` emits a `sol.func` for each base constructor in the
@@ -259,12 +281,16 @@ impl EmitObject for ContractDefinition {
             }
         }
         for modifier in invoked_modifiers.iter() {
-            context.current_contract_type = Some(contract_type);
             modifier.emit_modifier_definition(
-                &FunctionScope::new(context, Some(self), &dispatch, &storage_layout),
+                &FunctionScope::new(
+                    context,
+                    Some(self),
+                    Some(contract_type),
+                    &dispatch,
+                    &storage_layout,
+                ),
                 &contract_body,
             );
-            context.current_contract_type = None;
         }
 
         let environment = Environment::new();
@@ -273,6 +299,7 @@ impl EmitObject for ContractDefinition {
             &environment,
             &dispatch,
             &storage_layout,
+            Some(contract_type),
             ArithmeticMode::Checked,
         );
         for state_variable in self.linearised_state_variables() {
@@ -336,12 +363,17 @@ impl EmitObject for LibraryDefinition {
         );
 
         for function in functions.iter() {
-            context.current_contract_type = Some(library_type);
             function.emit(
-                &FunctionScope::new(context, None, &dispatch, &storage_layout),
+                &FunctionScope::new(
+                    context,
+                    None,
+                    Some(library_type),
+                    &dispatch,
+                    &storage_layout,
+                ),
+                None,
                 &contract_body,
             );
-            context.current_contract_type = None;
         }
     }
 }

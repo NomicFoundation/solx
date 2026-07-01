@@ -5,9 +5,11 @@
 pub mod compilation_config;
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::SourceUnitMember;
 use slang_solidity_v2::compilation::CompilationBuilder;
 use slang_solidity_v2::compilation::CompilationUnit;
@@ -16,6 +18,7 @@ use slang_solidity_v2::utils::LanguageVersion;
 use slang_solidity_v2_common::evm_targets::EvmTarget;
 
 use solx_core::Frontend;
+use solx_mlir::UserDefinedOperator;
 use solx_standard_json::CollectableError;
 use solx_standard_json::output::error::source_location::SourceLocation;
 
@@ -124,6 +127,34 @@ impl Slang {
             );
         Ok(())
     }
+
+    /// Emits one deployable object -- a contract or a library -- into a fresh module and records it.
+    /// A construct the frontend does not yet support panics out of `emit`; that is deliberate, so an
+    /// unsupported object fails loudly rather than being silently dropped.
+    fn emit_object<T: EmitObject>(
+        object: &T,
+        name: String,
+        method_identifiers: BTreeMap<String, String>,
+        scope: &ObjectScope,
+        operator_bindings: &HashMap<(NodeId, UserDefinedOperator), NodeId>,
+        input_json: &solx_standard_json::Input,
+        file_identifier: &str,
+        output: &mut solx_standard_json::Output,
+    ) -> anyhow::Result<()> {
+        let melior_context = solx_mlir::Context::create_mlir_context();
+        let evm_version = input_json.settings.evm_version.unwrap_or_default();
+        let mut context = solx_mlir::Context::new(&melior_context, evm_version);
+        context.operator_bindings = operator_bindings.clone();
+        object.emit(&mut context, scope);
+        Self::record_object(
+            context,
+            name,
+            method_identifiers,
+            input_json,
+            file_identifier,
+            output,
+        )
+    }
 }
 
 impl Frontend for Slang {
@@ -216,6 +247,9 @@ impl Frontend for Slang {
         let file_identifiers = unit.file_ids();
         let free_functions = Self::gather_free_functions(&unit);
         let operator_bindings = OperatorBindings::gather(&unit);
+        let contract_scope = ObjectScope::new(&free_functions, &operator_bindings.functions);
+        let library_scope = ObjectScope::new(&[], &[]);
+        let no_operator_bindings = HashMap::new();
 
         for file_identifier in file_identifiers.iter() {
             let Some(file) = unit.file(file_identifier) else {
@@ -223,58 +257,32 @@ impl Frontend for Slang {
             };
             let source_unit = file.ast();
 
-            // Emit every contract as its own deployable object. The `catch_unwind` isolates each:
-            // a contract that cannot yet be emitted is simply absent from the artifacts, so its gap
-            // never aborts the file's other contracts. An `abstract contract` is never deployed.
             for contract in source_unit.contracts().iter() {
                 if contract.is_abstract() {
                     continue;
                 }
-                let emitted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
-                    || -> anyhow::Result<()> {
-                        let melior_context = solx_mlir::Context::create_mlir_context();
-                        let evm_version = input_json.settings.evm_version.unwrap_or_default();
-                        let mut context = solx_mlir::Context::new(&melior_context, evm_version);
-                        context.operator_bindings = operator_bindings.map.clone();
-                        let scope = ObjectScope::new(&free_functions, &operator_bindings.functions);
-                        contract.emit(&mut context, &scope);
-                        Self::record_object(
-                            context,
-                            contract.name().name(),
-                            contract.method_identifiers(),
-                            input_json,
-                            file_identifier,
-                            &mut output,
-                        )
-                    },
-                ));
-                if let Ok(Err(error)) = emitted {
-                    output
-                        .errors
-                        .push(solx_standard_json::OutputError::new_warning(format!(
-                            "contract '{}' was not emitted: {error}",
-                            contract.name().name()
-                        )));
-                }
+                Self::emit_object(
+                    contract,
+                    contract.name().name(),
+                    contract.method_identifiers(),
+                    &contract_scope,
+                    &operator_bindings.map,
+                    input_json,
+                    file_identifier,
+                    &mut output,
+                )?;
             }
 
-            // Emit every library as its own deployable object, including internal-only ones: the
-            // harness's `// library:` directive deploys and links it by name, so the object must
-            // exist even when all its functions are internal.
             for member in source_unit.members().iter() {
                 let SourceUnitMember::LibraryDefinition(library) = member else {
                     continue;
                 };
-
-                let melior_context = solx_mlir::Context::create_mlir_context();
-                let evm_version = input_json.settings.evm_version.unwrap_or_default();
-                let mut context = solx_mlir::Context::new(&melior_context, evm_version);
-                let scope = ObjectScope::new(&[], &[]);
-                library.emit(&mut context, &scope);
-                Self::record_object(
-                    context,
+                Self::emit_object(
+                    &library,
                     library.name().name(),
                     library.method_identifiers(),
+                    &library_scope,
+                    &no_operator_bindings,
                     input_json,
                     file_identifier,
                     &mut output,

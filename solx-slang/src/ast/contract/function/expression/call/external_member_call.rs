@@ -149,7 +149,7 @@ impl EmitTry for ExternalMemberCall {
         Vec<Value<'context, 'block>>,
         BlockRef<'context, 'block>,
     ) {
-        let (callee_name, selector, parameter_types, return_types, _is_static) =
+        let (callee_name, selector, parameter_types, return_types, is_static) =
             self.resolve_call(context.state);
         let BlockAnd {
             value: receiver,
@@ -169,7 +169,7 @@ impl EmitTry for ExternalMemberCall {
             &return_types,
             call_value,
             call_gas,
-            false,
+            is_static,
             true,
             state,
             &block,

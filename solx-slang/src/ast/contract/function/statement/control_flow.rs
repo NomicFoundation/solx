@@ -147,6 +147,7 @@ statement_emit!(ForStatement; |node, context, block| {
             context.environment,
             context.dispatch,
             context.storage_layout,
+            context.contract_type,
             ArithmeticMode::Unchecked,
         );
         let step_end = iterator_expression.emit_for_effect(&emitter, step_block);

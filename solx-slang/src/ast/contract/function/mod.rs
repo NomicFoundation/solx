@@ -32,23 +32,6 @@ impl EmitFunction for FunctionDefinition {
     fn emit<'state, 'context>(
         &self,
         scope: &FunctionScope<'state, 'context>,
-        contract_body: &BlockRef<'context, '_>,
-    ) {
-        self.emit_inner(scope, None, contract_body);
-    }
-
-    fn emit_with_symbol<'state, 'context>(
-        &self,
-        scope: &FunctionScope<'state, 'context>,
-        symbol: &str,
-        contract_body: &BlockRef<'context, '_>,
-    ) {
-        self.emit_inner(scope, Some(symbol), contract_body);
-    }
-
-    fn emit_inner<'state, 'context>(
-        &self,
-        scope: &FunctionScope<'state, 'context>,
         symbol_override: Option<&str>,
         contract_body: &BlockRef<'context, '_>,
     ) {
@@ -125,6 +108,7 @@ impl EmitFunction for FunctionDefinition {
                 &mut environment,
                 scope.dispatch,
                 scope.storage_layout,
+                scope.contract_type,
                 &signature.return_types,
                 &return_slots,
             );
@@ -155,8 +139,13 @@ impl EmitFunction for FunctionDefinition {
                         let slang_type = returns
                             .get(index)
                             .and_then(|parameter| parameter.get_type());
-                        AstValue::type_default(slang_type.as_ref(), return_type, state, &current_block)
-                            .into_mlir()
+                        AstValue::type_default(
+                            slang_type.as_ref(),
+                            return_type,
+                            state,
+                            &current_block,
+                        )
+                        .into_mlir()
                     }
                 })
                 .collect();

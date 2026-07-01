@@ -16,6 +16,7 @@ use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::statement::assembly::YulContext;
+use crate::ast::contract::storage_layout::StateVariableSlot;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_yul::EmitYul;
 
@@ -49,6 +50,7 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
             context.environment,
             context.dispatch,
             context.storage_layout,
+            None,
             ArithmeticMode::Checked,
         );
         let BlockAnd { value, block } = initializer.emit(&emitter, block);
@@ -64,10 +66,7 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
         let parts: Vec<_> = path.iter().collect();
         let head_definition = parts[0].resolve_to_definition();
         if let Some(Definition::StateVariable(state_variable)) = &head_definition {
-            let slot = context
-                .storage_layout
-                .get(&state_variable.node_id())
-                .expect("unregistered state variable");
+            let slot = context.storage_layout.slot(state_variable.node_id());
             match parts[1].resolve_to_built_in() {
                 Some(BuiltIn::YulSlot) => {
                     let slot_word =

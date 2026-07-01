@@ -42,6 +42,7 @@ use slang_solidity_v2::ast::Type as SlangType;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
+use crate::ast::contract::storage_layout::StateVariableSlot;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_place::EmitPlace;
 use crate::ast::operator_binding::OperatorBindings;
@@ -303,8 +304,6 @@ impl Operator {
                 (result, block)
             }
             Operator::Subtract => {
-                // `-x` is emitted as `0 - x`, checked or unchecked per the active arithmetic mode,
-                // as the binary subtraction path does; checked negation reverts on `-type(intN).min`.
                 let BlockAnd { value, block } = operand.emit(context, block);
                 let operand_type = target_type.expect("slang validated");
                 let value = value
@@ -362,12 +361,7 @@ impl Operator {
     ) -> (Value<'context, 'block>, Value<'context, 'block>) {
         match identifier.resolve_to_definition() {
             Some(Definition::StateVariable(state_variable)) => {
-                let slot = context
-                    .storage_layout
-                    .get(&state_variable.node_id())
-                    .unwrap_or_else(|| {
-                        unreachable!("unregistered state variable {:?}", state_variable.node_id())
-                    });
+                let slot = context.storage_layout.slot(state_variable.node_id());
                 let element_type = AstType::resolve_state_variable(
                     &state_variable.get_type().expect("slang validated"),
                     context.state,

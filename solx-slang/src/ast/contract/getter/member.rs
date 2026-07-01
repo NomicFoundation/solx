@@ -37,7 +37,7 @@ impl<'context> Member<'context> {
     ) -> Option<Vec<Self>> {
         let mut members = Vec::new();
         for (member_index, member) in struct_definition.members().iter().enumerate() {
-            let member_slang = member.get_type()?;
+            let member_slang = member.get_type().expect("slang validated");
             let stored_type = AstType::new(struct_mlir_type)
                 .element_type(member_index)
                 .into_mlir();

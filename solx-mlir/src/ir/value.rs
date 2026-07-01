@@ -5,6 +5,7 @@
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
+use melior::ir::OperationRef;
 use melior::ir::Type as MlirType;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
@@ -501,14 +502,7 @@ impl<'context, 'block> Value<'context, 'block> {
             .result(0)
             .expect("sol.ext_call produces a status result")
             .into();
-        let results = (0..result_types.len())
-            .map(|index| {
-                operation
-                    .result(index + 1)
-                    .expect("sol.ext_call produces a status plus its declared results")
-                    .into()
-            })
-            .collect();
+        let results = Self::operation_results(operation, 1, result_types.len());
         (status, results)
     }
 
@@ -547,14 +541,7 @@ impl<'context, 'block> Value<'context, 'block> {
                 ))
                 .outs(result_types)
         ));
-        (0..result_types.len())
-            .map(|index| {
-                operation
-                    .result(index + 1)
-                    .expect("sol.ext_call produces the declared results")
-                    .into()
-            })
-            .collect()
+        Self::operation_results(operation, 1, result_types.len())
     }
 
     /// Calls this function-pointer value, returning the decoded results. Dispatch is on the value's
@@ -590,14 +577,7 @@ impl<'context, 'block> Value<'context, 'block> {
                     .callee(self.into_mlir())
                     .callee_operands(argument_values)
             ));
-            (0..result_types.len())
-                .map(|index| {
-                    operation
-                        .result(index)
-                        .expect("sol.icall produces its declared result count")
-                        .into()
-                })
-                .collect()
+            Self::operation_results(operation, 0, result_types.len())
         }
     }
 
@@ -643,15 +623,25 @@ impl<'context, 'block> Value<'context, 'block> {
             .result(0)
             .expect("sol.ext_icall produces a status result")
             .into();
-        let results = (0..result_types.len())
+        let results = Self::operation_results(operation, 1, result_types.len());
+        (status, results)
+    }
+
+    /// Collects `count` operation results starting at `offset` as MLIR values; the leading result of
+    /// a `sol.ext_call` / `sol.ext_icall` is the status flag, skipped with an `offset` of 1.
+    fn operation_results(
+        operation: OperationRef<'context, 'block>,
+        offset: usize,
+        count: usize,
+    ) -> Vec<MlirValue<'context, 'block>> {
+        (offset..offset + count)
             .map(|index| {
                 operation
-                    .result(index + 1)
-                    .expect("sol.ext_icall produces a status plus its declared results")
+                    .result(index)
+                    .expect("the call operation produces its declared results")
                     .into()
             })
-            .collect();
-        (status, results)
+            .collect()
     }
 
     /// `sol.encode`: the ABI-encoded `bytes memory` payload of `ins`. A `selector`,

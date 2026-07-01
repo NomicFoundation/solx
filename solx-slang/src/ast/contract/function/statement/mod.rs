@@ -62,6 +62,8 @@ pub struct StatementContext<'state, 'context, 'block> {
     pub dispatch: &'state ContractDispatch,
     /// State variable node ID to storage slot mapping.
     pub storage_layout: &'state HashMap<NodeId, StorageSlot>,
+    /// MLIR type of the contract or library being emitted, the type of `this`.
+    pub contract_type: Option<Type<'context>>,
     /// The function's declared return types, for `emit_return` to cast to.
     pub return_types: &'state [Type<'context>],
     /// The function's return slots, parallel to `return_types` (`None` for an unnamed return); a bare
@@ -78,6 +80,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         environment: &'state mut Environment<'context, 'block>,
         dispatch: &'state ContractDispatch,
         storage_layout: &'state HashMap<NodeId, StorageSlot>,
+        contract_type: Option<Type<'context>>,
         return_types: &'state [Type<'context>],
         return_slots: &'state [Option<Value<'context, 'block>>],
     ) -> Self {
@@ -86,6 +89,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             environment,
             dispatch,
             storage_layout,
+            contract_type,
             return_types,
             return_slots,
             arithmetic_mode: ArithmeticMode::Checked,
@@ -103,6 +107,7 @@ impl<'state, 'context, 'block> From<&'state StatementContext<'_, 'context, 'bloc
             statement.environment,
             statement.dispatch,
             statement.storage_layout,
+            statement.contract_type,
             statement.arithmetic_mode,
         )
     }
@@ -217,9 +222,7 @@ statement_emit!(ExpressionStatement; |node, context, block| {
                     );
                     block
                 }
-                Some(Expression::StringExpression(string_expression))
-                    if !string_expression.value().is_empty() =>
-                {
+                Some(Expression::StringExpression(string_expression)) => {
                     let message = String::from_utf8(string_expression.value())
                         .expect("revert message is valid UTF-8");
                     let state = context.state;

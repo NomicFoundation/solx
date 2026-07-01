@@ -14,15 +14,15 @@ use crate::ast::contract::storage_layout::StorageSlot;
 /// A contract's storage layout: state variable node ID to its storage slot.
 pub trait StorageLayout {
     /// The layout re-keyed from Slang's ABI, covering the persistent, transient, and immutable
-    /// layouts, never re-packed here. Empty when the ABI is unavailable.
+    /// layouts, never re-packed here.
     fn storage_layout(&self) -> HashMap<NodeId, StorageSlot>;
 }
 
 impl StorageLayout for ContractDefinition {
     fn storage_layout(&self) -> HashMap<NodeId, StorageSlot> {
-        let Some(abi) = self.compute_abi() else {
-            return HashMap::new();
-        };
+        let abi = self
+            .compute_abi()
+            .expect("slang validated: an emitted contract has a computable ABI");
         let mut layout: HashMap<NodeId, StorageSlot> = abi
             .storage_layout()
             .iter()

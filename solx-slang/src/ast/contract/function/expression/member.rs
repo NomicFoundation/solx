@@ -10,7 +10,6 @@ use melior::ir::r#type::IntegerType;
 use num_bigint::BigInt;
 use num_bigint::Sign;
 use slang_solidity_v2::ast::BuiltIn;
-use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
@@ -200,18 +199,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     else {
                         unreachable!("type(I).interfaceId resolves to an interface definition");
                     };
-                    let interface_id = interface_definition
-                        .members()
-                        .iter()
-                        .filter_map(|member| match member {
-                            ContractMember::FunctionDefinition(function) => {
-                                function.compute_selector()
-                            }
-                            _ => None,
-                        })
-                        .fold(0u32, |interface_id, selector| interface_id ^ selector);
                     let value = AstValue::selector_constant(
-                        &BigInt::from(interface_id),
+                        &BigInt::from(interface_definition.compute_interface_id()),
                         4,
                         context.state,
                         &block,

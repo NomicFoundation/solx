@@ -61,11 +61,6 @@ impl ReachabilityWalk {
         }
     }
 
-    /// Whether `node_id` is already in the reached result set, for one-time bookkeeping before `reach`.
-    pub fn is_collected(&self, node_id: NodeId) -> bool {
-        self.collected.contains_key(&node_id)
-    }
-
     /// Queues `function`'s body to be walked WITHOUT adding it to the result set, to follow the calls
     /// it makes, e.g. a free function emitted elsewhere.
     pub fn enqueue(&mut self, function: FunctionDefinition) {

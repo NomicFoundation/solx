@@ -15,6 +15,7 @@ use solx_mlir::Value as AstValue;
 
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::storage_layout::StateVariableSlot;
 use crate::ast::emit::emit_as::EmitAs;
 use crate::ast::emit::emit_expression::EmitExpression;
 
@@ -38,12 +39,7 @@ expression_emit!(Identifier; |node, context, block| {
                     initializer.emit(context, block)
                 }
             } else {
-                let slot = context
-                    .storage_layout
-                    .get(&state_variable.node_id())
-                    .unwrap_or_else(|| {
-                        unreachable!("unregistered state variable {:?}", state_variable.node_id())
-                    });
+                let slot = context.storage_layout.slot(state_variable.node_id());
                 let value = slot.load(context.state, element_type, &block);
                 BlockAnd {
                     block,

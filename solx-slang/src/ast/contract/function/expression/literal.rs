@@ -55,10 +55,7 @@ expression_emit!(FalseKeyword; |context, block| {
 });
 
 expression_emit!(ThisKeyword; |context, block| {
-    let contract_type = context
-        .state
-        .current_contract_type
-        .expect("slang validated");
+    let contract_type = context.contract_type.expect("slang validated");
     let value: Value<'context, 'block> =
         mlir_op!(context.state, block, ThisOperation.addr(contract_type));
     BlockAnd {

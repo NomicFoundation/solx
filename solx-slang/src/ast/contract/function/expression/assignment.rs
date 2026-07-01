@@ -21,6 +21,7 @@ use solx_mlir::ods::sol::DeleteOperation;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
+use crate::ast::contract::storage_layout::StateVariableSlot;
 use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::emit::emit_as::EmitAs;
 use crate::ast::emit::emit_expression::EmitExpression;
@@ -132,10 +133,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         let declared_type = state_variable.get_type().expect("slang validated");
         let slot = context
             .storage_layout
-            .get(&state_variable.node_id())
-            .unwrap_or_else(|| {
-                unreachable!("unregistered state variable {:?}", state_variable.node_id())
-            })
+            .slot(state_variable.node_id())
             .clone();
         let element_type = AstType::resolve(
             &declared_type,
@@ -254,13 +252,12 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
             block = next;
             targets.push((target, value));
         }
-        let result = targets
-            .into_iter()
-            .rev()
-            .fold(None, |_, (target, value)| {
-                Some(target.store(context, value, &block))
-            })
-            .unwrap_or_else(|| AstValue::uint256(0, context.state, &block).into_mlir());
+        let mut result = None;
+        for (target, value) in targets.into_iter().rev() {
+            result = Some(target.store(context, value, &block));
+        }
+        let result =
+            result.unwrap_or_else(|| AstValue::uint256(0, context.state, &block).into_mlir());
         (result, block)
     }
 

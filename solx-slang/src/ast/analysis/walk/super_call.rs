@@ -41,7 +41,9 @@ pub struct SuperDispatch {
 
 impl SuperDispatch {
     /// Re-resolves every `super` call reachable from `contract`'s functions and
-    /// constructor against its C3 linearisation.
+    /// constructor against its C3 linearisation. Base-qualified calls in inheritance-specifier
+    /// arguments (`contract C is Base(Other.f())`), which no function body contains, are collected
+    /// too so each gets a `redirect` entry.
     pub fn build_super_dispatch(contract: &ContractDefinition) -> Self {
         let mro: Vec<ContractDefinition> = contract
             .linearised_bases()
@@ -90,9 +92,6 @@ impl SuperDispatch {
             }
         }
 
-        // A base-qualified call can also appear in an inheritance-specifier argument
-        // (`contract C is Base(Other.f())`), which no function body contains; collect those
-        // up front so each gets a `redirect` entry.
         for base_contract in mro.iter() {
             let mut collector = Self::default();
             for inheritance in base_contract.inheritance_types().iter() {

@@ -12,6 +12,9 @@
 // CHECK: sol.func @{{.*empty_named_revert.*}}
 // CHECK:   sol.revert ""
 
+// CHECK: sol.func @{{.*empty_string_revert.*}}
+// CHECK:   sol.revert ""
+
 // CHECK: sol.func @{{.*message_revert.*}}
 // CHECK:   sol.revert "oops"
 
@@ -31,6 +34,10 @@ contract C {
 
     function empty_named_revert(bool b) public pure {
         if (b) revert({});
+    }
+
+    function empty_string_revert() public pure {
+        revert("");
     }
 
     function message_revert() public pure {

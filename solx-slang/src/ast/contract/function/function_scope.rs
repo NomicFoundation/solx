@@ -4,6 +4,8 @@
 
 use std::collections::HashMap;
 
+use melior::ir::Type;
+
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
@@ -22,6 +24,8 @@ pub struct FunctionScope<'state, 'context> {
     pub state: &'state Context<'context>,
     /// Containing contract; `None` for a library's functions, which have no constructor or state.
     pub contract: Option<&'state ContractDefinition>,
+    /// MLIR type of the contract or library being emitted, the type of `this`.
+    pub contract_type: Option<Type<'context>>,
     /// Contract-local dispatch metadata.
     pub dispatch: &'state ContractDispatch,
     /// State variable node ID to `(slot, byte_offset)` mapping.
@@ -33,12 +37,14 @@ impl<'state, 'context> FunctionScope<'state, 'context> {
     pub fn new(
         state: &'state Context<'context>,
         contract: Option<&'state ContractDefinition>,
+        contract_type: Option<Type<'context>>,
         dispatch: &'state ContractDispatch,
         storage_layout: &'state HashMap<NodeId, StorageSlot>,
     ) -> Self {
         Self {
             state,
             contract,
+            contract_type,
             dispatch,
             storage_layout,
         }
