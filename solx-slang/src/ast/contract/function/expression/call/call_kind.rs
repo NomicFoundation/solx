@@ -3,13 +3,13 @@
 //! rather than a chain of `Option`-returning probes.
 //!
 
+use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
-use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StructDefinition;
 
 /// The one emission kind a function call's callee resolves to. The variants are mutually exclusive
@@ -33,14 +33,17 @@ impl CallKind {
     pub fn from_call(
         call: &FunctionCallExpression,
         callee: &Expression,
-        arguments: &PositionalArguments,
+        arguments: &ArgumentsDeclaration,
     ) -> Self {
         if let Expression::Identifier(identifier) = callee
             && let Some(Definition::Struct(struct_definition)) = identifier.resolve_to_definition()
         {
             return Self::StructConstruction(struct_definition);
         }
-        if call.is_type_conversion() && arguments.len() == 1 {
+        if let ArgumentsDeclaration::PositionalArguments(positional) = arguments
+            && call.is_type_conversion()
+            && positional.len() == 1
+        {
             return Self::TypeConversion;
         }
         if let Expression::Identifier(identifier) = callee

@@ -42,10 +42,8 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
     ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
         let emitter = CallContext::new(context);
         let callee = self.operand();
-        let ArgumentsDeclaration::PositionalArguments(arguments) = &self.arguments() else {
-            unreachable!("only positional arguments supported");
-        };
-        match CallKind::from_call(self, &callee, arguments) {
+        let arguments = self.arguments();
+        match CallKind::from_call(self, &callee, &arguments) {
             CallKind::StructConstruction(struct_definition) => {
                 let result_type = context
                     .resolve_slang_type(self.get_type())
@@ -53,7 +51,7 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
                 let (value, block) = emitter.emit_struct_constructor(
                     &struct_definition,
                     result_type,
-                    arguments,
+                    &arguments,
                     block,
                 );
                 BlockAnd {
@@ -62,29 +60,34 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
                 }
             }
             CallKind::TypeConversion => {
-                let (value, block) = emitter.emit_type_conversion(self, arguments, block);
+                let (value, block) =
+                    emitter.emit_type_conversion(self, &emitter.positional(&arguments), block);
                 BlockAnd {
                     block,
                     value: vec![value],
                 }
             }
             CallKind::IdentifierBuiltinCall => {
-                let (value, block) = emitter.emit_built_in(self, &callee, arguments, block);
+                let (value, block) =
+                    emitter.emit_built_in(self, &callee, &emitter.positional(&arguments), block);
                 BlockAnd {
                     block,
                     value: value.into_iter().collect(),
                 }
             }
             CallKind::MemberBuiltinCall(access) => {
-                let (value, block) =
-                    emitter.emit_built_in_member_access(&access, Some(arguments), block);
+                let (value, block) = emitter.emit_built_in_member_access(
+                    &access,
+                    Some(&emitter.positional(&arguments)),
+                    block,
+                );
                 BlockAnd {
                     block,
                     value: value.into_iter().collect(),
                 }
             }
             CallKind::IdentifierFunctionCall(function_definition) => {
-                emitter.emit_function_call(&function_definition, arguments, block)
+                emitter.emit_function_call(&function_definition, &arguments, block)
             }
         }
     }
@@ -94,6 +97,14 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
     /// Creates a new call emitter.
     pub fn new(expression_context: &'emitter ExpressionContext<'state, 'context, 'block>) -> Self {
         Self { expression_context }
+    }
+
+    /// Unwraps the positional argument list of a call that does not accept named arguments.
+    fn positional(&self, arguments: &ArgumentsDeclaration) -> PositionalArguments {
+        let ArgumentsDeclaration::PositionalArguments(positional) = arguments else {
+            unreachable!("only direct calls and struct constructors accept named arguments");
+        };
+        positional.clone()
     }
 
     /// Emits an explicit one-argument type conversion (`uint256(x)`, `bytes4(x)`, `E(x)`).

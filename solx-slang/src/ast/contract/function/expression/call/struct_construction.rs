@@ -5,7 +5,8 @@
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use slang_solidity_v2::ast::PositionalArguments;
+use slang_solidity_v2::ast::ArgumentsDeclaration;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StructDefinition;
 
 use solx_mlir::Pointer;
@@ -19,25 +20,26 @@ use crate::ast::contract::function::expression::call::type_conversion::TypeConve
 use crate::ast::emit::emit_as::EmitAs;
 
 impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context, 'block> {
-    /// Emits a struct-literal constructor `S(a, b, c)` in memory.
+    /// Emits a struct-literal constructor `S(a, b, c)` or `S({b: .., a: ..})` in memory, evaluating
+    /// each argument in struct-member declaration order.
     pub(super) fn emit_struct_constructor(
         &self,
         struct_definition: &StructDefinition,
         result_type: Type<'context>,
-        arguments: &PositionalArguments,
+        arguments: &ArgumentsDeclaration,
         block: BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let context = self.expression_context.state;
+        let members = struct_definition.members();
+        let member_ids: Vec<NodeId> = members.iter().map(|member| member.node_id()).collect();
+        let ordered_arguments = arguments
+            .ordered_by(&member_ids)
+            .expect("slang matches every struct-constructor argument to a member");
         let struct_address =
             AstValue::malloc(AstType::new(result_type), None, false, context, &block);
 
         let mut block = block;
-        for (index, (member, argument)) in struct_definition
-            .members()
-            .iter()
-            .zip(arguments.iter())
-            .enumerate()
-        {
+        for (index, (member, argument)) in members.iter().zip(ordered_arguments).enumerate() {
             let field_slang_type = member.get_type().expect("slang types every struct member");
             let field_type = TypeConversion::resolve_slang_type(
                 &field_slang_type,
