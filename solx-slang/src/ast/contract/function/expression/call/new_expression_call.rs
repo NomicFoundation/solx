@@ -4,10 +4,11 @@
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
+use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
-use slang_solidity_v2::ast::PositionalArguments;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::TypeName as SlangTypeName;
 
@@ -28,7 +29,7 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
     pub(super) fn emit_new_expression(
         &self,
         call: &FunctionCallExpression,
-        arguments: &PositionalArguments,
+        arguments: &ArgumentsDeclaration,
         call_value: Option<Value<'context, 'block>>,
         salt: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
@@ -54,7 +55,10 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             _ => None,
         };
         if let Some(result_type) = dynamic_result_type {
-            let (values, current_block) = self.emit_argument_values(arguments, block);
+            let ArgumentsDeclaration::PositionalArguments(positional) = arguments else {
+                unreachable!("a dynamic new array, bytes, or string takes a positional size");
+            };
+            let (values, current_block) = self.emit_argument_values(positional, block);
             let size = AstValue::from(*values.first().expect("slang validates the size argument"))
                 .cast(
                     AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD),
@@ -79,7 +83,19 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
         let Definition::Contract(contract_definition) = contract_type.definition() else {
             unreachable!("Slang ContractType always references a Contract definition");
         };
-        let ordered_arguments: Vec<Expression> = arguments.iter().collect();
+        let parameter_ids: Vec<NodeId> = contract_definition
+            .constructor()
+            .map(|constructor| {
+                constructor
+                    .parameters()
+                    .iter()
+                    .map(|parameter| parameter.node_id())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let ordered_arguments = arguments
+            .ordered_by(&parameter_ids)
+            .expect("slang matches every constructor argument to a parameter");
         self.emit_contract_creation(
             &contract_definition,
             &ordered_arguments,

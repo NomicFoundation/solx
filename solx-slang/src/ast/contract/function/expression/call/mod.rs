@@ -133,13 +133,8 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
                 }
             }
             CallKind::NewExpressionCall => {
-                let (value, block) = emitter.emit_new_expression(
-                    self,
-                    &emitter.positional(&arguments),
-                    call_value,
-                    salt,
-                    block,
-                );
+                let (value, block) =
+                    emitter.emit_new_expression(self, &arguments, call_value, salt, block);
                 BlockAnd {
                     block,
                     value: vec![value],
