@@ -94,6 +94,42 @@ impl Slang {
             })
             .collect()
     }
+
+    /// Finalises one emitted object's module and records it in `output` under `name`, keyed by its
+    /// source file.
+    fn record_object(
+        context: solx_mlir::Context<'_>,
+        name: String,
+        method_identifiers: BTreeMap<String, String>,
+        input_json: &solx_standard_json::Input,
+        file_identifier: &str,
+        output: &mut solx_standard_json::Output,
+    ) -> anyhow::Result<()> {
+        let runtime_code_identifier =
+            format!("{name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX);
+        let capture_sol_dialect = input_json.settings.output_selection.check_selection(
+            file_identifier,
+            Some(name.as_str()),
+            solx_standard_json::InputSelector::MLIR,
+        );
+        let mlir_stages = context.finalize_module(&runtime_code_identifier, capture_sol_dialect)?;
+        output
+            .contracts
+            .entry(file_identifier.to_string())
+            .or_default()
+            .insert(
+                name,
+                solx_standard_json::output::contract::Contract {
+                    mlir: Some(mlir_stages),
+                    evm: Some(solx_standard_json::output::contract::evm::EVM {
+                        method_identifiers: Some(method_identifiers),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            );
+        Ok(())
+    }
 }
 
 impl Frontend for Slang {
@@ -192,45 +228,46 @@ impl Frontend for Slang {
                 continue;
             };
             let source_unit = file.ast();
-            let melior_context = solx_mlir::Context::create_mlir_context();
 
-            let evm_version = input_json.settings.evm_version.unwrap_or_default();
-            let mut context = solx_mlir::Context::new(&melior_context, evm_version);
-            let mut emitter = AstEmitter::new(&mut context);
-            let Some((contract_name, method_identifiers)) =
-                emitter.emit(&source_unit, &operator_bindings, &free_functions)
-            else {
-                continue;
-            };
+            for contract in source_unit.contracts().iter() {
+                if contract.is_abstract() {
+                    continue;
+                }
+                let evm_version = input_json.settings.evm_version.unwrap_or_default();
+                let melior_context = solx_mlir::Context::create_mlir_context();
+                let mut context = solx_mlir::Context::new(&melior_context, evm_version);
+                let method_identifiers = AstEmitter::new(&mut context).emit_contract(
+                    contract,
+                    &operator_bindings,
+                    &free_functions,
+                );
+                Self::record_object(
+                    context,
+                    contract.name().name(),
+                    method_identifiers,
+                    input_json,
+                    file_identifier,
+                    &mut output,
+                )?;
+            }
 
-            let runtime_code_identifier = format!(
-                "{contract_name}{}",
-                solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX
-            );
-            let capture_sol_dialect = input_json.settings.output_selection.check_selection(
-                file_identifier,
-                Some(contract_name.as_str()),
-                solx_standard_json::InputSelector::MLIR,
-            );
-            let mlir_stages =
-                context.finalize_module(&runtime_code_identifier, capture_sol_dialect)?;
-
-            let evm = Some(solx_standard_json::output::contract::evm::EVM {
-                method_identifiers: Some(method_identifiers),
-                ..Default::default()
-            });
-
-            let contract = solx_standard_json::output::contract::Contract {
-                mlir: Some(mlir_stages),
-                evm,
-                ..Default::default()
-            };
-
-            output
-                .contracts
-                .entry(file_identifier.to_string())
-                .or_default()
-                .insert(contract_name, contract);
+            for member in source_unit.members().iter() {
+                let SourceUnitMember::LibraryDefinition(library) = member else {
+                    continue;
+                };
+                let evm_version = input_json.settings.evm_version.unwrap_or_default();
+                let melior_context = solx_mlir::Context::create_mlir_context();
+                let mut context = solx_mlir::Context::new(&melior_context, evm_version);
+                AstEmitter::new(&mut context).emit_library(&library);
+                Self::record_object(
+                    context,
+                    library.name().name(),
+                    BTreeMap::new(),
+                    input_json,
+                    file_identifier,
+                    &mut output,
+                )?;
+            }
         }
 
         Ok(output)
