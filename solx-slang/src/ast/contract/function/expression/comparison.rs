@@ -49,6 +49,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         predicate: CmpPredicate,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Value<'context, 'block>> {
+        if let Some(function_id) = self.user_defined_operator(left, predicate.into()) {
+            let BlockAnd { value: lhs, block } = left.emit(self, block);
+            let BlockAnd { value: rhs, block } = right.emit(self, block);
+            let value = self.emit_operator_call(function_id, vec![lhs, rhs], &block);
+            return BlockAnd { block, value };
+        }
         let BlockAnd { value: lhs, block } = left.emit(self, block);
         let BlockAnd { value: rhs, block } = right.emit(self, block);
         let lhs_type = lhs.r#type();

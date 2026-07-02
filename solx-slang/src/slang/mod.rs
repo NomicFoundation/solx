@@ -19,6 +19,7 @@ use solx_standard_json::CollectableError;
 use solx_standard_json::output::error::source_location::SourceLocation;
 
 use crate::ast::AstEmitter;
+use crate::ast::operator_binding::OperatorBindings;
 
 use self::compilation_config::CompilationConfig;
 
@@ -162,6 +163,7 @@ impl Frontend for Slang {
         }
 
         let file_identifiers = unit.file_ids();
+        let operator_bindings = OperatorBindings::gather(&unit);
 
         for file_identifier in &file_identifiers {
             let Some(file) = unit.file(file_identifier) else {
@@ -173,7 +175,9 @@ impl Frontend for Slang {
             let evm_version = input_json.settings.evm_version.unwrap_or_default();
             let mut context = solx_mlir::Context::new(&melior_context, evm_version);
             let mut emitter = AstEmitter::new(&mut context);
-            let Some((contract_name, method_identifiers)) = emitter.emit(&source_unit) else {
+            let Some((contract_name, method_identifiers)) =
+                emitter.emit(&source_unit, &operator_bindings)
+            else {
                 continue;
             };
 

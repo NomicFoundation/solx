@@ -79,8 +79,32 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
         };
         match access.member().resolve_to_built_in() {
             Some(BuiltIn::AbiDecode) => Some(self.emit_abi_decode(call, arguments, block)),
+            Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
+                Some(self.emit_wrap_unwrap(call, arguments, block))
+            }
             _ => None,
         }
+    }
+
+    /// Emits `T.wrap(x)` / `T.unwrap(v)` as a type-level identity cast to the call's result type: a
+    /// user-defined value type resolves to its backing type, so both directions cast between values of
+    /// that same MLIR type.
+    fn emit_wrap_unwrap(
+        &self,
+        call: &FunctionCallExpression,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let argument = arguments
+            .iter()
+            .next()
+            .expect("a UDVT wrap/unwrap takes one positional argument");
+        let BlockAnd { value, block } = argument.emit(self.expression_context, block);
+        let context = self.expression_context.state;
+        let result_slang_type = call.get_type().expect("slang types every wrap/unwrap");
+        let result_type = TypeConversion::resolve_slang_type(&result_slang_type, None, context);
+        let value = TypeConversion::from_target_type(result_type, context).emit(value, context, &block);
+        (vec![value], block)
     }
 
     /// Emits a member access expression as an EVM intrinsic.

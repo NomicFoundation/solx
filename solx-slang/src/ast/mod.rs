@@ -10,6 +10,8 @@ pub mod block_and;
 pub mod contract;
 /// Slang AST emission traits.
 pub mod emit;
+/// User-defined operator bindings (`using {f as op} for T global;`).
+pub mod operator_binding;
 /// A storable location: an address pointer plus its element type.
 pub mod place;
 
@@ -21,6 +23,7 @@ use solx_mlir::Context;
 
 use self::analysis::query::method_identifiers::MethodIdentifiers;
 use self::emit::emit_object::EmitObject;
+use self::operator_binding::OperatorBindings;
 
 /// Walks a Slang AST and lowers its contract definitions to MLIR.
 pub struct AstEmitter<'state, 'context> {
@@ -48,12 +51,17 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
     ///
     /// A construct the frontend does not yet support panics out of emission; that is deliberate, so
     /// an unhandled case surfaces immediately rather than silently miscompiling.
-    pub fn emit(&mut self, unit: &SourceUnit) -> Option<(String, BTreeMap<String, String>)> {
+    pub fn emit(
+        &mut self,
+        unit: &SourceUnit,
+        operator_bindings: &OperatorBindings,
+    ) -> Option<(String, BTreeMap<String, String>)> {
         let contracts = unit.contracts();
         let contract = contracts.first()?;
 
         let name = contract.name().name();
-        contract.emit(self.state);
+        self.state.operator_bindings = operator_bindings.map.clone();
+        contract.emit(self.state, &operator_bindings.functions);
 
         Some((name, contract.method_identifiers()))
     }

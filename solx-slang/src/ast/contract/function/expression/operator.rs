@@ -2,11 +2,18 @@
 //! Solidity operator parsed from source text.
 //!
 
+use melior::ir::BlockRef;
 use melior::ir::Location;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use melior::ir::operation::Operation;
+use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::Type as SlangType;
 
+use solx_mlir::Function;
+use solx_mlir::UserDefinedOperator;
 use solx_mlir::ods::sol::AddOperation;
 use solx_mlir::ods::sol::AndOperation;
 use solx_mlir::ods::sol::CAddOperation;
@@ -23,6 +30,9 @@ use solx_mlir::ods::sol::ShlOperation;
 use solx_mlir::ods::sol::ShrOperation;
 use solx_mlir::ods::sol::SubOperation;
 use solx_mlir::ods::sol::XorOperation;
+
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
 /// Solidity operator parsed from source text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -206,5 +216,54 @@ impl Operator {
                 "emit_sol_binary_operation called on non-arithmetic operator: {self:?}"
             ),
         }
+    }
+}
+
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
+    /// The function bound to `user_operator` for `operand`'s user-defined value type, or `None` when
+    /// the operand is not a bound user-defined value type.
+    pub fn user_defined_operator(
+        &self,
+        operand: &Expression,
+        user_operator: UserDefinedOperator,
+    ) -> Option<NodeId> {
+        let SlangType::UserDefinedValue(udvt_type) = operand.get_type()? else {
+            return None;
+        };
+        let Definition::UserDefinedValueType(udvt_definition) = udvt_type.definition() else {
+            return None;
+        };
+        self.state
+            .operator_bindings
+            .get(&(udvt_definition.node_id(), user_operator))
+            .copied()
+    }
+
+    /// Emits a `sol.call` to the bound user-defined-operator function `function_id`, coercing each
+    /// argument to its declared parameter type, and returns the single result value.
+    pub fn emit_operator_call(
+        &self,
+        function_id: NodeId,
+        argument_values: Vec<Value<'context, 'block>>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        let (mlir_name, parameter_types, return_types) = self
+            .state
+            .resolve_function(function_id)
+            .expect("bound operator function resolves to a registered signature");
+        let argument_values: Vec<_> = argument_values
+            .into_iter()
+            .zip(parameter_types)
+            .map(|(value, &parameter_type)| {
+                TypeConversion::from_target_type(parameter_type, self.state).emit(
+                    value,
+                    self.state,
+                    block,
+                )
+            })
+            .collect();
+        let results = Function::call(mlir_name, &argument_values, return_types, self.state, block)
+            .expect("bound operator function call resolves to a registered signature");
+        results.into_iter().next().expect("slang validated")
     }
 }
