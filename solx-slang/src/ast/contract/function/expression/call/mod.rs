@@ -90,10 +90,7 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
             CallKind::IdentifierBuiltinCall => {
                 let (value, block) =
                     emitter.emit_built_in(self, &callee, &emitter.positional(&arguments), block);
-                BlockAnd {
-                    block,
-                    value: value.into_iter().collect(),
-                }
+                BlockAnd { block, value }
             }
             CallKind::MemberBuiltinCall(access) => {
                 if let Some(
@@ -192,30 +189,32 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
     }
 
     /// Dispatches a built-in reached by bare identifier or by member access whose result type comes
-    /// from the call, returning its optional value.
+    /// from the call, returning its result values in declaration order: none for a statement-style
+    /// built-in, one for a value-producing built-in, several for a multi-value `abi.decode`.
     fn emit_built_in(
         &self,
         call: &FunctionCallExpression,
         callee: &Expression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        if let Some(result) = self.try_emit_built_in_call(callee, arguments, block) {
-            return result;
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        if let Some((value, block)) = self.try_emit_built_in_call(callee, arguments, block) {
+            return (value.into_iter().collect(), block);
         }
-        if let Some((value, block)) =
+        if let Some((values, block)) =
             self.try_emit_built_in_call_expression(call, arguments, block)
         {
-            return (Some(value), block);
+            return (values, block);
         }
-        self.emit_built_in_member_access(
+        let (value, block) = self.emit_built_in_member_access(
             match callee {
                 Expression::MemberAccessExpression(access) => access,
                 _ => unreachable!("identifier built-in was already dispatched"),
             },
             Some(arguments),
             block,
-        )
+        );
+        (value.into_iter().collect(), block)
     }
 
     /// Emits a bare member access expression (e.g. `tx.origin`, `msg.sender`).
