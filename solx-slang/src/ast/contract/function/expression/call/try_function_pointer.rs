@@ -5,6 +5,7 @@
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
+use slang_solidity_v2::ast::CallOptionsExpression;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
@@ -15,12 +16,15 @@ use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_kind::CallKind;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::call_options::CallOptions;
 use crate::ast::emit::emit_as::EmitAs;
 use crate::ast::emit::emit_expression::EmitExpression;
 
 /// The external function-pointer call `try functionPointer(args)` guards, resolved ahead of emission
 /// so [`Self::emit`] surfaces the call's success status for the `try` op's regions.
 pub struct TryFunctionPointerCall {
+    /// The `{value: v}` / `{gas: g}` options layer, if any (`functionPointer{value: v}(args)`).
+    options: Option<CallOptionsExpression>,
     /// The external function-typed callee expression.
     callee: Expression,
     /// The call's positional arguments, coerced to the pointer's parameter types at emission.
@@ -36,7 +40,13 @@ impl TryFunctionPointerCall {
         let Expression::FunctionCallExpression(call) = expression else {
             return None;
         };
-        let callee = call.operand().unwrap_parentheses();
+        let (options, callee) = match call.operand().unwrap_parentheses() {
+            Expression::CallOptionsExpression(options) => {
+                let callee = options.operand().unwrap_parentheses();
+                (Some(options), callee)
+            }
+            callee => (None, callee),
+        };
         if !CallKind::is_function_pointer_callee(&callee) {
             return None;
         }
@@ -50,7 +60,8 @@ impl TryFunctionPointerCall {
             unreachable!("an external function-pointer call takes positional arguments");
         };
         Some(Self {
-            callee: callee.clone(),
+            options,
+            callee,
             arguments,
         })
     }
@@ -83,11 +94,20 @@ impl TryFunctionPointerCall {
             block = next;
         }
 
+        let (call_value, call_gas) = match &self.options {
+            Some(options) => {
+                let (value, _salt, gas, next_block) =
+                    CallOptions(options).capture(context, block);
+                block = next_block;
+                (value, gas)
+            }
+            None => (None, None),
+        };
         let (status, results) = AstValue::new(callee_value).external_call_indirect(
             &argument_values,
             &result_types,
-            None,
-            None,
+            call_value,
+            call_gas,
             false,
             true,
             context.state,

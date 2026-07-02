@@ -5,6 +5,7 @@
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
+use slang_solidity_v2::ast::CallOptionsExpression;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
@@ -13,6 +14,7 @@ use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::CallContext;
+use crate::ast::contract::function::expression::call_options::CallOptions;
 
 /// The external contract-instance method or getter call `try c.foo(args)` guards, resolved ahead of
 /// emission so [`Self::emit`] surfaces the call's success status for the `try` op's regions.
@@ -23,6 +25,8 @@ pub struct TryCall {
     definition: Definition,
     /// The call's argument list, ordered against the callee's parameters at emission.
     arguments: ArgumentsDeclaration,
+    /// The `{value: v}` / `{gas: g}` options layer, if any (`c.foo{value: v}(args)`).
+    options: Option<CallOptionsExpression>,
 }
 
 impl TryCall {
@@ -32,7 +36,14 @@ impl TryCall {
         let Expression::FunctionCallExpression(call) = expression else {
             return None;
         };
-        let Expression::MemberAccessExpression(access) = call.operand().unwrap_parentheses() else {
+        let (options, callee) = match call.operand().unwrap_parentheses() {
+            Expression::CallOptionsExpression(options) => {
+                let callee = options.operand().unwrap_parentheses();
+                (Some(options), callee)
+            }
+            callee => (None, callee),
+        };
+        let Expression::MemberAccessExpression(access) = callee else {
             return None;
         };
         if !matches!(
@@ -62,6 +73,7 @@ impl TryCall {
             access,
             definition,
             arguments: call.arguments(),
+            options,
         })
     }
 
@@ -76,12 +88,22 @@ impl TryCall {
         Vec<Value<'context, 'block>>,
         BlockRef<'context, 'block>,
     ) {
+        let mut block = block;
+        let (call_value, call_gas) = match &self.options {
+            Some(options) => {
+                let (value, _salt, gas, next_block) =
+                    CallOptions(options).capture(context, block);
+                block = next_block;
+                (value, gas)
+            }
+            None => (None, None),
+        };
         CallContext::new(context).emit_external_member_call_fallible(
             &self.access,
             &self.definition,
             &self.arguments,
-            None,
-            None,
+            call_value,
+            call_gas,
             true,
             block,
         )
