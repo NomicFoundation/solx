@@ -13,7 +13,9 @@ use melior::ir::attribute::DenseI32ArrayAttribute;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
+use melior::ir::attribute::TypeAttribute;
 use melior::ir::operation::OperationMutLike;
+use melior::ir::r#type::FunctionType;
 use num::BigInt;
 
 use crate::CmpPredicate;
@@ -32,7 +34,9 @@ use crate::ods::sol::DefaultCallDataOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::DefaultStorageOperation;
 use crate::ods::sol::EnumCastOperation;
+use crate::ods::sol::ExtCallOperation;
 use crate::ods::sol::FuncConstantOperation;
+use crate::ods::sol::GasLeftOperation;
 use crate::ods::sol::ICallOperation;
 use crate::ods::sol::MallocOperation;
 use crate::ods::sol::NewOperation;
@@ -215,6 +219,79 @@ impl<'context, 'block> Value<'context, 'block> {
                 .expect("sol.new always produces one result")
                 .into(),
         )
+    }
+
+    /// `sol.ext_call` to a statically-resolved external callee `callee_name`, dispatched by
+    /// `selector` at `receiver` cast to `address`. Returns the success status and the decoded
+    /// results.
+    ///
+    /// `call_value` selects the forwarded wei, defaulting to zero; `call_gas` selects the forwarded
+    /// gas, defaulting to `sol.gasleft`. A `view`/`pure` callee passes `is_static` for a `STATICCALL`.
+    /// The call reverts on failure, so the caller discards the status.
+    pub fn external_call(
+        receiver: Self,
+        callee_name: &str,
+        selector: u32,
+        parameter_types: &[MlirType<'context>],
+        argument_values: &[MlirValue<'context, 'block>],
+        result_types: &[MlirType<'context>],
+        call_value: Option<MlirValue<'context, 'block>>,
+        call_gas: Option<MlirValue<'context, 'block>>,
+        is_static: bool,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> (
+        MlirValue<'context, 'block>,
+        Vec<MlirValue<'context, 'block>>,
+    ) {
+        let uint256 = Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD);
+        let address = receiver
+            .address_cast(Type::address(context.mlir_context, false), context, block)
+            .into_mlir();
+        let value = call_value
+            .unwrap_or_else(|| Self::constant(0, uint256, context, block).into_mlir());
+        let gas = call_gas.unwrap_or_else(|| {
+            block
+                .append_operation(
+                    GasLeftOperation::builder(context.mlir_context, context.location())
+                        .val(uint256.into_mlir())
+                        .build()
+                        .into(),
+                )
+                .result(0)
+                .expect("sol.gasleft produces one result")
+                .into()
+        });
+        let selector_value =
+            Self::constant(i64::from(selector), uint256, context, block).into_mlir();
+        let callee_type = FunctionType::new(context.mlir_context, parameter_types, result_types);
+        let mut builder = ExtCallOperation::builder(context.mlir_context, context.location())
+            .callee(StringAttribute::new(context.mlir_context, callee_name))
+            .ins(argument_values)
+            .addr(address)
+            .gas(gas)
+            .val(value)
+            .selector(selector_value)
+            .callee_type(TypeAttribute::new(callee_type.into()))
+            .status(Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir())
+            .outs(result_types);
+        if is_static {
+            builder = builder.static_call(Attribute::unit(context.mlir_context));
+        }
+        let operation = block.append_operation(builder.build().into());
+        let status = operation
+            .result(0)
+            .expect("sol.ext_call produces a status result")
+            .into();
+        let results = (0..result_types.len())
+            .map(|index| {
+                operation
+                    .result(index + 1)
+                    .expect("sol.ext_call produces its declared result count")
+                    .into()
+            })
+            .collect();
+        (status, results)
     }
 
     /// `sol.default_storage`: the default value of a storage or transient aggregate.

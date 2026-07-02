@@ -5,6 +5,7 @@
 pub mod call_arguments;
 pub mod call_kind;
 pub mod contract_creation;
+pub mod external_member_call;
 pub mod function_pointer_call;
 pub mod identifier_builtin_call;
 pub mod identifier_function_call;
@@ -92,6 +93,15 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
                     emitter.emit_built_in(self, &callee, &emitter.positional(&arguments), block);
                 BlockAnd { block, value }
             }
+            CallKind::ExternalMemberCall(access, function_definition) => emitter
+                .emit_external_member_call(
+                    &access,
+                    &function_definition,
+                    &arguments,
+                    call_value,
+                    call_gas,
+                    block,
+                ),
             CallKind::MemberBuiltinCall(access) => {
                 if let Some(
                     kind @ (BuiltIn::AddressCall
