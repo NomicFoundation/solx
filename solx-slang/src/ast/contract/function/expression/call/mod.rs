@@ -26,6 +26,7 @@ use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_kind::CallKind;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::call_options::CallOptions;
 use crate::ast::emit::emit_as::EmitAs;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_values::EmitValues;
@@ -45,8 +46,20 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
         let emitter = CallContext::new(context);
-        let callee = self.operand();
         let arguments = self.arguments();
+        let (call_value, salt, call_gas, block, callee) = match self.operand().unwrap_parentheses() {
+            Expression::CallOptionsExpression(options) => {
+                let (value, salt, gas, block) = CallOptions(&options).capture(context, block);
+                (
+                    value,
+                    salt,
+                    gas,
+                    block,
+                    options.operand().unwrap_parentheses(),
+                )
+            }
+            other => (None, None, None, block, other),
+        };
         match CallKind::from_call(self, &callee, &arguments) {
             CallKind::StructConstruction(struct_definition) => {
                 let result_type = context
@@ -89,8 +102,14 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
                     | BuiltIn::AddressStaticcall),
                 ) = access.member().resolve_to_built_in()
                 {
-                    let (value, block) =
-                        emitter.emit_bare_call(&access, kind, &emitter.positional(&arguments), block);
+                    let (value, block) = emitter.emit_bare_call(
+                        &access,
+                        kind,
+                        &emitter.positional(&arguments),
+                        call_value,
+                        call_gas,
+                        block,
+                    );
                     return BlockAnd { block, value };
                 }
                 let (value, block) = emitter.emit_built_in_member_access(
@@ -104,8 +123,13 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
                 }
             }
             CallKind::NewExpressionCall => {
-                let (value, block) =
-                    emitter.emit_new_expression(self, &emitter.positional(&arguments), block);
+                let (value, block) = emitter.emit_new_expression(
+                    self,
+                    &emitter.positional(&arguments),
+                    call_value,
+                    salt,
+                    block,
+                );
                 BlockAnd {
                     block,
                     value: vec![value],

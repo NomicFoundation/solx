@@ -22,11 +22,14 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
     /// The created contract is recorded as a cross-contract dependency so the linker pulls its object
     /// in. Each constructor argument is coerced to its declared parameter type, so a literal
     /// materialises in the parameter's representation that the deployed constructor ABI-decodes. A
-    /// plain `new C()` forwards zero wei.
+    /// `{value: v}` option selects the forwarded wei, defaulting to zero; a `{salt: s}` option selects
+    /// CREATE2 over CREATE.
     pub(super) fn emit_contract_creation(
         &self,
         contract_definition: &ContractDefinition,
         arguments: &[Expression],
+        call_value: Option<Value<'context, 'block>>,
+        salt: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let context = self.expression_context.state;
@@ -48,16 +51,19 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
 
         let payable = ContractEmitter::is_contract_payable(contract_definition);
         let result_type = AstType::contract(context.mlir_context, &contract_name, payable);
-        let call_value = AstValue::constant(
-            0,
-            AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD),
-            context,
-            &current_block,
-        );
+        let call_value_or_zero = match call_value {
+            Some(value) => AstValue::new(value),
+            None => AstValue::constant(
+                0,
+                AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD),
+                context,
+                &current_block,
+            ),
+        };
         let value = AstValue::create_contract(
             &contract_name,
-            call_value,
-            None,
+            call_value_or_zero,
+            salt.map(AstValue::new),
             &constructor_arguments,
             result_type,
             context,

@@ -535,13 +535,16 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
     /// `sol.bare_*` operation, yielding the `(bool success, bytes memory returndata)` pair.
     ///
     /// The receiver evaluates to an address and the single payload argument is copied into memory,
-    /// since the operation's input rejects a storage- or calldata-sourced operand. Gas is forwarded
-    /// through `sol.gasleft`, and a plain `call` sends a zero value.
+    /// since the operation's input rejects a storage- or calldata-sourced operand. A `{gas: g}` option
+    /// selects the forwarded gas, defaulting to `sol.gasleft`; a `{value: v}` option selects the wei a
+    /// plain `call` sends, defaulting to zero.
     pub(super) fn emit_bare_call(
         &self,
         access: &MemberAccessExpression,
         kind: BuiltIn,
         arguments: &PositionalArguments,
+        call_value: Option<Value<'context, 'block>>,
+        call_gas: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let context = self.expression_context.state;
@@ -552,29 +555,33 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
         let input = AstValue::new(input)
             .data_loc_cast(AstType::string(context.mlir_context, solx_utils::DataLocation::Memory), context, &block)
             .into_mlir();
-        let gas = block
-            .append_operation(
-                GasLeftOperation::builder(context.mlir_context, context.location())
-                    .val(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("gasleft always produces one result")
-            .into();
+        let gas = call_gas.unwrap_or_else(|| {
+            block
+                .append_operation(
+                    GasLeftOperation::builder(context.mlir_context, context.location())
+                        .val(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
+                        .build()
+                        .into(),
+                )
+                .result(0)
+                .expect("gasleft always produces one result")
+                .into()
+        });
         let status_type =
             AstType::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir();
         let ret_data_type =
             AstType::string(context.mlir_context, solx_utils::DataLocation::Memory).into_mlir();
         let operation: Operation = match kind {
             BuiltIn::AddressCall => {
-                let value = AstValue::constant(
-                    0,
-                    AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD),
-                    context,
-                    &block,
-                )
-                .into_mlir();
+                let value = call_value.unwrap_or_else(|| {
+                    AstValue::constant(
+                        0,
+                        AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD),
+                        context,
+                        &block,
+                    )
+                    .into_mlir()
+                });
                 BareCallOperation::builder(context.mlir_context, context.location())
                     .addr(address)
                     .gas(gas)
