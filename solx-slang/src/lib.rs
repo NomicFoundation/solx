@@ -2,6 +2,8 @@
 //! Slang Solidity frontend for solx.
 //!
 
+#![allow(clippy::too_many_arguments)]
+
 #[macro_use]
 extern crate solx_mlir;
 

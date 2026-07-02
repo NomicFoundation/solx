@@ -183,6 +183,10 @@ impl<'context, 'block> Value<'context, 'block> {
     /// `sol.new`: contract creation embedding `object_name`'s deploy bytecode. `value` is the
     /// forwarded wei; a `salt` selects CREATE2.
     ///
+    /// A `try`/`catch` guard passes `try_call` to mark the creation, so the conversion yields a
+    /// success status instead of reverting on failure; otherwise the creation reverts and the caller
+    /// discards the status.
+    ///
     /// `operand_segment_sizes` is set by hand because melior's ODS builder does not synthesize the
     /// attribute for the `AttrSizedOperandSegments` op; the salt must precede the variadic constructor
     /// arguments or the two transpose.
@@ -192,6 +196,7 @@ impl<'context, 'block> Value<'context, 'block> {
         salt: Option<Self>,
         constructor_arguments: &[MlirValue<'context, 'block>],
         result_type: Type<'context>,
+        try_call: bool,
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
@@ -201,9 +206,12 @@ impl<'context, 'block> Value<'context, 'block> {
         if let Some(salt) = salt {
             builder = builder.salt(salt.inner);
         }
-        let builder = builder
+        let mut builder = builder
             .ctor_args(constructor_arguments)
             .out(result_type.into_mlir());
+        if try_call {
+            builder = builder.try_call(Attribute::unit(context.mlir_context));
+        }
         let mut operation: Operation = builder.build().into();
         let constructor_argument_count = i32::try_from(constructor_arguments.len())
             .expect("constructor argument count fits in i32");
@@ -227,7 +235,8 @@ impl<'context, 'block> Value<'context, 'block> {
     ///
     /// `call_value` selects the forwarded wei, defaulting to zero; `call_gas` selects the forwarded
     /// gas, defaulting to `sol.gasleft`. A `view`/`pure` callee passes `is_static` for a `STATICCALL`.
-    /// The call reverts on failure, so the caller discards the status.
+    /// A `try`/`catch` guard passes `try_call` to surface the status; otherwise the call reverts on
+    /// failure and the caller discards the status.
     pub fn external_call(
         receiver: Self,
         callee_name: &str,
@@ -238,6 +247,7 @@ impl<'context, 'block> Value<'context, 'block> {
         call_value: Option<MlirValue<'context, 'block>>,
         call_gas: Option<MlirValue<'context, 'block>>,
         is_static: bool,
+        try_call: bool,
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> (
@@ -277,6 +287,9 @@ impl<'context, 'block> Value<'context, 'block> {
             .outs(result_types);
         if is_static {
             builder = builder.static_call(Attribute::unit(context.mlir_context));
+        }
+        if try_call {
+            builder = builder.try_call(Attribute::unit(context.mlir_context));
         }
         let operation = block.append_operation(builder.build().into());
         let status = operation

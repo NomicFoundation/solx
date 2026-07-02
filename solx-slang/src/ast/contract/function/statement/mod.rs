@@ -5,6 +5,7 @@
 pub mod control_flow;
 pub mod event;
 pub mod revert;
+pub mod try_statement;
 pub mod variable_declaration;
 
 use std::collections::HashMap;
@@ -134,6 +135,7 @@ impl<'context: 'block, 'block> EmitStatement<'context, 'block> for Statement {
             Statement::UncheckedBlock(inner) => inner.emit(context, block),
             Statement::RevertStatement(inner) => inner.emit(context, block),
             Statement::EmitStatement(inner) => inner.emit(context, block),
+            Statement::TryStatement(inner) => inner.emit(context, block),
             _ => unreachable!(
                 "unsupported statement: {:?}",
                 std::mem::discriminant(self)
