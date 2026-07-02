@@ -18,7 +18,6 @@ use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::DeleteOperation;
-use solx_utils::DataLocation;
 
 use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::block_and::BlockAnd;
@@ -138,7 +137,7 @@ impl<'context: 'block, 'block> AssignmentTarget<'context, 'block> {
             let address_type = ExpressionContext::address_type(
                 context.state,
                 element_type,
-                DataLocation::Storage,
+                slot.location,
                 &declared_type,
             );
             let storage_ref =

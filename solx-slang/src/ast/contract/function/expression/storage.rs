@@ -11,7 +11,6 @@ use slang_solidity_v2::ast::ContractMember;
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
-use solx_utils::DataLocation;
 
 use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::block_and::BlockAnd;
@@ -74,7 +73,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let address_type = Self::address_type(
                 self.state,
                 element_type,
-                DataLocation::Storage,
+                slot.location,
                 &declared_type,
             );
             let storage_ref =
@@ -95,7 +94,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         block
     }
 
-    /// Returns a `!sol.ptr<element_type, Storage>` pointer via `sol.addr_of`.
+    /// Returns a `!sol.ptr<element_type, location>` pointer via `sol.addr_of`, at the slot's storage
+    /// class: persistent `Storage` or `Transient`.
     fn emit_storage_addr_of(
         &self,
         slot: &StorageSlot,
@@ -103,7 +103,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
         let pointer_type =
-            AstType::pointer(self.state.mlir_context, element_type, DataLocation::Storage)
+            AstType::pointer(self.state.mlir_context, element_type, slot.location)
                 .into_mlir();
         Pointer::addr_of(&slot.name, AstType::new(pointer_type), self.state, block).into_mlir()
     }

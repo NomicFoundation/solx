@@ -9,7 +9,6 @@ use slang_solidity_v2::ast::StateVariableMutability;
 
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
-use solx_utils::DataLocation;
 
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -42,7 +41,7 @@ expression_emit!(Identifier; |node, context, block| {
                 AstType::new(ExpressionContext::address_type(
                     context.state,
                     element_type,
-                    DataLocation::Storage,
+                    slot.location,
                     &declared_type,
                 )),
                 context.state,
