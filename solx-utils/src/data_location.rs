@@ -39,6 +39,25 @@ impl From<AddressSpace> for DataLocation {
     }
 }
 
+impl TryFrom<u32> for DataLocation {
+    type Error = u32;
+
+    /// Recovers a data location from its dialect ordinal, the inverse of the
+    /// `#[repr(u32)]` discriminant. An ordinal outside the six known locations is
+    /// returned verbatim as the error.
+    fn try_from(ordinal: u32) -> Result<Self, Self::Error> {
+        match ordinal {
+            0 => Ok(Self::Storage),
+            1 => Ok(Self::CallData),
+            2 => Ok(Self::Memory),
+            3 => Ok(Self::Stack),
+            4 => Ok(Self::Immutable),
+            5 => Ok(Self::Transient),
+            other => Err(other),
+        }
+    }
+}
+
 #[cfg(feature = "slang")]
 impl DataLocation {
     /// Converts a Slang semantic data location into the dialect's data location.

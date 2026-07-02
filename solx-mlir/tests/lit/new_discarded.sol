@@ -6,10 +6,10 @@
 // CHECK-NOT: sol.new
 // CHECK: sol.return
 
+contract D {}
+
 contract C {
     function f() public {
         new D;
     }
 }
-
-contract D {}

@@ -5,15 +5,20 @@
 //! crates (e.g. `solx-slang`) to emit Sol dialect operations without the raw `melior` API.
 //!
 
-#![allow(clippy::should_implement_trait)]
+#![allow(non_camel_case_types)]
+#![allow(clippy::upper_case_acronyms)]
+#![allow(clippy::enum_variant_names)]
 #![allow(clippy::too_many_arguments)]
+#![allow(clippy::should_implement_trait)]
+#![allow(clippy::result_large_err)]
+#![allow(clippy::new_without_default)]
 
 #[macro_use]
 mod macros;
 
 pub mod context;
 pub mod dialect;
-pub mod ffi;
+pub(crate) mod ffi;
 pub mod ir;
 pub mod llvm_module;
 pub mod ods;
@@ -33,6 +38,7 @@ pub use self::ir::attributes::YulCmpPredicate;
 pub use self::ir::pointer::Pointer;
 pub use self::ir::r#type::Type;
 pub use self::ir::r#type::array_size::ArraySize;
+pub use self::ir::r#type::location_policy::LocationPolicy;
 pub use self::ir::value::Value;
 pub use self::ir::yul_value::YulValue;
 pub use self::macros::IntoOds;

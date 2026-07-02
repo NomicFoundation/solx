@@ -2,13 +2,14 @@
 //! Slang Solidity frontend implementation.
 //!
 
-/// Compilation builder configuration for the Slang frontend.
 pub mod compilation_config;
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::SourceUnitMember;
 use slang_solidity_v2::compilation::CompilationBuilder;
 use slang_solidity_v2::compilation::CompilationUnit;
@@ -17,10 +18,13 @@ use slang_solidity_v2::utils::LanguageVersion;
 use slang_solidity_v2_common::evm_targets::EvmTarget;
 
 use solx_core::Frontend;
+use solx_mlir::UserDefinedOperator;
 use solx_standard_json::CollectableError;
 use solx_standard_json::output::error::source_location::SourceLocation;
 
-use crate::ast::AstEmitter;
+use crate::ast::analysis::query::method_identifiers::MethodIdentifiers;
+use crate::ast::contract::object_scope::ObjectScope;
+use crate::ast::emit::emit_object::EmitObject;
 use crate::ast::operator_binding::OperatorBindings;
 
 use self::compilation_config::CompilationConfig;
@@ -47,16 +51,6 @@ impl Slang {
     pub const NAME: &'static str = "Slang";
 
     /// Builds a Slang compilation unit from the given source files.
-    ///
-    /// Uses the `CompilationBuilder` to parse all sources and resolve imports.
-    ///
-    /// EVM built-in availability is gated on the target, but solx handles
-    /// EVM-version targeting downstream, so every built-in is admitted here.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the compilation builder fails to initialize or
-    /// if import resolution fails.
     pub fn compile(&self, sources: BTreeMap<String, String>) -> anyhow::Result<CompilationUnit> {
         let paths: Vec<String> = sources.keys().cloned().collect();
         let configuration = CompilationConfig::new(sources);
@@ -76,9 +70,9 @@ impl Slang {
         Ok(builder.build())
     }
 
-    /// The source-unit free functions the unit declares, across all files: the pool a contract's
-    /// reachability walk selects from, since a free function belongs to no contract's function set.
-    fn free_functions(unit: &CompilationUnit) -> Vec<FunctionDefinition> {
+    /// Gathers every file-level, or free, function: not part of any contract's linearised set, so
+    /// collected once and handed to each contract emitter.
+    fn gather_free_functions(unit: &CompilationUnit) -> Vec<FunctionDefinition> {
         unit.file_ids()
             .iter()
             .filter_map(|file_identifier| unit.file(file_identifier))
@@ -86,17 +80,21 @@ impl Slang {
                 file.ast()
                     .members()
                     .iter()
-                    .filter_map(|member| match member {
-                        SourceUnitMember::FunctionDefinition(function) => Some(function.clone()),
-                        _ => None,
+                    .filter_map(|member| {
+                        if let SourceUnitMember::FunctionDefinition(function) = member {
+                            Some(function)
+                        } else {
+                            None
+                        }
                     })
                     .collect::<Vec<_>>()
             })
             .collect()
     }
 
-    /// Finalises one emitted object's module and records it in `output` under `name`, keyed by its
-    /// source file.
+    /// Finalises a freshly-emitted object's module and records its MLIR stages
+    /// and method identifiers under `(file_identifier, name)` in the output.
+    /// Shared by the contract and deployable-library emission paths.
     fn record_object(
         context: solx_mlir::Context<'_>,
         name: String,
@@ -105,8 +103,7 @@ impl Slang {
         file_identifier: &str,
         output: &mut solx_standard_json::Output,
     ) -> anyhow::Result<()> {
-        let runtime_code_identifier =
-            format!("{name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX);
+        let runtime_code_identifier = format!("{name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX);
         let capture_sol_dialect = input_json.settings.output_selection.check_selection(
             file_identifier,
             Some(name.as_str()),
@@ -129,6 +126,34 @@ impl Slang {
                 },
             );
         Ok(())
+    }
+
+    /// Emits one deployable object -- a contract or a library -- into a fresh module and records it.
+    /// A construct the frontend does not yet support panics out of `emit`; that is deliberate, so an
+    /// unsupported object fails loudly rather than being silently dropped.
+    fn emit_object<T: EmitObject>(
+        object: &T,
+        name: String,
+        method_identifiers: BTreeMap<String, String>,
+        scope: &ObjectScope,
+        operator_bindings: &HashMap<(NodeId, UserDefinedOperator), NodeId>,
+        input_json: &solx_standard_json::Input,
+        file_identifier: &str,
+        output: &mut solx_standard_json::Output,
+    ) -> anyhow::Result<()> {
+        let melior_context = solx_mlir::Context::create_mlir_context();
+        let evm_version = input_json.settings.evm_version.unwrap_or_default();
+        let mut context = solx_mlir::Context::new(&melior_context, evm_version);
+        context.operator_bindings = operator_bindings.clone();
+        object.emit(&mut context, scope);
+        Self::record_object(
+            context,
+            name,
+            method_identifiers,
+            input_json,
+            file_identifier,
+            output,
+        )
     }
 }
 
@@ -206,7 +231,7 @@ impl Frontend for Slang {
                 )
             }));
 
-        for file_identifier in &unit.file_ids() {
+        for file_identifier in unit.file_ids().iter() {
             if let Some(output_source) = output.sources.get_mut(file_identifier) {
                 output_source.ast = Some(
                     serde_json::to_value(unit.file(file_identifier).map(|file| file.ast()))
@@ -220,10 +245,13 @@ impl Frontend for Slang {
         }
 
         let file_identifiers = unit.file_ids();
+        let free_functions = Self::gather_free_functions(&unit);
         let operator_bindings = OperatorBindings::gather(&unit);
-        let free_functions = Self::free_functions(&unit);
+        let contract_scope = ObjectScope::new(&free_functions, &operator_bindings.functions);
+        let library_scope = ObjectScope::new(&[], &[]);
+        let no_operator_bindings = HashMap::new();
 
-        for file_identifier in &file_identifiers {
+        for file_identifier in file_identifiers.iter() {
             let Some(file) = unit.file(file_identifier) else {
                 continue;
             };
@@ -233,18 +261,12 @@ impl Frontend for Slang {
                 if contract.is_abstract() {
                     continue;
                 }
-                let evm_version = input_json.settings.evm_version.unwrap_or_default();
-                let melior_context = solx_mlir::Context::create_mlir_context();
-                let mut context = solx_mlir::Context::new(&melior_context, evm_version);
-                let method_identifiers = AstEmitter::new(&mut context).emit_contract(
+                Self::emit_object(
                     contract,
-                    &operator_bindings,
-                    &free_functions,
-                );
-                Self::record_object(
-                    context,
                     contract.name().name(),
-                    method_identifiers,
+                    contract.method_identifiers(),
+                    &contract_scope,
+                    &operator_bindings.map,
                     input_json,
                     file_identifier,
                     &mut output,
@@ -255,14 +277,12 @@ impl Frontend for Slang {
                 let SourceUnitMember::LibraryDefinition(library) = member else {
                     continue;
                 };
-                let evm_version = input_json.settings.evm_version.unwrap_or_default();
-                let melior_context = solx_mlir::Context::create_mlir_context();
-                let mut context = solx_mlir::Context::new(&melior_context, evm_version);
-                AstEmitter::new(&mut context).emit_library(&library);
-                Self::record_object(
-                    context,
+                Self::emit_object(
+                    &library,
                     library.name().name(),
-                    BTreeMap::new(),
+                    library.method_identifiers(),
+                    &library_scope,
+                    &no_operator_bindings,
                     input_json,
                     file_identifier,
                     &mut output,

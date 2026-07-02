@@ -34,8 +34,8 @@ impl CompilationBuilderConfig for CompilationConfig {
     }
 
     /// Resolves `import_path` against the importing file's directory, normalizing `.` and `..`
-    /// segments. A `..` cancels any preceding segment, collapsing the path back into the source
-    /// tree so an import cannot climb above the shortest resolvable identifier.
+    /// segments. A `..` cancels a preceding normal segment but stacks against the base, so an
+    /// import may climb above the source directory instead of collapsing back into it.
     fn resolve_import(
         &mut self,
         source_file_identifier: &str,
@@ -51,7 +51,9 @@ impl CompilationBuilderConfig for CompilationConfig {
             for component in resolved.components() {
                 match component {
                     Component::ParentDir => {
-                        if normalized.pop().is_none() {
+                        if matches!(normalized.last(), Some(Component::Normal(_))) {
+                            normalized.pop();
+                        } else {
                             normalized.push(component);
                         }
                     }

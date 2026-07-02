@@ -2,6 +2,10 @@
 //! Sol and Yul dialect attribute enums for MLIR code generation.
 //!
 
+use slang_solidity_v2::ast::EqualityExpressionOperator;
+use slang_solidity_v2::ast::FunctionMutability;
+use slang_solidity_v2::ast::InequalityExpressionOperator;
+
 use crate::ffi;
 
 sol_dialect_attribute! {
@@ -17,7 +21,7 @@ sol_dialect_attribute! {
 }
 
 sol_dialect_attribute! {
-    /// Sol dialect function kind. Regular functions do not carry a kind attribute.
+    /// Sol dialect function kind.
     FunctionKind => ffi::solxCreateFunctionKindAttr {
         /// Constructor function.
         Constructor = 0,
@@ -42,9 +46,19 @@ sol_dialect_attribute! {
     }
 }
 
+impl From<FunctionMutability> for StateMutability {
+    fn from(mutability: FunctionMutability) -> Self {
+        match mutability {
+            FunctionMutability::Pure => Self::Pure,
+            FunctionMutability::View => Self::View,
+            FunctionMutability::Payable => Self::Payable,
+            FunctionMutability::NonPayable => Self::NonPayable,
+        }
+    }
+}
+
 sol_predicate_attribute! {
-    /// Sol dialect `sol.cmp` predicate values. Signedness is carried by the operand type, not the
-    /// predicate.
+    /// Sol dialect `sol.cmp` predicate values.
     CmpPredicate {
         /// Equal.
         Eq = 0,
@@ -58,6 +72,26 @@ sol_predicate_attribute! {
         Gt = 4,
         /// Greater than or equal.
         Ge = 5,
+    }
+}
+
+impl From<EqualityExpressionOperator> for CmpPredicate {
+    fn from(operator: EqualityExpressionOperator) -> Self {
+        match operator {
+            EqualityExpressionOperator::EqualEqual(_) => Self::Eq,
+            EqualityExpressionOperator::BangEqual(_) => Self::Ne,
+        }
+    }
+}
+
+impl From<InequalityExpressionOperator> for CmpPredicate {
+    fn from(operator: InequalityExpressionOperator) -> Self {
+        match operator {
+            InequalityExpressionOperator::LessThan(_) => Self::Lt,
+            InequalityExpressionOperator::LessThanEqual(_) => Self::Le,
+            InequalityExpressionOperator::GreaterThan(_) => Self::Gt,
+            InequalityExpressionOperator::GreaterThanEqual(_) => Self::Ge,
+        }
     }
 }
 

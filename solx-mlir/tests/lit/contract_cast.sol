@@ -16,6 +16,14 @@
 // CHECK: sol.func @{{.*upcast.*}}
 // CHECK:   sol.contract_cast %{{.*}} : <{{.*Derived.*}}> to <{{.*Base.*}}>
 
+interface I {}
+
+contract Other {}
+
+contract Base {}
+
+contract Derived is Base {}
+
 contract C {
     function from_contract(Other o) public pure returns (address) {
         return address(o);
@@ -37,11 +45,3 @@ contract C {
         return Base(d);
     }
 }
-
-interface I {}
-
-contract Other {}
-
-contract Base {}
-
-contract Derived is Base {}

@@ -12,22 +12,18 @@ cc = "1.2.60"
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+indexmap = "2.14"
+ruint.workspace = true
 num.workspace = true
-melior = { git = "https://github.com/NomicFoundation/melior", rev = "62a909e2ff67fcc19f7f42dc4fb70c3e03376bd2", features = ["ods-dialects", "helpers"] }
 serde.workspace = true
-# mlir-sys 210 wraps LLVM 21.0 C API; llvm-sys (via inkwell) targets 21.1.
-# Both are built from the same LLVM source tree (LLVM_SYS_211_PREFIX ==
-# MLIR_SYS_210_PREFIX), so the pointer casts between their types are ABI-
-# compatible. If these crates diverge to different LLVM builds, the
-# transmutes in context.rs become unsound.
-# TODO: Track mlir-sys 211 availability.
-mlir-sys = "210.0"
 
 inkwell = { workspace = true, features = ["llvm21-1-no-llvm-linking"] }
-
-ruint.workspace = true
+# mlir-sys 210 wraps the LLVM 21.0 C API; inkwell's llvm-sys targets 21.1. Both build from the
+# same LLVM tree (LLVM_SYS_211_PREFIX == MLIR_SYS_210_PREFIX), so the LLVMContextRef/LLVMModuleRef
+# casts in context/mod.rs are ABI-compatible; diverging the two LLVM builds would make them unsound.
+# TODO: Track mlir-sys 211 availability.
+mlir-sys = "210.0"
+melior = { git = "https://github.com/NomicFoundation/melior", rev = "193e8252ca5d2774555b3e2f29ec8b97f28f5d38", features = ["ods-dialects", "helpers"] }
 slang_solidity_v2.workspace = true
-solx-utils = { path = "../solx-utils", features = ["mlir"] }
 
-[dev-dependencies]
-hex.workspace = true
+solx-utils = { path = "../solx-utils", features = ["mlir"] }

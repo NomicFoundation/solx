@@ -3,89 +3,54 @@
 //!
 
 use melior::ir::BlockRef;
-use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
-use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 
-use solx_mlir::Function;
-
+use crate::ast::analysis::query::parameter_node_ids::ParameterNodeIds;
 use crate::ast::block_and::BlockAnd;
-use crate::ast::contract::function::expression::call::CallContext;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
-use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::contract::contract_dispatch::ContractDispatch;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 
-impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context, 'block> {
-    /// Emits a direct function call `f(a, b)` or `f({b: .., a: ..})`, returning all of its result
-    /// values in declaration order.
-    pub(super) fn emit_function_call(
-        &self,
-        function_definition: &FunctionDefinition,
+/// A direct identifier function call after virtual dispatch resolution.
+pub struct IdentifierFunctionCall {
+    /// The target function ID after virtual dispatch resolution.
+    pub target_id: NodeId,
+    /// Arguments ordered against the function parameters.
+    pub arguments: CallArguments,
+}
+
+impl IdentifierFunctionCall {
+    /// Classifies an identifier function call.
+    pub fn from_callee(
+        callee: &Expression,
         arguments: &ArgumentsDeclaration,
-        block: BlockRef<'context, 'block>,
-    ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
-        let (mlir_name, argument_values, return_types, block) =
-            self.emit_call_setup(function_definition, arguments, block);
-        let results = Function::call(
-            mlir_name,
-            &argument_values,
-            return_types,
-            self.expression_context.state,
-            &block,
-        )
-        .expect("function call resolves to a registered signature");
-        BlockAnd {
-            block,
-            value: results,
-        }
+        dispatch: &ContractDispatch,
+    ) -> Option<Self> {
+        let Expression::Identifier(identifier) = callee else {
+            return None;
+        };
+        let Some(Definition::Function(function_definition)) = identifier.resolve_to_definition()
+        else {
+            return None;
+        };
+        let parameter_ids = function_definition.parameters().node_ids();
+        Some(Self {
+            target_id: dispatch.resolve_virtual(function_definition.node_id()),
+            arguments: CallArguments::for_parameter_ids(arguments, &parameter_ids),
+        })
     }
 
-    /// Emits argument values for a direct call in parameter-declaration order, resolves the callee's
-    /// MLIR signature, and casts each argument to its declared parameter type.
-    fn emit_call_setup<'a>(
-        &'a self,
-        function_definition: &FunctionDefinition,
-        arguments: &ArgumentsDeclaration,
+    /// Emits the function call.
+    pub fn emit<'state, 'context: 'block, 'block>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
-    ) -> (
-        &'a str,
-        Vec<Value<'context, 'block>>,
-        &'a [Type<'context>],
-        BlockRef<'context, 'block>,
-    ) {
-        let parameter_ids: Vec<NodeId> = function_definition
-            .parameters()
-            .iter()
-            .map(|parameter| parameter.node_id())
-            .collect();
-        let ordered_arguments = arguments
-            .ordered_by(&parameter_ids)
-            .expect("slang matches every call argument to a parameter");
-        let mut argument_values = Vec::with_capacity(ordered_arguments.len());
-        let mut current_block = block;
-        for argument in ordered_arguments {
-            let BlockAnd { value, block: next } = argument.emit(self.expression_context, current_block);
-            argument_values.push(value);
-            current_block = next;
-        }
-
-        let target_id = self
-            .expression_context
-            .dispatch
-            .resolve_virtual(function_definition.node_id());
-        let (mlir_name, parameter_types, return_types) = self
-            .expression_context
-            .state
-            .resolve_function(target_id)
-            .expect("callee resolves to a registered signature");
-
-        let context = self.expression_context.state;
-        for (value, &param_type) in argument_values.iter_mut().zip(parameter_types) {
-            let conversion = TypeConversion::from_target_type(param_type, context);
-            *value = conversion.emit(*value, context, &current_block);
-        }
-
-        (mlir_name, argument_values, return_types, current_block)
+    ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
+        let function = context.state.resolve_function(self.target_id);
+        self.arguments.emit_call(function, context, block)
     }
 }

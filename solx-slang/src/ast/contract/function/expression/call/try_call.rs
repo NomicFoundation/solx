@@ -1,84 +1,98 @@
 //!
-//! The external contract-instance method call a `try` statement guards.
+//! A `try`-guarded call: an optional `{value: v}` / `{gas: g}` call-options layer over an inner
+//! infallible `try` emitter, classified ahead of emission. The inner call is either an external
+//! member call or a call through an externally-visible function pointer.
 //!
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::CallOptionsExpression;
-use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
-use slang_solidity_v2::ast::MemberAccessExpression;
-use slang_solidity_v2::ast::StateVariableMutability;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::call::CallContext;
+use crate::ast::contract::function::expression::call::external_member_call::ExternalMemberCall;
+use crate::ast::contract::function::expression::call::function_pointer_call::FunctionPointerCall;
 use crate::ast::contract::function::expression::call_options::CallOptions;
 
-/// The external contract-instance method or getter call `try c.foo(args)` guards, resolved ahead of
-/// emission so [`Self::emit`] surfaces the call's success status for the `try` op's regions.
-pub struct TryCall {
-    /// The member access that selected the callee.
-    access: MemberAccessExpression,
-    /// The resolved external method or state-variable getter carrying the ABI selector.
-    definition: Definition,
-    /// The call's argument list, ordered against the callee's parameters at emission.
-    arguments: ArgumentsDeclaration,
-    /// The `{value: v}` / `{gas: g}` options layer, if any (`c.foo{value: v}(args)`).
-    options: Option<CallOptionsExpression>,
+/// The inner call a [`TryCall`] drives with `try` semantics.
+pub trait EmitTry {
+    /// Emits the inner call with `try` semantics, given the value and gas captured from the options
+    /// layer, returning the success status flag, the decoded results, and the continuation block.
+    fn emit_try<'state, 'context: 'block, 'block>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        call_value: Option<Value<'context, 'block>>,
+        call_gas: Option<Value<'context, 'block>>,
+        block: BlockRef<'context, 'block>,
+    ) -> (
+        Value<'context, 'block>,
+        Vec<Value<'context, 'block>>,
+        BlockRef<'context, 'block>,
+    );
 }
 
-impl TryCall {
-    /// Classifies `try c.foo(args)`: an external call to a contract- or interface-instance method or
-    /// `public` state-variable getter carrying an ABI selector. Any other guarded shape yields `None`.
-    pub fn from_expression(expression: &Expression) -> Option<Self> {
+/// A `try`-guarded call: an optional call-options layer over an inner infallible `try` emitter,
+/// resolved from the `try` expression so [`Self::emit`] is total.
+pub struct TryCall<T> {
+    /// The `{value: v}` / `{gas: g}` options layer, if any.
+    options: Option<CallOptionsExpression>,
+    /// The classified inner call.
+    inner: T,
+}
+
+impl<T> TryCall<T> {
+    /// Splits a `try` call expression into its optional `{value}` / `{gas}` options layer, the
+    /// callee, and the argument list; any non-call shape yields `None`.
+    fn split_call(
+        expression: &Expression,
+    ) -> Option<(
+        Option<CallOptionsExpression>,
+        Expression,
+        ArgumentsDeclaration,
+    )> {
         let Expression::FunctionCallExpression(call) = expression else {
             return None;
         };
-        let (options, callee) = match call.operand().unwrap_parentheses() {
+        let (options, callee) = match call.operand() {
             Expression::CallOptionsExpression(options) => {
-                let callee = options.operand().unwrap_parentheses();
+                let callee = options.operand();
                 (Some(options), callee)
             }
-            callee => (None, callee),
+            operand => (None, operand),
         };
-        let Expression::MemberAccessExpression(access) = callee else {
-            return None;
-        };
+        Some((options, callee, call.arguments()))
+    }
+}
+
+impl TryCall<ExternalMemberCall> {
+    /// Classifies `try recv.f(args)`, optionally in a call-options layer; any other shape yields `None`.
+    pub fn from_expression(expression: &Expression) -> Option<Self> {
+        let (options, callee, arguments) = Self::split_call(expression)?;
+        let inner = ExternalMemberCall::from_callee(&callee, &arguments)?;
+        Some(Self { options, inner })
+    }
+}
+
+impl TryCall<FunctionPointerCall> {
+    /// Classifies `try fp(args)` through an externally-visible function pointer, optionally in a
+    /// call-options layer; an internal pointer, invalid in `try`, or any other shape yields `None`.
+    pub fn from_expression(expression: &Expression) -> Option<Self> {
+        let (options, callee, arguments) = Self::split_call(expression)?;
         if !matches!(
-            access.operand().get_type(),
-            Some(SlangType::Contract(_) | SlangType::Interface(_))
+            callee.get_type(),
+            Some(SlangType::Function(function_type)) if function_type.is_externally_visible()
         ) {
             return None;
         }
-        let definition = match access.member().resolve_to_definition()? {
-            Definition::Function(function_definition)
-                if function_definition.compute_selector().is_some() =>
-            {
-                Definition::Function(function_definition)
-            }
-            Definition::StateVariable(state_variable)
-                if state_variable.compute_selector().is_some()
-                    && !matches!(
-                        state_variable.mutability(),
-                        StateVariableMutability::Constant | StateVariableMutability::Immutable
-                    ) =>
-            {
-                Definition::StateVariable(state_variable)
-            }
-            _ => return None,
-        };
-        Some(Self {
-            access,
-            definition,
-            arguments: call.arguments(),
-            options,
-        })
+        let inner = FunctionPointerCall::from_callee(&callee, &arguments)?;
+        Some(Self { options, inner })
     }
+}
 
-    /// Emits the guarded call with `try` semantics, returning its success status, its result values in
-    /// declaration order, and the continuation block.
+impl<T: EmitTry> TryCall<T> {
+    /// Captures the call-options layer, then emits the inner call with `try` semantics.
     pub fn emit<'state, 'context: 'block, 'block>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -88,24 +102,17 @@ impl TryCall {
         Vec<Value<'context, 'block>>,
         BlockRef<'context, 'block>,
     ) {
-        let mut block = block;
-        let (call_value, call_gas) = match &self.options {
-            Some(options) => {
-                let (value, _salt, gas, next_block) =
-                    CallOptions(options).capture(context, block);
-                block = next_block;
-                (value, gas)
-            }
-            None => (None, None),
-        };
-        CallContext::new(context).emit_external_member_call_fallible(
-            &self.access,
-            &self.definition,
-            &self.arguments,
-            call_value,
-            call_gas,
-            true,
-            block,
-        )
+        let mut current_block = block;
+        let mut call_value = None;
+        let mut call_gas = None;
+        if let Some(options) = &self.options {
+            let (value, _salt, gas, next_block) =
+                CallOptions(options).capture(context, current_block);
+            current_block = next_block;
+            call_value = value;
+            call_gas = gas;
+        }
+        self.inner
+            .emit_try(context, call_value, call_gas, current_block)
     }
 }

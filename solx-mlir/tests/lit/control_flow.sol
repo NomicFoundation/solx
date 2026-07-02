@@ -1,39 +1,42 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @{{.*if_else.*}}
-// CHECK:   sol.if %{{.*}} {
-// CHECK:     sol.return
-// CHECK:   } else {
-// CHECK:     sol.return
-
-// CHECK: sol.func @{{.*while_loop.*}}
-// CHECK:   sol.while {
-// CHECK:     sol.condition %{{.*}}
-// CHECK:   } do {
-// CHECK:     sol.yield
-
-// For-loop step uses unchecked add (sol.add not sol.cadd)
-// CHECK: sol.func @{{.*for_loop.*}}
-// CHECK:   sol.for cond {
-// CHECK:     sol.condition %{{.*}}
-// CHECK:   } body {
-// CHECK:     sol.yield
-// CHECK:   } step {
-// CHECK:     sol.add %
-// CHECK:     sol.yield
-
 // CHECK: sol.func @{{.*do_while.*}}
 // CHECK:   sol.do {
 // CHECK:     sol.yield
 // CHECK:   } while {
 // CHECK:     sol.condition %{{.*}}
 
-// CHECK: sol.func @{{.*infinite_for.*}}
+// CHECK: sol.func @{{.*for_loop.*}}
 // CHECK:   sol.for cond {
-// CHECK:     %[[TRUE:.*]] = sol.constant true
-// CHECK:     sol.condition %[[TRUE]]
+// CHECK:     sol.condition %{{.*}}
 // CHECK:   } body {
+// CHECK:     sol.cadd %
+// CHECK:     sol.yield
+// CHECK:   } step {
+// CHECK:     sol.add %
+// CHECK:     sol.yield
+
+// CHECK: sol.func @{{.*if_else.*}}
+// CHECK:   sol.if %{{.*}} {
+// CHECK:     sol.return
+// CHECK:   } else {
+// CHECK:     sol.return
+
+// CHECK: sol.func @{{.*infinite_for.*}}
+// CHECK:     sol.constant true
+
+// CHECK: sol.func @{{.*loop_diverge.*}}
+// CHECK:   } body {
+// CHECK:     sol.return
+// CHECK-NEXT: no predecessors
+// CHECK-NEXT: sol.yield
+
+// CHECK: sol.func @{{.*while_loop.*}}
+// CHECK:   sol.while {
+// CHECK:     sol.condition %{{.*}}
+// CHECK:   } do {
+// CHECK:     sol.yield
 
 // CHECK: sol.func @{{.*with_break.*}}
 // CHECK:   sol.while {
@@ -50,22 +53,12 @@
 // CHECK:       sol.continue
 
 contract C {
-    function if_else(uint256 x) public pure returns (uint256) {
-        if (x > 10) {
-            return 1;
-        } else {
-            return 0;
-        }
-    }
-
-    function while_loop(uint256 n) public pure returns (uint256) {
-        uint256 sum = 0;
+    function do_while(uint256 n) public pure returns (uint256) {
         uint256 i = 0;
-        while (i < n) {
-            sum = sum + i;
+        do {
             i = i + 1;
-        }
-        return sum;
+        } while (i < n);
+        return i;
     }
 
     function for_loop(uint256 n) public pure returns (uint256) {
@@ -76,12 +69,12 @@ contract C {
         return sum;
     }
 
-    function do_while(uint256 n) public pure returns (uint256) {
-        uint256 i = 0;
-        do {
-            i = i + 1;
-        } while (i < n);
-        return i;
+    function if_else(uint256 x) public pure returns (uint256) {
+        if (x > 10) {
+            return 1;
+        } else {
+            return 0;
+        }
     }
 
     function infinite_for() public pure returns (uint256) {
@@ -92,6 +85,23 @@ contract C {
                 return i;
             }
         }
+    }
+
+    function loop_diverge(uint256 n) public pure returns (uint256) {
+        for (uint256 i = 0; i < n; i++) {
+            return i;
+        }
+        return 0;
+    }
+
+    function while_loop(uint256 n) public pure returns (uint256) {
+        uint256 sum = 0;
+        uint256 i = 0;
+        while (i < n) {
+            sum = sum + i;
+            i = i + 1;
+        }
+        return sum;
     }
 
     function with_break(uint256 n) public pure returns (uint256) {

@@ -17,6 +17,7 @@ use slang_solidity_v2::ast::YulStatement;
 use slang_solidity_v2::ast::YulSwitchCase;
 
 use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_mlir::YulValue;
 use solx_mlir::ods::yul::BreakOperation;
 use solx_mlir::ods::yul::ConditionOperation;
@@ -47,8 +48,20 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
                 (value, block)
             };
             for (path, value) in paths.iter().zip(values) {
-                let target = path.iter().next().expect("empty yul lvalue path");
-                let slot = context.slot(&target, &current);
+                let declaration = path
+                    .iter()
+                    .next()
+                    .expect("empty yul lvalue path")
+                    .resolve_to_definition()
+                    .expect("yul lvalue resolves to a declaration")
+                    .node_id();
+                let slot = AstValue::from(context.environment.variable(declaration))
+                    .reinterpret(
+                        AstType::llvm_ptr(context.state.mlir_context),
+                        context.state,
+                        &current,
+                    )
+                    .into_mlir();
                 value.store(slot, context.state, &current);
             }
             Some(current)
@@ -80,7 +93,7 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
                 let word =
                     initial.unwrap_or_else(|| YulValue::constant(&BigInt::from(0u32), state, &current));
                 word.store(slot, state, &current);
-                context.define_variable(identifier.node_id(), slot);
+                context.environment.define_variable(identifier.node_id(), slot);
             }
             Some(current)
         }
@@ -114,13 +127,13 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
             Some(block)
         }
         YulStatement::YulForStatement(for_statement) => {
-            context.enter_scope();
+            context.environment.enter_scope();
             let mut current = block;
             for inner in for_statement.initialization().statements().iter() {
                 match inner.emit(context, current) {
                     Some(next) => current = next,
                     None => {
-                        context.exit_scope();
+                        context.environment.exit_scope();
                         return None;
                     }
                 }
@@ -143,13 +156,13 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
             for_statement.body().emit_region_body(context, body_block);
             for_statement.iterator().emit_region_body(context, step_block);
 
-            context.exit_scope();
+            context.environment.exit_scope();
             Some(current)
         }
         YulStatement::YulBlock(yul_block) => {
-            context.enter_scope();
+            context.environment.enter_scope();
             let result = yul_block.emit(context, block);
-            context.exit_scope();
+            context.environment.exit_scope();
             result
         }
         YulStatement::YulFunctionDefinition(_) => {

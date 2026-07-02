@@ -16,6 +16,7 @@ use slang_solidity_v2::ast::NodeId;
 
 use crate::ast::analysis::query::base_constructor_arguments::BaseConstructorArguments;
 use crate::ast::analysis::query::match_linearised_base::MatchLinearisedBase;
+use crate::ast::analysis::query::positional_arguments::PositionalArguments;
 
 /// Resolves the base-constructor call chain a contract's construction emits.
 pub trait BaseConstructorChain {
@@ -48,7 +49,10 @@ impl BaseConstructorChain for ContractDefinition {
         for declaring_contract in mro.iter() {
             if let Some(constructor) = declaring_contract.constructor() {
                 for invocation in constructor.modifier_invocations().iter() {
-                    let Some(arguments) = invocation.arguments() else {
+                    let Some(arguments) = invocation
+                        .arguments()
+                        .and_then(|argument_list| argument_list.positional_arguments())
+                    else {
                         continue;
                     };
                     let Some(base_contract) = invocation.name().match_linearised_base(mro) else {
@@ -64,7 +68,10 @@ impl BaseConstructorChain for ContractDefinition {
                 }
             }
             for inheritance in declaring_contract.inheritance_types().iter() {
-                let Some(arguments) = inheritance.arguments() else {
+                let Some(arguments) = inheritance
+                    .arguments()
+                    .and_then(|argument_list| argument_list.positional_arguments())
+                else {
                     continue;
                 };
                 let Some(base_contract) = inheritance.type_name().match_linearised_base(mro) else {

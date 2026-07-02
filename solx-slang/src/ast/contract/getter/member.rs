@@ -5,19 +5,17 @@
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::r#type::TypeLike;
 use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Context;
+use solx_mlir::LocationPolicy;
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
-
 /// A returnable member of a struct getter. A scalar member loads its value; a reference member is
-/// returned as its relocated memory value, the two told apart by whether `stored_type` equals
+/// returned as its reinterpreted address, the two told apart by whether `stored_type` equals
 /// `result_type`.
 pub struct Member<'context> {
     /// The `sol.gep` index of the member within the struct place.
@@ -39,13 +37,10 @@ impl<'context> Member<'context> {
     ) -> Option<Vec<Self>> {
         let mut members = Vec::new();
         for (member_index, member) in struct_definition.members().iter().enumerate() {
-            let member_slang = member.get_type().expect("slang types every struct member");
-            let stored_type = unsafe {
-                Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
-                    struct_mlir_type.to_raw(),
-                    member_index as u64,
-                ))
-            };
+            let member_slang = member.get_type().expect("slang validated");
+            let stored_type = AstType::new(struct_mlir_type)
+                .element_type(member_index)
+                .into_mlir();
             let result_type = match &member_slang {
                 SlangType::Mapping(_) | SlangType::Array(_) | SlangType::FixedSizeArray(_) => {
                     continue;
@@ -54,11 +49,9 @@ impl<'context> Member<'context> {
                     AstType::string(context.mlir_context, solx_utils::DataLocation::Memory)
                         .into_mlir()
                 }
-                SlangType::Struct(_) => TypeConversion::resolve_slang_type(
-                    &member_slang,
-                    Some(solx_utils::DataLocation::Memory),
-                    context,
-                ),
+                SlangType::Struct(_) => {
+                    AstType::resolve(&member_slang, LocationPolicy::ForceMemory, context)
+                }
                 _ => stored_type,
             };
             members.push(Self {
@@ -95,7 +88,7 @@ impl<'context> Member<'context> {
                 .into_mlir()
         } else {
             AstValue::new(address)
-                .data_loc_cast(AstType::new(self.result_type), context, block)
+                .cast(AstType::new(self.result_type), context, block)
                 .into_mlir()
         }
     }

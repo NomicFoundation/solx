@@ -232,18 +232,18 @@ impl Contract {
             if let Some(sol_source) = output.sol_source.as_deref() {
                 writeln!(std::io::stdout(), "MLIR Dialect sol:\n{sol_source}")?;
             }
-            if !output.deploy_source.is_empty() {
+            if !output.llvm_deploy_source.is_empty() {
                 writeln!(
                     std::io::stdout(),
                     "MLIR Dialect llvm (deploy):\n{}",
-                    output.deploy_source
+                    output.llvm_deploy_source
                 )?;
             }
-            if !output.runtime_source.is_empty() {
+            if !output.llvm_runtime_source.is_empty() {
                 writeln!(
                     std::io::stdout(),
                     "MLIR Dialect llvm (runtime):\n{}",
-                    output.runtime_source
+                    output.llvm_runtime_source
                 )?;
             }
         }
@@ -819,16 +819,16 @@ impl Contract {
             if let Some(sol_source) = output.sol_source.as_deref() {
                 write("sol", sol_source)?;
             }
-            if !output.deploy_source.is_empty() {
+            if !output.llvm_deploy_source.is_empty() {
                 write(
                     &format!("llvm.{}", solx_utils::CodeSegment::Deploy),
-                    &output.deploy_source,
+                    &output.llvm_deploy_source,
                 )?;
             }
-            if !output.runtime_source.is_empty() {
+            if !output.llvm_runtime_source.is_empty() {
                 write(
                     &format!("llvm.{}", solx_utils::CodeSegment::Runtime),
-                    &output.runtime_source,
+                    &output.llvm_runtime_source,
                 )?;
             }
         }

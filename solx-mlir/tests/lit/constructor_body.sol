@@ -8,7 +8,7 @@
 // CHECK: sol.store {{.*}}!sol.ptr<ui256, Storage>
 // CHECK: sol.return
 
-contract CtorTest {
+contract ConstructorTest {
     uint256 c;
 
     constructor(uint256 a, uint256 b) {

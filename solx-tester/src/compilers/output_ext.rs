@@ -62,24 +62,32 @@ pub fn get_last_contract(
                     continue;
                 };
                 match last_contract_name(source) {
-                    Ok(name) => return Ok(format!("{path}:{name}")),
+                    Ok(name) => {
+                        return Ok(
+                            solx_utils::ContractName::new(path.clone(), Some(name)).full_path
+                        );
+                    }
                     Err(_error) => continue,
                 }
             }
 
             #[cfg(feature = "slang-ast")]
-            for (path, _source) in sources.iter().rev() {
-                if let Some(contracts) = output.contracts.get(path)
-                    && let Some(ast) = output
-                        .sources
-                        .get(path)
-                        .and_then(|source| source.ast.as_ref())
-                    && let Some(name) = slang_object_names_in_source_order(ast)
-                        .into_iter()
-                        .rev()
-                        .find(|name| contracts.contains_key(name.as_str()))
-                {
-                    return Ok(format!("{path}:{name}"));
+            {
+                for (path, _source) in sources.iter().rev() {
+                    if let Some(contracts) = output.contracts.get(path)
+                        && let Some(ast) = output
+                            .sources
+                            .get(path)
+                            .and_then(|source| source.ast.as_ref())
+                        && let Some(name) = slang_object_names_in_source_order(ast)
+                            .into_iter()
+                            .rev()
+                            .find(|name| contracts.contains_key(name.as_str()))
+                    {
+                        return Ok(
+                            solx_utils::ContractName::new(path.clone(), Some(name)).full_path
+                        );
+                    }
                 }
             }
 
@@ -93,9 +101,9 @@ pub fn get_last_contract(
                 .contracts
                 .first_key_value()
                 .and_then(|(path, contracts)| {
-                    contracts
-                        .first_key_value()
-                        .map(|(name, _contract)| format!("{path}:{name}"))
+                    contracts.first_key_value().map(|(name, _contract)| {
+                        solx_utils::ContractName::new(path.clone(), Some(name.clone())).full_path
+                    })
                 })
                 .ok_or_else(|| {
                     anyhow::anyhow!("The sources are empty. Found errors: {:?}", output.errors)
@@ -184,8 +192,8 @@ fn last_contract_name(
 
 ///
 /// Names of the deployable top-level objects in a Slang CST AST, in source order: a contract,
-/// library, or interface. Slang's CST gives each its own node type, unlike the solc AST where a
-/// library is a `ContractDefinition` with a `contractKind`, so all three are matched here.
+/// library, or interface. Slang's CST gives each its own node type, unlike the solc AST where
+/// a library is a `ContractDefinition` with a `contractKind`, so all three are matched here.
 ///
 #[cfg(feature = "slang-ast")]
 fn slang_object_names_in_source_order(ast: &serde_json::Value) -> Vec<String> {

@@ -4,6 +4,11 @@
 // CHECK: sol.ext_call "{{.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256, static_call} : !sol.address, (ui256) -> (i1, ui256)
 // CHECK: sol.ext_call "{{.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256, static_call} : !sol.address, (ui256) -> (i1, ui256)
 
+contract Other {
+    mapping(uint256 => uint256) public m;
+    uint256[] public array;
+}
+
 contract C {
     function readArray(Other o, uint256 index) external view returns (uint256) {
         return o.array(index);
@@ -12,9 +17,4 @@ contract C {
     function readMapping(Other o, uint256 key) external view returns (uint256) {
         return o.m(key);
     }
-}
-
-contract Other {
-    mapping(uint256 => uint256) public m;
-    uint256[] public array;
 }

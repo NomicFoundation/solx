@@ -10,7 +10,6 @@ use slang_solidity_v2::ast::CallOptionsExpression;
 use slang_solidity_v2::ast::Expression;
 
 use solx_mlir::Type as AstType;
-use solx_mlir::Value as AstValue;
 
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -26,8 +25,7 @@ expression_emit!(CallOptionsExpression; |node, context, block| {
     node.operand().emit(context, current_block)
 });
 
-/// A local lens over a foreign `CallOptionsExpression`, capturing the `value`, `salt`, and `gas`
-/// call modifiers.
+/// A local lens over a foreign `CallOptionsExpression`, capturing the `value` and `salt` call modifiers.
 pub struct CallOptions<'node>(pub &'node CallOptionsExpression);
 
 impl CallOptions<'_> {
@@ -58,7 +56,7 @@ impl CallOptions<'_> {
                     current_block = next_block;
                     let state = context.state;
                     value = Some(
-                        AstValue::new(option_value)
+                        option_value
                             .cast(
                                 AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
                                 state,
@@ -81,8 +79,8 @@ impl CallOptions<'_> {
                     current_block = next_block;
                     let state = context.state;
                     salt = Some(
-                        AstValue::new(salt_bytes)
-                            .bytes_cast(
+                        salt_bytes
+                            .cast(
                                 AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
                                 state,
                                 &current_block,
@@ -98,7 +96,7 @@ impl CallOptions<'_> {
                     current_block = next_block;
                     let state = context.state;
                     gas = Some(
-                        AstValue::new(option_value)
+                        option_value
                             .cast(
                                 AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
                                 state,

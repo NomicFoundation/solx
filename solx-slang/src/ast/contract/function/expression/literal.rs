@@ -7,6 +7,7 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::r#type::IntegerType;
 use num_bigint::BigInt;
 use num_bigint::Sign;
 use slang_solidity_v2::ast::DecimalNumberExpression;
@@ -25,102 +26,105 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::emit::emit_as::EmitAs;
 use crate::ast::emit::emit_expression::EmitExpression;
 
-expression_emit!(DecimalNumberExpression; |node, context, block| {
-    let value = node.integer_value().expect(
-        "decimal literal must evaluate to an integer after applying any units",
-    );
-    let result_type = context
-        .resolve_slang_type(node.get_type())
-        .expect("binder types every decimal literal node");
-    let value = AstValue::constant_from_bigint(
-        &value,
-        AstType::new(result_type),
-        context.state,
-        &block,
-    )
-    .into_mlir();
-    BlockAnd { block, value }
-});
-
-expression_emit!(HexNumberExpression; |node, context, block| {
+expression_emit!(DecimalNumberExpression, HexNumberExpression; |node, context, block| {
     let value = node
         .integer_value()
-        .expect("hex literals always evaluate to integers");
-    let result_type = context
-        .resolve_slang_type(node.get_type())
-        .expect("binder types every hex literal node");
-    let value = AstValue::constant_from_bigint(
+        .expect("slang validated");
+    let result_type =
+        AstType::resolve_optional(node.get_type(), context.state)
+            .expect("slang validated");
+    let constant = AstValue::constant_from_bigint(
         &value,
         AstType::new(result_type),
         context.state,
         &block,
-    )
-    .into_mlir();
-    BlockAnd { block, value }
+    );
+    BlockAnd {
+        block,
+        value: constant,
+    }
 });
 
 expression_emit!(TrueKeyword; |context, block| {
-    let value = AstValue::boolean(true, context.state, &block).into_mlir();
+    let value = AstValue::boolean(true, context.state, &block);
     BlockAnd { block, value }
 });
 
 expression_emit!(FalseKeyword; |context, block| {
-    let value = AstValue::boolean(false, context.state, &block).into_mlir();
+    let value = AstValue::boolean(false, context.state, &block);
     BlockAnd { block, value }
 });
 
 expression_emit!(ThisKeyword; |context, block| {
-    let contract_type = context
-        .state
-        .current_contract_type
-        .expect("sol.this emitted outside a contract");
-    let value = mlir_op!(context.state, &block, ThisOperation.addr(contract_type));
-    BlockAnd { block, value }
+    let contract_type = context.contract_type.expect("slang validated");
+    let value: Value<'context, 'block> =
+        mlir_op!(context.state, block, ThisOperation.addr(contract_type));
+    BlockAnd {
+        block,
+        value: value.into(),
+    }
 });
 
 expression_emit!(StringExpression; |node, context, block| {
     let bytes = node.value();
-    let text = unsafe { std::str::from_utf8_unchecked(&bytes) };
-    let value = AstValue::string_literal(text, context.state, &block).into_mlir();
+    // The bytes are read only as bytes by `StringAttribute::new`, never as UTF-8: a Solidity
+    // literal may be non-UTF-8, e.g. `"\xff"`, so the unchecked conversion is sound and a checked
+    // `from_utf8` would wrongly reject valid input.
+    let literal = unsafe { std::str::from_utf8_unchecked(&bytes) };
+    let value = AstValue::string_literal(literal, context.state, &block);
     BlockAnd { block, value }
 });
 
-/// Emits a string literal coerced to a `byte` / `bytesN` target as a compile-time constant.
-///
-/// A `byte` / `bytesN` value is left-aligned: the literal fills the high bytes, zero-padded on the
-/// right. The natural [`StringExpression::emit`] produces a runtime `!sol.string`; toward a
-/// fixed-width byte target that value is materialised directly as a `sol.constant` then narrowed
-/// with `sol.bytes_cast`. Any other target falls back to the runtime string emission.
 impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for StringExpression {
-    type Output = Value<'context, 'block>;
+    type Output = AstValue<'context, 'block>;
 
     fn emit_as<'state>(
         &self,
-        target: Type<'context>,
+        target_type: Type<'context>,
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
-    ) -> BlockAnd<'context, 'block, Value<'context, 'block>> {
-        let Some(width) = context.fixed_bytes_or_byte_width(target) else {
-            return self.emit(context, block);
-        };
-        let bytes = self.value();
-        let mut buffer = vec![0u8; width as usize];
-        for (slot, byte) in buffer.iter_mut().zip(bytes.iter()) {
-            *slot = *byte;
+    ) -> BlockAnd<'context, 'block, AstValue<'context, 'block>> {
+        let state = context.state;
+        if AstType::new(target_type).is_byte() {
+            // A string literal shorter than the target byte type is right-zero-padded, so an empty
+            // literal yields the zero byte; the `unwrap_or(0)` is that defined padding, not a fallback.
+            let byte = self.value().first().copied().unwrap_or(0);
+            let ui8 = Type::from(IntegerType::unsigned(
+                state.mlir_context,
+                solx_utils::BIT_LENGTH_BYTE as u32,
+            ));
+            let integer = AstValue::constant_from_bigint(
+                &BigInt::from(byte),
+                AstType::new(ui8),
+                state,
+                &block,
+            );
+            let value = integer.cast(AstType::new(target_type), state, &block);
+            return BlockAnd { block, value };
         }
-        let integer_type = AstType::unsigned(
-            context.state.mlir_context,
-            width as usize * solx_utils::BIT_LENGTH_BYTE,
-        );
-        let integer = AstValue::constant_from_bigint(
-            &BigInt::from_bytes_be(Sign::Plus, &buffer),
-            integer_type,
-            context.state,
-            &block,
-        );
-        let value = integer
-            .bytes_cast(AstType::new(target), context.state, &block)
-            .into_mlir();
-        BlockAnd { block, value }
+        if let Some(width) = AstType::new(target_type).fixed_bytes_or_byte_width() {
+            let mut buffer = vec![0u8; width as usize];
+            for (slot, byte) in buffer.iter_mut().zip(self.value().iter()) {
+                *slot = *byte;
+            }
+            let integer_value = BigInt::from_bytes_be(Sign::Plus, &buffer);
+            let integer_type = Type::from(IntegerType::unsigned(
+                state.mlir_context,
+                width * solx_utils::BIT_LENGTH_BYTE as u32,
+            ));
+            let integer = AstValue::constant_from_bigint(
+                &integer_value,
+                AstType::new(integer_type),
+                state,
+                &block,
+            );
+            let value = integer.cast(
+                AstType::fixed_bytes(state.mlir_context, width),
+                state,
+                &block,
+            );
+            return BlockAnd { block, value };
+        }
+        self.emit(context, block)
     }
 }

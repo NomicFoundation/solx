@@ -1,8 +1,9 @@
 //!
-//! Expression lowering to MLIR SSA values.
+//! Expression emission to MLIR SSA values.
 //!
 
 pub mod arithmetic;
+pub mod arithmetic_mode;
 pub mod array_expression;
 pub mod assignment;
 pub mod call;
@@ -12,6 +13,7 @@ pub mod conditional;
 pub mod identifier;
 pub mod index_access;
 pub mod literal;
+pub mod logical_operator;
 pub mod member;
 pub mod operator;
 pub mod short_circuit;
@@ -23,46 +25,40 @@ use std::collections::HashMap;
 
 use melior::ir::BlockRef;
 use melior::ir::Type;
-use melior::ir::Value;
-use melior::ir::ValueLike;
+use melior::ir::Value as MlirValue;
 use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
-use slang_solidity_v2::ast::Type as SlangType;
 
-use solx_mlir::CmpPredicate;
 use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
-use solx_utils::DataLocation;
 
-use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::contract_dispatch::ContractDispatch;
+use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::expression::assignment::AssignmentTarget;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::emit::emit_as::EmitAs;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_for_effect::EmitForEffect;
 use crate::ast::emit::emit_values::EmitValues;
 
-/// Lowers Solidity expressions to MLIR SSA values.
+/// Emits Solidity expressions to MLIR SSA values.
 pub struct ExpressionContext<'state, 'context, 'block> {
     /// The shared MLIR context.
     pub state: &'state Context<'context>,
     /// Variable environment.
     pub environment: &'state Environment<'context, 'block>,
+    /// Contract-local dispatch metadata.
+    pub dispatch: &'state ContractDispatch,
     /// State variable node ID to storage slot mapping.
     pub storage_layout: &'state HashMap<NodeId, StorageSlot>,
-    /// Contract-local super/base and virtual dispatch maps, resolving a `super.f()` / `Base.f()`
-    /// member access and a virtual internal call to their C3-linearised target.
-    pub dispatch: &'state ContractDispatch,
-    /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
-    ///
-    /// `true` by default (Solidity 0.8+). Set to `false` inside `unchecked {}`
-    /// blocks and for-loop step expressions.
-    pub checked: bool,
+    /// MLIR type of the contract or library being emitted, the type of `this`.
+    pub contract_type: Option<Type<'context>>,
+    /// Arithmetic overflow-checking mode; Checked by default, Unchecked inside `unchecked {}` and for-loop steps.
+    pub arithmetic_mode: ArithmeticMode,
 }
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -70,92 +66,27 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     pub fn new(
         state: &'state Context<'context>,
         environment: &'state Environment<'context, 'block>,
-        storage_layout: &'state HashMap<NodeId, StorageSlot>,
         dispatch: &'state ContractDispatch,
-        checked: bool,
+        storage_layout: &'state HashMap<NodeId, StorageSlot>,
+        contract_type: Option<Type<'context>>,
+        arithmetic_mode: ArithmeticMode,
     ) -> Self {
         Self {
             state,
             environment,
-            storage_layout,
             dispatch,
-            checked,
+            storage_layout,
+            contract_type,
+            arithmetic_mode,
         }
-    }
-
-    /// Emits a `sol.cmp ne 0` producing `i1` from a value.
-    ///
-    /// Short-circuits when the value is already `i1` (e.g. from `sol.cmp`),
-    /// avoiding the redundant `sol.cmp ne, %i1, %zero_i1 : i1` pattern.
-    pub fn emit_is_nonzero(
-        &self,
-        value: Value<'context, 'block>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block> {
-        if AstType::new(value.r#type()).integer_bit_width() == 1 {
-            return value;
-        }
-        let zero = AstValue::constant(0, AstType::new(value.r#type()), self.state, block);
-        AstValue::new(value)
-            .compare(zero, CmpPredicate::Ne, self.state, block)
-            .into_mlir()
-    }
-
-    /// Resolves the Solidity type from Slang to an MLIR type.
-    ///
-    /// Returns `None` when the incoming slang type is `None`. This can happen when calling
-    /// `node.get_type()` if the node doesn't have typing information, for example when
-    /// there are unresolved references or semantic errors.
-    /// Panics on types that `TypeConversion::resolve_slang_type` does not yet handle.
-    pub fn resolve_slang_type(&self, slang_type: Option<SlangType>) -> Option<Type<'context>> {
-        Some(TypeConversion::resolve_slang_type(
-            &slang_type?,
-            None,
-            self.state,
-        ))
-    }
-
-    /// Picks the MLIR type of the address yielded by `sol.gep` / `sol.map`.
-    ///
-    /// Mirrors `Sol_GepOp::build`'s non-ptr-ref-in-storage rule: when the
-    /// element is itself a reference type and lives in `Storage` or
-    /// `CallData`, the result address IS the element type rather than a
-    /// pointer to it.
-    pub(crate) fn address_type(
-        context: &Context<'context>,
-        element_type: Type<'context>,
-        base_location: DataLocation,
-        result_type: &SlangType,
-    ) -> Type<'context> {
-        if result_type.is_reference_type()
-            && matches!(
-                base_location,
-                DataLocation::Storage | DataLocation::CallData
-            )
-        {
-            element_type
-        } else {
-            AstType::pointer(context.mlir_context, element_type, base_location).into_mlir()
-        }
-    }
-
-    /// Whether `candidate` is the single-byte `!sol.byte`, the element type of `bytes` / `string`.
-    pub fn is_byte(&self, candidate: Type<'context>) -> bool {
-        AstType::new(candidate).is_byte(self.state.mlir_context)
-    }
-
-    /// The byte width of a fixed-width byte type: `N` for `!sol.fixedbytes<N>`, `1` for the single
-    /// `!sol.byte`, and `None` for any other type.
-    pub fn fixed_bytes_or_byte_width(&self, candidate: Type<'context>) -> Option<u32> {
-        AstType::new(candidate).fixed_bytes_or_byte_width(self.state.mlir_context)
     }
 }
 
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
-    type Output = BlockAnd<'context, 'block, Value<'context, 'block>>;
+    type Output = BlockAnd<'context, 'block, AstValue<'context, 'block>>;
 
     /// Dispatches an expression to its variant's emission, first folding a compile-time-constant
-    /// arithmetic/bitwise expression to a single constant.
+    /// arithmetic/bitwise expression to a constant.
     fn emit<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -173,16 +104,14 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
                 | Expression::PrefixExpression(_)
         );
         if folds && let Some(folded) = self.integer_value() {
-            let result_type = context
-                .resolve_slang_type(self.get_type())
-                .expect("binder types every folded constant expression");
+            let result_type =
+                AstType::resolve_optional(self.get_type(), context.state).expect("slang validated");
             let value = AstValue::constant_from_bigint(
                 &folded,
                 AstType::new(result_type),
                 context.state,
                 &block,
-            )
-            .into_mlir();
+            );
             return BlockAnd { block, value };
         }
         match self {
@@ -208,23 +137,57 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
             Expression::BitwiseXorExpression(inner) => inner.emit(context, block),
             Expression::ShiftExpression(inner) => inner.emit(context, block),
             Expression::FunctionCallExpression(inner) => {
-                let BlockAnd { mut value, block } = inner.emit_values(context, block);
+                let BlockAnd { mut value, block } = inner.emit(context, block);
                 BlockAnd {
-                    value: value.remove(0),
+                    value: AstValue::from(value.remove(0)),
                     block,
                 }
             }
             Expression::TupleExpression(inner) => inner.emit(context, block),
-            Expression::ConditionalExpression(inner) => inner.emit(context, block),
+            Expression::ConditionalExpression(inner) => {
+                let BlockAnd { mut value, block } = inner.emit(context, block);
+                BlockAnd {
+                    value: AstValue::from(value.remove(0)),
+                    block,
+                }
+            }
             Expression::ArrayExpression(inner) => inner.emit(context, block),
             Expression::MemberAccessExpression(inner) => inner.emit(context, block),
             Expression::IndexAccessExpression(inner) => inner.emit(context, block),
             Expression::CallOptionsExpression(inner) => inner.emit(context, block),
-            _ => unreachable!(
-                "unsupported expression: {:?}",
-                std::mem::discriminant(self)
-            ),
+            Expression::NewExpression(_) => {
+                unreachable!("a new expression is consumed by its call or discarded for effect")
+            }
+            Expression::TypeExpression(_)
+            | Expression::ElementaryType(_)
+            | Expression::PayableKeyword(_)
+            | Expression::SuperKeyword(_) => {
+                unreachable!(
+                    "a type or keyword is not a value; it is consumed by its enclosing conversion, call, or member access"
+                )
+            }
         }
+    }
+}
+
+impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Expression {
+    type Output = AstValue<'context, 'block>;
+
+    /// Emits this expression coerced to `target_type`.
+    fn emit_as<'state>(
+        &self,
+        target_type: Type<'context>,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> BlockAnd<'context, 'block, AstValue<'context, 'block>> {
+        let BlockAnd { value, block } = match self {
+            Expression::StringExpression(string_literal) => {
+                string_literal.emit_as(target_type, context, block)
+            }
+            _ => self.emit(context, block),
+        };
+        let value = value.cast(AstType::new(target_type), context.state, &block);
+        BlockAnd { value, block }
     }
 }
 
@@ -236,17 +199,17 @@ impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for Expression {
         block: BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
         match self {
-            Expression::FunctionCallExpression(call) => call.emit_values(context, block).block,
+            Expression::FunctionCallExpression(call) => call.emit(context, block).block,
             Expression::PrefixExpression(prefix)
                 if matches!(
                     prefix.operator(),
                     ast::PrefixExpressionOperator::DeleteKeyword(_)
                 ) =>
             {
-                AssignmentTarget::delete(context, &prefix.operand().unwrap_parentheses(), block)
+                AssignmentTarget::delete(context, &prefix.operand(), block)
             }
             Expression::ConditionalExpression(conditional)
-                if matches!(conditional.get_type(), Some(SlangType::Void(_))) =>
+                if matches!(conditional.get_type(), Some(ast::Type::Void(_))) =>
             {
                 conditional.emit_for_effect(context, block)
             }
@@ -257,21 +220,21 @@ impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for Expression {
 }
 
 impl<'context: 'block, 'block> EmitValues<'context, 'block> for Expression {
-    /// A tuple yields its elements; a call or a tuple-valued conditional its result list.
+    /// A tuple yields its elements; a call or conditional its result list.
     fn emit_values<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
-    ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
+    ) -> BlockAnd<'context, 'block, Vec<MlirValue<'context, 'block>>> {
         match self {
             Expression::TupleExpression(tuple) => {
                 let items = tuple.items();
                 let mut values = Vec::with_capacity(items.len());
                 let mut block = block;
                 for item in items.iter() {
-                    let inner = item.expression().expect("slang validates tuple element");
+                    let inner = item.expression().expect("slang validated");
                     let BlockAnd { value, block: next } = inner.emit(context, block);
-                    values.push(value);
+                    values.push(value.into_mlir());
                     block = next;
                 }
                 BlockAnd {
@@ -279,47 +242,9 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for Expression {
                     block,
                 }
             }
-            Expression::FunctionCallExpression(call) => call.emit_values(context, block),
-            Expression::ConditionalExpression(conditional) => {
-                conditional.emit_values(context, block)
-            }
+            Expression::FunctionCallExpression(call) => call.emit(context, block),
+            Expression::ConditionalExpression(conditional) => conditional.emit(context, block),
             _ => unreachable!("a multi-valued expression is a tuple, call, or conditional"),
         }
-    }
-}
-
-impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Expression {
-    type Output = Value<'context, 'block>;
-
-    /// Emits this expression coerced to `target_type`.
-    ///
-    /// A string literal toward a `byte` / `bytesN` target materialises directly in that
-    /// representation. A `bytes` / `string` / array value routes through its Slang type so a
-    /// data-location relocation lowers to `sol.data_loc_cast` rather than the illegal scalar
-    /// `sol.cast`; every other expression emits then casts to the target.
-    fn emit_as<'state>(
-        &self,
-        target_type: Type<'context>,
-        context: &ExpressionContext<'state, 'context, 'block>,
-        block: BlockRef<'context, 'block>,
-    ) -> BlockAnd<'context, 'block, Value<'context, 'block>> {
-        if let Expression::StringExpression(string_literal) = self {
-            return string_literal.emit_as(target_type, context, block);
-        }
-        let source_slang = self.get_type();
-        let BlockAnd { value, block } = self.emit(context, block);
-        let conversion = match &source_slang {
-            Some(
-                source_slang @ (SlangType::Bytes(_) | SlangType::String(_) | SlangType::Array(_)),
-            ) => TypeConversion::from_slang_conversion(
-                source_slang,
-                source_slang,
-                target_type,
-                context.state,
-            ),
-            _ => TypeConversion::from_target_type(target_type, context.state),
-        };
-        let value = conversion.emit(value, context.state, &block);
-        BlockAnd { value, block }
     }
 }

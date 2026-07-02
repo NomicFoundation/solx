@@ -19,7 +19,7 @@ use slang_solidity_v2::ast::visitor::Visitor;
 use slang_solidity_v2::ast::visitor::accept_function_definition;
 use slang_solidity_v2::ast::visitor::accept_inheritance_type;
 
-use crate::ast::contract::function::FunctionEmitter;
+use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 
 /// The result of re-resolving a contract's `super` / virtual calls against its C3 linearisation,
 /// plus the pass-local visitor state gathering the `super.f` / `Base.f` accesses.
@@ -200,7 +200,7 @@ impl SuperDispatch {
             let symbol = format!(
                 "{}.{}",
                 mro[target_index].name().name(),
-                FunctionEmitter::mlir_function_name(&target)
+                target.mlir_function_name()
             );
             dispatch.shadowed.push((symbol, target.clone()));
         }

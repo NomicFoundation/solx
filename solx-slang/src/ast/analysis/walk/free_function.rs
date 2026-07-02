@@ -1,7 +1,7 @@
 //!
 //! Collection of free functions referenced by a contract.
 //!
-//! Free functions are not in any contract's function set, so this walks a contract's functions and
+//! Free functions are not in any contract's linearised set, so this walks a contract's functions and
 //! returns every free function referenced, called or used as a value, for the emitter to register.
 //!
 
@@ -26,9 +26,8 @@ pub struct FreeCallCollector {
 }
 
 impl FreeCallCollector {
-    /// Returns the free functions reachable from `contract`'s functions (deduplicated by node id).
-    /// `extra_roots` are extra bodies to walk, such as the operator-bound free functions a
-    /// `using {f as +} for T global;` directive pulls in.
+    /// Returns the free functions reachable from `contract`'s functions and constructor (deduplicated
+    /// by node id). `extra_roots` are extra bodies to walk.
     pub fn reachable_free_functions(
         contract: &ContractDefinition,
         free_functions: &[FunctionDefinition],

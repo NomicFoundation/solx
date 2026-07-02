@@ -1,73 +1,77 @@
 //!
-//! Statement lowering to MLIR operations.
+//! Statement emission to MLIR operations.
 //!
 
 pub mod assembly;
 pub mod control_flow;
 pub mod event;
+pub mod expression_statement_kind;
 pub mod revert;
 pub mod try_statement;
 pub mod variable_declaration;
 
 use std::collections::HashMap;
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Region;
 use melior::ir::Type;
+use melior::ir::Value;
+use melior::ir::attribute::StringAttribute;
+use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Block;
 use slang_solidity_v2::ast::BreakStatement;
-use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::ContinueStatement;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::ExpressionStatement;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::ReturnStatement;
 use slang_solidity_v2::ast::Statement;
-use slang_solidity_v2::ast::Statements;
 use slang_solidity_v2::ast::UncheckedBlock;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::BreakOperation;
 use solx_mlir::ods::sol::ContinueOperation;
 use solx_mlir::ods::sol::PlaceholderOperation;
 use solx_mlir::ods::sol::ReturnOperation;
+use solx_mlir::ods::sol::RevertOperation;
 
-use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
+use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::emit::emit_as::EmitAs;
+use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_for_effect::EmitForEffect;
 use crate::ast::emit::emit_statement::EmitStatement;
 use crate::ast::emit::emit_values::EmitValues;
 
-/// Lowers Solidity statements to MLIR operations with control flow.
-///
-/// Returns `Some(block)` as the continuation block, or `None` when control
-/// flow has been terminated (by `return`, `break`, or `continue`).
+use self::expression_statement_kind::ExpressionStatementKind;
+
+/// Emits Solidity statements to MLIR operations; threads `Some(block)` or `None` when control diverges.
 pub struct StatementContext<'state, 'context, 'block> {
     /// The shared MLIR context.
     pub state: &'state Context<'context>,
-    /// Variable environment (mutable for new declarations and loop targets).
+    /// Variable environment, mutable for new declarations and loop targets.
     pub environment: &'state mut Environment<'context, 'block>,
-    /// The current region for creating new blocks.
-    /// Stored as a raw pointer to allow switching between Sol op regions
-    /// without lifetime conflicts.
-    region_pointer: *const Region<'context>,
+    /// Contract-local dispatch metadata.
+    pub dispatch: &'state ContractDispatch,
     /// State variable node ID to storage slot mapping.
     pub storage_layout: &'state HashMap<NodeId, StorageSlot>,
-    /// Contract-local super/base and virtual dispatch maps, forwarded to every borrowed
-    /// [`ExpressionContext`] so a call inside a statement resolves its C3-linearised target.
-    pub dispatch: &'state ContractDispatch,
+    /// MLIR type of the contract or library being emitted, the type of `this`.
+    pub contract_type: Option<Type<'context>>,
     /// The function's declared return types, for `emit_return` to cast to.
-    return_types: &'state [Type<'context>],
-    /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
-    ///
-    /// `true` by default. Set to `false` inside `unchecked {}` blocks.
-    pub checked: bool,
+    pub return_types: &'state [Type<'context>],
+    /// The function's return slots, parallel to `return_types` (`None` for an unnamed return); a bare
+    /// `return;` and the epilogue load these so the `sol.return` arity matches.
+    pub return_slots: &'state [Option<Value<'context, 'block>>],
+    /// Arithmetic overflow-checking mode: Checked by default, Unchecked inside `unchecked {}`.
+    pub arithmetic_mode: ArithmeticMode,
 }
 
 impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
@@ -75,62 +79,225 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     pub fn new(
         state: &'state Context<'context>,
         environment: &'state mut Environment<'context, 'block>,
-        region: &Region<'context>,
-        storage_layout: &'state HashMap<NodeId, StorageSlot>,
         dispatch: &'state ContractDispatch,
+        storage_layout: &'state HashMap<NodeId, StorageSlot>,
+        contract_type: Option<Type<'context>>,
         return_types: &'state [Type<'context>],
+        return_slots: &'state [Option<Value<'context, 'block>>],
     ) -> Self {
         Self {
             state,
             environment,
-            region_pointer: region as *const Region<'context>,
-            storage_layout,
             dispatch,
+            storage_layout,
+            contract_type,
             return_types,
-            checked: true,
+            return_slots,
+            arithmetic_mode: ArithmeticMode::Checked,
         }
-    }
-
-    /// Borrows an [`ExpressionContext`] sharing this statement's scope.
-    pub fn expression_context(&self) -> ExpressionContext<'_, 'context, 'block> {
-        ExpressionContext::new(
-            self.state,
-            self.environment,
-            self.storage_layout,
-            self.dispatch,
-            self.checked,
-        )
-    }
-
-    /// Switches the current region for emitting into Sol op regions.
-    pub fn set_region(&mut self, region: &Region<'context>) {
-        self.region_pointer = region as *const Region<'context>;
-    }
-
-    /// Emits a sequence of statements inside a new lexical scope.
-    pub fn emit_block(
-        &mut self,
-        statements: Statements,
-        block: BlockRef<'context, 'block>,
-    ) -> Option<BlockRef<'context, 'block>> {
-        self.environment.enter_scope();
-        let mut current = block;
-        for statement in statements.iter() {
-            match statement.emit(self, current) {
-                Some(next) => current = next,
-                None => {
-                    self.environment.exit_scope();
-                    return None;
-                }
-            }
-        }
-        self.environment.exit_scope();
-        Some(current)
     }
 }
 
+/// Builds an [`ExpressionContext`] from a statement context, propagating its arithmetic mode.
+impl<'state, 'context, 'block> From<&'state StatementContext<'_, 'context, 'block>>
+    for ExpressionContext<'state, 'context, 'block>
+{
+    fn from(statement: &'state StatementContext<'_, 'context, 'block>) -> Self {
+        ExpressionContext::new(
+            statement.state,
+            statement.environment,
+            statement.dispatch,
+            statement.storage_layout,
+            statement.contract_type,
+            statement.arithmetic_mode,
+        )
+    }
+}
+
+statement_emit!(ReturnStatement; |node, context, block| {
+    let Some(expression) = node.expression() else {
+        let state = context.state;
+        let mut values = Vec::with_capacity(context.return_types.len());
+        for (index, &return_type) in context.return_types.iter().enumerate() {
+            let value = match context.return_slots[index] {
+                Some(pointer) => Pointer::new(pointer)
+                    .load(AstType::new(return_type), state, &block)
+                    .into_mlir(),
+                None => AstValue::constant(
+                    0,
+                    AstType::new(return_type),
+                    state,
+                    &block,
+                )
+                .into_mlir(),
+            };
+            values.push(value);
+        }
+        mlir_op_void!(state, &block, ReturnOperation.operands(&values));
+        return None;
+    };
+
+    let emitter = ExpressionContext::from(&*context);
+    let expression = expression.unwrap_parentheses();
+
+    let (values, block) = if context.return_types.len() > 1 {
+        let BlockAnd { value: values, block } = expression.emit_values(&emitter, block);
+        (values.into_iter().map(AstValue::from).collect(), block)
+    } else {
+        let return_type = context.return_types[0];
+        let BlockAnd { value, block } = expression.emit_as(return_type, &emitter, block);
+        (vec![value], block)
+    };
+
+    let cast_values: Vec<_> = values
+        .into_iter()
+        .zip(context.return_types.iter())
+        .map(|(value, &return_type)| {
+            value
+                .cast(
+                    AstType::new(return_type),
+                    context.state,
+                    &block,
+                )
+                .into_mlir()
+        })
+        .collect();
+
+    mlir_op_void!(
+        context.state,
+        &block,
+        ReturnOperation.operands(&cast_values)
+    );
+    None
+});
+
+statement_emit!(Block; |node, context, block| {
+    context.environment.enter_scope();
+    let result = node
+        .statements()
+        .iter()
+        .try_fold(block, |block, statement| statement.emit(context, block));
+    context.environment.exit_scope();
+    result
+});
+
+statement_emit!(BreakStatement; |context, block| {
+    mlir_op_void!(context.state, &block, BreakOperation);
+    None
+});
+
+statement_emit!(ContinueStatement; |context, block| {
+    mlir_op_void!(context.state, &block, ContinueOperation);
+    None
+});
+
+statement_emit!(ExpressionStatement; |node, context, block| {
+    match ExpressionStatementKind::from_statement(node) {
+        ExpressionStatementKind::ModifierPlaceholder => {
+            mlir_op_void!(context.state, &block, PlaceholderOperation);
+            Some(block)
+        }
+        ExpressionStatementKind::RevertCall(call) => {
+            let argument = match &call.arguments() {
+                ArgumentsDeclaration::PositionalArguments(positional_arguments) => {
+                    positional_arguments.iter().next()
+                }
+                ArgumentsDeclaration::NamedArguments(named_arguments)
+                    if named_arguments.iter().next().is_none() =>
+                {
+                    None
+                }
+                ArgumentsDeclaration::NamedArguments(_) => {
+                    unreachable!("named arguments on a revert are not supported");
+                }
+            };
+            let block = match argument {
+                None => {
+                    let state = context.state;
+                    mlir_op_void!(
+                        state,
+                        &block,
+                        RevertOperation
+                            .signature(StringAttribute::new(state.mlir_context, ""))
+                            .args(&[])
+                    );
+                    block
+                }
+                Some(Expression::StringExpression(string_expression)) => {
+                    let message = String::from_utf8(string_expression.value())
+                        .expect("revert message is valid UTF-8");
+                    let state = context.state;
+                    mlir_op_void!(
+                        state,
+                        &block,
+                        RevertOperation
+                            .signature(StringAttribute::new(state.mlir_context, &message))
+                            .args(&[])
+                    );
+                    block
+                }
+                Some(expression) => {
+                    let emitter = ExpressionContext::from(&*context);
+                    let BlockAnd {
+                        value: message_value,
+                        block,
+                    } = expression.emit(&emitter, block);
+                    let state = context.state;
+                    let string_memory_type =
+                        AstType::string(state.mlir_context, solx_utils::DataLocation::Memory)
+                            .into_mlir();
+                    let message_value = message_value
+                        .cast(AstType::new(string_memory_type), state, &block)
+                        .into_mlir();
+                    mlir_op_void!(
+                        state,
+                        &block,
+                        RevertOperation
+                            .signature(StringAttribute::new(state.mlir_context, "Error(string)"))
+                            .args(&[message_value])
+                            .call(Attribute::unit(state.mlir_context))
+                    );
+                    block
+                }
+            };
+            Some(block)
+        }
+        ExpressionStatementKind::TypeOrSuperNoop => Some(block),
+        ExpressionStatementKind::TypeReference(expression) => {
+            let mut current = expression.unwrap_parentheses();
+            while let Expression::MemberAccessExpression(access) = current {
+                current = access.operand().unwrap_parentheses();
+            }
+            if let Expression::ConditionalExpression(conditional) = current {
+                let emitter = ExpressionContext::from(&*context);
+                Some(conditional.operand().emit(&emitter, block).block)
+            } else {
+                Some(block)
+            }
+        }
+        ExpressionStatementKind::TupleConditional(conditional) => {
+            let emitter = ExpressionContext::from(&*context);
+            let BlockAnd { block, .. } = conditional.emit(&emitter, block);
+            Some(block)
+        }
+        ExpressionStatementKind::Value(expression) => {
+            let emitter = ExpressionContext::from(&*context);
+            Some(expression.emit_for_effect(&emitter, block))
+        }
+    }
+});
+
+statement_emit!(UncheckedBlock; |node, context, block| {
+    let saved_mode = context.arithmetic_mode;
+    context.arithmetic_mode = ArithmeticMode::Unchecked;
+    let result = node.block().emit(context, block);
+    context.arithmetic_mode = saved_mode;
+    result
+});
+
 impl<'context: 'block, 'block> EmitStatement<'context, 'block> for Statement {
-    /// Dispatches a statement to its variant's emission.
+    /// Dispatches a statement to its variant's emission, threading the
+    /// continuation block (`None` when control diverged).
     fn emit<'state>(
         &self,
         context: &mut StatementContext<'state, 'context, 'block>,
@@ -150,82 +317,8 @@ impl<'context: 'block, 'block> EmitStatement<'context, 'block> for Statement {
             Statement::UncheckedBlock(inner) => inner.emit(context, block),
             Statement::RevertStatement(inner) => inner.emit(context, block),
             Statement::EmitStatement(inner) => inner.emit(context, block),
-            Statement::TryStatement(inner) => inner.emit(context, block),
             Statement::AssemblyStatement(inner) => inner.emit(context, block),
+            Statement::TryStatement(inner) => inner.emit(context, block),
         }
     }
 }
-
-statement_emit!(ExpressionStatement; |node, context, block| {
-    let expression = node.expression();
-    if let Expression::Identifier(identifier) = &expression
-        && matches!(
-            identifier.resolve_to_built_in(),
-            Some(BuiltIn::ModifierUnderscore)
-        )
-    {
-        mlir_op_void!(context.state, &block, PlaceholderOperation);
-        return Some(block);
-    }
-    if let Expression::FunctionCallExpression(call) = &expression
-        && let Expression::Identifier(identifier) = call.operand()
-        && identifier.name() == revert::IDENTIFIER
-    {
-        return context.emit_revert_call(call, block);
-    }
-    Some(expression.emit_for_effect(&context.expression_context(), block))
-});
-
-statement_emit!(BreakStatement; |context, block| {
-    mlir_op_void!(context.state, &block, BreakOperation);
-    None
-});
-
-statement_emit!(ContinueStatement; |context, block| {
-    mlir_op_void!(context.state, &block, ContinueOperation);
-    None
-});
-
-statement_emit!(Block; |node, context, block| {
-    context.emit_block(node.statements(), block)
-});
-
-statement_emit!(UncheckedBlock; |node, context, block| {
-    let saved_checked = context.checked;
-    context.checked = false;
-    let result = context.emit_block(node.block().statements(), block);
-    context.checked = saved_checked;
-    result
-});
-
-statement_emit!(ReturnStatement; |node, context, block| {
-    let Some(expression) = node.expression() else {
-        mlir_op_void!(context.state, &block, ReturnOperation.operands(&[]));
-        return None;
-    };
-
-    let expression_context = context.expression_context();
-    if context.return_types.len() == 1 {
-        let return_type = context.return_types[0];
-        let BlockAnd { value, block } =
-            expression.emit_as(return_type, &expression_context, block);
-        mlir_op_void!(context.state, &block, ReturnOperation.operands(&[value]));
-        return None;
-    }
-
-    let BlockAnd { value: values, block } = expression.emit_values(&expression_context, block);
-    let cast_values: Vec<_> = values
-        .into_iter()
-        .zip(context.return_types.iter())
-        .map(|(value, &return_type)| {
-            TypeConversion::from_target_type(return_type, context.state).emit(
-                value,
-                context.state,
-                &block,
-            )
-        })
-        .collect();
-
-    mlir_op_void!(context.state, &block, ReturnOperation.operands(&cast_values));
-    None
-});

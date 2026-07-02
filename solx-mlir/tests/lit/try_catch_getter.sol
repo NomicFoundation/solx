@@ -7,6 +7,10 @@
 // CHECK: error {
 // CHECK: fallback {
 
+contract Token {
+    uint256 public totalSupply;
+}
+
 contract C {
     function g(Token t) external returns (uint256) {
         try t.totalSupply() returns (uint256 s) {
@@ -17,8 +21,4 @@ contract C {
             return 0;
         }
     }
-}
-
-contract Token {
-    uint256 public totalSupply;
 }

@@ -2,17 +2,18 @@
 //! Identifier-position Solidity built-in calls.
 //!
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
+use melior::ir::Type;
 use melior::ir::Value;
-use slang_solidity_v2::ast::ArgumentsDeclaration;
+use melior::ir::attribute::StringAttribute;
+use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
-use slang_solidity_v2::ast::ErrorDefinition;
 use slang_solidity_v2::ast::Expression;
-use slang_solidity_v2::ast::NodeId;
-use slang_solidity_v2::ast::PositionalArguments;
 
+use solx_mlir::LocationPolicy;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::AddModOperation;
@@ -20,365 +21,378 @@ use solx_mlir::ods::sol::AssertOperation;
 use solx_mlir::ods::sol::BlobHashOperation;
 use solx_mlir::ods::sol::BlockHashOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
-use solx_mlir::ods::sol::GasLeftOperation;
-use solx_mlir::ods::sol::Keccak256Operation;
 use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::RequireOperation;
 use solx_mlir::ods::sol::Ripemd160Operation;
 use solx_mlir::ods::sol::SelfdestructOperation;
 use solx_mlir::ods::sol::Sha256Operation;
 
+use crate::ast::analysis::query::member_access_operand::MemberAccessOperand;
+use crate::ast::analysis::query::parameter_node_ids::ParameterNodeIds;
 use crate::ast::block_and::BlockAnd;
-use crate::ast::contract::function::expression::call::CallContext;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 use crate::ast::emit::emit_expression::EmitExpression;
 
-impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context, 'block> {
-    /// Tries to emit `callee(arguments)` as a Solidity built-in invoked by bare identifier.
-    ///
-    /// Resolves the callee via slang's binder to a [`BuiltIn`] variant. On match, returns
-    /// `Some((value, block))`, where `value` is `Some(...)` for value-producing built-ins
-    /// (e.g. `gasleft()`) and `None` for statement-style built-ins (e.g. `assert`, `require`).
-    /// Returns `None` if the callee is not a built-in.
-    pub(super) fn try_emit_built_in_call(
-        &self,
+/// A Solidity built-in called by identifier.
+pub struct IdentifierBuiltinCall {
+    /// The resolved built-in.
+    pub built_in: BuiltIn,
+    /// The call arguments.
+    pub arguments: CallArguments,
+}
+
+impl IdentifierBuiltinCall {
+    /// Classifies an identifier-position built-in call.
+    pub fn from_callee(
         callee: &Expression,
-        arguments: &PositionalArguments,
-        block: BlockRef<'context, 'block>,
-    ) -> Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        arguments: &slang_solidity_v2::ast::ArgumentsDeclaration,
+    ) -> Option<Self> {
         let Expression::Identifier(identifier) = callee else {
             return None;
         };
         let built_in = identifier.resolve_to_built_in()?;
-        match built_in {
-            BuiltIn::Assert if arguments.len() == 1 => {
-                let condition = arguments.iter().next().expect("argument count verified");
-                Some((None, self.emit_assert(&condition, block)))
-            }
-            BuiltIn::Require if matches!(arguments.len(), 1 | 2) => {
-                let mut iter = arguments.iter();
-                let condition = iter.next().expect("argument count verified");
-                let message = iter.next();
-                Some((None, self.emit_require(&condition, message.as_ref(), block)))
-            }
-            BuiltIn::Gasleft if arguments.is_empty() => {
-                let context = self.expression_context.state;
-                let value = block
-                    .append_operation(
-                        GasLeftOperation::builder(context.mlir_context, context.location())
-                            .val(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("gasleft always produces one result")
-                    .into();
-                Some((Some(value), block))
-            }
-            BuiltIn::Blockhash if arguments.len() == 1 => {
-                let (values, block) = self.emit_argument_values(arguments, block);
-                let context = self.expression_context.state;
-                let block_number = AstValue::new(values[0])
+        if !matches!(
+            built_in,
+            BuiltIn::Assert
+                | BuiltIn::Require
+                | BuiltIn::Gasleft
+                | BuiltIn::Blockhash
+                | BuiltIn::Keccak256
+                | BuiltIn::Sha256
+                | BuiltIn::Ripemd160
+                | BuiltIn::Ecrecover
+                | BuiltIn::Addmod
+                | BuiltIn::Mulmod
+                | BuiltIn::Selfdestruct
+                | BuiltIn::Blobhash
+        ) {
+            return None;
+        }
+        Some(Self {
+            built_in,
+            arguments: CallArguments::positional(arguments),
+        })
+    }
+
+    /// Emits the built-in call.
+    pub fn emit<'state, 'context: 'block, 'block>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
+        match self.built_in {
+            BuiltIn::Assert => self.emit_assert(context, block),
+            BuiltIn::Require => self.emit_require(context, block),
+            BuiltIn::Gasleft => BlockAnd {
+                value: vec![AstValue::gas_left(context.state, &block).into_mlir()],
+                block,
+            },
+            BuiltIn::Blockhash => {
+                let BlockAnd {
+                    value: values,
+                    block,
+                } = self.arguments.emit(context, block);
+                let state = context.state;
+                let block_number = AstValue::from(values[0])
                     .cast(
-                        AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD),
-                        context,
+                        AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
+                        state,
                         &block,
                     )
                     .into_mlir();
-                let value = block
-                    .append_operation(
-                        BlockHashOperation::builder(context.mlir_context, context.location())
-                            .block_number(block_number)
-                            .val(AstType::fixed_bytes(context.mlir_context, 32).into_mlir())
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("blockhash always produces one result")
-                    .into();
-                Some((Some(value), block))
-            }
-            BuiltIn::Blobhash if arguments.len() == 1 => {
-                let (values, block) = self.emit_argument_values(arguments, block);
-                let context = self.expression_context.state;
-                let index = AstValue::new(values[0])
-                    .cast(
-                        AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD),
-                        context,
-                        &block,
-                    )
-                    .into_mlir();
-                let value = block
-                    .append_operation(
-                        BlobHashOperation::builder(context.mlir_context, context.location())
-                            .idx(index)
-                            .val(AstType::fixed_bytes(context.mlir_context, 32).into_mlir())
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("blobhash always produces one result")
-                    .into();
-                Some((Some(value), block))
-            }
-            BuiltIn::Selfdestruct if arguments.len() == 1 => {
-                let (values, block) = self.emit_argument_values(arguments, block);
-                let context = self.expression_context.state;
-                let recipient = AstValue::new(values[0])
-                    .address_cast(
-                        AstType::address(context.mlir_context, true),
-                        context,
-                        &block,
-                    )
-                    .into_mlir();
-                block.append_operation(
-                    SelfdestructOperation::builder(context.mlir_context, context.location())
-                        .recipient(recipient)
-                        .build()
-                        .into(),
+                let value = mlir_op!(
+                    state,
+                    block,
+                    BlockHashOperation
+                        .block_number(block_number)
+                        .val(AstType::fixed_bytes(state.mlir_context, 32))
                 );
-                Some((None, block))
+                BlockAnd {
+                    value: vec![value],
+                    block,
+                }
             }
-            BuiltIn::Keccak256 if arguments.len() == 1 => {
-                let (values, block) = self.emit_argument_values(arguments, block);
-                let context = self.expression_context.state;
-                let value = block
-                    .append_operation(
-                        Keccak256Operation::builder(context.mlir_context, context.location())
-                            .addr(values[0])
-                            .result(AstType::fixed_bytes(context.mlir_context, 32).into_mlir())
-                            .build()
-                            .into(),
+            BuiltIn::Blobhash => {
+                let BlockAnd {
+                    value: values,
+                    block,
+                } = self.arguments.emit(context, block);
+                let state = context.state;
+                let index = AstValue::from(values[0])
+                    .cast(
+                        AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
+                        state,
+                        &block,
                     )
-                    .result(0)
-                    .expect("keccak256 always produces one result")
-                    .into();
-                Some((Some(value), block))
+                    .into_mlir();
+                let value = mlir_op!(
+                    state,
+                    block,
+                    BlobHashOperation
+                        .idx(index)
+                        .val(AstType::fixed_bytes(state.mlir_context, 32))
+                );
+                BlockAnd {
+                    value: vec![value],
+                    block,
+                }
             }
-            BuiltIn::Sha256 if arguments.len() == 1 => {
-                let (values, block) = self.emit_argument_values(arguments, block);
-                let context = self.expression_context.state;
-                let value = block
-                    .append_operation(
-                        Sha256Operation::builder(context.mlir_context, context.location())
-                            .data(values[0])
-                            .result(AstType::fixed_bytes(context.mlir_context, 32).into_mlir())
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("sha256 always produces one result")
-                    .into();
-                Some((Some(value), block))
+            BuiltIn::Selfdestruct => {
+                let BlockAnd {
+                    value: values,
+                    block,
+                } = self.arguments.emit(context, block);
+                let state = context.state;
+                let recipient = AstValue::from(values[0])
+                    .cast(AstType::address(state.mlir_context, true), state, &block)
+                    .into_mlir();
+                mlir_op_void!(state, &block, SelfdestructOperation.recipient(recipient));
+                BlockAnd {
+                    value: vec![],
+                    block,
+                }
             }
-            BuiltIn::Ripemd160 if arguments.len() == 1 => {
-                let (values, block) = self.emit_argument_values(arguments, block);
-                let context = self.expression_context.state;
-                let value = block
-                    .append_operation(
-                        Ripemd160Operation::builder(context.mlir_context, context.location())
-                            .data(values[0])
-                            .result(AstType::fixed_bytes(context.mlir_context, 20).into_mlir())
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("ripemd160 always produces one result")
-                    .into();
-                Some((Some(value), block))
+            BuiltIn::Keccak256 => {
+                let BlockAnd {
+                    value: values,
+                    block,
+                } = self.arguments.emit(context, block);
+                let value = AstValue::keccak256(AstValue::from(values[0]), context.state, &block)
+                    .into_mlir();
+                BlockAnd {
+                    value: vec![value],
+                    block,
+                }
             }
-            BuiltIn::Ecrecover if arguments.len() == 4 => {
-                let (values, block) = self.emit_argument_values(arguments, block);
-                let context = self.expression_context.state;
-                let value = block
-                    .append_operation(
-                        EcrecoverOperation::builder(context.mlir_context, context.location())
-                            .hash(values[0])
-                            .v(values[1])
-                            .r(values[2])
-                            .s(values[3])
-                            .result(AstType::address(context.mlir_context, false).into_mlir())
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("ecrecover always produces one result")
-                    .into();
-                Some((Some(value), block))
+            BuiltIn::Sha256 => {
+                let BlockAnd {
+                    value: values,
+                    block,
+                } = self.arguments.emit(context, block);
+                let state = context.state;
+                let value = mlir_op!(
+                    state,
+                    block,
+                    Sha256Operation
+                        .data(values[0])
+                        .result(AstType::fixed_bytes(state.mlir_context, 32))
+                );
+                BlockAnd {
+                    value: vec![value],
+                    block,
+                }
             }
-            BuiltIn::Addmod if arguments.len() == 3 => {
-                let (values, block) = self.emit_argument_values(arguments, block);
-                let context = self.expression_context.state;
-                let field = AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD);
-                let value = block
-                    .append_operation(
-                        AddModOperation::builder(context.mlir_context, context.location())
-                            .x(AstValue::new(values[0]).cast(field, context, &block).into_mlir())
-                            .y(AstValue::new(values[1]).cast(field, context, &block).into_mlir())
-                            .r#mod(AstValue::new(values[2]).cast(field, context, &block).into_mlir())
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("addmod always produces one result")
-                    .into();
-                Some((Some(value), block))
+            BuiltIn::Ripemd160 => {
+                let BlockAnd {
+                    value: values,
+                    block,
+                } = self.arguments.emit(context, block);
+                let state = context.state;
+                let value = mlir_op!(
+                    state,
+                    block,
+                    Ripemd160Operation
+                        .data(values[0])
+                        .result(AstType::fixed_bytes(state.mlir_context, 20))
+                );
+                BlockAnd {
+                    value: vec![value],
+                    block,
+                }
             }
-            BuiltIn::Mulmod if arguments.len() == 3 => {
-                let (values, block) = self.emit_argument_values(arguments, block);
-                let context = self.expression_context.state;
-                let field = AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD);
-                let value = block
-                    .append_operation(
-                        MulModOperation::builder(context.mlir_context, context.location())
-                            .x(AstValue::new(values[0]).cast(field, context, &block).into_mlir())
-                            .y(AstValue::new(values[1]).cast(field, context, &block).into_mlir())
-                            .r#mod(AstValue::new(values[2]).cast(field, context, &block).into_mlir())
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("mulmod always produces one result")
-                    .into();
-                Some((Some(value), block))
+            BuiltIn::Ecrecover => {
+                let BlockAnd {
+                    value: values,
+                    block,
+                } = self.arguments.emit(context, block);
+                let state = context.state;
+                let bytes32 = AstType::fixed_bytes(state.mlir_context, 32).into_mlir();
+                let ui8 = Type::from(IntegerType::unsigned(state.mlir_context, 8));
+                let hash = AstValue::from(values[0])
+                    .cast(AstType::new(bytes32), state, &block)
+                    .into_mlir();
+                let v = AstValue::from(values[1])
+                    .cast(AstType::new(ui8), state, &block)
+                    .into_mlir();
+                let r = AstValue::from(values[2])
+                    .cast(AstType::new(bytes32), state, &block)
+                    .into_mlir();
+                let s = AstValue::from(values[3])
+                    .cast(AstType::new(bytes32), state, &block)
+                    .into_mlir();
+                let value = mlir_op!(
+                    state,
+                    block,
+                    EcrecoverOperation
+                        .hash(hash)
+                        .v(v)
+                        .r(r)
+                        .s(s)
+                        .result(AstType::address(state.mlir_context, false))
+                );
+                BlockAnd {
+                    value: vec![value],
+                    block,
+                }
             }
-            _ => None,
+            BuiltIn::Addmod | BuiltIn::Mulmod => {
+                let BlockAnd {
+                    value: values,
+                    block,
+                } = self.arguments.emit(context, block);
+                let state = context.state;
+                let ui256 =
+                    AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
+                let x = AstValue::from(values[0])
+                    .cast(AstType::new(ui256), state, &block)
+                    .into_mlir();
+                let y = AstValue::from(values[1])
+                    .cast(AstType::new(ui256), state, &block)
+                    .into_mlir();
+                let modulus = AstValue::from(values[2])
+                    .cast(AstType::new(ui256), state, &block)
+                    .into_mlir();
+                let value = if matches!(self.built_in, BuiltIn::Addmod) {
+                    mlir_op!(state, block, AddModOperation.x(x).y(y).r#mod(modulus))
+                } else {
+                    mlir_op!(state, block, MulModOperation.x(x).y(y).r#mod(modulus))
+                };
+                BlockAnd {
+                    value: vec![value],
+                    block,
+                }
+            }
+            _ => unreachable!("only identifier built-ins are classified here"),
         }
     }
 
-    /// Emits an `assert(condition)` built-in via `sol.assert`.
-    fn emit_assert(
+    /// Emits the `assert` builtin as a `sol.assert` op: an unrecoverable panic carrying no message.
+    fn emit_assert<'state, 'context: 'block, 'block>(
         &self,
-        condition: &Expression,
+        context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
-    ) -> BlockRef<'context, 'block> {
-        let BlockAnd { value: condition_value, block } =
-            condition.emit(self.expression_context, block);
-        let condition_boolean = self
-            .expression_context
-            .emit_is_nonzero(condition_value, &block);
-        let context = self.expression_context.state;
-        mlir_op_void!(context, &block, AssertOperation.cond(condition_boolean));
-        block
+    ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
+        let condition = self
+            .arguments
+            .expressions
+            .first()
+            .expect("assert has one argument");
+        let BlockAnd {
+            value: condition_value,
+            block,
+        } = condition.emit(context, block);
+        let condition_boolean = condition_value
+            .is_nonzero(context.state, &block)
+            .into_mlir();
+        mlir_op_void!(
+            context.state,
+            &block,
+            AssertOperation.cond(condition_boolean)
+        );
+        BlockAnd {
+            value: vec![],
+            block,
+        }
     }
 
-    /// Emits a `require(condition)` or `require(condition, message)` built-in
-    /// via `sol.require`.
-    ///
-    /// Literal string messages lower to `sol.require %cond, "msg" : ()`. A
-    /// `require(cond, CustomError(args))` lowers to the `call` form carrying the
-    /// error's canonical signature and ABI-encoded arguments. Any other runtime
-    /// expression evaluates at runtime and is ABI-encoded under the
-    /// `Error(string)` selector via the `call` form of `sol.require`.
-    fn emit_require(
+    /// Emits the `require` builtin as a `sol.require` op, threading its optional string or custom-error message.
+    fn emit_require<'state, 'context: 'block, 'block>(
         &self,
-        condition: &Expression,
-        message: Option<&Expression>,
+        context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
-    ) -> BlockRef<'context, 'block> {
-        let BlockAnd { value: condition_value, block } =
-            condition.emit(self.expression_context, block);
-        let condition_boolean = self
-            .expression_context
-            .emit_is_nonzero(condition_value, &block);
-        let context = self.expression_context.state;
-        match message {
+    ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
+        let mut iter = self.arguments.expressions.iter();
+        let condition = iter.next().expect("require has a condition argument");
+        let message = iter.next();
+        let BlockAnd {
+            value: condition_value,
+            block,
+        } = condition.emit(context, block);
+        let condition_boolean = condition_value
+            .is_nonzero(context.state, &block)
+            .into_mlir();
+        let state = context.state;
+        let block = match message {
             Some(Expression::StringExpression(string_expression)) => {
                 let bytes = string_expression.value();
                 let literal = String::from_utf8(bytes).expect("require message is valid UTF-8");
-                let operation_builder =
-                    RequireOperation::builder(context.mlir_context, context.location())
+                mlir_op_void!(
+                    state,
+                    &block,
+                    RequireOperation
                         .cond(condition_boolean)
                         .args(&[])
-                        .msg(melior::ir::attribute::StringAttribute::new(context.mlir_context, &literal));
-                block.append_operation(operation_builder.build().into());
+                        .msg(StringAttribute::new(state.mlir_context, &literal))
+                );
                 block
-            }
-            Some(Expression::FunctionCallExpression(error_call))
-                if let Expression::Identifier(identifier) = error_call.operand()
-                    && let Some(Definition::Error(error_definition)) =
-                        identifier.resolve_to_definition() =>
-            {
-                self.emit_require_custom_error(
-                    condition_boolean,
-                    &error_definition,
-                    &error_call.arguments(),
-                    block,
-                )
             }
             Some(expression) => {
-                let BlockAnd { value: message_value, block } =
-                    expression.emit(self.expression_context, block);
-                let string_memory_type = AstType::string(context.mlir_context, solx_utils::DataLocation::Memory).into_mlir();
-                let message_value = TypeConversion::from_target_type(string_memory_type, context)
-                    .emit(message_value, context, &block);
-                let operation_builder =
-                    RequireOperation::builder(context.mlir_context, context.location())
-                        .cond(condition_boolean)
-                        .args(&[message_value])
-                        .msg(melior::ir::attribute::StringAttribute::new(context.mlir_context, "Error(string)"))
-                        .call(melior::ir::Attribute::unit(context.mlir_context));
-                block.append_operation(operation_builder.build().into());
-                block
+                if let Expression::FunctionCallExpression(error_call) = expression
+                    && let Some(Definition::Error(error_definition)) =
+                        MemberAccessOperand(&error_call.operand()).resolve()
+                {
+                    let signature = error_definition
+                        .compute_canonical_signature()
+                        .expect("slang validated");
+                    let parameter_ids = error_definition.parameters().node_ids();
+                    let parameter_types = AstType::resolve_parameters(
+                        &error_definition.parameters(),
+                        LocationPolicy::Declared(None),
+                        context.state,
+                    );
+                    let error_arguments =
+                        CallArguments::for_parameter_ids(&error_call.arguments(), &parameter_ids);
+                    let BlockAnd {
+                        value: argument_values,
+                        block: current_block,
+                    } = error_arguments.emit_as(&parameter_types, context, block);
+                    let state = context.state;
+                    mlir_op_void!(
+                        state,
+                        &current_block,
+                        RequireOperation
+                            .cond(condition_boolean)
+                            .args(&argument_values)
+                            .msg(StringAttribute::new(state.mlir_context, &signature))
+                            .call(Attribute::unit(state.mlir_context))
+                    );
+                    current_block
+                } else {
+                    let BlockAnd {
+                        value: message_value,
+                        block,
+                    } = expression.emit(context, block);
+                    let string_memory_type =
+                        AstType::string(state.mlir_context, solx_utils::DataLocation::Memory)
+                            .into_mlir();
+                    let message_value = message_value
+                        .cast(AstType::new(string_memory_type), state, &block)
+                        .into_mlir();
+                    mlir_op_void!(
+                        state,
+                        &block,
+                        RequireOperation
+                            .cond(condition_boolean)
+                            .args(&[message_value])
+                            .msg(StringAttribute::new(state.mlir_context, "Error(string)"))
+                            .call(Attribute::unit(state.mlir_context))
+                    );
+                    block
+                }
             }
             None => {
-                let operation_builder =
-                    RequireOperation::builder(context.mlir_context, context.location())
-                        .cond(condition_boolean)
-                        .args(&[]);
-                block.append_operation(operation_builder.build().into());
+                mlir_op_void!(
+                    state,
+                    &block,
+                    RequireOperation.cond(condition_boolean).args(&[])
+                );
                 block
             }
+        };
+        BlockAnd {
+            value: vec![],
+            block,
         }
-    }
-
-    /// Emits `require(condition, CustomError(args))` as the `call` form of
-    /// `sol.require`, carrying the error's canonical signature and its
-    /// ABI-encoded arguments coerced to the declared parameter types.
-    fn emit_require_custom_error(
-        &self,
-        condition_boolean: Value<'context, 'block>,
-        error_definition: &ErrorDefinition,
-        arguments: &ArgumentsDeclaration,
-        block: BlockRef<'context, 'block>,
-    ) -> BlockRef<'context, 'block> {
-        let signature = error_definition
-            .compute_canonical_signature()
-            .expect("canonical signature is computable for a custom error");
-        let parameters = error_definition.parameters();
-        let parameter_ids: Vec<NodeId> =
-            parameters.iter().map(|parameter| parameter.node_id()).collect();
-        let ordered_arguments = arguments
-            .ordered_by(&parameter_ids)
-            .expect("slang matches every require custom-error argument to a parameter");
-        let context = self.expression_context.state;
-        let mut argument_values = Vec::with_capacity(ordered_arguments.len());
-        let mut current_block = block;
-        for (parameter, argument) in parameters.iter().zip(ordered_arguments) {
-            let BlockAnd { value, block: next_block } =
-                argument.emit(self.expression_context, current_block);
-            current_block = next_block;
-            let parameter_type = TypeConversion::resolve_slang_type(
-                &parameter
-                    .get_type()
-                    .expect("parameter type resolved by semantic analysis"),
-                None,
-                context,
-            );
-            let value = TypeConversion::from_target_type(parameter_type, context).emit(
-                value,
-                context,
-                &current_block,
-            );
-            argument_values.push(value);
-        }
-        let operation_builder =
-            RequireOperation::builder(context.mlir_context, context.location())
-                .cond(condition_boolean)
-                .args(&argument_values)
-                .msg(melior::ir::attribute::StringAttribute::new(context.mlir_context, &signature))
-                .call(melior::ir::Attribute::unit(context.mlir_context));
-        current_block.append_operation(operation_builder.build().into());
-        current_block
     }
 }

@@ -8,14 +8,14 @@ use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Context;
+use solx_mlir::LocationPolicy;
 use solx_mlir::Type as AstType;
 
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::getter::keyed_signature::KeyedSignature;
 use crate::ast::contract::getter::member::Member;
 
 /// The external ABI signature of a `public` state variable's synthesised getter, shared by the
-/// call-position getter and the published method identifiers.
+/// call-position getter, the function-pointer value, and the published method identifiers.
 pub trait Signature {
     /// `(parameter_types, return_types)`: scalar `() -> (T)`, mapping `(K) -> (V)`, array
     /// `(uint256) -> (element)`, struct `() -> (members)`; `None` with no flattenable result.
@@ -28,6 +28,7 @@ pub trait Signature {
     /// `None` for a non-keyed type or a leaf with no flattenable getter.
     fn keyed_signature<'context>(
         &self,
+        location: solx_utils::DataLocation,
         context: &Context<'context>,
     ) -> Option<KeyedSignature<'context>>;
 }
@@ -37,46 +38,46 @@ impl Signature for StateVariableDefinition {
         &self,
         context: &Context<'context>,
     ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)> {
-        let declared_type = self.get_type().expect("slang types every state variable");
+        let declared_type = self.get_type().expect("slang validated");
         match &declared_type {
             SlangType::Mapping(_) | SlangType::Array(_) | SlangType::FixedSizeArray(_) => self
-                .keyed_signature(context)
+                .keyed_signature(solx_utils::DataLocation::Storage, context)
                 .map(|signature| (signature.input_types, signature.result_types)),
             SlangType::Struct(struct_type) => {
                 let Definition::Struct(struct_definition) = struct_type.definition() else {
                     return None;
                 };
-                let struct_mlir_type = TypeConversion::resolve_slang_type(
+                let struct_mlir_type = AstType::resolve(
                     &declared_type,
-                    Some(solx_utils::DataLocation::Storage),
+                    LocationPolicy::Declared(Some(solx_utils::DataLocation::Storage)),
                     context,
                 );
                 let members = Member::layout(&struct_definition, struct_mlir_type, context)?;
                 let return_types = members.iter().map(|member| member.result_type).collect();
                 Some((Vec::new(), return_types))
             }
-            SlangType::String(_) | SlangType::Bytes(_) => Some((
-                Vec::new(),
-                vec![AstType::string(context.mlir_context, solx_utils::DataLocation::Memory)
-                    .into_mlir()],
-            )),
             other if other.is_reference_type() => Some((
                 Vec::new(),
-                vec![TypeConversion::resolve_slang_type(
+                vec![AstType::resolve(
                     other,
-                    Some(solx_utils::DataLocation::Memory),
+                    LocationPolicy::ForceMemory,
                     context,
                 )],
             )),
             other => Some((
                 Vec::new(),
-                vec![TypeConversion::resolve_slang_type(other, None, context)],
+                vec![AstType::resolve(
+                    other,
+                    LocationPolicy::Declared(None),
+                    context,
+                )],
             )),
         }
     }
 
     fn keyed_signature<'context>(
         &self,
+        location: solx_utils::DataLocation,
         context: &Context<'context>,
     ) -> Option<KeyedSignature<'context>> {
         let mut input_types: Vec<Type<'context>> = Vec::new();
@@ -89,11 +90,7 @@ impl Signature for StateVariableDefinition {
                         AstType::string(context.mlir_context, solx_utils::DataLocation::Memory)
                             .into_mlir()
                     } else {
-                        TypeConversion::resolve_slang_type(
-                            &key,
-                            Some(solx_utils::DataLocation::Storage),
-                            context,
-                        )
+                        AstType::resolve(&key, LocationPolicy::Declared(Some(location)), context)
                     };
                     input_types.push(key_type);
                     terminal = mapping_type.value_type();
@@ -112,28 +109,20 @@ impl Signature for StateVariableDefinition {
             return None;
         }
         let terminal_is_reference = matches!(&terminal, SlangType::String(_) | SlangType::Bytes(_));
+        let result_type = if terminal_is_reference {
+            AstType::resolve(&terminal, LocationPolicy::ForceMemory, context)
+        } else {
+            AstType::resolve(&terminal, LocationPolicy::Declared(Some(location)), context)
+        };
         let members = match &terminal {
             SlangType::Struct(struct_type) => {
                 let Definition::Struct(struct_definition) = struct_type.definition() else {
                     return None;
                 };
-                let struct_mlir_type = TypeConversion::resolve_slang_type(
-                    &terminal,
-                    Some(solx_utils::DataLocation::Storage),
-                    context,
-                );
-                Some(Member::layout(&struct_definition, struct_mlir_type, context)?)
+                Some(Member::layout(&struct_definition, result_type, context)?)
             }
+            SlangType::String(_) | SlangType::Bytes(_) => None,
             _ => None,
-        };
-        let result_type = if terminal_is_reference {
-            AstType::string(context.mlir_context, solx_utils::DataLocation::Memory).into_mlir()
-        } else {
-            TypeConversion::resolve_slang_type(
-                &terminal,
-                Some(solx_utils::DataLocation::Storage),
-                context,
-            )
         };
         let result_types: Vec<Type<'context>> = match &members {
             Some(members) => members.iter().map(|member| member.result_type).collect(),

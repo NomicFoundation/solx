@@ -1,147 +1,110 @@
-//! Tuple deconstruction statement lowering.
+//!
+//! Variable declaration statement emission.
+//!
 
 use melior::ir::BlockRef;
-use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MultiTypedDeclaration;
 use slang_solidity_v2::ast::SingleTypedDeclaration;
 use slang_solidity_v2::ast::VariableDeclarationStatement;
 use slang_solidity_v2::ast::VariableDeclarationTarget;
 
+use solx_mlir::LocationPolicy;
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 
 use crate::ast::block_and::BlockAnd;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::emit::emit_as::EmitAs;
-use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_statement::EmitStatement;
 use crate::ast::emit::emit_values::EmitValues;
 
 statement_emit!(VariableDeclarationStatement; |node, context, block| {
     match node.target() {
         VariableDeclarationTarget::SingleTypedDeclaration(single_typed_declaration) => {
-            context.emit_single_typed_declaration(&single_typed_declaration, block)
+            single_typed_declaration.emit(context, block)
         }
         VariableDeclarationTarget::MultiTypedDeclaration(multi_typed_declaration) => {
-            context.emit_multi_typed_declaration(&multi_typed_declaration, block)
+            multi_typed_declaration.emit(context, block)
         }
     }
 });
 
-impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
-    /// Emits a single-typed variable declaration with an optional initializer.
-    fn emit_single_typed_declaration(
-        &mut self,
-        declaration: &SingleTypedDeclaration,
-        block: BlockRef<'context, 'block>,
-    ) -> Option<BlockRef<'context, 'block>> {
-        let name = declaration.declaration().name().name();
-        let slang_type = declaration.declaration().get_type();
-        let declared_type = slang_type
-            .as_ref()
-            .map(|slang_type| TypeConversion::resolve_slang_type(slang_type, None, self.state))
-            .unwrap_or_else(|| {
-                AstType::unsigned(self.state.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
-            });
+statement_emit!(SingleTypedDeclaration; |node, context, block| {
+    let slang_declared_type = node.declaration().get_type().expect("slang validated");
+    let declared_type = AstType::resolve(
+        &slang_declared_type,
+        LocationPolicy::Declared(None),
+        context.state,
+    );
 
-        let expression_context = self.expression_context();
-        let (block, initial_value) = if let Some(ref initializer_expression) = declaration.value() {
-            let (block, cast_value) = match initializer_expression {
-                Expression::StringExpression(string_literal)
-                    if expression_context
-                        .fixed_bytes_or_byte_width(declared_type)
-                        .is_some() =>
-                {
-                    let BlockAnd { value, block } =
-                        string_literal.emit_as(declared_type, &expression_context, block);
-                    (block, value)
-                }
-                _ => {
-                    let BlockAnd {
-                        value: initial_value,
-                        block,
-                    } = initializer_expression.emit(&expression_context, block);
-                    let cast_value = TypeConversion::from_target_type(declared_type, self.state)
-                        .emit(initial_value, self.state, &block);
-                    (block, cast_value)
-                }
-            };
-            (block, Some(cast_value))
-        } else {
-            (block, None)
+    let emitter = ExpressionContext::from(&*context);
+
+    let (block, initial_value) = if let Some(ref initializer_expression) = node.value() {
+        let BlockAnd { value, block } =
+            initializer_expression.emit_as(declared_type, &emitter, block);
+        (block, Some(value.into_mlir()))
+    } else {
+        (block, None)
+    };
+
+    let pointer = if let Some(value) = initial_value {
+        let pointer = Pointer::stack(
+            AstType::new(declared_type),
+            context.state,
+            &block,
+        );
+        pointer.store(AstValue::new(value), context.state, &block);
+        pointer.into_mlir()
+    } else {
+        Pointer::default_initialized(
+            AstType::new(declared_type),
+            context.state,
+            &block,
+        )
+        .into_mlir()
+    };
+
+    context
+        .environment
+        .define_variable(node.declaration().node_id(), pointer);
+    Some(block)
+});
+
+statement_emit!(MultiTypedDeclaration; |node, context, block| {
+    let expression = node.value().unwrap_parentheses();
+    let elements = node.elements();
+
+    let emitter = ExpressionContext::from(&*context);
+
+    let BlockAnd {
+        value: values,
+        block: current,
+    } = expression.emit_values(&emitter, block);
+
+    for (member, value) in elements.iter().zip(values) {
+        let Some(declaration) = member.member() else {
+            continue;
         };
-
-        let pointer = match (initial_value, &slang_type) {
-            (Some(value), _) => {
-                let pointer = Pointer::stack(AstType::new(declared_type), self.state, &block);
-                pointer.store(AstValue::new(value), self.state, &block);
-                pointer
-            }
-            (None, Some(slang_type)) => Pointer::default_initialized(
-                slang_type,
-                AstType::new(declared_type),
-                self.state,
-                &block,
-            ),
-            (None, None) => {
-                let pointer = Pointer::stack(AstType::new(declared_type), self.state, &block);
-                let zero = AstValue::constant(0, AstType::new(declared_type), self.state, &block);
-                pointer.store(zero, self.state, &block);
-                pointer
-            }
-        };
-
-        self.environment
-            .define_variable(name, pointer.into_mlir(), declared_type);
-        Some(block)
+        let state = context.state;
+        let declared_type = AstType::resolve(
+            &declaration.get_type().expect("slang validated"),
+            LocationPolicy::Declared(None),
+            state,
+        );
+        let cast = AstValue::from(value).cast(
+            AstType::new(declared_type),
+            state,
+            &current,
+        );
+        let pointer =
+            Pointer::stack(AstType::new(declared_type), state, &current);
+        pointer.store(cast, state, &current);
+        context
+            .environment
+            .define_variable(declaration.node_id(), pointer.into_mlir());
     }
 
-    /// Emits a multi-typed variable declaration, deconstructing a tuple or call.
-    fn emit_multi_typed_declaration(
-        &mut self,
-        declaration: &MultiTypedDeclaration,
-        block: BlockRef<'context, 'block>,
-    ) -> Option<BlockRef<'context, 'block>> {
-        let expression = declaration.value();
-        let elements = declaration.elements();
-
-        let expression_context = self.expression_context();
-        let BlockAnd {
-            value: values,
-            block: current,
-        } = match &expression {
-            Expression::TupleExpression(_)
-            | Expression::FunctionCallExpression(_)
-            | Expression::ConditionalExpression(_) => {
-                expression.emit_values(&expression_context, block)
-            }
-            _ => unimplemented!(
-                "tuple deconstruction with this right-hand side shape is not yet supported"
-            ),
-        };
-
-        for (member, value) in elements.iter().zip(values) {
-            let Some(declaration) = member.member() else {
-                continue;
-            };
-            let name = declaration.name().name();
-            let declared_type = declaration
-                .get_type()
-                .map(|slang_type| TypeConversion::resolve_slang_type(&slang_type, None, self.state))
-                .unwrap_or_else(|| {
-                    AstType::unsigned(self.state.mlir_context, solx_utils::BIT_LENGTH_FIELD)
-                        .into_mlir()
-                });
-            let cast = TypeConversion::from_target_type(declared_type, self.state)
-                .emit(value, self.state, &current);
-            let pointer = Pointer::stack(AstType::new(declared_type), self.state, &current);
-            pointer.store(AstValue::new(cast), self.state, &current);
-            self.environment
-                .define_variable(name, pointer.into_mlir(), declared_type);
-        }
-
-        Some(current)
-    }
-}
+    Some(current)
+});

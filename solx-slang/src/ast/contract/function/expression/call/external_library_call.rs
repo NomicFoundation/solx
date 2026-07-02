@@ -3,127 +3,154 @@
 //!
 
 use melior::ir::BlockRef;
-use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
-use slang_solidity_v2::ast::NodeId;
-use slang_solidity_v2::ast::StorageLocation;
-use slang_solidity_v2::ast::Type as SlangType;
 
-use solx_mlir::Context;
+use solx_mlir::LocationPolicy;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 
 use crate::ast::analysis::query::member_access_operand::MemberAccessOperand;
+use crate::ast::analysis::query::parameter_node_ids::ParameterNodeIds;
 use crate::ast::block_and::BlockAnd;
-use crate::ast::contract::function::FunctionEmitter;
-use crate::ast::contract::function::expression::call::CallContext;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
+use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 use crate::ast::emit::emit_expression::EmitExpression;
 
-impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context, 'block> {
-    /// Emits an external call into a library member `L.f(args)` / `x.f(args)` through a `DELEGATECALL`,
-    /// returning all of its result values in declaration order.
-    ///
-    /// The library's linked address is a `sol.lib_addr` placeholder the linker resolves. A namespace-
-    /// qualified access orders its arguments against the callee's parameters; a `using for` receiver
-    /// evaluates the receiver, casts it to the first parameter type, and forwards it ahead of the
-    /// remaining arguments.
-    pub(super) fn emit_external_library_call(
+/// An external call to a library function.
+pub struct ExternalLibraryCall {
+    /// The member access that selected the library function.
+    pub access: MemberAccessExpression,
+    /// The resolved library function.
+    pub function: FunctionDefinition,
+    /// Receiver value supplied as the library self parameter, if any.
+    pub self_receiver: Option<Expression>,
+    /// Arguments ordered against the library parameters.
+    pub arguments: CallArguments,
+}
+
+impl ExternalLibraryCall {
+    /// Classifies an external library call.
+    pub fn from_callee(callee: &Expression, arguments: &ArgumentsDeclaration) -> Option<Self> {
+        let Expression::MemberAccessExpression(access) = callee else {
+            return None;
+        };
+        let Some(Definition::Function(function)) = access.member().resolve_to_definition() else {
+            return None;
+        };
+        if function.compute_selector().is_none()
+            || !(matches!(&access.operand(), Expression::Identifier(identifier)
+                    if matches!(identifier.resolve_to_definition(), Some(Definition::Library(_))))
+                || matches!(
+                    function.enclosing_definition(),
+                    Some(Definition::Library(_))
+                ))
+        {
+            return None;
+        }
+        let library_operand = access.operand();
+        let self_receiver = (!MemberAccessOperand(&library_operand).is_namespace_qualifier())
+            .then_some(library_operand);
+        let parameter_ids = function.parameters().node_ids();
+        let arguments = if self_receiver.is_some() {
+            CallArguments::after_receiver(arguments, &parameter_ids)
+        } else {
+            CallArguments::for_parameter_ids(arguments, &parameter_ids)
+        };
+        Some(Self {
+            access: access.clone(),
+            function,
+            self_receiver,
+            arguments,
+        })
+    }
+
+    /// Emits the library call.
+    pub fn emit<'state, 'context: 'block, 'block>(
         &self,
-        access: &MemberAccessExpression,
-        function_definition: &FunctionDefinition,
-        arguments: &ArgumentsDeclaration,
+        context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
-        let context = self.expression_context.state;
-        let Some(Definition::Library(library)) = function_definition.enclosing_definition() else {
+        let Some(Definition::Library(library)) = self.function.enclosing_definition() else {
             unreachable!("an external library call's target is a library member");
         };
         let library_name = solx_utils::ContractName::new(
             library.get_file_id().to_owned(),
             Some(library.name().name()),
         );
-        let (parameter_types, _) =
-            TypeConversion::resolve_function_types(function_definition, context);
-        let return_types = Self::library_return_types(function_definition, context);
-        let selector = function_definition
-            .compute_selector()
-            .expect("an external library call resolves to a selector-bearing member");
-        let callee_name = FunctionEmitter::mlir_function_name(function_definition);
-        let parameter_ids: Vec<NodeId> = function_definition
-            .parameters()
-            .iter()
-            .map(|parameter| parameter.node_id())
-            .collect();
-
-        let operand = access.operand();
-        let (argument_values, block) =
-            if MemberAccessOperand(&operand).is_namespace_qualifier() {
-                self.emit_ordered_arguments(arguments, &parameter_ids, &parameter_types, block)
-            } else {
-                let (&receiver_type, rest_types) = parameter_types
-                    .split_first()
-                    .expect("a `using for` receiver occupies the first parameter");
+        let (parameter_types, _) = AstType::resolve_signature(
+            &self.function,
+            LocationPolicy::Declared(None),
+            context.state,
+        );
+        let return_types: Vec<_> = match self.function.returns() {
+            Some(returns) => returns
+                .iter()
+                .map(|parameter| {
+                    let policy = if matches!(
+                        parameter.storage_location(),
+                        Some(slang_solidity_v2::ast::StorageLocation::CallDataKeyword(_))
+                    ) {
+                        LocationPolicy::ForceMemory
+                    } else {
+                        LocationPolicy::Declared(None)
+                    };
+                    AstType::resolve(
+                        &parameter.get_type().expect("slang validated"),
+                        policy,
+                        context.state,
+                    )
+                })
+                .collect(),
+            None => Vec::new(),
+        };
+        let selector = self.function.compute_selector().expect("slang validated");
+        let mlir_name = self.function.mlir_function_name();
+        let (argument_values, current_block) = match &self.self_receiver {
+            Some(receiver) => {
+                let (parameter_self, parameter_rest) =
+                    parameter_types.split_first().expect("slang validated");
                 let BlockAnd {
-                    value: receiver,
+                    value: self_value,
                     block,
-                } = operand.emit(self.expression_context, block);
-                let receiver =
-                    TypeConversion::from_target_type(receiver_type, context).emit(receiver, context, &block);
-                let (mut argument_values, block) =
-                    self.emit_ordered_arguments(arguments, &parameter_ids[1..], rest_types, block);
-                argument_values.insert(0, receiver);
-                (argument_values, block)
-            };
-
-        let address = AstValue::library_address(&library_name, context, &block);
+                } = receiver.emit(context, block);
+                let state = context.state;
+                let self_value = self_value
+                    .cast(AstType::new(*parameter_self), state, &block)
+                    .into_mlir();
+                let BlockAnd {
+                    value: mut rest_values,
+                    block,
+                } = self.arguments.emit_as(parameter_rest, context, block);
+                rest_values.insert(0, self_value);
+                (rest_values, block)
+            }
+            None => {
+                let BlockAnd { value, block } =
+                    self.arguments.emit_as(&parameter_types, context, block);
+                (value, block)
+            }
+        };
+        let state = context.state;
+        let address = AstValue::library_address(&library_name, state, &current_block);
         let results = AstValue::library_call(
             address,
-            &callee_name,
+            &mlir_name,
             selector,
             &parameter_types,
             &argument_values,
             &return_types,
-            context,
-            &block,
+            state,
+            &current_block,
         );
         BlockAnd {
             value: results,
-            block,
+            block: current_block,
         }
-    }
-
-    /// The library callee's return types, relocating a returned `calldata` reference to `memory`: a
-    /// calldata reference cannot cross a call boundary, so the decoded `bytes` / `string` result lives
-    /// in memory.
-    fn library_return_types(
-        function_definition: &FunctionDefinition,
-        context: &Context<'context>,
-    ) -> Vec<Type<'context>> {
-        let Some(returns) = function_definition.returns() else {
-            return Vec::new();
-        };
-        returns
-            .iter()
-            .map(|parameter| {
-                let slang_type = parameter.get_type().expect("slang types every return parameter");
-                if matches!(
-                    parameter.storage_location(),
-                    Some(StorageLocation::CallDataKeyword(_))
-                ) && matches!(slang_type, SlangType::Bytes(_) | SlangType::String(_))
-                {
-                    return AstType::string(
-                        context.mlir_context,
-                        solx_utils::DataLocation::Memory,
-                    )
-                    .into_mlir();
-                }
-                TypeConversion::resolve_slang_type(&slang_type, None, context)
-            })
-            .collect()
     }
 }

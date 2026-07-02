@@ -1,481 +1,575 @@
 //!
-//! Member access expression lowering: struct fields, namespace-qualified reads, type metadata,
-//! selectors, and function-pointer values.
+//! Member access expression emission for `base.member`: namespace-qualified reads, struct fields, and built-ins.
 //!
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::ValueLike;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::r#type::IntegerType;
-use melior::ir::r#type::TypeLike;
 use num_bigint::BigInt;
 use num_bigint::Sign;
 use slang_solidity_v2::ast::BuiltIn;
-use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::TypeName as SlangTypeName;
 
+use solx_mlir::LocationPolicy;
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
+use solx_mlir::ods::sol::BalanceOperation;
+use solx_mlir::ods::sol::BaseFeeOperation;
+use solx_mlir::ods::sol::BlobBaseFeeOperation;
+use solx_mlir::ods::sol::BlockNumberOperation;
+use solx_mlir::ods::sol::CallValueOperation;
+use solx_mlir::ods::sol::CallerOperation;
+use solx_mlir::ods::sol::ChainIdOperation;
+use solx_mlir::ods::sol::CodeHashOperation;
+use solx_mlir::ods::sol::CodeOperation;
+use solx_mlir::ods::sol::CoinbaseOperation;
+use solx_mlir::ods::sol::DifficultyOperation;
+use solx_mlir::ods::sol::GasLimitOperation;
+use solx_mlir::ods::sol::GasPriceOperation;
+use solx_mlir::ods::sol::GetCallDataOperation;
 use solx_mlir::ods::sol::ObjectCodeOperation;
+use solx_mlir::ods::sol::OriginOperation;
+use solx_mlir::ods::sol::PrevRandaoOperation;
+use solx_mlir::ods::sol::SigOperation;
+use solx_mlir::ods::sol::TimestampOperation;
 
 use crate::ast::analysis::query::member_access_operand::MemberAccessOperand;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::call::CallContext;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::getter::signature::Signature;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_for_effect::EmitForEffect;
 use crate::ast::emit::emit_place::EmitPlace;
 use crate::ast::place::Place;
 
-impl<'context: 'block, 'block> EmitExpression<'context, 'block> for MemberAccessExpression {
-    type Output = BlockAnd<'context, 'block, Value<'context, 'block>>;
-
-    /// Lowers `base.member` in value position: a struct-field load, a namespace-qualified state or
-    /// constant read (`C.x`), `type(T)` metadata, an enum-variant ordinal, a compile-time selector,
-    /// or an internal function-pointer value; anything else is a built-in intrinsic (`msg.sender`).
-    fn emit<'state>(
-        &self,
-        context: &ExpressionContext<'state, 'context, 'block>,
-        block: BlockRef<'context, 'block>,
-    ) -> Self::Output {
-        if let Some(BlockAnd {
-            value: place,
-            block,
-        }) = context.emit_struct_field_place(self, block)
-        {
-            let value = Pointer::new(place.address)
-                .load(AstType::new(place.element_type), context.state, &block)
-                .into_mlir();
-            return BlockAnd { block, value };
-        }
-        if let Expression::Identifier(operand) = self.operand()
-            && matches!(
-                operand.resolve_to_definition(),
-                Some(
-                    Definition::Contract(_)
-                        | Definition::Library(_)
-                        | Definition::Import(_)
-                        | Definition::ImportedSymbol(_)
-                )
-            )
-            && matches!(
-                self.member().resolve_to_definition(),
-                Some(Definition::StateVariable(_) | Definition::Constant(_))
-            )
-        {
-            return self.member().emit(context, block);
-        }
-        if let Some(result) = context.emit_type_member(self, block) {
-            return result;
-        }
-        if let Some(ordinal) = context.enum_ordinal(self) {
-            let result_type = context
-                .resolve_slang_type(self.get_type())
-                .expect("slang types every enumeration value");
-            let value = AstValue::constant(
-                ordinal,
-                AstType::unsigned(context.state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
-                context.state,
-                &block,
-            )
-            .enum_cast(AstType::new(result_type), context.state, &block)
-            .into_mlir();
-            return BlockAnd { block, value };
-        }
-        if let Some(result) = context.emit_selector(self, block) {
-            return result;
-        }
-        if let Some(result) = context.emit_function_pointer(self, block) {
-            return result;
-        }
-        if let Some(Definition::Library(library)) = self.member().resolve_to_definition() {
-            let name = solx_utils::ContractName::new(
-                library.get_file_id().to_owned(),
-                Some(library.name().name()),
-            );
-            let value = AstValue::library_address(&name, context.state, &block).into_mlir();
-            return BlockAnd { block, value };
-        }
-        let (value, block) = CallContext::new(context).emit_member_access(self, block);
-        BlockAnd { block, value }
-    }
-}
-
 impl<'context: 'block, 'block> EmitPlace<'context, 'block> for MemberAccessExpression {
-    /// Emits the address yielded by `s.field` together with the field's element MLIR type, without
-    /// the trailing `sol.load`. Panics when the base is not a struct, which the assignment lvalue
-    /// path guarantees.
+    /// Emits the address `s.field` denotes with the field's element type, without the load. Struct base only.
     fn emit_place<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Place<'context, 'block>> {
-        context
-            .emit_struct_field_place(self, block)
-            .expect("slang validates a member-access lvalue resolves to a struct field")
-    }
-}
-
-impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// The enumeration ordinal an enum-valued member access denotes, or `None` when it is not one: an
-    /// enum member `E.Variant` yields the variant's declaration index, and `type(E).min` / `type(E).max`
-    /// the first and last ordinals.
-    fn enum_ordinal(&self, access: &MemberAccessExpression) -> Option<i64> {
-        match access.member().resolve_to_built_in() {
-            Some(builtin @ (BuiltIn::TypeEnumMin | BuiltIn::TypeEnumMax)) => {
-                let Expression::TypeExpression(type_expression) = access.operand() else {
-                    unreachable!("a type(...) builtin operand is a type expression");
-                };
-                let SlangTypeName::IdentifierPath(identifier_path) = type_expression.type_name()
-                else {
-                    unreachable!("type(E) on an enumeration names it via an identifier path");
-                };
-                let Some(Definition::Enum(enum_definition)) =
-                    identifier_path.resolve_to_definition()
-                else {
-                    unreachable!("type(E).min/max resolves to an enum definition");
-                };
-                let member_count = enum_definition.members().iter().count();
-                Some(match builtin {
-                    BuiltIn::TypeEnumMin => 0,
-                    BuiltIn::TypeEnumMax => (member_count - 1) as i64,
-                    _ => unreachable!("dispatched on TypeEnumMin / TypeEnumMax"),
-                })
-            }
-            None => {
-                let Some(Definition::EnumMember(member_identifier)) =
-                    access.member().resolve_to_definition()
-                else {
-                    return None;
-                };
-                let Some(SlangType::Enum(enum_type)) = access.get_type() else {
-                    return None;
-                };
-                let Definition::Enum(enum_definition) = enum_type.definition() else {
-                    unreachable!("slang EnumType always references an Enum definition");
-                };
-                enum_definition
-                    .members()
-                    .iter()
-                    .position(|member| member.node_id() == member_identifier.node_id())
-                    .map(|ordinal| ordinal as i64)
-            }
-            _ => None,
-        }
-    }
-
-    /// Emits a `type(T)` metadata member — `min`/`max` for an integer type, `interfaceId` for an
-    /// interface, `name` for a contract or interface, and `creationCode`/`runtimeCode` for a
-    /// contract — returning `None` when the member is not one of these type-level properties.
-    fn emit_type_member(
-        &self,
-        access: &MemberAccessExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> Option<BlockAnd<'context, 'block, Value<'context, 'block>>> {
-        match access.member().resolve_to_built_in() {
-            Some(builtin @ (BuiltIn::TypeMin | BuiltIn::TypeMax)) => {
-                let result_type = self
-                    .resolve_slang_type(access.get_type())
-                    .expect("slang types every type(T).min/max");
-                let integer_type =
-                    IntegerType::try_from(result_type).expect("type(T).min/max names an integer");
-                let bits = AstType::new(result_type).integer_bit_width() as usize;
-                let integer = match (builtin, integer_type.is_signed()) {
-                    (BuiltIn::TypeMin, false) => BigInt::ZERO,
-                    (BuiltIn::TypeMin, true) => -(BigInt::from(1) << (bits - 1)),
-                    (BuiltIn::TypeMax, false) => (BigInt::from(1) << bits) - 1,
-                    (BuiltIn::TypeMax, true) => (BigInt::from(1) << (bits - 1)) - 1,
-                    _ => unreachable!("dispatched on TypeMin / TypeMax"),
-                };
-                let value = AstValue::constant_from_bigint(
-                    &integer,
-                    AstType::new(result_type),
-                    self.state,
-                    &block,
-                )
-                .into_mlir();
-                Some(BlockAnd { block, value })
-            }
-            Some(BuiltIn::TypeInterfaceId) => {
-                let Some(Definition::Interface(interface_definition)) =
-                    Self::type_expression_definition(access)
-                else {
-                    unreachable!("type(I).interfaceId resolves to an interface definition");
-                };
-                let interface_id = interface_definition
-                    .members()
-                    .iter()
-                    .filter_map(|member| match member {
-                        ContractMember::FunctionDefinition(function) => function.compute_selector(),
-                        _ => None,
-                    })
-                    .fold(0u32, |interface_id, selector| interface_id ^ selector);
-                let value = AstValue::constant(
-                    i64::from(interface_id),
-                    AstType::new(Type::from(IntegerType::unsigned(self.state.mlir_context, 32))),
-                    self.state,
-                    &block,
-                )
-                .bytes_cast(AstType::fixed_bytes(self.state.mlir_context, 4), self.state, &block)
-                .into_mlir();
-                Some(BlockAnd { block, value })
-            }
-            Some(BuiltIn::TypeName) => {
-                let type_name = match Self::type_expression_definition(access) {
-                    Some(Definition::Contract(contract)) => contract.name().name(),
-                    Some(Definition::Interface(interface)) => interface.name().name(),
-                    _ => unreachable!("type(C).name resolves to a contract or interface"),
-                };
-                let value =
-                    AstValue::string_literal(&type_name, self.state, &block).into_mlir();
-                Some(BlockAnd { block, value })
-            }
-            Some(builtin @ (BuiltIn::TypeCreationCode | BuiltIn::TypeRuntimeCode)) => {
-                let Some(Definition::Contract(contract_definition)) =
-                    Self::type_expression_definition(access)
-                else {
-                    unreachable!("type(C).creationCode/runtimeCode resolves to a contract definition");
-                };
-                let contract_name = contract_definition.name().name();
-                let object_name = match builtin {
-                    BuiltIn::TypeRuntimeCode => {
-                        format!("{contract_name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX)
-                    }
-                    _ => contract_name,
-                };
-                self.state.add_dependency(object_name.clone());
-                let result_type = self
-                    .resolve_slang_type(access.get_type())
-                    .expect("slang types type(C).creationCode/runtimeCode");
-                let value: Value<'context, 'block> = mlir_op!(
-                    self.state,
-                    &block,
-                    ObjectCodeOperation
-                        .obj_name(StringAttribute::new(self.state.mlir_context, &object_name))
-                        .out(result_type)
-                );
-                Some(BlockAnd { block, value })
-            }
-            _ => None,
-        }
-    }
-
-    /// The definition named by a `type(T)` operand's identifier path.
-    fn type_expression_definition(access: &MemberAccessExpression) -> Option<Definition> {
-        let Expression::TypeExpression(type_expression) = access.operand() else {
-            unreachable!("a type(...) builtin operand is a type expression");
-        };
-        let SlangTypeName::IdentifierPath(identifier_path) = type_expression.type_name() else {
-            unreachable!("type(T) names a user-defined type via an identifier path");
-        };
-        identifier_path.resolve_to_definition()
-    }
-
-    /// Emits a function-pointer value denoted by `base.member`, or `None` when the member denotes no
-    /// function pointer.
-    ///
-    /// A type-qualified method `C.f` takes the internal function pointer `sol.func_constant`. A method
-    /// or `public` state-variable getter reached through a contract-instance value (`this.f`,
-    /// `this.value`) takes the external function pointer `sol.ext_func_constant`, packing the
-    /// receiver's address with the callee's ABI selector.
-    fn emit_function_pointer(
-        &self,
-        access: &MemberAccessExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> Option<BlockAnd<'context, 'block, Value<'context, 'block>>> {
-        let member_definition = access.member().resolve_to_definition()?;
-        if let Definition::Function(function_definition) = &member_definition
-            && MemberAccessOperand(&access.operand()).is_namespace_or_type()
-        {
-            let value = self
-                .state
-                .function_signatures
-                .get(&function_definition.node_id())
-                .expect("a type-qualified internal function resolves to a registered signature")
-                .pointer_constant(self.state, &block)
-                .into_mlir();
-            return Some(BlockAnd { block, value });
-        }
-        let (selector, parameter_types, return_types) = match &member_definition {
-            Definition::Function(function_definition) => {
-                let selector = function_definition.compute_selector()?;
-                let (parameter_types, return_types) =
-                    TypeConversion::resolve_function_types(function_definition, self.state);
-                (selector, parameter_types, return_types)
-            }
-            Definition::StateVariable(state_variable) => {
-                let selector = state_variable.compute_selector()?;
-                let (parameter_types, return_types) = state_variable
-                    .getter_signature(self.state)
-                    .expect("a function pointer to a public accessor has a returnable signature");
-                (selector, parameter_types, return_types)
-            }
-            _ => return None,
-        };
-        let BlockAnd {
-            value: receiver,
-            block,
-        } = access.operand().emit(self, block);
-        let value = AstValue::external_callee(
-            AstValue::new(receiver),
-            selector,
-            &parameter_types,
-            &return_types,
-            self.state,
-            &block,
-        )
-        .into_mlir();
-        Some(BlockAnd { block, value })
-    }
-
-    /// Emits a `.selector` or `.address` member. A compile-time selector — a function or error
-    /// four-byte selector, a public state-variable getter's four-byte selector, or an event's
-    /// thirty-two-byte topic — folds to a constant, running the receiver's side effects first. A
-    /// `.selector` or `.address` on an external function-pointer value reads it at runtime through
-    /// `sol.ext_func_selector` / `sol.ext_func_addr`. Returns `None` when the member is neither.
-    fn emit_selector(
-        &self,
-        access: &MemberAccessExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> Option<BlockAnd<'context, 'block, Value<'context, 'block>>> {
-        let constant = match access.member().resolve_to_built_in() {
-            Some(BuiltIn::FunctionSelector) => match MemberAccessOperand(&access.operand()).resolve()
-            {
-                Some(Definition::Function(function)) => {
-                    Some((BigInt::from(function.compute_selector()?), 4))
-                }
-                Some(Definition::StateVariable(state_variable)) => Some((
-                    BigInt::from(
-                        state_variable
-                            .compute_selector()
-                            .expect("a public accessor `.selector` has a selector"),
-                    ),
-                    4,
-                )),
-                _ => None,
-            },
-            Some(BuiltIn::ErrorSelector) => {
-                let Some(Definition::Error(error)) =
-                    MemberAccessOperand(&access.operand()).resolve()
-                else {
-                    unreachable!("slang resolves an error `.selector` base to an error definition");
-                };
-                Some((
-                    BigInt::from(error.compute_selector().expect("slang validated")),
-                    4,
-                ))
-            }
-            Some(BuiltIn::EventSelector) => {
-                let Some(Definition::Event(event)) =
-                    MemberAccessOperand(&access.operand()).resolve()
-                else {
-                    unreachable!("slang resolves an event `.selector` base to an event definition");
-                };
-                let signature = event.compute_canonical_signature().expect("slang validated");
-                let hash = solx_utils::Keccak256Hash::from_slice(signature.as_bytes());
-                Some((BigInt::from_bytes_be(Sign::Plus, hash.as_bytes()), 32))
-            }
-            _ => None,
-        };
-        if let Some((selector, byte_width)) = constant {
-            let block = if let Expression::MemberAccessExpression(inner) = access.operand()
-                && !MemberAccessOperand(&inner.operand()).is_namespace_or_type()
-            {
-                inner.operand().emit_for_effect(self, block)
-            } else {
-                block
-            };
-            let integer_width = (byte_width * 8) as usize;
-            let value = AstValue::constant_from_bigint(
-                &selector,
-                AstType::unsigned(self.state.mlir_context, integer_width),
-                self.state,
-                &block,
-            )
-            .bytes_cast(
-                AstType::fixed_bytes(self.state.mlir_context, byte_width),
-                self.state,
-                &block,
-            )
-            .into_mlir();
-            return Some(BlockAnd { block, value });
-        }
-        let member = match access.member().resolve_to_built_in() {
-            Some(member @ (BuiltIn::FunctionSelector | BuiltIn::FunctionAddress)) => member,
-            _ => return None,
-        };
-        let BlockAnd {
-            value: operand,
-            block,
-        } = access.operand().emit(self, block);
-        let operand = AstValue::new(operand);
-        let value = match member {
-            BuiltIn::FunctionSelector => operand.external_function_selector(self.state, &block),
-            BuiltIn::FunctionAddress => operand.external_function_address(self.state, &block),
-            _ => unreachable!("dispatched on FunctionSelector / FunctionAddress"),
-        }
-        .into_mlir();
-        Some(BlockAnd { block, value })
-    }
-
-    /// Emits the address yielded by `s.field` when the base is a struct, returning `None` otherwise
-    /// so the caller can fall back to built-in member-access lowering.
-    fn emit_struct_field_place(
-        &self,
-        access: &MemberAccessExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> Option<BlockAnd<'context, 'block, Place<'context, 'block>>> {
-        let base = access.operand();
-        let SlangType::Struct(struct_type) = base.get_type()? else {
-            return None;
+        let base = self.operand();
+        let Some(SlangType::Struct(struct_type)) = base.get_type() else {
+            unreachable!("a struct-field address is only emitted for a struct base");
         };
         let Definition::Struct(struct_definition) = struct_type.definition() else {
             unreachable!("slang StructType always references a Struct definition");
         };
 
-        let member_name = access.member().name();
+        let Some(Definition::StructMember(member_definition)) =
+            self.member().resolve_to_definition()
+        else {
+            unreachable!("slang resolves a struct field access to its StructMember definition");
+        };
+        let member_id = member_definition.node_id();
         let field_index = struct_definition
             .members()
             .iter()
-            .position(|member| member.name().name() == member_name)
-            .expect("slang validates the accessed member exists");
+            .position(|member| member.node_id() == member_id)
+            .expect("slang validated");
 
         let BlockAnd {
             value: base_value,
             block,
-        } = base.emit(self, block);
+        } = base.emit(context, block);
+        let state = context.state;
 
         let index_value = AstValue::constant(
             field_index as i64,
-            AstType::unsigned(self.state.mlir_context, solx_utils::BIT_LENGTH_X64),
-            self.state,
+            AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_X64),
+            state,
             &block,
         );
-        let element_type = unsafe {
-            Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
-                base_value.r#type().to_raw(),
-                field_index as u64,
-            ))
-        };
-        let address = Pointer::new(base_value)
-            .gep(index_value, AstType::new(element_type), false, self.state, &block)
+        let element_type = base_value.r#type().element_type(field_index);
+        let address = Pointer::from(base_value)
+            .gep(index_value, element_type, false, state, &block)
             .into_mlir();
-        Some(BlockAnd {
+        BlockAnd {
+            value: Place {
+                address,
+                element_type: element_type.into_mlir(),
+            },
             block,
+        }
+    }
+}
+
+expression_emit!(MemberAccessExpression; |node, context, block| {
+    if let Expression::Identifier(operand) = node.operand()
+        && matches!(
+            operand.resolve_to_definition(),
+            Some(
+                Definition::Contract(_)
+                    | Definition::Library(_)
+                    | Definition::Import(_)
+                    | Definition::ImportedSymbol(_)
+            )
+        )
+    {
+        // A `Function` member is NOT delegated: it would pick up the virtual redirect `Base.f` must skip.
+        match node.member().resolve_to_definition() {
+            Some(Definition::StateVariable(_) | Definition::Constant(_)) => {
+                return node.member().emit(context, block);
+            }
+            Some(Definition::Function(function_definition))
+                if matches!(
+                    operand.resolve_to_definition(),
+                    Some(Definition::Contract(_))
+                ) =>
+            {
+                let value = context
+                    .state
+                    .resolve_function(function_definition.node_id())
+                    .pointer_constant(context.state, &block);
+                return BlockAnd { block, value };
+            }
+            _ => {}
+        }
+    }
+    let built_in = node.member().resolve_to_built_in();
+    match &built_in {
+        Some(builtin @ (BuiltIn::TypeMin | BuiltIn::TypeMax)) => {
+            let result_type =
+                AstType::resolve_optional(node.get_type(), context.state)
+                    .expect("slang validated");
+            let integer_type = IntegerType::try_from(result_type).expect("slang validated");
+            let bits = AstType::new(result_type).integer_bit_width() as usize;
+            let integer = match (builtin, integer_type.is_signed()) {
+                (BuiltIn::TypeMin, false) => BigInt::ZERO,
+                (BuiltIn::TypeMin, true) => -(BigInt::from(1) << (bits - 1)),
+                (BuiltIn::TypeMax, false) => (BigInt::from(1) << bits) - 1,
+                (BuiltIn::TypeMax, true) => (BigInt::from(1) << (bits - 1)) - 1,
+                _ => unreachable!("dispatched on TypeMin / TypeMax"),
+            };
+            let value = AstValue::constant_from_bigint(
+                &integer,
+                AstType::new(result_type),
+                context.state,
+                &block,
+            );
+            return BlockAnd { block, value };
+        }
+        Some(
+            builtin @ (BuiltIn::TypeEnumMin
+            | BuiltIn::TypeEnumMax
+            | BuiltIn::TypeInterfaceId
+            | BuiltIn::TypeName
+            | BuiltIn::TypeCreationCode
+            | BuiltIn::TypeRuntimeCode),
+        ) => {
+            let Expression::TypeExpression(type_expression) = node.operand() else {
+                unreachable!("a type(...) builtin operand is a type expression");
+            };
+            let SlangTypeName::IdentifierPath(identifier_path) = type_expression.type_name() else {
+                unreachable!("type(...) on a user-defined type names it via an identifier path");
+            };
+            match builtin {
+                BuiltIn::TypeEnumMin | BuiltIn::TypeEnumMax => {
+                    let Some(Definition::Enum(enum_definition)) =
+                        identifier_path.resolve_to_definition()
+                    else {
+                        unreachable!("type(E).min/max resolves to an enum definition");
+                    };
+                    let result_type = AstType::resolve_optional(node.get_type(), context.state)
+                        .expect("slang validated");
+                    let member_count = enum_definition.members().len();
+                    let ordinal = match builtin {
+                        BuiltIn::TypeEnumMin => 0,
+                        BuiltIn::TypeEnumMax => member_count
+                            .checked_sub(1)
+                            .expect("slang validated: an enum has at least one member")
+                            as i64,
+                        _ => unreachable!("dispatched on TypeEnumMin / TypeEnumMax"),
+                    };
+                    let state = context.state;
+                    let value = AstValue::uint256(ordinal, state, &block)
+                        .cast(AstType::new(result_type), state, &block);
+                    return BlockAnd { block, value };
+                }
+                BuiltIn::TypeInterfaceId => {
+                    let Some(Definition::Interface(interface_definition)) =
+                        identifier_path.resolve_to_definition()
+                    else {
+                        unreachable!("type(I).interfaceId resolves to an interface definition");
+                    };
+                    let value = AstValue::selector_constant(
+                        &BigInt::from(interface_definition.compute_interface_id()),
+                        4,
+                        context.state,
+                        &block,
+                    );
+                    return BlockAnd { block, value };
+                }
+                BuiltIn::TypeName => {
+                    let type_name = match identifier_path.resolve_to_definition() {
+                        Some(Definition::Contract(contract)) => contract.name().name(),
+                        Some(Definition::Interface(interface)) => interface.name().name(),
+                        _ => unreachable!("type(C).name resolves to a contract or interface"),
+                    };
+                    let value = AstValue::string_literal(&type_name, context.state, &block);
+                    return BlockAnd { block, value };
+                }
+                _ => {
+                    let Some(Definition::Contract(contract_definition)) =
+                        identifier_path.resolve_to_definition()
+                    else {
+                        unreachable!(
+                            "type(C).creationCode/runtimeCode resolves to a contract definition"
+                        );
+                    };
+                    let contract_name = contract_definition.name().name();
+            // `runtimeCode` must depend on the deployed object `C_deployed`; depending on the
+            // creation object `C` alone leaves its data symbols unresolved at link time.
+            let object_name = match builtin {
+                BuiltIn::TypeRuntimeCode => {
+                    format!("{contract_name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX)
+                }
+                _ => contract_name,
+            };
+            context.state.add_dependency(object_name.clone());
+            let result_type = AstType::resolve_optional(node.get_type(), context.state)
+                .expect("slang validated");
+            let state = context.state;
+            let value: Value<'context, 'block> = mlir_op!(
+                state,
+                &block,
+                ObjectCodeOperation
+                    .obj_name(StringAttribute::new(state.mlir_context, &object_name))
+                    .out(result_type)
+            );
+            return BlockAnd {
+                block,
+                value: value.into(),
+            };
+        }
+            }
+        }
+        Some(BuiltIn::AddressBalance) => {
+            let BlockAnd {
+                value: address,
+                block,
+            } = node.operand().emit(context, block);
+            let state = context.state;
+            let value: Value<'context, 'block> = mlir_op!(
+                state,
+                &block,
+                BalanceOperation
+                    .cont_addr(address.into_mlir())
+                    .out(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
+            );
+            return BlockAnd {
+                block,
+                value: value.into(),
+            };
+        }
+        Some(BuiltIn::AddressCodehash) => {
+            let BlockAnd {
+                value: address,
+                block,
+            } = node.operand().emit(context, block);
+            let state = context.state;
+            let value: Value<'context, 'block> = mlir_op!(
+                state,
+                &block,
+                CodeHashOperation
+                    .cont_addr(address.into_mlir())
+                    .out(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
+            );
+            return BlockAnd {
+                block,
+                value: value.into(),
+            };
+        }
+        Some(BuiltIn::AddressCode) => {
+            let BlockAnd {
+                value: address,
+                block,
+            } = node.operand().emit(context, block);
+            let state = context.state;
+            let value: Value<'context, 'block> = mlir_op!(
+                state,
+                &block,
+                CodeOperation
+                    .cont_addr(address.into_mlir())
+                    .out(AstType::string(state.mlir_context, solx_utils::DataLocation::Memory))
+            );
+            return BlockAnd {
+                block,
+                value: value.into(),
+            };
+        }
+        Some(BuiltIn::Length) => {
+            let BlockAnd {
+                value: operand,
+                block,
+            } = node.operand().emit(context, block);
+            return BlockAnd {
+                value: operand.length(context.state, &block),
+                block,
+            };
+        }
+        Some(
+            BuiltIn::AddressTransfer
+            | BuiltIn::AddressSend
+            | BuiltIn::AddressCall
+            | BuiltIn::AddressDelegatecall
+            | BuiltIn::AddressStaticcall
+            | BuiltIn::ArrayPop
+            | BuiltIn::ArrayPush
+            | BuiltIn::AbiEncode
+            | BuiltIn::AbiEncodePacked
+            | BuiltIn::AbiEncodeWithSelector
+            | BuiltIn::AbiEncodeWithSignature
+            | BuiltIn::AbiEncodeCall
+            | BuiltIn::AbiDecode
+            | BuiltIn::Wrap
+            | BuiltIn::Unwrap,
+        ) => {
+            unreachable!(
+                "address/array/abi/wrap member builtins are only valid as a call callee, intercepted upstream"
+            )
+        }
+        _ => {}
+    }
+    let state = context.state;
+    let environment_op = match &built_in {
+        Some(BuiltIn::TxOrigin) => {
+            Some(mlir_op_build!(state, OriginOperation.addr(AstType::address(state.mlir_context, false))))
+        }
+        Some(BuiltIn::TxGasPrice) => Some(mlir_op_build!(
+            state,
+            GasPriceOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::MsgSender) => {
+            Some(mlir_op_build!(state, CallerOperation.addr(AstType::address(state.mlir_context, false))))
+        }
+        Some(BuiltIn::MsgValue) => Some(mlir_op_build!(
+            state,
+            CallValueOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::BlockTimestamp) => Some(mlir_op_build!(
+            state,
+            TimestampOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::BlockNumber) => Some(mlir_op_build!(
+            state,
+            BlockNumberOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::BlockCoinbase) => {
+            Some(mlir_op_build!(state, CoinbaseOperation.addr(AstType::address(state.mlir_context, false))))
+        }
+        Some(BuiltIn::BlockChainid) => Some(mlir_op_build!(
+            state,
+            ChainIdOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::BlockBasefee) => Some(mlir_op_build!(
+            state,
+            BaseFeeOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::BlockGaslimit) => Some(mlir_op_build!(
+            state,
+            GasLimitOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::BlockBlobbasefee) => Some(mlir_op_build!(
+            state,
+            BlobBaseFeeOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::BlockDifficulty) => Some(mlir_op_build!(
+            state,
+            DifficultyOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::BlockPrevrandao) => Some(mlir_op_build!(
+            state,
+            PrevRandaoOperation.val(AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::MsgSig) => Some(mlir_op_build!(
+            state,
+            SigOperation.val(AstType::fixed_bytes(state.mlir_context, 4))
+        )),
+        Some(BuiltIn::MsgData) => Some(mlir_op_build!(
+            state,
+            GetCallDataOperation.addr(AstType::string(state.mlir_context, solx_utils::DataLocation::CallData))
+        )),
+        _ => None,
+    };
+    if let Some(operation) = environment_op {
+        let value: Value<'context, 'block> = block
+            .append_operation(operation)
+            .result(0)
+            .expect("an environment global produces one result")
+            .into();
+        return BlockAnd {
+            block,
+            value: value.into(),
+        };
+    }
+    let emit_operand_effect = |block: BlockRef<'context, 'block>| -> BlockRef<'context, 'block> {
+        if let Expression::MemberAccessExpression(inner) = node.operand()
+            && !MemberAccessOperand(&inner.operand()).is_namespace_or_type()
+        {
+            inner.operand().emit_for_effect(context, block)
+        } else {
+            block
+        }
+    };
+    if matches!(node.operand().get_type(), Some(SlangType::Struct(_))) {
+        let BlockAnd {
             value: Place {
                 address,
                 element_type,
             },
-        })
+            block,
+        } = node.emit_place(context, block);
+        let value = Pointer::new(address).load(
+            AstType::new(element_type),
+            context.state,
+            &block,
+        );
+        BlockAnd { block, value }
+    } else if let Some(ordinal) = match (
+        node.member().resolve_to_definition(),
+        MemberAccessOperand(&node.operand()).resolve(),
+    ) {
+        (
+            Some(Definition::EnumMember(member_definition)),
+            Some(Definition::Enum(enum_definition)),
+        ) => enum_definition
+            .members()
+            .iter()
+            .position(|member| member.node_id() == member_definition.node_id()),
+        _ => None,
+    } {
+        let result_type = AstType::resolve_optional(node.get_type(), context.state)
+            .expect("slang validated");
+        let state = context.state;
+        let value = AstValue::uint256(ordinal as i64, state, &block)
+            .cast(AstType::new(result_type), state, &block);
+        BlockAnd { block, value }
+    } else if matches!(&built_in, Some(BuiltIn::FunctionSelector)) {
+        let static_selector = match MemberAccessOperand(&node.operand()).resolve() {
+            Some(Definition::Function(function)) => function.compute_selector(),
+            Some(Definition::StateVariable(state_variable)) => state_variable.compute_selector(),
+            _ => None,
+        };
+        if let Some(selector) = static_selector {
+            let block = emit_operand_effect(block);
+            let value =
+                AstValue::selector_constant(&BigInt::from(selector), 4, context.state, &block);
+            return BlockAnd { block, value };
+        }
+        let BlockAnd {
+            value: operand_value,
+            block,
+        } = node.operand().emit(context, block);
+        let value = operand_value.ext_func_selector(context.state, &block);
+        BlockAnd { block, value }
+    } else {
+        let selector_constant = match &built_in {
+            Some(BuiltIn::ErrorSelector) => {
+                let Some(Definition::Error(error)) = MemberAccessOperand(&node.operand()).resolve()
+                else {
+                    unreachable!("slang resolves an error `.selector` base to an error definition");
+                };
+                Some((BigInt::from(error.compute_selector().expect("slang validated")), 4))
+            }
+            Some(BuiltIn::EventSelector) => {
+                let Some(Definition::Event(event)) = MemberAccessOperand(&node.operand()).resolve()
+                else {
+                    unreachable!("slang resolves an event `.selector` base to an event definition");
+                };
+                let topic = event.compute_event_topic().expect("slang validated");
+                Some((BigInt::from_bytes_be(Sign::Plus, &topic), 32))
+            }
+            _ => None,
+        };
+        if let Some((selector, byte_width)) = selector_constant {
+            let block = emit_operand_effect(block);
+            let value =
+                AstValue::selector_constant(&selector, byte_width, context.state, &block);
+            return BlockAnd { block, value };
+        }
+        match &built_in {
+            Some(BuiltIn::FunctionAddress) => {
+                let BlockAnd {
+                    value: operand_value,
+                    block,
+                } = node.operand().emit(context, block);
+                let value = operand_value.ext_func_address(context.state, &block);
+                BlockAnd { block, value }
+            }
+            _ => {
+                let member_definition = node.member().resolve_to_definition();
+                if let Some(Definition::Library(library)) = &member_definition {
+                    let name = solx_utils::ContractName::new(
+                        library.get_file_id().to_owned(),
+                        Some(library.name().name()),
+                    );
+                    let value =
+                        AstValue::library_address(&name, context.state, &block);
+                    return BlockAnd { block, value };
+                }
+                if let Some(Definition::StateVariable(state_variable)) = &member_definition {
+                    let state = context.state;
+                    let Some((parameter_types, return_types)) =
+                        state_variable.getter_signature(state)
+                    else {
+                        unreachable!(
+                            "a function pointer to a public accessor with no returnable members is invalid"
+                        );
+                    };
+                    let selector = state_variable.compute_selector().expect("slang validated");
+                    let BlockAnd {
+                        value: receiver,
+                        block,
+                    } = node.operand().emit(context, block);
+                    let value = AstValue::external_callee(
+                        receiver,
+                        selector,
+                        &parameter_types,
+                        &return_types,
+                        context.state,
+                        &block,
+                    );
+                    return BlockAnd { block, value };
+                }
+                let Some(Definition::Function(function_definition)) = member_definition else {
+                    unreachable!("unsupported member access: {}", node.member().name());
+                };
+                if let Some(selector) = function_definition.compute_selector() {
+                    let (parameter_types, return_types) = AstType::resolve_signature(
+                        &function_definition,
+                        LocationPolicy::ForceMemory,
+                        context.state,
+                    );
+                    let BlockAnd {
+                        value: receiver,
+                        block,
+                    } = node.operand().emit(context, block);
+                    let value = AstValue::external_callee(
+                        receiver,
+                        selector,
+                        &parameter_types,
+                        &return_types,
+                        context.state,
+                        &block,
+                    );
+                    BlockAnd { block, value }
+                } else {
+                    let value = context
+                        .state
+                        .resolve_function(function_definition.node_id())
+                        .pointer_constant(context.state, &block);
+                    BlockAnd { block, value }
+                }
+            }
+        }
     }
-}
+});

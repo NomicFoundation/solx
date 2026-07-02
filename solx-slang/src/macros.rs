@@ -24,7 +24,7 @@ macro_rules! expression_emit {
     ($($node:ty),+ ; |$bound:ident, $context:ident, $block:ident| $body:block) => {
         $(
             impl<'context: 'block, 'block> EmitExpression<'context, 'block> for $node {
-                type Output = BlockAnd<'context, 'block, ::melior::ir::Value<'context, 'block>>;
+                type Output = BlockAnd<'context, 'block, ::solx_mlir::Value<'context, 'block>>;
 
                 fn emit<'state>(
                     &self,
@@ -40,7 +40,7 @@ macro_rules! expression_emit {
     ($($node:ty),+ ; |$context:ident, $block:ident| $body:block) => {
         $(
             impl<'context: 'block, 'block> EmitExpression<'context, 'block> for $node {
-                type Output = BlockAnd<'context, 'block, ::melior::ir::Value<'context, 'block>>;
+                type Output = BlockAnd<'context, 'block, ::solx_mlir::Value<'context, 'block>>;
 
                 fn emit<'state>(
                     &self,
@@ -90,8 +90,9 @@ macro_rules! statement_emit {
 /// generates `impl EmitYul` for a Yul node. The context is `&mut YulContext`, since a Yul
 /// `let` declares variables; the output is stated per node because the family is not uniform: a
 /// statement yields its continuation `BlockRef`, or `None` when `break`/`continue` diverges, and an
-/// expression yields its word paired with a continuation. The closure binds the node
-/// (`|node, context, block|`). Names resolve against the call site's imports.
+/// expression yields its word paired with a continuation. The closure
+/// binds the node (`|node, context, block|`). Names resolve against the call
+/// site's imports.
 macro_rules! yul_emit {
     ($node:ty => $output:ty ; |$bound:ident, $context:ident, $block:ident| $body:block) => {
         impl<'context: 'block, 'block> EmitYul<'context, 'block> for $node {

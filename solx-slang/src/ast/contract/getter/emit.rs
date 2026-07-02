@@ -13,16 +13,15 @@ use slang_solidity_v2::ast::StateVariableMutability;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Function;
+use solx_mlir::LocationPolicy;
 use solx_mlir::Pointer;
 use solx_mlir::StateMutability;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::ReturnOperation;
-use solx_utils::DataLocation;
 
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::getter::keyed_signature::KeyedSignature;
 use crate::ast::contract::getter::member::Member;
 use crate::ast::contract::getter::signature::Signature;
@@ -32,9 +31,7 @@ use crate::ast::emit::emit_expression::EmitExpression;
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariableDefinition {
     type Output = ();
 
-    /// Emits the auto-generated external accessor for this `public` state variable into the contract
-    /// body. A non-`public` variable, an `immutable` variable, or one carrying no returnable ABI
-    /// entry emits nothing.
+    /// Emits the auto-generated external accessor for this `public` state variable into the contract body.
     fn emit<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -45,22 +42,16 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
         let Some(AbiEntry::Function(abi)) = self.compute_abi_entry() else {
             return;
         };
-        let signature = self
-            .compute_canonical_signature()
-            .expect("a public accessor has a canonical signature");
-        let selector = self
-            .compute_selector()
-            .expect("a public accessor has a selector");
+        let signature = self.compute_canonical_signature().expect("slang validated");
+        let selector = self.compute_selector().expect("slang validated");
 
         if matches!(self.mutability(), StateVariableMutability::Constant) {
             let initializer = self
                 .value()
-                .expect("a constant state variable is initialised");
-            let (_, result_types) = self
-                .getter_signature(state)
-                .expect("a constant public accessor returns a value");
-            let element_type = result_types[0];
-            let entry = Function::new(signature, Vec::new(), result_types).define(
+                .expect("a constant state variable is initialized");
+            let slang_type = self.get_type().expect("slang validated");
+            let element_type = AstType::resolve(&slang_type, LocationPolicy::ForceMemory, state);
+            let entry = Function::new(signature, Vec::new(), vec![element_type]).define(
                 Some(selector),
                 StateMutability::Pure,
                 None,
@@ -72,29 +63,32 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 value,
                 block: entry,
             } = initializer.emit_as(element_type, context, entry);
-            mlir_op_void!(state, &entry, ReturnOperation.operands(&[value]));
+            mlir_op_void!(
+                state,
+                &entry,
+                ReturnOperation.operands(&[value.into_mlir()])
+            );
             return;
         }
 
-        if matches!(self.mutability(), StateVariableMutability::Immutable) {
-            return;
-        }
-
-        let Some(slot) = context.storage_layout.get(&self.node_id()) else {
-            return;
-        };
-        let declared_type = self.get_type().expect("slang types every state variable");
+        let slot = context
+            .storage_layout
+            .get(&self.node_id())
+            .expect("a public non-constant state variable has a storage slot");
+        let location = slot.location;
+        let declared_type = self.get_type().expect("slang validated");
 
         if !abi.inputs().is_empty() {
-            let KeyedSignature {
+            let Some(KeyedSignature {
                 input_types,
                 result_types,
                 members,
                 terminal_is_reference,
-            } = self
-                .keyed_signature(state)
-                .expect("a keyed public accessor has a returnable keyed signature");
-            let container_type = TypeConversion::resolve_state_variable_type(self, state);
+            }) = self.keyed_signature(location, state)
+            else {
+                unreachable!("a keyed public accessor has a returnable keyed signature");
+            };
+            let container_type = AstType::resolve_state_variable(&declared_type, state);
             let result_type = result_types[0];
             let entry = Function::new(signature, input_types, result_types).define(
                 Some(selector),
@@ -117,19 +111,21 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                             .expect("argument index is within the block signature")
                             .into();
                         let value_slang = mapping_type.value_type();
-                        let resolved_value = TypeConversion::resolve_slang_type(
+                        let resolved_value = AstType::resolve(
                             &value_slang,
-                            Some(DataLocation::Storage),
+                            LocationPolicy::Declared(Some(location)),
                             state,
                         );
-                        let entry_type = ExpressionContext::address_type(
-                            state,
-                            resolved_value,
-                            DataLocation::Storage,
-                            &value_slang,
-                        );
+                        let level_type = AstType::new(resolved_value)
+                            .address_type(location, state.mlir_context)
+                            .into_mlir();
                         base = Pointer::new(base)
-                            .map(AstValue::new(argument), AstType::new(entry_type), state, &entry)
+                            .map(
+                                AstValue::new(argument),
+                                AstType::new(level_type),
+                                state,
+                                &entry,
+                            )
                             .into_mlir();
                         index += 1;
                         current = value_slang;
@@ -143,13 +139,21 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                     .argument(index)
                     .expect("argument index is within the block signature")
                     .into();
-                let element_type = TypeConversion::resolve_slang_type(
+                let element_type = AstType::resolve(
                     &element_slang,
-                    Some(DataLocation::Storage),
+                    LocationPolicy::Declared(Some(location)),
                     state,
                 );
+                // An array index passes `no_panic_bounds` so an out-of-bounds access plain-reverts
+                // rather than `Panic(0x32)`.
                 base = Pointer::new(base)
-                    .gep(AstValue::new(argument), AstType::new(element_type), true, state, &entry)
+                    .gep(
+                        AstValue::new(argument),
+                        AstType::new(element_type),
+                        true,
+                        state,
+                        &entry,
+                    )
                     .into_mlir();
                 index += 1;
                 current = element_slang;
@@ -162,7 +166,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 None => {
                     let value = if terminal_is_reference {
                         AstValue::new(base)
-                            .data_loc_cast(AstType::new(result_type), state, &entry)
+                            .cast(AstType::new(result_type), state, &entry)
                             .into_mlir()
                     } else {
                         Pointer::new(base)
@@ -179,15 +183,15 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
         if let SlangType::Struct(struct_type) = &declared_type
             && let Definition::Struct(struct_definition) = struct_type.definition()
         {
-            let struct_mlir_type = TypeConversion::resolve_slang_type(
+            let struct_mlir_type = AstType::resolve(
                 &declared_type,
-                Some(DataLocation::Storage),
+                LocationPolicy::Declared(Some(location)),
                 state,
             );
             if let Some(members) = Member::layout(&struct_definition, struct_mlir_type, state) {
                 let result_types: Vec<Type<'context>> =
                     members.iter().map(|member| member.result_type).collect();
-                let container_type = TypeConversion::resolve_state_variable_type(self, state);
+                let container_type = AstType::resolve_state_variable(&declared_type, state);
                 let entry = Function::new(signature, Vec::new(), result_types).define(
                     Some(selector),
                     StateMutability::View,
@@ -208,13 +212,17 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             }
         }
 
-        let element_type = TypeConversion::resolve_state_variable_type(self, state);
+        let element_type = AstType::resolve_state_variable(&declared_type, state);
+        let address_type = AstType::new(element_type)
+            .address_type(location, state.mlir_context)
+            .into_mlir();
         let is_reference = declared_type.is_reference_type();
-        let (_, result_types) = self
-            .getter_signature(state)
-            .expect("a scalar public accessor returns a value");
-        let return_type = result_types[0];
-        let entry = Function::new(signature, Vec::new(), result_types).define(
+        let return_type = if is_reference {
+            AstType::resolve(&declared_type, LocationPolicy::ForceMemory, state)
+        } else {
+            element_type
+        };
+        let entry = Function::new(signature, Vec::new(), vec![return_type]).define(
             Some(selector),
             StateMutability::View,
             None,
@@ -224,12 +232,12 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
         );
         let value = if is_reference {
             let storage_reference =
-                Pointer::addr_of(&slot.name, AstType::new(element_type), state, &entry).into_mlir();
+                Pointer::addr_of(&slot.name, AstType::new(address_type), state, &entry).into_mlir();
             AstValue::new(storage_reference)
-                .data_loc_cast(AstType::new(return_type), state, &entry)
+                .cast(AstType::new(return_type), state, &entry)
                 .into_mlir()
         } else {
-            context.emit_storage_load(slot, element_type, &entry)
+            slot.load(state, element_type, &entry)
         };
         mlir_op_void!(state, &entry, ReturnOperation.operands(&[value]));
     }

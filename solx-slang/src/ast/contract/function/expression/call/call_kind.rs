@@ -4,242 +4,100 @@
 //!
 
 use slang_solidity_v2::ast::ArgumentsDeclaration;
-use slang_solidity_v2::ast::BuiltIn;
-use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
-use slang_solidity_v2::ast::FunctionDefinition;
-use slang_solidity_v2::ast::MemberAccessExpression;
-use slang_solidity_v2::ast::NodeId;
-use slang_solidity_v2::ast::StateVariableMutability;
-use slang_solidity_v2::ast::StructDefinition;
-use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ast::contract::contract_dispatch::ContractDispatch;
+use crate::ast::contract::function::expression::call::external_library_call::ExternalLibraryCall;
+use crate::ast::contract::function::expression::call::external_member_call::ExternalMemberCall;
+use crate::ast::contract::function::expression::call::function_pointer_call::FunctionPointerCall;
+use crate::ast::contract::function::expression::call::identifier_builtin_call::IdentifierBuiltinCall;
+use crate::ast::contract::function::expression::call::identifier_function_call::IdentifierFunctionCall;
+use crate::ast::contract::function::expression::call::inherited_function_call::InheritedFunctionCall;
+use crate::ast::contract::function::expression::call::internal_member_call::InternalMemberCall;
+use crate::ast::contract::function::expression::call::member_builtin_call::MemberBuiltinCall;
+use crate::ast::contract::function::expression::call::new_expression_call::NewExpressionCall;
+use crate::ast::contract::function::expression::call::struct_construction::StructConstruction;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
 /// The one emission kind a function call's callee resolves to. The variants are mutually exclusive
-/// and tested in declaration order, so an earlier match wins.
+/// and tested in declaration order, so an earlier match wins: a member access onto a library
+/// function is an [`ExternalLibraryCall`], never an [`ExternalMemberCall`].
 pub enum CallKind {
     /// The callee names a struct, so the call builds a struct value from its members.
-    StructConstruction(StructDefinition),
-    /// A one-argument elementary or user-defined-value-type conversion.
-    TypeConversion,
-    /// A call through a function-typed value (a local, parameter, contract-static state variable, or
-    /// struct field) rather than a named function.
-    FunctionPointerCall(Expression),
-    /// A built-in invoked by bare identifier (`require`, `keccak256`) or a built-in reached through
-    /// member access whose result type comes from the call (`abi.decode`).
-    IdentifierBuiltinCall,
-    /// A `super.f(args)` / `Base.f(args)` call redirected by inherited dispatch to its C3-linearised
-    /// target function.
-    InheritedFunctionCall(MemberAccessExpression, NodeId),
-    /// An external call into a library member `L.f(args)` / `x.f(args)`, dispatched by ABI selector
-    /// through a `DELEGATECALL`.
-    ExternalLibraryCall(MemberAccessExpression, FunctionDefinition),
-    /// A member call to an internal function that carries no ABI selector: an inlined library member
-    /// `L.f(args)` or a `using for` receiver `x.f(args)`.
-    InternalMemberCall(MemberAccessExpression, FunctionDefinition),
-    /// An external call to a contract-instance method or `public` state-variable getter:
-    /// `c.foo(args)`, dispatched by ABI selector.
-    ExternalMemberCall(MemberAccessExpression, Definition),
-    /// A built-in reached through member access (`address.balance`, `abi.encode`).
-    MemberBuiltinCall(MemberAccessExpression),
-    /// A `new C(...)` contract or `new T[](...)` / `new bytes(...)` dynamic-array creation.
-    NewExpressionCall,
-    /// A direct call to a named function.
-    IdentifierFunctionCall(FunctionDefinition),
+    StructConstruction(StructConstruction),
+    /// A one-argument elementary, user-defined-value-type, or array-type conversion.
+    TypeConversion(TypeConversion),
+    /// A call through a function-typed value rather than a named function.
+    FunctionPointerCall(FunctionPointerCall),
+    /// A built-in invoked by bare identifier (`require`, `keccak256`, `selfdestruct`).
+    IdentifierBuiltinCall(IdentifierBuiltinCall),
+    /// A built-in reached through member access (`address.call`, `bytes.concat`).
+    MemberBuiltinCall(MemberBuiltinCall),
+    /// A `super.f(...)` or base-qualified call redirected by inherited dispatch.
+    InheritedFunctionCall(InheritedFunctionCall),
+    /// An external call into a library member.
+    ExternalLibraryCall(ExternalLibraryCall),
+    /// A member call to an internal function, which carries no ABI selector.
+    InternalMemberCall(InternalMemberCall),
+    /// An external call to a contract function or a generated public getter.
+    ExternalMemberCall(ExternalMemberCall),
+    /// A `new C(...)` / `new bytes(...)` contract or dynamic-array creation.
+    NewExpressionCall(NewExpressionCall),
+    /// A direct call to a named function, resolved through virtual dispatch.
+    IdentifierFunctionCall(IdentifierFunctionCall),
 }
 
 impl CallKind {
-    /// Classifies `call`'s callee into the single kind that emits it.
+    /// Classifies `callee` into the single kind that emits it.
     pub fn from_call(
         call: &FunctionCallExpression,
         callee: &Expression,
         arguments: &ArgumentsDeclaration,
         dispatch: &ContractDispatch,
     ) -> Self {
-        if let Expression::Identifier(identifier) = callee
-            && let Some(Definition::Struct(struct_definition)) = identifier.resolve_to_definition()
-        {
-            return Self::StructConstruction(struct_definition);
+        if let Some(inner) = StructConstruction::from_call(call, callee) {
+            return Self::StructConstruction(inner);
         }
-        if let ArgumentsDeclaration::PositionalArguments(positional) = arguments
-            && positional.len() == 1
-            && (call.is_type_conversion() || Self::is_array_type_cast_callee(callee))
-        {
-            return Self::TypeConversion;
+        if let Some(inner) = TypeConversion::from_call(call) {
+            return Self::TypeConversion(inner);
         }
-        if Self::is_function_pointer_callee(callee) {
-            return Self::FunctionPointerCall(callee.clone());
+        if let Some(inner) = FunctionPointerCall::from_callee(callee, arguments) {
+            return Self::FunctionPointerCall(inner);
         }
-        if let Expression::Identifier(identifier) = callee
-            && identifier.resolve_to_built_in().is_some()
-        {
-            return Self::IdentifierBuiltinCall;
+        if let Some(inner) = IdentifierBuiltinCall::from_callee(callee, arguments) {
+            return Self::IdentifierBuiltinCall(inner);
         }
-        if let Expression::MemberAccessExpression(access) = callee
-            && matches!(
-                access.member().resolve_to_built_in(),
-                Some(BuiltIn::AbiDecode | BuiltIn::Wrap | BuiltIn::Unwrap)
-            )
-        {
-            return Self::IdentifierBuiltinCall;
+        if let Some(inner) = MemberBuiltinCall::from_call(call, callee) {
+            return Self::MemberBuiltinCall(inner);
         }
-        if let Expression::MemberAccessExpression(access) = callee
-            && let Some(target_id) = Self::inherited_function_callee(access, dispatch)
-        {
-            return Self::InheritedFunctionCall(access.clone(), target_id);
+        if let Some(inner) = InheritedFunctionCall::from_callee(callee, arguments, dispatch) {
+            return Self::InheritedFunctionCall(inner);
         }
-        if let Expression::MemberAccessExpression(access) = callee
-            && let Some(function) = Self::external_library_callee(access)
-        {
-            return Self::ExternalLibraryCall(access.clone(), function);
+        if let Some(inner) = ExternalLibraryCall::from_callee(callee, arguments) {
+            return Self::ExternalLibraryCall(inner);
         }
-        if let Expression::MemberAccessExpression(access) = callee
-            && let Some(function) = Self::internal_member_callee(access)
-        {
-            return Self::InternalMemberCall(access.clone(), function);
+        if let Some(inner) = InternalMemberCall::from_callee(callee, arguments) {
+            return Self::InternalMemberCall(inner);
         }
-        if let Expression::MemberAccessExpression(access) = callee
-            && let Some(definition) = Self::external_member_callee(access)
-        {
-            return Self::ExternalMemberCall(access.clone(), definition);
+        if let Some(inner) = ExternalMemberCall::from_callee(callee, arguments) {
+            return Self::ExternalMemberCall(inner);
         }
-        if let Expression::MemberAccessExpression(access) = callee {
-            return Self::MemberBuiltinCall(access.clone());
+        if let Some(inner) = NewExpressionCall::from_call(call, callee) {
+            return Self::NewExpressionCall(inner);
         }
-        if let Expression::NewExpression(_) = callee {
-            return Self::NewExpressionCall;
+        if let Some(inner) = TypeConversion::from_index_access(call, callee) {
+            return Self::TypeConversion(inner);
         }
-        let Expression::Identifier(identifier) = callee else {
-            unreachable!("unsupported callee expression");
-        };
-        let Some(Definition::Function(function_definition)) = identifier.resolve_to_definition()
-        else {
-            unreachable!("callee '{}' does not resolve to a function", identifier.name());
-        };
-        Self::IdentifierFunctionCall(function_definition)
-    }
-
-    /// Whether `callee` is an array-type expression `T[]` written as the callee of a cast
-    /// `T[](value)`, which Slang parses as an index access with neither index nor slice bounds.
-    fn is_array_type_cast_callee(callee: &Expression) -> bool {
-        let Expression::IndexAccessExpression(array_type) = callee else {
-            return false;
-        };
-        array_type.start().is_none() && array_type.end().is_none() && !array_type.is_slice()
-    }
-
-    /// Whether `callee` is a function-typed value the call dispatches through indirectly: a local,
-    /// parameter, or contract-static state variable of function type, or a struct-member field of
-    /// function type. A bare function name, a built-in, and a library member resolve to a definition
-    /// rather than a value, so they fall through to their own dispatch.
-    pub fn is_function_pointer_callee(callee: &Expression) -> bool {
-        let addresses_value = match callee {
-            Expression::Identifier(identifier) => matches!(
-                identifier.resolve_to_definition(),
-                Some(
-                    Definition::Variable(_)
-                        | Definition::Parameter(_)
-                        | Definition::StateVariable(_)
-                )
-            ),
-            Expression::MemberAccessExpression(access) => {
-                match access.member().resolve_to_definition() {
-                    Some(Definition::StructMember(_)) => true,
-                    Some(Definition::StateVariable(_)) => matches!(
-                        &access.operand(),
-                        Expression::Identifier(operand)
-                            if matches!(
-                                operand.resolve_to_definition(),
-                                Some(Definition::Contract(_))
-                            )
-                    ),
-                    _ => false,
-                }
-            }
-            _ => true,
-        };
-        addresses_value && matches!(callee.get_type(), Some(SlangType::Function(_)))
-    }
-
-    /// The contract method or `public` state-variable getter an external member call `c.foo(args)`
-    /// dispatches to, or `None` when the access is not one.
-    ///
-    /// The member must resolve to a function or a getter carrying an ABI selector, so an internal or
-    /// private method (no selector) falls through. The receiver must be a contract or interface
-    /// instance value, which excludes both a library member call and a namespace- or type-qualified
-    /// static call: those resolve through a `Library` or type reference, never a runtime instance.
-    fn external_member_callee(access: &MemberAccessExpression) -> Option<Definition> {
-        if !matches!(
-            access.operand().get_type(),
-            Some(SlangType::Contract(_) | SlangType::Interface(_))
-        ) {
-            return None;
+        if let Some(inner) = IdentifierFunctionCall::from_callee(callee, arguments, dispatch) {
+            return Self::IdentifierFunctionCall(inner);
         }
-        match access.member().resolve_to_definition()? {
-            Definition::Function(function_definition)
-                if function_definition.compute_selector().is_some() =>
-            {
-                Some(Definition::Function(function_definition))
-            }
-            Definition::StateVariable(state_variable)
-                if state_variable.compute_selector().is_some()
-                    && !matches!(
-                        state_variable.mutability(),
-                        StateVariableMutability::Constant
-                            | StateVariableMutability::Immutable
-                    ) =>
-            {
-                Some(Definition::StateVariable(state_variable))
-            }
-            _ => None,
+        if let Expression::Identifier(identifier) = callee {
+            unreachable!(
+                "callee '{}' does not resolve to a function",
+                identifier.name()
+            );
         }
-    }
-
-    /// The library function an external member call `L.f(args)` / `x.f(args)` dispatches to through a
-    /// `DELEGATECALL`, or `None` when the access is not one.
-    ///
-    /// The member must resolve to a function carrying an ABI selector whose access is either qualified
-    /// by the library name or declared inside a library, so an `external`/`public` library member is
-    /// selected while a plain contract-instance method falls through.
-    fn external_library_callee(access: &MemberAccessExpression) -> Option<FunctionDefinition> {
-        let Definition::Function(function) = access.member().resolve_to_definition()? else {
-            return None;
-        };
-        if function.compute_selector().is_none() {
-            return None;
-        }
-        let selects_library = matches!(
-            &access.operand(),
-            Expression::Identifier(identifier)
-                if matches!(identifier.resolve_to_definition(), Some(Definition::Library(_)))
-        ) || matches!(function.enclosing_definition(), Some(Definition::Library(_)));
-        selects_library.then_some(function)
-    }
-
-    /// The internal function a member call `L.f(args)` / `x.f(args)` inlines, or `None` when the
-    /// access is not one. The member must resolve to a function carrying no ABI selector, so an
-    /// inlined library member or a `using for` receiver is selected while a selector-dispatched
-    /// external call falls through.
-    fn internal_member_callee(access: &MemberAccessExpression) -> Option<FunctionDefinition> {
-        let Definition::Function(function) = access.member().resolve_to_definition()? else {
-            return None;
-        };
-        function.compute_selector().is_none().then_some(function)
-    }
-
-    /// The C3-linearised target a `super.f(args)` / `Base.f(args)` member call redirects to, or `None`
-    /// when the access is neither. A `super` operand always carries a recorded redirect; a
-    /// base-contract-qualified access is one exactly when `dispatch` recorded a super redirect for it.
-    fn inherited_function_callee(
-        access: &MemberAccessExpression,
-        dispatch: &ContractDispatch,
-    ) -> Option<NodeId> {
-        let redirect = dispatch.resolve_super(access.node_id());
-        if !matches!(access.operand(), Expression::SuperKeyword(_)) && redirect.is_none() {
-            return None;
-        }
-        Some(redirect.expect("a super/base call has a recorded redirect target"))
+        unreachable!("unsupported callee expression");
     }
 }

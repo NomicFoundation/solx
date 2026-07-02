@@ -128,16 +128,16 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
             .unwrap_or_default();
 
         let state = context.state;
-        context.enter_scope();
+        context.environment.enter_scope();
         for (parameter, argument) in parameters.iter().zip(arguments.iter()) {
             let slot = YulValue::alloca(state, &current);
             argument.store(slot, state, &current);
-            context.define_variable(parameter.node_id(), slot);
+            context.environment.define_variable(parameter.node_id(), slot);
         }
         for return_identifier in returns.iter() {
             let slot = YulValue::alloca(state, &current);
             YulValue::constant(&BigInt::from(0u32), state, &current).store(slot, state, &current);
-            context.define_variable(return_identifier.node_id(), slot);
+            context.environment.define_variable(return_identifier.node_id(), slot);
         }
 
         let mut hoisted: Vec<NodeId> = Vec::new();
@@ -171,10 +171,10 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
 
         let mut return_values = Vec::with_capacity(returns.len());
         for return_identifier in returns.iter() {
-            let slot = context.variable(return_identifier.node_id());
+            let slot = context.environment.variable(return_identifier.node_id());
             return_values.push(YulValue::load(slot, context.state, &current));
         }
-        context.exit_scope();
+        context.environment.exit_scope();
         *context
             .yul_inline_depth
             .get_mut(&function_id)

@@ -8,101 +8,117 @@ use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
-use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::TypeName as SlangTypeName;
 
+use solx_mlir::LocationPolicy;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
-use solx_utils::DataLocation;
 
-use crate::ast::contract::function::expression::call::CallContext;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::analysis::query::parameter_node_ids::ParameterNodeIds;
+use crate::ast::block_and::BlockAnd;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
+use crate::ast::contract::function::expression::call::contract_creation::ContractCreation;
+use crate::ast::emit::emit_expression::EmitExpression;
 
-impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context, 'block> {
-    /// Emits a `new` call: `new T[](n)` / `new bytes(n)` / `new string(n)` dynamic allocation, or
-    /// `new C(args)` contract creation.
-    ///
-    /// The array, `bytes`, and `string` forms allocate a dynamic memory aggregate of `n` elements via
-    /// a zeroed `sol.malloc`. The array forms resolve a call type; `new bytes` / `new string` surface
-    /// none, so the syntactic elementary type name selects the `string` aggregate.
-    pub(super) fn emit_new_expression(
+/// A call whose callee is a Solidity `new` expression.
+pub struct NewExpressionCall {
+    /// The full call expression.
+    pub call: FunctionCallExpression,
+    /// The call arguments.
+    pub arguments: ArgumentsDeclaration,
+}
+
+impl NewExpressionCall {
+    /// Classifies a call to `new`.
+    pub fn from_call(call: &FunctionCallExpression, callee: &Expression) -> Option<Self> {
+        if !matches!(callee, Expression::NewExpression(_)) {
+            return None;
+        }
+        Some(Self {
+            call: call.clone(),
+            arguments: call.arguments(),
+        })
+    }
+
+    /// Emits the `new` call.
+    pub fn emit<'state, 'context: 'block, 'block>(
         &self,
-        call: &FunctionCallExpression,
-        arguments: &ArgumentsDeclaration,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
         call_value: Option<Value<'context, 'block>>,
         salt: Option<Value<'context, 'block>>,
-        block: BlockRef<'context, 'block>,
-    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
-        let context = self.expression_context.state;
-        let slang_type = call.get_type();
+    ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
+        let slang_type = self.call.get_type();
         let dynamic_result_type = match &slang_type {
             Some(inner @ (SlangType::Array(_) | SlangType::Bytes(_) | SlangType::String(_))) => {
-                Some(TypeConversion::resolve_slang_type(
+                Some(AstType::resolve(
                     inner,
-                    Some(DataLocation::Memory),
-                    context,
+                    LocationPolicy::Declared(Some(solx_utils::DataLocation::Memory)),
+                    context.state,
                 ))
             }
             None if matches!(
-                call.operand(),
+                self.call.operand(),
                 Expression::NewExpression(new_expression)
                     if matches!(new_expression.type_name(), SlangTypeName::ElementaryType(_))
             ) =>
             {
-                Some(AstType::string(context.mlir_context, DataLocation::Memory).into_mlir())
+                Some(
+                    AstType::string(context.state.mlir_context, solx_utils::DataLocation::Memory)
+                        .into_mlir(),
+                )
             }
             _ => None,
         };
         if let Some(result_type) = dynamic_result_type {
-            let ArgumentsDeclaration::PositionalArguments(positional) = arguments else {
-                unreachable!("a dynamic new array, bytes, or string takes a positional size");
+            let ArgumentsDeclaration::PositionalArguments(positional) = &self.arguments else {
+                unreachable!("named arguments on a new array/bytes/string are not supported");
             };
-            let (values, current_block) = self.emit_argument_values(positional, block);
-            let size = AstValue::from(*values.first().expect("slang validates the size argument"))
-                .cast(
-                    AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD),
-                    context,
-                    &current_block,
-                )
-                .into_mlir();
-            let address = AstValue::malloc(
-                AstType::new(result_type),
-                Some(size),
-                true,
-                context,
-                &current_block,
-            )
-            .into_mlir();
-            return (address, current_block);
+            let BlockAnd {
+                value: values,
+                block: current_block,
+            } = positional.emit(context, block);
+            let state = context.state;
+            let address = match values.first() {
+                Some(&size_value) => {
+                    let size = AstValue::from(size_value)
+                        .cast(
+                            AstType::unsigned(state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
+                            state,
+                            &current_block,
+                        )
+                        .into_mlir();
+                    AstValue::malloc(result_type, Some(size), true, state, &current_block)
+                        .into_mlir()
+                }
+                None => {
+                    unreachable!("new array/bytes/string requires a size argument")
+                }
+            };
+            return BlockAnd {
+                value: vec![address],
+                block: current_block,
+            };
         }
 
         let Some(SlangType::Contract(contract_type)) = slang_type else {
-            unimplemented!("new expression has no resolved type or unsupported new target");
+            unreachable!("new expression has no resolved type or unsupported new target");
         };
         let Definition::Contract(contract_definition) = contract_type.definition() else {
             unreachable!("Slang ContractType always references a Contract definition");
         };
-        let parameter_ids: Vec<NodeId> = contract_definition
+        let parameter_ids = contract_definition
             .constructor()
-            .map(|constructor| {
-                constructor
-                    .parameters()
-                    .iter()
-                    .map(|parameter| parameter.node_id())
-                    .collect()
-            })
+            .map(|constructor| constructor.parameters().node_ids())
             .unwrap_or_default();
-        let ordered_arguments = arguments
-            .ordered_by(&parameter_ids)
-            .expect("slang matches every constructor argument to a parameter");
-        self.emit_contract_creation(
-            &contract_definition,
-            &ordered_arguments,
-            call_value,
-            salt,
-            false,
+        let ordered_arguments = CallArguments::for_parameter_ids(&self.arguments, &parameter_ids);
+        let creation = ContractCreation::new(contract_definition, ordered_arguments);
+        let BlockAnd { value, block } = creation.emit(context, call_value, salt, false, block);
+        BlockAnd {
+            value: vec![value],
             block,
-        )
+        }
     }
 }

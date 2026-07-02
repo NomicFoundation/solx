@@ -15,7 +15,9 @@ use solx_mlir::YulValue;
 
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::statement::assembly::YulContext;
+use crate::ast::contract::storage_layout::StateVariableSlot;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_yul::EmitYul;
 
@@ -47,12 +49,13 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
         let emitter = ExpressionContext::new(
             context.state,
             context.environment,
-            context.storage_layout,
             context.dispatch,
-            true,
+            context.storage_layout,
+            None,
+            ArithmeticMode::Checked,
         );
         let BlockAnd { value, block } = initializer.emit(&emitter, block);
-        let widened = AstValue::new(value).cast(
+        let widened = value.cast(
             AstType::signless(state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
             state,
             &block,
@@ -64,10 +67,7 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
         let parts: Vec<_> = path.iter().collect();
         let head_definition = parts[0].resolve_to_definition();
         if let Some(Definition::StateVariable(state_variable)) = &head_definition {
-            let slot = context
-                .storage_layout
-                .get(&state_variable.node_id())
-                .expect("slang registers every state variable in the storage layout");
+            let slot = context.storage_layout.slot(state_variable.node_id());
             match parts[1].resolve_to_built_in() {
                 Some(BuiltIn::YulSlot) => {
                     let slot_word =
@@ -86,16 +86,17 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
 
         if matches!(
             head_definition,
-            Some(
-                Definition::Variable(_)
-                    | Definition::Parameter(_)
-                    | Definition::YulVariable(_)
-                    | Definition::YulParameter(_)
-            )
+            Some(Definition::Variable(_) | Definition::Parameter(_))
         ) {
             match parts[1].resolve_to_built_in() {
                 Some(BuiltIn::YulSlot) => {
-                    let slot = context.slot(&parts[0], &block);
+                    let declaration = head_definition
+                        .as_ref()
+                        .expect("yul path head resolves to a declaration")
+                        .node_id();
+                    let slot = AstValue::from(context.environment.variable(declaration))
+                        .reinterpret(AstType::llvm_ptr(state.mlir_context), state, &block)
+                        .into_mlir();
                     return BlockAnd { value: YulValue::load(slot, state, &block), block };
                 }
                 Some(BuiltIn::YulOffset) => {
@@ -106,6 +107,12 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
         }
     }
 
-    let slot = context.slot(&identifier, &block);
+    let declaration = identifier
+        .resolve_to_definition()
+        .expect("yul variable reference resolves to a declaration")
+        .node_id();
+    let slot = AstValue::from(context.environment.variable(declaration))
+        .reinterpret(AstType::llvm_ptr(state.mlir_context), state, &block)
+        .into_mlir();
     BlockAnd { value: YulValue::load(slot, state, &block), block }
 });

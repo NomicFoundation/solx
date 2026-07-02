@@ -11,7 +11,9 @@ use crate::ast::emit::emit_expression::EmitExpression;
 
 expression_emit!(TupleExpression; |node, context, block| {
     let items = node.items();
-    let item = items.iter().next().expect("slang validates non-empty tuple");
-    let inner = item.expression().expect("tuple element is non-empty");
+    let item = items.iter().next().expect("slang validated");
+    let inner = item
+        .expression()
+        .expect("slang validated");
     inner.emit(context, block)
 });

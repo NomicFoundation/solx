@@ -6,7 +6,14 @@
 // CHECK: sol.func {{.*}}pay_transfer{{.*}}!sol.address{{.*}}ui256
 // CHECK:   sol.transfer {{.*}}, {{.*}} : !sol.address, ui256
 
+// CHECK: sol.cast %{{.*}} : ui8 to ui256
+
 contract C {
     function pay_send(address payable r, uint256 v) public returns (bool) { return r.send(v); }
+
     function pay_transfer(address payable r, uint256 v) public { r.transfer(v); }
+
+    function send_literal(address payable r) public returns (bool) { return r.send(0); }
+
+    function transfer_literal(address payable r) public { r.transfer(1); }
 }

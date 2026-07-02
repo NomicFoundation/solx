@@ -19,130 +19,132 @@ use solx_mlir::ods::sol::YieldOperation;
 
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::emit::emit_as::EmitAs;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_for_effect::EmitForEffect;
 use crate::ast::emit::emit_values::EmitValues;
 
-expression_emit!(ConditionalExpression; |node, context, block| {
-    let internal_func_ref_type = |branch: &Expression| {
-        let Expression::MemberAccessExpression(access) = branch else {
-            return None;
-        };
-        let Expression::Identifier(operand) = access.operand() else {
-            return None;
-        };
-        if !matches!(operand.resolve_to_definition(), Some(Definition::Contract(_))) {
-            return None;
-        }
-        let Some(Definition::Function(function_definition)) =
-            access.member().resolve_to_definition()
-        else {
-            return None;
-        };
-        Some(
-            context
-                .state
-                .function_signatures
-                .get(&function_definition.node_id())
-                .expect("a type-qualified internal function resolves to a registered signature")
-                .func_ref_type(context.state)
-                .into_mlir(),
-        )
-    };
-    let result_type = internal_func_ref_type(&node.true_expression().unwrap_parentheses())
-        .or_else(|| internal_func_ref_type(&node.false_expression().unwrap_parentheses()))
-        .or_else(|| context.resolve_slang_type(node.get_type()))
-        .unwrap_or_else(|| {
-            AstType::unsigned(context.state.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
-        });
-    let condition = node.operand();
-    let BlockAnd {
-        value: condition_value,
-        block,
-    } = condition.emit(context, block);
-    let condition_boolean = context.emit_is_nonzero(condition_value, &block);
+impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalExpression {
+    type Output = BlockAnd<'context, 'block, Vec<Value<'context, 'block>>>;
 
-    let result_slot = Pointer::stack(AstType::new(result_type), context.state, &block);
-    let (then_block, else_block) = mlir_region_op!(
-        context.state, &block,
-        IfOperation.cond(condition_boolean); then_region, else_region
-    );
-
-    let true_expression = node.true_expression();
-    let BlockAnd {
-        value: then_value,
-        block: then_end,
-    } = true_expression.emit(context, then_block);
-    let then_cast = TypeConversion::from_target_type(result_type, context.state)
-        .emit(then_value, context.state, &then_end);
-    result_slot.store(AstValue::new(then_cast), context.state, &then_end);
-    mlir_op_void!(context.state, &then_end, YieldOperation.ins(&[]));
-
-    let false_expression = node.false_expression();
-    let BlockAnd {
-        value: else_value,
-        block: else_end,
-    } = false_expression.emit(context, else_block);
-    let else_cast = TypeConversion::from_target_type(result_type, context.state)
-        .emit(else_value, context.state, &else_end);
-    result_slot.store(AstValue::new(else_cast), context.state, &else_end);
-    mlir_op_void!(context.state, &else_end, YieldOperation.ins(&[]));
-
-    let value = result_slot
-        .load(AstType::new(result_type), context.state, &block)
-        .into_mlir();
-    BlockAnd { block, value }
-});
-
-impl<'context: 'block, 'block> EmitValues<'context, 'block> for ConditionalExpression {
-    /// Emits a tuple-valued `cond ? (a, b) : (c, d)`, yielding one value per element. Each result
-    /// slot is stored in both `sol.if` branches from the branch's expanded values, then loaded after.
-    fn emit_values<'state>(
+    /// Emits `cond ? a : b`, yielding one value per result. Both branches store into shared slots
+    /// loaded after the `sol.if`.
+    fn emit<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
-    ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
-        let true_expression = self.true_expression();
-        let false_expression = self.false_expression();
+    ) -> Self::Output {
+        let true_expression = self.true_expression().unwrap_parentheses();
+        let false_expression = self.false_expression().unwrap_parentheses();
 
-        let result_types: Vec<Type<'context>> =
-            match (&true_expression, &false_expression, self.get_type()) {
-                (Expression::TupleExpression(true_tuple), Expression::TupleExpression(_), _) => {
-                    true_tuple
+        if let Some(SlangType::Tuple(tuple_type)) = self.get_type() {
+            let result_types: Vec<Type<'context>> = match (&true_expression, &false_expression) {
+                (Expression::TupleExpression(true_tuple), Expression::TupleExpression(_)) => {
+                    let true_items: Vec<Expression> = true_tuple
                         .items()
                         .iter()
+                        .filter_map(|item| item.expression())
+                        .collect();
+                    true_items
+                        .iter()
                         .map(|item| {
-                            let element = item.expression().expect("slang validates tuple element");
-                            context
-                                .resolve_slang_type(element.get_type())
-                                .expect("slang types every tuple element")
+                            AstType::resolve_optional(item.get_type(), context.state)
+                                .expect("slang validated")
                         })
                         .collect()
                 }
-                (_, _, Some(SlangType::Tuple(tuple_type))) => tuple_type
+                _ => tuple_type
                     .types()
-                    .into_iter()
+                    .iter()
                     .map(|element_type| {
-                        context
-                            .resolve_slang_type(Some(element_type))
-                            .expect("slang types every tuple element")
+                        AstType::resolve_optional(Some(element_type.clone()), context.state)
+                            .expect("slang validated")
                     })
                     .collect(),
-                _ => unreachable!("a multi-valued conditional is tuple-typed"),
             };
 
-        let condition = self.operand();
+            let state = context.state;
+            let BlockAnd {
+                value: condition_value,
+                block,
+            } = self.operand().emit(context, block);
+            let condition_boolean = condition_value.is_nonzero(state, &block).into_mlir();
+            let slots: Vec<Pointer<'context, 'block>> = result_types
+                .iter()
+                .map(|&result_type| Pointer::stack(AstType::new(result_type), state, &block))
+                .collect();
+            let (then_block, else_block) = mlir_region_op!(state, &block, IfOperation.cond(condition_boolean); then_region, else_region);
+
+            for (branch_block, branch_expression) in [
+                (then_block, &true_expression),
+                (else_block, &false_expression),
+            ] {
+                let BlockAnd {
+                    value: values,
+                    block: current,
+                } = branch_expression.emit_values(context, branch_block);
+                for (index, value) in values.into_iter().enumerate() {
+                    let cast = AstValue::from(value).cast(
+                        AstType::new(result_types[index]),
+                        state,
+                        &current,
+                    );
+                    slots[index].store(cast, state, &current);
+                }
+                mlir_op_void!(state, &current, YieldOperation.ins(&[]));
+            }
+
+            let mut values = Vec::with_capacity(slots.len());
+            for (index, &slot) in slots.iter().enumerate() {
+                values.push(
+                    slot.load(AstType::new(result_types[index]), state, &block)
+                        .into_mlir(),
+                );
+            }
+            return BlockAnd {
+                value: values,
+                block,
+            };
+        }
+
+        let func_ref_type = |expression: &Expression| {
+            let definition = match expression {
+                Expression::Identifier(identifier) => identifier.resolve_to_definition()?,
+                Expression::MemberAccessExpression(access) => {
+                    let Expression::Identifier(operand) = access.operand() else {
+                        return None;
+                    };
+                    if !matches!(
+                        operand.resolve_to_definition(),
+                        Some(Definition::Contract(_))
+                    ) {
+                        return None;
+                    }
+                    access.member().resolve_to_definition()?
+                }
+                _ => return None,
+            };
+            let Definition::Function(function_definition) = definition else {
+                return None;
+            };
+            let function = context
+                .state
+                .resolve_function(function_definition.node_id());
+            Some(function.func_ref_type(context.state).into_mlir())
+        };
+        let result_type = func_ref_type(&true_expression)
+            .or_else(|| func_ref_type(&false_expression))
+            .or_else(|| AstType::resolve_optional(self.get_type(), context.state))
+            .expect("slang validated");
         let BlockAnd {
             value: condition_value,
             block,
-        } = condition.emit(context, block);
-        let condition_boolean = context.emit_is_nonzero(condition_value, &block);
+        } = self.operand().emit(context, block);
+        let condition_boolean = condition_value
+            .is_nonzero(context.state, &block)
+            .into_mlir();
 
-        let result_slots: Vec<Pointer<'context, 'block>> = result_types
-            .iter()
-            .map(|&result_type| Pointer::stack(AstType::new(result_type), context.state, &block))
-            .collect();
+        let result_slot = Pointer::stack(AstType::new(result_type), context.state, &block);
         let (then_block, else_block) = mlir_region_op!(
             context.state, &block,
             IfOperation.cond(condition_boolean); then_region, else_region
@@ -153,32 +155,26 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for ConditionalExpre
             (else_block, &false_expression),
         ] {
             let BlockAnd {
-                value: branch_values,
+                value: branch_value,
                 block: branch_end,
-            } = branch_expression.emit_values(context, branch_block);
-            for (index, branch_value) in branch_values.into_iter().enumerate() {
-                let cast = TypeConversion::from_target_type(result_types[index], context.state)
-                    .emit(branch_value, context.state, &branch_end);
-                result_slots[index].store(AstValue::new(cast), context.state, &branch_end);
-            }
+            } = branch_expression.emit_as(result_type, context, branch_block);
+            result_slot.store(branch_value, context.state, &branch_end);
             mlir_op_void!(context.state, &branch_end, YieldOperation.ins(&[]));
         }
 
-        let value = result_types
-            .iter()
-            .zip(result_slots)
-            .map(|(&result_type, slot)| {
-                slot.load(AstType::new(result_type), context.state, &block)
-                    .into_mlir()
-            })
-            .collect();
-        BlockAnd { block, value }
+        BlockAnd {
+            value: vec![
+                result_slot
+                    .load(AstType::new(result_type), context.state, &block)
+                    .into_mlir(),
+            ],
+            block,
+        }
     }
 }
 
 impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for ConditionalExpression {
-    /// Emits a void-typed `cond ? a : b` in statement position: one branch runs per the condition,
-    /// yielding no result.
+    /// Emits a void-typed `cond ? a : b` for effect: one branch runs per the condition, with no result.
     fn emit_for_effect<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -190,7 +186,9 @@ impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for ConditionalEx
             value: condition_value,
             block,
         } = self.operand().emit(context, block);
-        let condition_boolean = context.emit_is_nonzero(condition_value, &block);
+        let condition_boolean = condition_value
+            .is_nonzero(context.state, &block)
+            .into_mlir();
         let (then_block, else_block) = mlir_region_op!(
             context.state, &block,
             IfOperation.cond(condition_boolean); then_region, else_region

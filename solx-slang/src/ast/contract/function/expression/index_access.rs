@@ -1,144 +1,43 @@
 //!
-//! Index access expression lowering: `a[i]`, `m[k]`, `s[i]`.
+//! Index access expression emission: `a[i]`, `m[k]`, `s[i]`.
 //!
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::ValueLike;
-use melior::ir::r#type::TypeLike;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::IndexAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use solx_mlir::LocationPolicy;
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
-use solx_mlir::ods::sol::LengthOperation;
 use solx_mlir::ods::sol::SliceOperation;
-use solx_utils::DataLocation;
 
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_place::EmitPlace;
 use crate::ast::place::Place;
 
-impl<'context: 'block, 'block> EmitExpression<'context, 'block> for IndexAccessExpression {
-    type Output = BlockAnd<'context, 'block, Value<'context, 'block>>;
-
-    /// Lowers `a[i]` / `m[k]` for arrays, dynamic `bytes`, mappings, and
-    /// strings to `sol.gep` (sequential containers) or `sol.map` (mappings),
-    /// followed by a `sol.load` of the addressed element. For dynamic
-    /// `bytes` the C++ element type is `!sol.byte`; a `sol.bytes_cast`
-    /// widens it to `!sol.fixedbytes<1>` to match Solidity's `bytes1`
-    /// typing. `sol.bytes_cast` is a no-op for matching types.
-    ///
-    /// A slice `a[start:end]` instead produces a sub-array value via
-    /// `sol.slice`. An omitted `start` defaults to `0`; an omitted `end`
-    /// defaults to the operand's `sol.length`; both indices widen to `ui256`.
-    fn emit<'state>(
-        &self,
-        context: &ExpressionContext<'state, 'context, 'block>,
-        block: BlockRef<'context, 'block>,
-    ) -> Self::Output {
-        if self.is_slice() {
-            let base = self.operand();
-            let BlockAnd {
-                value: base_value,
-                block,
-            } = base.emit(context, block);
-            let ui256 =
-                AstType::unsigned(context.state.mlir_context, solx_utils::BIT_LENGTH_FIELD);
-            let (start_value, block) = match self.start() {
-                Some(start_expression) => {
-                    let BlockAnd { value, block } = start_expression.emit(context, block);
-                    let value = AstValue::new(value).cast(ui256, context.state, &block).into_mlir();
-                    (value, block)
-                }
-                None => {
-                    let zero = AstValue::constant(0, ui256, context.state, &block).into_mlir();
-                    (zero, block)
-                }
-            };
-            let (end_value, block) = match self.end() {
-                Some(end_expression) => {
-                    let BlockAnd { value, block } = end_expression.emit(context, block);
-                    let value = AstValue::new(value).cast(ui256, context.state, &block).into_mlir();
-                    (value, block)
-                }
-                None => {
-                    let length: Value<'context, 'block> = mlir_op!(
-                        context.state,
-                        &block,
-                        LengthOperation.inp(base_value).len(ui256.into_mlir())
-                    );
-                    (length, block)
-                }
-            };
-            let result_slang_type = self
-                .get_type()
-                .expect("slang types every index-access expression");
-            let result_type =
-                TypeConversion::resolve_slang_type(&result_slang_type, None, context.state);
-            let value: Value<'context, 'block> = mlir_op!(
-                context.state,
-                &block,
-                SliceOperation
-                    .arr(base_value)
-                    .start(start_value)
-                    .end(end_value)
-                    .res(result_type)
-            );
-            return BlockAnd { block, value };
-        }
-        let BlockAnd {
-            value: place,
-            block,
-        } = self.emit_place(context, block);
-        let value =
-            Pointer::new(place.address).load(AstType::new(place.element_type), context.state, &block);
-        let result_type = self
-            .get_type()
-            .expect("slang types every index-access expression");
-        let slang_expected =
-            TypeConversion::resolve_slang_type(&result_type, None, context.state);
-        let value = value
-            .bytes_cast(AstType::new(slang_expected), context.state, &block)
-            .into_mlir();
-        BlockAnd { block, value }
-    }
-}
-
 impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpression {
-    /// Emits the address yielded by `a[i]` / `m[k]` together with the element
-    /// MLIR type, without the trailing `sol.load`.
-    ///
-    /// Shared between the value-producing read path and the lvalue write path
-    /// in `emit_assignment`.
+    /// Emits the address `a[i]` / `m[k]` denotes with the element type, without the load.
     fn emit_place<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Place<'context, 'block>> {
-        if self.is_slice() {
+        if self.end().is_some() {
             unreachable!(
                 "a slice a[i:j] is emitted in value position, never as an assignable place"
             );
         }
 
         let base = self.operand();
-        let index_expression = self
-            .start()
-            .expect("slang validates a[i] has an index expression");
-        let base_type = base
-            .get_type()
-            .expect("base of index access has a resolved type");
-        let result_type = self
-            .get_type()
-            .expect("slang types every index-access expression");
+        let index_expression = self.start().expect("slang validated");
+        let base_type = base.get_type().expect("slang validated");
+        let result_type = self.get_type().expect("slang validated");
 
         let BlockAnd {
             value: base_value,
@@ -152,38 +51,29 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
         let (address, element_type) = match &base_type {
             SlangType::Mapping(_) => {
                 let element_type =
-                    TypeConversion::resolve_slang_type(&result_type, None, context.state);
+                    AstType::resolve(&result_type, LocationPolicy::Declared(None), context.state);
                 let base_location = match base_type.data_location() {
                     Some(SlangDataLocation::Inherited) => {
                         unreachable!("slang should not surface Inherited at an index-access base")
                     }
-                    Some(other) => DataLocation::from_slang(other, None),
-                    None => unimplemented!(
+                    Some(other) => solx_utils::DataLocation::from_slang(other, None),
+                    None => unreachable!(
                         "index access on a value-typed base is not yet wired: {:?}",
                         std::mem::discriminant(&base_type)
                     ),
                 };
-                let address_type = ExpressionContext::address_type(
-                    context.state,
-                    element_type,
-                    base_location,
-                    &result_type,
-                );
-                let address = Pointer::new(base_value)
-                    .map(AstValue::new(index_value), AstType::new(address_type), context.state, &block)
+                let address_type = AstType::new(element_type)
+                    .address_type(base_location, context.state.mlir_context);
+                let address = Pointer::from(base_value)
+                    .map(index_value, address_type, context.state, &block)
                     .into_mlir();
                 (address, element_type)
             }
             _ => {
-                let element_type = unsafe {
-                    Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
-                        base_value.r#type().to_raw(),
-                        0,
-                    ))
-                };
-                let address = Pointer::new(base_value)
+                let element_type = base_value.r#type().element_type(0).into_mlir();
+                let address = Pointer::from(base_value)
                     .gep(
-                        AstValue::new(index_value),
+                        index_value,
                         AstType::new(element_type),
                         false,
                         context.state,
@@ -194,11 +84,102 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
             }
         };
         BlockAnd {
-            block,
             value: Place {
                 address,
                 element_type,
             },
+            block,
         }
     }
 }
+
+expression_emit!(IndexAccessExpression; |node, context, block| {
+    if node.is_slice() {
+        let base = node.operand();
+        let BlockAnd {
+            value: base_value,
+            block,
+        } = base.emit(context, block);
+        let ui256 =
+            AstType::unsigned(context.state.mlir_context, solx_utils::BIT_LENGTH_FIELD)
+                .into_mlir();
+        let (start_value, block) = match node.start() {
+            Some(start_expression) => {
+                let BlockAnd { value, block } = start_expression.emit(context, block);
+                let value = value
+                    .cast(AstType::new(ui256), context.state, &block)
+                    .into_mlir();
+                (value, block)
+            }
+            None => {
+                let zero = AstValue::constant(
+                    0,
+                    AstType::new(ui256),
+                    context.state,
+                    &block,
+                )
+                .into_mlir();
+                (zero, block)
+            }
+        };
+        let (end_value, block) = match node.end() {
+            Some(end_expression) => {
+                let BlockAnd { value, block } = end_expression.emit(context, block);
+                let value = value
+                    .cast(AstType::new(ui256), context.state, &block)
+                    .into_mlir();
+                (value, block)
+            }
+            None => {
+                let length = base_value
+                    .length(context.state, &block)
+                    .into_mlir();
+                (length, block)
+            }
+        };
+        let result_type = AstType::resolve(
+            &node
+                .get_type()
+                .expect("slang validated"),
+            LocationPolicy::Declared(None),
+            context.state,
+        );
+        let state = context.state;
+        let value: Value<'context, 'block> = mlir_op!(
+            state,
+            block,
+            SliceOperation
+                .arr(base_value)
+                .start(start_value)
+                .end(end_value)
+                .res(result_type)
+        );
+        return BlockAnd { block, value: value.into() };
+    }
+    let BlockAnd {
+        value: Place {
+            address,
+            element_type,
+        },
+        block,
+    } = node.emit_place(context, block);
+    let value = Pointer::new(address).load(
+        AstType::new(element_type),
+        context.state,
+        &block,
+    );
+    if value.r#type().is_reference() {
+        return BlockAnd { block, value };
+    }
+    let result_type = node
+        .get_type()
+        .expect("slang validated");
+    let slang_expected =
+        AstType::resolve(&result_type, LocationPolicy::Declared(None), context.state);
+    let value = value.cast(
+        AstType::new(slang_expected),
+        context.state,
+        &block,
+    );
+    BlockAnd { block, value }
+});

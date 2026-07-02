@@ -5,6 +5,12 @@
 // CHECK: sol.try
 // CHECK: fallback {
 
+contract A {
+    function g(uint256 a, uint256 b) external pure returns (uint256) {
+        return a - b;
+    }
+}
+
 contract C {
     function f(A instance) external returns (uint256) {
         try instance.g({b: 11, a: 99}) returns (uint256 r) {
@@ -12,11 +18,5 @@ contract C {
         } catch {
             return 0;
         }
-    }
-}
-
-contract A {
-    function g(uint256 a, uint256 b) external pure returns (uint256) {
-        return a - b;
     }
 }

@@ -1,5 +1,5 @@
 //!
-//! Function call resolution metadata, and the `sol.func` / `sol.call` it emits.
+//! Function call resolution metadata.
 //!
 
 use melior::ir::Block;
@@ -21,6 +21,7 @@ use crate::Context;
 use crate::FunctionKind;
 use crate::StateMutability;
 use crate::Type;
+use crate::Value;
 use crate::ods::sol::CallOperation;
 use crate::ods::sol::FuncOperation;
 
@@ -37,7 +38,7 @@ pub struct Function<'context> {
 }
 
 impl<'context> Function<'context> {
-    /// Records a function's mangled name and interned signature.
+    /// Records a function's mangled name and interned signature for later call and define lookups.
     pub fn new(
         mlir_name: String,
         parameter_types: Vec<MlirType<'context>>,
@@ -50,10 +51,8 @@ impl<'context> Function<'context> {
         }
     }
 
-    /// Emits this function's `sol.func` definition with an entry block whose arguments carry the
-    /// parameter types, returned for the body. `selector` / `kind` are the optional dispatch
-    /// attributes; `dispatch_identifier` is the internal-function-pointer dispatch tag; an original
-    /// function type is attached for selector-dispatched, constructor, and fallback functions.
+    /// Emits this function's `sol.func` definition with an empty entry block, returned for the body.
+    /// `selector` / `kind` / `dispatch_identifier` are the optional dispatch attributes.
     pub fn define<'block>(
         &self,
         selector: Option<u32>,
@@ -100,12 +99,7 @@ impl<'context> Function<'context> {
                 function_id,
             ));
         }
-        if selector.is_some()
-            || matches!(
-                kind,
-                Some(FunctionKind::Constructor | FunctionKind::Fallback)
-            )
-        {
+        if selector.is_some() || matches!(kind, Some(FunctionKind::Constructor)) {
             operation_builder =
                 operation_builder.orig_fn_type(TypeAttribute::new(function_type.into()));
         }
@@ -117,14 +111,13 @@ impl<'context> Function<'context> {
             .expect("func body has entry block")
     }
 
-    /// Emits a `sol.call` to `callee` by symbol, returning its results in declaration order.
+    /// Emits a `sol.call` to this function, an internal call by symbol, returning its results in order.
     pub fn call<'block, B>(
-        callee: &str,
+        &self,
         operands: &[MlirValue<'context, 'block>],
-        result_types: &[MlirType<'context>],
         context: &Context<'context>,
         block: &B,
-    ) -> anyhow::Result<Vec<MlirValue<'context, 'block>>>
+    ) -> Vec<MlirValue<'context, 'block>>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
@@ -132,19 +125,25 @@ impl<'context> Function<'context> {
         let operation = block.append_operation(mlir_op_build!(
             context,
             CallOperation
-                .callee(FlatSymbolRefAttribute::new(context.mlir_context, callee))
-                .outs(result_types)
+                .callee(FlatSymbolRefAttribute::new(
+                    context.mlir_context,
+                    &self.mlir_name
+                ))
+                .outs(&self.return_types)
                 .operands(operands)
         ));
-        let mut results = Vec::with_capacity(result_types.len());
-        for index in 0..result_types.len() {
-            results.push(operation.result(index)?.into());
-        }
-        Ok(results)
+        (0..self.return_types.len())
+            .map(|index| {
+                operation
+                    .result(index)
+                    .expect("sol.call produces its declared result count")
+                    .into()
+            })
+            .collect()
     }
 
-    /// The `!sol.func_ref<...>` type of an internal pointer to this function, built from its
-    /// declared signature.
+    /// The `!sol.func_ref<...>` type of an internal pointer to this function,
+    /// built from its declared signature.
     pub fn func_ref_type(&self, context: &Context<'context>) -> Type<'context> {
         Type::func_ref(
             context.mlir_context,
@@ -158,7 +157,7 @@ impl<'context> Function<'context> {
         &self,
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
-    ) -> crate::Value<'context, 'block> {
-        crate::Value::function_constant(&self.mlir_name, self.func_ref_type(context), context, block)
+    ) -> Value<'context, 'block> {
+        Value::function_constant(&self.mlir_name, self.func_ref_type(context), context, block)
     }
 }

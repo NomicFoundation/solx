@@ -6,52 +6,61 @@ use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::NodeId;
 
-use solx_mlir::Function;
-
+use crate::ast::analysis::query::parameter_node_ids::ParameterNodeIds;
 use crate::ast::block_and::BlockAnd;
-use crate::ast::contract::function::expression::call::CallContext;
+use crate::ast::contract::contract_dispatch::ContractDispatch;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::call_arguments::CallArguments;
 
-impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context, 'block> {
-    /// Emits a `super.f(args)` / `Base.f(args)` call redirected by inherited dispatch to `target_id`,
-    /// returning all of its result values in declaration order.
-    ///
-    /// The arguments are ordered against the lexically named function's parameters, then cast to the
-    /// redirected target's registered parameter types, so a named-argument `super.f({b: .., a: ..})`
-    /// reaches the target in declaration order.
-    pub(super) fn emit_inherited_function_call(
-        &self,
-        access: &MemberAccessExpression,
-        target_id: NodeId,
+/// A function call redirected by inherited dispatch metadata.
+pub struct InheritedFunctionCall {
+    /// The member access that selected the inherited function.
+    pub access: MemberAccessExpression,
+    /// The redirected target function ID.
+    pub target_id: NodeId,
+    /// Arguments ordered against the target parameters.
+    pub arguments: CallArguments,
+}
+
+impl InheritedFunctionCall {
+    /// Classifies a `super.f(...)` or `Base.f(...)` call.
+    pub fn from_callee(
+        callee: &Expression,
         arguments: &ArgumentsDeclaration,
+        dispatch: &ContractDispatch,
+    ) -> Option<Self> {
+        let Expression::MemberAccessExpression(access) = callee else {
+            return None;
+        };
+        let redirect = dispatch.resolve_super(access.node_id());
+        if !matches!(access.operand(), Expression::SuperKeyword(_)) && redirect.is_none() {
+            return None;
+        }
+        let target_id = redirect.expect("a super/base call has a recorded redirect target");
+        let parameter_ids = match access.member().resolve_to_definition() {
+            Some(Definition::Function(function_definition)) => {
+                function_definition.parameters().node_ids()
+            }
+            _ => unreachable!("a super/base call resolves its member to a function"),
+        };
+        Some(Self {
+            access: access.clone(),
+            target_id,
+            arguments: CallArguments::for_parameter_ids(arguments, &parameter_ids),
+        })
+    }
+
+    /// Emits the inherited call.
+    pub fn emit<'state, 'context: 'block, 'block>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
-        let context = self.expression_context.state;
-        let Some(Definition::Function(function_definition)) =
-            access.member().resolve_to_definition()
-        else {
-            unreachable!("a super/base call resolves its member to a function");
-        };
-        let parameter_ids: Vec<NodeId> = function_definition
-            .parameters()
-            .iter()
-            .map(|parameter| parameter.node_id())
-            .collect();
-
-        let (mlir_name, parameter_types, return_types) = context
-            .resolve_function(target_id)
-            .expect("a super/base call resolves to a registered signature");
-
-        let (argument_values, block) =
-            self.emit_ordered_arguments(arguments, &parameter_ids, parameter_types, block);
-
-        let results = Function::call(mlir_name, &argument_values, return_types, context, &block)
-            .expect("a super/base call resolves to a registered signature");
-        BlockAnd {
-            value: results,
-            block,
-        }
+        let function = context.state.resolve_function(self.target_id);
+        self.arguments.emit_call(function, context, block)
     }
 }

@@ -1,19 +1,25 @@
 //!
-//! Solidity operator parsed from source text.
+//! Solidity operator, bridged from slang's typed per-expression operator enums.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Location;
+use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use melior::ir::operation::Operation;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 
-use solx_mlir::Function;
+use solx_mlir::CmpPredicate;
+use solx_mlir::Context;
+use solx_mlir::Pointer;
+use solx_mlir::Type as AstType;
 use solx_mlir::UserDefinedOperator;
+use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::AddOperation;
 use solx_mlir::ods::sol::AndOperation;
 use solx_mlir::ods::sol::CAddOperation;
@@ -25,21 +31,28 @@ use solx_mlir::ods::sol::DivOperation;
 use solx_mlir::ods::sol::ExpOperation;
 use solx_mlir::ods::sol::ModOperation;
 use solx_mlir::ods::sol::MulOperation;
+use solx_mlir::ods::sol::NotOperation;
 use solx_mlir::ods::sol::OrOperation;
 use solx_mlir::ods::sol::ShlOperation;
 use solx_mlir::ods::sol::ShrOperation;
 use solx_mlir::ods::sol::SubOperation;
 use solx_mlir::ods::sol::XorOperation;
 
+use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
+use crate::ast::contract::storage_layout::StateVariableSlot;
+use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_place::EmitPlace;
+use crate::ast::operator_binding::OperatorBindings;
+use crate::ast::place::Place;
 
-/// Solidity operator parsed from source text.
+/// Solidity operator, bridged from slang's typed per-expression operator enums.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operator {
     /// `+`
     Add,
-    /// `-`
+    /// `-`, binary or unary negation
     Subtract,
     /// `*`
     Multiply,
@@ -49,17 +62,6 @@ pub enum Operator {
     Remainder,
     /// `**`
     Exponentiation,
-
-    /// `+=`
-    AddAssign,
-    /// `-=`
-    SubtractAssign,
-    /// `*=`
-    MultiplyAssign,
-    /// `/=`
-    DivideAssign,
-    /// `%=`
-    RemainderAssign,
 
     /// `&`
     BitwiseAnd,
@@ -74,29 +76,6 @@ pub enum Operator {
     /// `~`
     BitwiseNot,
 
-    /// `&=`
-    BitwiseAndAssign,
-    /// `|=`
-    BitwiseOrAssign,
-    /// `^=`
-    BitwiseXorAssign,
-    /// `<<=`
-    ShiftLeftAssign,
-    /// `>>=`
-    ShiftRightAssign,
-
-    /// `==`
-    Equal,
-    /// `!=`
-    NotEqual,
-    /// `>`
-    Greater,
-    /// `>=`
-    GreaterEqual,
-    /// `<`
-    Less,
-    /// `<=`
-    LessEqual,
     /// `!`
     Not,
 
@@ -107,123 +86,9 @@ pub enum Operator {
 }
 
 impl Operator {
-    /// Builds a Sol dialect binary operation via ODS-generated builders.
-    ///
-    /// When `checked` is true, uses checked variants (`sol.cadd`, `sol.csub`,
-    /// `sol.cmul`, `sol.cdiv`, `sol.cexp`) for arithmetic operators. Modulo, bitwise,
-    /// and shift operators are always unchecked. Result type is inferred
-    /// from `lhs` (`SameOperandsAndResultType`).
-    ///
-    /// # Panics
-    ///
-    /// Panics if called on a comparison or assignment operator.
-    pub fn emit_sol_binary_operation<'context>(
-        self,
-        checked: bool,
-        context: &'context melior::Context,
-        location: Location<'context>,
-        lhs: Value<'context, '_>,
-        rhs: Value<'context, '_>,
-    ) -> Operation<'context> {
-        match self {
-            Self::Add | Self::Increment if checked => CAddOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::Add | Self::Increment => AddOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::Subtract | Self::Decrement if checked => {
-                CSubOperation::builder(context, location)
-                    .lhs(lhs)
-                    .rhs(rhs)
-                    .build()
-                    .into()
-            }
-            Self::Subtract | Self::Decrement => SubOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::Multiply if checked => CMulOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::Multiply => MulOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::Divide if checked => CDivOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::Divide => DivOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::Remainder => ModOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::Exponentiation if checked => CExpOperation::builder(context, location)
-                .result(lhs.r#type())
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::Exponentiation => ExpOperation::builder(context, location)
-                .result(lhs.r#type())
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::BitwiseAnd => AndOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::BitwiseOr => OrOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::BitwiseXor => XorOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::ShiftLeft => ShlOperation::builder(context, location)
-                .result(lhs.r#type())
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::ShiftRight => ShrOperation::builder(context, location)
-                .result(lhs.r#type())
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            _ => unreachable!(
-                "emit_sol_binary_operation called on non-arithmetic operator: {self:?}"
-            ),
-        }
-    }
-}
-
-impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// The function bound to `user_operator` for `operand`'s user-defined value type, or `None` when
-    /// the operand is not a bound user-defined value type.
-    pub fn user_defined_operator(
-        &self,
+    /// The function bound to `user_operator` for `operand`'s user-defined value type, or `None` if unbound.
+    pub fn user_defined_operator<'context, 'block>(
+        context: &ExpressionContext<'_, 'context, 'block>,
         operand: &Expression,
         user_operator: UserDefinedOperator,
     ) -> Option<NodeId> {
@@ -233,37 +98,358 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let Definition::UserDefinedValueType(udvt_definition) = udvt_type.definition() else {
             return None;
         };
-        self.state
+        context
+            .state
             .operator_bindings
             .get(&(udvt_definition.node_id(), user_operator))
             .copied()
     }
 
-    /// Emits a `sol.call` to the bound user-defined-operator function `function_id`, coercing each
-    /// argument to its declared parameter type, and returns the single result value.
-    pub fn emit_operator_call(
-        &self,
+    /// Calls the bound user-defined-operator function `function_id`, coercing each argument to its parameter type.
+    pub fn emit_operator_call<'context, 'block>(
+        context: &ExpressionContext<'_, 'context, 'block>,
         function_id: NodeId,
-        argument_values: Vec<Value<'context, 'block>>,
+        argument_values: Vec<AstValue<'context, 'block>>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        let (mlir_name, parameter_types, return_types) = self
-            .state
-            .resolve_function(function_id)
-            .expect("bound operator function resolves to a registered signature");
+        let function = context.state.resolve_function(function_id);
         let argument_values: Vec<_> = argument_values
             .into_iter()
-            .zip(parameter_types)
+            .zip(&function.parameter_types)
             .map(|(value, &parameter_type)| {
-                TypeConversion::from_target_type(parameter_type, self.state).emit(
-                    value,
-                    self.state,
-                    block,
-                )
+                value
+                    .cast(AstType::new(parameter_type), context.state, block)
+                    .into_mlir()
             })
             .collect();
-        let results = Function::call(mlir_name, &argument_values, return_types, self.state, block)
-            .expect("bound operator function call resolves to a registered signature");
+        let results = function.call(&argument_values, context.state, block);
         results.into_iter().next().expect("slang validated")
+    }
+
+    /// Builds a Sol dialect binary operation. Checked mode uses the `sol.c*` arithmetic variants;
+    /// modulo, bitwise, and shift are always unchecked.
+    pub fn emit_sol_binary_operation<'context>(
+        self,
+        mode: ArithmeticMode,
+        context: &Context<'context>,
+        lhs: Value<'context, '_>,
+        rhs: Value<'context, '_>,
+    ) -> Operation<'context> {
+        let checked = matches!(mode, ArithmeticMode::Checked);
+        match self {
+            Self::Add | Self::Increment if checked => {
+                mlir_op_build!(context, CAddOperation.lhs(lhs).rhs(rhs))
+            }
+            Self::Add | Self::Increment => mlir_op_build!(context, AddOperation.lhs(lhs).rhs(rhs)),
+            Self::Subtract | Self::Decrement if checked => {
+                mlir_op_build!(context, CSubOperation.lhs(lhs).rhs(rhs))
+            }
+            Self::Subtract | Self::Decrement => {
+                mlir_op_build!(context, SubOperation.lhs(lhs).rhs(rhs))
+            }
+            Self::Multiply if checked => mlir_op_build!(context, CMulOperation.lhs(lhs).rhs(rhs)),
+            Self::Multiply => mlir_op_build!(context, MulOperation.lhs(lhs).rhs(rhs)),
+            Self::Divide if checked => mlir_op_build!(context, CDivOperation.lhs(lhs).rhs(rhs)),
+            Self::Divide => mlir_op_build!(context, DivOperation.lhs(lhs).rhs(rhs)),
+            Self::Remainder => mlir_op_build!(context, ModOperation.lhs(lhs).rhs(rhs)),
+            Self::Exponentiation if checked => {
+                mlir_op_build!(
+                    context,
+                    CExpOperation.result(lhs.r#type()).lhs(lhs).rhs(rhs)
+                )
+            }
+            Self::Exponentiation => {
+                mlir_op_build!(context, ExpOperation.result(lhs.r#type()).lhs(lhs).rhs(rhs))
+            }
+            Self::BitwiseAnd => mlir_op_build!(context, AndOperation.lhs(lhs).rhs(rhs)),
+            Self::BitwiseOr => mlir_op_build!(context, OrOperation.lhs(lhs).rhs(rhs)),
+            Self::BitwiseXor => mlir_op_build!(context, XorOperation.lhs(lhs).rhs(rhs)),
+            Self::ShiftLeft => {
+                mlir_op_build!(context, ShlOperation.result(lhs.r#type()).lhs(lhs).rhs(rhs))
+            }
+            Self::ShiftRight => {
+                mlir_op_build!(context, ShrOperation.result(lhs.r#type()).lhs(lhs).rhs(rhs))
+            }
+            _ => unreachable!(
+                "emit_sol_binary_operation called on non-arithmetic operator: {self:?}"
+            ),
+        }
+    }
+
+    /// Emits a binary expression `left <op> right` to its result value, dispatching to a bound
+    /// user-defined operator when present. With no `target_type`, the wider operand type is selected.
+    pub fn emit_binary<'context, 'block>(
+        self,
+        context: &ExpressionContext<'_, 'context, 'block>,
+        left: &Expression,
+        right: &Expression,
+        target_type: Option<Type<'context>>,
+        block: BlockRef<'context, 'block>,
+    ) -> (AstValue<'context, 'block>, BlockRef<'context, 'block>) {
+        if let Some(function_id) = OperatorBindings::binary_operator(self)
+            .and_then(|user_operator| Self::user_defined_operator(context, left, user_operator))
+        {
+            let BlockAnd { value: lhs, block } = left.emit(context, block);
+            let BlockAnd { value: rhs, block } = right.emit(context, block);
+            let result = Self::emit_operator_call(context, function_id, vec![lhs, rhs], &block);
+            return (result.into(), block);
+        }
+
+        let BlockAnd { value: lhs, block } = left.emit(context, block);
+        let BlockAnd { value: rhs, block } = right.emit(context, block);
+        let result_type = target_type.unwrap_or_else(|| {
+            let lhs_width = lhs.r#type().integer_bit_width();
+            let rhs_width = rhs.r#type().integer_bit_width();
+            if lhs_width >= rhs_width {
+                lhs.r#type().into_mlir()
+            } else {
+                rhs.r#type().into_mlir()
+            }
+        });
+        let value = self.emit_value_binary(
+            context.arithmetic_mode,
+            context.state,
+            lhs,
+            rhs,
+            result_type,
+            &block,
+        );
+        (value, block)
+    }
+
+    /// Combines already-materialised `lhs`/`rhs` into a value of `result_type`. Bitwise and shift
+    /// ops apply directly to a `bytesN` / `byte` result type; no integer bridge.
+    pub fn emit_value_binary<'context, 'block>(
+        self,
+        mode: ArithmeticMode,
+        context: &Context<'context>,
+        lhs: AstValue<'context, 'block>,
+        rhs: AstValue<'context, 'block>,
+        result_type: Type<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> AstValue<'context, 'block> {
+        let lhs = lhs
+            .cast(AstType::new(result_type), context, block)
+            .into_mlir();
+        let keep_rhs = matches!(
+            self,
+            Operator::Exponentiation | Operator::ShiftLeft | Operator::ShiftRight
+        );
+        let rhs = if keep_rhs {
+            rhs.into_mlir()
+        } else {
+            rhs.cast(AstType::new(result_type), context, block)
+                .into_mlir()
+        };
+
+        let result: Value<'context, 'block> = block
+            .append_operation(self.emit_sol_binary_operation(mode, context, lhs, rhs))
+            .result(0)
+            .expect("binary operation always produces one result")
+            .into();
+        result.into()
+    }
+
+    /// Emits postfix `++` / `--`, returning the old value.
+    pub fn emit_postfix<'context, 'block>(
+        self,
+        context: &ExpressionContext<'_, 'context, 'block>,
+        operand: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> (AstValue<'context, 'block>, BlockRef<'context, 'block>) {
+        let (old, _new, block) = self.emit_increment_decrement(context, operand, block);
+        (old.into(), block)
+    }
+
+    /// Emits prefix operators, dispatching a `-` / `~` on a bound user-defined value type to its
+    /// function. `target_type`, when set, types the operation.
+    pub fn emit_prefix<'context, 'block>(
+        self,
+        context: &ExpressionContext<'_, 'context, 'block>,
+        operand: &Expression,
+        target_type: Option<Type<'context>>,
+        block: BlockRef<'context, 'block>,
+    ) -> (AstValue<'context, 'block>, BlockRef<'context, 'block>) {
+        if let Some(function_id) = OperatorBindings::unary_operator(self)
+            .and_then(|user_operator| Self::user_defined_operator(context, operand, user_operator))
+        {
+            let BlockAnd { value, block } = operand.emit(context, block);
+            let result = Self::emit_operator_call(context, function_id, vec![value], &block);
+            return (result.into(), block);
+        }
+
+        match self {
+            Operator::Increment | Operator::Decrement => {
+                let (_old, new_value, block) =
+                    self.emit_increment_decrement(context, operand, block);
+                (new_value.into(), block)
+            }
+            Operator::BitwiseNot => {
+                let BlockAnd { value, block } = operand.emit(context, block);
+                let operand_type = target_type.expect("slang validated");
+                let value = value
+                    .cast(AstType::new(operand_type), context.state, &block)
+                    .into_mlir();
+                let result: Value<'context, 'block> =
+                    mlir_op!(context.state, block, NotOperation.value(value));
+                (result.into(), block)
+            }
+            Operator::Not => {
+                let BlockAnd { value, block } = operand.emit(context, block);
+                let zero = AstValue::constant(0, value.r#type(), context.state, &block);
+                let cmp = value.compare(zero, CmpPredicate::Eq, context.state, &block);
+                let result_type = target_type.expect("slang validated");
+                let result = cmp.cast(AstType::new(result_type), context.state, &block);
+                (result, block)
+            }
+            Operator::Subtract => {
+                let BlockAnd { value, block } = operand.emit(context, block);
+                let operand_type = target_type.expect("slang validated");
+                let value = value
+                    .cast(AstType::new(operand_type), context.state, &block)
+                    .into_mlir();
+                let zero = AstValue::constant(0, AstType::new(operand_type), context.state, &block)
+                    .into_mlir();
+                let state = context.state;
+                let result: Value<'context, 'block> =
+                    if matches!(context.arithmetic_mode, ArithmeticMode::Checked) {
+                        mlir_op!(state, block, CSubOperation.lhs(zero).rhs(value))
+                    } else {
+                        mlir_op!(state, block, SubOperation.lhs(zero).rhs(value))
+                    };
+                (result.into(), block)
+            }
+            _ => unreachable!("unsupported prefix operator: {self:?}"),
+        }
+    }
+
+    /// Loads an incrementable lvalue, applies the `++` / `--` step, stores it, and returns
+    /// `(old, new, continuation block)`. The operand's expression kind selects the lvalue's place,
+    /// resolved here so neither caller probes for it: an identifier names a variable or
+    /// state-variable slot; an index or member access is a computed pointer that may open a block.
+    fn emit_increment_decrement<'context, 'block>(
+        self,
+        context: &ExpressionContext<'_, 'context, 'block>,
+        operand: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> (
+        Value<'context, 'block>,
+        Value<'context, 'block>,
+        BlockRef<'context, 'block>,
+    ) {
+        match operand {
+            Expression::Identifier(identifier) => {
+                let (old, new_value) =
+                    self.emit_increment_decrement_variable(context, identifier, &block);
+                (old, new_value, block)
+            }
+            Expression::IndexAccessExpression(_) | Expression::MemberAccessExpression(_) => {
+                self.emit_increment_decrement_place(context, operand, block)
+            }
+            _ => unreachable!("unsupported operand for {self:?}"),
+        }
+    }
+
+    /// Loads, increments or decrements, stores, and returns `(old, new)` for a named lvalue: a
+    /// state variable addressed by its storage slot, or a stack variable or parameter by pointer.
+    fn emit_increment_decrement_variable<'context, 'block>(
+        self,
+        context: &ExpressionContext<'_, 'context, 'block>,
+        identifier: &Identifier,
+        block: &BlockRef<'context, 'block>,
+    ) -> (Value<'context, 'block>, Value<'context, 'block>) {
+        match identifier.resolve_to_definition() {
+            Some(Definition::StateVariable(state_variable)) => {
+                let slot = context.storage_layout.slot(state_variable.node_id());
+                let element_type = AstType::resolve_state_variable(
+                    &state_variable.get_type().expect("slang validated"),
+                    context.state,
+                );
+                let old = slot.load(context.state, element_type, block);
+                let new_value = self.emit_step(context, old, element_type, block);
+                slot.store(context.state, new_value, element_type, block);
+                (old, new_value)
+            }
+            Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
+                let pointer = Pointer::new(context.environment.variable(definition.node_id()));
+                let element_type = pointer.pointee();
+                let old = pointer.load(element_type, context.state, block).into_mlir();
+                let new_value = self.emit_step(context, old, element_type.into_mlir(), block);
+                pointer.store(AstValue::new(new_value), context.state, block);
+                (old, new_value)
+            }
+            None => unreachable!("slang resolves every identifier reference"),
+            Some(other) => {
+                unreachable!("unsupported operand for {self:?}: {:?}", other.node_id())
+            }
+        }
+    }
+
+    /// Loads, increments or decrements, stores, and returns `(old, new, continuation block)` for a
+    /// computed lvalue such as `a[i]` or a struct field, whose address may open a new block.
+    fn emit_increment_decrement_place<'context, 'block>(
+        self,
+        context: &ExpressionContext<'_, 'context, 'block>,
+        operand: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> (
+        Value<'context, 'block>,
+        Value<'context, 'block>,
+        BlockRef<'context, 'block>,
+    ) {
+        let (address, element_type, block) = match operand {
+            Expression::IndexAccessExpression(index_access) => {
+                let BlockAnd {
+                    value:
+                        Place {
+                            address,
+                            element_type,
+                        },
+                    block,
+                } = index_access.emit_place(context, block);
+                (address, element_type, block)
+            }
+            Expression::MemberAccessExpression(access) => {
+                let BlockAnd {
+                    value:
+                        Place {
+                            address,
+                            element_type,
+                        },
+                    block,
+                } = access.emit_place(context, block);
+                (address, element_type, block)
+            }
+            _ => unreachable!("a computed increment lvalue is an index or member access"),
+        };
+        let pointer = Pointer::new(address);
+        let old = pointer
+            .load(AstType::new(element_type), context.state, &block)
+            .into_mlir();
+        let new_value = self.emit_step(context, old, element_type, &block);
+        pointer.store(AstValue::new(new_value), context.state, &block);
+        (old, new_value, block)
+    }
+
+    /// Applies the `++` / `--` step to a loaded value: adds or subtracts a typed `1`, honoring the arithmetic mode.
+    fn emit_step<'context, 'block>(
+        self,
+        context: &ExpressionContext<'_, 'context, 'block>,
+        old: Value<'context, 'block>,
+        element_type: Type<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        let one =
+            AstValue::constant(1, AstType::new(element_type), context.state, block).into_mlir();
+        block
+            .append_operation(self.emit_sol_binary_operation(
+                context.arithmetic_mode,
+                context.state,
+                old,
+                one,
+            ))
+            .result(0)
+            .expect("binary operation always produces one result")
+            .into()
     }
 }

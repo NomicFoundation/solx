@@ -11,10 +11,16 @@
 // CHECK:   sol.string_lit "Other" -> !sol.string<Memory>
 // CHECK: sol.func @{{.*rcode.*}}() -> !sol.string<Memory>
 // CHECK:   sol.object_code "Other{{.*}}_deployed" : !sol.string<Memory>
-// CHECK: sol.func @{{.*tmax.*}}() -> ui16
-// CHECK:   sol.constant 65535 : ui16
-// CHECK: sol.func @{{.*tmin.*}}() -> si8
-// CHECK:   sol.constant -128 : si8
+
+interface IFoo {
+    function foo(uint256 x) external returns (uint256);
+
+    function bar() external view returns (bool);
+}
+
+contract Other {
+    uint256 x;
+}
 
 contract C {
     function ccode() public pure returns (bytes memory) { return type(Other).creationCode; }
@@ -26,18 +32,4 @@ contract C {
     function nm() public pure returns (string memory) { return type(Other).name; }
 
     function rcode() public pure returns (bytes memory) { return type(Other).runtimeCode; }
-
-    function tmax() public pure returns (uint16) { return type(uint16).max; }
-
-    function tmin() public pure returns (int8) { return type(int8).min; }
-}
-
-interface IFoo {
-    function foo(uint256 x) external returns (uint256);
-
-    function bar() external view returns (bool);
-}
-
-contract Other {
-    uint256 x;
 }

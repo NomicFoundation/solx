@@ -165,8 +165,8 @@ impl Build {
             if let Some(output) = contract.mlir.as_mut() {
                 match dialect {
                     solx_mlir::Dialect::Sol => {
-                        output.deploy_source.clear();
-                        output.runtime_source.clear();
+                        output.llvm_deploy_source.clear();
+                        output.llvm_runtime_source.clear();
                     }
                     solx_mlir::Dialect::Llvm => {
                         output.sol_source = None;

@@ -3,19 +3,20 @@
 //!
 //! `mlir_op_build!` / `mlir_op!` / `mlir_op_void!` / `mlir_region_op!` collapse the ceremony of an
 //! ODS-generated op builder (the `(context, unknown_location)` head and `.build().into()` tail) so a
-//! site states only the op name and its setters.
+//! site states only the op name and its setters. Ops with optional setters applied conditionally
+//! (`Encode`'s `selector`, `New`'s `salt`, `Emit`'s `signature`), multiple results (`Decode`), or
+//! `sol.try`'s conditional catch regions are built by hand.
 //!
 
 /// Coerces an op-builder setter argument to the type the ODS setter expects.
-///
-/// A local trait rather than `From`/`Into`: the orphan rule forbids implementing `From` for the
-/// foreign melior setter types the domain conversions target, so the macros route every argument
-/// through it. The reflexive impl is the identity for an argument already of the setter's type.
 pub trait IntoOds<T> {
     /// Converts `self` into the setter's argument type.
     fn into_ods(self) -> T;
 }
 
+// A local trait rather than `From`/`Into`: the orphan rule forbids implementing `From` for the
+// foreign melior types the domain conversions target, so the macro routes every setter argument
+// through this trait. The reflexive impl is the identity for an argument already of the setter's type.
 impl<T> IntoOds<T> for T {
     fn into_ods(self) -> T {
         self
@@ -52,8 +53,8 @@ macro_rules! mlir_op {
     };
 }
 
-/// [`mlir_op!`] for a value-less op: a statement or effect such as `sol.store`
-/// or `sol.return`: appends the op ([`mlir_op_build!`]) and yields `()`.
+/// [`mlir_op!`] for a value-less op: a statement or effect such as `sol.transfer`
+/// or `sol.log`: appends the op ([`mlir_op_build!`]) and yields `()`.
 #[macro_export]
 macro_rules! mlir_op_void {
     ($context:expr, $block:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {

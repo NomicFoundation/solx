@@ -45,9 +45,12 @@ impl OperatorBindings {
                 file.ast()
                     .members()
                     .iter()
-                    .filter_map(|member| match member {
-                        SourceUnitMember::UsingDirective(directive) => Some(directive.clone()),
-                        _ => None,
+                    .filter_map(|member| {
+                        if let SourceUnitMember::UsingDirective(directive) = member {
+                            Some(directive)
+                        } else {
+                            None
+                        }
                     })
                     .collect::<Vec<_>>()
             })
@@ -70,7 +73,8 @@ impl OperatorBindings {
                 let Some(first_parameter) = parameters.iter().next() else {
                     continue;
                 };
-                let Some(SlangType::UserDefinedValue(udvt_type)) = first_parameter.get_type() else {
+                let Some(SlangType::UserDefinedValue(udvt_type)) = first_parameter.get_type()
+                else {
                     continue;
                 };
                 let Definition::UserDefinedValueType(udvt_definition) = udvt_type.definition()
@@ -88,7 +92,7 @@ impl OperatorBindings {
         Self { map, functions }
     }
 
-    /// The user-defined binary operator an [`Operator`] binds through, when one exists.
+    /// The user-defined binary operator for an [`Operator`], when one exists.
     pub fn binary_operator(operator: Operator) -> Option<UserDefinedOperator> {
         Some(match operator {
             Operator::Add => UserDefinedOperator::Add,
@@ -103,8 +107,8 @@ impl OperatorBindings {
         })
     }
 
-    /// The user-defined unary operator an [`Operator`] binds through: `Subtract` to `Neg`,
-    /// `BitwiseNot` to `BitNot`.
+    /// The user-defined unary operator for an [`Operator`]: `Subtract` to `Neg`, `BitwiseNot` to
+    /// `BitNot`.
     pub fn unary_operator(operator: Operator) -> Option<UserDefinedOperator> {
         Some(match operator {
             Operator::Subtract => UserDefinedOperator::Neg,
@@ -113,8 +117,7 @@ impl OperatorBindings {
         })
     }
 
-    /// Maps the typed [`UsingOperator`] token to a [`UserDefinedOperator`]: with `arity == 1`, `Minus`
-    /// splits into `Neg` versus `Sub`.
+    /// Maps the typed [`UsingOperator`] token to a [`UserDefinedOperator`]: with `arity == 1`, `Minus` splits into `Neg` versus `Sub`.
     fn map_using_operator(operator: &UsingOperator, arity: usize) -> UserDefinedOperator {
         match operator {
             UsingOperator::Plus(_) => UserDefinedOperator::Add,

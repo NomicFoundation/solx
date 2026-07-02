@@ -8,8 +8,8 @@
 contract C {
     uint256 x;
 
-    constructor(uint256 val) {
-        x = val;
+    constructor(uint256 value) {
+        x = value;
     }
 
     receive() external payable {}

@@ -9,7 +9,6 @@ use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::TypeAttribute;
-use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::Context;
 use crate::Type;
@@ -60,17 +59,54 @@ impl<'context, 'block> Pointer<'context, 'block> {
         ))
     }
 
-    /// A stack slot for `pointee`, default-initialised to the zero of its Solidity `slang_type` via
-    /// [`Value::type_default`].
+    /// A stack slot default-initialised to the zero of `pointee`.
     pub fn default_initialized(
-        slang_type: &SlangType,
         pointee: Type<'context>,
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
         let slot = Self::stack(pointee, context, block);
-        let default = Value::type_default(slang_type, pointee, context, block);
-        slot.store(default, context, block);
+        if pointee.is_array() || pointee.is_struct() || pointee.is_string() {
+            let default = match pointee.data_location() {
+                solx_utils::DataLocation::CallData => {
+                    Value::default_calldata(pointee, context, block)
+                }
+                solx_utils::DataLocation::Storage | solx_utils::DataLocation::Transient => {
+                    Value::default_storage(pointee, context, block)
+                }
+                solx_utils::DataLocation::Memory => Value::malloc(
+                    pointee.into_mlir(),
+                    None,
+                    !pointee.is_string(),
+                    context,
+                    block,
+                ),
+                solx_utils::DataLocation::Stack | solx_utils::DataLocation::Immutable => {
+                    unreachable!("an aggregate default is in memory, storage, or calldata")
+                }
+            };
+            slot.store(default, context, block);
+        } else if !pointee.is_reference() {
+            slot.store(Value::zero(pointee, context, block), context, block);
+        }
+        slot
+    }
+
+    /// A stack slot of `pointee` seeded from the entry block's argument at `argument_index`.
+    pub fn from_argument(
+        pointee: Type<'context>,
+        argument_index: usize,
+        entry_block: &BlockRef<'context, 'block>,
+        context: &Context<'context>,
+    ) -> Self {
+        let slot = Self::stack(pointee, context, entry_block);
+        let argument = Value::new(
+            entry_block
+                .argument(argument_index)
+                .expect("argument index is within the block signature")
+                .into(),
+        );
+        slot.store(argument, context, entry_block);
         slot
     }
 
@@ -131,8 +167,12 @@ impl<'context, 'block> Pointer<'context, 'block> {
 
     /// Deep-copies the reference `value`'s pointee into this place (`sol.copy`): the
     /// reference-to-reference counterpart of the scalar [`Self::store`].
-    pub fn copy_from<B>(self, value: Value<'context, 'block>, context: &Context<'context>, block: &B)
-    where
+    pub fn copy_from<B>(
+        self,
+        value: Value<'context, 'block>,
+        context: &Context<'context>,
+        block: &B,
+    ) where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
@@ -144,8 +184,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
     }
 
     /// Steps to the place of element `element_type` at `index` within this aggregate place (`sol.gep`).
-    /// The result place type comes from [`Type::gep_result_type`]. `no_panic_bounds` marks an index
-    /// whose out-of-bounds access plain-reverts rather than raising `Panic(0x32)`.
+    /// The result place type comes from [`Type::gep_result_type`].
     pub fn gep<B>(
         self,
         index: Value<'context, 'block>,
@@ -201,6 +240,11 @@ impl<'context, 'block> Pointer<'context, 'block> {
     /// The pointer type `!sol.ptr<T, Loc>`.
     pub fn r#type(self) -> Type<'context> {
         Type::new(self.inner.r#type())
+    }
+
+    /// The pointee type `T`.
+    pub fn pointee(self) -> Type<'context> {
+        self.r#type().pointee()
     }
 
     /// The inner melior value, for the op-construction boundary.
