@@ -23,6 +23,9 @@ use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::BalanceOperation;
+use solx_mlir::ods::sol::BareCallOperation;
+use solx_mlir::ods::sol::BareDelegateCallOperation;
+use solx_mlir::ods::sol::BareStaticCallOperation;
 use solx_mlir::ods::sol::BaseFeeOperation;
 use solx_mlir::ods::sol::BlobBaseFeeOperation;
 use solx_mlir::ods::sol::BlockNumberOperation;
@@ -37,6 +40,7 @@ use solx_mlir::ods::sol::ConcatOperation;
 use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::DifficultyOperation;
 use solx_mlir::ods::sol::EncodeOperation;
+use solx_mlir::ods::sol::GasLeftOperation;
 use solx_mlir::ods::sol::GasLimitOperation;
 use solx_mlir::ods::sol::GasPriceOperation;
 use solx_mlir::ods::sol::GetCallDataOperation;
@@ -525,5 +529,93 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             .expect("abi.decode single-result always produces one value")
             .into();
         (value, block)
+    }
+
+    /// Emits `addr.call(data)` / `addr.delegatecall(data)` / `addr.staticcall(data)` as the matching
+    /// `sol.bare_*` operation, yielding the `(bool success, bytes memory returndata)` pair.
+    ///
+    /// The receiver evaluates to an address and the single payload argument is copied into memory,
+    /// since the operation's input rejects a storage- or calldata-sourced operand. Gas is forwarded
+    /// through `sol.gasleft`, and a plain `call` sends a zero value.
+    pub(super) fn emit_bare_call(
+        &self,
+        access: &MemberAccessExpression,
+        kind: BuiltIn,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let context = self.expression_context.state;
+        let BlockAnd { value: address, block } =
+            access.operand().emit(self.expression_context, block);
+        let argument = arguments.iter().next().expect("slang validates the payload argument");
+        let BlockAnd { value: input, block } = argument.emit(self.expression_context, block);
+        let input = AstValue::new(input)
+            .data_loc_cast(AstType::string(context.mlir_context, solx_utils::DataLocation::Memory), context, &block)
+            .into_mlir();
+        let gas = block
+            .append_operation(
+                GasLeftOperation::builder(context.mlir_context, context.location())
+                    .val(AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("gasleft always produces one result")
+            .into();
+        let status_type =
+            AstType::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir();
+        let ret_data_type =
+            AstType::string(context.mlir_context, solx_utils::DataLocation::Memory).into_mlir();
+        let operation: Operation = match kind {
+            BuiltIn::AddressCall => {
+                let value = AstValue::constant(
+                    0,
+                    AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD),
+                    context,
+                    &block,
+                )
+                .into_mlir();
+                BareCallOperation::builder(context.mlir_context, context.location())
+                    .addr(address)
+                    .gas(gas)
+                    .val(value)
+                    .inp(input)
+                    .status(status_type)
+                    .ret_data(ret_data_type)
+                    .build()
+                    .into()
+            }
+            BuiltIn::AddressDelegatecall => {
+                BareDelegateCallOperation::builder(context.mlir_context, context.location())
+                    .addr(address)
+                    .gas(gas)
+                    .inp(input)
+                    .status(status_type)
+                    .ret_data(ret_data_type)
+                    .build()
+                    .into()
+            }
+            BuiltIn::AddressStaticcall => {
+                BareStaticCallOperation::builder(context.mlir_context, context.location())
+                    .addr(address)
+                    .gas(gas)
+                    .inp(input)
+                    .status(status_type)
+                    .ret_data(ret_data_type)
+                    .build()
+                    .into()
+            }
+            _ => unreachable!("bare call kind is call, delegatecall, or staticcall"),
+        };
+        let operation = block.append_operation(operation);
+        let status = operation
+            .result(0)
+            .expect("a bare call always produces a status")
+            .into();
+        let ret_data = operation
+            .result(1)
+            .expect("a bare call always produces return data")
+            .into();
+        (vec![status, ret_data], block)
     }
 }
