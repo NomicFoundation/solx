@@ -4,12 +4,11 @@
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
-use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::CallOptionsExpression;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
-use slang_solidity_v2::ast::PositionalArguments;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::CmpPredicate;
@@ -27,8 +26,8 @@ pub struct TryNewExpression {
     options: Option<CallOptionsExpression>,
     /// The contract being created.
     contract_definition: ContractDefinition,
-    /// The constructor arguments in source order.
-    arguments: PositionalArguments,
+    /// The constructor arguments, ordered against the constructor's parameters.
+    arguments: Vec<Expression>,
 }
 
 impl TryNewExpression {
@@ -57,9 +56,20 @@ impl TryNewExpression {
         let Definition::Contract(contract_definition) = contract_type.definition() else {
             unreachable!("Slang ContractType always references a Contract definition");
         };
-        let ArgumentsDeclaration::PositionalArguments(arguments) = call.arguments() else {
-            unreachable!("a contract creation takes positional constructor arguments");
-        };
+        let parameter_ids: Vec<NodeId> = contract_definition
+            .constructor()
+            .map(|constructor| {
+                constructor
+                    .parameters()
+                    .iter()
+                    .map(|parameter| parameter.node_id())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let arguments = call
+            .arguments()
+            .ordered_by(&parameter_ids)
+            .expect("slang matches every constructor argument to a parameter");
         Some(Self {
             options,
             contract_definition,
@@ -92,10 +102,9 @@ impl TryNewExpression {
             salt = salt_value;
         }
 
-        let ordered_arguments: Vec<Expression> = self.arguments.iter().collect();
         let (contract_value, current_block) = CallContext::new(context).emit_contract_creation(
             &self.contract_definition,
-            &ordered_arguments,
+            &self.arguments,
             call_value,
             salt,
             true,
