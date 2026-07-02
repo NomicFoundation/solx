@@ -12,3 +12,4 @@ pub mod emit_object;
 pub mod emit_place;
 pub mod emit_statement;
 pub mod emit_values;
+pub mod emit_yul;

@@ -66,6 +66,11 @@ impl<'context> Type<'context> {
         })
     }
 
+    /// An opaque `!llvm.ptr`, the pointer type every inline-assembly (Yul) local slot carries.
+    pub fn llvm_ptr(context: &'context melior::Context) -> Self {
+        Self::new(melior::dialect::llvm::r#type::pointer(context, 0))
+    }
+
     /// A `sol::ContractType` for the named contract with the given payability.
     pub fn contract(context: &'context melior::Context, name: &str, payable: bool) -> Self {
         let name_bytes = name.as_bytes();

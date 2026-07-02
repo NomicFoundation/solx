@@ -2,6 +2,7 @@
 //! Statement lowering to MLIR operations.
 //!
 
+pub mod assembly;
 pub mod control_flow;
 pub mod event;
 pub mod revert;
@@ -136,10 +137,7 @@ impl<'context: 'block, 'block> EmitStatement<'context, 'block> for Statement {
             Statement::RevertStatement(inner) => inner.emit(context, block),
             Statement::EmitStatement(inner) => inner.emit(context, block),
             Statement::TryStatement(inner) => inner.emit(context, block),
-            _ => unreachable!(
-                "unsupported statement: {:?}",
-                std::mem::discriminant(self)
-            ),
+            Statement::AssemblyStatement(inner) => inner.emit(context, block),
         }
     }
 }

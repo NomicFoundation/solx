@@ -33,6 +33,7 @@ use crate::ods::sol::CastOperation;
 use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ContractCastOperation;
+use crate::ods::sol::ConvCastOperation;
 use crate::ods::sol::DataLocCastOperation;
 use crate::ods::sol::DefaultCallDataOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
@@ -683,6 +684,31 @@ impl<'context, 'block> Value<'context, 'block> {
             context,
             block,
             CastOperation
+                .inp(self.into_mlir())
+                .out(target_type.into_mlir())
+        ))
+    }
+
+    /// Reinterprets the value's representation as `target_type` via `sol.conv_cast`, e.g. across the
+    /// inline-assembly boundary: a `!sol.ptr<T, Stack>` as the `!llvm.ptr` Yul operates on. A no-op
+    /// when already that type.
+    pub fn reinterpret<B>(
+        self,
+        target_type: Type<'context>,
+        context: &Context<'context>,
+        block: &B,
+    ) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        if self.r#type() == target_type {
+            return self;
+        }
+        Self::new(mlir_op!(
+            context,
+            block,
+            ConvCastOperation
                 .inp(self.into_mlir())
                 .out(target_type.into_mlir())
         ))
