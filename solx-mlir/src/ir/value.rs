@@ -24,6 +24,7 @@ use crate::ods::sol::BytesCastOperation;
 use crate::ods::sol::CastOperation;
 use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConstantOperation;
+use crate::ods::sol::DataLocCastOperation;
 use crate::ods::sol::DefaultCallDataOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::DefaultStorageOperation;
@@ -360,6 +361,30 @@ impl<'context, 'block> Value<'context, 'block> {
             context,
             block,
             EnumCastOperation
+                .inp(self.into_mlir())
+                .out(target_type.into_mlir())
+        ))
+    }
+
+    /// Casts to `target_type` via `sol.data_loc_cast`, relocating a reference value between data
+    /// locations; a no-op when already that type.
+    pub fn data_loc_cast<B>(
+        self,
+        target_type: Type<'context>,
+        context: &Context<'context>,
+        block: &B,
+    ) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        if self.r#type() == target_type {
+            return self;
+        }
+        Self::new(mlir_op!(
+            context,
+            block,
+            DataLocCastOperation
                 .inp(self.into_mlir())
                 .out(target_type.into_mlir())
         ))

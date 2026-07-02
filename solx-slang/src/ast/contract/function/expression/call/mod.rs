@@ -14,6 +14,7 @@ pub mod type_conversion;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
+use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::MemberAccessExpression;
@@ -80,6 +81,16 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
                 }
             }
             CallKind::MemberBuiltinCall(access) => {
+                if let Some(
+                    kind @ (BuiltIn::AddressCall
+                    | BuiltIn::AddressDelegatecall
+                    | BuiltIn::AddressStaticcall),
+                ) = access.member().resolve_to_built_in()
+                {
+                    let (value, block) =
+                        emitter.emit_bare_call(&access, kind, &emitter.positional(&arguments), block);
+                    return BlockAnd { block, value };
+                }
                 let (value, block) = emitter.emit_built_in_member_access(
                     &access,
                     Some(&emitter.positional(&arguments)),
