@@ -3,10 +3,12 @@
 //!
 
 use melior::ir::BlockRef;
-use melior::ir::Value;
-use melior::ir::ValueLike;
 use slang_solidity_v2::ast::Expression;
 use solx_mlir::CmpPredicate;
+use solx_mlir::Effect;
+use solx_mlir::Place;
+use solx_mlir::Type;
+use solx_mlir::Value;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
@@ -29,26 +31,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let common_type = if lhs.r#type() == rhs.r#type() {
             lhs.r#type()
         } else {
-            self.state.builder.types.ui256
+            Type::unsigned(self.state.melior, solx_utils::BIT_LENGTH_FIELD)
         };
-        let lhs = TypeConversion::from_target_type(common_type, &self.state.builder).emit(
-            lhs,
-            &self.state.builder,
-            &block,
-        );
-        let rhs = TypeConversion::from_target_type(common_type, &self.state.builder).emit(
-            rhs,
-            &self.state.builder,
-            &block,
-        );
-        let comparison = self.state.builder.emit_sol_cmp(lhs, rhs, predicate, &block);
+        let lhs =
+            TypeConversion::from_target_type(common_type, self.state).emit(lhs, self.state, &block);
+        let rhs =
+            TypeConversion::from_target_type(common_type, self.state).emit(rhs, self.state, &block);
+        let comparison = lhs.compare(rhs, predicate, self.state, &block);
         Ok((comparison, block))
     }
 
     /// Emits short-circuit `&&` using `sol.if` with an `i1` alloca.
     ///
-    /// Matches solc's pattern: allocate a boolean result variable, default to
-    /// `false`, and only evaluate the RHS when the LHS is true.
+    /// Allocates a boolean result variable, defaults it to `false`, and only
+    /// evaluates the RHS when the LHS is true.
     ///
     /// # Errors
     ///
@@ -62,37 +58,28 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (lhs, block) = self.emit_value(left, block)?;
         let lhs_bool = self.emit_is_nonzero(lhs, &block);
 
-        let i1_type = self.state.builder.types.i1;
-        let result_ptr = self.state.builder.emit_sol_alloca(i1_type, &block);
-        let false_value = self.state.builder.emit_bool(false, &block);
-        self.state
-            .builder
-            .emit_sol_store(false_value, result_ptr, &block);
+        let i1_type = Type::signless(self.state.melior, solx_utils::BIT_LENGTH_BOOLEAN);
+        let result_ptr = Place::stack(i1_type, self.state, &block);
+        let false_value = Value::boolean(false, self.state, &block);
+        result_ptr.store(false_value, self.state, &block);
 
-        let (then_block, else_block) = self.state.builder.emit_sol_if(lhs_bool, &block);
+        let (then_block, else_block) = Effect::new(self.state, block).branch(lhs_bool);
 
-        // Then: LHS was true — evaluate RHS and store result.
         let (rhs, then_end) = self.emit_value(right, then_block)?;
         let rhs_bool = self.emit_is_nonzero(rhs, &then_end);
-        self.state
-            .builder
-            .emit_sol_store(rhs_bool, result_ptr, &then_end);
-        self.state.builder.emit_sol_yield(&then_end);
+        result_ptr.store(rhs_bool, self.state, &then_end);
+        Effect::new(self.state, then_end).r#yield(&[]);
 
-        // Else: LHS was false — result stays false.
-        self.state.builder.emit_sol_yield(&else_block);
+        Effect::new(self.state, else_block).r#yield(&[]);
 
-        let result = self
-            .state
-            .builder
-            .emit_sol_load(result_ptr, i1_type, &block)?;
+        let result = result_ptr.load(i1_type, self.state, &block);
         Ok((result, block))
     }
 
     /// Emits short-circuit `||` using `sol.if` with an `i1` alloca.
     ///
-    /// Matches solc's pattern: allocate a boolean result variable, default to
-    /// `true`, and only evaluate the RHS when the LHS is false.
+    /// Allocates a boolean result variable, defaults it to `true`, and only
+    /// evaluates the RHS when the LHS is false.
     ///
     /// # Errors
     ///
@@ -106,30 +93,21 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (lhs, block) = self.emit_value(left, block)?;
         let lhs_bool = self.emit_is_nonzero(lhs, &block);
 
-        let i1_type = self.state.builder.types.i1;
-        let result_ptr = self.state.builder.emit_sol_alloca(i1_type, &block);
-        let true_value = self.state.builder.emit_bool(true, &block);
-        self.state
-            .builder
-            .emit_sol_store(true_value, result_ptr, &block);
+        let i1_type = Type::signless(self.state.melior, solx_utils::BIT_LENGTH_BOOLEAN);
+        let result_ptr = Place::stack(i1_type, self.state, &block);
+        let true_value = Value::boolean(true, self.state, &block);
+        result_ptr.store(true_value, self.state, &block);
 
-        let (then_block, else_block) = self.state.builder.emit_sol_if(lhs_bool, &block);
+        let (then_block, else_block) = Effect::new(self.state, block).branch(lhs_bool);
 
-        // Then: LHS was true — result stays true.
-        self.state.builder.emit_sol_yield(&then_block);
+        Effect::new(self.state, then_block).r#yield(&[]);
 
-        // Else: LHS was false — evaluate RHS and store result.
         let (rhs, else_end) = self.emit_value(right, else_block)?;
         let rhs_bool = self.emit_is_nonzero(rhs, &else_end);
-        self.state
-            .builder
-            .emit_sol_store(rhs_bool, result_ptr, &else_end);
-        self.state.builder.emit_sol_yield(&else_end);
+        result_ptr.store(rhs_bool, self.state, &else_end);
+        Effect::new(self.state, else_end).r#yield(&[]);
 
-        let result = self
-            .state
-            .builder
-            .emit_sol_load(result_ptr, i1_type, &block)?;
+        let result = result_ptr.load(i1_type, self.state, &block);
         Ok((result, block))
     }
 }

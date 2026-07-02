@@ -10,15 +10,15 @@ pub mod variable_declaration;
 use std::collections::HashMap;
 
 use melior::ir::BlockRef;
-use melior::ir::Region;
-use melior::ir::Type;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Statement;
 use slang_solidity_v2::ast::Statements;
 
 use solx_mlir::Context;
+use solx_mlir::Effect;
 use solx_mlir::Environment;
+use solx_mlir::Type;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
@@ -27,16 +27,12 @@ use crate::ast::contract::function::storage_slot::StorageSlot;
 /// Lowers Solidity statements to MLIR operations with control flow.
 ///
 /// Returns `Some(block)` as the continuation block, or `None` when control
-/// flow has been terminated (by `return`, `break`, or `continue`).
+/// flow has been terminated by `return`, `break`, or `continue`.
 pub struct StatementEmitter<'state, 'context, 'block> {
     /// The shared MLIR context.
     state: &'state Context<'context>,
     /// Variable environment (mutable for new declarations and loop targets).
     environment: &'state mut Environment<'context, 'block>,
-    /// The current region for creating new blocks.
-    /// Stored as a raw pointer to allow switching between Sol op regions
-    /// without lifetime conflicts.
-    region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
     storage_layout: &'state HashMap<NodeId, StorageSlot>,
     /// The function's declared return types, for `emit_return` to cast to.
@@ -52,34 +48,16 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     pub fn new(
         state: &'state Context<'context>,
         environment: &'state mut Environment<'context, 'block>,
-        region: &Region<'context>,
         storage_layout: &'state HashMap<NodeId, StorageSlot>,
         return_types: &'state [Type<'context>],
     ) -> Self {
         Self {
             state,
             environment,
-            region_pointer: region as *const Region<'context>,
             storage_layout,
             return_types,
             checked: true,
         }
-    }
-
-    /// Returns a reference to the current region.
-    ///
-    /// # Safety
-    ///
-    /// The region pointer is valid as long as the MLIR module exists,
-    /// which outlives all emitters.
-    pub fn region(&self) -> &Region<'context> {
-        // SAFETY: The region is owned by the MLIR module and outlives this emitter.
-        unsafe { &*self.region_pointer }
-    }
-
-    /// Switches the current region for emitting into Sol op regions.
-    pub fn set_region(&mut self, region: &Region<'context>) {
-        self.region_pointer = region as *const Region<'context>;
     }
 
     /// Emits MLIR for a statement.
@@ -172,7 +150,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         &self,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        self.state.builder.emit_sol_break(&block);
+        Effect::new(self.state, block).r#break();
         Ok(None)
     }
 
@@ -181,7 +159,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         &self,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        self.state.builder.emit_sol_continue(&block);
+        Effect::new(self.state, block).r#continue();
         Ok(None)
     }
 
@@ -197,7 +175,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let Some(expression) = return_statement.expression() else {
-            self.state.builder.emit_sol_return(&[], &block);
+            Effect::new(self.state, block).r#return(&[]);
             return Ok(None);
         };
 
@@ -232,15 +210,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             .into_iter()
             .zip(self.return_types.iter())
             .map(|(value, &return_type)| {
-                TypeConversion::from_target_type(return_type, &self.state.builder).emit(
-                    value,
-                    &self.state.builder,
-                    &block,
-                )
+                TypeConversion::from_target_type(return_type, self.state)
+                    .emit(value, self.state, &block)
             })
             .collect();
 
-        self.state.builder.emit_sol_return(&cast_values, &block);
+        Effect::new(self.state, block).r#return(&cast_values);
         Ok(None)
     }
 }

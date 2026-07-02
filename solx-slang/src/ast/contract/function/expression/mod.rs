@@ -13,11 +13,7 @@ pub mod storage;
 
 use std::collections::HashMap;
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Type;
-use melior::ir::Value;
-use melior::ir::ValueLike;
 use operator::Operator;
 use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Definition;
@@ -25,11 +21,13 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 
-use solx_mlir::Builder;
 use solx_mlir::CmpPredicate;
 use solx_mlir::Context;
+use solx_mlir::Effect;
 use solx_mlir::Environment;
-use solx_mlir::ods::sol::ThisOperation;
+use solx_mlir::Place;
+use solx_mlir::Type;
+use solx_mlir::Value;
 use solx_utils::DataLocation;
 
 use self::call::type_conversion::TypeConversion;
@@ -68,8 +66,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Emits MLIR for an expression that must produce a value.
     ///
-    /// Delegates to [`Self::emit`] and returns an error for void expressions
-    /// (e.g. calls to functions with no return value).
+    /// Delegates to [`Self::emit`] and returns an error for void expressions.
     pub fn emit_value(
         &self,
         expression: &Expression,
@@ -82,8 +79,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Emits MLIR for an expression, appending operations to `block`.
     ///
-    /// Returns `None` for void expressions (calls with no return value).
-    /// Use [`Self::emit_value`] when a value is required.
+    /// Returns `None` for void expressions. Use [`Self::emit_value`] when a
+    /// value is required.
     ///
     /// # Errors
     ///
@@ -104,10 +101,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let result_type = self
                     .resolve_slang_type(decimal_number.get_type())
                     .expect("binder types every decimal literal node");
-                let constant = self
-                    .state
-                    .builder
-                    .emit_constant(&value, result_type, &block);
+                let constant = Value::constant_from_bigint(&value, result_type, self.state, &block);
                 Ok((Some(constant), block))
             }
             Expression::HexNumberExpression(hex_number) => {
@@ -117,18 +111,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let result_type = self
                     .resolve_slang_type(hex_number.get_type())
                     .expect("binder types every hex literal node");
-                let constant = self
-                    .state
-                    .builder
-                    .emit_constant(&value, result_type, &block);
+                let constant = Value::constant_from_bigint(&value, result_type, self.state, &block);
                 Ok((Some(constant), block))
             }
             Expression::TrueKeyword(_) => {
-                let constant = self.state.builder.emit_bool(true, &block);
+                let constant = Value::boolean(true, self.state, &block);
                 Ok((Some(constant), block))
             }
             Expression::FalseKeyword(_) => {
-                let constant = self.state.builder.emit_bool(false, &block);
+                let constant = Value::boolean(false, self.state, &block);
                 Ok((Some(constant), block))
             }
             Expression::ThisKeyword(_) => {
@@ -136,23 +127,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .state
                     .current_contract_type
                     .ok_or_else(|| anyhow::anyhow!("sol.this emitted outside a contract"))?;
-                let operation = ThisOperation::builder(
-                    self.state.builder.context,
-                    self.state.builder.unknown_location,
-                )
-                .addr(contract_type)
-                .build();
-                let value = block
-                    .append_operation(operation.into())
-                    .result(0)
-                    .expect("sol.this always produces one result")
-                    .into();
+                let value = Value::this(contract_type, self.state, &block);
                 Ok((Some(value), block))
             }
             Expression::StringExpression(string_expression) => {
                 let bytes = string_expression.value();
                 let text = std::str::from_utf8(&bytes).expect("string literal is valid UTF-8");
-                let value = self.state.builder.emit_sol_string_lit(text, &block);
+                let value = Value::string_literal(text, self.state, &block);
                 Ok((Some(value), block))
             }
             Expression::Identifier(identifier) => {
@@ -168,33 +149,25 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         let declared_type = state_variable.get_type().ok_or_else(|| {
                             anyhow::anyhow!("unresolved type for state variable: {name}")
                         })?;
-                        let element_type = TypeConversion::resolve_slang_type(
-                            &declared_type,
-                            None,
-                            &self.state.builder,
-                        );
-                        let address = self.state.builder.emit_sol_addr_of(
+                        let element_type =
+                            TypeConversion::resolve_slang_type(&declared_type, None, self.state);
+                        let address = Place::addr_of(
                             &slot.name,
                             Self::address_type(
-                                &self.state.builder,
+                                self.state,
                                 element_type,
                                 DataLocation::Storage,
                                 &declared_type,
                             ),
+                            self.state,
                             &block,
                         );
-                        let value =
-                            self.state
-                                .builder
-                                .emit_sol_load(address, element_type, &block)?;
+                        let value = address.load(element_type, self.state, &block);
                         Ok((Some(value), block))
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                         let (pointer, element_type) = self.environment.variable_with_type(&name);
-                        let value =
-                            self.state
-                                .builder
-                                .emit_sol_load(pointer, element_type, &block)?;
+                        let value = pointer.load(element_type, self.state, &block);
                         Ok((Some(value), block))
                     }
                     Some(Definition::Constant(constant)) => {
@@ -337,7 +310,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
             Expression::TupleExpression(tuple) => {
                 let items = tuple.items();
-                // TODO: support multi-value tuples (e.g. tuple deconstruction)
+                // TODO: support multi-value tuple expressions.
                 anyhow::ensure!(items.len() == 1, "multi-value tuples not yet supported");
                 let item = items.iter().next().expect("length checked to be 1 above");
                 let inner = item
@@ -348,37 +321,32 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::ConditionalExpression(conditional) => {
                 let result_type = self
                     .resolve_slang_type(conditional.get_type())
-                    .unwrap_or(self.state.builder.types.ui256);
+                    .unwrap_or_else(|| {
+                        Type::unsigned(self.state.melior, solx_utils::BIT_LENGTH_FIELD)
+                    });
                 let condition = conditional.operand();
                 let (condition_value, block) = self.emit_value(&condition, block)?;
                 let condition_boolean = self.emit_is_nonzero(condition_value, &block);
 
-                let result_slot = self.state.builder.emit_sol_alloca(result_type, &block);
+                let result_slot = Place::stack(result_type, self.state, &block);
                 let (then_block, else_block) =
-                    self.state.builder.emit_sol_if(condition_boolean, &block);
+                    Effect::new(self.state, block).branch(condition_boolean);
 
                 let true_expression = conditional.true_expression();
                 let (then_value, then_end) = self.emit_value(&true_expression, then_block)?;
-                let then_cast = TypeConversion::from_target_type(result_type, &self.state.builder)
-                    .emit(then_value, &self.state.builder, &then_end);
-                self.state
-                    .builder
-                    .emit_sol_store(then_cast, result_slot, &then_end);
-                self.state.builder.emit_sol_yield(&then_end);
+                let then_cast = TypeConversion::from_target_type(result_type, self.state)
+                    .emit(then_value, self.state, &then_end);
+                result_slot.store(then_cast, self.state, &then_end);
+                Effect::new(self.state, then_end).r#yield(&[]);
 
                 let false_expression = conditional.false_expression();
                 let (else_value, else_end) = self.emit_value(&false_expression, else_block)?;
-                let else_cast = TypeConversion::from_target_type(result_type, &self.state.builder)
-                    .emit(else_value, &self.state.builder, &else_end);
-                self.state
-                    .builder
-                    .emit_sol_store(else_cast, result_slot, &else_end);
-                self.state.builder.emit_sol_yield(&else_end);
+                let else_cast = TypeConversion::from_target_type(result_type, self.state)
+                    .emit(else_value, self.state, &else_end);
+                result_slot.store(else_cast, self.state, &else_end);
+                Effect::new(self.state, else_end).r#yield(&[]);
 
-                let result = self
-                    .state
-                    .builder
-                    .emit_sol_load(result_slot, result_type, &block)?;
+                let result = result_slot.load(result_type, self.state, &block);
 
                 Ok((Some(result), block))
             }
@@ -394,21 +362,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         std::mem::discriminant(&result_slang_type)
                     ),
                 };
-                let builder = &self.state.builder;
                 let array_type =
-                    TypeConversion::resolve_slang_type(&result_slang_type, None, builder);
+                    TypeConversion::resolve_slang_type(&result_slang_type, None, self.state);
                 let element_type =
-                    TypeConversion::resolve_slang_type(&element_slang_type, None, builder);
+                    TypeConversion::resolve_slang_type(&element_slang_type, None, self.state);
                 let mut element_values = Vec::new();
                 let mut current = block;
                 for item in array_expression.items().iter() {
                     let (value, next) = self.emit_value(&item, current)?;
-                    let cast_value = TypeConversion::from_target_type(element_type, builder)
-                        .emit(value, builder, &next);
+                    let cast_value = TypeConversion::from_target_type(element_type, self.state)
+                        .emit(value, self.state, &next);
                     element_values.push(cast_value);
                     current = next;
                 }
-                let value = builder.emit_sol_array_lit(&element_values, array_type, &current);
+                let value = Value::array_literal(&element_values, array_type, self.state, &current);
                 Ok((Some(value), current))
             }
             Expression::MemberAccessExpression(access) => {
@@ -432,23 +399,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Emits a `sol.cmp ne 0` producing `i1` from a value.
     ///
-    /// Short-circuits when the value is already `i1` (e.g. from `sol.cmp`),
-    /// avoiding the redundant `sol.cmp ne, %i1, %zero_i1 : i1` pattern.
+    /// Short-circuits when the value is already `i1`, avoiding the redundant
+    /// `sol.cmp ne, %i1, %zero_i1 : i1` pattern.
     pub fn emit_is_nonzero(
         &self,
         value: Value<'context, 'block>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        if solx_mlir::TypeFactory::integer_bit_width(value.r#type()) == 1 {
+        if value.r#type().is_integer()
+            && value.r#type().integer_bit_width() == solx_utils::BIT_LENGTH_BOOLEAN as u32
+        {
             return value;
         }
-        let zero = self
-            .state
-            .builder
-            .emit_sol_constant(0, value.r#type(), block);
-        self.state
-            .builder
-            .emit_sol_cmp(value, zero, CmpPredicate::Ne, block)
+        let zero = Value::constant(0, value.r#type(), self.state, block);
+        value.compare(zero, CmpPredicate::Ne, self.state, block)
     }
 
     /// Resolves the Solidity type from Slang to an MLIR type.
@@ -457,17 +421,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// `node.get_type()` if the node doesn't have typing information, for example when
     /// there are unresolved references or semantic errors.
     /// Panics on types that `TypeConversion::resolve_slang_type` does not yet handle.
-    // TODO: slang's binder does not fold binary expressions of literal operands —
-    // its typing rules return the type of one operand (e.g. type of the left
-    // operand for shifts), so `1 << 100` gets typed as ui8 (the type of `1`)
-    // and constant subexpressions overflow at that width. solc folds via
-    // `RationalNumberType::binaryOperatorResult`, sizing the result to fit the
-    // folded value. Either teach slang to fold, or fold here before lowering.
+    // TODO: slang's binder does not fold binary expressions of literal operands;
+    // its typing rules return the type of one operand, so `1 << 100` gets typed
+    // as ui8 and constant subexpressions overflow at that width. Either teach
+    // slang to fold, or fold here before lowering.
     pub fn resolve_slang_type(&self, slang_type: Option<SlangType>) -> Option<Type<'context>> {
         Some(TypeConversion::resolve_slang_type(
             &slang_type?,
             None,
-            &self.state.builder,
+            self.state,
         ))
     }
 
@@ -478,7 +440,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// `CallData`, the result address IS the element type rather than a
     /// pointer to it.
     fn address_type(
-        builder: &Builder<'context>,
+        context: &Context<'context>,
         element_type: Type<'context>,
         base_location: DataLocation,
         result_type: &SlangType,
@@ -491,7 +453,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         {
             element_type
         } else {
-            builder.types.pointer(element_type, base_location)
+            Type::pointer(context.melior, element_type, base_location)
         }
     }
 }

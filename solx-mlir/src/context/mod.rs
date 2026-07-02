@@ -1,12 +1,8 @@
 //!
 //! MLIR compilation context for EVM code generation.
 //!
-//! Provides the [`Context`] type that owns the MLIR module and provides
-//! helpers for creating common MLIR types, SSA naming, and function
-//! registration. Emission methods live in the [`builder`] child module.
-//!
 
-pub mod builder;
+pub mod contract;
 pub mod environment;
 pub mod function;
 
@@ -19,30 +15,26 @@ use melior::ir::AttributeLike;
 use melior::ir::BlockLike;
 use melior::ir::Location;
 use melior::ir::Module;
-use melior::ir::Type;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationLike;
 use melior::ir::operation::OperationMutLike;
 use melior::pass::PassManager;
 use slang_solidity_v2::ast::NodeId;
 
+use crate::Type;
 use crate::llvm_module::RawLlvmModule;
 
-use self::builder::Builder;
 use self::function::Function;
 
 /// Accumulated MLIR state threaded through the AST visitors.
 ///
-/// Owns a `melior::ir::Module` being populated and provides helpers for
-/// creating common MLIR types, SSA naming, and function registration.
-/// Also provides pass pipeline execution and LLVM translation.
-///
-/// Mirrors the single-context pattern used by `solx-codegen-evm`.
+/// Owns a `melior::ir::Module` being populated, and provides function registration, pass pipeline
+/// execution, and LLVM translation. Emission is expressed through the [`crate::ir`] entity API.
 pub struct Context<'context> {
+    /// The MLIR context with all dialects and translations registered.
+    pub melior: &'context melior::Context,
     /// The MLIR module being built.
     pub module: Module<'context>,
-    /// Cached MLIR types and emission methods.
-    pub builder: Builder<'context>,
     /// Resolution metadata keyed by the AST definition id of each function.
     pub function_signatures: HashMap<NodeId, Function<'context>>,
     /// The MLIR type of the contract currently being emitted, used to type
@@ -51,12 +43,8 @@ pub struct Context<'context> {
 }
 
 impl<'context> Context<'context> {
-    // ---- Private constants ----
-
     /// MLIR `builtin.module` operation name used to locate nested modules.
     const BUILTIN_MODULE: &'static str = "builtin.module";
-
-    // ==== Phase 1: Context creation ====
 
     /// Creates a fully-initialized `melior::Context` with all upstream
     /// dialects, Sol dialect, Yul dialect, and LLVM translation interfaces
@@ -65,13 +53,10 @@ impl<'context> Context<'context> {
     /// `register_all_llvm_translations` MUST be called before any
     /// MLIR-to-LLVM translation. Without it, `mlirTranslateModuleToLLVMIR`
     /// returns null. This function enforces that invariant.
-    pub fn create_mlir_context() -> melior::Context {
+    pub fn create_melior_context() -> melior::Context {
         let registry = DialectRegistry::new();
         melior::utility::register_all_dialects(&registry);
 
-        // SAFETY: FFI calls to register Sol and Yul dialects into the
-        // registry. The registry and dialect handles are valid C objects
-        // produced by the MLIR C API; no aliasing or lifetime issues.
         unsafe {
             crate::ffi::mlirDialectHandleInsertDialect(
                 crate::ffi::mlirGetDialectHandle__sol__(),
@@ -83,47 +68,33 @@ impl<'context> Context<'context> {
             );
         }
 
-        let context = melior::Context::new();
-        context.append_dialect_registry(&registry);
-        context.load_all_available_dialects();
-        melior::utility::register_all_llvm_translations(&context);
+        let melior = melior::Context::new();
+        melior.append_dialect_registry(&registry);
+        melior.load_all_available_dialects();
+        melior::utility::register_all_llvm_translations(&melior);
 
-        // Register Sol dialect passes so they can be added to a PassManager.
-        // `Once` guarantees single-threaded, one-time execution.
         static REGISTER_PASSES: Once = Once::new();
-        // SAFETY: `mlirRegisterSolPasses` is idempotent within a single
-        // call but must not be called concurrently. `Once` provides full
-        // happens-before ordering and guards against concurrent execution.
         REGISTER_PASSES.call_once(|| unsafe {
             crate::ffi::mlirRegisterSolPasses();
         });
 
-        context
+        melior
     }
-
-    // ==== Phase 2: Module construction ====
 
     /// Creates a new MLIR state with an empty module.
     ///
     /// Sets the `sol.evm_version` module attribute required by the
     /// `convert-sol-to-yul` pass.
-    pub fn new(context: &'context melior::Context, evm_version: solx_utils::EVMVersion) -> Self {
-        let location = Location::unknown(context);
+    pub fn new(melior: &'context melior::Context, evm_version: solx_utils::EVMVersion) -> Self {
+        let location = Location::unknown(melior);
         let module = Module::new(location);
 
-        // Set the EVM version attribute on the module — required by the
-        // Sol-to-Yul conversion pass.
-        // SAFETY: `solxCreateEvmVersionAttr` returns a valid MlirAttribute
-        // from the C++ Sol dialect. The context pointer is valid.
         let evm_version_attribute = unsafe {
             Attribute::from_raw(crate::ffi::solxCreateEvmVersionAttr(
-                context.to_raw(),
+                melior.to_raw(),
                 evm_version.into_sol_dialect_identifier(),
             ))
         };
-        // SAFETY: Setting a named attribute on the module operation. Both
-        // the operation and attribute are valid MLIR objects owned by this
-        // context.
         unsafe {
             mlir_sys::mlirOperationSetAttributeByName(
                 module.as_operation().to_raw(),
@@ -134,13 +105,9 @@ impl<'context> Context<'context> {
 
         let target = solx_utils::Target::EVM;
         let data_layout_attr: Attribute<'_> =
-            StringAttribute::new(context, target.data_layout()).into();
+            StringAttribute::new(melior, target.data_layout()).into();
         let target_triple_attr: Attribute<'_> =
-            StringAttribute::new(context, target.triple()).into();
-        // SAFETY: Setting llvm.data_layout and llvm.target_triple on the
-        // module. Both are string attributes required by the LLVM translation
-        // layer. The module operation and attribute values are valid MLIR
-        // objects owned by this context.
+            StringAttribute::new(melior, target.triple()).into();
         unsafe {
             mlir_sys::mlirOperationSetAttributeByName(
                 module.as_operation().to_raw(),
@@ -155,28 +122,33 @@ impl<'context> Context<'context> {
         }
 
         Self {
+            melior,
             module,
             function_signatures: HashMap::new(),
-            builder: Builder::new(context),
             current_contract_type: None,
         }
+    }
+
+    /// The unknown source location.
+    pub fn location(&self) -> Location<'context> {
+        Location::unknown(self.melior)
     }
 
     /// Registers a function signature keyed by its AST definition id.
     pub fn register_function_signature(
         &mut self,
-        definition_id: NodeId,
+        definition_node_id: NodeId,
         mlir_name: String,
         parameter_types: Vec<Type<'context>>,
         return_types: Vec<Type<'context>>,
     ) {
         let previous = self.function_signatures.insert(
-            definition_id,
+            definition_node_id,
             Function::new(mlir_name, parameter_types, return_types),
         );
         debug_assert!(
             previous.is_none(),
-            "duplicate function signature registration for definition {definition_id:?}",
+            "duplicate function signature registration for definition {definition_node_id:?}",
         );
     }
 
@@ -190,13 +162,13 @@ impl<'context> Context<'context> {
     /// Returns an error if the definition was not registered.
     pub fn resolve_function(
         &self,
-        definition_id: NodeId,
+        definition_node_id: NodeId,
     ) -> anyhow::Result<(&str, &[Type<'context>], &[Type<'context>])> {
         let function = self
             .function_signatures
-            .get(&definition_id)
+            .get(&definition_node_id)
             .ok_or_else(|| {
-                anyhow::anyhow!("undefined function for definition {definition_id:?}")
+                anyhow::anyhow!("undefined function for definition {definition_node_id:?}")
             })?;
         Ok((
             function.mlir_name.as_str(),
@@ -205,35 +177,27 @@ impl<'context> Context<'context> {
         ))
     }
 
-    // ==== Phase 3: Sol pass pipeline ====
-
     /// Run the Sol-to-LLVM conversion pass pipeline on a module in-place.
     ///
     /// The pass pipeline is:
-    /// 1. `convert-sol-to-yul` — Sol → Yul
-    /// 2. `convert-yul-to-std` — Yul → func/arith/scf/cf/LLVM
+    /// 1. `convert-sol-to-yul`: Sol → Yul
+    /// 2. `convert-yul-to-std`: Yul → func/arith/scf/cf/LLVM
     /// 3. `convert-scf-to-cf`
     /// 4. `convert-func-to-llvm`
     /// 5. `convert-arith-to-llvm`
     /// 6. `convert-cf-to-llvm`
     /// 7. `reconcile-unrealized-casts`
     ///
-    /// Modifier lowering and LICM are skipped — they operate on `sol.modifier`
+    /// Modifier lowering and LICM are skipped: they operate on `sol.modifier`
     /// and `sol.while`/`sol.for` ops which are not yet emitted.
     ///
     /// # Errors
     ///
     /// Returns an error if any pass in the pipeline fails.
-    pub fn run_sol_passes(context: &melior::Context, module: &mut Module) -> anyhow::Result<()> {
-        let pass_manager = PassManager::new(context);
+    pub fn run_sol_passes(melior: &melior::Context, module: &mut Module) -> anyhow::Result<()> {
+        let pass_manager = PassManager::new(melior);
         pass_manager.enable_verifier(true);
 
-        // TODO: the canonicalizer pass causes an infinite loop on complex
-        // loop tests (e.g. loop/complex/1.sol) at the -Oz optimization level.
-        //
-        // SAFETY: Each `mlirCreate*Pass` returns a freshly allocated pass
-        // object. `Pass::from_raw` takes ownership. The pass manager runs
-        // them sequentially on the module. No aliasing or use-after-free.
         unsafe {
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateTransformsCanonicalizer(),
@@ -279,11 +243,11 @@ impl<'context> Context<'context> {
     /// ```text
     /// module @Contract { deploy __entry + module @Contract_deployed { runtime __entry } }
     /// ```
-    /// The inner module (matched by `runtime_code_identifier`) is detached
+    /// The inner module, matched by `runtime_code_identifier`, is detached
     /// from the outer and stringified separately, so each can be translated
     /// to its own LLVM IR module by `solx-codegen-evm` and emit its own
     /// bytecode segment. The Sol-pass-generated outer carries the deploy
-    /// entry that runs the constructor and returns the runtime bytecode —
+    /// entry that runs the constructor and returns the runtime bytecode;
     /// it replaces the synthetic `minimal_deploy_code` wrapper that
     /// `solx-core` uses for non-MLIR pipelines.
     ///
@@ -298,17 +262,10 @@ impl<'context> Context<'context> {
     ) -> anyhow::Result<crate::output::MlirOutput> {
         let mut module = self.module;
 
-        // Capture the Sol dialect MLIR before lowering, if requested.
         let sol_source = capture_sol.then(|| module.as_operation().to_string());
 
-        // Lower Sol → LLVM dialect.
-        Self::run_sol_passes(self.builder.context, &mut module)?;
+        Self::run_sol_passes(self.melior, &mut module)?;
 
-        // Detach the inner runtime module so the deploy text doesn't carry
-        // a duplicate copy and the deploy LLVM IR translation doesn't redo
-        // runtime codegen. The deploy entry still references the runtime
-        // via `evm.datasize`/`evm.dataoffset` metadata, which the linker
-        // resolves through the runtime object's identifier.
         let runtime_llvm = Self::take_nested_module_text(&mut module, runtime_code_identifier)?;
         let deploy_llvm = module.as_operation().to_string();
 
@@ -343,8 +300,6 @@ impl<'context> Context<'context> {
         .ok_or_else(|| anyhow::anyhow!("no module with sym_name `{target}` in Sol pass output"))
     }
 
-    // ==== Phase 4: LLVM translation ====
-
     /// Translate MLIR source text (LLVM dialect) to raw LLVM pointers.
     ///
     /// Parses the source, verifies it, and translates to LLVM IR.
@@ -355,21 +310,16 @@ impl<'context> Context<'context> {
     /// Returns an error if the source cannot be parsed, fails verification,
     /// or cannot be translated to LLVM IR.
     pub fn translate_source_to_llvm(
-        context: &melior::Context,
+        melior: &melior::Context,
         source: &str,
     ) -> anyhow::Result<RawLlvmModule> {
-        let module = Module::parse(context, source)
+        let module = Module::parse(melior, source)
             .ok_or_else(|| anyhow::anyhow!("failed to parse MLIR source text"))?;
 
         if !module.as_operation().verify() {
             anyhow::bail!("MLIR module verification failed");
         }
 
-        // SAFETY: `raw_operation` is a valid MlirOperation from a verified
-        // module. `LLVMContextCreate` returns a fresh context. The LLVM
-        // translation is safe because `register_all_llvm_translations` was
-        // called in `create_mlir_context()`. Null-check guards the module
-        // pointer.
         unsafe {
             let raw_operation = module.as_operation().to_raw();
             let llvm_context = inkwell::llvm_sys::core::LLVMContextCreate();
@@ -379,10 +329,7 @@ impl<'context> Context<'context> {
 
             if llvm_module.is_null() {
                 inkwell::llvm_sys::core::LLVMContextDispose(llvm_context);
-                anyhow::bail!(
-                    "mlirTranslateModuleToLLVMIR returned null — \
-                     ensure register_all_llvm_translations was called"
-                );
+                anyhow::bail!("mlirTranslateModuleToLLVMIR returned null");
             }
 
             Ok(RawLlvmModule {

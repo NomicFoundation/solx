@@ -8,6 +8,10 @@ use slang_solidity_v2::ast::SingleTypedDeclaration;
 use slang_solidity_v2::ast::VariableDeclarationStatement;
 use slang_solidity_v2::ast::VariableDeclarationTarget;
 
+use solx_mlir::Place;
+use solx_mlir::Type;
+use solx_mlir::Value;
+
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::CallEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
@@ -39,10 +43,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let declared_type = declaration
             .declaration()
             .get_type()
-            .map(|slang_type| {
-                TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
-            })
-            .unwrap_or_else(|| self.state.builder.types.ui256);
+            .map(|slang_type| TypeConversion::resolve_slang_type(&slang_type, None, self.state))
+            .unwrap_or_else(|| Type::unsigned(self.state.melior, solx_utils::BIT_LENGTH_FIELD));
 
         let emitter = ExpressionEmitter::new(
             self.state,
@@ -51,31 +53,23 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             self.checked,
         );
 
-        // For explicit initializers, evaluate and cast before alloca to match
-        // solc's emission order (constant → cast → alloca → store).
-        // For implicit zero-initialization, alloca is emitted first.
-        let (block, initial_value) = if let Some(ref initializer_expression) = declaration.value() {
-            let (initial_value, block) = emitter.emit_value(initializer_expression, block)?;
-            let cast_value = TypeConversion::from_target_type(
-                declared_type,
-                &emitter.state.builder,
-            )
-            .emit(initial_value, &emitter.state.builder, &block);
-            (block, Some(cast_value))
-        } else {
-            (block, None)
-        };
+        let (block, initial_value) =
+            if let Some(ref initializer_expression) = declaration.value() {
+                let (initial_value, block) = emitter.emit_value(initializer_expression, block)?;
+                let cast_value = TypeConversion::from_target_type(declared_type, emitter.state)
+                    .emit(initial_value, emitter.state, &block);
+                (block, Some(cast_value))
+            } else {
+                (block, None)
+            };
 
-        let pointer = emitter.state.builder.emit_sol_alloca(declared_type, &block);
+        let pointer = Place::stack(declared_type, emitter.state, &block);
 
         if let Some(value) = initial_value {
-            emitter.state.builder.emit_sol_store(value, pointer, &block);
-        } else if melior::ir::r#type::IntegerType::try_from(declared_type).is_ok() {
-            let zero = self
-                .state
-                .builder
-                .emit_sol_constant(0, declared_type, &block);
-            emitter.state.builder.emit_sol_store(zero, pointer, &block);
+            pointer.store(value, emitter.state, &block);
+        } else if declared_type.is_integer() {
+            let zero = Value::constant(0, declared_type, self.state, &block);
+            pointer.store(zero, emitter.state, &block);
         } else {
             unimplemented!("zero-initialization for non-integer type {declared_type}");
         }
@@ -139,19 +133,17 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
         for (member, value) in elements.iter().zip(values) {
             let Some(declaration) = member.member() else {
-                // Discard the value; nothing to bind.
                 continue;
             };
             let name = declaration.name().name();
-            let builder = &self.state.builder;
             let declared_type = declaration
                 .get_type()
-                .map(|slang_type| TypeConversion::resolve_slang_type(&slang_type, None, builder))
-                .unwrap_or_else(|| builder.types.ui256);
-            let cast = TypeConversion::from_target_type(declared_type, builder)
-                .emit(value, builder, &current);
-            let pointer = builder.emit_sol_alloca(declared_type, &current);
-            builder.emit_sol_store(cast, pointer, &current);
+                .map(|slang_type| TypeConversion::resolve_slang_type(&slang_type, None, self.state))
+                .unwrap_or_else(|| Type::unsigned(self.state.melior, solx_utils::BIT_LENGTH_FIELD));
+            let cast = TypeConversion::from_target_type(declared_type, self.state)
+                .emit(value, self.state, &current);
+            let pointer = Place::stack(declared_type, self.state, &current);
+            pointer.store(cast, self.state, &current);
             self.environment
                 .define_variable(name, pointer, declared_type);
         }

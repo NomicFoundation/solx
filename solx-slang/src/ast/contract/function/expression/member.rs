@@ -3,13 +3,13 @@
 //!
 
 use melior::ir::BlockRef;
-use melior::ir::Type;
-use melior::ir::Value;
-use melior::ir::ValueLike;
-use melior::ir::r#type::TypeLike;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
+
+use solx_mlir::Place;
+use solx_mlir::Type;
+use solx_mlir::Value;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 
@@ -18,8 +18,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// `sol.load` of the addressed field unless the field already IS the
     /// value (non-ptr-ref-in-storage rule).
     ///
-    /// Returns `Ok(None)` when the base is not a struct (e.g. `msg.sender`),
-    /// so the caller can fall back to built-in member access lowering.
+    /// Returns `Ok(None)` when the base is not a struct, so the caller can
+    /// fall back to built-in member access lowering.
     pub fn emit_struct_field(
         &self,
         access: &MemberAccessExpression,
@@ -29,10 +29,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         else {
             return Ok(None);
         };
-        let value = self
-            .state
-            .builder
-            .emit_sol_load(address, element_type, &block)?;
+        let value = address.load(element_type, self.state, &block);
         Ok(Some((value, block)))
     }
 
@@ -48,7 +45,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<
         Option<(
-            Value<'context, 'block>,
+            Place<'context, 'block>,
             Type<'context>,
             BlockRef<'context, 'block>,
         )>,
@@ -69,18 +66,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .ok_or_else(|| anyhow::anyhow!("unknown struct member: {member_name}"))?;
 
         let (base_value, block) = self.emit_value(&base, block)?;
-        let builder = &self.state.builder;
 
-        let index_value = builder.emit_sol_constant(field_index as i64, builder.types.ui64, &block);
-        // SAFETY: `mlirSolGetEltType` returns a valid MlirType from
-        // `sol::getEltType` on the C++ side.
-        let element_type = unsafe {
-            Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
-                base_value.r#type().to_raw(),
-                field_index as u64,
-            ))
-        };
-        let address = builder.emit_sol_gep(base_value, index_value, element_type, &block);
+        let index_value = Value::constant(
+            field_index as i64,
+            Type::unsigned(self.state.melior, solx_utils::BIT_LENGTH_X64),
+            self.state,
+            &block,
+        );
+        let element_type = base_value.r#type().element_type(field_index as u64);
+        let address = Place::from(base_value).gep(index_value, element_type, self.state, &block);
         Ok(Some((address, element_type, block)))
     }
 }
