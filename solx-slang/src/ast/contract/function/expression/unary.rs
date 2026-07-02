@@ -26,6 +26,7 @@ use crate::ast::contract::function::expression::call::type_conversion::TypeConve
 use crate::ast::contract::function::expression::operator::Operator;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_place::EmitPlace;
+use crate::ast::operator_binding::OperatorBindings;
 use crate::ast::place::Place;
 
 expression_emit!(PostfixExpression; |node, context, block| {
@@ -87,6 +88,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Value<'context, 'block>> {
+        if let Some(function_id) = OperatorBindings::unary_operator(operator)
+            .and_then(|user_operator| self.user_defined_operator(operand, user_operator))
+        {
+            let BlockAnd { value, block } = operand.emit(self, block);
+            let value = self.emit_operator_call(function_id, vec![value], &block);
+            return BlockAnd { block, value };
+        }
         match operator {
             Operator::Increment | Operator::Decrement => {
                 if let Some((_old, new_value, block)) =

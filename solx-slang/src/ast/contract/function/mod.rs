@@ -325,6 +325,15 @@ impl EmitFunction for FunctionDefinition {
                         &function_entry_block,
                     );
                     pointer.store(zero, emitter.state, &function_entry_block);
+                } else if matches!(&slang_type, ast::Type::Enum(_)) {
+                    let zero = AstValue::constant(
+                        0,
+                        AstType::unsigned(emitter.state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
+                        emitter.state,
+                        &function_entry_block,
+                    )
+                    .enum_cast(AstType::new(return_type), emitter.state, &function_entry_block);
+                    pointer.store(zero, emitter.state, &function_entry_block);
                 } else {
                     unimplemented!(
                         "zero-initialization for non-integer named return: {return_type}"

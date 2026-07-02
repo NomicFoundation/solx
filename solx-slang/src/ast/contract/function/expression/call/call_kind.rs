@@ -63,7 +63,10 @@ impl CallKind {
             return Self::IdentifierBuiltinCall;
         }
         if let Expression::MemberAccessExpression(access) = callee
-            && matches!(access.member().resolve_to_built_in(), Some(BuiltIn::AbiDecode))
+            && matches!(
+                access.member().resolve_to_built_in(),
+                Some(BuiltIn::AbiDecode | BuiltIn::Wrap | BuiltIn::Unwrap)
+            )
         {
             return Self::IdentifierBuiltinCall;
         }

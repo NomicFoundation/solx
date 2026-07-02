@@ -4,6 +4,7 @@
 
 pub mod environment;
 pub mod function;
+pub mod user_defined_operator;
 
 use std::cell::Cell;
 use std::cell::RefCell;
@@ -26,6 +27,7 @@ use slang_solidity_v2::ast::NodeId;
 use crate::llvm_module::RawLlvmModule;
 
 use self::function::Function;
+use self::user_defined_operator::UserDefinedOperator;
 
 /// Accumulated MLIR state threaded through the AST visitors.
 ///
@@ -38,6 +40,8 @@ pub struct Context<'context> {
     pub module: Module<'context>,
     /// Resolution metadata keyed by the AST definition id of each function.
     pub function_signatures: HashMap<NodeId, Function<'context>>,
+    /// User-defined operator bindings, keyed by `(udvt_definition_id, operator)` to the bound function.
+    pub operator_bindings: HashMap<(NodeId, UserDefinedOperator), NodeId>,
     /// The MLIR type of the contract currently being emitted, used to type
     /// `this` expressions. Frontends set this before emitting function bodies.
     pub current_contract_type: Option<Type<'context>>,
@@ -130,6 +134,7 @@ impl<'context> Context<'context> {
             mlir_context: context,
             module,
             function_signatures: HashMap::new(),
+            operator_bindings: HashMap::new(),
             current_contract_type: None,
             dependencies: RefCell::new(Vec::new()),
             function_id_counter: Cell::new(1),

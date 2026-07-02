@@ -13,6 +13,7 @@ use melior::ir::attribute::TypeAttribute;
 use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
 
@@ -56,26 +57,35 @@ impl ContractEmitter {
             if matches!(function.kind(), FunctionKind::Modifier) {
                 continue;
             }
-            let mlir_name = FunctionEmitter::mlir_function_name(&function);
-            let (parameter_types, return_types) =
-                TypeConversion::resolve_function_types(&function, context);
-
-            context.register_function_signature(
-                function.node_id(),
-                mlir_name,
-                parameter_types,
-                return_types,
-            );
+            Self::register_function(context, &function);
         }
+    }
+
+    /// Registers one function's MLIR signature keyed by its AST definition, so a call resolves before
+    /// any body is emitted.
+    fn register_function(context: &mut Context, function: &FunctionDefinition) {
+        let mlir_name = FunctionEmitter::mlir_function_name(function);
+        let (parameter_types, return_types) =
+            TypeConversion::resolve_function_types(function, context);
+        context.register_function_signature(
+            function.node_id(),
+            mlir_name,
+            parameter_types,
+            return_types,
+        );
     }
 }
 
 impl EmitObject for ContractDefinition {
-    /// Emits a `sol.contract` containing all function definitions.
-    fn emit(&self, context: &mut Context) {
+    /// Emits a `sol.contract` containing all function definitions, followed by the operator-bound free
+    /// functions the contract dispatches to.
+    fn emit(&self, context: &mut Context, operator_functions: &[FunctionDefinition]) {
         let contract_name = self.name().name();
 
         ContractEmitter::pre_register_functions(context, self);
+        for function in operator_functions {
+            ContractEmitter::register_function(context, function);
+        }
         let storage_layout = self.storage_layout();
 
         let contract_type = AstType::contract(
@@ -137,6 +147,13 @@ impl EmitObject for ContractDefinition {
                 &contract_body,
             );
             context.current_contract_type = None;
+        }
+
+        for function in operator_functions {
+            function.emit(
+                &FunctionEmitter::new(context, self, &storage_layout),
+                &contract_body,
+            );
         }
     }
 }
