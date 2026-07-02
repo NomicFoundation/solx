@@ -51,8 +51,8 @@ impl CallKind {
             return Self::StructConstruction(struct_definition);
         }
         if let ArgumentsDeclaration::PositionalArguments(positional) = arguments
-            && call.is_type_conversion()
             && positional.len() == 1
+            && (call.is_type_conversion() || Self::is_array_type_cast_callee(callee))
         {
             return Self::TypeConversion;
         }
@@ -91,6 +91,15 @@ impl CallKind {
             unreachable!("callee '{}' does not resolve to a function", identifier.name());
         };
         Self::IdentifierFunctionCall(function_definition)
+    }
+
+    /// Whether `callee` is an array-type expression `T[]` written as the callee of a cast
+    /// `T[](value)`, which Slang parses as an index access with neither index nor slice bounds.
+    fn is_array_type_cast_callee(callee: &Expression) -> bool {
+        let Expression::IndexAccessExpression(array_type) = callee else {
+            return false;
+        };
+        array_type.start().is_none() && array_type.end().is_none() && !array_type.is_slice()
     }
 
     /// Whether `callee` is a function-typed value the call dispatches through indirectly: a local,

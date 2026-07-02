@@ -288,7 +288,9 @@ impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Expr
     /// Emits this expression coerced to `target_type`.
     ///
     /// A string literal toward a `byte` / `bytesN` target materialises directly in that
-    /// representation; every other expression emits then casts.
+    /// representation. A `bytes` / `string` / array value routes through its Slang type so a
+    /// data-location relocation lowers to `sol.data_loc_cast` rather than the illegal scalar
+    /// `sol.cast`; every other expression emits then casts to the target.
     fn emit_as<'state>(
         &self,
         target_type: Type<'context>,
@@ -298,12 +300,20 @@ impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Expr
         if let Expression::StringExpression(string_literal) = self {
             return string_literal.emit_as(target_type, context, block);
         }
+        let source_slang = self.get_type();
         let BlockAnd { value, block } = self.emit(context, block);
-        let value = TypeConversion::from_target_type(target_type, context.state).emit(
-            value,
-            context.state,
-            &block,
-        );
+        let conversion = match &source_slang {
+            Some(
+                source_slang @ (SlangType::Bytes(_) | SlangType::String(_) | SlangType::Array(_)),
+            ) => TypeConversion::from_slang_conversion(
+                source_slang,
+                source_slang,
+                target_type,
+                context.state,
+            ),
+            _ => TypeConversion::from_target_type(target_type, context.state),
+        };
+        let value = conversion.emit(value, context.state, &block);
         BlockAnd { value, block }
     }
 }
