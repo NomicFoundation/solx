@@ -33,6 +33,10 @@ pub enum TypeConversion<'context> {
     Address,
     /// `bytesN(x)` / `byte(x)` and the reverse `uintN(bytesN)` — `sol.bytes_cast` to target.
     BytesCast(Type<'context>),
+    /// `bytesN(b)` on a dynamic `bytes` value — `sol.dyn_bytes_to_fixedbytes` to target.
+    DynBytesToFixedBytes(Type<'context>),
+    /// `bytes(b)` / `string(s)` relocating a reference across data locations — `sol.data_loc_cast`.
+    DataLocCast(Type<'context>),
     /// `E(x)` and the reverse `uint8(E)` — `sol.enum_cast` between an enum and its backing integer.
     EnumCast(Type<'context>),
     /// Integer type cast — `sol.cast` to target.
@@ -55,6 +59,14 @@ impl<'context> TypeConversion<'context> {
             SlangType::Integer(integer_type) => {
                 let bits = integer_type.bits();
                 if integer_type.is_signed() {
+                    Type::from(IntegerType::signed(context.mlir_context, bits))
+                } else {
+                    Type::from(IntegerType::unsigned(context.mlir_context, bits))
+                }
+            }
+            SlangType::FixedPointNumber(fixed_point_type) => {
+                let bits = fixed_point_type.bits();
+                if fixed_point_type.is_signed() {
                     Type::from(IntegerType::signed(context.mlir_context, bits))
                 } else {
                     Type::from(IntegerType::unsigned(context.mlir_context, bits))
@@ -272,12 +284,24 @@ impl<'context> TypeConversion<'context> {
     }
 
     /// Classifies a target type into the appropriate conversion variant.
+    ///
+    /// A fixed-width byte target routes through `sol.bytes_cast`, so an integer literal coerced to a
+    /// `bytesN` return or argument narrows through the byte representation rather than the illegal
+    /// integer-to-fixed-bytes `sol.cast`. A dynamic-bytes target routes through `sol.data_loc_cast`,
+    /// relocating a `bytes` / `string` value across data locations.
     pub fn from_target_type(target_type: Type<'context>, context: &Context<'context>) -> Self {
         if target_type == AstType::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir()
         {
             Self::Bool
         } else if target_type == AstType::address(context.mlir_context, false).into_mlir() {
             Self::Address
+        } else if AstType::new(target_type)
+            .fixed_bytes_or_byte_width(context.mlir_context)
+            .is_some()
+        {
+            Self::BytesCast(target_type)
+        } else if AstType::new(target_type).is_string(context.mlir_context) {
+            Self::DataLocCast(target_type)
         } else {
             Self::Cast(target_type)
         }
@@ -285,18 +309,26 @@ impl<'context> TypeConversion<'context> {
 
     /// Classifies an explicit `T(x)` conversion from its Slang source and target types.
     ///
-    /// An enumeration on either side routes through `sol.enum_cast`, and a fixed-width byte type on
-    /// either side through `sol.bytes_cast`; the Slang types disambiguate the reverse `uintN(bytesN)`
-    /// and `uint8(E)` directions that the MLIR target alone cannot. Any other conversion defers to the
-    /// target-typed classification.
+    /// An enumeration on either side routes through `sol.enum_cast`. A dynamic `bytes` / `string`
+    /// source toward a `bytesN` target routes through `sol.dyn_bytes_to_fixedbytes`. A fixed-width
+    /// byte type on either side routes through `sol.bytes_cast`; the Slang types disambiguate the
+    /// reverse `uintN(bytesN)` and `uint8(E)` directions that the MLIR target alone cannot. Any other
+    /// conversion, including a `bytes` / `string` data-location relocation, defers to the target-typed
+    /// classification.
     pub fn from_slang_conversion(
         source: &SlangType,
         target: &SlangType,
         target_type: Type<'context>,
         context: &Context<'context>,
     ) -> Self {
+        let source_is_reference = matches!(
+            source,
+            SlangType::Bytes(_) | SlangType::String(_) | SlangType::Array(_)
+        );
         if matches!(source, SlangType::Enum(_)) || matches!(target, SlangType::Enum(_)) {
             Self::EnumCast(target_type)
+        } else if source_is_reference && matches!(target, SlangType::ByteArray(_)) {
+            Self::DynBytesToFixedBytes(target_type)
         } else if matches!(source, SlangType::ByteArray(_))
             || matches!(target, SlangType::ByteArray(_))
         {
@@ -313,9 +345,11 @@ impl<'context> TypeConversion<'context> {
                 AstType::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir()
             }
             Self::Address => AstType::address(context.mlir_context, false).into_mlir(),
-            Self::BytesCast(target_type) | Self::EnumCast(target_type) | Self::Cast(target_type) => {
-                *target_type
-            }
+            Self::BytesCast(target_type)
+            | Self::DynBytesToFixedBytes(target_type)
+            | Self::DataLocCast(target_type)
+            | Self::EnumCast(target_type)
+            | Self::Cast(target_type) => *target_type,
         }
     }
 
@@ -388,8 +422,32 @@ impl<'context> TypeConversion<'context> {
                 };
                 truncated.address_cast(address_type, context, block).into_mlir()
             }
-            Self::BytesCast(target_type) => AstValue::new(value)
-                .bytes_cast(AstType::new(target_type), context, block)
+            Self::BytesCast(target_type) => {
+                let bridged = match (
+                    IntegerType::try_from(value.r#type()),
+                    AstType::new(target_type).fixed_bytes_or_byte_width(context.mlir_context),
+                ) {
+                    (Ok(integer), Some(width)) => {
+                        let bridge_bits = width * solx_utils::BIT_LENGTH_BYTE as u32;
+                        if integer.width() == bridge_bits {
+                            AstValue::new(value)
+                        } else {
+                            let bridge =
+                                AstType::unsigned(context.mlir_context, bridge_bits as usize);
+                            AstValue::new(value).cast(bridge, context, block)
+                        }
+                    }
+                    _ => AstValue::new(value),
+                };
+                bridged
+                    .bytes_cast(AstType::new(target_type), context, block)
+                    .into_mlir()
+            }
+            Self::DynBytesToFixedBytes(target_type) => AstValue::new(value)
+                .dyn_bytes_to_fixedbytes(AstType::new(target_type), context, block)
+                .into_mlir(),
+            Self::DataLocCast(target_type) => AstValue::new(value)
+                .data_loc_cast(AstType::new(target_type), context, block)
                 .into_mlir(),
             Self::EnumCast(target_type) => AstValue::new(value)
                 .enum_cast(AstType::new(target_type), context, block)

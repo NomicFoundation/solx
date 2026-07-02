@@ -33,6 +33,7 @@ use crate::ods::sol::DataLocCastOperation;
 use crate::ods::sol::DefaultCallDataOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::DefaultStorageOperation;
+use crate::ods::sol::DynBytesToFixedBytesOperation;
 use crate::ods::sol::EnumCastOperation;
 use crate::ods::sol::ExtCallOperation;
 use crate::ods::sol::FuncConstantOperation;
@@ -520,6 +521,27 @@ impl<'context, 'block> Value<'context, 'block> {
             context,
             block,
             DataLocCastOperation
+                .inp(self.into_mlir())
+                .out(target_type.into_mlir())
+        ))
+    }
+
+    /// Casts a dynamic-bytes value to `target_type` via `sol.dyn_bytes_to_fixedbytes`, the fixed-width
+    /// prefix of a `bytes` value.
+    pub fn dyn_bytes_to_fixedbytes<B>(
+        self,
+        target_type: Type<'context>,
+        context: &Context<'context>,
+        block: &B,
+    ) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        Self::new(mlir_op!(
+            context,
+            block,
+            DynBytesToFixedBytesOperation
                 .inp(self.into_mlir())
                 .out(target_type.into_mlir())
         ))
