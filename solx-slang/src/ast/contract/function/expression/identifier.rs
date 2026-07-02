@@ -9,6 +9,7 @@ use slang_solidity_v2::ast::StateVariableMutability;
 
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -81,6 +82,14 @@ expression_emit!(Identifier; |node, context, block| {
                 .expect("bare function name resolves to a registered signature")
                 .pointer_constant(context.state, &block)
                 .into_mlir();
+            BlockAnd { block, value }
+        }
+        Some(Definition::Library(library)) => {
+            let name = solx_utils::ContractName::new(
+                library.get_file_id().to_owned(),
+                Some(library.name().name()),
+            );
+            let value = AstValue::library_address(&name, context.state, &block).into_mlir();
             BlockAnd { block, value }
         }
         None => unreachable!("slang resolves every identifier reference: {name}"),
