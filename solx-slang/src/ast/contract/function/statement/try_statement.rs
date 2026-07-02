@@ -41,6 +41,7 @@ statement_emit!(TryStatement; |node, context, block| {
     let (status, results, current_block) = {
         let expression_context = context.expression_context();
         match TryCallKind::from_expression(&expression) {
+            TryCallKind::FunctionPointer(call) => call.emit(&expression_context, block),
             TryCallKind::External(call) => call.emit(&expression_context, block),
             TryCallKind::NewExpression(new) => new.emit(&expression_context, block),
         }

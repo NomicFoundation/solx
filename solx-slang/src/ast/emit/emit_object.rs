@@ -10,8 +10,15 @@ use solx_mlir::Context;
 /// Emits a top-level definition as one deployable `sol.contract`, threading `&mut Context`.
 /// Implemented by `ContractDefinition`, emitting its state variables, constructor, and functions.
 pub trait EmitObject {
-    /// Emits this definition as a deployable `sol.contract` with its functions, plus the
-    /// operator-bound free functions it dispatches to (`using {f as op} for T global;`), emitted as
-    /// ordinary internal functions so the operator dispatch resolves.
-    fn emit(&self, context: &mut Context, operator_functions: &[FunctionDefinition]);
+    /// Emits this definition as a deployable `sol.contract` with its functions, plus the reachable
+    /// free functions it references. `operator_functions` are the operator-bound free functions
+    /// (`using {f as op} for T global;`) that seed reachability; `free_functions` is the source-unit
+    /// pool the walk selects from. Both are emitted as ordinary internal functions under their
+    /// node-id-qualified symbols so the operator dispatch and pointer references resolve.
+    fn emit(
+        &self,
+        context: &mut Context,
+        operator_functions: &[FunctionDefinition],
+        free_functions: &[FunctionDefinition],
+    );
 }

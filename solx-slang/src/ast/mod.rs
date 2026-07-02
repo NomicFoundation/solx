@@ -17,6 +17,7 @@ pub mod place;
 
 use std::collections::BTreeMap;
 
+use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::SourceUnit;
 
 use solx_mlir::Context;
@@ -55,13 +56,14 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
         &mut self,
         unit: &SourceUnit,
         operator_bindings: &OperatorBindings,
+        free_functions: &[FunctionDefinition],
     ) -> Option<(String, BTreeMap<String, String>)> {
         let contracts = unit.contracts();
         let contract = contracts.first()?;
 
         let name = contract.name().name();
         self.state.operator_bindings = operator_bindings.map.clone();
-        contract.emit(self.state, &operator_bindings.functions);
+        contract.emit(self.state, &operator_bindings.functions, free_functions);
 
         Some((name, contract.method_identifiers()))
     }

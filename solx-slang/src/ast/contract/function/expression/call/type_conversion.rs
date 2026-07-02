@@ -236,12 +236,15 @@ impl<'context> TypeConversion<'context> {
                 Self::resolve_slang_type(&target_type, inherited_location, context)
             }
             SlangType::Function(function_type) => {
-                if function_type.is_externally_visible() {
-                    unimplemented!("external function-pointer types are not yet supported");
-                }
                 let (parameter_types, result_types) =
                     Self::function_pointer_signature(slang_type, context);
-                AstType::func_ref(context.mlir_context, &parameter_types, &result_types).into_mlir()
+                if function_type.is_externally_visible() {
+                    AstType::ext_func_ref(context.mlir_context, &parameter_types, &result_types)
+                        .into_mlir()
+                } else {
+                    AstType::func_ref(context.mlir_context, &parameter_types, &result_types)
+                        .into_mlir()
+                }
             }
             _ => unimplemented!("unsupported Slang type"),
         }

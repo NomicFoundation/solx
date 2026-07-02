@@ -88,6 +88,13 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         format!("{name}({})", types.join(","))
     }
 
+    /// The MLIR symbol of a reached free function: its signature suffixed with the bare AST node id,
+    /// disambiguating two free functions of the same signature and never colliding with a contract
+    /// method's ABI-selector symbol.
+    pub fn free_function_symbol(function: &FunctionDefinition) -> String {
+        format!("{}_{}", Self::mlir_function_name(function), function.node_id())
+    }
+
     /// Returns a textual representation of a Solidity type name from the AST.
     fn type_name_text(type_name: &TypeName) -> String {
         match type_name {
@@ -194,9 +201,12 @@ impl EmitFunction for FunctionDefinition {
     fn emit<'context>(
         &self,
         emitter: &FunctionEmitter<'_, 'context>,
+        symbol_override: Option<&str>,
         contract_body: &BlockRef<'context, '_>,
     ) -> String {
-        let mlir_name = FunctionEmitter::mlir_function_name(self);
+        let mlir_name = symbol_override
+            .map(str::to_owned)
+            .unwrap_or_else(|| FunctionEmitter::mlir_function_name(self));
         let Some(ref body) = self.body() else {
             return mlir_name;
         };
@@ -206,7 +216,7 @@ impl EmitFunction for FunctionDefinition {
         let (mlir_parameter_types, result_types) =
             TypeConversion::resolve_function_types(self, emitter.state);
 
-        let selector = self.compute_selector();
+        let selector = symbol_override.is_none().then(|| self.compute_selector()).flatten();
 
         let state_mutability = FunctionEmitter::map_state_mutability(self);
 
@@ -334,7 +344,7 @@ impl EmitConstructor for ContractDefinition {
         contract_body: &BlockRef<'context, '_>,
     ) {
         if let Some(constructor) = self.constructor() {
-            constructor.emit(emitter, contract_body);
+            constructor.emit(emitter, None, contract_body);
             return;
         }
         let entry = Function::new("constructor()".to_owned(), Vec::new(), Vec::new()).define(

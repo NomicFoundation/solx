@@ -185,9 +185,40 @@ impl<'context> Type<'context> {
         })
     }
 
+    /// A `sol::ExtFuncRefType`: an external function pointer, an address and selector, over
+    /// `parameter_types -> result_types`.
+    pub fn ext_func_ref(
+        context: &'context melior::Context,
+        parameter_types: &[MlirType<'context>],
+        result_types: &[MlirType<'context>],
+    ) -> Self {
+        let parameters: Vec<_> = parameter_types
+            .iter()
+            .map(|parameter_type| parameter_type.to_raw())
+            .collect();
+        let results: Vec<_> = result_types
+            .iter()
+            .map(|result_type| result_type.to_raw())
+            .collect();
+        Self::new(unsafe {
+            MlirType::from_raw(ffi::solxCreateExtFuncRefType(
+                context.to_raw(),
+                parameters.as_ptr(),
+                parameters.len(),
+                results.as_ptr(),
+                results.len(),
+            ))
+        })
+    }
+
     /// Whether this is a Sol internal function reference (`!sol.func_ref<...>`).
     pub fn is_function_ref(self) -> bool {
         unsafe { ffi::solxIsFuncRefType(self.inner.to_raw()) }
+    }
+
+    /// Whether this is a Sol external function reference (`!sol.ext_func_ref<...>`).
+    pub fn is_external_function_ref(self) -> bool {
+        unsafe { ffi::solxIsExtFuncRefType(self.inner.to_raw()) }
     }
 
     /// Whether this is the single-byte `!sol.byte`, the element type of `bytes` / `string`.

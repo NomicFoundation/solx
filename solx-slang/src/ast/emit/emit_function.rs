@@ -12,9 +12,13 @@ use crate::ast::contract::function::FunctionEmitter;
 pub trait EmitFunction {
     /// Opens the `sol.func`, binds parameters and return slots, threads the body statements, and
     /// closes with the default return, returning the emitted `sol.func` symbol name.
+    ///
+    /// `symbol_override` names a reached free function under its node-id-qualified symbol, suppressing
+    /// the ABI dispatch entry a contract method would carry; a contract method passes `None`.
     fn emit<'context>(
         &self,
         emitter: &FunctionEmitter<'_, 'context>,
+        symbol_override: Option<&str>,
         contract_body: &BlockRef<'context, '_>,
     ) -> String;
 }

@@ -16,6 +16,7 @@ use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
 use melior::ir::operation::OperationMutLike;
 use melior::ir::r#type::FunctionType;
+use melior::ir::r#type::IntegerType;
 use num::BigInt;
 use slang_solidity_v2::ast::DataLocation;
 use slang_solidity_v2::ast::Type as SlangType;
@@ -38,6 +39,10 @@ use crate::ods::sol::DefaultStorageOperation;
 use crate::ods::sol::DynBytesToFixedBytesOperation;
 use crate::ods::sol::EnumCastOperation;
 use crate::ods::sol::ExtCallOperation;
+use crate::ods::sol::ExtFuncAddrOperation;
+use crate::ods::sol::ExtFuncConstantOperation;
+use crate::ods::sol::ExtFuncSelectorOperation;
+use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::FuncConstantOperation;
 use crate::ods::sol::GasLeftOperation;
 use crate::ods::sol::ICallOperation;
@@ -390,6 +395,17 @@ impl<'context, 'block> Value<'context, 'block> {
                 Self::constant(0, Type::unsigned(context.mlir_context, bits), context, block)
                     .bytes_cast(mlir_type, context, block)
             }
+            SlangType::Function(function_type) if function_type.is_externally_visible() => {
+                let address = Self::constant(
+                    0,
+                    Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_ETH_ADDRESS),
+                    context,
+                    block,
+                )
+                .address_cast(Type::address(context.mlir_context, false), context, block);
+                Self::external_function_constant(address, 0, mlir_type, context, block)
+            }
+            SlangType::Function(_) => Self::function_pointer_zero(mlir_type, context, block),
             SlangType::Enum(_) => {
                 Self::constant(
                     0,
@@ -472,14 +488,70 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// Calls this internal function-pointer value through `sol.icall`, returning the decoded results.
+    /// `sol.ext_func_constant`: an external function pointer (`!sol.ext_func_ref<...>`) packing the
+    /// callee `address` and its four-byte `selector`.
+    pub fn external_function_constant(
+        address: Self,
+        selector: u32,
+        result_type: Type<'context>,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            context,
+            block,
+            ExtFuncConstantOperation
+                .addr(address.into_mlir())
+                .selector(IntegerAttribute::new(
+                    IntegerType::new(context.mlir_context, Type::SELECTOR_BIT_WIDTH).into(),
+                    i64::from(selector),
+                ))
+                .result(result_type.into_mlir())
+        ))
+    }
+
+    /// The `!sol.ext_func_ref<...>` value of an external interaction: `receiver` cast to `address`,
+    /// packed with `selector` over `parameter_types -> result_types`.
+    pub fn external_callee(
+        receiver: Self,
+        selector: u32,
+        parameter_types: &[MlirType<'context>],
+        result_types: &[MlirType<'context>],
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        let address =
+            receiver.address_cast(Type::address(context.mlir_context, false), context, block);
+        let result_type = Type::ext_func_ref(context.mlir_context, parameter_types, result_types);
+        Self::external_function_constant(address, selector, result_type, context, block)
+    }
+
+    /// Calls this function-pointer value, returning the decoded results. An internal `!sol.func_ref`
+    /// dispatches through `sol.icall`; an external `!sol.ext_func_ref` through `sol.ext_icall`,
+    /// forwarding `call_value` as `msg.value`, `call_gas` as the gas, and dropping the status.
     pub fn call_indirect(
         self,
         argument_values: &[MlirValue<'context, 'block>],
         result_types: &[MlirType<'context>],
+        call_value: Option<MlirValue<'context, 'block>>,
+        call_gas: Option<MlirValue<'context, 'block>>,
+        is_static: bool,
         context: &Context<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Vec<MlirValue<'context, 'block>> {
+        if self.r#type().is_external_function_ref() {
+            let (_status, results) = self.external_call_indirect(
+                argument_values,
+                result_types,
+                call_value,
+                call_gas,
+                is_static,
+                false,
+                context,
+                block,
+            );
+            return results;
+        }
         let operation = block.append_operation(mlir_op_build!(
             context,
             ICallOperation
@@ -495,6 +567,101 @@ impl<'context, 'block> Value<'context, 'block> {
                     .into()
             })
             .collect()
+    }
+
+    /// Calls this external function-pointer value through `sol.ext_icall`, returning the success
+    /// status and the decoded results. `call_value` forwards `msg.value` (defaulting to zero) and
+    /// `call_gas` the gas (defaulting to `sol.gasleft`). A `view`/`pure` pointer passes `is_static`
+    /// for a `STATICCALL`; a `try`/`catch` guard passes `try_call` to surface the status.
+    pub fn external_call_indirect(
+        self,
+        argument_values: &[MlirValue<'context, 'block>],
+        result_types: &[MlirType<'context>],
+        call_value: Option<MlirValue<'context, 'block>>,
+        call_gas: Option<MlirValue<'context, 'block>>,
+        is_static: bool,
+        try_call: bool,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> (
+        MlirValue<'context, 'block>,
+        Vec<MlirValue<'context, 'block>>,
+    ) {
+        let uint256 = Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD);
+        let value = call_value
+            .unwrap_or_else(|| Self::constant(0, uint256, context, block).into_mlir());
+        let gas = call_gas.unwrap_or_else(|| {
+            block
+                .append_operation(
+                    GasLeftOperation::builder(context.mlir_context, context.location())
+                        .val(uint256.into_mlir())
+                        .build()
+                        .into(),
+                )
+                .result(0)
+                .expect("sol.gasleft produces one result")
+                .into()
+        });
+        let mut out_types = Vec::with_capacity(result_types.len() + 1);
+        out_types
+            .push(Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
+        out_types.extend_from_slice(result_types);
+        let mut builder = ExtICallOperation::builder(context.mlir_context, context.location())
+            .outs(&out_types)
+            .callee(self.into_mlir())
+            .callee_operands(argument_values)
+            .gas(gas)
+            .value(value);
+        if is_static {
+            builder = builder.static_call(Attribute::unit(context.mlir_context));
+        }
+        if try_call {
+            builder = builder.try_call(Attribute::unit(context.mlir_context));
+        }
+        let operation = block.append_operation(builder.build().into());
+        let status = operation
+            .result(0)
+            .expect("sol.ext_icall produces a status result")
+            .into();
+        let results = (0..result_types.len())
+            .map(|index| {
+                operation
+                    .result(index + 1)
+                    .expect("sol.ext_icall produces its declared result count")
+                    .into()
+            })
+            .collect();
+        (status, results)
+    }
+
+    /// The four-byte selector of this external function-pointer value, via `sol.ext_func_selector`.
+    pub fn external_function_selector(
+        self,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            context,
+            block,
+            ExtFuncSelectorOperation
+                .func(self.into_mlir())
+                .result(Type::fixed_bytes(context.mlir_context, 4).into_mlir())
+        ))
+    }
+
+    /// The callee `address` of this external function-pointer value, via `sol.ext_func_addr`.
+    pub fn external_function_address(
+        self,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            context,
+            block,
+            ExtFuncAddrOperation
+                .func(self.into_mlir())
+                .result(Type::address(context.mlir_context, false).into_mlir())
+        ))
     }
 
     /// Casts to `target_type` via `sol.cast`, a no-op when already that type.
