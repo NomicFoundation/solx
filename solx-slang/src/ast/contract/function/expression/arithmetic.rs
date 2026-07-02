@@ -149,8 +149,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let value = self.emit_operator_call(function_id, vec![lhs, rhs], &block);
             return BlockAnd { block, value };
         }
-        let BlockAnd { value: rhs, block } = right.emit(self, block);
         let BlockAnd { value: lhs, block } = left.emit(self, block);
+        let BlockAnd { value: rhs, block } = right.emit(self, block);
         let result_type = target_type.unwrap_or_else(|| {
             let lhs_width = AstType::new(lhs.r#type()).integer_bit_width();
             let rhs_width = AstType::new(rhs.r#type()).integer_bit_width();
