@@ -122,11 +122,15 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
                     );
                     return BlockAnd { block, value };
                 }
-                let (value, block) = emitter.emit_built_in_member_access(
-                    &access,
-                    Some(&emitter.positional(&arguments)),
-                    block,
-                );
+                let positional = match &arguments {
+                    ArgumentsDeclaration::PositionalArguments(positional) => Some(positional.clone()),
+                    ArgumentsDeclaration::NamedArguments(named) if named.is_empty() => None,
+                    ArgumentsDeclaration::NamedArguments(_) => {
+                        unreachable!("only .push / .pop accept an empty {{}} named-argument list")
+                    }
+                };
+                let (value, block) =
+                    emitter.emit_built_in_member_access(&access, positional.as_ref(), block);
                 BlockAnd {
                     block,
                     value: value.into_iter().collect(),

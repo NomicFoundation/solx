@@ -56,6 +56,7 @@ use solx_mlir::ods::sol::TimestampOperation;
 use solx_mlir::ods::sol::TransferOperation;
 
 use crate::ast::block_and::BlockAnd;
+use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::CallContext;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::emit::emit_expression::EmitExpression;
@@ -343,10 +344,7 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
                 (Some(result), block)
             }
             Some(BuiltIn::ArrayPop) => self.emit_array_pop(access, block),
-            Some(BuiltIn::ArrayPush) => {
-                let arguments = arguments.expect("array push is a member-access call");
-                self.emit_array_push(access, arguments, block)
-            }
+            Some(BuiltIn::ArrayPush) => self.emit_array_push(access, arguments, block),
             resolved => {
                 let operation = match resolved {
                     Some(BuiltIn::TxOrigin) => {
@@ -464,20 +462,20 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
         (None, block)
     }
 
-    /// Emits `arr.push(x)` / `arr.push()` / `bytes.push()` as `sol.push`,
-    /// followed by `sol.store` of the cast value when one is provided.
-    /// Returns the new slot reference for the no-arg form, otherwise `None`.
-    fn emit_array_push(
+    /// Emits `arr.push(x)` / `arr.push()` / `bytes.push()` as `sol.push`, followed by the write of a
+    /// provided value: `sol.copy` into a reference-typed slot, `sol.store` of the cast scalar
+    /// otherwise. Returns the new slot reference for the no-arg form, otherwise `None`.
+    pub(in crate::ast::contract::function::expression) fn emit_array_push(
         &self,
         access: &MemberAccessExpression,
-        arguments: &PositionalArguments,
+        arguments: Option<&PositionalArguments>,
         block: BlockRef<'context, 'block>,
     ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let base = access.operand();
         let base_slang_type = base
             .get_type()
             .expect("base of array push has a resolved type");
-        let value_argument = arguments.iter().next();
+        let value_argument = arguments.and_then(|arguments| arguments.iter().next());
         let context = self.expression_context.state;
         if let (SlangType::Bytes(_), Some(value_argument)) = (&base_slang_type, &value_argument) {
             let byte_type = AstType::fixed_bytes(context.mlir_context, 1);
@@ -495,16 +493,21 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             return (None, block);
         }
 
-        let (element_type, slang_location) = match &base_slang_type {
-            SlangType::Array(array_type) => (
-                TypeConversion::resolve_slang_type(&array_type.element_type(), None, context),
-                array_type.location(),
-            ),
-            SlangType::Bytes(bytes_type) => (AstType::fixed_bytes(context.mlir_context, 1).into_mlir(), bytes_type.location()),
+        let (element_slang_type, slang_location) = match &base_slang_type {
+            SlangType::Array(array_type) => {
+                (Some(array_type.element_type()), array_type.location())
+            }
+            SlangType::Bytes(bytes_type) => (None, bytes_type.location()),
             other => unreachable!(
                 "Solidity's .push is a member of dynamic arrays and bytes only; got {:?}",
                 std::mem::discriminant(other)
             ),
+        };
+        let element_type = match &element_slang_type {
+            Some(element_slang_type) => {
+                TypeConversion::resolve_slang_type(element_slang_type, None, context)
+            }
+            None => AstType::fixed_bytes(context.mlir_context, 1).into_mlir(),
         };
         let base_location = match slang_location {
             SlangDataLocation::Inherited => {
@@ -514,13 +517,28 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
         };
 
         let BlockAnd { value: array_value, block } = base.emit(self.expression_context, block);
-        let address_type = AstType::pointer(context.mlir_context, element_type, base_location).into_mlir();
+        let address_type = match &element_slang_type {
+            Some(element_slang_type) => ExpressionContext::address_type(
+                context,
+                element_type,
+                base_location,
+                element_slang_type,
+            ),
+            None => AstType::pointer(context.mlir_context, element_type, base_location).into_mlir(),
+        };
         let new_slot = AstValue::new(array_value).push(AstType::new(address_type), context, &block).into_mlir();
 
         let Some(value_argument) = value_argument else {
             return (Some(new_slot), block);
         };
         let BlockAnd { value, block } = value_argument.emit(self.expression_context, block);
+        if element_slang_type
+            .as_ref()
+            .is_some_and(SlangType::is_reference_type)
+        {
+            Pointer::new(new_slot).copy_from(AstValue::new(value), context, &block);
+            return (None, block);
+        }
         let cast_value =
             TypeConversion::from_target_type(element_type, context).emit(value, context, &block);
         Pointer::new(new_slot).store(AstValue::new(cast_value), context, &block);

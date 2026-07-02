@@ -9,6 +9,7 @@ use melior::ir::Value;
 use melior::ir::ValueLike;
 use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::AssignmentExpression;
+use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::TupleExpression;
@@ -22,6 +23,7 @@ use solx_utils::DataLocation;
 use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::CallContext;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::expression::operator::Operator;
 use crate::ast::emit::emit_as::EmitAs;
@@ -86,6 +88,26 @@ impl<'context: 'block, 'block> AssignmentTarget<'context, 'block> {
                     block,
                 } = access.emit_place(context, block);
                 (Self::from_address(place.address, place.element_type), block)
+            }
+            Expression::FunctionCallExpression(call)
+                if matches!(
+                    call.operand().unwrap_parentheses(),
+                    Expression::MemberAccessExpression(access)
+                        if matches!(access.member().resolve_to_built_in(), Some(BuiltIn::ArrayPush))
+                ) =>
+            {
+                let Expression::MemberAccessExpression(access) =
+                    call.operand().unwrap_parentheses()
+                else {
+                    unreachable!("guarded by the match arm");
+                };
+                let element_type = context
+                    .resolve_slang_type(call.get_type())
+                    .expect("slang types every array push");
+                let (slot, block) =
+                    CallContext::new(context).emit_array_push(&access, None, block);
+                let slot = slot.expect("a no-argument array push yields its new slot");
+                (Self::from_address(slot, element_type), block)
             }
             _ => unimplemented!(
                 "assignment target {:?} is not yet supported",

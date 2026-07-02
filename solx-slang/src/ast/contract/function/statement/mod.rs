@@ -35,7 +35,7 @@ use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
-use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_as::EmitAs;
 use crate::ast::emit::emit_for_effect::EmitForEffect;
 use crate::ast::emit::emit_statement::EmitStatement;
 use crate::ast::emit::emit_values::EmitValues;
@@ -184,14 +184,15 @@ statement_emit!(ReturnStatement; |node, context, block| {
     };
 
     let expression_context = context.expression_context();
-    let (values, block) = if context.return_types.len() > 1 {
-        let BlockAnd { value, block } = expression.emit_values(&expression_context, block);
-        (value, block)
-    } else {
-        let BlockAnd { value, block } = expression.emit(&expression_context, block);
-        (vec![value], block)
-    };
+    if context.return_types.len() == 1 {
+        let return_type = context.return_types[0];
+        let BlockAnd { value, block } =
+            expression.emit_as(return_type, &expression_context, block);
+        mlir_op_void!(context.state, &block, ReturnOperation.operands(&[value]));
+        return None;
+    }
 
+    let BlockAnd { value: values, block } = expression.emit_values(&expression_context, block);
     let cast_values: Vec<_> = values
         .into_iter()
         .zip(context.return_types.iter())

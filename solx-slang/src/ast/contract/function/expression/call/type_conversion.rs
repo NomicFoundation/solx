@@ -325,6 +325,10 @@ impl<'context> TypeConversion<'context> {
             source,
             SlangType::Bytes(_) | SlangType::String(_) | SlangType::Array(_)
         );
+        let target_is_reference = matches!(
+            target,
+            SlangType::Bytes(_) | SlangType::String(_) | SlangType::Array(_)
+        );
         if matches!(source, SlangType::Enum(_)) || matches!(target, SlangType::Enum(_)) {
             Self::EnumCast(target_type)
         } else if source_is_reference && matches!(target, SlangType::ByteArray(_)) {
@@ -333,6 +337,8 @@ impl<'context> TypeConversion<'context> {
             || matches!(target, SlangType::ByteArray(_))
         {
             Self::BytesCast(target_type)
+        } else if source_is_reference && target_is_reference {
+            Self::DataLocCast(target_type)
         } else {
             Self::from_target_type(target_type, context)
         }
