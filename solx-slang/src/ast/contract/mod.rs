@@ -162,15 +162,15 @@ impl EmitObject for ContractDefinition {
                 IntegerType::new(context.mlir_context, solx_utils::BIT_LENGTH_X32 as u32).into(),
                 slot.byte_offset.into(),
             );
-            mlir_op_void!(
-                context,
-                &contract_body,
-                StateVarOperation
-                    .sym_name(StringAttribute::new(context.mlir_context, &slot.name))
-                    .r#type(TypeAttribute::new(element_type))
-                    .slot(slot_attribute)
-                    .byte_offset(byte_offset_attribute)
-            );
+            let mut operation = StateVarOperation::builder(context.mlir_context, context.location())
+                .sym_name(StringAttribute::new(context.mlir_context, &slot.name))
+                .r#type(TypeAttribute::new(element_type))
+                .slot(slot_attribute)
+                .byte_offset(byte_offset_attribute);
+            if matches!(slot.location, solx_utils::DataLocation::Transient) {
+                operation = operation.transient(Attribute::unit(context.mlir_context));
+            }
+            contract_body.append_operation(operation.build().into());
         }
 
         context.current_contract_type = Some(contract_type);
