@@ -10,6 +10,7 @@ use mlir_sys::MlirBlock;
 use mlir_sys::MlirContext;
 use mlir_sys::MlirDialectHandle;
 use mlir_sys::MlirDialectRegistry;
+use mlir_sys::MlirModule;
 use mlir_sys::MlirPass;
 use mlir_sys::MlirRegion;
 
@@ -49,6 +50,19 @@ unsafe extern "C" {
 
     /// Creates the `reconcile-unrealized-casts` pass.
     pub fn mlirCreateConversionReconcileUnrealizedCastsPass() -> MlirPass;
+
+    /// Lowers each `llvm.setimmutable` op in `module` to heap stores at its immutable's reserved
+    /// offsets, then erases it. The identifier-to-offsets mapping is passed flattened:
+    /// `immutable_identifiers[i]` reserves offset `immutable_offsets[i]`, one entry per
+    /// identifier-offset pair, `immutable_count` entries. An op whose identifier is absent is erased
+    /// as a no-op. Mirrors the EVM-assembly `setimmutable` for the MLIR Slang pipeline, which
+    /// reaches codegen-evm as LLVM IR, not Yul.
+    pub fn mlirEvmLowerSetImmutables(
+        module: MlirModule,
+        immutable_identifiers: *const *const std::ffi::c_char,
+        immutable_offsets: *const u64,
+        immutable_count: u64,
+    );
 
     /// Loads a dialect into the context by handle.
     pub fn mlirDialectHandleInsertDialect(handle: MlirDialectHandle, registry: MlirDialectRegistry);

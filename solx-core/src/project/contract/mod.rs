@@ -486,7 +486,9 @@ impl Contract {
                 )?;
                 let (immutables_out, metadata_out) = match code_segment {
                     solx_utils::CodeSegment::Deploy => (None, None),
-                    solx_utils::CodeSegment::Runtime => (Some(BTreeMap::new()), metadata_bytes),
+                    solx_utils::CodeSegment::Runtime => {
+                        (Some(build.immutables.unwrap_or_default()), metadata_bytes)
+                    }
                 };
                 let object = EVMContractObject::new(
                     code_identifier,
@@ -542,9 +544,12 @@ impl Contract {
                 };
 
                 let melior_context = solx_mlir::Context::create_mlir_context();
-                let raw_llvm =
-                    solx_mlir::Context::translate_source_to_llvm(&melior_context, &mlir.source)
-                        .context("MLIR translation")?;
+                let raw_llvm = solx_mlir::Context::translate_source_to_llvm(
+                    &melior_context,
+                    &mlir.source,
+                    immutables.as_ref(),
+                )
+                .context("MLIR translation")?;
                 let context = unsafe { inkwell::context::Context::new(raw_llvm.context) };
                 let module = unsafe { inkwell::module::Module::new(raw_llvm.module) };
                 module.set_name(code_identifier.as_str());
@@ -601,7 +606,9 @@ impl Contract {
                 )?;
                 let (immutables_out, metadata_out) = match code_segment {
                     solx_utils::CodeSegment::Deploy => (None, None),
-                    solx_utils::CodeSegment::Runtime => (Some(BTreeMap::new()), metadata_bytes),
+                    solx_utils::CodeSegment::Runtime => {
+                        (Some(build.immutables.unwrap_or_default()), metadata_bytes)
+                    }
                 };
                 let object = EVMContractObject::new(
                     code_identifier.clone(),

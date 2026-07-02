@@ -26,6 +26,7 @@ use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::Type as AstType;
 use solx_mlir::ods::sol::ContractOperation;
+use solx_mlir::ods::sol::ImmutableOperation;
 use solx_mlir::ods::sol::StateVarOperation;
 
 use crate::ast::analysis::query::storage_layout::StorageLayout;
@@ -153,6 +154,16 @@ impl EmitObject for ContractDefinition {
             };
             let element_type =
                 TypeConversion::resolve_state_variable_type(&state_variable, context);
+            if matches!(slot.location, solx_utils::DataLocation::Immutable) {
+                contract_body.append_operation(
+                    ImmutableOperation::builder(context.mlir_context, context.location())
+                        .sym_name(StringAttribute::new(context.mlir_context, &slot.name))
+                        .r#type(TypeAttribute::new(element_type))
+                        .build()
+                        .into(),
+                );
+                continue;
+            }
             let slot_attribute: IntegerAttribute =
                 Attribute::parse(context.mlir_context, &format!("{} : i256", slot.slot))
                     .expect("valid slot literal")

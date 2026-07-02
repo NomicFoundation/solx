@@ -8,7 +8,11 @@ pub mod user_defined_operator;
 
 use std::cell::Cell;
 use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::ffi::CString;
+use std::ffi::c_char;
 use std::sync::Once;
 
 use melior::dialect::DialectRegistry;
@@ -24,6 +28,7 @@ use melior::ir::operation::OperationMutLike;
 use melior::pass::PassManager;
 use slang_solidity_v2::ast::NodeId;
 
+use crate::ffi;
 use crate::llvm_module::RawLlvmModule;
 
 use self::function::Function;
@@ -340,12 +345,17 @@ impl<'context> Context<'context> {
     pub fn translate_source_to_llvm(
         context: &melior::Context,
         source: &str,
+        immutables: Option<&BTreeMap<String, BTreeSet<u64>>>,
     ) -> anyhow::Result<RawLlvmModule> {
         let module = Module::parse(context, source)
             .ok_or_else(|| anyhow::anyhow!("failed to parse MLIR source text"))?;
 
         if !module.as_operation().verify() {
             anyhow::bail!("MLIR module verification failed");
+        }
+
+        if let Some(immutables) = immutables {
+            Self::lower_set_immutables(&module, immutables);
         }
 
         unsafe {
@@ -367,6 +377,34 @@ impl<'context> Context<'context> {
                 context: llvm_context,
                 module: llvm_module as *mut _,
             })
+        }
+    }
+
+    /// Lowers every `llvm.setimmutable` to heap stores at its reserved offsets via the solx-llvm
+    /// C-API, flattening the identifier-to-offsets map into parallel pointer and offset slices.
+    fn lower_set_immutables(module: &Module, immutables: &BTreeMap<String, BTreeSet<u64>>) {
+        let mut identifier_cstrings: Vec<CString> = Vec::new();
+        let mut offsets: Vec<u64> = Vec::new();
+        for (identifier, identifier_offsets) in immutables {
+            for &offset in identifier_offsets {
+                identifier_cstrings.push(
+                    CString::new(identifier.as_str())
+                        .expect("immutable identifier has no interior NUL"),
+                );
+                offsets.push(offset);
+            }
+        }
+        let identifier_pointers: Vec<*const c_char> = identifier_cstrings
+            .iter()
+            .map(|identifier| identifier.as_ptr())
+            .collect();
+        unsafe {
+            ffi::mlirEvmLowerSetImmutables(
+                module.to_raw(),
+                identifier_pointers.as_ptr(),
+                offsets.as_ptr(),
+                offsets.len() as u64,
+            );
         }
     }
 }

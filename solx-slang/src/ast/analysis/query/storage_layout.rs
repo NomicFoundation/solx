@@ -6,7 +6,9 @@ use std::collections::HashMap;
 
 use ruint::aliases::U256;
 use slang_solidity_v2::ast::ContractDefinition;
+use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::StateVariableMutability;
 
 /// Storage location of a state variable in contract storage.
 #[derive(Debug, Clone)]
@@ -46,8 +48,8 @@ impl StorageSlot {
 /// A contract's storage layout: state variable node ID to its storage slot.
 pub trait StorageLayout {
     /// The layout re-keyed from Slang's ABI, mapping each state variable's node ID to its slot
-    /// index, byte offset, and storage class (persistent or transient). Empty when the ABI is
-    /// unavailable.
+    /// index, byte offset, and storage class (persistent, transient, or immutable). Empty when the
+    /// ABI is unavailable.
     fn storage_layout(&self) -> HashMap<NodeId, StorageSlot>;
 }
 
@@ -81,6 +83,26 @@ impl StorageLayout for ContractDefinition {
                     item.label(),
                     item.node_id(),
                     solx_utils::DataLocation::Transient,
+                ),
+            );
+        }
+        for member in self.members().iter() {
+            let ContractMember::StateVariableDefinition(variable) = member else {
+                continue;
+            };
+            if !matches!(variable.mutability(), StateVariableMutability::Immutable) {
+                continue;
+            }
+            let node_id = variable.node_id();
+            let label = variable.name().name();
+            layout.insert(
+                node_id,
+                StorageSlot::new(
+                    U256::ZERO,
+                    0,
+                    &label,
+                    node_id,
+                    solx_utils::DataLocation::Immutable,
                 ),
             );
         }

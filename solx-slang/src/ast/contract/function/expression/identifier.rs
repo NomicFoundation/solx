@@ -36,20 +36,24 @@ expression_emit!(Identifier; |node, context, block| {
                 .expect("binder types every state variable");
             let element_type =
                 TypeConversion::resolve_slang_type(&declared_type, None, context.state);
-            let address = Pointer::addr_of(
-                &slot.name,
-                AstType::new(ExpressionContext::address_type(
+            let value = if matches!(slot.location, solx_utils::DataLocation::Immutable) {
+                context.emit_storage_load(slot, element_type, &block)
+            } else {
+                let address = Pointer::addr_of(
+                    &slot.name,
+                    AstType::new(ExpressionContext::address_type(
+                        context.state,
+                        element_type,
+                        slot.location,
+                        &declared_type,
+                    )),
                     context.state,
-                    element_type,
-                    slot.location,
-                    &declared_type,
-                )),
-                context.state,
-                &block,
-            );
-            let value = address
-                .load(AstType::new(element_type), context.state, &block)
-                .into_mlir();
+                    &block,
+                );
+                address
+                    .load(AstType::new(element_type), context.state, &block)
+                    .into_mlir()
+            };
             BlockAnd { block, value }
         }
         Some(Definition::Variable(_) | Definition::Parameter(_)) => {

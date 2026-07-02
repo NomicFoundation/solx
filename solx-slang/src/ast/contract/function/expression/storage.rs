@@ -2,15 +2,18 @@
 //! Storage load/store expression lowering via Sol dialect.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::attribute::FlatSymbolRefAttribute;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
+use solx_mlir::ods::sol::LoadImmutableOperation;
 
 use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::block_and::BlockAnd;
@@ -26,6 +29,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
+        if matches!(slot.location, solx_utils::DataLocation::Immutable) {
+            return mlir_op!(
+                self.state,
+                block,
+                LoadImmutableOperation
+                    ._name(FlatSymbolRefAttribute::new(self.state.mlir_context, &slot.name))
+                    .val(element_type)
+            );
+        }
         let pointer = self.emit_storage_addr_of(slot, element_type, block);
         Pointer::new(pointer)
             .load(AstType::new(element_type), self.state, block)
