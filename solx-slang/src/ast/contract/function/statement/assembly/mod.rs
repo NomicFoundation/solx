@@ -23,6 +23,7 @@ use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 
 use crate::ast::analysis::query::storage_layout::StorageSlot;
+use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::emit::emit_statement::EmitStatement;
 use crate::ast::emit::emit_yul::EmitYul;
@@ -40,6 +41,9 @@ pub struct YulContext<'frame, 'context, 'block> {
     pub environment: &'frame Environment<'context, 'block>,
     /// State variable node ID to storage slot mapping.
     pub storage_layout: &'frame HashMap<NodeId, StorageSlot>,
+    /// Contract-local super/base and virtual dispatch maps, forwarded so a Yul path folding a
+    /// Solidity `constant` initializer resolves any call it contains to its C3-linearised target.
+    pub dispatch: &'frame ContractDispatch,
     /// Stack of Yul-local scopes, each mapping a declaration's `NodeId` to its `!llvm.ptr` slot.
     scopes: Vec<HashMap<NodeId, MlirValue<'context, 'block>>>,
     /// In-scope user Yul functions, keyed by node id so like-named functions in disjoint scopes differ.
@@ -54,11 +58,13 @@ impl<'frame, 'context, 'block> YulContext<'frame, 'context, 'block> {
         state: &'frame Context<'context>,
         environment: &'frame Environment<'context, 'block>,
         storage_layout: &'frame HashMap<NodeId, StorageSlot>,
+        dispatch: &'frame ContractDispatch,
     ) -> Self {
         Self {
             state,
             environment,
             storage_layout,
+            dispatch,
             scopes: vec![HashMap::new()],
             yul_functions: HashMap::new(),
             yul_inline_depth: HashMap::new(),
@@ -120,7 +126,11 @@ impl<'frame, 'context, 'block> YulContext<'frame, 'context, 'block> {
 }
 
 statement_emit!(AssemblyStatement; |node, context, block| {
-    let mut yul_context =
-        YulContext::new(context.state, context.environment, context.storage_layout);
+    let mut yul_context = YulContext::new(
+        context.state,
+        context.environment,
+        context.storage_layout,
+        context.dispatch,
+    );
     node.body().emit(&mut yul_context, block)
 });

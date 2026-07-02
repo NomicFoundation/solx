@@ -68,10 +68,13 @@ expression_emit!(Identifier; |node, context, block| {
             initializer.emit(context, block)
         }
         Some(Definition::Function(function_definition)) => {
+            let target_id = context
+                .dispatch
+                .resolve_virtual(function_definition.node_id());
             let value = context
                 .state
                 .function_signatures
-                .get(&function_definition.node_id())
+                .get(&target_id)
                 .expect("bare function name resolves to a registered signature")
                 .pointer_constant(context.state, &block)
                 .into_mlir();

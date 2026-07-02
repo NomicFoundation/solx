@@ -48,6 +48,7 @@ yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |pa
             context.state,
             context.environment,
             context.storage_layout,
+            context.dispatch,
             true,
         );
         let BlockAnd { value, block } = initializer.emit(&emitter, block);

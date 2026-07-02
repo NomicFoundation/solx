@@ -2,6 +2,8 @@
 //! Contract definition lowering to Sol dialect MLIR.
 //!
 
+/// Contract-local super/base and virtual dispatch maps.
+pub mod contract_dispatch;
 /// Function definition lowering to Sol dialect MLIR.
 pub mod function;
 /// Public state-variable getter synthesis.
@@ -36,6 +38,8 @@ use crate::ast::analysis::query::storage_layout::StorageLayout;
 use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::analysis::walk::free_function::FreeCallCollector;
 use crate::ast::analysis::walk::library::LibraryCallCollector;
+use crate::ast::analysis::walk::super_call::SuperDispatch;
+use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::emit::emit_constructor::EmitConstructor;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_function::EmitFunction;
@@ -66,15 +70,55 @@ impl ContractEmitter {
         })
     }
 
-    /// Pre-registers all function signatures for call resolution before bodies
-    /// are emitted.
+    /// The functions a contract emits as its own `sol.func`s, call-resolution order preserved: its own
+    /// declarations in source order, followed by the base-contract functions it inherits unchanged in
+    /// C3-linearisation order. An inherited function overridden in a more-derived contract is excluded,
+    /// its most-derived override already present among the own declarations or a nearer base.
+    fn emitted_functions(contract: &ContractDefinition) -> Vec<FunctionDefinition> {
+        let mut functions = contract.functions();
+        let own_ids: HashSet<NodeId> = functions
+            .iter()
+            .map(|function| function.node_id())
+            .collect();
+        for function in contract.linearised_functions() {
+            if matches!(function.kind(), FunctionKind::Modifier) {
+                continue;
+            }
+            if own_ids.contains(&function.node_id()) {
+                continue;
+            }
+            functions.push(function);
+        }
+        functions
+    }
+
+    /// Pre-registers every function signature reachable for call resolution before bodies are
+    /// emitted, so a call to an inherited or virtually dispatched method resolves to a registered
+    /// signature.
     fn pre_register_functions(context: &mut Context, contract: &ContractDefinition) {
-        for function in contract.functions() {
+        for function in Self::emitted_functions(contract) {
             if matches!(function.kind(), FunctionKind::Modifier) {
                 continue;
             }
             Self::register_function(context, &function);
         }
+    }
+
+    /// Registers a shadowed base override under its contract-qualified symbol, so a `super.f()` /
+    /// `Base.f()` call resolving to it reaches the `sol.func` emitted under the same symbol.
+    fn register_shadowed_function(
+        context: &mut Context,
+        function: &FunctionDefinition,
+        symbol: &str,
+    ) {
+        let (parameter_types, return_types) =
+            TypeConversion::resolve_function_types(function, context);
+        context.register_function_signature(
+            function.node_id(),
+            symbol.to_owned(),
+            parameter_types,
+            return_types,
+        );
     }
 
     /// Registers one function's MLIR signature keyed by its AST definition, so a call resolves before
@@ -117,7 +161,16 @@ impl EmitObject for ContractDefinition {
     ) {
         let contract_name = self.name().name();
 
+        let super_dispatch = SuperDispatch::build_super_dispatch(self);
+        let dispatch = ContractDispatch::from(&super_dispatch);
+        let shadowed_functions: Vec<FunctionDefinition> = super_dispatch
+            .shadowed
+            .iter()
+            .map(|(_, function)| function.clone())
+            .collect();
+
         let mut walk_roots = operator_functions.to_vec();
+        walk_roots.extend(shadowed_functions.iter().cloned());
         let library_functions =
             LibraryCallCollector::reachable_library_functions(self, free_functions, &walk_roots);
         walk_roots.extend(library_functions.iter().cloned());
@@ -135,6 +188,9 @@ impl EmitObject for ContractDefinition {
         }
 
         ContractEmitter::pre_register_functions(context, self);
+        for (symbol, function) in super_dispatch.shadowed.iter() {
+            ContractEmitter::register_shadowed_function(context, function, symbol);
+        }
         for function in &reached_free_functions {
             ContractEmitter::register_free_function(context, function);
         }
@@ -156,10 +212,7 @@ impl EmitObject for ContractDefinition {
             body_region
         );
 
-        for member in self.members().iter() {
-            let ContractMember::StateVariableDefinition(state_variable) = member else {
-                continue;
-            };
+        for state_variable in self.linearised_state_variables() {
             let Some(slot) = storage_layout.get(&state_variable.node_id()) else {
                 continue;
             };
@@ -197,23 +250,18 @@ impl EmitObject for ContractDefinition {
 
         context.current_contract_type = Some(contract_type);
         self.emit_constructor(
-            &FunctionEmitter::new(context, Some(self), &storage_layout),
+            &FunctionEmitter::new(context, Some(self), &storage_layout, &dispatch),
             &contract_body,
         );
         context.current_contract_type = None;
 
         let getter_selectors: HashSet<u32> = self
-            .members()
+            .linearised_state_variables()
             .iter()
-            .filter_map(|member| match member {
-                ContractMember::StateVariableDefinition(state_variable) => {
-                    state_variable.compute_selector()
-                }
-                _ => None,
-            })
+            .filter_map(|state_variable| state_variable.compute_selector())
             .collect();
 
-        for function in self.functions() {
+        for function in ContractEmitter::emitted_functions(self) {
             if let Some(selector) = function.compute_selector()
                 && getter_selectors.contains(&selector)
             {
@@ -221,8 +269,18 @@ impl EmitObject for ContractDefinition {
             }
             context.current_contract_type = Some(contract_type);
             function.emit(
-                &FunctionEmitter::new(context, Some(self), &storage_layout),
+                &FunctionEmitter::new(context, Some(self), &storage_layout, &dispatch),
                 None,
+                &contract_body,
+            );
+            context.current_contract_type = None;
+        }
+
+        for (symbol, function) in super_dispatch.shadowed.iter() {
+            context.current_contract_type = Some(contract_type);
+            function.emit(
+                &FunctionEmitter::new(context, Some(self), &storage_layout, &dispatch),
+                Some(symbol.as_str()),
                 &contract_body,
             );
             context.current_contract_type = None;
@@ -231,7 +289,7 @@ impl EmitObject for ContractDefinition {
         for function in &reached_free_functions {
             let symbol = FunctionEmitter::free_function_symbol(function);
             function.emit(
-                &FunctionEmitter::new(context, Some(self), &storage_layout),
+                &FunctionEmitter::new(context, Some(self), &storage_layout, &dispatch),
                 Some(symbol.as_str()),
                 &contract_body,
             );
@@ -241,11 +299,8 @@ impl EmitObject for ContractDefinition {
         {
             let environment = Environment::new();
             let getter_context =
-                ExpressionContext::new(context, &environment, &storage_layout, true);
-            for member in self.members().iter() {
-                let ContractMember::StateVariableDefinition(state_variable) = member else {
-                    continue;
-                };
+                ExpressionContext::new(context, &environment, &storage_layout, &dispatch, true);
+            for state_variable in self.linearised_state_variables() {
                 state_variable.emit(&getter_context, contract_body);
             }
         }
@@ -281,6 +336,7 @@ impl EmitLibrary for LibraryDefinition {
         }
 
         let storage_layout: HashMap<NodeId, StorageSlot> = HashMap::new();
+        let dispatch = ContractDispatch::default();
         let library_type =
             AstType::contract(context.mlir_context, &library_name, false).into_mlir();
 
@@ -296,7 +352,7 @@ impl EmitLibrary for LibraryDefinition {
         context.current_contract_type = Some(library_type);
         for function in &functions {
             function.emit(
-                &FunctionEmitter::new(context, None, &storage_layout),
+                &FunctionEmitter::new(context, None, &storage_layout, &dispatch),
                 None,
                 &contract_body,
             );

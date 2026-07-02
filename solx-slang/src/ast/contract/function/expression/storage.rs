@@ -8,7 +8,6 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 use slang_solidity_v2::ast::ContractDefinition;
-use slang_solidity_v2::ast::ContractMember;
 
 use solx_mlir::Pointer;
 use solx_mlir::Type as AstType;
@@ -56,8 +55,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         Pointer::new(pointer).store(AstValue::new(value), self.state, block);
     }
 
-    /// Emits every state-variable inline initializer (`T x = <expr>;`)
-    /// declared in `contract`, in source order.
+    /// Emits every state-variable inline initializer (`T x = <expr>;`) declared across `contract`'s
+    /// C3 linearisation, in linearisation order.
     ///
     /// Reference-typed slots are written via `sol.copy` from the evaluated
     /// value into the storage reference. Value-typed slots cast to the
@@ -67,10 +66,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         contract: &ContractDefinition,
         mut block: BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
-        for member in contract.members().iter() {
-            let ContractMember::StateVariableDefinition(state_variable) = member else {
-                continue;
-            };
+        for state_variable in contract.linearised_state_variables() {
             let Some(slot) = self.storage_layout.get(&state_variable.node_id()) else {
                 continue;
             };

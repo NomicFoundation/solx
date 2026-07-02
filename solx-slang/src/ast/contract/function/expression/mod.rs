@@ -39,6 +39,7 @@ use solx_utils::DataLocation;
 
 use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::block_and::BlockAnd;
+use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::expression::assignment::AssignmentTarget;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::emit::emit_as::EmitAs;
@@ -54,6 +55,9 @@ pub struct ExpressionContext<'state, 'context, 'block> {
     pub environment: &'state Environment<'context, 'block>,
     /// State variable node ID to storage slot mapping.
     pub storage_layout: &'state HashMap<NodeId, StorageSlot>,
+    /// Contract-local super/base and virtual dispatch maps, resolving a `super.f()` / `Base.f()`
+    /// member access and a virtual internal call to their C3-linearised target.
+    pub dispatch: &'state ContractDispatch,
     /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
     ///
     /// `true` by default (Solidity 0.8+). Set to `false` inside `unchecked {}`
@@ -67,12 +71,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         state: &'state Context<'context>,
         environment: &'state Environment<'context, 'block>,
         storage_layout: &'state HashMap<NodeId, StorageSlot>,
+        dispatch: &'state ContractDispatch,
         checked: bool,
     ) -> Self {
         Self {
             state,
             environment,
             storage_layout,
+            dispatch,
             checked,
         }
     }

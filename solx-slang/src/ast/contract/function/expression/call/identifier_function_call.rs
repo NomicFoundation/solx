@@ -70,10 +70,14 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             current_block = next;
         }
 
+        let target_id = self
+            .expression_context
+            .dispatch
+            .resolve_virtual(function_definition.node_id());
         let (mlir_name, parameter_types, return_types) = self
             .expression_context
             .state
-            .resolve_function(function_definition.node_id())
+            .resolve_function(target_id)
             .expect("callee resolves to a registered signature");
 
         let context = self.expression_context.state;

@@ -10,9 +10,12 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableMutability;
 use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
+
+use crate::ast::contract::contract_dispatch::ContractDispatch;
 
 /// The one emission kind a function call's callee resolves to. The variants are mutually exclusive
 /// and tested in declaration order, so an earlier match wins.
@@ -27,6 +30,9 @@ pub enum CallKind {
     /// A built-in invoked by bare identifier (`require`, `keccak256`) or a built-in reached through
     /// member access whose result type comes from the call (`abi.decode`).
     IdentifierBuiltinCall,
+    /// A `super.f(args)` / `Base.f(args)` call redirected by inherited dispatch to its C3-linearised
+    /// target function.
+    InheritedFunctionCall(MemberAccessExpression, NodeId),
     /// An external call into a library member `L.f(args)` / `x.f(args)`, dispatched by ABI selector
     /// through a `DELEGATECALL`.
     ExternalLibraryCall(MemberAccessExpression, FunctionDefinition),
@@ -50,6 +56,7 @@ impl CallKind {
         call: &FunctionCallExpression,
         callee: &Expression,
         arguments: &ArgumentsDeclaration,
+        dispatch: &ContractDispatch,
     ) -> Self {
         if let Expression::Identifier(identifier) = callee
             && let Some(Definition::Struct(struct_definition)) = identifier.resolve_to_definition()
@@ -77,6 +84,11 @@ impl CallKind {
             )
         {
             return Self::IdentifierBuiltinCall;
+        }
+        if let Expression::MemberAccessExpression(access) = callee
+            && let Some(target_id) = Self::inherited_function_callee(access, dispatch)
+        {
+            return Self::InheritedFunctionCall(access.clone(), target_id);
         }
         if let Expression::MemberAccessExpression(access) = callee
             && let Some(function) = Self::external_library_callee(access)
@@ -215,5 +227,19 @@ impl CallKind {
             return None;
         };
         function.compute_selector().is_none().then_some(function)
+    }
+
+    /// The C3-linearised target a `super.f(args)` / `Base.f(args)` member call redirects to, or `None`
+    /// when the access is neither. A `super` operand always carries a recorded redirect; a
+    /// base-contract-qualified access is one exactly when `dispatch` recorded a super redirect for it.
+    fn inherited_function_callee(
+        access: &MemberAccessExpression,
+        dispatch: &ContractDispatch,
+    ) -> Option<NodeId> {
+        let redirect = dispatch.resolve_super(access.node_id());
+        if !matches!(access.operand(), Expression::SuperKeyword(_)) && redirect.is_none() {
+            return None;
+        }
+        Some(redirect.expect("a super/base call has a recorded redirect target"))
     }
 }

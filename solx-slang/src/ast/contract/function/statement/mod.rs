@@ -34,6 +34,7 @@ use solx_mlir::ods::sol::ReturnOperation;
 
 use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::block_and::BlockAnd;
+use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::emit::emit_as::EmitAs;
@@ -56,6 +57,9 @@ pub struct StatementContext<'state, 'context, 'block> {
     region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
     pub storage_layout: &'state HashMap<NodeId, StorageSlot>,
+    /// Contract-local super/base and virtual dispatch maps, forwarded to every borrowed
+    /// [`ExpressionContext`] so a call inside a statement resolves its C3-linearised target.
+    pub dispatch: &'state ContractDispatch,
     /// The function's declared return types, for `emit_return` to cast to.
     return_types: &'state [Type<'context>],
     /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
@@ -71,6 +75,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         environment: &'state mut Environment<'context, 'block>,
         region: &Region<'context>,
         storage_layout: &'state HashMap<NodeId, StorageSlot>,
+        dispatch: &'state ContractDispatch,
         return_types: &'state [Type<'context>],
     ) -> Self {
         Self {
@@ -78,6 +83,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             environment,
             region_pointer: region as *const Region<'context>,
             storage_layout,
+            dispatch,
             return_types,
             checked: true,
         }
@@ -85,7 +91,13 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
 
     /// Borrows an [`ExpressionContext`] sharing this statement's scope.
     pub fn expression_context(&self) -> ExpressionContext<'_, 'context, 'block> {
-        ExpressionContext::new(self.state, self.environment, self.storage_layout, self.checked)
+        ExpressionContext::new(
+            self.state,
+            self.environment,
+            self.storage_layout,
+            self.dispatch,
+            self.checked,
+        )
     }
 
     /// Switches the current region for emitting into Sol op regions.

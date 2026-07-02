@@ -11,6 +11,7 @@ pub mod internal_member_call;
 pub mod function_pointer_call;
 pub mod identifier_builtin_call;
 pub mod identifier_function_call;
+pub mod inherited_function_call;
 pub mod member_builtin_call;
 pub mod new_expression_call;
 pub mod struct_construction;
@@ -68,7 +69,7 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
             }
             other => (None, None, None, block, other),
         };
-        match CallKind::from_call(self, &callee, &arguments) {
+        match CallKind::from_call(self, &callee, &arguments, context.dispatch) {
             CallKind::StructConstruction(struct_definition) => {
                 let result_type = context
                     .resolve_slang_type(self.get_type())
@@ -99,6 +100,9 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
                 let (value, block) =
                     emitter.emit_built_in(self, &callee, &emitter.positional(&arguments), block);
                 BlockAnd { block, value }
+            }
+            CallKind::InheritedFunctionCall(access, target_id) => {
+                emitter.emit_inherited_function_call(&access, target_id, &arguments, block)
             }
             CallKind::ExternalLibraryCall(access, function_definition) => {
                 emitter.emit_external_library_call(&access, &function_definition, &arguments, block)
