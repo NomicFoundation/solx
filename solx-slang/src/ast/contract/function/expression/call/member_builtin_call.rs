@@ -13,6 +13,7 @@ use melior::ir::operation::OperationMutLike;
 use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::MemberAccessExpression;
@@ -44,6 +45,7 @@ use solx_mlir::ods::sol::GasLeftOperation;
 use solx_mlir::ods::sol::GasLimitOperation;
 use solx_mlir::ods::sol::GasPriceOperation;
 use solx_mlir::ods::sol::GetCallDataOperation;
+use solx_mlir::ods::sol::Keccak256Operation;
 use solx_mlir::ods::sol::LengthOperation;
 use solx_mlir::ods::sol::OriginOperation;
 use solx_mlir::ods::sol::PrevRandaoOperation;
@@ -71,7 +73,7 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
         call: &FunctionCallExpression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> Option<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> Option<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let Expression::MemberAccessExpression(access) = call.operand() else {
             return None;
         };
@@ -187,41 +189,115 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
                 let mut iter = arguments.iter();
                 let signature_expression =
                     iter.next().expect("slang validates non-empty arguments");
-                let Expression::StringExpression(string_expression) = signature_expression else {
-                    unimplemented!(
-                        "abi.encodeWithSignature with a non-literal signature is not yet supported"
-                    );
+                let (selector_value, mut current) = match signature_expression {
+                    Expression::StringExpression(string_expression) => {
+                        let signature_bytes = string_expression.value();
+                        let hash = solx_utils::Keccak256Hash::from_slice(&signature_bytes);
+                        let selector_bytes: [u8; 4] = hash.as_bytes()[..4]
+                            .try_into()
+                            .expect("keccak256 always yields 32 bytes");
+                        let selector_word = u32::from_be_bytes(selector_bytes);
+                        let selector_int = AstValue::constant(
+                            i64::from(selector_word),
+                            AstType::new(Type::from(IntegerType::unsigned(context.mlir_context, 32))),
+                            context,
+                            &block,
+                        ).into_mlir();
+                        let selector_value = block
+                            .append_operation(
+                                BytesCastOperation::builder(context.mlir_context, context.location())
+                                    .inp(selector_int)
+                                    .out(AstType::fixed_bytes(context.mlir_context, 4).into_mlir())
+                                    .build()
+                                    .into(),
+                            )
+                            .result(0)
+                            .expect("sol.bytes_cast always produces one result")
+                            .into();
+                        (selector_value, block)
+                    }
+                    _ => {
+                        let BlockAnd { value: signature_value, block: current } =
+                            signature_expression.emit(self.expression_context, block);
+                        let hash = block
+                            .append_operation(
+                                Keccak256Operation::builder(context.mlir_context, context.location())
+                                    .addr(signature_value)
+                                    .result(AstType::fixed_bytes(context.mlir_context, 32).into_mlir())
+                                    .build()
+                                    .into(),
+                            )
+                            .result(0)
+                            .expect("sol.keccak256 always produces one result")
+                            .into();
+                        let selector_value = AstValue::new(hash)
+                            .bytes_cast(AstType::fixed_bytes(context.mlir_context, 4), context, &current)
+                            .into_mlir();
+                        (selector_value, current)
+                    }
                 };
-                let signature_bytes = string_expression.value();
-                let hash = solx_utils::Keccak256Hash::from_slice(&signature_bytes);
-                let selector_bytes: [u8; 4] = hash.as_bytes()[..4]
-                    .try_into()
-                    .expect("keccak256 always yields 32 bytes");
-                let selector_word = u32::from_be_bytes(selector_bytes);
-                let selector_int = AstValue::constant(
-                    i64::from(selector_word),
-                    AstType::new(Type::from(IntegerType::unsigned(context.mlir_context, 32))),
-                    context,
-                    &block,
-                ).into_mlir();
-                let selector_value = block
-                    .append_operation(
-                        BytesCastOperation::builder(context.mlir_context, context.location())
-                            .inp(selector_int)
-                            .out(AstType::fixed_bytes(context.mlir_context, 4).into_mlir())
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("sol.bytes_cast always produces one result")
-                    .into();
                 let mut values = Vec::with_capacity(arguments.len() - 1);
-                let mut current = block;
                 for argument in iter {
                     let BlockAnd { value, block: next } =
                         argument.emit(self.expression_context, current);
                     values.push(value);
                     current = next;
+                }
+                let result = self.emit_sol_encode(&values, Some(selector_value), false, &current);
+                (Some(result), current)
+            }
+            Some(BuiltIn::AbiEncodeCall) => {
+                let arguments = arguments.expect("abi.encodeCall is a member-access call");
+                let mut iter = arguments.iter();
+                let function_expression = iter.next().expect("slang validates the callee argument");
+                let call_arguments =
+                    iter.next().expect("slang validates the argument tuple");
+                let function_definition = match &function_expression {
+                    Expression::MemberAccessExpression(member) => {
+                        member.member().resolve_to_definition()
+                    }
+                    Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+                    _ => None,
+                };
+                let Some(Definition::Function(function_definition)) = function_definition else {
+                    unimplemented!(
+                        "abi.encodeCall through a function pointer is not yet supported"
+                    );
+                };
+                let selector = function_definition
+                    .compute_selector()
+                    .expect("slang computes the selector of an externally visible callee");
+                let selector_int = AstValue::constant(
+                    i64::from(selector),
+                    AstType::new(Type::from(IntegerType::unsigned(context.mlir_context, 32))),
+                    context,
+                    &block,
+                )
+                .into_mlir();
+                let selector_value = AstValue::new(selector_int)
+                    .bytes_cast(AstType::fixed_bytes(context.mlir_context, 4), context, &block)
+                    .into_mlir();
+                let (parameter_types, _) =
+                    TypeConversion::resolve_function_types(&function_definition, context);
+                let argument_expressions: Vec<Expression> = match call_arguments {
+                    Expression::TupleExpression(tuple) => tuple
+                        .items()
+                        .iter()
+                        .filter_map(|item| item.expression())
+                        .collect(),
+                    other => vec![other],
+                };
+                let mut values = Vec::with_capacity(argument_expressions.len());
+                let mut current = block;
+                for (argument, &parameter_type) in
+                    argument_expressions.iter().zip(&parameter_types)
+                {
+                    let BlockAnd { value, block: next } =
+                        argument.emit(self.expression_context, current);
+                    current = next;
+                    let value = TypeConversion::from_target_type(parameter_type, context)
+                        .emit(value, context, &current);
+                    values.push(value);
                 }
                 let result = self.emit_sol_encode(&values, Some(selector_value), false, &current);
                 (Some(result), current)
@@ -492,17 +568,17 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             .into()
     }
 
-    /// Emits `abi.decode(payload, (T))` as a `sol.decode` operation.
+    /// Emits `abi.decode(payload, (T, ...))` as a `sol.decode` operation.
     ///
-    /// The result type comes from the call's slang type (`call.get_type()`);
-    /// multi-result decode requires the multi-result-call dispatch and is
-    /// not yet supported.
+    /// The requested types come from the call's slang type (`call.get_type()`):
+    /// a tuple expands to one result per element, and any other type yields a
+    /// single result.
     fn emit_abi_decode(
         &self,
         call: &FunctionCallExpression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let payload_expression = arguments
             .iter()
             .next()
@@ -512,23 +588,49 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
         let return_slang_type = call
             .get_type()
             .expect("abi.decode call is typed by the binder");
-        if matches!(return_slang_type, SlangType::Tuple(_)) {
-            unimplemented!("abi.decode returning multiple values is not yet supported");
-        }
         let context = self.expression_context.state;
-        let result_type = TypeConversion::resolve_slang_type(&return_slang_type, None, context);
-        let value = block
-            .append_operation(
-                DecodeOperation::builder(context.mlir_context, context.location())
-                    .addr(payload_value)
-                    .outs(&[result_type])
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("abi.decode single-result always produces one value")
-            .into();
-        (value, block)
+        let result_types: Vec<Type> = match return_slang_type {
+            SlangType::Tuple(tuple_type) => tuple_type
+                .types()
+                .iter()
+                .map(|element_type| {
+                    TypeConversion::resolve_slang_type(element_type, None, context)
+                })
+                .collect(),
+            other => vec![TypeConversion::resolve_slang_type(&other, None, context)],
+        };
+        let payload_value = if matches!(
+            payload_expression
+                .get_type()
+                .and_then(|payload_type| payload_type.data_location()),
+            Some(SlangDataLocation::Storage)
+        ) {
+            AstValue::new(payload_value)
+                .data_loc_cast(
+                    AstType::string(context.mlir_context, solx_utils::DataLocation::Memory),
+                    context,
+                    &block,
+                )
+                .into_mlir()
+        } else {
+            payload_value
+        };
+        let operation = block.append_operation(
+            DecodeOperation::builder(context.mlir_context, context.location())
+                .addr(payload_value)
+                .outs(&result_types)
+                .build()
+                .into(),
+        );
+        let values = (0..result_types.len())
+            .map(|index| {
+                operation
+                    .result(index)
+                    .expect("sol.decode yields one result per requested type")
+                    .into()
+            })
+            .collect();
+        (values, block)
     }
 
     /// Emits `addr.call(data)` / `addr.delegatecall(data)` / `addr.staticcall(data)` as the matching

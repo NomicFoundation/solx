@@ -21,6 +21,9 @@
 // CHECK-SOLX: sol.func @"decode(bytes)"
 // CHECK-SOLC: sol.func @decode_{{[0-9]+}}
 // CHECK:   sol.decode {{.*}} : !sol.string<Memory> -> ui256
+// CHECK-SOLX: sol.func @"decodeMulti(bytes)"
+// CHECK-SOLC: sol.func @decodeMulti_{{[0-9]+}}
+// CHECK:   sol.decode %{{.*}} : !sol.string<Memory> -> ui256, i1, !sol.fixedbytes<32>
 
 contract C {
     function encode(uint256 x, address y) public pure returns (bytes memory) { return abi.encode(x, y); }
@@ -29,4 +32,5 @@ contract C {
     function encodeWithSelectorTwo(bytes4 s, uint256 x, address y) public pure returns (bytes memory) { return abi.encodeWithSelector(s, x, y); }
     function encodeWithSignature(uint256 x) public pure returns (bytes memory) { return abi.encodeWithSignature("foo(uint256)", x); }
     function decode(bytes memory data) public pure returns (uint256) { return abi.decode(data, (uint256)); }
+    function decodeMulti(bytes memory data) public pure returns (uint256, bool, bytes32) { return abi.decode(data, (uint256, bool, bytes32)); }
 }
