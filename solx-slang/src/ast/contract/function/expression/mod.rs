@@ -164,12 +164,37 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
     type Output = BlockAnd<'context, 'block, Value<'context, 'block>>;
 
-    /// Dispatches an expression to its variant's emission.
+    /// Dispatches an expression to its variant's emission, first folding a compile-time-constant
+    /// arithmetic/bitwise expression to a single constant.
     fn emit<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> Self::Output {
+        let folds = matches!(
+            self,
+            Expression::AdditiveExpression(_)
+                | Expression::MultiplicativeExpression(_)
+                | Expression::ExponentiationExpression(_)
+                | Expression::ShiftExpression(_)
+                | Expression::BitwiseAndExpression(_)
+                | Expression::BitwiseOrExpression(_)
+                | Expression::BitwiseXorExpression(_)
+                | Expression::PrefixExpression(_)
+        );
+        if folds && let Some(folded) = self.integer_value() {
+            let result_type = context
+                .resolve_slang_type(self.get_type())
+                .expect("binder types every folded constant expression");
+            let value = AstValue::constant_from_bigint(
+                &folded,
+                AstType::new(result_type),
+                context.state,
+                &block,
+            )
+            .into_mlir();
+            return BlockAnd { block, value };
+        }
         match self {
             Expression::DecimalNumberExpression(inner) => inner.emit(context, block),
             Expression::HexNumberExpression(inner) => inner.emit(context, block),
