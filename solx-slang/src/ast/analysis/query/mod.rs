@@ -9,4 +9,6 @@ pub mod base_constructor_chain;
 pub mod match_linearised_base;
 pub mod member_access_operand;
 pub mod method_identifiers;
+pub mod modifier_resolution;
+pub mod positional_arguments;
 pub mod storage_layout;

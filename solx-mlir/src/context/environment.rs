@@ -20,6 +20,10 @@ pub struct Environment<'context, 'block> {
     /// Stack of scopes, each mapping variable names to `(pointer, element_type)`.
     /// The outermost scope (index 0) holds function parameters.
     scopes: Vec<HashMap<String, (Value<'context, 'block>, Type<'context>)>>,
+    /// Names bound directly to an SSA value: a read yields the value with no `sol.load`. Used inside a
+    /// `sol.modifier_call_blk`, whose `IsolatedFromAbove` block exposes the wrapping function's
+    /// parameters as block-argument values rather than stack slots.
+    value_bindings: HashMap<String, (Value<'context, 'block>, Type<'context>)>,
 }
 
 impl<'context, 'block> Default for Environment<'context, 'block> {
@@ -33,6 +37,7 @@ impl<'context, 'block> Environment<'context, 'block> {
     pub fn new() -> Self {
         Self {
             scopes: vec![HashMap::new()],
+            value_bindings: HashMap::new(),
         }
     }
 
@@ -80,5 +85,21 @@ impl<'context, 'block> Environment<'context, 'block> {
             }
         }
         unreachable!("unregistered local variable: {name}");
+    }
+
+    /// Binds `name` directly to the SSA `value` of `element_type`: a read returns `value` itself,
+    /// emitting no `sol.load`. Used to expose a `sol.modifier_call_blk` block argument as a parameter.
+    pub fn bind_value(
+        &mut self,
+        name: String,
+        value: Value<'context, 'block>,
+        element_type: Type<'context>,
+    ) {
+        self.value_bindings.insert(name, (value, element_type));
+    }
+
+    /// The SSA value `name` is directly bound to and its element type, if any (see [`Self::bind_value`]).
+    pub fn value_binding(&self, name: &str) -> Option<(Value<'context, 'block>, Type<'context>)> {
+        self.value_bindings.get(name).copied()
     }
 }

@@ -18,6 +18,7 @@ use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
 use melior::ir::r#type::IntegerType;
+use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionDefinition;
@@ -43,6 +44,7 @@ use crate::ast::contract::contract_dispatch::ContractDispatch;
 use crate::ast::emit::emit_constructor::EmitConstructor;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_function::EmitFunction;
+use crate::ast::emit::emit_modifier_calls::EmitModifierCalls;
 use crate::ast::emit::emit_object::EmitLibrary;
 use crate::ast::emit::emit_object::EmitObject;
 
@@ -294,6 +296,37 @@ impl EmitObject for ContractDefinition {
                 &contract_body,
             );
         }
+
+        let mut emitted_modifiers: HashSet<NodeId> = HashSet::new();
+        let mut invoked_modifiers: Vec<FunctionDefinition> = Vec::new();
+        {
+            let modifier_emitter =
+                FunctionEmitter::new(context, Some(self), &storage_layout, &dispatch);
+            let mut wrapped_functions = self.linearised_functions();
+            for base in self.linearised_bases() {
+                if let ContractBase::Contract(base_contract) = base
+                    && let Some(constructor) = base_contract.constructor()
+                {
+                    wrapped_functions.push(constructor);
+                }
+            }
+            wrapped_functions.extend(reached_free_functions.iter().cloned());
+            for function in wrapped_functions.iter() {
+                for modifier in function.resolve_invoked_modifiers(&modifier_emitter) {
+                    if emitted_modifiers.insert(modifier.node_id()) {
+                        invoked_modifiers.push(modifier);
+                    }
+                }
+            }
+        }
+        context.current_contract_type = Some(contract_type);
+        for modifier in invoked_modifiers.iter() {
+            modifier.emit_modifier_definition(
+                &FunctionEmitter::new(context, Some(self), &storage_layout, &dispatch),
+                &contract_body,
+            );
+        }
+        context.current_contract_type = None;
 
         context.current_contract_type = Some(contract_type);
         {

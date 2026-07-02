@@ -3,6 +3,7 @@
 //!
 
 pub mod expression;
+pub mod modifier;
 pub mod statement;
 
 use std::collections::HashMap;
@@ -19,6 +20,7 @@ use slang_solidity_v2::ast::ElementaryType;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
+use slang_solidity_v2::ast::ModifierInvocation;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::TypeName;
@@ -34,6 +36,7 @@ use solx_mlir::ods::sol::ReturnOperation;
 
 use crate::ast::analysis::query::base_constructor_arguments::BaseConstructorArguments;
 use crate::ast::analysis::query::base_constructor_chain::BaseConstructorChain;
+use crate::ast::analysis::query::modifier_resolution::ModifierResolution;
 use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::contract_dispatch::ContractDispatch;
@@ -43,6 +46,7 @@ use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::emit::emit_constructor::EmitConstructor;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_function::EmitFunction;
+use crate::ast::emit::emit_modifier_calls::EmitModifierCalls;
 use crate::ast::emit::emit_statement::EmitStatement;
 
 /// Lowers a Solidity function definition to a `sol.func` operation.
@@ -75,6 +79,21 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             storage_layout,
             dispatch,
         }
+    }
+
+    /// The shared MLIR context threaded through emission.
+    pub fn state(&self) -> &'state Context<'context> {
+        self.state
+    }
+
+    /// The state-variable storage layout of the contract being emitted.
+    pub fn storage_layout(&self) -> &'state HashMap<NodeId, StorageSlot> {
+        self.storage_layout
+    }
+
+    /// The contract-local super/base and virtual dispatch maps of the contract being emitted.
+    pub fn dispatch(&self) -> &'state ContractDispatch {
+        self.dispatch
     }
 
     /// Builds the MLIR function name as `{name}({types})`.
@@ -119,6 +138,34 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// constructor's node id so each base contract's constructor resolves to its own symbol.
     pub fn base_constructor_symbol(constructor: &FunctionDefinition) -> String {
         format!("constructor_{}", constructor.node_id())
+    }
+
+    /// The MLIR symbol of a modifier definition: its name suffixed with its node id, so two like-named
+    /// modifiers in an inherited override chain resolve to distinct `sol.modifier` defs. The same
+    /// authority names both the `sol.modifier` def and the invoking `sol.call`.
+    pub fn modifier_symbol(modifier: &FunctionDefinition) -> String {
+        let name = modifier
+            .name()
+            .map(|identifier| identifier.name())
+            .expect("a modifier definition has a name");
+        format!("{name}_{}", modifier.node_id())
+    }
+
+    /// Resolves a modifier invocation to the body-bearing definition to emit, or `None` to skip a
+    /// non-modifier invocation or a bodyless modifier. Applies lexical resolution, then virtual
+    /// override re-dispatch against the emitting contract's C3-linearised modifier set.
+    pub fn resolve_modifier_invocation(
+        &self,
+        invocation: &ModifierInvocation,
+    ) -> Option<FunctionDefinition> {
+        let Some(Definition::Modifier(lexical)) = invocation.name().resolve_to_definition() else {
+            return None;
+        };
+        let definition = self
+            .contract
+            .and_then(|contract| contract.resolve_modifier_override(invocation, &lexical))
+            .unwrap_or(lexical);
+        definition.body().is_some().then_some(definition)
     }
 
     /// Returns a textual representation of a Solidity type name from the AST.
@@ -278,6 +325,13 @@ impl EmitFunction for FunctionDefinition {
             contract_body,
         );
 
+        self.emit_modifier_call_blocks(
+            emitter,
+            &parameters.iter().collect::<Vec<_>>(),
+            &mlir_parameter_types,
+            &function_entry_block,
+        );
+
         let mut environment = Environment::new();
 
         for (index, parameter) in parameters.iter().enumerate() {
@@ -428,6 +482,15 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         } else {
             entry
         };
+
+        if let Some(constructor) = &constructor {
+            constructor.emit_modifier_call_blocks(
+                self,
+                &constructor.parameters().iter().collect::<Vec<_>>(),
+                &parameter_types,
+                &current_block,
+            );
+        }
 
         if let Some(constructor) = &constructor {
             for (index, parameter) in constructor.parameters().iter().enumerate() {

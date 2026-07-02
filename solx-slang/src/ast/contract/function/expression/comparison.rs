@@ -16,6 +16,7 @@ use solx_mlir::Value as AstValue;
 
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::emit::emit_as::EmitAs;
 use crate::ast::emit::emit_expression::EmitExpression;
 
 expression_emit!(EqualityExpression; |node, context, block| {
@@ -55,8 +56,21 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let value = self.emit_operator_call(function_id, vec![lhs, rhs], &block);
             return BlockAnd { block, value };
         }
-        let BlockAnd { value: lhs, block } = left.emit(self, block);
-        let BlockAnd { value: rhs, block } = right.emit(self, block);
+        let left_is_string = matches!(left, Expression::StringExpression(_));
+        let right_is_string = matches!(right, Expression::StringExpression(_));
+        let (lhs, rhs, block) = if right_is_string && !left_is_string {
+            let BlockAnd { value: lhs, block } = left.emit(self, block);
+            let BlockAnd { value: rhs, block } = right.emit_as(lhs.r#type(), self, block);
+            (lhs, rhs, block)
+        } else if left_is_string && !right_is_string {
+            let BlockAnd { value: rhs, block } = right.emit(self, block);
+            let BlockAnd { value: lhs, block } = left.emit_as(rhs.r#type(), self, block);
+            (lhs, rhs, block)
+        } else {
+            let BlockAnd { value: lhs, block } = left.emit(self, block);
+            let BlockAnd { value: rhs, block } = right.emit(self, block);
+            (lhs, rhs, block)
+        };
         let lhs_type = lhs.r#type();
         let rhs_type = rhs.r#type();
         let value = if lhs_type == rhs_type {

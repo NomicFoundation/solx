@@ -4,6 +4,7 @@
 
 pub mod environment;
 pub mod function;
+pub mod modifier;
 pub mod user_defined_operator;
 
 use std::cell::Cell;
@@ -220,8 +221,9 @@ impl<'context> Context<'context> {
     /// 6. `convert-cf-to-llvm`
     /// 7. `reconcile-unrealized-casts`
     ///
-    /// Modifier lowering and LICM are skipped — they operate on `sol.modifier`
-    /// and `sol.while`/`sol.for` ops which are not yet emitted.
+    /// LICM is skipped — it operates on `sol.while`/`sol.for` ops which are not
+    /// yet emitted; the `sol-modifier-op-lowering` pass inlines each emitted
+    /// `sol.modifier` into its `sol.modifier_call_blk` before Sol-to-Yul.
     ///
     /// # Errors
     ///

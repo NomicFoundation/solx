@@ -17,6 +17,7 @@ use melior::ir::Region;
 use melior::ir::Type;
 use slang_solidity_v2::ast::Block;
 use slang_solidity_v2::ast::BreakStatement;
+use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::ContinueStatement;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::ExpressionStatement;
@@ -30,6 +31,7 @@ use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::ods::sol::BreakOperation;
 use solx_mlir::ods::sol::ContinueOperation;
+use solx_mlir::ods::sol::PlaceholderOperation;
 use solx_mlir::ods::sol::ReturnOperation;
 
 use crate::ast::analysis::query::storage_layout::StorageSlot;
@@ -156,6 +158,15 @@ impl<'context: 'block, 'block> EmitStatement<'context, 'block> for Statement {
 
 statement_emit!(ExpressionStatement; |node, context, block| {
     let expression = node.expression();
+    if let Expression::Identifier(identifier) = &expression
+        && matches!(
+            identifier.resolve_to_built_in(),
+            Some(BuiltIn::ModifierUnderscore)
+        )
+    {
+        mlir_op_void!(context.state, &block, PlaceholderOperation);
+        return Some(block);
+    }
     if let Expression::FunctionCallExpression(call) = &expression
         && let Expression::Identifier(identifier) = call.operand()
         && identifier.name() == revert::IDENTIFIER

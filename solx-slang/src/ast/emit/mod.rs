@@ -8,6 +8,7 @@ pub mod emit_constructor;
 pub mod emit_expression;
 pub mod emit_for_effect;
 pub mod emit_function;
+pub mod emit_modifier_calls;
 pub mod emit_object;
 pub mod emit_place;
 pub mod emit_statement;

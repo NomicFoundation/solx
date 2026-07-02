@@ -57,6 +57,9 @@ expression_emit!(Identifier; |node, context, block| {
             BlockAnd { block, value }
         }
         Some(Definition::Variable(_) | Definition::Parameter(_)) => {
+            if let Some((value, _)) = context.environment.value_binding(&name) {
+                return BlockAnd { block, value };
+            }
             let (pointer, element_type) = context.environment.variable_with_type(&name);
             let value = Pointer::new(pointer)
                 .load(AstType::new(element_type), context.state, &block)

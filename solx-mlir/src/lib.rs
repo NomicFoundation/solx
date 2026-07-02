@@ -22,6 +22,7 @@ pub mod output;
 pub use self::context::Context;
 pub use self::context::environment::Environment;
 pub use self::context::function::Function;
+pub use self::context::modifier::Modifier;
 pub use self::context::user_defined_operator::UserDefinedOperator;
 pub use self::dialect::Dialect;
 pub use self::ir::attributes::CmpPredicate;
