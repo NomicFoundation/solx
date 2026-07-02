@@ -31,6 +31,10 @@ pub enum TypeConversion<'context> {
     Bool,
     /// `address(x)` / `payable(x)` — `sol.cast` to ui160 then `sol.address_cast`.
     Address,
+    /// `C(a)` / `I(a)` on an address — `sol.address_cast` to the contract or interface target.
+    AddressCast(Type<'context>),
+    /// `C(c)` between two contracts or interfaces — `sol.contract_cast` to the target.
+    ContractCast(Type<'context>),
     /// `bytesN(x)` / `byte(x)` and the reverse `uintN(bytesN)` — `sol.bytes_cast` to target.
     BytesCast(Type<'context>),
     /// `bytesN(b)` on a dynamic `bytes` value — `sol.dyn_bytes_to_fixedbytes` to target.
@@ -312,12 +316,14 @@ impl<'context> TypeConversion<'context> {
 
     /// Classifies an explicit `T(x)` conversion from its Slang source and target types.
     ///
-    /// An enumeration on either side routes through `sol.enum_cast`. A dynamic `bytes` / `string`
-    /// source toward a `bytesN` target routes through `sol.dyn_bytes_to_fixedbytes`. A fixed-width
-    /// byte type on either side routes through `sol.bytes_cast`; the Slang types disambiguate the
-    /// reverse `uintN(bytesN)` and `uint8(E)` directions that the MLIR target alone cannot. Any other
-    /// conversion, including a `bytes` / `string` data-location relocation, defers to the target-typed
-    /// classification.
+    /// An enumeration on either side routes through `sol.enum_cast`. A contract or interface on both
+    /// sides routes through `sol.contract_cast`, and an address toward a contract or interface target
+    /// routes through `sol.address_cast`; the reverse contract-to-address direction defers to the
+    /// target-typed classification's address arm. A dynamic `bytes` / `string` source toward a `bytesN`
+    /// target routes through `sol.dyn_bytes_to_fixedbytes`. A fixed-width byte type on either side
+    /// routes through `sol.bytes_cast`; the Slang types disambiguate the reverse `uintN(bytesN)` and
+    /// `uint8(E)` directions that the MLIR target alone cannot. Any other conversion, including a
+    /// `bytes` / `string` data-location relocation, defers to the target-typed classification.
     pub fn from_slang_conversion(
         source: &SlangType,
         target: &SlangType,
@@ -332,8 +338,14 @@ impl<'context> TypeConversion<'context> {
             target,
             SlangType::Bytes(_) | SlangType::String(_) | SlangType::Array(_)
         );
+        let source_is_contract = matches!(source, SlangType::Contract(_) | SlangType::Interface(_));
+        let target_is_contract = matches!(target, SlangType::Contract(_) | SlangType::Interface(_));
         if matches!(source, SlangType::Enum(_)) || matches!(target, SlangType::Enum(_)) {
             Self::EnumCast(target_type)
+        } else if source_is_contract && target_is_contract {
+            Self::ContractCast(target_type)
+        } else if target_is_contract {
+            Self::AddressCast(target_type)
         } else if source_is_reference && matches!(target, SlangType::ByteArray(_)) {
             Self::DynBytesToFixedBytes(target_type)
         } else if matches!(source, SlangType::ByteArray(_))
@@ -354,7 +366,9 @@ impl<'context> TypeConversion<'context> {
                 AstType::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir()
             }
             Self::Address => AstType::address(context.mlir_context, false).into_mlir(),
-            Self::BytesCast(target_type)
+            Self::AddressCast(target_type)
+            | Self::ContractCast(target_type)
+            | Self::BytesCast(target_type)
             | Self::DynBytesToFixedBytes(target_type)
             | Self::DataLocCast(target_type)
             | Self::EnumCast(target_type)
@@ -431,6 +445,12 @@ impl<'context> TypeConversion<'context> {
                 };
                 truncated.address_cast(address_type, context, block).into_mlir()
             }
+            Self::AddressCast(target_type) => AstValue::new(value)
+                .address_cast(AstType::new(target_type), context, block)
+                .into_mlir(),
+            Self::ContractCast(target_type) => AstValue::new(value)
+                .contract_cast(AstType::new(target_type), context, block)
+                .into_mlir(),
             Self::BytesCast(target_type) => {
                 let bridged = match (
                     IntegerType::try_from(value.r#type()),
