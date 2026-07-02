@@ -182,7 +182,13 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
                     ))
                 };
                 let address = Pointer::new(base_value)
-                    .gep(AstValue::new(index_value), AstType::new(element_type), context.state, &block)
+                    .gep(
+                        AstValue::new(index_value),
+                        AstType::new(element_type),
+                        false,
+                        context.state,
+                        &block,
+                    )
                     .into_mlir();
                 (address, element_type)
             }

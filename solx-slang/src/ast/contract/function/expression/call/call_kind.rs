@@ -10,6 +10,7 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
+use slang_solidity_v2::ast::StateVariableMutability;
 use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 
@@ -26,8 +27,9 @@ pub enum CallKind {
     /// A built-in invoked by bare identifier (`require`, `keccak256`) or a built-in reached through
     /// member access whose result type comes from the call (`abi.decode`).
     IdentifierBuiltinCall,
-    /// An external call to a contract-instance method: `c.foo(args)`, dispatched by ABI selector.
-    ExternalMemberCall(MemberAccessExpression, FunctionDefinition),
+    /// An external call to a contract-instance method or `public` state-variable getter:
+    /// `c.foo(args)`, dispatched by ABI selector.
+    ExternalMemberCall(MemberAccessExpression, Definition),
     /// A built-in reached through member access (`address.balance`, `abi.encode`).
     MemberBuiltinCall(MemberAccessExpression),
     /// A `new C(...)` contract or `new T[](...)` / `new bytes(...)` dynamic-array creation.
@@ -71,9 +73,9 @@ impl CallKind {
             return Self::IdentifierBuiltinCall;
         }
         if let Expression::MemberAccessExpression(access) = callee
-            && let Some(function_definition) = Self::external_member_callee(access)
+            && let Some(definition) = Self::external_member_callee(access)
         {
-            return Self::ExternalMemberCall(access.clone(), function_definition);
+            return Self::ExternalMemberCall(access.clone(), definition);
         }
         if let Expression::MemberAccessExpression(access) = callee {
             return Self::MemberBuiltinCall(access.clone());
@@ -124,27 +126,37 @@ impl CallKind {
         addresses_value && matches!(callee.get_type(), Some(SlangType::Function(_)))
     }
 
-    /// The contract method an external member call `c.foo(args)` dispatches to, or `None` when the
-    /// access is not one.
+    /// The contract method or `public` state-variable getter an external member call `c.foo(args)`
+    /// dispatches to, or `None` when the access is not one.
     ///
-    /// The member must resolve to a function carrying an ABI selector, so an internal or private
-    /// method (no selector) falls through. The receiver must be a contract or interface instance
-    /// value, which excludes both a library member call and a namespace- or type-qualified static
-    /// call: those resolve through a `Library` or type reference, never a runtime instance.
-    fn external_member_callee(access: &MemberAccessExpression) -> Option<FunctionDefinition> {
-        let Some(Definition::Function(function_definition)) =
-            access.member().resolve_to_definition()
-        else {
-            return None;
-        };
-        if function_definition.compute_selector().is_none()
-            || !matches!(
-                access.operand().get_type(),
-                Some(SlangType::Contract(_) | SlangType::Interface(_))
-            )
-        {
+    /// The member must resolve to a function or a getter carrying an ABI selector, so an internal or
+    /// private method (no selector) falls through. The receiver must be a contract or interface
+    /// instance value, which excludes both a library member call and a namespace- or type-qualified
+    /// static call: those resolve through a `Library` or type reference, never a runtime instance.
+    fn external_member_callee(access: &MemberAccessExpression) -> Option<Definition> {
+        if !matches!(
+            access.operand().get_type(),
+            Some(SlangType::Contract(_) | SlangType::Interface(_))
+        ) {
             return None;
         }
-        Some(function_definition)
+        match access.member().resolve_to_definition()? {
+            Definition::Function(function_definition)
+                if function_definition.compute_selector().is_some() =>
+            {
+                Some(Definition::Function(function_definition))
+            }
+            Definition::StateVariable(state_variable)
+                if state_variable.compute_selector().is_some()
+                    && !matches!(
+                        state_variable.mutability(),
+                        StateVariableMutability::Constant
+                            | StateVariableMutability::Immutable
+                    ) =>
+            {
+                Some(Definition::StateVariable(state_variable))
+            }
+            _ => None,
+        }
     }
 }

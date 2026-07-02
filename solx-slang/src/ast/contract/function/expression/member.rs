@@ -383,7 +383,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             ))
         };
         let address = Pointer::new(base_value)
-            .gep(index_value, AstType::new(element_type), self.state, &block)
+            .gep(index_value, AstType::new(element_type), false, self.state, &block)
             .into_mlir();
         Some(BlockAnd {
             block,

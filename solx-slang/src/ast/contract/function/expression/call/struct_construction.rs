@@ -55,6 +55,7 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             let field_address = Pointer::from(struct_address).gep(
                 index_value,
                 AstType::new(field_type),
+                false,
                 context,
                 &block,
             );
