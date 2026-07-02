@@ -54,39 +54,7 @@ impl<'context: 'block, 'block> AssignmentTarget<'context, 'block> {
                 let name = identifier.name();
                 let target = match identifier.resolve_to_definition() {
                     Some(Definition::StateVariable(state_variable)) => {
-                        let declared_type = state_variable
-                            .get_type()
-                            .expect("binder types every state variable");
-                        let slot = context
-                            .storage_layout
-                            .get(&state_variable.node_id())
-                            .expect("state variable is registered in the storage layout")
-                            .clone();
-                        let element_type = TypeConversion::resolve_slang_type(
-                            &declared_type,
-                            None,
-                            context.state,
-                        );
-                        if declared_type.is_reference_type()
-                            && !matches!(declared_type, ast::Type::Mapping(_))
-                        {
-                            let address_type = ExpressionContext::address_type(
-                                context.state,
-                                element_type,
-                                DataLocation::Storage,
-                                &declared_type,
-                            );
-                            let storage_ref = Pointer::addr_of(
-                                &slot.name,
-                                AstType::new(address_type),
-                                context.state,
-                                &block,
-                            )
-                            .into_mlir();
-                            AssignmentTarget::ReferenceCopy(storage_ref)
-                        } else {
-                            AssignmentTarget::Storage(slot, element_type)
-                        }
+                        return Self::from_state_variable(context, &state_variable, block);
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                         let (pointer, element_type) =
@@ -108,6 +76,11 @@ impl<'context: 'block, 'block> AssignmentTarget<'context, 'block> {
                 (Self::from_address(place.address, place.element_type), block)
             }
             Expression::MemberAccessExpression(access) => {
+                if let Some(Definition::StateVariable(state_variable)) =
+                    access.member().resolve_to_definition()
+                {
+                    return Self::from_state_variable(context, &state_variable, block);
+                }
                 let BlockAnd {
                     value: place,
                     block,
@@ -119,6 +92,39 @@ impl<'context: 'block, 'block> AssignmentTarget<'context, 'block> {
                 std::mem::discriminant(target_expression)
             ),
         }
+    }
+
+    /// Resolves a state-variable lvalue (bare `x` or namespace-qualified `C.x`) to its target.
+    /// Reference-typed storage is copied via `sol.copy` ([`Self::ReferenceCopy`]); value-typed
+    /// storage stores the scalar directly ([`Self::Storage`]).
+    fn from_state_variable<'state>(
+        context: &ExpressionContext<'state, 'context, 'block>,
+        state_variable: &ast::StateVariableDefinition,
+        block: BlockRef<'context, 'block>,
+    ) -> (Self, BlockRef<'context, 'block>) {
+        let declared_type = state_variable
+            .get_type()
+            .expect("binder types every state variable");
+        let slot = context
+            .storage_layout
+            .get(&state_variable.node_id())
+            .expect("state variable is registered in the storage layout")
+            .clone();
+        let element_type =
+            TypeConversion::resolve_slang_type(&declared_type, None, context.state);
+        if declared_type.is_reference_type() && !matches!(declared_type, ast::Type::Mapping(_)) {
+            let address_type = ExpressionContext::address_type(
+                context.state,
+                element_type,
+                DataLocation::Storage,
+                &declared_type,
+            );
+            let storage_ref =
+                Pointer::addr_of(&slot.name, AstType::new(address_type), context.state, &block)
+                    .into_mlir();
+            return (AssignmentTarget::ReferenceCopy(storage_ref), block);
+        }
+        (AssignmentTarget::Storage(slot, element_type), block)
     }
 
     /// Classifies a computed lvalue `address` into its target: a reference element, whose address
