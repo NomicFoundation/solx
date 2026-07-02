@@ -1,0 +1,13 @@
+// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
+
+// CHECK: sol.ext_func_constant %{{.*}} {selector = {{-?[0-9]+}} : i32} : !sol.address -> !sol.ext_func_ref<() -> !sol.string<Memory>>
+
+contract C {
+    string public name;
+
+    function pointer() external view returns (string memory) {
+        function() external view returns (string memory) functionPointer = this.name;
+        return functionPointer();
+    }
+}

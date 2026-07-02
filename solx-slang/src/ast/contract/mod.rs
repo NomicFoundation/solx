@@ -20,6 +20,7 @@ use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
+use slang_solidity_v2::ast::NodeId;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
@@ -28,6 +29,7 @@ use solx_mlir::ods::sol::ContractOperation;
 use solx_mlir::ods::sol::StateVarOperation;
 
 use crate::ast::analysis::query::storage_layout::StorageLayout;
+use crate::ast::analysis::walk::free_function::FreeCallCollector;
 use crate::ast::emit::emit_constructor::EmitConstructor;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_function::EmitFunction;
@@ -81,17 +83,48 @@ impl ContractEmitter {
             return_types,
         );
     }
+
+    /// Registers a reached free function under its node-id-qualified symbol, so a bare-identifier
+    /// reference or operator dispatch to it resolves to the same symbol its `sol.func` carries.
+    fn register_free_function(context: &mut Context, function: &FunctionDefinition) {
+        let mlir_name = FunctionEmitter::free_function_symbol(function);
+        let (parameter_types, return_types) =
+            TypeConversion::resolve_function_types(function, context);
+        context.register_function_signature(
+            function.node_id(),
+            mlir_name,
+            parameter_types,
+            return_types,
+        );
+    }
 }
 
 impl EmitObject for ContractDefinition {
-    /// Emits a `sol.contract` containing all function definitions, followed by the operator-bound free
-    /// functions the contract dispatches to.
-    fn emit(&self, context: &mut Context, operator_functions: &[FunctionDefinition]) {
+    /// Emits a `sol.contract` containing all function definitions, followed by the reachable free
+    /// functions the contract references.
+    fn emit(
+        &self,
+        context: &mut Context,
+        operator_functions: &[FunctionDefinition],
+        free_functions: &[FunctionDefinition],
+    ) {
         let contract_name = self.name().name();
 
-        ContractEmitter::pre_register_functions(context, self);
+        let mut reached_free_functions =
+            FreeCallCollector::reachable_free_functions(self, free_functions, operator_functions);
+        let mut seen: HashSet<NodeId> = reached_free_functions
+            .iter()
+            .map(|function| function.node_id())
+            .collect();
         for function in operator_functions {
-            ContractEmitter::register_function(context, function);
+            if seen.insert(function.node_id()) {
+                reached_free_functions.push(function.clone());
+            }
+        }
+
+        ContractEmitter::pre_register_functions(context, self);
+        for function in &reached_free_functions {
+            ContractEmitter::register_free_function(context, function);
         }
         let storage_layout = self.storage_layout();
 
@@ -167,14 +200,17 @@ impl EmitObject for ContractDefinition {
             context.current_contract_type = Some(contract_type);
             function.emit(
                 &FunctionEmitter::new(context, self, &storage_layout),
+                None,
                 &contract_body,
             );
             context.current_contract_type = None;
         }
 
-        for function in operator_functions {
+        for function in &reached_free_functions {
+            let symbol = FunctionEmitter::free_function_symbol(function);
             function.emit(
                 &FunctionEmitter::new(context, self, &storage_layout),
+                Some(symbol.as_str()),
                 &contract_body,
             );
         }

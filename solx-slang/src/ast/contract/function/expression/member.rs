@@ -30,6 +30,8 @@ use crate::ast::analysis::query::member_access_operand::MemberAccessOperand;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::CallContext;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::contract::getter::signature::Signature;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_for_effect::EmitForEffect;
 use crate::ast::emit::emit_place::EmitPlace;
@@ -93,17 +95,8 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for MemberAccess
         if let Some(result) = context.emit_selector(self, block) {
             return result;
         }
-        if let Some(Definition::Function(function_definition)) =
-            self.member().resolve_to_definition()
-        {
-            let value = context
-                .state
-                .function_signatures
-                .get(&function_definition.node_id())
-                .expect("a namespace-qualified internal function resolves to a registered signature")
-                .pointer_constant(context.state, &block)
-                .into_mlir();
-            return BlockAnd { block, value };
+        if let Some(result) = context.emit_function_pointer(self, block) {
+            return result;
         }
         let (value, block) = CallContext::new(context).emit_member_access(self, block);
         BlockAnd { block, value }
@@ -280,33 +273,99 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         identifier_path.resolve_to_definition()
     }
 
-    /// Emits a compile-time `.selector` — a function or error four-byte selector, or an event's
-    /// thirty-two-byte topic — running the receiver's side effects first, or `None` when the member
-    /// is not a static selector.
+    /// Emits a function-pointer value denoted by `base.member`, or `None` when the member denotes no
+    /// function pointer.
+    ///
+    /// A type-qualified method `C.f` takes the internal function pointer `sol.func_constant`. A method
+    /// or `public` state-variable getter reached through a contract-instance value (`this.f`,
+    /// `this.value`) takes the external function pointer `sol.ext_func_constant`, packing the
+    /// receiver's address with the callee's ABI selector.
+    fn emit_function_pointer(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> Option<BlockAnd<'context, 'block, Value<'context, 'block>>> {
+        let member_definition = access.member().resolve_to_definition()?;
+        if let Definition::Function(function_definition) = &member_definition
+            && MemberAccessOperand(&access.operand()).is_namespace_or_type()
+        {
+            let value = self
+                .state
+                .function_signatures
+                .get(&function_definition.node_id())
+                .expect("a type-qualified internal function resolves to a registered signature")
+                .pointer_constant(self.state, &block)
+                .into_mlir();
+            return Some(BlockAnd { block, value });
+        }
+        let (selector, parameter_types, return_types) = match &member_definition {
+            Definition::Function(function_definition) => {
+                let selector = function_definition.compute_selector()?;
+                let (parameter_types, return_types) =
+                    TypeConversion::resolve_function_types(function_definition, self.state);
+                (selector, parameter_types, return_types)
+            }
+            Definition::StateVariable(state_variable) => {
+                let selector = state_variable.compute_selector()?;
+                let (parameter_types, return_types) = state_variable
+                    .getter_signature(self.state)
+                    .expect("a function pointer to a public accessor has a returnable signature");
+                (selector, parameter_types, return_types)
+            }
+            _ => return None,
+        };
+        let BlockAnd {
+            value: receiver,
+            block,
+        } = access.operand().emit(self, block);
+        let value = AstValue::external_callee(
+            AstValue::new(receiver),
+            selector,
+            &parameter_types,
+            &return_types,
+            self.state,
+            &block,
+        )
+        .into_mlir();
+        Some(BlockAnd { block, value })
+    }
+
+    /// Emits a `.selector` or `.address` member. A compile-time selector — a function or error
+    /// four-byte selector, a public state-variable getter's four-byte selector, or an event's
+    /// thirty-two-byte topic — folds to a constant, running the receiver's side effects first. A
+    /// `.selector` or `.address` on an external function-pointer value reads it at runtime through
+    /// `sol.ext_func_selector` / `sol.ext_func_addr`. Returns `None` when the member is neither.
     fn emit_selector(
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> Option<BlockAnd<'context, 'block, Value<'context, 'block>>> {
-        let (selector, byte_width) = match access.member().resolve_to_built_in() {
-            Some(BuiltIn::FunctionSelector) => {
-                let Some(Definition::Function(function)) =
-                    MemberAccessOperand(&access.operand()).resolve()
-                else {
-                    return None;
-                };
-                (BigInt::from(function.compute_selector()?), 4)
-            }
+        let constant = match access.member().resolve_to_built_in() {
+            Some(BuiltIn::FunctionSelector) => match MemberAccessOperand(&access.operand()).resolve()
+            {
+                Some(Definition::Function(function)) => {
+                    Some((BigInt::from(function.compute_selector()?), 4))
+                }
+                Some(Definition::StateVariable(state_variable)) => Some((
+                    BigInt::from(
+                        state_variable
+                            .compute_selector()
+                            .expect("a public accessor `.selector` has a selector"),
+                    ),
+                    4,
+                )),
+                _ => None,
+            },
             Some(BuiltIn::ErrorSelector) => {
                 let Some(Definition::Error(error)) =
                     MemberAccessOperand(&access.operand()).resolve()
                 else {
                     unreachable!("slang resolves an error `.selector` base to an error definition");
                 };
-                (
+                Some((
                     BigInt::from(error.compute_selector().expect("slang validated")),
                     4,
-                )
+                ))
             }
             Some(BuiltIn::EventSelector) => {
                 let Some(Definition::Event(event)) =
@@ -316,29 +375,47 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 };
                 let signature = event.compute_canonical_signature().expect("slang validated");
                 let hash = solx_utils::Keccak256Hash::from_slice(signature.as_bytes());
-                (BigInt::from_bytes_be(Sign::Plus, hash.as_bytes()), 32)
+                Some((BigInt::from_bytes_be(Sign::Plus, hash.as_bytes()), 32))
             }
+            _ => None,
+        };
+        if let Some((selector, byte_width)) = constant {
+            let block = if let Expression::MemberAccessExpression(inner) = access.operand()
+                && !MemberAccessOperand(&inner.operand()).is_namespace_or_type()
+            {
+                inner.operand().emit_for_effect(self, block)
+            } else {
+                block
+            };
+            let integer_width = (byte_width * 8) as usize;
+            let value = AstValue::constant_from_bigint(
+                &selector,
+                AstType::unsigned(self.state.mlir_context, integer_width),
+                self.state,
+                &block,
+            )
+            .bytes_cast(
+                AstType::fixed_bytes(self.state.mlir_context, byte_width),
+                self.state,
+                &block,
+            )
+            .into_mlir();
+            return Some(BlockAnd { block, value });
+        }
+        let member = match access.member().resolve_to_built_in() {
+            Some(member @ (BuiltIn::FunctionSelector | BuiltIn::FunctionAddress)) => member,
             _ => return None,
         };
-        let block = if let Expression::MemberAccessExpression(inner) = access.operand()
-            && !MemberAccessOperand(&inner.operand()).is_namespace_or_type()
-        {
-            inner.operand().emit_for_effect(self, block)
-        } else {
-            block
-        };
-        let integer_width = (byte_width * 8) as usize;
-        let value = AstValue::constant_from_bigint(
-            &selector,
-            AstType::unsigned(self.state.mlir_context, integer_width),
-            self.state,
-            &block,
-        )
-        .bytes_cast(
-            AstType::fixed_bytes(self.state.mlir_context, byte_width),
-            self.state,
-            &block,
-        )
+        let BlockAnd {
+            value: operand,
+            block,
+        } = access.operand().emit(self, block);
+        let operand = AstValue::new(operand);
+        let value = match member {
+            BuiltIn::FunctionSelector => operand.external_function_selector(self.state, &block),
+            BuiltIn::FunctionAddress => operand.external_function_address(self.state, &block),
+            _ => unreachable!("dispatched on FunctionSelector / FunctionAddress"),
+        }
         .into_mlir();
         Some(BlockAnd { block, value })
     }

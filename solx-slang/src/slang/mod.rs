@@ -8,6 +8,8 @@ pub mod compilation_config;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::SourceUnitMember;
 use slang_solidity_v2::compilation::CompilationBuilder;
 use slang_solidity_v2::compilation::CompilationUnit;
 use slang_solidity_v2::diagnostics::DiagnosticExtensions;
@@ -72,6 +74,25 @@ impl Slang {
         }
 
         Ok(builder.build())
+    }
+
+    /// The source-unit free functions the unit declares, across all files: the pool a contract's
+    /// reachability walk selects from, since a free function belongs to no contract's function set.
+    fn free_functions(unit: &CompilationUnit) -> Vec<FunctionDefinition> {
+        unit.file_ids()
+            .iter()
+            .filter_map(|file_identifier| unit.file(file_identifier))
+            .flat_map(|file| {
+                file.ast()
+                    .members()
+                    .iter()
+                    .filter_map(|member| match member {
+                        SourceUnitMember::FunctionDefinition(function) => Some(function.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
     }
 }
 
@@ -164,6 +185,7 @@ impl Frontend for Slang {
 
         let file_identifiers = unit.file_ids();
         let operator_bindings = OperatorBindings::gather(&unit);
+        let free_functions = Self::free_functions(&unit);
 
         for file_identifier in &file_identifiers {
             let Some(file) = unit.file(file_identifier) else {
@@ -176,7 +198,7 @@ impl Frontend for Slang {
             let mut context = solx_mlir::Context::new(&melior_context, evm_version);
             let mut emitter = AstEmitter::new(&mut context);
             let Some((contract_name, method_identifiers)) =
-                emitter.emit(&source_unit, &operator_bindings)
+                emitter.emit(&source_unit, &operator_bindings, &free_functions)
             else {
                 continue;
             };

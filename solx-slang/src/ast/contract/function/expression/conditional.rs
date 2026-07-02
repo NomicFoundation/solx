@@ -7,6 +7,7 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ConditionalExpression;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::Type as SlangType;
 
@@ -24,9 +25,37 @@ use crate::ast::emit::emit_for_effect::EmitForEffect;
 use crate::ast::emit::emit_values::EmitValues;
 
 expression_emit!(ConditionalExpression; |node, context, block| {
-    let result_type = context.resolve_slang_type(node.get_type()).unwrap_or_else(|| {
-        AstType::unsigned(context.state.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
-    });
+    let internal_func_ref_type = |branch: &Expression| {
+        let Expression::MemberAccessExpression(access) = branch else {
+            return None;
+        };
+        let Expression::Identifier(operand) = access.operand() else {
+            return None;
+        };
+        if !matches!(operand.resolve_to_definition(), Some(Definition::Contract(_))) {
+            return None;
+        }
+        let Some(Definition::Function(function_definition)) =
+            access.member().resolve_to_definition()
+        else {
+            return None;
+        };
+        Some(
+            context
+                .state
+                .function_signatures
+                .get(&function_definition.node_id())
+                .expect("a type-qualified internal function resolves to a registered signature")
+                .func_ref_type(context.state)
+                .into_mlir(),
+        )
+    };
+    let result_type = internal_func_ref_type(&node.true_expression().unwrap_parentheses())
+        .or_else(|| internal_func_ref_type(&node.false_expression().unwrap_parentheses()))
+        .or_else(|| context.resolve_slang_type(node.get_type()))
+        .unwrap_or_else(|| {
+            AstType::unsigned(context.state.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
+        });
     let condition = node.operand();
     let BlockAnd {
         value: condition_value,

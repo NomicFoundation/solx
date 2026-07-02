@@ -106,7 +106,7 @@ impl CallKind {
     /// parameter, or contract-static state variable of function type, or a struct-member field of
     /// function type. A bare function name, a built-in, and a library member resolve to a definition
     /// rather than a value, so they fall through to their own dispatch.
-    fn is_function_pointer_callee(callee: &Expression) -> bool {
+    pub fn is_function_pointer_callee(callee: &Expression) -> bool {
         let addresses_value = match callee {
             Expression::Identifier(identifier) => matches!(
                 identifier.resolve_to_definition(),
@@ -130,7 +130,7 @@ impl CallKind {
                     _ => false,
                 }
             }
-            _ => false,
+            _ => true,
         };
         addresses_value && matches!(callee.get_type(), Some(SlangType::Function(_)))
     }

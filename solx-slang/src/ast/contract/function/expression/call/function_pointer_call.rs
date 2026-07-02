@@ -50,6 +50,9 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
         let results = AstValue::new(callee_value).call_indirect(
             &argument_values,
             &result_types,
+            None,
+            None,
+            false,
             context.state,
             &block,
         );

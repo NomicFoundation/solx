@@ -6,3 +6,4 @@
 //!
 
 pub mod query;
+pub mod walk;
