@@ -29,6 +29,8 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
         &self,
         call: &FunctionCallExpression,
         arguments: &PositionalArguments,
+        call_value: Option<Value<'context, 'block>>,
+        salt: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let context = self.expression_context.state;
@@ -78,6 +80,12 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             unreachable!("Slang ContractType always references a Contract definition");
         };
         let ordered_arguments: Vec<Expression> = arguments.iter().collect();
-        self.emit_contract_creation(&contract_definition, &ordered_arguments, block)
+        self.emit_contract_creation(
+            &contract_definition,
+            &ordered_arguments,
+            call_value,
+            salt,
+            block,
+        )
     }
 }
