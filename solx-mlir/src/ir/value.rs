@@ -48,6 +48,7 @@ use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::FuncConstantOperation;
 use crate::ods::sol::GasLeftOperation;
 use crate::ods::sol::ICallOperation;
+use crate::ods::sol::LibAddrOperation;
 use crate::ods::sol::MallocOperation;
 use crate::ods::sol::NewOperation;
 use crate::ods::sol::PopOperation;
@@ -315,6 +316,76 @@ impl<'context, 'block> Value<'context, 'block> {
             })
             .collect();
         (status, results)
+    }
+
+    /// `sol.lib_addr`: a library's linked deploy address, a placeholder the linker resolves by the
+    /// library's full path.
+    pub fn library_address(
+        name: &solx_utils::ContractName,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            context,
+            block,
+            LibAddrOperation
+                ._name(StringAttribute::new(context.mlir_context, &name.full_path))
+                .val(Type::address(context.mlir_context, false).into_mlir())
+        ))
+    }
+
+    /// `sol.ext_call` to a library function `callee_name` at its deployed `address`, dispatched by
+    /// `selector`. A library call is always a `DELEGATECALL`, so it carries the `delegate_call` and
+    /// `library_call` markers, reverts on failure, and discards the status.
+    pub fn library_call(
+        address: Self,
+        callee_name: &str,
+        selector: u32,
+        parameter_types: &[MlirType<'context>],
+        argument_values: &[MlirValue<'context, 'block>],
+        result_types: &[MlirType<'context>],
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Vec<MlirValue<'context, 'block>> {
+        let uint256 = Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD);
+        let gas = block
+            .append_operation(
+                GasLeftOperation::builder(context.mlir_context, context.location())
+                    .val(uint256.into_mlir())
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.gasleft produces one result")
+            .into();
+        let value = Self::constant(0, uint256, context, block).into_mlir();
+        let selector_value =
+            Self::constant(i64::from(selector), uint256, context, block).into_mlir();
+        let callee_type = FunctionType::new(context.mlir_context, parameter_types, result_types);
+        let operation = block.append_operation(
+            ExtCallOperation::builder(context.mlir_context, context.location())
+                .callee(StringAttribute::new(context.mlir_context, callee_name))
+                .ins(argument_values)
+                .addr(address.into_mlir())
+                .gas(gas)
+                .val(value)
+                .selector(selector_value)
+                .delegate_call(Attribute::unit(context.mlir_context))
+                .library_call(Attribute::unit(context.mlir_context))
+                .callee_type(TypeAttribute::new(callee_type.into()))
+                .status(Type::signless(context.mlir_context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir())
+                .outs(result_types)
+                .build()
+                .into(),
+        );
+        (0..result_types.len())
+            .map(|index| {
+                operation
+                    .result(index + 1)
+                    .expect("sol.ext_call produces its declared result count")
+                    .into()
+            })
+            .collect()
     }
 
     /// `sol.default_storage`: the default value of a storage or transient aggregate.

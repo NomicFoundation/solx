@@ -27,6 +27,12 @@ pub enum CallKind {
     /// A built-in invoked by bare identifier (`require`, `keccak256`) or a built-in reached through
     /// member access whose result type comes from the call (`abi.decode`).
     IdentifierBuiltinCall,
+    /// An external call into a library member `L.f(args)` / `x.f(args)`, dispatched by ABI selector
+    /// through a `DELEGATECALL`.
+    ExternalLibraryCall(MemberAccessExpression, FunctionDefinition),
+    /// A member call to an internal function that carries no ABI selector: an inlined library member
+    /// `L.f(args)` or a `using for` receiver `x.f(args)`.
+    InternalMemberCall(MemberAccessExpression, FunctionDefinition),
     /// An external call to a contract-instance method or `public` state-variable getter:
     /// `c.foo(args)`, dispatched by ABI selector.
     ExternalMemberCall(MemberAccessExpression, Definition),
@@ -71,6 +77,16 @@ impl CallKind {
             )
         {
             return Self::IdentifierBuiltinCall;
+        }
+        if let Expression::MemberAccessExpression(access) = callee
+            && let Some(function) = Self::external_library_callee(access)
+        {
+            return Self::ExternalLibraryCall(access.clone(), function);
+        }
+        if let Expression::MemberAccessExpression(access) = callee
+            && let Some(function) = Self::internal_member_callee(access)
+        {
+            return Self::InternalMemberCall(access.clone(), function);
         }
         if let Expression::MemberAccessExpression(access) = callee
             && let Some(definition) = Self::external_member_callee(access)
@@ -167,5 +183,37 @@ impl CallKind {
             }
             _ => None,
         }
+    }
+
+    /// The library function an external member call `L.f(args)` / `x.f(args)` dispatches to through a
+    /// `DELEGATECALL`, or `None` when the access is not one.
+    ///
+    /// The member must resolve to a function carrying an ABI selector whose access is either qualified
+    /// by the library name or declared inside a library, so an `external`/`public` library member is
+    /// selected while a plain contract-instance method falls through.
+    fn external_library_callee(access: &MemberAccessExpression) -> Option<FunctionDefinition> {
+        let Definition::Function(function) = access.member().resolve_to_definition()? else {
+            return None;
+        };
+        if function.compute_selector().is_none() {
+            return None;
+        }
+        let selects_library = matches!(
+            &access.operand(),
+            Expression::Identifier(identifier)
+                if matches!(identifier.resolve_to_definition(), Some(Definition::Library(_)))
+        ) || matches!(function.enclosing_definition(), Some(Definition::Library(_)));
+        selects_library.then_some(function)
+    }
+
+    /// The internal function a member call `L.f(args)` / `x.f(args)` inlines, or `None` when the
+    /// access is not one. The member must resolve to a function carrying no ABI selector, so an
+    /// inlined library member or a `using for` receiver is selected while a selector-dispatched
+    /// external call falls through.
+    fn internal_member_callee(access: &MemberAccessExpression) -> Option<FunctionDefinition> {
+        let Definition::Function(function) = access.member().resolve_to_definition()? else {
+            return None;
+        };
+        function.compute_selector().is_none().then_some(function)
     }
 }

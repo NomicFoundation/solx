@@ -98,6 +98,14 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for MemberAccess
         if let Some(result) = context.emit_function_pointer(self, block) {
             return result;
         }
+        if let Some(Definition::Library(library)) = self.member().resolve_to_definition() {
+            let name = solx_utils::ContractName::new(
+                library.get_file_id().to_owned(),
+                Some(library.name().name()),
+            );
+            let value = AstValue::library_address(&name, context.state, &block).into_mlir();
+            return BlockAnd { block, value };
+        }
         let (value, block) = CallContext::new(context).emit_member_access(self, block);
         BlockAnd { block, value }
     }

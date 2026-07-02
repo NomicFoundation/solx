@@ -21,6 +21,15 @@ impl MemberAccessOperand<'_> {
         }
     }
 
+    /// Whether the operand is a namespace qualifier: a library or import alias, not a value, as
+    /// opposed to a `using for` receiver.
+    pub fn is_namespace_qualifier(&self) -> bool {
+        matches!(
+            self.resolve(),
+            Some(Definition::Library(_) | Definition::Import(_) | Definition::ImportedSymbol(_))
+        )
+    }
+
     /// Whether the operand is a namespace or type reference, not a runtime value, so a `.selector`
     /// taken through it evaluates nothing.
     pub fn is_namespace_or_type(&self) -> bool {

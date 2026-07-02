@@ -5,7 +5,9 @@
 pub mod call_arguments;
 pub mod call_kind;
 pub mod contract_creation;
+pub mod external_library_call;
 pub mod external_member_call;
+pub mod internal_member_call;
 pub mod function_pointer_call;
 pub mod identifier_builtin_call;
 pub mod identifier_function_call;
@@ -27,6 +29,7 @@ use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 
+use crate::ast::analysis::query::member_access_operand::MemberAccessOperand;
 use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_kind::CallKind;
@@ -96,6 +99,12 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
                 let (value, block) =
                     emitter.emit_built_in(self, &callee, &emitter.positional(&arguments), block);
                 BlockAnd { block, value }
+            }
+            CallKind::ExternalLibraryCall(access, function_definition) => {
+                emitter.emit_external_library_call(&access, &function_definition, &arguments, block)
+            }
+            CallKind::InternalMemberCall(access, function_definition) => {
+                emitter.emit_internal_member_call(&access, &function_definition, &arguments, block)
             }
             CallKind::ExternalMemberCall(access, definition) => emitter
                 .emit_external_member_call(
@@ -187,6 +196,12 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
         if let Expression::StringExpression(_) = first {
             let BlockAnd { value, block } =
                 first.emit_as(target_type, self.expression_context, block);
+            return (value, block);
+        }
+        if MemberAccessOperand(&first).resolve().is_some_and(|definition| {
+            matches!(definition, slang_solidity_v2::ast::Definition::Library(_))
+        }) {
+            let BlockAnd { value, block } = first.emit(self.expression_context, block);
             return (value, block);
         }
         let source_slang = first.get_type().expect("slang types every conversion operand");

@@ -1,5 +1,5 @@
 //!
-//! The deployable-object emission trait: a contract emits itself as a
+//! The deployable-object emission trait: a contract or library emits itself as a
 //! `sol.contract`.
 //!
 
@@ -21,4 +21,12 @@ pub trait EmitObject {
         operator_functions: &[FunctionDefinition],
         free_functions: &[FunctionDefinition],
     );
+}
+
+/// Emits a library as one deployable `sol.contract` of library kind, threading `&mut Context`.
+/// Implemented by `LibraryDefinition`, emitting its `external` / `public` functions.
+pub trait EmitLibrary {
+    /// Emits this library as a deployable `sol.contract` of library kind carrying its
+    /// externally-visible functions, so the `// library:` directive can deploy and link it.
+    fn emit(&self, context: &mut Context);
 }

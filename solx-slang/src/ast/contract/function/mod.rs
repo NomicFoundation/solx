@@ -13,6 +13,7 @@ use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractDefinition;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::ElementaryType;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
@@ -42,8 +43,8 @@ use crate::ast::emit::emit_statement::EmitStatement;
 pub struct FunctionEmitter<'state, 'context> {
     /// The shared MLIR context.
     state: &'state Context<'context>,
-    /// Containing contract.
-    contract: &'state ContractDefinition,
+    /// Containing contract, absent for a deployable library's own functions.
+    contract: Option<&'state ContractDefinition>,
     /// State variable node ID to `(slot, byte_offset)` mapping. The byte
     /// offset is zero for unpacked variables and non-zero for variables
     /// packed into a shared slot.
@@ -54,7 +55,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Creates a new function emitter.
     pub fn new(
         state: &'state Context<'context>,
-        contract: &'state ContractDefinition,
+        contract: Option<&'state ContractDefinition>,
         storage_layout: &'state HashMap<NodeId, StorageSlot>,
     ) -> Self {
         Self {
@@ -70,6 +71,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// falls back to AST-based type names for internal/private functions.
     pub fn mlir_function_name(function: &FunctionDefinition) -> String {
         let name = Self::mlir_base_name(function);
+
+        if matches!(function.enclosing_definition(), Some(Definition::Library(_)))
+            && let Some(signature) = function.compute_library_signature()
+        {
+            return signature;
+        }
 
         if let Some(AbiEntry::Function(abi_function)) = function.compute_abi_entry() {
             let inputs = abi_function.inputs();
@@ -216,7 +223,7 @@ impl EmitFunction for FunctionDefinition {
         let (mlir_parameter_types, result_types) =
             TypeConversion::resolve_function_types(self, emitter.state);
 
-        let selector = symbol_override.is_none().then(|| self.compute_selector()).flatten();
+        let selector = self.compute_selector();
 
         let state_mutability = FunctionEmitter::map_state_mutability(self);
 
@@ -301,8 +308,12 @@ impl EmitFunction for FunctionDefinition {
                 emitter.storage_layout,
                 true,
             );
-            current_block =
-                expression_context.emit_state_var_initializers(emitter.contract, current_block);
+            current_block = expression_context.emit_state_var_initializers(
+                emitter
+                    .contract
+                    .expect("a constructor is emitted only for a contract"),
+                current_block,
+            );
         }
 
         let mut terminated = false;
@@ -358,7 +369,12 @@ impl EmitConstructor for ContractDefinition {
         let environment = Environment::new();
         let expression_context =
             ExpressionContext::new(emitter.state, &environment, emitter.storage_layout, true);
-        let block = expression_context.emit_state_var_initializers(emitter.contract, entry);
+        let block = expression_context.emit_state_var_initializers(
+            emitter
+                .contract
+                .expect("a constructor is emitted only for a contract"),
+            entry,
+        );
         mlir_op_void!(emitter.state, &block, ReturnOperation.operands(&[]));
     }
 }

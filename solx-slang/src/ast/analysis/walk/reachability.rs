@@ -58,6 +58,14 @@ impl ReachabilityWalk {
         }
     }
 
+    /// Queues `function`'s body to be walked WITHOUT adding it to the result set, to follow the calls
+    /// it makes, e.g. a free function emitted elsewhere.
+    pub fn enqueue(&mut self, function: FunctionDefinition) {
+        if !self.walked.contains(&function.node_id()) {
+            self.to_walk.push(function);
+        }
+    }
+
     /// Consumes the walk and returns the reached functions, deduplicated by node id and ordered by it,
     /// so emission is reproducible across runs.
     pub fn into_reached(self) -> Vec<FunctionDefinition> {

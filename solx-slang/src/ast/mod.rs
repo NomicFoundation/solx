@@ -19,10 +19,12 @@ use std::collections::BTreeMap;
 
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::SourceUnit;
+use slang_solidity_v2::ast::SourceUnitMember;
 
 use solx_mlir::Context;
 
 use self::analysis::query::method_identifiers::MethodIdentifiers;
+use self::emit::emit_object::EmitLibrary;
 use self::emit::emit_object::EmitObject;
 use self::operator_binding::OperatorBindings;
 
@@ -40,15 +42,13 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
 
     /// Emits MLIR for the first contract definition in the source unit.
     ///
-    /// The current pipeline creates one MLIR module per source file, so
-    /// only the first contract is processed. Multi-contract files will be
+    /// The current pipeline creates one MLIR module per source file, so only the first contract is
+    /// processed, or the first library when the file declares no contract. Multi-object files will be
     /// supported in a future pass.
     ///
-    /// Source files containing only interfaces, libraries, or abstract
-    /// contracts are skipped without error.
+    /// Source files containing only interfaces or abstract contracts are skipped without error.
     ///
-    /// Returns `Some((contract_name, method_identifiers))` if a contract was
-    /// emitted, `None` otherwise.
+    /// Returns `Some((object_name, method_identifiers))` if an object was emitted, `None` otherwise.
     ///
     /// A construct the frontend does not yet support panics out of emission; that is deliberate, so
     /// an unhandled case surfaces immediately rather than silently miscompiling.
@@ -58,13 +58,20 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
         operator_bindings: &OperatorBindings,
         free_functions: &[FunctionDefinition],
     ) -> Option<(String, BTreeMap<String, String>)> {
-        let contracts = unit.contracts();
-        let contract = contracts.first()?;
-
-        let name = contract.name().name();
         self.state.operator_bindings = operator_bindings.map.clone();
-        contract.emit(self.state, &operator_bindings.functions, free_functions);
 
-        Some((name, contract.method_identifiers()))
+        if let Some(contract) = unit.contracts().first() {
+            let name = contract.name().name();
+            contract.emit(self.state, &operator_bindings.functions, free_functions);
+            return Some((name, contract.method_identifiers()));
+        }
+
+        let library = unit.members().iter().find_map(|member| match member {
+            SourceUnitMember::LibraryDefinition(library) => Some(library.clone()),
+            _ => None,
+        })?;
+        let name = library.name().name();
+        library.emit(self.state);
+        Some((name, BTreeMap::new()))
     }
 }

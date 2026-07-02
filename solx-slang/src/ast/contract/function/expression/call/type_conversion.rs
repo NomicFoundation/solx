@@ -250,6 +250,7 @@ impl<'context> TypeConversion<'context> {
                         .into_mlir()
                 }
             }
+            SlangType::Library(_) => AstType::address(context.mlir_context, false).into_mlir(),
             _ => unimplemented!("unsupported Slang type"),
         }
     }

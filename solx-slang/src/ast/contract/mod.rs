@@ -7,6 +7,7 @@ pub mod function;
 /// Public state-variable getter synthesis.
 pub mod getter;
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 use melior::ir::Attribute;
@@ -20,6 +21,8 @@ use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
+use slang_solidity_v2::ast::FunctionVisibility;
+use slang_solidity_v2::ast::LibraryDefinition;
 use slang_solidity_v2::ast::NodeId;
 
 use solx_mlir::Context;
@@ -30,10 +33,13 @@ use solx_mlir::ods::sol::ImmutableOperation;
 use solx_mlir::ods::sol::StateVarOperation;
 
 use crate::ast::analysis::query::storage_layout::StorageLayout;
+use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::analysis::walk::free_function::FreeCallCollector;
+use crate::ast::analysis::walk::library::LibraryCallCollector;
 use crate::ast::emit::emit_constructor::EmitConstructor;
 use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_function::EmitFunction;
+use crate::ast::emit::emit_object::EmitLibrary;
 use crate::ast::emit::emit_object::EmitObject;
 
 use self::function::FunctionEmitter;
@@ -111,15 +117,20 @@ impl EmitObject for ContractDefinition {
     ) {
         let contract_name = self.name().name();
 
+        let mut walk_roots = operator_functions.to_vec();
+        let library_functions =
+            LibraryCallCollector::reachable_library_functions(self, free_functions, &walk_roots);
+        walk_roots.extend(library_functions.iter().cloned());
+
         let mut reached_free_functions =
-            FreeCallCollector::reachable_free_functions(self, free_functions, operator_functions);
+            FreeCallCollector::reachable_free_functions(self, free_functions, &walk_roots);
         let mut seen: HashSet<NodeId> = reached_free_functions
             .iter()
             .map(|function| function.node_id())
             .collect();
-        for function in operator_functions {
+        for function in operator_functions.iter().cloned().chain(library_functions) {
             if seen.insert(function.node_id()) {
-                reached_free_functions.push(function.clone());
+                reached_free_functions.push(function);
             }
         }
 
@@ -186,7 +197,7 @@ impl EmitObject for ContractDefinition {
 
         context.current_contract_type = Some(contract_type);
         self.emit_constructor(
-            &FunctionEmitter::new(context, self, &storage_layout),
+            &FunctionEmitter::new(context, Some(self), &storage_layout),
             &contract_body,
         );
         context.current_contract_type = None;
@@ -210,7 +221,7 @@ impl EmitObject for ContractDefinition {
             }
             context.current_contract_type = Some(contract_type);
             function.emit(
-                &FunctionEmitter::new(context, self, &storage_layout),
+                &FunctionEmitter::new(context, Some(self), &storage_layout),
                 None,
                 &contract_body,
             );
@@ -220,7 +231,7 @@ impl EmitObject for ContractDefinition {
         for function in &reached_free_functions {
             let symbol = FunctionEmitter::free_function_symbol(function);
             function.emit(
-                &FunctionEmitter::new(context, self, &storage_layout),
+                &FunctionEmitter::new(context, Some(self), &storage_layout),
                 Some(symbol.as_str()),
                 &contract_body,
             );
@@ -237,6 +248,58 @@ impl EmitObject for ContractDefinition {
                 };
                 state_variable.emit(&getter_context, contract_body);
             }
+        }
+        context.current_contract_type = None;
+    }
+}
+
+impl EmitLibrary for LibraryDefinition {
+    /// Emits a deployable library object: its `external` / `public` functions as `sol.func`s inside a
+    /// `sol.contract` of library kind, so the `// library:` directive can deploy and link it.
+    fn emit(&self, context: &mut Context) {
+        let library_name = self.name().name();
+
+        let functions: Vec<FunctionDefinition> = self
+            .members()
+            .iter()
+            .filter_map(|member| match member {
+                ContractMember::FunctionDefinition(function)
+                    if matches!(function.kind(), FunctionKind::Regular)
+                        && matches!(
+                            function.visibility(),
+                            FunctionVisibility::External | FunctionVisibility::Public
+                        ) =>
+                {
+                    Some(function.clone())
+                }
+                _ => None,
+            })
+            .collect();
+
+        for function in &functions {
+            ContractEmitter::register_function(context, function);
+        }
+
+        let storage_layout: HashMap<NodeId, StorageSlot> = HashMap::new();
+        let library_type =
+            AstType::contract(context.mlir_context, &library_name, false).into_mlir();
+
+        let module_body = context.module.body();
+        let contract_body = mlir_region_op!(
+            context, &module_body,
+            ContractOperation
+                .sym_name(StringAttribute::new(context.mlir_context, &library_name))
+                .kind(solx_mlir::ContractKind::Library.attribute(context.mlir_context));
+            body_region
+        );
+
+        context.current_contract_type = Some(library_type);
+        for function in &functions {
+            function.emit(
+                &FunctionEmitter::new(context, None, &storage_layout),
+                None,
+                &contract_body,
+            );
         }
         context.current_contract_type = None;
     }
