@@ -94,6 +94,15 @@ impl<'context> Type<'context> {
         })
     }
 
+    /// The single-byte `!sol.byte`, the element type of `bytes` / `string`.
+    ///
+    /// The dialect exposes no byte-type constructor and Rust cannot build `!sol.byte` directly, so it
+    /// is taken as the element type of a `!sol.string`.
+    pub fn byte(context: &'context melior::Context) -> Self {
+        let string_type = Self::string(context, solx_utils::DataLocation::Memory).into_mlir();
+        Self::new(unsafe { MlirType::from_raw(ffi::mlirSolGetEltType(string_type.to_raw(), 0)) })
+    }
+
     /// A `sol::ArrayType` of `element_type` at `location`.
     pub fn array(
         context: &'context melior::Context,
@@ -183,14 +192,10 @@ impl<'context> Type<'context> {
 
     /// Whether this is the single-byte `!sol.byte`, the element type of `bytes` / `string`.
     ///
-    /// The dialect exposes no byte-type query and Rust cannot construct `!sol.byte` directly, so it
-    /// is matched against the element type of a `!sol.string`.
+    /// The dialect exposes no byte-type query, so the type is reconstructed via [`Self::byte`] and
+    /// matched by equality.
     pub fn is_byte(self, context: &'context melior::Context) -> bool {
-        let string_type = Self::string(context, solx_utils::DataLocation::Memory).into_mlir();
-        let byte_type = unsafe {
-            MlirType::from_raw(ffi::mlirSolGetEltType(string_type.to_raw(), 0))
-        };
-        self.inner == byte_type
+        self == Self::byte(context)
     }
 
     /// Whether this is the dynamic-bytes type `!sol.string` (shared by `string` and `bytes`), at any

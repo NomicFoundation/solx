@@ -11,15 +11,14 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::abi::AbiEntry;
-use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ElementaryType;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::TypeName;
 
 use solx_mlir::Context;
@@ -30,7 +29,6 @@ use solx_mlir::StateMutability;
 use solx_mlir::Type as AstType;
 use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::ReturnOperation;
-use solx_utils::DataLocation;
 
 use crate::ast::analysis::query::storage_layout::StorageSlot;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -143,32 +141,36 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
     }
 
-    /// Emits a default `sol.return` if the block lacks a terminator.
-    ///
-    /// For each return position, loads the current value from the named-return
-    /// slot when one was allocated, otherwise materializes a typed zero
-    /// constant.
+    /// Emits a default `sol.return` if the block lacks a terminator. A named return loads its
+    /// default-initialised slot; an unnamed return materialises the typed zero of its Solidity return
+    /// type via [`AstValue::type_default`].
     fn emit_default_return(
         &self,
         result_types: &[Type<'context>],
+        return_slang_types: &[SlangType],
         return_slots: &[Option<Value<'context, '_>>],
         block: &BlockRef<'context, '_>,
     ) {
         if block.terminator().is_some() {
             return;
         }
-        let mut values: Vec<Value<'context, '_>> = Vec::with_capacity(result_types.len());
-        for (index, result_type) in result_types.iter().enumerate() {
-            let value = match return_slots.get(index).copied().flatten() {
-                Some(pointer) => Pointer::new(pointer)
+        let values: Vec<Value<'context, '_>> = result_types
+            .iter()
+            .zip(return_slang_types)
+            .zip(return_slots)
+            .map(|((result_type, slang_type), slot)| match slot {
+                Some(pointer) => Pointer::new(*pointer)
                     .load(AstType::new(*result_type), self.state, block)
                     .into_mlir(),
-                None => {
-                    AstValue::constant(0, AstType::new(*result_type), self.state, block).into_mlir()
-                }
-            };
-            values.push(value);
-        }
+                None => AstValue::type_default(
+                    slang_type,
+                    AstType::new(*result_type),
+                    self.state,
+                    block,
+                )
+                .into_mlir(),
+            })
+            .collect();
         mlir_op_void!(self.state, block, ReturnOperation.operands(&values));
     }
 
@@ -255,93 +257,25 @@ impl EmitFunction for FunctionDefinition {
             environment.define_variable(parameter_name, pointer.into_mlir(), parameter_type);
         }
 
+        let mut return_slang_types: Vec<SlangType> = Vec::new();
         let mut return_slots: Vec<Option<Value<'context, '_>>> = Vec::new();
         if let Some(returns) = self.returns() {
             for (index, parameter) in returns.iter().enumerate() {
-                let Some(identifier) = parameter.name() else {
-                    return_slots.push(None);
-                    continue;
-                };
                 let return_type = result_types[index];
                 let slang_type = parameter.get_type().expect("slang types every return");
-                let pointer =
-                    Pointer::stack(AstType::new(return_type), emitter.state, &function_entry_block);
-                if IntegerType::try_from(return_type).is_ok() {
-                    let zero = AstValue::constant(
-                        0,
+                let slot = parameter.name().map(|identifier| {
+                    let pointer = Pointer::default_initialized(
+                        &slang_type,
                         AstType::new(return_type),
                         emitter.state,
                         &function_entry_block,
-                    );
-                    pointer.store(zero, emitter.state, &function_entry_block);
-                } else if let Some(slang_location) = match &slang_type {
-                    ast::Type::Array(array) => Some(array.location()),
-                    ast::Type::FixedSizeArray(array) => Some(array.location()),
-                    ast::Type::Struct(structure) => Some(structure.location()),
-                    ast::Type::String(string) => Some(string.location()),
-                    ast::Type::Bytes(bytes) => Some(bytes.location()),
-                    _ => None,
-                } {
-                    let default = match DataLocation::from_slang(slang_location, None) {
-                        DataLocation::CallData => AstValue::default_calldata(
-                            AstType::new(return_type),
-                            emitter.state,
-                            &function_entry_block,
-                        ),
-                        DataLocation::Storage | DataLocation::Transient => {
-                            AstValue::default_storage(
-                                AstType::new(return_type),
-                                emitter.state,
-                                &function_entry_block,
-                            )
-                        }
-                        DataLocation::Memory => AstValue::malloc(
-                            AstType::new(return_type),
-                            None,
-                            !matches!(slang_type, ast::Type::String(_) | ast::Type::Bytes(_)),
-                            emitter.state,
-                            &function_entry_block,
-                        ),
-                        DataLocation::Stack | DataLocation::Immutable => {
-                            unreachable!("a reference aggregate is in storage, calldata, or memory")
-                        }
-                    };
-                    pointer.store(default, emitter.state, &function_entry_block);
-                } else if matches!(&slang_type, ast::Type::Contract(_) | ast::Type::Interface(_)) {
-                    let address_type = AstType::address(emitter.state.mlir_context, false);
-                    let zero = AstValue::constant(
-                        0,
-                        AstType::unsigned(
-                            emitter.state.mlir_context,
-                            solx_utils::BIT_LENGTH_ETH_ADDRESS,
-                        ),
-                        emitter.state,
-                        &function_entry_block,
                     )
-                    .address_cast(address_type, emitter.state, &function_entry_block)
-                    .address_cast(
-                        AstType::new(return_type),
-                        emitter.state,
-                        &function_entry_block,
-                    );
-                    pointer.store(zero, emitter.state, &function_entry_block);
-                } else if matches!(&slang_type, ast::Type::Enum(_)) {
-                    let zero = AstValue::constant(
-                        0,
-                        AstType::unsigned(emitter.state.mlir_context, solx_utils::BIT_LENGTH_FIELD),
-                        emitter.state,
-                        &function_entry_block,
-                    )
-                    .enum_cast(AstType::new(return_type), emitter.state, &function_entry_block);
-                    pointer.store(zero, emitter.state, &function_entry_block);
-                } else {
-                    unimplemented!(
-                        "zero-initialization for non-integer named return: {return_type}"
-                    );
-                }
-                let pointer = pointer.into_mlir();
-                environment.define_variable(identifier.name(), pointer, return_type);
-                return_slots.push(Some(pointer));
+                    .into_mlir();
+                    environment.define_variable(identifier.name(), pointer, return_type);
+                    pointer
+                });
+                return_slang_types.push(slang_type);
+                return_slots.push(slot);
             }
         }
 
@@ -380,7 +314,12 @@ impl EmitFunction for FunctionDefinition {
         }
 
         if !terminated {
-            emitter.emit_default_return(&result_types, &return_slots, &current_block);
+            emitter.emit_default_return(
+                &result_types,
+                &return_slang_types,
+                &return_slots,
+                &current_block,
+            );
         }
 
         mlir_name

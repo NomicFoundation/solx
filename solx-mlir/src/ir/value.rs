@@ -17,6 +17,8 @@ use melior::ir::attribute::TypeAttribute;
 use melior::ir::operation::OperationMutLike;
 use melior::ir::r#type::FunctionType;
 use num::BigInt;
+use slang_solidity_v2::ast::DataLocation;
+use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::CmpPredicate;
 use crate::Context;
@@ -340,6 +342,86 @@ impl<'context, 'block> Value<'context, 'block> {
             block,
             DefaultCallDataOperation.result(result_type.into_mlir())
         ))
+    }
+
+    /// The zero value of `mlir_type`, chosen by its Solidity `slang_type`.
+    ///
+    /// An aggregate resolves to its data location's empty value: a memory array / struct / `bytes` /
+    /// `string` to a `sol.malloc` buffer (zero-filled for arrays and structs), a storage or transient
+    /// aggregate to `sol.default_storage`, a calldata aggregate to `sol.default_calldata`. An address
+    /// or contract zeroes at `ui160` and casts through `sol.address_cast`, a `bytesN` at `ui<N*8>`
+    /// through `sol.bytes_cast`, an enumeration at `ui256` through `sol.enum_cast`, and every remaining
+    /// scalar takes the `sol.constant` zero of its own type.
+    pub fn type_default(
+        slang_type: &SlangType,
+        mlir_type: Type<'context>,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        match slang_type {
+            SlangType::Array(array) => {
+                Self::aggregate_default(array.location(), mlir_type, true, context, block)
+            }
+            SlangType::FixedSizeArray(array) => {
+                Self::aggregate_default(array.location(), mlir_type, true, context, block)
+            }
+            SlangType::Struct(structure) => {
+                Self::aggregate_default(structure.location(), mlir_type, true, context, block)
+            }
+            SlangType::String(string) => {
+                Self::aggregate_default(string.location(), mlir_type, false, context, block)
+            }
+            SlangType::Bytes(bytes) => {
+                Self::aggregate_default(bytes.location(), mlir_type, false, context, block)
+            }
+            SlangType::Address(_) | SlangType::Contract(_) | SlangType::Interface(_) => {
+                let address_type = Type::address(context.mlir_context, false);
+                Self::constant(
+                    0,
+                    Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_ETH_ADDRESS),
+                    context,
+                    block,
+                )
+                .address_cast(address_type, context, block)
+                .address_cast(mlir_type, context, block)
+            }
+            SlangType::ByteArray(byte_array) => {
+                let bits = byte_array.width() as usize * solx_utils::BIT_LENGTH_BYTE;
+                Self::constant(0, Type::unsigned(context.mlir_context, bits), context, block)
+                    .bytes_cast(mlir_type, context, block)
+            }
+            SlangType::Enum(_) => {
+                Self::constant(
+                    0,
+                    Type::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD),
+                    context,
+                    block,
+                )
+                .enum_cast(mlir_type, context, block)
+            }
+            _ => Self::constant(0, mlir_type, context, block),
+        }
+    }
+
+    /// The empty aggregate value of `result_type` at its Solidity `location`: a memory buffer via
+    /// `sol.malloc` (`zero_init` zero-fills a fixed-shape aggregate but not a dynamic `bytes` /
+    /// `string`), a storage aggregate via `sol.default_storage`, a calldata aggregate via
+    /// `sol.default_calldata`.
+    fn aggregate_default(
+        location: DataLocation,
+        result_type: Type<'context>,
+        zero_init: bool,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        match location {
+            DataLocation::Memory => Self::malloc(result_type, None, zero_init, context, block),
+            DataLocation::Storage => Self::default_storage(result_type, context, block),
+            DataLocation::Calldata => Self::default_calldata(result_type, context, block),
+            DataLocation::Inherited => {
+                unreachable!("a reference aggregate default carries a resolved data location")
+            }
+        }
     }
 
     /// `sol.array_lit`: an array of `array_type` constructed from `elements`.

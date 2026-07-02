@@ -38,10 +38,10 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> Option<BlockRef<'context, 'block>> {
         let name = declaration.declaration().name().name();
-        let declared_type = declaration
-            .declaration()
-            .get_type()
-            .map(|slang_type| TypeConversion::resolve_slang_type(&slang_type, None, self.state))
+        let slang_type = declaration.declaration().get_type();
+        let declared_type = slang_type
+            .as_ref()
+            .map(|slang_type| TypeConversion::resolve_slang_type(slang_type, None, self.state))
             .unwrap_or_else(|| {
                 AstType::unsigned(self.state.mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
             });
@@ -73,20 +73,28 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             (block, None)
         };
 
-        let pointer = Pointer::stack(AstType::new(declared_type), self.state, &block);
+        let pointer = match (initial_value, &slang_type) {
+            (Some(value), _) => {
+                let pointer = Pointer::stack(AstType::new(declared_type), self.state, &block);
+                pointer.store(AstValue::new(value), self.state, &block);
+                pointer
+            }
+            (None, Some(slang_type)) => Pointer::default_initialized(
+                slang_type,
+                AstType::new(declared_type),
+                self.state,
+                &block,
+            ),
+            (None, None) => {
+                let pointer = Pointer::stack(AstType::new(declared_type), self.state, &block);
+                let zero = AstValue::constant(0, AstType::new(declared_type), self.state, &block);
+                pointer.store(zero, self.state, &block);
+                pointer
+            }
+        };
 
-        if let Some(value) = initial_value {
-            pointer.store(AstValue::new(value), self.state, &block);
-        } else if melior::ir::r#type::IntegerType::try_from(declared_type).is_ok() {
-            let zero = AstValue::constant(0, AstType::new(declared_type), self.state, &block);
-            pointer.store(zero, self.state, &block);
-        } else {
-            unimplemented!("zero-initialization for non-integer type {declared_type}");
-        }
-
-        let pointer = pointer.into_mlir();
-
-        self.environment.define_variable(name, pointer, declared_type);
+        self.environment
+            .define_variable(name, pointer.into_mlir(), declared_type);
         Some(block)
     }
 

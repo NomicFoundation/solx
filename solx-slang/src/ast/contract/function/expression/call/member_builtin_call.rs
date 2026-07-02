@@ -507,7 +507,7 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             Some(element_slang_type) => {
                 TypeConversion::resolve_slang_type(element_slang_type, None, context)
             }
-            None => AstType::fixed_bytes(context.mlir_context, 1).into_mlir(),
+            None => AstType::byte(context.mlir_context).into_mlir(),
         };
         let base_location = match slang_location {
             SlangDataLocation::Inherited => {
