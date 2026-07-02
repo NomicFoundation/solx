@@ -4,10 +4,12 @@
 
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
+use melior::ir::BlockRef;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::TypeAttribute;
+use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::Context;
 use crate::Type;
@@ -56,6 +58,20 @@ impl<'context, 'block> Pointer<'context, 'block> {
                 .alloc_type(TypeAttribute::new(address_type))
                 .addr(address_type)
         ))
+    }
+
+    /// A stack slot for `pointee`, default-initialised to the zero of its Solidity `slang_type` via
+    /// [`Value::type_default`].
+    pub fn default_initialized(
+        slang_type: &SlangType,
+        pointee: Type<'context>,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        let slot = Self::stack(pointee, context, block);
+        let default = Value::type_default(slang_type, pointee, context, block);
+        slot.store(default, context, block);
+        slot
     }
 
     /// The place a named contract symbol denotes: `sol.addr_of @symbol` of `place_type`.
