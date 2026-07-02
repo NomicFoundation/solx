@@ -228,6 +228,7 @@ impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for Expression {
             {
                 AssignmentTarget::delete(context, &prefix.operand().unwrap_parentheses(), block)
             }
+            Expression::NewExpression(_) => block,
             _ => self.emit(context, block).block,
         }
     }

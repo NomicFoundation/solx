@@ -28,6 +28,8 @@ pub enum CallKind {
     IdentifierBuiltinCall,
     /// A built-in reached through member access (`address.balance`, `abi.encode`).
     MemberBuiltinCall(MemberAccessExpression),
+    /// A `new C(...)` contract or `new T[](...)` / `new bytes(...)` dynamic-array creation.
+    NewExpressionCall,
     /// A direct call to a named function.
     IdentifierFunctionCall(FunctionDefinition),
 }
@@ -65,6 +67,9 @@ impl CallKind {
         }
         if let Expression::MemberAccessExpression(access) = callee {
             return Self::MemberBuiltinCall(access.clone());
+        }
+        if let Expression::NewExpression(_) = callee {
+            return Self::NewExpressionCall;
         }
         let Expression::Identifier(identifier) = callee else {
             unreachable!("unsupported callee expression");
