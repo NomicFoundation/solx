@@ -255,6 +255,11 @@ impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for Expression {
             {
                 AssignmentTarget::delete(context, &prefix.operand().unwrap_parentheses(), block)
             }
+            Expression::ConditionalExpression(conditional)
+                if matches!(conditional.get_type(), Some(SlangType::Void(_))) =>
+            {
+                conditional.emit_for_effect(context, block)
+            }
             Expression::NewExpression(_) => block,
             _ => self.emit(context, block).block,
         }
