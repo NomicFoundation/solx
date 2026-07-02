@@ -6,6 +6,7 @@ pub mod environment;
 pub mod function;
 
 use std::cell::Cell;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Once;
 
@@ -40,6 +41,8 @@ pub struct Context<'context> {
     /// The MLIR type of the contract currently being emitted, used to type
     /// `this` expressions. Frontends set this before emitting function bodies.
     pub current_contract_type: Option<Type<'context>>,
+    /// Cross-contract references in encounter order, drained into the linker output.
+    dependencies: RefCell<Vec<String>>,
     /// Monotonic internal-function-pointer dispatch tag; starts at 1, where 0 is the null pointer.
     function_id_counter: Cell<i64>,
 }
@@ -128,7 +131,16 @@ impl<'context> Context<'context> {
             module,
             function_signatures: HashMap::new(),
             current_contract_type: None,
+            dependencies: RefCell::new(Vec::new()),
             function_id_counter: Cell::new(1),
+        }
+    }
+
+    /// Records a cross-contract reference by object name; duplicates are ignored.
+    pub fn add_dependency(&self, name: String) {
+        let mut dependencies = self.dependencies.borrow_mut();
+        if !dependencies.iter().any(|existing| existing == &name) {
+            dependencies.push(name);
         }
     }
 
@@ -283,6 +295,7 @@ impl<'context> Context<'context> {
             sol_source,
             deploy_source: deploy_llvm,
             runtime_source: runtime_llvm,
+            dependencies: self.dependencies.into_inner(),
         })
     }
 

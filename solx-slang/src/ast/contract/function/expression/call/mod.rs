@@ -4,10 +4,12 @@
 
 pub mod call_arguments;
 pub mod call_kind;
+pub mod contract_creation;
 pub mod function_pointer_call;
 pub mod identifier_builtin_call;
 pub mod identifier_function_call;
 pub mod member_builtin_call;
+pub mod new_expression_call;
 pub mod struct_construction;
 pub mod type_conversion;
 
@@ -99,6 +101,14 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
                 BlockAnd {
                     block,
                     value: value.into_iter().collect(),
+                }
+            }
+            CallKind::NewExpressionCall => {
+                let (value, block) =
+                    emitter.emit_new_expression(self, &emitter.positional(&arguments), block);
+                BlockAnd {
+                    block,
+                    value: vec![value],
                 }
             }
             CallKind::IdentifierFunctionCall(function_definition) => {

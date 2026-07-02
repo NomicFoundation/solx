@@ -5,12 +5,15 @@
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
+use melior::ir::Operation;
 use melior::ir::Type as MlirType;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
+use melior::ir::attribute::DenseI32ArrayAttribute;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
+use melior::ir::operation::OperationMutLike;
 use num::BigInt;
 
 use crate::CmpPredicate;
@@ -32,6 +35,7 @@ use crate::ods::sol::EnumCastOperation;
 use crate::ods::sol::FuncConstantOperation;
 use crate::ods::sol::ICallOperation;
 use crate::ods::sol::MallocOperation;
+use crate::ods::sol::NewOperation;
 use crate::ods::sol::PopOperation;
 use crate::ods::sol::PushOperation;
 use crate::ods::sol::StringLitOperation;
@@ -168,6 +172,47 @@ impl<'context, 'block> Value<'context, 'block> {
                 .append_operation(builder.build().into())
                 .result(0)
                 .expect("sol.malloc produces one result")
+                .into(),
+        )
+    }
+
+    /// `sol.new`: contract creation embedding `object_name`'s deploy bytecode. `value` is the
+    /// forwarded wei; a `salt` selects CREATE2.
+    ///
+    /// `operand_segment_sizes` is set by hand because melior's ODS builder does not synthesize the
+    /// attribute for the `AttrSizedOperandSegments` op; the salt must precede the variadic constructor
+    /// arguments or the two transpose.
+    pub fn create_contract(
+        object_name: &str,
+        value: Self,
+        salt: Option<Self>,
+        constructor_arguments: &[MlirValue<'context, 'block>],
+        result_type: Type<'context>,
+        context: &Context<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        let mut builder = NewOperation::builder(context.mlir_context, context.location())
+            .obj_name(StringAttribute::new(context.mlir_context, object_name))
+            .val(value.inner);
+        if let Some(salt) = salt {
+            builder = builder.salt(salt.inner);
+        }
+        let builder = builder
+            .ctor_args(constructor_arguments)
+            .out(result_type.into_mlir());
+        let mut operation: Operation = builder.build().into();
+        let constructor_argument_count = i32::try_from(constructor_arguments.len())
+            .expect("constructor argument count fits in i32");
+        let segment_sizes = DenseI32ArrayAttribute::new(
+            context.mlir_context,
+            &[1, i32::from(salt.is_some()), constructor_argument_count],
+        );
+        operation.set_inherent_attribute("operand_segment_sizes", segment_sizes.into());
+        Self::new(
+            block
+                .append_operation(operation)
+                .result(0)
+                .expect("sol.new always produces one result")
                 .into(),
         )
     }
