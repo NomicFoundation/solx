@@ -20,6 +20,7 @@ use crate::ast::block_and::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::emit::emit_expression::EmitExpression;
+use crate::ast::emit::emit_for_effect::EmitForEffect;
 use crate::ast::emit::emit_values::EmitValues;
 
 expression_emit!(ConditionalExpression; |node, context, block| {
@@ -143,5 +144,37 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for ConditionalExpre
             })
             .collect();
         BlockAnd { block, value }
+    }
+}
+
+impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for ConditionalExpression {
+    /// Emits a void-typed `cond ? a : b` in statement position: one branch runs per the condition,
+    /// yielding no result.
+    fn emit_for_effect<'state>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> BlockRef<'context, 'block> {
+        let true_expression = self.true_expression().unwrap_parentheses();
+        let false_expression = self.false_expression().unwrap_parentheses();
+        let BlockAnd {
+            value: condition_value,
+            block,
+        } = self.operand().emit(context, block);
+        let condition_boolean = context.emit_is_nonzero(condition_value, &block);
+        let (then_block, else_block) = mlir_region_op!(
+            context.state, &block,
+            IfOperation.cond(condition_boolean); then_region, else_region
+        );
+
+        for (branch_block, branch_expression) in [
+            (then_block, &true_expression),
+            (else_block, &false_expression),
+        ] {
+            let branch_end = branch_expression.emit_for_effect(context, branch_block);
+            mlir_op_void!(context.state, &branch_end, YieldOperation.ins(&[]));
+        }
+
+        block
     }
 }
