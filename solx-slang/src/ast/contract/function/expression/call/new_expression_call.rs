@@ -85,6 +85,7 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             &ordered_arguments,
             call_value,
             salt,
+            false,
             block,
         )
     }

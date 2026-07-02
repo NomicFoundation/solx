@@ -12,6 +12,9 @@ pub mod identifier_function_call;
 pub mod member_builtin_call;
 pub mod new_expression_call;
 pub mod struct_construction;
+pub mod try_call;
+pub mod try_call_kind;
+pub mod try_new_expression;
 pub mod type_conversion;
 
 use melior::ir::BlockRef;

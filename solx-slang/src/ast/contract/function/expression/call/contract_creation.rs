@@ -23,13 +23,15 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
     /// in. Each constructor argument is coerced to its declared parameter type, so a literal
     /// materialises in the parameter's representation that the deployed constructor ABI-decodes. A
     /// `{value: v}` option selects the forwarded wei, defaulting to zero; a `{salt: s}` option selects
-    /// CREATE2 over CREATE.
+    /// CREATE2 over CREATE. A `try`/`catch` guard passes `try_call` to mark the creation, so a
+    /// surrounding `sol.try` receives a success status instead of reverting.
     pub(super) fn emit_contract_creation(
         &self,
         contract_definition: &ContractDefinition,
         arguments: &[Expression],
         call_value: Option<Value<'context, 'block>>,
         salt: Option<Value<'context, 'block>>,
+        try_call: bool,
         block: BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let context = self.expression_context.state;
@@ -66,6 +68,7 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             salt.map(AstValue::new),
             &constructor_arguments,
             result_type,
+            try_call,
             context,
             &current_block,
         )

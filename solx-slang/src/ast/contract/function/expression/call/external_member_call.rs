@@ -25,7 +25,7 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
     /// The receiver evaluates to the callee's address, the arguments coerce to the callee's declared
     /// parameter types, and `sol.ext_call` encodes the selector and ABI-encoded arguments before
     /// decoding the returns. A `{value: v}` / `{gas: g}` option forwards the wei and gas; a `view` or
-    /// `pure` callee lowers to a `STATICCALL`.
+    /// `pure` callee lowers to a `STATICCALL`. The call reverts on failure, so the status is discarded.
     pub(super) fn emit_external_member_call(
         &self,
         access: &MemberAccessExpression,
@@ -35,6 +35,40 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
         call_gas: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Vec<Value<'context, 'block>>> {
+        let (_status, results, block) = self.emit_external_member_call_fallible(
+            access,
+            function_definition,
+            arguments,
+            call_value,
+            call_gas,
+            false,
+            block,
+        );
+        BlockAnd {
+            value: results,
+            block,
+        }
+    }
+
+    /// Emits the external contract-instance method call `c.foo(args)`, returning its success status,
+    /// its result values in declaration order, and the continuation block.
+    ///
+    /// `try_call` surfaces the success status for a `try`/`catch` guard; without it the `sol.ext_call`
+    /// reverts on failure.
+    pub(super) fn emit_external_member_call_fallible(
+        &self,
+        access: &MemberAccessExpression,
+        function_definition: &FunctionDefinition,
+        arguments: &ArgumentsDeclaration,
+        call_value: Option<Value<'context, 'block>>,
+        call_gas: Option<Value<'context, 'block>>,
+        try_call: bool,
+        block: BlockRef<'context, 'block>,
+    ) -> (
+        Value<'context, 'block>,
+        Vec<Value<'context, 'block>>,
+        BlockRef<'context, 'block>,
+    ) {
         let context = self.expression_context.state;
         let (parameter_types, return_types) =
             TypeConversion::resolve_function_types(function_definition, context);
@@ -70,7 +104,7 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             block = next;
         }
 
-        let (_status, results) = AstValue::external_call(
+        let (status, results) = AstValue::external_call(
             AstValue::new(receiver),
             &callee_name,
             selector,
@@ -80,12 +114,10 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             call_value,
             call_gas,
             is_static,
+            try_call,
             context,
             &block,
         );
-        BlockAnd {
-            value: results,
-            block,
-        }
+        (status, results, block)
     }
 }
