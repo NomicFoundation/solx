@@ -2,6 +2,7 @@
 //! A `!sol.ptr<T, Loc>` place in the Sol dialect: a typed address, and the loads, stores, and steps it supports.
 //!
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
@@ -127,11 +128,13 @@ impl<'context, 'block> Pointer<'context, 'block> {
     }
 
     /// Steps to the place of element `element_type` at `index` within this aggregate place (`sol.gep`).
-    /// The result place type comes from [`Type::gep_result_type`].
+    /// The result place type comes from [`Type::gep_result_type`]. `no_panic_bounds` marks an index
+    /// whose out-of-bounds access plain-reverts rather than raising `Panic(0x32)`.
     pub fn gep<B>(
         self,
         index: Value<'context, 'block>,
         element_type: Type<'context>,
+        no_panic_bounds: bool,
         context: &Context<'context>,
         block: &B,
     ) -> Self
@@ -140,14 +143,20 @@ impl<'context, 'block> Pointer<'context, 'block> {
         'context: 'block,
     {
         let address_type = self.r#type().gep_result_type(element_type);
-        Self::new(mlir_op!(
-            context,
-            block,
-            GepOperation
-                .base_addr(self.inner)
-                .idx(index.into_mlir())
-                .addr(address_type.into_mlir())
-        ))
+        let mut gep = GepOperation::builder(context.mlir_context, context.location())
+            .base_addr(self.inner)
+            .idx(index.into_mlir())
+            .addr(address_type.into_mlir());
+        if no_panic_bounds {
+            gep = gep.no_panic_bounds(Attribute::unit(context.mlir_context));
+        }
+        Self::new(
+            block
+                .append_operation(gep.build().into())
+                .result(0)
+                .expect("sol.gep produces one result")
+                .into(),
+        )
     }
 
     /// Steps to the place of the mapping entry for `key` (`sol.map`). The dialect derives no map

@@ -96,10 +96,10 @@ impl<'context: 'block, 'block> EmitValues<'context, 'block> for FunctionCallExpr
                     emitter.emit_built_in(self, &callee, &emitter.positional(&arguments), block);
                 BlockAnd { block, value }
             }
-            CallKind::ExternalMemberCall(access, function_definition) => emitter
+            CallKind::ExternalMemberCall(access, definition) => emitter
                 .emit_external_member_call(
                     &access,
-                    &function_definition,
+                    &definition,
                     &arguments,
                     call_value,
                     call_gas,

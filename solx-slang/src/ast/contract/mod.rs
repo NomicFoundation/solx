@@ -4,6 +4,10 @@
 
 /// Function definition lowering to Sol dialect MLIR.
 pub mod function;
+/// Public state-variable getter synthesis.
+pub mod getter;
+
+use std::collections::HashSet;
 
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
@@ -18,16 +22,19 @@ use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
 
 use solx_mlir::Context;
+use solx_mlir::Environment;
 use solx_mlir::Type as AstType;
 use solx_mlir::ods::sol::ContractOperation;
 use solx_mlir::ods::sol::StateVarOperation;
 
 use crate::ast::analysis::query::storage_layout::StorageLayout;
 use crate::ast::emit::emit_constructor::EmitConstructor;
+use crate::ast::emit::emit_expression::EmitExpression;
 use crate::ast::emit::emit_function::EmitFunction;
 use crate::ast::emit::emit_object::EmitObject;
 
 use self::function::FunctionEmitter;
+use self::function::expression::ExpressionContext;
 use self::function::expression::call::type_conversion::TypeConversion;
 
 /// Lowers a Solidity contract to Sol dialect MLIR.
@@ -140,7 +147,23 @@ impl EmitObject for ContractDefinition {
         );
         context.current_contract_type = None;
 
+        let getter_selectors: HashSet<u32> = self
+            .members()
+            .iter()
+            .filter_map(|member| match member {
+                ContractMember::StateVariableDefinition(state_variable) => {
+                    state_variable.compute_selector()
+                }
+                _ => None,
+            })
+            .collect();
+
         for function in self.functions() {
+            if let Some(selector) = function.compute_selector()
+                && getter_selectors.contains(&selector)
+            {
+                continue;
+            }
             context.current_contract_type = Some(contract_type);
             function.emit(
                 &FunctionEmitter::new(context, self, &storage_layout),
@@ -155,5 +178,19 @@ impl EmitObject for ContractDefinition {
                 &contract_body,
             );
         }
+
+        context.current_contract_type = Some(contract_type);
+        {
+            let environment = Environment::new();
+            let getter_context =
+                ExpressionContext::new(context, &environment, &storage_layout, true);
+            for member in self.members().iter() {
+                let ContractMember::StateVariableDefinition(state_variable) = member else {
+                    continue;
+                };
+                state_variable.emit(&getter_context, contract_body);
+            }
+        }
+        context.current_contract_type = None;
     }
 }
