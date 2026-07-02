@@ -5,6 +5,7 @@
 use std::collections::BTreeMap;
 use std::path::Component;
 use std::path::Path;
+use std::path::PathBuf;
 
 use slang_solidity_v2::compilation::CompilationBuilderConfig;
 use slang_solidity_v2::diagnostics::kinds::compilation::MissingFile;
@@ -32,27 +33,20 @@ impl CompilationBuilderConfig for CompilationConfig {
             })
     }
 
+    /// Resolves `import_path` against the importing file's directory, normalizing `.` and `..`
+    /// segments. A `..` cancels any preceding segment, collapsing the path back into the source
+    /// tree so an import cannot climb above the shortest resolvable identifier.
     fn resolve_import(
         &mut self,
         source_file_identifier: &str,
         import_path: &str,
     ) -> Result<String, UnresolvedImport> {
-        let path = import_path
-            .strip_prefix('"')
-            .and_then(|stripped| stripped.strip_suffix('"'))
-            .or_else(|| {
-                import_path
-                    .strip_prefix('\'')
-                    .and_then(|stripped| stripped.strip_suffix('\''))
-            })
-            .unwrap_or(import_path);
-
-        if self.sources.contains_key(path) {
-            return Ok(path.to_owned());
+        if self.sources.contains_key(import_path) {
+            return Ok(import_path.to_owned());
         }
 
         if let Some(dir) = Path::new(source_file_identifier).parent() {
-            let resolved = dir.join(path);
+            let resolved = dir.join(import_path);
             let mut normalized = Vec::new();
             for component in resolved.components() {
                 match component {
@@ -65,7 +59,7 @@ impl CompilationBuilderConfig for CompilationConfig {
                     other => normalized.push(other),
                 }
             }
-            let clean: std::path::PathBuf = normalized.into_iter().collect();
+            let clean: PathBuf = normalized.into_iter().collect();
             let key = clean.to_string_lossy().replace('\\', "/");
             if self.sources.contains_key(&key) {
                 return Ok(key);
