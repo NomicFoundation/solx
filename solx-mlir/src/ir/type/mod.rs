@@ -181,6 +181,49 @@ impl<'context> Type<'context> {
         unsafe { ffi::solxIsFuncRefType(self.inner.to_raw()) }
     }
 
+    /// Whether this is the single-byte `!sol.byte`, the element type of `bytes` / `string`.
+    ///
+    /// The dialect exposes no byte-type query and Rust cannot construct `!sol.byte` directly, so it
+    /// is matched against the element type of a `!sol.string`.
+    pub fn is_byte(self, context: &'context melior::Context) -> bool {
+        let string_type = Self::string(context, solx_utils::DataLocation::Memory).into_mlir();
+        let byte_type = unsafe {
+            MlirType::from_raw(ffi::mlirSolGetEltType(string_type.to_raw(), 0))
+        };
+        self.inner == byte_type
+    }
+
+    /// Whether this is the dynamic-bytes type `!sol.string` (shared by `string` and `bytes`), at any
+    /// data location.
+    ///
+    /// The dialect exposes no string-type query, so the type is reconstructed at each data location
+    /// and matched by equality.
+    pub fn is_string(self, context: &'context melior::Context) -> bool {
+        [
+            solx_utils::DataLocation::Storage,
+            solx_utils::DataLocation::CallData,
+            solx_utils::DataLocation::Memory,
+            solx_utils::DataLocation::Stack,
+            solx_utils::DataLocation::Immutable,
+            solx_utils::DataLocation::Transient,
+        ]
+        .into_iter()
+        .any(|location| self.inner == Self::string(context, location).into_mlir())
+    }
+
+    /// The byte width of a fixed-width byte type: `N` for `!sol.fixedbytes<N>`, `1` for the single
+    /// `!sol.byte`, and `None` for any other type.
+    ///
+    /// The dialect exposes no width query, so each `bytes1 ..= bytes32` type is reconstructed and
+    /// matched by equality.
+    pub fn fixed_bytes_or_byte_width(self, context: &'context melior::Context) -> Option<u32> {
+        if self.is_byte(context) {
+            return Some(1);
+        }
+        (1..=solx_utils::BYTE_LENGTH_FIELD as u32)
+            .find(|&width| self.inner == Self::fixed_bytes(context, width).into_mlir())
+    }
+
     /// The bit width of an integer type, or 256 for any non-integer type.
     pub fn integer_bit_width(self) -> u32 {
         IntegerType::try_from(self.inner).map_or(solx_utils::BIT_LENGTH_FIELD as u32, |integer| {

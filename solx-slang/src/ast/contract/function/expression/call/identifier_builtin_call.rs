@@ -209,12 +209,13 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             BuiltIn::Addmod if arguments.len() == 3 => {
                 let (values, block) = self.emit_argument_values(arguments, block);
                 let context = self.expression_context.state;
+                let field = AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD);
                 let value = block
                     .append_operation(
                         AddModOperation::builder(context.mlir_context, context.location())
-                            .x(values[0])
-                            .y(values[1])
-                            .r#mod(values[2])
+                            .x(AstValue::new(values[0]).cast(field, context, &block).into_mlir())
+                            .y(AstValue::new(values[1]).cast(field, context, &block).into_mlir())
+                            .r#mod(AstValue::new(values[2]).cast(field, context, &block).into_mlir())
                             .build()
                             .into(),
                     )
@@ -226,12 +227,13 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
             BuiltIn::Mulmod if arguments.len() == 3 => {
                 let (values, block) = self.emit_argument_values(arguments, block);
                 let context = self.expression_context.state;
+                let field = AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD);
                 let value = block
                     .append_operation(
                         MulModOperation::builder(context.mlir_context, context.location())
-                            .x(values[0])
-                            .y(values[1])
-                            .r#mod(values[2])
+                            .x(AstValue::new(values[0]).cast(field, context, &block).into_mlir())
+                            .y(AstValue::new(values[1]).cast(field, context, &block).into_mlir())
+                            .r#mod(AstValue::new(values[2]).cast(field, context, &block).into_mlir())
                             .build()
                             .into(),
                     )

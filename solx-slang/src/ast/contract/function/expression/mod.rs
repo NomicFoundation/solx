@@ -25,7 +25,6 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
-use melior::ir::r#type::TypeLike;
 use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
@@ -135,29 +134,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     }
 
     /// Whether `candidate` is the single-byte `!sol.byte`, the element type of `bytes` / `string`.
-    ///
-    /// The dialect exposes no byte-type query and Rust cannot construct `!sol.byte` directly, so it
-    /// is matched against the element type of a `!sol.string`.
     pub fn is_byte(&self, candidate: Type<'context>) -> bool {
-        let string_type =
-            AstType::string(self.state.mlir_context, DataLocation::Memory).into_mlir();
-        let byte_type =
-            unsafe { Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(string_type.to_raw(), 0)) };
-        candidate == byte_type
+        AstType::new(candidate).is_byte(self.state.mlir_context)
     }
 
     /// The byte width of a fixed-width byte type: `N` for `!sol.fixedbytes<N>`, `1` for the single
     /// `!sol.byte`, and `None` for any other type.
-    ///
-    /// The dialect exposes no width query, so each `bytes1 ..= bytes32` type is reconstructed and
-    /// matched by equality.
     pub fn fixed_bytes_or_byte_width(&self, candidate: Type<'context>) -> Option<u32> {
-        if self.is_byte(candidate) {
-            return Some(1);
-        }
-        (1..=solx_utils::BYTE_LENGTH_FIELD as u32).find(|&width| {
-            candidate == AstType::fixed_bytes(self.state.mlir_context, width).into_mlir()
-        })
+        AstType::new(candidate).fixed_bytes_or_byte_width(self.state.mlir_context)
     }
 }
 
