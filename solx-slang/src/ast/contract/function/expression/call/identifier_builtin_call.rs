@@ -14,14 +14,18 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::PositionalArguments;
 
 use solx_mlir::Type as AstType;
+use solx_mlir::Value as AstValue;
 use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::AssertOperation;
+use solx_mlir::ods::sol::BlobHashOperation;
+use solx_mlir::ods::sol::BlockHashOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
 use solx_mlir::ods::sol::GasLeftOperation;
 use solx_mlir::ods::sol::Keccak256Operation;
 use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::RequireOperation;
 use solx_mlir::ods::sol::Ripemd160Operation;
+use solx_mlir::ods::sol::SelfdestructOperation;
 use solx_mlir::ods::sol::Sha256Operation;
 
 use crate::ast::block_and::BlockAnd;
@@ -70,6 +74,70 @@ impl<'emitter, 'state, 'context, 'block> CallContext<'emitter, 'state, 'context,
                     .expect("gasleft always produces one result")
                     .into();
                 Some((Some(value), block))
+            }
+            BuiltIn::Blockhash if arguments.len() == 1 => {
+                let (values, block) = self.emit_argument_values(arguments, block);
+                let context = self.expression_context.state;
+                let block_number = AstValue::new(values[0])
+                    .cast(
+                        AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD),
+                        context,
+                        &block,
+                    )
+                    .into_mlir();
+                let value = block
+                    .append_operation(
+                        BlockHashOperation::builder(context.mlir_context, context.location())
+                            .block_number(block_number)
+                            .val(AstType::fixed_bytes(context.mlir_context, 32).into_mlir())
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("blockhash always produces one result")
+                    .into();
+                Some((Some(value), block))
+            }
+            BuiltIn::Blobhash if arguments.len() == 1 => {
+                let (values, block) = self.emit_argument_values(arguments, block);
+                let context = self.expression_context.state;
+                let index = AstValue::new(values[0])
+                    .cast(
+                        AstType::unsigned(context.mlir_context, solx_utils::BIT_LENGTH_FIELD),
+                        context,
+                        &block,
+                    )
+                    .into_mlir();
+                let value = block
+                    .append_operation(
+                        BlobHashOperation::builder(context.mlir_context, context.location())
+                            .idx(index)
+                            .val(AstType::fixed_bytes(context.mlir_context, 32).into_mlir())
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("blobhash always produces one result")
+                    .into();
+                Some((Some(value), block))
+            }
+            BuiltIn::Selfdestruct if arguments.len() == 1 => {
+                let (values, block) = self.emit_argument_values(arguments, block);
+                let context = self.expression_context.state;
+                let recipient = AstValue::new(values[0])
+                    .address_cast(
+                        AstType::address(context.mlir_context, true),
+                        context,
+                        &block,
+                    )
+                    .into_mlir();
+                block.append_operation(
+                    SelfdestructOperation::builder(context.mlir_context, context.location())
+                        .recipient(recipient)
+                        .build()
+                        .into(),
+                );
+                Some((None, block))
             }
             BuiltIn::Keccak256 if arguments.len() == 1 => {
                 let (values, block) = self.emit_argument_values(arguments, block);
