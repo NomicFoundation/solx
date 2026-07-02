@@ -32,6 +32,7 @@ use crate::ods::sol::BytesCastOperation;
 use crate::ods::sol::CastOperation;
 use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConstantOperation;
+use crate::ods::sol::ContractCastOperation;
 use crate::ods::sol::DataLocCastOperation;
 use crate::ods::sol::DefaultCallDataOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
@@ -726,6 +727,26 @@ impl<'context, 'block> Value<'context, 'block> {
             context,
             block,
             AddressCastOperation
+                .inp(self.into_mlir())
+                .out(target_type.into_mlir())
+        ))
+    }
+
+    /// Casts to `target_type` via `sol.contract_cast`, between two contract or interface types.
+    pub fn contract_cast<B>(
+        self,
+        target_type: Type<'context>,
+        context: &Context<'context>,
+        block: &B,
+    ) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        Self::new(mlir_op!(
+            context,
+            block,
+            ContractCastOperation
                 .inp(self.into_mlir())
                 .out(target_type.into_mlir())
         ))
