@@ -237,7 +237,7 @@ pub fn test(
             for (key, value) in project.env.iter() {
                 npm_compile_command.env(key, value);
             }
-            if toolchain_name.starts_with("solx") {
+            if toolchain_name.contains("solx") {
                 npm_compile_command.env("USE_SOLX", "true");
                 npm_compile_command.env("SOLX", &*compiler_path_str);
             }
@@ -280,7 +280,7 @@ pub fn test(
             let npm_test_report_path = project_directory.join("junit-report.json");
             let npm_test_report_path_str = npm_test_report_path.to_string_lossy();
             npm_test_command.env("JUNIT_REPORT", &*npm_test_report_path_str);
-            if toolchain_name.starts_with("solx") {
+            if toolchain_name.contains("solx") {
                 npm_test_command.env("USE_SOLX", "true");
                 npm_test_command.env("SOLX", &*compiler_path_str);
             }

@@ -245,7 +245,7 @@ jobs:
         run: |
           ./target/release/solx-dev test solx-tester \
             --solidity-compiler ./target/release/solx \
-            --via-ir --optimizer 'M^B3' \
+            --optimizer 'M^B3' \
             --benchmark=../reference-benchmark.json
 
       - name: Run solx-tester benchmarks (PR)
@@ -257,7 +257,7 @@ jobs:
         run: |
           ./target/release/solx-dev test solx-tester \
             --solidity-compiler ./target/release/solx \
-            --via-ir --optimizer 'M^B3' \
+            --optimizer 'M^B3' \
             --benchmark=candidate-benchmark.json
 
       - name: Build benchmark converter
