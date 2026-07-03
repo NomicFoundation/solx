@@ -41,7 +41,6 @@ impl Block {
     /// Assembles a block from the sequence of instructions.
     ///
     pub fn try_from_instructions(
-        solc_version: semver::Version,
         code_segment: solx_utils::CodeSegment,
         slice: &[Instruction],
     ) -> anyhow::Result<(Self, usize)> {
@@ -67,15 +66,15 @@ impl Block {
             instance: None,
             elements: Vec::with_capacity(Self::ELEMENTS_VECTOR_DEFAULT_CAPACITY),
             predecessors: BTreeSet::new(),
-            initial_stack: ElementStack::new(),
-            stack: ElementStack::new(),
+            initial_stack: ElementStack::default(),
+            stack: ElementStack::default(),
             extra_hashes: vec![],
         };
 
         let mut dead_code = false;
         while cursor < slice.len() {
             if !dead_code {
-                let element: Element = Element::new(solc_version.clone(), slice[cursor].to_owned());
+                let element: Element = Element::new(slice[cursor].to_owned());
                 block.elements.push(element);
             }
 

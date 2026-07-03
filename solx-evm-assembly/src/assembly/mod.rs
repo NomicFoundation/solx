@@ -312,7 +312,6 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
     }
 
     fn into_llvm(self, context: &mut solx_codegen_evm::Context) -> anyhow::Result<()> {
-        // Use module name which already includes the code segment (e.g., "contract.runtime")
         let contract_path = context
             .module()
             .get_name()
@@ -320,7 +319,6 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
             .expect("Always valid")
             .to_owned();
 
-        // Get optimizer settings for file naming (same as LLVM IR dumps)
         let is_size_fallback = context.optimizer().settings().is_fallback_to_size_enabled();
         let spill_area = context
             .optimizer()
@@ -328,22 +326,32 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
             .spill_area_size()
             .map(|size| (solx_codegen_evm::SOLC_USER_MEMORY_OFFSET, size));
 
-        let (code_segment, blocks) = if let Ok(runtime_code) = self.runtime_code() {
+        let output_evmla = context
+            .output_config()
+            .map_or(context.capture_evmla(), |output_config| {
+                output_config.output_evmla
+            });
+        let output_ethir = context
+            .output_config()
+            .map_or(context.capture_ethir(), |output_config| {
+                output_config.output_ethir
+            });
+
+        if output_evmla {
             let evmla_string = self.to_string();
-            if let Some(output_config) = context.output_config() {
-                output_config.dump_evmla(
+            match context.output_config() {
+                Some(output_config) => output_config.dump_evmla(
                     contract_path.as_str(),
                     evmla_string.as_str(),
                     is_size_fallback,
                     spill_area,
-                )?;
-            } else {
-                // Capture for standard JSON output when not writing to files
-                context.set_captured_evmla(evmla_string);
+                )?,
+                None => context.set_captured_evmla(evmla_string),
             }
+        }
 
+        let (code_segment, blocks) = if let Ok(runtime_code) = self.runtime_code() {
             let deploy_code_blocks = EtherealIR::get_blocks(
-                context.evmla().expect("Always exists").version.to_owned(),
                 solx_utils::CodeSegment::Deploy,
                 self.code
                     .as_deref()
@@ -355,7 +363,6 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Runtime code instructions not found"))?;
             let runtime_code_blocks = EtherealIR::get_blocks(
-                context.evmla().expect("Always exists").version.to_owned(),
                 solx_utils::CodeSegment::Runtime,
                 runtime_code_instructions.as_slice(),
             )?;
@@ -364,21 +371,7 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
             blocks.extend(runtime_code_blocks);
             (solx_utils::CodeSegment::Deploy, blocks)
         } else {
-            let evmla_string = self.to_string();
-            if let Some(output_config) = context.output_config() {
-                output_config.dump_evmla(
-                    contract_path.as_str(),
-                    evmla_string.as_str(),
-                    is_size_fallback,
-                    spill_area,
-                )?;
-            } else {
-                // Capture for standard JSON output when not writing to files
-                context.set_captured_evmla(evmla_string);
-            }
-
             let blocks = EtherealIR::get_blocks(
-                context.evmla().expect("Always exists").version.to_owned(),
                 solx_utils::CodeSegment::Runtime,
                 self.code
                     .as_deref()
@@ -392,18 +385,19 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
             self.extra_metadata.unwrap_or_default(),
             Some(code_segment),
             blocks,
+            output_ethir,
         )?;
-        let ethir_string = ethereal_ir.to_string();
-        if let Some(output_config) = context.output_config() {
-            output_config.dump_ethir(
-                contract_path.as_str(),
-                ethir_string.as_str(),
-                is_size_fallback,
-                spill_area,
-            )?;
-        } else {
-            // Capture for standard JSON output when not writing to files
-            context.set_captured_ethir(ethir_string);
+        if output_ethir {
+            let ethir_string = ethereal_ir.to_string();
+            match context.output_config() {
+                Some(output_config) => output_config.dump_ethir(
+                    contract_path.as_str(),
+                    ethir_string.as_str(),
+                    is_size_fallback,
+                    spill_area,
+                )?,
+                None => context.set_captured_ethir(ethir_string),
+            }
         }
 
         let mut entry = solx_codegen_evm::EntryFunction::new(ethereal_ir);
