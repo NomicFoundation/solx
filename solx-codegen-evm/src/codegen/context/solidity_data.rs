@@ -77,14 +77,12 @@ impl ISolidityData for SolidityData {
     fn get_solx_location(&self) -> Option<&solx_utils::DebugInfoMappedLocation> {
         let debug_info = self.debug_info.as_ref()?;
         let solc_location = self.get_debug_info_solc_location()?;
+        let start = usize::try_from(solc_location.start).ok()?;
 
-        debug_info.ast_nodes.values().find_map(|ast_node| {
-            if ast_node.solc_location.start == solc_location.start {
-                Some(&ast_node.mapped_location)
-            } else {
-                None
-            }
-        })
+        debug_info
+            .ast_nodes
+            .get(&start)
+            .map(|ast_node| &ast_node.mapped_location)
     }
 
     fn debug_info(&self) -> Option<&solx_utils::DebugInfo> {
