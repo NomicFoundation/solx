@@ -393,10 +393,211 @@ pub enum Name {
     },
 }
 
+impl Name {
+    ///
+    /// Returns the static mnemonic of the instruction.
+    ///
+    pub const fn mnemonic(&self) -> &'static str {
+        match self {
+            Self::PUSH => "PUSH",
+            Self::PUSH_Tag => "PUSH_Tag",
+            Self::PUSH_Data => "PUSH_Data",
+            Self::PUSH_DataSize => "PUSH_DataSize",
+            Self::PUSH_DataOffset => "PUSH_DataOffset",
+
+            Self::PUSH1 => "PUSH1",
+            Self::PUSH2 => "PUSH2",
+            Self::PUSH3 => "PUSH3",
+            Self::PUSH4 => "PUSH4",
+            Self::PUSH5 => "PUSH5",
+            Self::PUSH6 => "PUSH6",
+            Self::PUSH7 => "PUSH7",
+            Self::PUSH8 => "PUSH8",
+            Self::PUSH9 => "PUSH9",
+            Self::PUSH10 => "PUSH10",
+            Self::PUSH11 => "PUSH11",
+            Self::PUSH12 => "PUSH12",
+            Self::PUSH13 => "PUSH13",
+            Self::PUSH14 => "PUSH14",
+            Self::PUSH15 => "PUSH15",
+            Self::PUSH16 => "PUSH16",
+            Self::PUSH17 => "PUSH17",
+            Self::PUSH18 => "PUSH18",
+            Self::PUSH19 => "PUSH19",
+            Self::PUSH20 => "PUSH20",
+            Self::PUSH21 => "PUSH21",
+            Self::PUSH22 => "PUSH22",
+            Self::PUSH23 => "PUSH23",
+            Self::PUSH24 => "PUSH24",
+            Self::PUSH25 => "PUSH25",
+            Self::PUSH26 => "PUSH26",
+            Self::PUSH27 => "PUSH27",
+            Self::PUSH28 => "PUSH28",
+            Self::PUSH29 => "PUSH29",
+            Self::PUSH30 => "PUSH30",
+            Self::PUSH31 => "PUSH31",
+            Self::PUSH32 => "PUSH32",
+            Self::PUSH0 => "PUSH0",
+
+            Self::DUP1 => "DUP1",
+            Self::DUP2 => "DUP2",
+            Self::DUP3 => "DUP3",
+            Self::DUP4 => "DUP4",
+            Self::DUP5 => "DUP5",
+            Self::DUP6 => "DUP6",
+            Self::DUP7 => "DUP7",
+            Self::DUP8 => "DUP8",
+            Self::DUP9 => "DUP9",
+            Self::DUP10 => "DUP10",
+            Self::DUP11 => "DUP11",
+            Self::DUP12 => "DUP12",
+            Self::DUP13 => "DUP13",
+            Self::DUP14 => "DUP14",
+            Self::DUP15 => "DUP15",
+            Self::DUP16 => "DUP16",
+            Self::DUPX => "DUPX",
+
+            Self::SWAP1 => "SWAP1",
+            Self::SWAP2 => "SWAP2",
+            Self::SWAP3 => "SWAP3",
+            Self::SWAP4 => "SWAP4",
+            Self::SWAP5 => "SWAP5",
+            Self::SWAP6 => "SWAP6",
+            Self::SWAP7 => "SWAP7",
+            Self::SWAP8 => "SWAP8",
+            Self::SWAP9 => "SWAP9",
+            Self::SWAP10 => "SWAP10",
+            Self::SWAP11 => "SWAP11",
+            Self::SWAP12 => "SWAP12",
+            Self::SWAP13 => "SWAP13",
+            Self::SWAP14 => "SWAP14",
+            Self::SWAP15 => "SWAP15",
+            Self::SWAP16 => "SWAP16",
+            Self::SWAPX => "SWAPX",
+
+            Self::POP => "POP",
+
+            Self::Tag => "Tag",
+            Self::JUMP => "JUMP",
+            Self::JUMPI => "JUMPI",
+            Self::JUMPDEST => "JUMPDEST",
+
+            Self::ADD => "ADD",
+            Self::SUB => "SUB",
+            Self::MUL => "MUL",
+            Self::DIV => "DIV",
+            Self::MOD => "MOD",
+            Self::SDIV => "SDIV",
+            Self::SMOD => "SMOD",
+
+            Self::LT => "LT",
+            Self::GT => "GT",
+            Self::EQ => "EQ",
+            Self::ISZERO => "ISZERO",
+            Self::SLT => "SLT",
+            Self::SGT => "SGT",
+
+            Self::OR => "OR",
+            Self::XOR => "XOR",
+            Self::NOT => "NOT",
+            Self::AND => "AND",
+            Self::SHL => "SHL",
+            Self::SHR => "SHR",
+            Self::SAR => "SAR",
+            Self::CLZ => "CLZ",
+            Self::BYTE => "BYTE",
+
+            Self::ADDMOD => "ADDMOD",
+            Self::MULMOD => "MULMOD",
+            Self::EXP => "EXP",
+            Self::SIGNEXTEND => "SIGNEXTEND",
+            Self::SHA3 => "SHA3",
+            Self::KECCAK256 => "KECCAK256",
+
+            Self::MLOAD => "MLOAD",
+            Self::MSTORE => "MSTORE",
+            Self::MSTORE8 => "MSTORE8",
+            Self::MCOPY => "MCOPY",
+
+            Self::SLOAD => "SLOAD",
+            Self::SSTORE => "SSTORE",
+            Self::TLOAD => "TLOAD",
+            Self::TSTORE => "TSTORE",
+            Self::PUSHIMMUTABLE => "PUSHIMMUTABLE",
+            Self::ASSIGNIMMUTABLE => "ASSIGNIMMUTABLE",
+
+            Self::CALLDATALOAD => "CALLDATALOAD",
+            Self::CALLDATASIZE => "CALLDATASIZE",
+            Self::CALLDATACOPY => "CALLDATACOPY",
+            Self::CODESIZE => "CODESIZE",
+            Self::CODECOPY => "CODECOPY",
+            Self::PUSHSIZE => "PUSHSIZE",
+            Self::EXTCODESIZE => "EXTCODESIZE",
+            Self::EXTCODEHASH => "EXTCODEHASH",
+            Self::RETURNDATASIZE => "RETURNDATASIZE",
+            Self::RETURNDATACOPY => "RETURNDATACOPY",
+
+            Self::RETURN => "RETURN",
+            Self::REVERT => "REVERT",
+            Self::STOP => "STOP",
+            Self::INVALID => "INVALID",
+
+            Self::LOG0 => "LOG0",
+            Self::LOG1 => "LOG1",
+            Self::LOG2 => "LOG2",
+            Self::LOG3 => "LOG3",
+            Self::LOG4 => "LOG4",
+
+            Self::CALL => "CALL",
+            Self::STATICCALL => "STATICCALL",
+            Self::DELEGATECALL => "DELEGATECALL",
+
+            Self::CREATE => "CREATE",
+            Self::CREATE2 => "CREATE2",
+
+            Self::ADDRESS => "ADDRESS",
+            Self::CALLER => "CALLER",
+
+            Self::CALLVALUE => "CALLVALUE",
+            Self::GAS => "GAS",
+            Self::BALANCE => "BALANCE",
+            Self::SELFBALANCE => "SELFBALANCE",
+
+            Self::PUSHLIB => "PUSHLIB",
+            Self::PUSHDEPLOYADDRESS => "PUSHDEPLOYADDRESS",
+            Self::MEMORYGUARD => "MEMORYGUARD",
+
+            Self::GASLIMIT => "GASLIMIT",
+            Self::GASPRICE => "GASPRICE",
+            Self::ORIGIN => "ORIGIN",
+            Self::CHAINID => "CHAINID",
+            Self::TIMESTAMP => "TIMESTAMP",
+            Self::NUMBER => "NUMBER",
+            Self::BLOCKHASH => "BLOCKHASH",
+            Self::BLOBHASH => "BLOBHASH",
+            Self::DIFFICULTY => "DIFFICULTY",
+            Self::PREVRANDAO => "PREVRANDAO",
+            Self::COINBASE => "COINBASE",
+            Self::BASEFEE => "BASEFEE",
+            Self::BLOBBASEFEE => "BLOBBASEFEE",
+            Self::MSIZE => "MSIZE",
+
+            Self::CALLCODE => "CALLCODE",
+            Self::PC => "PC",
+            Self::EXTCODECOPY => "EXTCODECOPY",
+            Self::SELFDESTRUCT => "SELFDESTRUCT",
+
+            Self::UNSAFEASM => "UNSAFEASM",
+
+            Self::RecursiveCall { .. } => "RECURSIVE_CALL",
+            Self::RecursiveReturn { .. } => "RECURSIVE_RETURN",
+        }
+    }
+}
+
 impl std::fmt::Display for Name {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Tag => write!(f, "Tag"),
             Self::RecursiveCall {
                 name,
                 entry_key,
@@ -409,7 +610,7 @@ impl std::fmt::Display for Name {
                 "RECURSIVE_CALL({name}_{entry_key}, {input_size}, {output_size}, {return_address})",
             ),
             Self::RecursiveReturn { input_size } => write!(f, "RECURSIVE_RETURN({input_size})"),
-            _ => write!(f, "{self:?}",),
+            _ => f.write_str(self.mnemonic()),
         }
     }
 }

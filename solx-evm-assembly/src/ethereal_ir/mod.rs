@@ -49,9 +49,14 @@ impl EtherealIR {
         extra_metadata: ExtraMetadata,
         code_segment: Option<solx_utils::CodeSegment>,
         blocks: HashMap<solx_codegen_evm::BlockKey, Block>,
+        capture_stacks: bool,
     ) -> anyhow::Result<Self> {
-        let mut entry_function =
-            Function::new(solc_version, code_segment, FunctionType::new_entry());
+        let mut entry_function = Function::new(
+            solc_version,
+            code_segment,
+            FunctionType::new_entry(),
+            capture_stacks,
+        );
         let mut defined_functions = BTreeMap::new();
         let mut visited_functions = HashSet::new();
         entry_function.traverse(
@@ -71,7 +76,6 @@ impl EtherealIR {
     /// Gets blocks for the specified type of the contract code.
     ///
     pub fn get_blocks(
-        solc_version: semver::Version,
         code_segment: solx_utils::CodeSegment,
         instructions: &[Instruction],
     ) -> anyhow::Result<HashMap<solx_codegen_evm::BlockKey, Block>> {
@@ -79,11 +83,8 @@ impl EtherealIR {
         let mut offset = 0;
 
         while offset < instructions.len() {
-            let (block, size) = Block::try_from_instructions(
-                solc_version.clone(),
-                code_segment,
-                &instructions[offset..],
-            )?;
+            let (block, size) =
+                Block::try_from_instructions(code_segment, &instructions[offset..])?;
             blocks.insert(
                 solx_codegen_evm::BlockKey::new(code_segment, block.key.tag),
                 block,
