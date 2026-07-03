@@ -89,6 +89,7 @@ jobs:
         with:
           build-type: Release
           enable-assertions: 'false'
+          enable-mlir: 'true'
 
       # Submodule SHA alone is not sufficient: `solx-dev llvm build` is
       # driven by `solx-dev/src/llvm/*`, so a PR that edits those scripts
@@ -126,7 +127,7 @@ jobs:
           pushd temp-solx-main
           ${SFW_PREFIX:-} cargo fetch --locked
           ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-dev
-          ./target/release/solx-dev llvm build --build-type Release --install-distribution
+          ./target/release/solx-dev llvm build --build-type Release --enable-mlir --install-distribution
           popd
 
       - name: Build solc (PR)
@@ -180,13 +181,17 @@ jobs:
         env:
           BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
-        run: ${SFW_PREFIX:-} cargo build --frozen --release --bin solx
+        run: |
+          ${SFW_PREFIX:-} cargo build --frozen --release -p solx-slang -p solx-mlir -p solx \
+            --no-default-features --features slang --target-dir target-slang
+          mkdir -p target/release
+          cp target-slang/release/solx target/release/solx
 
       - name: Build solx-dev and solx-tester (PR)
         env:
           BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
-        run: ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-dev --bin solx-tester
+        run: ${SFW_PREFIX:-} cargo build --frozen --release -p solx-dev -p solx-tester --features solx-tester/slang-ast
 
       - name: Fetch dependencies (main)
         working-directory: temp-solx-main
@@ -199,7 +204,11 @@ jobs:
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
-        run: ${SFW_PREFIX:-} cargo build --frozen --release --bin solx
+        run: |
+          ${SFW_PREFIX:-} cargo build --frozen --release -p solx-slang -p solx-mlir -p solx \
+            --no-default-features --features slang --target-dir target-slang
+          mkdir -p target/release
+          cp target-slang/release/solx target/release/solx
 
       - name: Build solx-dev and solx-tester (main)
         working-directory: temp-solx-main
@@ -207,7 +216,7 @@ jobs:
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
-        run: ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-dev --bin solx-tester
+        run: ${SFW_PREFIX:-} cargo build --frozen --release -p solx-dev -p solx-tester --features solx-tester/slang-ast
 
       - name: Run solx-tester tests (PR)
         id: solx_tester_tests
