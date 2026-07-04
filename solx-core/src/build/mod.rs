@@ -69,17 +69,18 @@ impl Build {
                     .values()
                     .flat_map(|contract| contract.objects_ref())
                     .collect::<Vec<&ContractObject>>();
+                let objects_by_id: BTreeMap<&str, &ContractObject> = all_objects
+                    .iter()
+                    .map(|object| (object.identifier.as_str(), *object))
+                    .collect();
 
                 let assembleable_objects = all_objects
                     .iter()
                     .filter(|object| {
                         !object.is_assembled
                             && object.dependencies.inner.iter().all(|dependency| {
-                                all_objects
-                                    .iter()
-                                    .find(|object| {
-                                        object.identifier.as_str() == dependency.as_str()
-                                    })
+                                objects_by_id
+                                    .get(dependency.as_str())
                                     .map(|object| object.is_assembled)
                                     .unwrap_or_default()
                             })
@@ -92,7 +93,7 @@ impl Build {
 
                 let mut assembled_objects_data = Vec::with_capacity(assembleable_objects.len());
                 for object in assembleable_objects.into_iter() {
-                    let assembled_object = match object.assemble(all_objects.as_slice()) {
+                    let assembled_object = match object.assemble(&objects_by_id) {
                         Ok(assembled_object) => assembled_object,
                         Err(error) => {
                             self.messages.lock_sync().push(
