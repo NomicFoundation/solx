@@ -142,7 +142,7 @@ impl Object {
     ///
     pub fn assemble(
         &self,
-        all_objects: &[&Self],
+        objects_by_id: &BTreeMap<&str, &Self>,
     ) -> anyhow::Result<inkwell::memory_buffer::MemoryBuffer> {
         let memory_buffer = self.to_memory_buffer()?;
 
@@ -151,9 +151,8 @@ impl Object {
 
         memory_buffers.extend(self.dependencies.inner.iter().map(|dependency| {
             let original_dependency_identifier = dependency.to_owned();
-            let dependency = all_objects
-                .iter()
-                .find(|object| object.identifier.as_str() == dependency.as_str())
+            let dependency = objects_by_id
+                .get(dependency.as_str())
                 .expect("Dependency not found");
             let dependency_bytecode = dependency.bytecode.as_deref().expect("Bytecode is not set");
             let memory_buffer = inkwell::memory_buffer::MemoryBuffer::create_from_memory_range(
