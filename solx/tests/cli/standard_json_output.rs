@@ -285,6 +285,22 @@ fn select_specific_bytecode(path: &str, expected_key: &str) -> anyhow::Result<()
     Ok(())
 }
 
+#[test_case(crate::common::standard_json!("select_evm_bytecode_debug_info.json"), "bytecode")]
+#[test_case(crate::common::standard_json!("select_evm_deployed_bytecode_debug_info.json"), "deployedBytecode")]
+fn select_specific_debug_info(path: &str, expected_key: &str) -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &["--standard-json", path];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains(expected_key))
+        .stdout(predicate::str::contains("\"debugInfo\"").count(1));
+
+    Ok(())
+}
+
 #[cfg(feature = "solc")]
 #[test]
 fn via_ir_output_structure() -> anyhow::Result<()> {
