@@ -27,7 +27,6 @@ use self::traits::address_space::IAddressSpace;
 use self::traits::evmla_data::IEVMLAData;
 use self::traits::evmla_function::IEVMLAFunction;
 use self::traits::solidity_data::ISolidityData;
-use self::traits::yul_data::IYulData;
 
 ///
 /// The LLVM module context trait.
@@ -53,11 +52,6 @@ pub trait IContext<'ctx> {
     /// The Solidity extra data type.
     ///
     type SolidityData: ISolidityData;
-
-    ///
-    /// The Yul extra data type.
-    ///
-    type YulData: IYulData;
 
     ///
     /// The EVMLA extra data type.
@@ -707,27 +701,6 @@ pub trait IContext<'ctx> {
     /// If the Solidity data has not been initialized.
     ///
     fn solidity_mut(&mut self) -> Option<&mut Self::SolidityData>;
-
-    ///
-    /// Sets the Yul data.
-    ///
-    fn set_yul_data(&mut self, data: Self::YulData);
-
-    ///
-    /// Returns the Yul data reference.
-    ///
-    /// # Panics
-    /// If the Yul data has not been initialized.
-    ///
-    fn yul(&self) -> Option<&Self::YulData>;
-
-    ///
-    /// Returns the Yul data mutable reference.
-    ///
-    /// # Panics
-    /// If the Yul data has not been initialized.
-    ///
-    fn yul_mut(&mut self) -> Option<&mut Self::YulData>;
 
     ///
     /// Sets the EVM legacy assembly data.

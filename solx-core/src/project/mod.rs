@@ -42,8 +42,6 @@ pub struct Project {
     pub contracts: BTreeMap<String, Contract>,
     /// The Solidity AST JSONs of the source files.
     pub ast_jsons: Option<BTreeMap<String, Option<serde_json::Value>>>,
-    /// The mapping of auxiliary identifiers, e.g. Yul object names, to full contract paths.
-    pub identifier_paths: BTreeMap<String, String>,
     /// The library addresses.
     pub libraries: solx_utils::Libraries,
     /// Solidity function definitions.
@@ -63,11 +61,6 @@ impl Project {
         libraries: solx_utils::Libraries,
         debug_info: Option<solx_utils::DebugInfo>,
     ) -> Self {
-        let mut identifier_paths = BTreeMap::new();
-        for (path, contract) in contracts.iter() {
-            identifier_paths.insert(contract.identifier().to_owned(), path.to_owned());
-        }
-
         let solc_version = match language {
             solx_standard_json::InputLanguage::Solidity
             | solx_standard_json::InputLanguage::Yul => Some(
@@ -81,7 +74,6 @@ impl Project {
             solc_version,
             contracts,
             ast_jsons,
-            identifier_paths,
             libraries,
             debug_info,
         }
@@ -644,7 +636,6 @@ impl Project {
                         runtime_code_ir,
                         solx_utils::CodeSegment::Runtime,
                         evm_version,
-                        self.identifier_paths.clone(),
                         runtime_debug_info,
                         output_selection.to_owned(),
                         None,
@@ -670,7 +661,6 @@ impl Project {
                         deploy_code_ir,
                         solx_utils::CodeSegment::Deploy,
                         evm_version,
-                        self.identifier_paths.clone(),
                         deploy_debug_info,
                         output_selection.to_owned(),
                         immutables,
