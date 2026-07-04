@@ -45,6 +45,11 @@ unsafe extern "C" {
     /// Get the Solidity compiler version.
     ///
     fn solidity_version() -> *const std::os::raw::c_char;
+
+    ///
+    /// Free a string allocated by the Solidity compiler.
+    ///
+    fn solidity_free(data: *const std::os::raw::c_char);
 }
 
 impl Default for Solc {
@@ -185,9 +190,11 @@ impl solx_core::Frontend for Solc {
             if output_pointer.is_null() {
                 anyhow::bail!("solc standard JSON I/O returned a null pointer");
             }
-            CStr::from_ptr(output_pointer)
+            let output_string = CStr::from_ptr(output_pointer)
                 .to_string_lossy()
-                .into_owned()
+                .into_owned();
+            solidity_free(output_pointer);
+            output_string
         };
 
         let mut solc_output = match solx_utils::deserialize_from_str::<solx_standard_json::Output>(
