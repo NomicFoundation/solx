@@ -19,10 +19,12 @@ pub struct Object {
     /// Text assembly.
     pub assembly: Option<String>,
     /// Bytecode.
+    #[serde(with = "serde_bytes")]
     pub bytecode: Option<Vec<u8>>,
     /// Hexadecimal bytecode.
     pub bytecode_hex: Option<String>,
     /// Debug info.
+    #[serde(with = "serde_bytes")]
     pub debug_info: Option<Vec<u8>>,
     /// EVM legacy assembly IR (solx internal representation).
     pub evmla: Option<String>,
@@ -37,6 +39,7 @@ pub struct Object {
     /// Code segment.
     pub code_segment: solx_utils::CodeSegment,
     /// The metadata bytes. Only appended to runtime code.
+    #[serde(with = "serde_bytes")]
     pub metadata_bytes: Option<Vec<u8>>,
     /// Immutables of the runtime code.
     pub immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
