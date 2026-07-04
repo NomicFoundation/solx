@@ -539,8 +539,22 @@ impl Project {
                 #[cfg(feature = "mlir")]
                 let mlir = contract.mlir.take();
 
-                let mut deploy_debug_info = self.debug_info.clone();
-                let mut runtime_debug_info = self.debug_info.clone();
+                let mut deploy_debug_info = output_selection
+                    .check_selection(
+                        path.as_str(),
+                        contract_name.name.as_deref(),
+                        solx_standard_json::InputSelector::BytecodeDebugInfo,
+                    )
+                    .then(|| self.debug_info.clone())
+                    .flatten();
+                let mut runtime_debug_info = output_selection
+                    .check_selection(
+                        path.as_str(),
+                        contract_name.name.as_deref(),
+                        solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
+                    )
+                    .then(|| self.debug_info.clone())
+                    .flatten();
 
                 let (deploy_code_ir, runtime_code_ir): (ContractIR, ContractIR) = match contract.ir
                 {
