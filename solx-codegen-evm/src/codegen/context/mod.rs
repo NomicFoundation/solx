@@ -832,8 +832,7 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
             inkwell::values::ValueKind::Instruction(inner) => Some(inner),
         };
         if let Some(instruction_value) = instruction_value {
-            let debug_location = self.create_debug_info_location();
-            instruction_value.set_debug_location(debug_location);
+            self.set_instruction_debug_location(instruction_value);
         }
 
         self.modify_call_site_value(arguments, call_site_value, function);
