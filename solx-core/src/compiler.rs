@@ -350,7 +350,11 @@ impl<'arguments> Compiler<'arguments> {
 
         let linker_symbols = solc_input.settings.libraries.as_linker_symbols()?;
         solc_input.resolve_sources()?;
-        let debug_info = solc_output.get_debug_info(&solc_input.sources);
+        let debug_info = if output_selection.is_debug_info_set_for_any() {
+            Some(solc_output.get_debug_info(&solc_input.sources))
+        } else {
+            None
+        };
 
         let run_solx_project = profiler.start_pipeline_element("solx_Solidity_IR_Analysis");
         let project = Project::try_from_solidity_output(
@@ -358,7 +362,7 @@ impl<'arguments> Compiler<'arguments> {
             solc_input.settings.libraries.clone(),
             via_ir,
             &mut solc_output,
-            Some(debug_info),
+            debug_info,
             output_config.as_ref(),
         )?;
         run_solx_project.borrow_mut().finish();
@@ -444,7 +448,15 @@ impl<'arguments> Compiler<'arguments> {
                 run_solc_standard_json.borrow_mut().finish();
 
                 solc_input.resolve_sources()?;
-                let function_definitions = solc_output.get_debug_info(&solc_input.sources);
+                let function_definitions = if solc_input
+                    .settings
+                    .output_selection
+                    .is_debug_info_set_for_any()
+                {
+                    Some(solc_output.get_debug_info(&solc_input.sources))
+                } else {
+                    None
+                };
 
                 if solc_output.has_errors() {
                     solc_output.write_and_exit(&solc_input.settings.output_selection);
@@ -460,7 +472,7 @@ impl<'arguments> Compiler<'arguments> {
                     solc_input.settings.libraries.clone(),
                     via_ir,
                     &mut solc_output,
-                    Some(function_definitions),
+                    function_definitions,
                     output_config.as_ref(),
                 )?;
                 run_solx_project.borrow_mut().finish();
