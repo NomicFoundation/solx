@@ -45,7 +45,7 @@ impl EtherealIR {
     pub fn new(
         solc_version: semver::Version,
         extra_metadata: ExtraMetadata,
-        code_segment: Option<solx_utils::CodeSegment>,
+        code_segment: solx_utils::CodeSegment,
         blocks: FxHashMap<solx_codegen_evm::BlockKey, Block>,
         capture_stacks: bool,
     ) -> anyhow::Result<Self> {

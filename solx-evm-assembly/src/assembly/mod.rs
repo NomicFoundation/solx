@@ -95,6 +95,18 @@ impl Assembly {
     }
 
     ///
+    /// Replaces the nested runtime code with a path reference, dropping its instructions.
+    ///
+    /// The deploy translation unit never enters the runtime blocks, so shipping the runtime
+    /// instructions inside the deploy input is dead weight.
+    ///
+    pub fn strip_runtime_code(&mut self, path: String) {
+        if let Some(data) = self.data.as_mut() {
+            data.insert("0".to_owned(), Data::Path(path));
+        }
+    }
+
+    ///
     /// Get the list of EVM dependencies.
     ///
     pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
@@ -366,40 +378,18 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
             }
         }
 
-        let (code_segment, blocks) = if let Ok(runtime_code) = self.runtime_code() {
-            let deploy_code_blocks = EtherealIR::get_blocks(
-                solx_utils::CodeSegment::Deploy,
-                self.code
-                    .as_deref()
-                    .ok_or_else(|| anyhow::anyhow!("Deploy code instructions not found"))?,
-            )?;
-
-            let runtime_code_instructions = runtime_code
-                .code
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Runtime code instructions not found"))?;
-            let runtime_code_blocks = EtherealIR::get_blocks(
-                solx_utils::CodeSegment::Runtime,
-                runtime_code_instructions.as_slice(),
-            )?;
-
-            let mut blocks = deploy_code_blocks;
-            blocks.extend(runtime_code_blocks);
-            (solx_utils::CodeSegment::Deploy, blocks)
-        } else {
-            let blocks = EtherealIR::get_blocks(
-                solx_utils::CodeSegment::Runtime,
-                self.code
-                    .as_deref()
-                    .ok_or_else(|| anyhow::anyhow!("Deploy code instructions not found"))?,
-            )?;
-            (solx_utils::CodeSegment::Runtime, blocks)
-        };
+        let code_segment = context.code_segment().expect("Code segment must be set");
+        let blocks = EtherealIR::get_blocks(
+            code_segment,
+            self.code
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("Code instructions not found"))?,
+        )?;
 
         let ethereal_ir = EtherealIR::new(
             context.evmla().expect("Always exists").version.to_owned(),
             self.extra_metadata.unwrap_or_default(),
-            Some(code_segment),
+            code_segment,
             blocks,
             output_ethir,
         )?;

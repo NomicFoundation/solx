@@ -49,7 +49,7 @@ pub struct Function {
     /// The function name.
     pub name: String,
     /// The optional code segment. Only used for the EVM target.
-    pub code_segment: Option<solx_utils::CodeSegment>,
+    pub code_segment: solx_utils::CodeSegment,
     /// The separately labelled blocks.
     pub blocks: BTreeMap<solx_codegen_evm::BlockKey, Vec<Block>>,
     /// The function type.
@@ -66,7 +66,7 @@ impl Function {
     ///
     pub fn new(
         solc_version: semver::Version,
-        code_segment: Option<solx_utils::CodeSegment>,
+        code_segment: solx_utils::CodeSegment,
         r#type: Type,
         capture_stacks: bool,
     ) -> Self {
@@ -102,30 +102,20 @@ impl Function {
     ) -> anyhow::Result<()> {
         let mut visited_blocks = FxHashSet::default();
 
-        let code_segments = match self.code_segment {
-            Some(code_segment) => vec![code_segment],
-            None => vec![
-                solx_utils::CodeSegment::Deploy,
-                solx_utils::CodeSegment::Runtime,
-            ],
-        };
-
         match self.r#type {
             Type::Entry => {
-                for code_segment in code_segments {
-                    self.consume_block(
-                        blocks,
-                        functions,
-                        extra_metadata,
-                        visited_functions,
-                        &mut visited_blocks,
-                        QueueElement::new(
-                            solx_codegen_evm::BlockKey::new(code_segment, 0u64),
-                            None,
-                            Stack::default(),
-                        ),
-                    )?;
-                }
+                self.consume_block(
+                    blocks,
+                    functions,
+                    extra_metadata,
+                    visited_functions,
+                    &mut visited_blocks,
+                    QueueElement::new(
+                        solx_codegen_evm::BlockKey::new(self.code_segment, 0u64),
+                        None,
+                        Stack::default(),
+                    ),
+                )?;
             }
             Type::Defined {
                 ref block_key,
@@ -1357,7 +1347,7 @@ impl Function {
         if !visited_functions.contains(&visited_element) {
             let mut function = Self::new(
                 version.to_owned(),
-                Some(block_key.code_segment),
+                block_key.code_segment,
                 Type::new_defined(
                     function.name.to_owned(),
                     function.ast_id,
