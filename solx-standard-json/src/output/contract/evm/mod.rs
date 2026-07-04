@@ -3,10 +3,12 @@
 //!
 
 pub mod bytecode;
+pub mod legacy_assembly;
 
 use std::collections::BTreeMap;
 
 use self::bytecode::Bytecode;
+use self::legacy_assembly::LegacyAssembly;
 
 ///
 /// The `solc --standard-json` output contract EVM data.
@@ -22,7 +24,7 @@ pub struct EVM {
     pub deployed_bytecode: Option<Bytecode>,
     /// The contract EVM legacy assembly code.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub legacy_assembly: Option<solx_evm_assembly::Assembly>,
+    pub legacy_assembly: Option<LegacyAssembly>,
     /// The contract function signatures.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub method_identifiers: Option<BTreeMap<String, String>>,
