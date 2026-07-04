@@ -5,8 +5,9 @@
 pub mod function;
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
-use std::collections::HashSet;
+
+use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 
 use solx_codegen_evm::IContext;
 
@@ -45,7 +46,7 @@ impl EtherealIR {
         solc_version: semver::Version,
         extra_metadata: ExtraMetadata,
         code_segment: Option<solx_utils::CodeSegment>,
-        blocks: HashMap<solx_codegen_evm::BlockKey, Block>,
+        blocks: FxHashMap<solx_codegen_evm::BlockKey, Block>,
         capture_stacks: bool,
     ) -> anyhow::Result<Self> {
         let mut entry_function = Function::new(
@@ -55,7 +56,7 @@ impl EtherealIR {
             capture_stacks,
         );
         let mut defined_functions = BTreeMap::new();
-        let mut visited_functions = HashSet::new();
+        let mut visited_functions = FxHashSet::default();
         entry_function.traverse(
             &blocks,
             &mut defined_functions,
@@ -75,8 +76,8 @@ impl EtherealIR {
     pub fn get_blocks(
         code_segment: solx_utils::CodeSegment,
         instructions: &[Instruction],
-    ) -> anyhow::Result<HashMap<solx_codegen_evm::BlockKey, Block>> {
-        let mut blocks = HashMap::new();
+    ) -> anyhow::Result<FxHashMap<solx_codegen_evm::BlockKey, Block>> {
+        let mut blocks = FxHashMap::default();
         let mut offset = 0;
 
         while offset < instructions.len() {

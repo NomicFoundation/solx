@@ -19,6 +19,7 @@ num.workspace = true
 rayon.workspace = true
 inkwell.workspace = true
 twox-hash = "2.1"
+rustc-hash = "2.1"
 
 solx-codegen-evm = { path = "../solx-codegen-evm" }
 solx-utils = { path = "../solx-utils" }

@@ -8,8 +8,6 @@ pub mod r#type;
 pub mod visited_element;
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
-use std::collections::HashSet;
 
 use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
@@ -21,6 +19,8 @@ use num::Num;
 use num::One;
 use num::ToPrimitive;
 use num::Zero;
+use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 
 use solx_codegen_evm::IContext;
 use solx_codegen_evm::IEVMLAFunction;
@@ -95,12 +95,12 @@ impl Function {
     ///
     pub fn traverse(
         &mut self,
-        blocks: &HashMap<solx_codegen_evm::BlockKey, Block>,
+        blocks: &FxHashMap<solx_codegen_evm::BlockKey, Block>,
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
-        visited_functions: &mut HashSet<VisitedElement>,
+        visited_functions: &mut FxHashSet<VisitedElement>,
     ) -> anyhow::Result<()> {
-        let mut visited_blocks = HashSet::new();
+        let mut visited_blocks = FxHashSet::default();
 
         let code_segments = match self.code_segment {
             Some(code_segment) => vec![code_segment],
@@ -160,11 +160,11 @@ impl Function {
     ///
     fn consume_block(
         &mut self,
-        blocks: &HashMap<solx_codegen_evm::BlockKey, Block>,
+        blocks: &FxHashMap<solx_codegen_evm::BlockKey, Block>,
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
-        visited_functions: &mut HashSet<VisitedElement>,
-        visited_blocks: &mut HashSet<VisitedElement>,
+        visited_functions: &mut FxHashSet<VisitedElement>,
+        visited_blocks: &mut FxHashSet<VisitedElement>,
         mut queue_element: QueueElement,
     ) -> anyhow::Result<()> {
         let version = self.solc_version.to_owned();
@@ -250,10 +250,10 @@ impl Function {
     /// the invalid part is truncated after terminating with an `INVALID` instruction.
     ///
     fn handle_instruction(
-        blocks: &HashMap<solx_codegen_evm::BlockKey, Block>,
+        blocks: &FxHashMap<solx_codegen_evm::BlockKey, Block>,
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
-        visited_functions: &mut HashSet<VisitedElement>,
+        visited_functions: &mut FxHashSet<VisitedElement>,
         code_segment: solx_utils::CodeSegment,
         instance: usize,
         block_stack: &mut Stack,
@@ -1326,10 +1326,10 @@ impl Function {
     ///
     fn handle_function_call(
         function: &ExtraMetadataDefinedFunction,
-        blocks: &HashMap<solx_codegen_evm::BlockKey, Block>,
+        blocks: &FxHashMap<solx_codegen_evm::BlockKey, Block>,
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
-        visited_functions: &mut HashSet<VisitedElement>,
+        visited_functions: &mut FxHashSet<VisitedElement>,
         block_key: solx_codegen_evm::BlockKey,
         block_stack: &mut Stack,
         block_element: &mut BlockElement,
@@ -1408,7 +1408,7 @@ impl Function {
     /// Checks whether the tag value references an existing block in the given code segment.
     ///
     fn is_tag_value_valid(
-        blocks: &HashMap<solx_codegen_evm::BlockKey, Block>,
+        blocks: &FxHashMap<solx_codegen_evm::BlockKey, Block>,
         code_segment: solx_utils::CodeSegment,
         tag: &u64,
     ) -> bool {
