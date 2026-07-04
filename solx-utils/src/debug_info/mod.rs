@@ -7,6 +7,7 @@
 pub mod ast_node;
 pub mod contract_definition;
 pub mod function_definition;
+pub mod line_index;
 pub mod mapped_location;
 pub mod solc_location;
 
