@@ -12,6 +12,7 @@ pub mod mapped_location;
 pub mod solc_location;
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 
 use self::ast_node::AstNode;
@@ -58,15 +59,15 @@ impl DebugInfo {
     ///
     /// Retains only the debug info for the specified source IDs.
     ///
-    pub fn retain_source_ids(&mut self, source_ids: &BTreeMap<usize, String>) {
+    pub fn retain_source_ids(&mut self, source_ids: &BTreeSet<usize>) {
         self.contract_definitions.retain(|_, contract_definition| {
-            source_ids.contains_key(&contract_definition.solc_location.source_id)
+            source_ids.contains(&contract_definition.solc_location.source_id)
         });
         self.function_definitions.retain(|_, function_definition| {
-            source_ids.contains_key(&function_definition.solc_location.source_id)
+            source_ids.contains(&function_definition.solc_location.source_id)
         });
         self.ast_nodes
-            .retain(|_, ast_node| source_ids.contains_key(&ast_node.solc_location.source_id));
+            .retain(|_, ast_node| source_ids.contains(&ast_node.solc_location.source_id));
     }
 
     ///
