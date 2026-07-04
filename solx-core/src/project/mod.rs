@@ -100,6 +100,16 @@ impl Project {
     ) -> anyhow::Result<Self> {
         #[cfg(feature = "mlir")]
         let _ = (via_ir, output_config);
+
+        solc_output
+            .contracts
+            .values_mut()
+            .flat_map(|file| file.values_mut())
+            .filter_map(|contract| contract.evm.as_mut()?.legacy_assembly.as_mut())
+            .collect::<Vec<_>>()
+            .into_par_iter()
+            .try_for_each(|legacy_assembly| legacy_assembly.materialize())?;
+
         #[cfg(not(feature = "mlir"))]
         if !via_ir {
             let legacy_assemblies: BTreeMap<
@@ -117,7 +127,8 @@ impl Project {
                                     contract
                                         .evm
                                         .as_mut()
-                                        .and_then(|evm| evm.legacy_assembly.as_mut())?,
+                                        .and_then(|evm| evm.legacy_assembly.as_mut())
+                                        .map(|legacy_assembly| legacy_assembly.parsed_mut())?,
                                 ))
                             })
                             .collect();
@@ -161,7 +172,8 @@ impl Project {
                 let legacy_assembly = contract
                     .evm
                     .as_mut()
-                    .and_then(|evm| evm.legacy_assembly.take());
+                    .and_then(|evm| evm.legacy_assembly.take())
+                    .map(solx_standard_json::OutputContractEVMLegacyAssembly::into_parsed);
 
                 #[cfg(feature = "mlir")]
                 let result = contract.mlir.as_ref().map(|output| {
