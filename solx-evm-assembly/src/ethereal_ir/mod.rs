@@ -38,9 +38,6 @@ pub struct EtherealIR {
 }
 
 impl EtherealIR {
-    /// The blocks hashmap initial capacity.
-    pub const BLOCKS_HASHMAP_DEFAULT_CAPACITY: usize = 64;
-
     ///
     /// Assembles a sequence of functions from the sequence of instructions.
     ///
@@ -79,7 +76,7 @@ impl EtherealIR {
         code_segment: solx_utils::CodeSegment,
         instructions: &[Instruction],
     ) -> anyhow::Result<HashMap<solx_codegen_evm::BlockKey, Block>> {
-        let mut blocks = HashMap::with_capacity(Self::BLOCKS_HASHMAP_DEFAULT_CAPACITY);
+        let mut blocks = HashMap::new();
         let mut offset = 0;
 
         while offset < instructions.len() {

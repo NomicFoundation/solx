@@ -34,9 +34,6 @@ pub struct Block {
 }
 
 impl Block {
-    /// The elements vector initial capacity.
-    pub const ELEMENTS_VECTOR_DEFAULT_CAPACITY: usize = 64;
-
     ///
     /// Assembles a block from the sequence of instructions.
     ///
@@ -64,7 +61,7 @@ impl Block {
         let mut block = Self {
             key: solx_codegen_evm::BlockKey::new(code_segment, tag),
             instance: None,
-            elements: Vec::with_capacity(Self::ELEMENTS_VECTOR_DEFAULT_CAPACITY),
+            elements: Vec::new(),
             predecessors: BTreeSet::new(),
             initial_stack: ElementStack::default(),
             stack: ElementStack::default(),
