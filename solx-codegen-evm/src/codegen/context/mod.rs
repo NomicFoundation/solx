@@ -250,7 +250,12 @@ impl<'ctx> Context<'ctx> {
         })?;
         run_optimize_verify.borrow_mut().finish();
 
-        let assembly_buffer = if output_assembly || self.output_config.is_some() {
+        let assembly_buffer = if output_assembly
+            || self
+                .output_config
+                .as_ref()
+                .is_some_and(|output_config| output_config.output_assembly)
+        {
             let run_emit_llvm_assembly = profiler.start_evm_translation_unit(
                 contract_path,
                 self.code_segment,
