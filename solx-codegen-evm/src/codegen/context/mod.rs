@@ -206,12 +206,14 @@ impl<'ctx> Context<'ctx> {
             None
         };
 
-        self.verify().map_err(|error| {
-            anyhow::anyhow!(
-                "{} code unoptimized LLVM IR verification: {error}",
-                self.code_segment,
-            )
-        })?;
+        if cfg!(debug_assertions) {
+            self.verify().map_err(|error| {
+                anyhow::anyhow!(
+                    "{} code unoptimized LLVM IR verification: {error}",
+                    self.code_segment,
+                )
+            })?;
+        }
         run_init_verify.borrow_mut().finish();
 
         let needs_size_fallback = self.optimizer.settings() == &OptimizerSettings::cycles()
@@ -242,12 +244,14 @@ impl<'ctx> Context<'ctx> {
             None
         };
 
-        self.verify().map_err(|error| {
-            anyhow::anyhow!(
-                "{} code optimized LLVM IR verification: {error}",
-                self.code_segment,
-            )
-        })?;
+        if cfg!(debug_assertions) {
+            self.verify().map_err(|error| {
+                anyhow::anyhow!(
+                    "{} code optimized LLVM IR verification: {error}",
+                    self.code_segment,
+                )
+            })?;
+        }
         run_optimize_verify.borrow_mut().finish();
 
         let assembly_buffer = if output_assembly
