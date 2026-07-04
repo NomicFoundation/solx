@@ -2,6 +2,8 @@
 //! Line-column source code location.
 //!
 
+use crate::debug_info::line_index::LineIndex;
+
 ///
 /// Line-column source code location.
 ///
@@ -63,41 +65,12 @@ impl MappedLocation {
         end: isize,
         source_code: Option<&str>,
     ) -> Self {
-        let source_code = match source_code {
-            Some(source_code) => source_code,
-            None => return Self::new(path),
-        };
-        if start < 0 || end < 0 || end < start {
-            return Self::new(path);
-        }
-        let start = start as usize;
-        let end = end as usize;
-
-        let mut cursor = 0;
-        for (line, source_line) in source_code.lines().enumerate() {
-            let cursor_next = cursor + source_line.len() + 1;
-
-            if cursor <= start && start <= cursor_next {
-                let column = start - cursor;
-                let (line, column) = if column == source_line.len() + 1 {
-                    (line + 2, 1)
-                } else {
-                    (line + 1, start - cursor + 1)
-                };
-                let length = end - start;
-                return Self::new_with_location(
-                    path,
-                    line,
-                    column,
-                    length,
-                    Some(source_line.to_owned()),
-                );
+        match source_code {
+            Some(source_code) if start >= 0 && end >= start => {
+                LineIndex::new(source_code).mapped_location(path, start, end)
             }
-
-            cursor = cursor_next;
+            _ => Self::new(path),
         }
-
-        Self::new(path)
     }
 }
 
