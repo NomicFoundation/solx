@@ -4525,6 +4525,7 @@ dependencies = [
  "inkwell",
  "num",
  "rayon",
+ "rustc-hash",
  "semver 1.0.28",
  "serde",
  "serde_json",
