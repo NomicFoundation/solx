@@ -6,7 +6,6 @@ pub mod address_space;
 pub mod evmla_data;
 pub mod function;
 pub mod solidity_data;
-pub mod yul_data;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -35,7 +34,6 @@ use self::evmla_data::EVMLAData;
 use self::function::Function;
 use self::function::intrinsics::Intrinsics;
 use self::solidity_data::SolidityData;
-use self::yul_data::YulData;
 
 ///
 /// The LLVM IR generator context.
@@ -76,8 +74,6 @@ pub struct Context<'ctx> {
 
     /// The Solidity data.
     solidity_data: Option<SolidityData>,
-    /// The Yul data.
-    yul_data: Option<YulData>,
     /// The EVM legacy assembly data.
     evmla_data: Option<EVMLAData<'ctx>>,
 
@@ -145,7 +141,6 @@ impl<'ctx> Context<'ctx> {
             output_config,
 
             solidity_data,
-            yul_data: None,
             evmla_data: None,
 
             captured_evmla: None,
@@ -622,8 +617,6 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
 
     type SolidityData = SolidityData;
 
-    type YulData = YulData;
-
     type EVMLAData = EVMLAData<'ctx>;
 
     fn llvm(&self) -> &'ctx inkwell::context::Context {
@@ -865,18 +858,6 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
 
     fn solidity_mut(&mut self) -> Option<&mut Self::SolidityData> {
         self.solidity_data.as_mut()
-    }
-
-    fn set_yul_data(&mut self, data: Self::YulData) {
-        self.yul_data = Some(data);
-    }
-
-    fn yul(&self) -> Option<&Self::YulData> {
-        self.yul_data.as_ref()
-    }
-
-    fn yul_mut(&mut self) -> Option<&mut Self::YulData> {
-        self.yul_data.as_mut()
     }
 
     fn set_evmla_data(&mut self, data: Self::EVMLAData) {

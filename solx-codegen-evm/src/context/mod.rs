@@ -27,7 +27,6 @@ use self::traits::address_space::IAddressSpace;
 use self::traits::evmla_data::IEVMLAData;
 use self::traits::evmla_function::IEVMLAFunction;
 use self::traits::solidity_data::ISolidityData;
-use self::traits::yul_data::IYulData;
 
 ///
 /// The LLVM module context trait.
@@ -53,11 +52,6 @@ pub trait IContext<'ctx> {
     /// The Solidity extra data type.
     ///
     type SolidityData: ISolidityData;
-
-    ///
-    /// The Yul extra data type.
-    ///
-    type YulData: IYulData;
 
     ///
     /// The EVMLA extra data type.
@@ -97,10 +91,7 @@ pub trait IContext<'ctx> {
     ///
     /// Sets the current debug info location on the instruction when debug info is enabled.
     ///
-    fn set_instruction_debug_location(
-        &self,
-        instruction: inkwell::values::InstructionValue<'ctx>,
-    ) {
+    fn set_instruction_debug_location(&self, instruction: inkwell::values::InstructionValue<'ctx>) {
         if self.debug_info().is_some() {
             instruction.set_debug_location(self.create_debug_info_location());
         }
@@ -718,27 +709,6 @@ pub trait IContext<'ctx> {
     /// If the Solidity data has not been initialized.
     ///
     fn solidity_mut(&mut self) -> Option<&mut Self::SolidityData>;
-
-    ///
-    /// Sets the Yul data.
-    ///
-    fn set_yul_data(&mut self, data: Self::YulData);
-
-    ///
-    /// Returns the Yul data reference.
-    ///
-    /// # Panics
-    /// If the Yul data has not been initialized.
-    ///
-    fn yul(&self) -> Option<&Self::YulData>;
-
-    ///
-    /// Returns the Yul data mutable reference.
-    ///
-    /// # Panics
-    /// If the Yul data has not been initialized.
-    ///
-    fn yul_mut(&mut self) -> Option<&mut Self::YulData>;
 
     ///
     /// Sets the EVM legacy assembly data.
