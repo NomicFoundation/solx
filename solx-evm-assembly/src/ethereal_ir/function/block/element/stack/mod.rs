@@ -60,13 +60,6 @@ impl Stack {
     }
 
     ///
-    /// Extends this stack by cloning elements from another stack.
-    ///
-    pub fn extend_from(&mut self, other: &Self) {
-        self.elements.extend(other.elements.iter().cloned());
-    }
-
-    ///
     /// Pops a stack element.
     ///
     pub fn pop(&mut self) -> anyhow::Result<Element> {

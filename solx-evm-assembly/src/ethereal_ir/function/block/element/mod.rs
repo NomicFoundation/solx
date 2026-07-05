@@ -32,6 +32,8 @@ pub struct Element {
     pub stack_hash: Option<u64>,
     /// The stack input.
     pub stack_input: Stack,
+    /// The stack output depth.
+    pub stack_output_size: usize,
     /// The stack output.
     pub stack_output: Stack,
 }
@@ -47,6 +49,7 @@ impl Element {
             stack_size: 0,
             stack_hash: None,
             stack_input: Stack::default(),
+            stack_output_size: 0,
             stack_output: Stack::default(),
         }
     }
