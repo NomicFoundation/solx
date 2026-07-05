@@ -1302,10 +1302,14 @@ impl Function {
                 .drain(block_stack.len() - input_size..)
                 .collect(),
         );
-        block_element.stack_output = Stack::new_with_elements(output_data);
-        block_stack.extend_from(&block_element.stack_output);
+        block_element.stack_output_size = output_data.len();
+        block_stack.elements.extend(output_data);
         block_element.stack_size = block_stack.len();
         if capture_stacks {
+            block_element.stack_output = Stack::new_with_elements(
+                block_stack.elements[block_stack.len() - block_element.stack_output_size..]
+                    .to_vec(),
+            );
             block_element.stack = block_stack.clone();
         }
         Ok(())
@@ -1408,7 +1412,7 @@ impl Function {
                 for block_element in block.elements.iter() {
                     let total_length = block_element.stack_size
                         + block_element.stack_input.len()
-                        + block_element.stack_output.len();
+                        + block_element.stack_output_size;
                     if total_length > self.stack_size {
                         self.stack_size = total_length;
                     }
