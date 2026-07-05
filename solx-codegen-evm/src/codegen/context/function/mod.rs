@@ -355,13 +355,7 @@ impl<'ctx> IEVMLAFunction<'ctx> for Function<'ctx> {
             .get(key)
             .ok_or_else(|| anyhow::anyhow!("Undeclared function block {key}"))?
             .iter()
-            .find(|block| {
-                block
-                    .evm()
-                    .stack_hashes
-                    .iter()
-                    .any(|hash| hash == stack_hash)
-            })
+            .find(|block| block.evm().stack_hash == *stack_hash)
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("Undeclared function block {key}"))
     }

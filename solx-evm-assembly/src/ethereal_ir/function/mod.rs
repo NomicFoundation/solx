@@ -100,7 +100,7 @@ impl Function {
         extra_metadata: &ExtraMetadata,
         visited_functions: &mut FxHashSet<VisitedElement>,
     ) -> anyhow::Result<()> {
-        let mut visited_blocks = FxHashSet::default();
+        let mut visited_blocks = FxHashMap::default();
 
         match self.r#type {
             Type::Entry => {
@@ -154,7 +154,7 @@ impl Function {
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
         visited_functions: &mut FxHashSet<VisitedElement>,
-        visited_blocks: &mut FxHashSet<VisitedElement>,
+        visited_blocks: &mut FxHashMap<VisitedElement, usize>,
         mut queue_element: QueueElement,
     ) -> anyhow::Result<()> {
         let version = self.solc_version.to_owned();
@@ -164,17 +164,16 @@ impl Function {
 
         let visited_element =
             VisitedElement::new(queue_element.block_key.clone(), queue_element.stack.hash());
-        if visited_blocks.contains(&visited_element) {
+        if let Some(&instance) = visited_blocks.get(&visited_element) {
             if let Some(predecessor) = queue_element.predecessor.take() {
                 self.blocks
                     .get_mut(&queue_element.block_key)
-                    .and_then(|instances| instances.last_mut())
+                    .and_then(|instances| instances.get_mut(instance))
                     .expect("Always exists")
                     .insert_predecessor(predecessor.0, predecessor.1);
             }
             return Ok(());
         }
-        visited_blocks.insert(visited_element);
 
         let mut block = blocks
             .get(&queue_element.block_key)
@@ -185,6 +184,7 @@ impl Function {
         block.initial_stack = std::mem::take(&mut queue_element.stack);
         block.stack = block.initial_stack.clone();
         let block = self.insert_block(block);
+        visited_blocks.insert(visited_element, block.instance.expect("Always exists"));
         if let Some(predecessor) = queue_element.predecessor.take() {
             block.insert_predecessor(predecessor.0, predecessor.1);
         }
@@ -1470,9 +1470,8 @@ impl solx_codegen_evm::WriteLLVM for Function {
         for (key, blocks) in self.blocks.iter() {
             for (index, block) in blocks.iter().enumerate() {
                 let inner = context.append_basic_block(format!("block_{key}/{index}").as_str());
-                let mut stack_hashes = vec![block.initial_stack.hash()];
-                stack_hashes.extend_from_slice(block.extra_hashes.as_slice());
-                let evmla_data = solx_codegen_evm::FunctionBlockEVMLAData::new(stack_hashes);
+                let evmla_data =
+                    solx_codegen_evm::FunctionBlockEVMLAData::new(block.initial_stack.hash());
                 let mut block = solx_codegen_evm::FunctionBlock::new(inner);
                 block.set_evmla_data(evmla_data);
                 context

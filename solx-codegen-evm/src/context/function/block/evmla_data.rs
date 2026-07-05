@@ -9,15 +9,15 @@
 ///
 #[derive(Debug, Clone)]
 pub struct EVMLAData {
-    /// The initial hashes of the allowed stack states.
-    pub stack_hashes: Vec<u64>,
+    /// The hash of the block's initial stack state.
+    pub stack_hash: u64,
 }
 
 impl EVMLAData {
     ///
     /// A shortcut constructor.
     ///
-    pub fn new(stack_hashes: Vec<u64>) -> Self {
-        Self { stack_hashes }
+    pub fn new(stack_hash: u64) -> Self {
+        Self { stack_hash }
     }
 }
