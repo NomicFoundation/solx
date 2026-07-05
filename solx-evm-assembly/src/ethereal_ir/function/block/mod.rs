@@ -25,8 +25,8 @@ pub struct Block {
     pub elements: Vec<Element>,
     /// The block predecessors.
     pub predecessors: BTreeSet<(solx_codegen_evm::BlockKey, usize)>,
-    /// The initial stack state.
-    pub initial_stack: ElementStack,
+    /// The initial stack state hash, which acts as the block instance identifier.
+    pub initial_stack_hash: u64,
     /// The stack.
     pub stack: ElementStack,
 }
@@ -61,7 +61,7 @@ impl Block {
             instance: None,
             elements: Vec::new(),
             predecessors: BTreeSet::new(),
-            initial_stack: ElementStack::default(),
+            initial_stack_hash: 0,
             stack: ElementStack::default(),
         };
 
