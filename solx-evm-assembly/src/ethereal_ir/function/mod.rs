@@ -1413,11 +1413,12 @@ impl Function {
         for (_tag, blocks) in self.blocks.iter() {
             for block in blocks.iter() {
                 for block_element in block.elements.iter() {
-                    let total_length = block_element.stack_size
-                        + block_element.stack_input.len()
-                        + block_element.stack_output_size;
-                    if total_length > self.stack_size {
-                        self.stack_size = total_length;
+                    let concurrent_length = block_element.stack_size.max(
+                        block_element.stack_size + block_element.stack_input.len()
+                            - block_element.stack_output_size,
+                    );
+                    if concurrent_length > self.stack_size {
+                        self.stack_size = concurrent_length;
                     }
                 }
             }
