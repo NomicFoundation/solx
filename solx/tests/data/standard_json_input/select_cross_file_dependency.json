@@ -1,0 +1,23 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A.sol": {
+      "content": "// SPDX-License-Identifier: UNLICENSED\npragma solidity >=0.0;\nimport \"./B.sol\";\ncontract A {\n    function deploy() public returns (address) {\n        return address(new B());\n    }\n}"
+    },
+    "B.sol": {
+      "content": "// SPDX-License-Identifier: UNLICENSED\npragma solidity >=0.0;\ncontract B {\n    uint256 public x;\n}"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": true
+    },
+    "outputSelection": {
+      "A.sol": {
+        "*": [
+          "evm.bytecode.object"
+        ]
+      }
+    }
+  }
+}

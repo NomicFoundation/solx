@@ -510,3 +510,39 @@ fn select_ast_only() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn select_wildcard_and_per_file_are_unioned() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("select_wildcard_and_per_file.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("\"abi\""))
+        .stdout(predicate::str::contains("\"bytecode\""));
+
+    Ok(())
+}
+
+#[test]
+fn select_per_file_cross_file_dependency() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("select_cross_file_dependency.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("Contract path not found for hash").not())
+        .stdout(predicate::str::contains("\"bytecode\""));
+
+    Ok(())
+}
