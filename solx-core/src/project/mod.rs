@@ -88,6 +88,7 @@ impl Project {
         via_ir: bool,
         solc_output: &mut solx_standard_json::Output,
         debug_info: Option<solx_utils::DebugInfo>,
+        output_selection: &solx_standard_json::InputSelection,
         output_config: Option<&solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<Self> {
         #[cfg(feature = "mlir")]
@@ -166,6 +167,11 @@ impl Project {
                     .as_mut()
                     .and_then(|evm| evm.legacy_assembly.take())
                     .map(solx_standard_json::OutputContractEVMLegacyAssembly::into_parsed);
+                let output_legacy_assembly = output_selection.check_selection(
+                    name.path.as_str(),
+                    name.name.as_deref(),
+                    solx_standard_json::InputSelector::EVMLegacyAssembly,
+                );
 
                 #[cfg(feature = "mlir")]
                 let result = contract.mlir.as_ref().map(|output| {
@@ -218,7 +224,7 @@ impl Project {
                     contract.devdoc,
                     contract.storage_layout,
                     contract.transient_storage_layout,
-                    legacy_assembly,
+                    legacy_assembly.filter(|_| output_legacy_assembly),
                     contract.ir,
                     #[cfg(feature = "mlir")]
                     mlir_stages,
