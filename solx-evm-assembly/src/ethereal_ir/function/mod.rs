@@ -162,8 +162,9 @@ impl Function {
 
         let mut queue = vec![];
 
+        let initial_stack_hash = queue_element.stack.hash();
         let visited_element =
-            VisitedElement::new(queue_element.block_key.clone(), queue_element.stack.hash());
+            VisitedElement::new(queue_element.block_key.clone(), initial_stack_hash);
         if let Some(&instance) = visited_blocks.get(&visited_element) {
             if let Some(predecessor) = queue_element.predecessor.take() {
                 self.blocks
@@ -181,8 +182,8 @@ impl Function {
             .ok_or_else(|| {
                 anyhow::anyhow!("Undeclared destination block {}", queue_element.block_key)
             })?;
-        block.initial_stack = std::mem::take(&mut queue_element.stack);
-        block.stack = block.initial_stack.clone();
+        block.initial_stack_hash = initial_stack_hash;
+        block.stack = std::mem::take(&mut queue_element.stack);
         let block = self.insert_block(block);
         visited_blocks.insert(visited_element, block.instance.expect("Always exists"));
         if let Some(predecessor) = queue_element.predecessor.take() {
@@ -1466,7 +1467,7 @@ impl solx_codegen_evm::WriteLLVM for Function {
             for (index, block) in blocks.iter().enumerate() {
                 let inner = context.append_basic_block(format!("block_{key}/{index}").as_str());
                 let evmla_data =
-                    solx_codegen_evm::FunctionBlockEVMLAData::new(block.initial_stack.hash());
+                    solx_codegen_evm::FunctionBlockEVMLAData::new(block.initial_stack_hash);
                 let mut block = solx_codegen_evm::FunctionBlock::new(inner);
                 block.set_evmla_data(evmla_data);
                 context
