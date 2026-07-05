@@ -29,8 +29,6 @@ pub struct Block {
     pub initial_stack: ElementStack,
     /// The stack.
     pub stack: ElementStack,
-    /// The extra block hashes for alternative routes.
-    pub extra_hashes: Vec<u64>,
 }
 
 impl Block {
@@ -65,7 +63,6 @@ impl Block {
             predecessors: BTreeSet::new(),
             initial_stack: ElementStack::default(),
             stack: ElementStack::default(),
-            extra_hashes: vec![],
         };
 
         let mut dead_code = false;
