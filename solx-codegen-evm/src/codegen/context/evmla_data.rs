@@ -38,12 +38,4 @@ impl<'ctx> IEVMLAData<'ctx> for EVMLAData<'ctx> {
     fn get_element(&self, position: usize) -> &Value<'ctx> {
         &self.stack[position]
     }
-
-    fn set_element(&mut self, position: usize, value: Value<'ctx>) {
-        self.stack[position] = value;
-    }
-
-    fn set_original(&mut self, position: usize, original: String) {
-        self.stack[position].original = Some(original);
-    }
 }

@@ -15,20 +15,4 @@ pub trait IEVMLAData<'ctx> {
     /// If `position` is out of bounds.
     ///
     fn get_element(&self, position: usize) -> &Value<'ctx>;
-
-    ///
-    /// Sets the element at the specified stack position.
-    ///
-    /// # Panics
-    /// If `position` is out of bounds.
-    ///
-    fn set_element(&mut self, position: usize, value: Value<'ctx>);
-
-    ///
-    /// Sets the compile-time string representation to the element at the specified stack position.
-    ///
-    /// # Panics
-    /// If `position` is out of bounds.
-    ///
-    fn set_original(&mut self, position: usize, original: String);
 }
