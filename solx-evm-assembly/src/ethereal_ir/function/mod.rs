@@ -23,6 +23,7 @@ use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 
 use solx_codegen_evm::IContext;
+use solx_codegen_evm::IEVMLAData;
 use solx_codegen_evm::IEVMLAFunction;
 
 use crate::assembly::instruction::Instruction;
@@ -1550,6 +1551,7 @@ impl solx_codegen_evm::WriteLLVM for Function {
                 .zip(blocks)
             {
                 context.set_basic_block(llvm_block);
+                context.evmla_mut().expect("Always exists").shadow_reset();
                 ir_block.into_llvm(context)?;
             }
         }

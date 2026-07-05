@@ -12,9 +12,10 @@ pub fn unconditional<'ctx, C>(
     context: &mut C,
     destination: u64,
     stack_hash: u64,
+    stack_height: usize,
 ) -> anyhow::Result<()>
 where
-    C: solx_codegen_evm::IContext<'ctx>,
+    C: solx_codegen_evm::IEVMLAStack<'ctx>,
 {
     let code_segment = context
         .code_segment()
@@ -28,6 +29,8 @@ where
         }
         code_segment => solx_codegen_evm::BlockKey::new(code_segment, destination),
     };
+
+    context.evmla_stack_flush(stack_height)?;
 
     let block = context
         .current_function()
@@ -48,7 +51,7 @@ pub fn conditional<'ctx, C>(
     stack_height: usize,
 ) -> anyhow::Result<()>
 where
-    C: solx_codegen_evm::IContext<'ctx>,
+    C: solx_codegen_evm::IEVMLAStack<'ctx>,
 {
     let code_segment = context
         .code_segment()
@@ -63,22 +66,15 @@ where
         code_segment => solx_codegen_evm::BlockKey::new(code_segment, destination),
     };
 
-    let condition_pointer = context
-        .evmla()
-        .expect("Always exists")
-        .get_element(stack_height)
-        .to_llvm()
-        .into_pointer_value();
-    let condition = context.build_load(
-        solx_codegen_evm::Pointer::new_stack_field(context, condition_pointer),
-        format!("conditional_{block_key}_condition").as_str(),
-    )?;
+    let condition = context.evmla_stack_read(stack_height)?;
     let condition = context.build_int_compare(
         inkwell::IntPredicate::NE,
         condition.into_int_value(),
         context.field_const(0),
         format!("conditional_{block_key}_condition_compared").as_str(),
     )?;
+
+    context.evmla_stack_flush(stack_height)?;
 
     let then_block = context
         .current_function()
@@ -90,6 +86,7 @@ where
     context.build_conditional_branch(condition, then_block.inner(), join_block)?;
 
     context.set_basic_block(join_block);
+    context.evmla_mut().expect("Always exists").shadow_reset();
 
     Ok(())
 }

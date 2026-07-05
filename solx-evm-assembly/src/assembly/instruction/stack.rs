@@ -1,5 +1,5 @@
 //!
-//! Translates the stack memory operations.
+//! Translates the stack operations.
 //!
 
 use inkwell::values::BasicValue;
@@ -42,70 +42,27 @@ where
 }
 
 ///
-/// Translates the stack memory duplicate.
+/// Duplicates a stack element on the shadow stack.
 ///
-pub fn dup<'ctx, C>(
-    context: &mut C,
-    offset: usize,
-    height: usize,
-) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+pub fn dup<'ctx, C>(context: &mut C, offset: usize, height: usize)
 where
     C: solx_codegen_evm::IContext<'ctx>,
 {
-    let element = context
-        .evmla()
+    context
+        .evmla_mut()
         .expect("Always exists")
-        .get_element(height - offset - 1);
-    let value = context.build_load(
-        solx_codegen_evm::Pointer::new_stack_field(context, element.to_llvm().into_pointer_value()),
-        format!("dup{offset}").as_str(),
-    )?;
-
-    Ok(value)
+        .shadow_dup(height - 1, height - offset - 1);
 }
 
 ///
-/// Translates the stack memory swap.
+/// Swaps two stack elements on the shadow stack.
 ///
-pub fn swap<'ctx, C>(context: &mut C, offset: usize, height: usize) -> anyhow::Result<()>
+pub fn swap<'ctx, C>(context: &mut C, offset: usize, height: usize)
 where
     C: solx_codegen_evm::IContext<'ctx>,
 {
-    let top_element = context
-        .evmla()
+    context
+        .evmla_mut()
         .expect("Always exists")
-        .get_element(height - 1)
-        .to_owned();
-    let top_pointer = solx_codegen_evm::Pointer::new_stack_field(
-        context,
-        top_element.to_llvm().into_pointer_value(),
-    );
-    let top_value = context.build_load(top_pointer, format!("swap{offset}_top_value").as_str())?;
-
-    let swap_element = context
-        .evmla()
-        .expect("Always exists")
-        .get_element(height - offset - 1)
-        .to_owned();
-    let swap_pointer = solx_codegen_evm::Pointer::new_stack_field(
-        context,
-        swap_element.to_llvm().into_pointer_value(),
-    );
-    let swap_value =
-        context.build_load(swap_pointer, format!("swap{offset}_swap_value").as_str())?;
-
-    context.build_store(top_pointer, swap_value)?;
-    context.build_store(swap_pointer, top_value)?;
-
-    Ok(())
-}
-
-///
-/// Translates the stack memory pop.
-///
-pub fn pop<'ctx, C>(_context: &mut C) -> anyhow::Result<()>
-where
-    C: solx_codegen_evm::IContext<'ctx>,
-{
-    Ok(())
+        .shadow_swap(height - 1, height - offset - 1);
 }
