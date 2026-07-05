@@ -95,8 +95,6 @@ impl solx_codegen_evm::WriteLLVM for Element {
             solidity_data.set_debug_info_solc_location(solc_location);
         }
 
-        let mut original = self.instruction.value.clone();
-
         let result = match self.instruction.name.clone() {
             InstructionName::PUSH0 => Ok(Some(context.field_const(0).as_basic_value_enum())),
             InstructionName::PUSH
@@ -200,103 +198,60 @@ impl solx_codegen_evm::WriteLLVM for Element {
             }
 
             InstructionName::DUP1 => {
-                crate::assembly::instruction::stack::dup(context, 1, self.stack_size, &mut original)
-                    .map(Some)
+                crate::assembly::instruction::stack::dup(context, 1, self.stack_size).map(Some)
             }
             InstructionName::DUP2 => {
-                crate::assembly::instruction::stack::dup(context, 2, self.stack_size, &mut original)
-                    .map(Some)
+                crate::assembly::instruction::stack::dup(context, 2, self.stack_size).map(Some)
             }
             InstructionName::DUP3 => {
-                crate::assembly::instruction::stack::dup(context, 3, self.stack_size, &mut original)
-                    .map(Some)
+                crate::assembly::instruction::stack::dup(context, 3, self.stack_size).map(Some)
             }
             InstructionName::DUP4 => {
-                crate::assembly::instruction::stack::dup(context, 4, self.stack_size, &mut original)
-                    .map(Some)
+                crate::assembly::instruction::stack::dup(context, 4, self.stack_size).map(Some)
             }
             InstructionName::DUP5 => {
-                crate::assembly::instruction::stack::dup(context, 5, self.stack_size, &mut original)
-                    .map(Some)
+                crate::assembly::instruction::stack::dup(context, 5, self.stack_size).map(Some)
             }
             InstructionName::DUP6 => {
-                crate::assembly::instruction::stack::dup(context, 6, self.stack_size, &mut original)
-                    .map(Some)
+                crate::assembly::instruction::stack::dup(context, 6, self.stack_size).map(Some)
             }
             InstructionName::DUP7 => {
-                crate::assembly::instruction::stack::dup(context, 7, self.stack_size, &mut original)
-                    .map(Some)
+                crate::assembly::instruction::stack::dup(context, 7, self.stack_size).map(Some)
             }
             InstructionName::DUP8 => {
-                crate::assembly::instruction::stack::dup(context, 8, self.stack_size, &mut original)
-                    .map(Some)
+                crate::assembly::instruction::stack::dup(context, 8, self.stack_size).map(Some)
             }
             InstructionName::DUP9 => {
-                crate::assembly::instruction::stack::dup(context, 9, self.stack_size, &mut original)
-                    .map(Some)
+                crate::assembly::instruction::stack::dup(context, 9, self.stack_size).map(Some)
             }
-            InstructionName::DUP10 => crate::assembly::instruction::stack::dup(
-                context,
-                10,
-                self.stack_size,
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP11 => crate::assembly::instruction::stack::dup(
-                context,
-                11,
-                self.stack_size,
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP12 => crate::assembly::instruction::stack::dup(
-                context,
-                12,
-                self.stack_size,
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP13 => crate::assembly::instruction::stack::dup(
-                context,
-                13,
-                self.stack_size,
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP14 => crate::assembly::instruction::stack::dup(
-                context,
-                14,
-                self.stack_size,
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP15 => crate::assembly::instruction::stack::dup(
-                context,
-                15,
-                self.stack_size,
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP16 => crate::assembly::instruction::stack::dup(
-                context,
-                16,
-                self.stack_size,
-                &mut original,
-            )
-            .map(Some),
+            InstructionName::DUP10 => {
+                crate::assembly::instruction::stack::dup(context, 10, self.stack_size).map(Some)
+            }
+            InstructionName::DUP11 => {
+                crate::assembly::instruction::stack::dup(context, 11, self.stack_size).map(Some)
+            }
+            InstructionName::DUP12 => {
+                crate::assembly::instruction::stack::dup(context, 12, self.stack_size).map(Some)
+            }
+            InstructionName::DUP13 => {
+                crate::assembly::instruction::stack::dup(context, 13, self.stack_size).map(Some)
+            }
+            InstructionName::DUP14 => {
+                crate::assembly::instruction::stack::dup(context, 14, self.stack_size).map(Some)
+            }
+            InstructionName::DUP15 => {
+                crate::assembly::instruction::stack::dup(context, 15, self.stack_size).map(Some)
+            }
+            InstructionName::DUP16 => {
+                crate::assembly::instruction::stack::dup(context, 16, self.stack_size).map(Some)
+            }
             InstructionName::DUPX => {
                 let offset = self
                     .stack_input
                     .pop_constant()?
                     .to_usize()
                     .ok_or_else(|| anyhow::anyhow!("DUPX offset too large"))?;
-                crate::assembly::instruction::stack::dup(
-                    context,
-                    offset,
-                    self.stack_size,
-                    &mut original,
-                )
-                .map(Some)
+                crate::assembly::instruction::stack::dup(context, offset, self.stack_size).map(Some)
             }
 
             InstructionName::SWAP1 => {
@@ -1202,8 +1157,6 @@ impl solx_codegen_evm::WriteLLVM for Element {
                 solx_codegen_evm::Pointer::new_stack_field(context, pointer),
                 result,
             )?;
-            context.evmla_mut().expect("Always exists").stack[self.stack_size - 1].original =
-                original;
         }
 
         Ok(())
