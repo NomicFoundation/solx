@@ -98,7 +98,7 @@ impl Function {
         blocks: &FxHashMap<solx_codegen_evm::BlockKey, Block>,
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
-        visited_functions: &mut FxHashSet<VisitedElement>,
+        visited_functions: &mut FxHashSet<solx_codegen_evm::BlockKey>,
     ) -> anyhow::Result<()> {
         let mut visited_blocks = FxHashMap::default();
 
@@ -153,7 +153,7 @@ impl Function {
         blocks: &FxHashMap<solx_codegen_evm::BlockKey, Block>,
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
-        visited_functions: &mut FxHashSet<VisitedElement>,
+        visited_functions: &mut FxHashSet<solx_codegen_evm::BlockKey>,
         visited_blocks: &mut FxHashMap<VisitedElement, usize>,
         mut queue_element: QueueElement,
     ) -> anyhow::Result<()> {
@@ -243,7 +243,7 @@ impl Function {
         blocks: &FxHashMap<solx_codegen_evm::BlockKey, Block>,
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
-        visited_functions: &mut FxHashSet<VisitedElement>,
+        visited_functions: &mut FxHashSet<solx_codegen_evm::BlockKey>,
         code_segment: solx_utils::CodeSegment,
         instance: usize,
         block_stack: &mut Stack,
@@ -1319,7 +1319,7 @@ impl Function {
         blocks: &FxHashMap<solx_codegen_evm::BlockKey, Block>,
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
-        visited_functions: &mut FxHashSet<VisitedElement>,
+        visited_functions: &mut FxHashSet<solx_codegen_evm::BlockKey>,
         block_key: solx_codegen_evm::BlockKey,
         block_stack: &mut Stack,
         block_element: &mut BlockElement,
@@ -1327,8 +1327,6 @@ impl Function {
         capture_stacks: bool,
     ) -> anyhow::Result<(solx_codegen_evm::BlockKey, Vec<Element>)> {
         let return_address_offset = block_stack.elements.len() - 2 - function.input_size;
-        let input_arguments_offset = return_address_offset + 1;
-        let callee_tag_offset = input_arguments_offset + function.input_size;
 
         let return_address = match block_stack.elements[return_address_offset] {
             Element::Tag(ref return_address) => {
@@ -1336,15 +1334,8 @@ impl Function {
             }
             ref element => anyhow::bail!("Expected the function return address, found {element}"),
         };
-        let mut stack = Stack::with_capacity(1 + function.input_size);
-        stack.push(StackElement::ReturnAddress(1 + function.output_size));
-        stack
-            .elements
-            .extend_from_slice(&block_stack.elements[input_arguments_offset..callee_tag_offset]);
-        let stack_hash = stack.hash();
 
-        let visited_element = VisitedElement::new(block_key.clone(), stack_hash);
-        if !visited_functions.contains(&visited_element) {
+        if !visited_functions.contains(&block_key) {
             let mut function = Self::new(
                 version.to_owned(),
                 block_key.code_segment,
@@ -1357,7 +1348,7 @@ impl Function {
                 ),
                 capture_stacks,
             );
-            visited_functions.insert(visited_element);
+            visited_functions.insert(block_key.clone());
             function.traverse(blocks, functions, extra_metadata, visited_functions)?;
             functions.insert(block_key.clone(), function);
         }
