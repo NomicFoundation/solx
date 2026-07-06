@@ -97,7 +97,7 @@ runs:
 
     - name: Restore LLVM artifact cache
       id: llvm-artifact-cache
-      uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: ${{ inputs.working-dir != '.' && format('{0}/target-llvm/target-final', inputs.working-dir) || 'target-llvm/target-final' }}
         key: ${{ steps.llvm-cache.outputs.key }}
@@ -230,7 +230,7 @@ runs:
 
     - name: Save LLVM artifact cache
       if: steps.llvm-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
-      uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: ${{ inputs.working-dir != '.' && format('{0}/target-llvm/target-final', inputs.working-dir) || 'target-llvm/target-final' }}
         key: ${{ steps.llvm-cache.outputs.key }}
