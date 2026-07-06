@@ -11,9 +11,6 @@ LABEL org.opencontainers.image.source="https://github.com/NomicFoundation/solx"
 LABEL org.opencontainers.image.description="CI runner image for solx"
 
 ENV DEBIAN_FRONTEND=noninteractive
-# Ubuntu 26.04's Python is PEP-668 externally-managed; CI jobs pip-install
-# straight into the container (no venv), so lift the guard image-wide.
-ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 # ── System packages ──────────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -26,8 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         wget \
         pkg-config \
         python3 \
-        python3-pip \
         python3-psutil \
+        python3-venv \
         jq \
         ca-certificates \
         gnupg \
@@ -46,8 +43,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Must match the LLVM version shipped inside rustc (1.93.0 → LLVM 21) so that
 # llvm-cov / llvm-profdata can read the profraw format emitted by instrumented
 # Rust binaries.
-# clang-format/clang-tidy (and python3-pip above) are not used by solx itself;
-# they serve solx-llvm's regression CI, which runs in this image.
+# clang-format/clang-tidy (and python3-venv/psutil above) are not used by solx
+# itself; they serve solx-llvm's regression CI, which runs in this image.
 RUN curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
         | gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] \
@@ -150,7 +147,10 @@ RUN set -eux \
     && clang-format --version \
     && clang-tidy --version \
     && command -v git-clang-format \
-    && python3 -m pip --version \
+    && python3 -c 'import psutil' \
+    && python3 -m venv /tmp/smoke-venv \
+    && /tmp/smoke-venv/bin/pip --version \
+    && rm -rf /tmp/smoke-venv \
     && lld -flavor gnu --version \
     && command -v llvm-cov \
     && command -v llvm-profdata \
