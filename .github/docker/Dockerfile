@@ -35,6 +35,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libssl-dev \
         openssh-client \
         xz-utils \
+        # actions/cache compresses with zstd only if the binary is in the container;
+        # without it, it silently falls back to gzip (slower, larger entries).
+        zstd \
         libc6-dbg \
     && rm -rf /var/lib/apt/lists/*
 
