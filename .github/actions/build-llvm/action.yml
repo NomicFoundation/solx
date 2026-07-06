@@ -51,6 +51,15 @@ inputs:
     description: 'LLVM build type. Possible values are `Debug`, `Release`, `RelWithDebInfo`, or `MinSizeRel`. [default: Release]'
     required: false
     default: 'Release'
+  enable-artifact-cache:
+    description: >-
+      Enable the whole-artifact cache layer (restore/save of target-llvm/target-final).
+      Disable it when the solx-llvm tree changes every run (e.g. solx-llvm's own
+      regression CI) or when later steps need the build directory: an artifact hit
+      skips the build entirely, so target-llvm/build-final would not exist.
+      When disabled, the `cache-hit` output is always empty.
+    required: false
+    default: 'true'
 
 runs:
   using: "composite"
@@ -65,6 +74,7 @@ runs:
       run: echo "hash=$(pacman -Q | sha256sum | head -c 8)" >> "${GITHUB_OUTPUT}"
 
     - name: Compute LLVM cache key
+      if: inputs.enable-artifact-cache == 'true'
       id: llvm-cache
       shell: bash
       working-directory: ${{ inputs.working-dir }}
@@ -96,6 +106,7 @@ runs:
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
     - name: Restore LLVM artifact cache
+      if: inputs.enable-artifact-cache == 'true'
       id: llvm-artifact-cache
       uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
@@ -229,7 +240,7 @@ runs:
       run: ccache --show-stats
 
     - name: Save LLVM artifact cache
-      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
+      if: inputs.enable-artifact-cache == 'true' && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
       uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: ${{ inputs.working-dir != '.' && format('{0}/target-llvm/target-final', inputs.working-dir) || 'target-llvm/target-final' }}
