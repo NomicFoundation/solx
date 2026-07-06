@@ -162,7 +162,7 @@ This repository maintains intuitive and stable naming for the executables and pr
 
 ### Building LLVM manually
 
-If you prefer building [the LLVM framework](https://github.com/matter-labs/solx-llvm) manually, include the following flags in your CMake command:
+If you prefer building [the LLVM framework](https://github.com/NomicFoundation/solx-llvm) manually, include the following flags in your CMake command:
 
 ```shell
 # We recommend using the latest version of CMake.

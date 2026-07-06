@@ -8,7 +8,7 @@ The compiler consists of three repositories:
 
 1. [solx](https://github.com/NomicFoundation/solx) — The main compiler executable and Rust crates that translate Yul and EVM assembly to LLVM IR.
 2. [solx-solidity](https://github.com/NomicFoundation/solx-solidity) — An LLVM-friendly fork of the Solidity compiler that emits Yul and EVM assembly.
-3. [solx-llvm](https://github.com/matter-labs/solx-llvm) — A fork of the LLVM framework with an EVM target backend.
+3. [solx-llvm](https://github.com/NomicFoundation/solx-llvm) — A fork of the LLVM framework with an EVM target backend.
 
 ## Compilation Pipeline
 

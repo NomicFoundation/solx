@@ -4,5 +4,5 @@
 	branch = 0.8.34
 [submodule "solx-llvm"]
 	path = solx-llvm
-	url = https://github.com/matter-labs/solx-llvm
+	url = https://github.com/NomicFoundation/solx-llvm
 	branch = main

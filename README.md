@@ -74,7 +74,7 @@ For reference, see [llvm-sys](https://crates.io/crates/llvm-sys) and [Local LLVM
   - Apache License, Version 2.0 ([LICENSE-APACHE](./solx-standard-json/LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
   - MIT license ([LICENSE-MIT](./solx-standard-json/LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
 - [`solx-solidity`](https://github.com/NomicFoundation/solx-solidity/) is licensed under [GNU General Public License v3.0](https://github.com/NomicFoundation/solx-solidity/blob/0.8.34/LICENSE.txt)
-- [`solx-llvm`](https://github.com/matter-labs/solx-llvm) is licensed under the terms of Apache License, Version 2.0 with LLVM Exceptions, ([LICENSE](https://github.com/matter-labs/solx-llvm/blob/main/LICENSE) or https://llvm.org/LICENSE.txt)
+- [`solx-llvm`](https://github.com/NomicFoundation/solx-llvm) is licensed under the terms of Apache License, Version 2.0 with LLVM Exceptions, ([LICENSE](https://github.com/NomicFoundation/solx-llvm/blob/main/LICENSE) or https://llvm.org/LICENSE.txt)
 
 Additionally, this repository vendors tests and test projects that preserve their original licenses:
 
