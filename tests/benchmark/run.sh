@@ -47,10 +47,29 @@ for i in "${!BIN_NAMES[@]}"; do
 done
 cat "${OUT_DIR}/versions.txt"
 
-for fixture in "${FIXTURES_DIR}"/*.json; do
-  name="$(basename "${fixture}" .json)"
+# The standard-JSON protocol reports compilation failure inside the JSON
+# (exit code stays 0), so an untimed validation run per binary must gate the
+# benchmark: hyperfine would otherwise happily time failing compiles.
+validate() {
+  "$1" --standard-json "$2" 2>/dev/null | python3 -c '
+import json, sys
+out = json.load(sys.stdin)
+errors = [e for e in out.get("errors") or [] if e.get("severity") == "error"]
+for error in errors:
+    print(error.get("formattedMessage", error), file=sys.stderr)
+assert not errors, f"{len(errors)} compilation error(s)"
+assert out.get("contracts"), "no contracts in output"
+'
+}
+
+# Fixtures mirror the hardhat-published corpus layout: <scenario>/<variant>.json
+# (manifest.json at the root carries provenance and is not a fixture).
+for fixture in "${FIXTURES_DIR}"/*/*.json; do
+  name="$(basename "$(dirname "${fixture}")")--$(basename "${fixture}" .json)"
   args=()
   for i in "${!BIN_NAMES[@]}"; do
+    echo "validating ${name} with ${BIN_NAMES[$i]}"
+    validate "${BIN_PATHS[$i]}" "${fixture}"
     args+=(--command-name "${BIN_NAMES[$i]}" "${BIN_PATHS[$i]} --standard-json ${fixture} > /dev/null")
   done
   hyperfine \

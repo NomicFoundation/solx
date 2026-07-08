@@ -21,33 +21,44 @@ relative column in the report.
 
 ## Fixtures
 
-Solc standard-JSON inputs, one compile per fixture, EVMLA (default) pipeline.
-The corpus is deliberately small while it lives in-repo; the plan is to move
-it to a dedicated benchmark corpus repository fed by hardhat's
-`bench:dump-standard-json` (which captures the exact input solx receives from
-Hardhat), and to grow it there.
+The fixtures are the exact standard-JSON inputs solx receives from Hardhat,
+captured by the hardhat repo's `bench:dump-standard-json` (the solx
+regression benchmark's "Dump solx standard JSON" step) and vendored here in
+the corpus layout `fixtures/<scenario>/<variant>.json`. `fixtures/manifest.json`
+is the dump's provenance record (per-file sha256, hardhat commit, CI run URL,
+scenario repo+commit pins) — it describes the full corpus, of which this
+directory vendors the legacy-DWARF subset:
 
-Seed fixtures were generated with `pack_standard_json.py` from the same
-project pins the Hardhat solx benchmark uses:
-
-| fixture | source | notes |
+| fixture | contracts | notes |
 |---|---|---|
-| `openzeppelin.json` | `nomicfoundation/openzeppelin-contracts` @ `f72b6b46` (`contracts/`, keys prefixed `contracts/`) | 350 sources, 422 contracts |
-| `uniswap-v4.json` | `anaPerezGhiglia/uniswap-v4-core` @ `ab2b22ee` (+ submodules solmate @ `4b47a190`, openzeppelin-contracts @ `dbb6104c`) | 209 sources; excludes tests/docs/certora/mocks; `src/PoolManager.sol` pragma relaxed `0.8.26` → `^0.8.26` (same transform as the Hardhat scenario's preinstall); remappings for `@openzeppelin/` and `solmate/` |
+| `ens-verifiable-factory-solx/solx-legacy-dwarf.json` | 52 | |
+| `openzeppelin-contracts-0.34/solx-legacy-dwarf.json` | 422 | the heavy cell (~50 s/compile on the CI runner) |
+| `uniswap-v4-core-solx/solx-legacy-dwarf.json` | 157 | |
 
-Regeneration example:
+These compile with production settings — optimizer enabled and DWARF debug
+info — unlike hand-packed inputs, so timings here are comparable to what the
+Hardhat solx benchmark measures (minus Hardhat's own overhead).
 
-```bash
-python3 tests/benchmark/pack_standard_json.py \
-  --root path/to/openzeppelin-contracts/contracts --prefix contracts/ \
-  --out tests/benchmark/fixtures/openzeppelin.json
-```
+Not yet vendored: `aave-v4-solx` — its profile compiles through multiple
+per-file-override jobs that all overwrite the same `SOLX_STANDARD_JSON_DEBUG`
+path, so which job the dump captures is machine-dependent; it returns once
+the hardhat-side dump captures every job. Note its dumps require
+`EVM_DISABLE_MEMORY_SAFE_ASM_CHECK=1` to compile (scenario-level env in the
+hardhat benchmark; env vars are not part of standard JSON) — the validation
+pass in `run.sh` fails loudly if a fixture needs an env var it doesn't get.
+
+Long-term, the corpus is published by the hardhat workflow to
+`nomic-foundation-automation/hardhat-benchmark-results` under `solx-corpus/`
+(main runs only); once populated, refresh by copying from a pinned commit of
+that repo instead of a CI artifact.
 
 ## Extending
 
-- **More fixtures**: drop any valid standard-JSON input into `fixtures/`;
-  `run.sh` picks up every `*.json` there. Verify it compiles error-free with
-  the released solx first (`solx --standard-json fixture.json`).
+- **More fixtures**: drop any valid standard-JSON input into a
+  `fixtures/<name>/` subdirectory; `run.sh` picks up every
+  `fixtures/*/*.json`. The per-binary validation pass rejects fixtures that
+  don't compile clean (the standard-JSON protocol reports errors inside the
+  JSON with exit code 0, so hyperfine alone would silently time failures).
 - **Slang v2 pipeline**: add a second timed dimension by passing the Slang
   frontend flag through an additional `--bin` entry once the pipeline accepts
   the same standard-JSON input (the driver only assembles

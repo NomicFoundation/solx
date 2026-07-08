@@ -54,7 +54,7 @@ jobs:
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:79b926f62cddf00086b8a385f89e3f3281e2f37b993491e773f17d7549f7363a
       options: -m 110g
-    # Warm caches: ~10 min builds + ~10 min benchmark. Cold LLVM/solc builds
+    # Warm caches: ~10 min builds + ~20 min benchmark. Cold LLVM/solc builds
     # dominate the worst case.
     timeout-minutes: 90
     steps:
@@ -209,12 +209,17 @@ jobs:
           apt-get update -qq
           apt-get install -y hyperfine
 
+      # Corpus fixtures compile with production settings (optimizer + DWARF),
+      # so a full sweep is ~80 s per binary; 3 runs keep the step around
+      # 20 min (hyperfine σ on this corpus is well under 1%). The per-binary
+      # validation pass in run.sh doubles as cache warmup.
       - name: Run benchmark
         run: |
           ./tests/benchmark/run.sh \
             --bin pr=./target/release/solx \
             --bin main=./temp-solx-main/target/release/solx \
             --bin release=./solx-release \
+            --runs 3 --warmup 1 \
             --out benchmark-out
           python3 ./tests/benchmark/report.py --dir benchmark-out --out benchmark-out/report.md
 

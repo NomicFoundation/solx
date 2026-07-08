@@ -1,0 +1,41 @@
+{
+  "hardhatCommit": "b125c30815e8e5caeceb1445fc771df6f384f126",
+  "runUrl": "https://github.com/NomicFoundation/hardhat/actions/runs/28936120651",
+  "hardhatSolxVersion": "2.0.0",
+  "scenarios": {
+    "aave-v4-solx": {
+      "repo": "anaPerezGhiglia/aave-v4",
+      "commit": "f729aeff7cc61d576e8f89e818e05265ec9f65e9",
+      "files": {
+        "solx-legacy-dwarf.json": "398ae52c0936ce5ff249ebab46192c1d9cbaa3d4bb3594c3b73fbb8b005730ba",
+        "solx-via-ir-dwarf.json": "056ecbf4b8b0458a3064ba35b696bf6350e1339cc92694ce3dc1004e871872dd"
+      }
+    },
+    "ens-verifiable-factory-solx": {
+      "repo": "anaPerezGhiglia/ensdomains-verifiable-factory",
+      "commit": "cd6622442c298ae89c4d92bcbc93a0faca4fbfae",
+      "files": {
+        "solx-legacy-dwarf.json": "54d2ce5b7ab8d8e8498b67ca375fae813e2ad937191d2c11b9c03ab7161835bf",
+        "solx-via-ir-dwarf.json": "8f236da6d973200e3efd86f3aabeb1c2c81810a97ca3e672954c030d38b2245f"
+      }
+    },
+    "openzeppelin-contracts-0.34": {
+      "repo": "nomicfoundation/openzeppelin-contracts",
+      "commit": "f72b6b4616806a0cb29eb61d6baf05ab5ff01558",
+      "files": {
+        "solx-legacy-dwarf.json": "8311ab491481413624d1c1ef0d8b0adbe11b6ce4b07dd24c66b7060a3aa2fcc7",
+        "solx-via-ir-dwarf.json": "08df33522f6115eafbdd92b1a5cf5cfe59b4b11a91f5f28cf93abbbe40f830b1",
+        "solx-legacy-no-dwarf.json": "3be1d6ebaa3a5ca5411808d6f76a5f421be2c938c732c987037ac35d2cac155a",
+        "solx-via-ir-no-dwarf.json": "4ef50bc8eb74271c7f259be57d22ec269c2a0f9e69af9e45283a45620f51bd0c"
+      }
+    },
+    "uniswap-v4-core-solx": {
+      "repo": "anaPerezGhiglia/uniswap-v4-core",
+      "commit": "ab2b22eef19e0abe29d67420dde81b5d54455ae5",
+      "files": {
+        "solx-legacy-dwarf.json": "8facbeecb3833a851ff341703c980b938732811c98c861b4015d13bdee10c9e9",
+        "solx-via-ir-dwarf.json": "defecf4a368689c626f350a9edb14624f499f3d031cd3c5a3bd29a21ffabeb37"
+      }
+    }
+  }
+}
