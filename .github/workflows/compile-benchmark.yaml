@@ -192,8 +192,14 @@ jobs:
           ${SFW_PREFIX:-} cargo build --frozen --release --bin solx
 
       - name: Download latest release binary
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          TAG=$(curl -fsSL https://api.github.com/repos/NomicFoundation/solx/releases/latest \
+          # Authenticated API call: the unauthenticated rate limit is per IP,
+          # which neighboring jobs on a shared self-hosted runner can exhaust.
+          # The asset download below redirects to S3 and needs no auth.
+          TAG=$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            https://api.github.com/repos/NomicFoundation/solx/releases/latest \
             | python3 -c 'import json, sys; print(json.load(sys.stdin)["tag_name"])')
           ASSET="solx-linux-amd64-gnu-v${TAG}"
           BASE="https://github.com/NomicFoundation/solx/releases/download/${TAG}"
