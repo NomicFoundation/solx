@@ -22,11 +22,30 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// `bytes` the C++ element type is `!sol.byte`; a `sol.bytes_cast`
     /// widens it to `!sol.fixedbytes<1>` to match Solidity's `bytes1`
     /// typing. `sol.bytes_cast` is a no-op for matching types.
+    ///
+    /// Fixed `bytesN` is a value, not an addressable container, so `bytesN[i]`
+    /// extracts the byte directly with `sol.fixed_bytes_index` and never reaches
+    /// the address path.
     pub fn emit_index_access(
         &self,
         index_access: &IndexAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let base = index_access.operand();
+        let base_type = base
+            .get_type()
+            .ok_or_else(|| anyhow::anyhow!("base of index access has no resolved type"))?;
+
+        if let SlangType::ByteArray(_) = base_type {
+            let index_expression = index_access
+                .start()
+                .expect("slang validates a[i] has an index expression");
+            let (base_value, block) = self.emit_value(&base, block)?;
+            let (index_value, block) = self.emit_value(&index_expression, block)?;
+            let value = base_value.fixed_bytes_index(index_value, self.state, &block);
+            return Ok((Some(value), block));
+        }
+
         let (address, element_type, block) = self.emit_index_access_address(index_access, block)?;
         let value = address.load(element_type, self.state, &block);
         let result_type = index_access

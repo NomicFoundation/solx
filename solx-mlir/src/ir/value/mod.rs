@@ -27,6 +27,7 @@ use crate::ods::sol::BytesCastOperation;
 use crate::ods::sol::CastOperation;
 use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConstantOperation;
+use crate::ods::sol::FixedBytesIndexOperation;
 use crate::ods::sol::LengthOperation;
 use crate::ods::sol::PopOperation;
 use crate::ods::sol::PushOperation;
@@ -235,6 +236,22 @@ impl<'context, 'block> Value<'context, 'block> {
             AddressCastOperation
                 .inp(self.into_mlir())
                 .out(target_type.into_mlir())
+        ))
+    }
+
+    /// Extracts the `index`-th byte of this fixed-bytes value as `bytes1` via `sol.fixed_bytes_index`.
+    pub fn fixed_bytes_index<B>(self, index: Self, context: &Context<'context>, block: &B) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        Self::new(mlir_op!(
+            context,
+            block,
+            FixedBytesIndexOperation
+                .value(self.inner)
+                .index(index.inner)
+                .result(Type::fixed_bytes(context.melior, 1).into_mlir())
         ))
     }
 

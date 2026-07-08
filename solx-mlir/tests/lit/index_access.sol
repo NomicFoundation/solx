@@ -10,6 +10,9 @@
 // CHECK:   sol.load %{{.*}} : !sol.ptr<!sol.byte, Memory>, !sol.byte
 // CHECK:   sol.bytes_cast %{{.*}} : !sol.byte to !sol.fixedbytes<1>
 
+// CHECK: sol.func {{.*}}readFixedBytes{{.*}}-> !sol.fixedbytes<1>
+// CHECK:   sol.fixed_bytes_index %{{.*}}[%{{.*}}] : !sol.fixedbytes<32>, ui256 -> !sol.fixedbytes<1>
+
 // CHECK: sol.func {{.*}}readMapping{{.*}}-> ui256
 // CHECK:   sol.map %{{.*}}, %{{.*}} : !sol.mapping<ui256, ui256>, ui256, !sol.ptr<ui256, Storage>
 // CHECK:   sol.load %{{.*}} : !sol.ptr<ui256, Storage>, ui256
@@ -31,6 +34,10 @@ contract C {
 
     function readBytes(bytes memory data, uint256 i) public pure returns (bytes1) {
         return data[i];
+    }
+
+    function readFixedBytes(bytes32 b, uint256 i) public pure returns (bytes1) {
+        return b[i];
     }
 
     function readMapping(uint256 k) public view returns (uint256) {
