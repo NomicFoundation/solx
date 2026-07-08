@@ -330,7 +330,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
                 let result_slot = Place::stack(result_type, self.state, &block);
                 let (then_block, else_block) =
-                    Effect::new(self.state, block).branch(condition_boolean);
+                    Effect::new(self.state, block).branch(condition_boolean, true);
+                let else_block = else_block.expect("conditional expression emits an else arm");
 
                 let true_expression = conditional.true_expression();
                 let (then_value, then_end) = self.emit_value(&true_expression, then_block)?;

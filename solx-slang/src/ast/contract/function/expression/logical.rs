@@ -63,7 +63,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let false_value = Value::boolean(false, self.state, &block);
         result_ptr.store(false_value, self.state, &block);
 
-        let (then_block, else_block) = Effect::new(self.state, block).branch(lhs_bool);
+        let (then_block, else_block) = Effect::new(self.state, block).branch(lhs_bool, true);
+        let else_block = else_block.expect("`&&` emits an else arm");
 
         let (rhs, then_end) = self.emit_value(right, then_block)?;
         let rhs_bool = self.emit_is_nonzero(rhs, &then_end);
@@ -98,7 +99,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let true_value = Value::boolean(true, self.state, &block);
         result_ptr.store(true_value, self.state, &block);
 
-        let (then_block, else_block) = Effect::new(self.state, block).branch(lhs_bool);
+        let (then_block, else_block) = Effect::new(self.state, block).branch(lhs_bool, true);
+        let else_block = else_block.expect("`||` emits an else arm");
 
         Effect::new(self.state, then_block).r#yield(&[]);
 

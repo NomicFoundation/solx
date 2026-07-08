@@ -6,10 +6,8 @@
 //! entry blocks for the caller to emit into and terminate.
 //!
 
-use melior::ir::Block;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::RegionLike;
 
 use crate::Effect;
 use crate::Value;
@@ -60,17 +58,6 @@ impl<'a, 'context, 'block> Effect<'a, 'context, 'block> {
         );
     }
 
-    /// Appends a fresh block ending in an empty `sol.yield` to this block's region, for a region
-    /// whose live block already terminated.
-    pub fn empty_yield(self) {
-        let region = self
-            .block
-            .parent_region()
-            .expect("block is attached to a region");
-        let dead_block = region.append_block(Block::new(&[]));
-        Effect::new(self.context, dead_block).r#yield(&[]);
-    }
-
     /// Emits `sol.condition` gating a loop region on `condition`.
     pub fn condition(self, condition: Value<'context, 'block>) {
         mlir_op_void!(
@@ -80,12 +67,17 @@ impl<'a, 'context, 'block> Effect<'a, 'context, 'block> {
         );
     }
 
-    /// Emits `sol.if` and returns the then- and else-region entry blocks.
+    /// Emits `sol.if` and returns the then-region entry block, plus the else-region entry block
+    /// when `with_else`; otherwise the else region is left empty.
     pub fn branch(
         self,
         condition: Value<'context, 'block>,
-    ) -> (BlockRef<'context, 'block>, BlockRef<'context, 'block>) {
-        mlir_region_op!(self.context, &self.block, IfOperation.cond(condition); then_region, else_region)
+        with_else: bool,
+    ) -> (
+        BlockRef<'context, 'block>,
+        Option<BlockRef<'context, 'block>>,
+    ) {
+        mlir_region_op!(self.context, &self.block, IfOperation.cond(condition); then_region; else_region if with_else)
     }
 
     /// Emits `sol.for` and returns the condition-, body-, and step-region entry blocks.

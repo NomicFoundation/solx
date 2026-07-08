@@ -558,9 +558,8 @@ impl Contract {
                 };
 
                 let melior = solx_mlir::Context::create_melior_context();
-                let raw_llvm =
-                    solx_mlir::Context::translate_source_to_llvm(&melior, &mlir.source)
-                        .context("MLIR translation")?;
+                let raw_llvm = solx_mlir::Context::translate_source_to_llvm(&melior, &mlir.source)
+                    .context("MLIR translation")?;
                 let context = unsafe { inkwell::context::Context::new(raw_llvm.context) };
                 let module = unsafe { inkwell::module::Module::new(raw_llvm.module) };
                 module.set_name(code_identifier.as_str());

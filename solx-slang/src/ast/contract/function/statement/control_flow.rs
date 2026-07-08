@@ -34,24 +34,20 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let (condition_value, block) = emitter.emit_value(&condition_expression, block)?;
         let condition_boolean = emitter.emit_is_nonzero(condition_value, &block);
 
-        let (then_block, else_block) = Effect::new(self.state, block).branch(condition_boolean);
+        let else_branch = if_statement.else_branch();
+        let (then_block, else_block) =
+            Effect::new(self.state, block).branch(condition_boolean, else_branch.is_some());
 
         let then_end = self.emit(&if_statement.body(), then_block)?;
         if let Some(then_end) = then_end {
             Effect::new(self.state, then_end).r#yield(&[]);
-        } else {
-            Effect::new(self.state, then_block).empty_yield();
         }
 
-        if let Some(ref else_statement) = if_statement.else_branch() {
+        if let (Some(else_statement), Some(else_block)) = (else_branch.as_ref(), else_block) {
             let else_end = self.emit(else_statement, else_block)?;
             if let Some(else_end) = else_end {
                 Effect::new(self.state, else_end).r#yield(&[]);
-            } else {
-                Effect::new(self.state, else_block).empty_yield();
             }
-        } else {
-            Effect::new(self.state, else_block).r#yield(&[]);
         }
 
         Ok(Some(block))

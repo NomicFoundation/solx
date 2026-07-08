@@ -39,14 +39,19 @@ macro_rules! mlir_op_void {
     };
 }
 
-/// Appends a region-bearing control-flow op (`sol.if`/`for`/`while`/`do`) and yields each region's
-/// fresh entry block (named after the `;`) for the caller to emit into and terminate.
+/// Appends a region-bearing control-flow op (`sol.if`/`for`/`while`/`do`) and hands back each
+/// region's fresh entry block for the caller to emit into and terminate. A trailing
+/// `; region if condition` clause makes that region optional: it receives a block — returned as
+/// `Some` — only when `condition` holds, and is left empty (`None`) otherwise, modelling an absent
+/// `else`.
 #[macro_export]
 macro_rules! mlir_region_op {
     (
         $context:expr, $block:expr, $operation:ident
         $(.$method:ident($($argument:expr),* $(,)?))*
-        ; $($region:ident),+ $(,)?
+        ; $($region:ident),+
+        $(; $optional_region:ident if $optional_condition:expr)?
+        $(,)?
     ) => {{
         $(
             let $region = {
@@ -55,24 +60,41 @@ macro_rules! mlir_region_op {
                 region
             };
         )+
+        $(
+            let $optional_region = {
+                let region = melior::ir::Region::new();
+                if $optional_condition {
+                    melior::ir::RegionLike::append_block(&region, melior::ir::Block::new(&[]));
+                }
+                region
+            };
+        )?
         let operation = melior::ir::BlockLike::append_operation(
             $block,
             $operation::builder($context.melior, $context.location())
                 $(.$method($($crate::IntoOds::into_ods($argument)),*))*
                 $(.$region($region))+
+                $(.$optional_region($optional_region))?
                 .build()
                 .into(),
         );
         let mut regions = (0usize..).map(|index| {
-            melior::ir::RegionLike::first_block(
-                &melior::ir::operation::OperationLike::region(&operation, index)
-                    .expect(concat!(stringify!($operation), " region index in range")),
-            )
-            .expect(concat!(stringify!($operation), " region has an entry block"))
+            melior::ir::operation::OperationLike::region(&operation, index)
+                .expect(concat!(stringify!($operation), " region index in range"))
         });
-        ($(
-            regions.next().expect(concat!("missing ", stringify!($region)))
-        ),+)
+        (
+            $(
+                melior::ir::RegionLike::first_block(
+                    &regions.next().expect(concat!("missing ", stringify!($region))),
+                )
+                .expect(concat!(stringify!($region), " has an entry block"))
+            ),+
+            $(
+                , melior::ir::RegionLike::first_block(
+                    &regions.next().expect(concat!("missing ", stringify!($optional_region))),
+                )
+            )?
+        )
     }};
 }
 
