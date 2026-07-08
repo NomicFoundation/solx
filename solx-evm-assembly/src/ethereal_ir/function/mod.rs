@@ -1269,6 +1269,8 @@ impl Function {
             capture_stacks,
         )?;
 
+        // Keep this set in sync with the `stack_hash.expect()` readers in `block::element`:
+        // those arms panic if their instruction is not captured here.
         if matches!(
             block_element.instruction.name,
             InstructionName::Tag | InstructionName::JUMP | InstructionName::JUMPI
