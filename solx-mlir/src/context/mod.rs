@@ -131,6 +131,8 @@ impl<'context> Context<'context> {
 
     /// The unknown source location.
     pub fn location(&self) -> Location<'context> {
+        // TODO: stop generating unknown locations; every op should carry a real source
+        // location derived from the AST going forward.
         Location::unknown(self.melior)
     }
 
