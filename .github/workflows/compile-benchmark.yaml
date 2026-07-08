@@ -1,0 +1,248 @@
+name: Compile Benchmark
+
+# Times `solx --standard-json` over the fixtures in tests/benchmark/fixtures
+# with hyperfine, comparing the PR build against a main build and the latest
+# release binary, and posts the report as a PR comment. Label-gated like the
+# integration suite; report-only (no pass/fail gating on timings).
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash -ex {0}
+
+jobs:
+
+  label-check:
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (contains(github.event.pull_request.labels.*.name, 'ci:compile-benchmark')
+        && (github.event.action != 'labeled' || github.event.label.name == 'ci:compile-benchmark')
+        && !github.event.pull_request.head.repo.fork)
+    runs-on: ubuntu-24.04
+    steps:
+      - run: 'true'
+
+  cooldown-check:
+    name: Cargo cooldown check
+    runs-on: ubuntu-24.04
+    needs: label-check
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/cooldown-check
+
+  compile-benchmark:
+    needs: [label-check, cooldown-check]
+    permissions:
+      contents: read
+      pull-requests: write
+      packages: read
+    # Temporary: pinned to the standard solx-linux-amd64 runner to fast-track
+    # the current batch of solx improvements. Revert to the self-hosted runner
+    # once the queue clears.
+    runs-on: solx-linux-amd64
+    container:
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:79b926f62cddf00086b8a385f89e3f3281e2f37b993491e773f17d7549f7363a
+      options: -m 110g
+    # Warm caches: ~10 min builds + ~20 min benchmark. Worst case: a PR that
+    # bumps solx-llvm (or its build scripts) builds both the PR and main LLVM
+    # cold, sequentially.
+    timeout-minutes: 180
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: true
+
+      # actions/checkout's `git clean -ffdx` doesn't recurse into submodules,
+      # so on a persistent self-hosted workspace a previous run can leave
+      # stale dirs inside temp-solx-main. Wipe wholesale before re-checking
+      # out main. (Same pattern as integration-tests.yaml.)
+      - name: Reset main checkout dir
+        run: rm -rf temp-solx-main
+
+      - name: Checkout main
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: main
+          submodules: true
+          path: temp-solx-main
+
+      - name: Checkout submodules (PR)
+        uses: ./.github/actions/checkout-submodules
+
+      - name: Checkout submodules (main)
+        uses: ./.github/actions/checkout-submodules
+        with:
+          working-directory: temp-solx-main
+
+      - name: Setup SFW
+        uses: ./.github/actions/setup-sfw
+
+      # Release build without assertions: matches the released binary's
+      # configuration so the three-way comparison is apples-to-apples.
+      - name: Build LLVM
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: Release
+          enable-assertions: 'false'
+
+      # Submodule SHA alone is not sufficient: `solx-dev llvm build` is
+      # driven by `solx-dev/src/llvm/*`, so a PR that edits those scripts
+      # without bumping the solx-llvm submodule would silently share its
+      # own LLVM as the "main" baseline. Mirror the SHA + script-hash
+      # check used by integration-tests.yaml.
+      - name: Share LLVM with main checkout
+        id: share-llvm
+        run: |
+          # Content hash of a directory tree (order-independent).
+          hash_tree() {
+            find "$1" -type f -print0 | sort -z | xargs -0 cat | sha256sum | cut -d' ' -f1
+          }
+          MAIN_SHA=$(git -C temp-solx-main/solx-llvm rev-parse HEAD)
+          PR_SHA=$(git -C solx-llvm rev-parse HEAD)
+          SCRIPT_PR=$(hash_tree solx-dev/src/llvm)
+          SCRIPT_MAIN=$(hash_tree temp-solx-main/solx-dev/src/llvm)
+          if [ "$MAIN_SHA" = "$PR_SHA" ] && [ "$SCRIPT_MAIN" = "$SCRIPT_PR" ]; then
+            echo "LLVM SHAs and build scripts match ($PR_SHA / ${SCRIPT_PR:0:8}), sharing via symlink"
+            mkdir -p temp-solx-main/target-llvm
+            rm -rf temp-solx-main/target-llvm/target-final
+            ln -snf "$GITHUB_WORKSPACE/target-llvm/target-final" \
+                    temp-solx-main/target-llvm/target-final
+            echo "shared=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::LLVM inputs differ (main=$MAIN_SHA/${SCRIPT_MAIN:0:8} PR=$PR_SHA/${SCRIPT_PR:0:8}), building main separately"
+          fi
+
+      - name: Build LLVM (main)
+        if: steps.share-llvm.outputs.shared != 'true'
+        run: |
+          pushd temp-solx-main
+          ${SFW_PREFIX:-} cargo fetch --locked
+          ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-dev
+          ./target/release/solx-dev llvm build --build-type Release --install-distribution
+          popd
+
+      - name: Build solc (PR)
+        uses: ./.github/actions/build-solc
+        with:
+          cmake-build-type: Release
+          working-dir: 'solx-solidity'
+
+      # Match the cache key composition in build-solc/action.yml: SHA alone
+      # is not sufficient because a PR can change `solx-dev/src/solc/*`
+      # without bumping the submodule pin. Without the script-hash check,
+      # the PR's solc binary would be shared as the "main" baseline and
+      # silently skew benchmarks.
+      - name: Share solc with main checkout
+        id: share-solc
+        run: |
+          # Content hash of a directory tree (order-independent).
+          hash_tree() {
+            find "$1" -type f -print0 | sort -z | xargs -0 cat | sha256sum | cut -d' ' -f1
+          }
+          MAIN_SHA=$(git -C temp-solx-main/solx-solidity rev-parse HEAD)
+          PR_SHA=$(git -C solx-solidity rev-parse HEAD)
+          SCRIPT_PR=$(hash_tree solx-dev/src/solc)
+          SCRIPT_MAIN=$(hash_tree temp-solx-main/solx-dev/src/solc)
+          if [ "$MAIN_SHA" = "$PR_SHA" ] && [ "$SCRIPT_MAIN" = "$SCRIPT_PR" ]; then
+            echo "solc SHAs and build scripts match ($PR_SHA / ${SCRIPT_PR:0:8}), sharing via symlink"
+            rm -rf temp-solx-main/solx-solidity/build temp-solx-main/solx-solidity/boost
+            ln -snf "$GITHUB_WORKSPACE/solx-solidity/build" \
+                    temp-solx-main/solx-solidity/build
+            ln -snf "$GITHUB_WORKSPACE/solx-solidity/boost" \
+                    temp-solx-main/solx-solidity/boost
+            echo "shared=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::solc inputs differ (main=$MAIN_SHA/${SCRIPT_MAIN:0:8} PR=$PR_SHA/${SCRIPT_PR:0:8}), building main separately"
+          fi
+
+      - name: Build solc (main)
+        if: steps.share-solc.outputs.shared != 'true'
+        uses: ./.github/actions/build-solc
+        with:
+          cmake-build-type: 'Release'
+          working-dir: 'temp-solx-main/solx-solidity'
+
+      - name: Build solx (PR)
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+        run: |
+          ${SFW_PREFIX:-} cargo fetch --locked
+          ${SFW_PREFIX:-} cargo build --frozen --release --bin solx
+
+      - name: Build solx (main)
+        working-directory: temp-solx-main
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
+        run: |
+          ${SFW_PREFIX:-} cargo fetch --locked
+          ${SFW_PREFIX:-} cargo build --frozen --release --bin solx
+
+      - name: Download latest release binary
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # Authenticated API call: the unauthenticated rate limit is per IP,
+          # which neighboring jobs on a shared self-hosted runner can exhaust.
+          # The asset download below redirects to S3 and needs no auth.
+          TAG=$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            https://api.github.com/repos/NomicFoundation/solx/releases/latest \
+            | python3 -c 'import json, sys; print(json.load(sys.stdin)["tag_name"])')
+          ASSET="solx-linux-amd64-gnu-v${TAG}"
+          BASE="https://github.com/NomicFoundation/solx/releases/download/${TAG}"
+          curl -fsSL -o solx-release "${BASE}/${ASSET}"
+          curl -fsSL "${BASE}/${ASSET}.sha256" | sed "s|[^ ]*${ASSET}|solx-release|" | sha256sum -c -
+          chmod +x solx-release
+          ./solx-release --version
+
+      # The image's system interpreter is Debian-managed and steps run as
+      # root, so install straight from apt (no sudo in the container).
+      - name: Install hyperfine
+        run: |
+          apt-get update -qq
+          apt-get install -y hyperfine
+
+      # Corpus fixtures compile with production settings (optimizer + DWARF),
+      # so a full sweep is ~80 s per binary; 3 runs keep the step around
+      # 20 min (hyperfine σ on this corpus is well under 1%). The per-binary
+      # validation pass in run.sh doubles as cache warmup.
+      - name: Run benchmark
+        run: |
+          ./tests/benchmark/run.sh \
+            --bin pr=./target/release/solx \
+            --bin main=./temp-solx-main/target/release/solx \
+            --bin release=./solx-release \
+            --runs 3 --warmup 1 \
+            --out benchmark-out
+          python3 ./tests/benchmark/report.py --dir benchmark-out --out benchmark-out/report.md
+
+      - name: Post benchmark report comment
+        if: github.event_name == 'pull_request'
+        uses: mshick/add-pr-comment@ec328af66588ab8f77cdeb2c264f14aba45bbf59 # v3.12
+        with:
+          message-id: 'compile-benchmark-report'
+          message-path: benchmark-out/report.md
+
+      - name: Upload raw results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: compile-benchmark-results
+          path: benchmark-out/
