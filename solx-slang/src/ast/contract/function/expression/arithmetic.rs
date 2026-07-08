@@ -94,12 +94,23 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 Ok((result, block))
             }
             Operator::Subtract => {
+                let magnitude = match operand {
+                    Expression::DecimalNumberExpression(number) => number.integer_value(),
+                    Expression::HexNumberExpression(number) => number.integer_value(),
+                    _ => None,
+                };
+                if let (Some(operand_type), Some(magnitude)) = (target_type, magnitude) {
+                    return Ok((
+                        Value::constant_from_bigint(&-magnitude, operand_type, self.state, &block),
+                        block,
+                    ));
+                }
                 let (value, block) = self.emit_value(operand, block)?;
                 let operand_type = target_type.unwrap_or_else(|| value.r#type());
                 let value = TypeConversion::from_target_type(operand_type, self.state)
                     .emit(value, self.state, &block);
                 let zero = Value::constant(0, operand_type, self.state, &block);
-                let result = zero.subtract(value, false, self.state, &block);
+                let result = operator.emit(self.checked, zero, value, self.state, &block);
                 Ok((result, block))
             }
             _ => anyhow::bail!("unsupported prefix operator: {operator:?}"),

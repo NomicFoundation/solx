@@ -21,7 +21,6 @@
 // CHECK:   } do {
 // CHECK:     sol.yield
 
-// For-loop step uses unchecked add (sol.add not sol.cadd)
 // CHECK: sol.func @{{.*for_loop.*}}
 // CHECK:   sol.for cond {
 // CHECK:     sol.condition %{{.*}}
