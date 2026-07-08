@@ -310,6 +310,32 @@ jobs:
         with:
           target: ${{ matrix.target || '' }}
 
+      # TEMPORARY (remove before merge): record the full Ethereal IR dump for the
+      # main-vs-PR review, and assert it is deterministic across two runs.
+      - name: Capture Ethereal IR dump
+        if: matrix.name == 'Linux x86 gnu'
+        shell: bash
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          contract=solx/tests/data/contracts/solidity/Test.sol
+          cargo run --quiet --bin solx --target "${TARGET}" -- "${contract}" --ethir >ethir-dump.txt
+          cargo run --quiet --bin solx --target "${TARGET}" -- "${contract}" --ethir >ethir-dump-second.txt
+          if ! diff ethir-dump.txt ethir-dump-second.txt; then
+            echo "::error::--ethir output is not deterministic across runs"
+            exit 1
+          fi
+
+      - name: Upload Ethereal IR dump
+        if: matrix.name == 'Linux x86 gnu'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ethir-dump
+          path: ethir-dump.txt
+
   # Special job that allows some of the jobs to be skipped or failed
   # requiring others to be successful
   pr-checks:
