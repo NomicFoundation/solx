@@ -25,23 +25,17 @@ pub struct Block {
     pub elements: Vec<Element>,
     /// The block predecessors.
     pub predecessors: BTreeSet<(solx_codegen_evm::BlockKey, usize)>,
-    /// The initial stack state.
-    pub initial_stack: ElementStack,
+    /// The initial stack state hash, which acts as the block instance identifier.
+    pub initial_stack_hash: u64,
     /// The stack.
     pub stack: ElementStack,
-    /// The extra block hashes for alternative routes.
-    pub extra_hashes: Vec<u64>,
 }
 
 impl Block {
-    /// The elements vector initial capacity.
-    pub const ELEMENTS_VECTOR_DEFAULT_CAPACITY: usize = 64;
-
     ///
     /// Assembles a block from the sequence of instructions.
     ///
     pub fn try_from_instructions(
-        solc_version: semver::Version,
         code_segment: solx_utils::CodeSegment,
         slice: &[Instruction],
     ) -> anyhow::Result<(Self, usize)> {
@@ -65,17 +59,16 @@ impl Block {
         let mut block = Self {
             key: solx_codegen_evm::BlockKey::new(code_segment, tag),
             instance: None,
-            elements: Vec::with_capacity(Self::ELEMENTS_VECTOR_DEFAULT_CAPACITY),
+            elements: Vec::new(),
             predecessors: BTreeSet::new(),
-            initial_stack: ElementStack::new(),
-            stack: ElementStack::new(),
-            extra_hashes: vec![],
+            initial_stack_hash: 0,
+            stack: ElementStack::default(),
         };
 
         let mut dead_code = false;
         while cursor < slice.len() {
             if !dead_code {
-                let element: Element = Element::new(solc_version.clone(), slice[cursor].to_owned());
+                let element: Element = Element::new(slice[cursor].to_owned());
                 block.elements.push(element);
             }
 

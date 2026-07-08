@@ -85,6 +85,10 @@ pub struct Context<'ctx> {
     captured_evmla: Option<String>,
     /// Captured Ethereal IR for output.
     captured_ethir: Option<String>,
+    /// Whether to capture EVM legacy assembly IR for output.
+    capture_evmla: bool,
+    /// Whether to capture Ethereal IR for output.
+    capture_ethir: bool,
     /// Whether to capture LLVM IR for output.
     capture_llvm_ir: bool,
 }
@@ -146,6 +150,8 @@ impl<'ctx> Context<'ctx> {
 
             captured_evmla: None,
             captured_ethir: None,
+            capture_evmla: false,
+            capture_ethir: false,
             capture_llvm_ir: false,
         }
     }
@@ -417,6 +423,34 @@ impl<'ctx> Context<'ctx> {
     ///
     pub fn set_captured_ethir(&mut self, ethir: String) {
         self.captured_ethir = Some(ethir);
+    }
+
+    ///
+    /// Returns whether EVM legacy assembly IR capture is enabled.
+    ///
+    pub fn capture_evmla(&self) -> bool {
+        self.capture_evmla
+    }
+
+    ///
+    /// Enables EVM legacy assembly IR capture for output.
+    ///
+    pub fn set_capture_evmla(&mut self, capture: bool) {
+        self.capture_evmla = capture;
+    }
+
+    ///
+    /// Returns whether Ethereal IR capture is enabled.
+    ///
+    pub fn capture_ethir(&self) -> bool {
+        self.capture_ethir
+    }
+
+    ///
+    /// Enables Ethereal IR capture for output.
+    ///
+    pub fn set_capture_ethir(&mut self, capture: bool) {
+        self.capture_ethir = capture;
     }
 
     ///

@@ -20,18 +20,6 @@ pub struct Stack {
 }
 
 impl Stack {
-    /// The default stack size.
-    pub const DEFAULT_STACK_SIZE: usize = 16;
-
-    ///
-    /// A shortcut constructor.
-    ///
-    pub fn new() -> Self {
-        Self {
-            elements: Vec::with_capacity(Self::DEFAULT_STACK_SIZE),
-        }
-    }
-
     ///
     /// A shortcut constructor.
     ///
@@ -69,20 +57,6 @@ impl Stack {
     ///
     pub fn push(&mut self, element: Element) {
         self.elements.push(element);
-    }
-
-    ///
-    /// Appends another stack on top of this one, consuming its elements.
-    ///
-    pub fn append(&mut self, other: &mut Self) {
-        self.elements.append(&mut other.elements);
-    }
-
-    ///
-    /// Extends this stack by cloning elements from another stack.
-    ///
-    pub fn extend_from(&mut self, other: &Self) {
-        self.elements.extend(other.elements.iter().cloned());
     }
 
     ///

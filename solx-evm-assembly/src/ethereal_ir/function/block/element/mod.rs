@@ -24,10 +24,16 @@ use self::stack::element::Element as StackElement;
 pub struct Element {
     /// The instruction.
     pub instruction: Instruction,
-    /// The stack data.
+    /// The stack snapshot after the instruction, captured only for Ethereal IR text output.
     pub stack: Stack,
+    /// The stack depth after the instruction.
+    pub stack_size: usize,
+    /// The stack state hash after the instruction, set for control transfer instructions.
+    pub stack_hash: Option<u64>,
     /// The stack input.
     pub stack_input: Stack,
+    /// The stack output depth.
+    pub stack_output_size: usize,
     /// The stack output.
     pub stack_output: Stack,
 }
@@ -36,15 +42,15 @@ impl Element {
     ///
     /// A shortcut constructor.
     ///
-    pub fn new(solc_version: semver::Version, instruction: Instruction) -> Self {
-        let input_size = instruction.input_size(&solc_version);
-        let output_size = instruction.output_size();
-
+    pub fn new(instruction: Instruction) -> Self {
         Self {
             instruction,
-            stack: Stack::new(),
-            stack_input: Stack::with_capacity(input_size),
-            stack_output: Stack::with_capacity(output_size),
+            stack: Stack::default(),
+            stack_size: 0,
+            stack_hash: None,
+            stack_input: Stack::default(),
+            stack_output_size: 0,
+            stack_output: Stack::default(),
         }
     }
 
@@ -62,7 +68,7 @@ impl Element {
         let mut arguments = Vec::with_capacity(input_size);
         for index in 0..input_size {
             let pointer = context.evmla().expect("Always exists").stack
-                [self.stack.elements.len() + input_size - output_size - 1 - index]
+                [self.stack_size + input_size - output_size - 1 - index]
                 .to_llvm()
                 .into_pointer_value();
             let value = context.build_load(
@@ -91,8 +97,6 @@ impl solx_codegen_evm::WriteLLVM for Element {
         if let Some((solidity_data, solc_location)) = context.solidity_mut().zip(solc_location) {
             solidity_data.set_debug_info_solc_location(solc_location);
         }
-
-        let mut original = self.instruction.value.clone();
 
         let result = match self.instruction.name.clone() {
             InstructionName::PUSH0 => Ok(Some(context.field_const(0).as_basic_value_enum())),
@@ -196,195 +200,116 @@ impl solx_codegen_evm::WriteLLVM for Element {
                 .map(Some)
             }
 
-            InstructionName::DUP1 => crate::assembly::instruction::stack::dup(
-                context,
-                1,
-                self.stack.elements.len(),
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP2 => crate::assembly::instruction::stack::dup(
-                context,
-                2,
-                self.stack.elements.len(),
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP3 => crate::assembly::instruction::stack::dup(
-                context,
-                3,
-                self.stack.elements.len(),
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP4 => crate::assembly::instruction::stack::dup(
-                context,
-                4,
-                self.stack.elements.len(),
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP5 => crate::assembly::instruction::stack::dup(
-                context,
-                5,
-                self.stack.elements.len(),
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP6 => crate::assembly::instruction::stack::dup(
-                context,
-                6,
-                self.stack.elements.len(),
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP7 => crate::assembly::instruction::stack::dup(
-                context,
-                7,
-                self.stack.elements.len(),
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP8 => crate::assembly::instruction::stack::dup(
-                context,
-                8,
-                self.stack.elements.len(),
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP9 => crate::assembly::instruction::stack::dup(
-                context,
-                9,
-                self.stack.elements.len(),
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP10 => crate::assembly::instruction::stack::dup(
-                context,
-                10,
-                self.stack.elements.len(),
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP11 => crate::assembly::instruction::stack::dup(
-                context,
-                11,
-                self.stack.elements.len(),
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP12 => crate::assembly::instruction::stack::dup(
-                context,
-                12,
-                self.stack.elements.len(),
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP13 => crate::assembly::instruction::stack::dup(
-                context,
-                13,
-                self.stack.elements.len(),
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP14 => crate::assembly::instruction::stack::dup(
-                context,
-                14,
-                self.stack.elements.len(),
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP15 => crate::assembly::instruction::stack::dup(
-                context,
-                15,
-                self.stack.elements.len(),
-                &mut original,
-            )
-            .map(Some),
-            InstructionName::DUP16 => crate::assembly::instruction::stack::dup(
-                context,
-                16,
-                self.stack.elements.len(),
-                &mut original,
-            )
-            .map(Some),
+            InstructionName::DUP1 => {
+                crate::assembly::instruction::stack::dup(context, 1, self.stack_size).map(Some)
+            }
+            InstructionName::DUP2 => {
+                crate::assembly::instruction::stack::dup(context, 2, self.stack_size).map(Some)
+            }
+            InstructionName::DUP3 => {
+                crate::assembly::instruction::stack::dup(context, 3, self.stack_size).map(Some)
+            }
+            InstructionName::DUP4 => {
+                crate::assembly::instruction::stack::dup(context, 4, self.stack_size).map(Some)
+            }
+            InstructionName::DUP5 => {
+                crate::assembly::instruction::stack::dup(context, 5, self.stack_size).map(Some)
+            }
+            InstructionName::DUP6 => {
+                crate::assembly::instruction::stack::dup(context, 6, self.stack_size).map(Some)
+            }
+            InstructionName::DUP7 => {
+                crate::assembly::instruction::stack::dup(context, 7, self.stack_size).map(Some)
+            }
+            InstructionName::DUP8 => {
+                crate::assembly::instruction::stack::dup(context, 8, self.stack_size).map(Some)
+            }
+            InstructionName::DUP9 => {
+                crate::assembly::instruction::stack::dup(context, 9, self.stack_size).map(Some)
+            }
+            InstructionName::DUP10 => {
+                crate::assembly::instruction::stack::dup(context, 10, self.stack_size).map(Some)
+            }
+            InstructionName::DUP11 => {
+                crate::assembly::instruction::stack::dup(context, 11, self.stack_size).map(Some)
+            }
+            InstructionName::DUP12 => {
+                crate::assembly::instruction::stack::dup(context, 12, self.stack_size).map(Some)
+            }
+            InstructionName::DUP13 => {
+                crate::assembly::instruction::stack::dup(context, 13, self.stack_size).map(Some)
+            }
+            InstructionName::DUP14 => {
+                crate::assembly::instruction::stack::dup(context, 14, self.stack_size).map(Some)
+            }
+            InstructionName::DUP15 => {
+                crate::assembly::instruction::stack::dup(context, 15, self.stack_size).map(Some)
+            }
+            InstructionName::DUP16 => {
+                crate::assembly::instruction::stack::dup(context, 16, self.stack_size).map(Some)
+            }
             InstructionName::DUPX => {
                 let offset = self
                     .stack_input
                     .pop_constant()?
                     .to_usize()
                     .ok_or_else(|| anyhow::anyhow!("DUPX offset too large"))?;
-                crate::assembly::instruction::stack::dup(
-                    context,
-                    offset,
-                    self.stack.elements.len(),
-                    &mut original,
-                )
-                .map(Some)
+                crate::assembly::instruction::stack::dup(context, offset, self.stack_size).map(Some)
             }
 
             InstructionName::SWAP1 => {
-                crate::assembly::instruction::stack::swap(context, 1, self.stack.elements.len())
-                    .map(|_| None)
+                crate::assembly::instruction::stack::swap(context, 1, self.stack_size).map(|_| None)
             }
             InstructionName::SWAP2 => {
-                crate::assembly::instruction::stack::swap(context, 2, self.stack.elements.len())
-                    .map(|_| None)
+                crate::assembly::instruction::stack::swap(context, 2, self.stack_size).map(|_| None)
             }
             InstructionName::SWAP3 => {
-                crate::assembly::instruction::stack::swap(context, 3, self.stack.elements.len())
-                    .map(|_| None)
+                crate::assembly::instruction::stack::swap(context, 3, self.stack_size).map(|_| None)
             }
             InstructionName::SWAP4 => {
-                crate::assembly::instruction::stack::swap(context, 4, self.stack.elements.len())
-                    .map(|_| None)
+                crate::assembly::instruction::stack::swap(context, 4, self.stack_size).map(|_| None)
             }
             InstructionName::SWAP5 => {
-                crate::assembly::instruction::stack::swap(context, 5, self.stack.elements.len())
-                    .map(|_| None)
+                crate::assembly::instruction::stack::swap(context, 5, self.stack_size).map(|_| None)
             }
             InstructionName::SWAP6 => {
-                crate::assembly::instruction::stack::swap(context, 6, self.stack.elements.len())
-                    .map(|_| None)
+                crate::assembly::instruction::stack::swap(context, 6, self.stack_size).map(|_| None)
             }
             InstructionName::SWAP7 => {
-                crate::assembly::instruction::stack::swap(context, 7, self.stack.elements.len())
-                    .map(|_| None)
+                crate::assembly::instruction::stack::swap(context, 7, self.stack_size).map(|_| None)
             }
             InstructionName::SWAP8 => {
-                crate::assembly::instruction::stack::swap(context, 8, self.stack.elements.len())
-                    .map(|_| None)
+                crate::assembly::instruction::stack::swap(context, 8, self.stack_size).map(|_| None)
             }
             InstructionName::SWAP9 => {
-                crate::assembly::instruction::stack::swap(context, 9, self.stack.elements.len())
-                    .map(|_| None)
+                crate::assembly::instruction::stack::swap(context, 9, self.stack_size).map(|_| None)
             }
             InstructionName::SWAP10 => {
-                crate::assembly::instruction::stack::swap(context, 10, self.stack.elements.len())
+                crate::assembly::instruction::stack::swap(context, 10, self.stack_size)
                     .map(|_| None)
             }
             InstructionName::SWAP11 => {
-                crate::assembly::instruction::stack::swap(context, 11, self.stack.elements.len())
+                crate::assembly::instruction::stack::swap(context, 11, self.stack_size)
                     .map(|_| None)
             }
             InstructionName::SWAP12 => {
-                crate::assembly::instruction::stack::swap(context, 12, self.stack.elements.len())
+                crate::assembly::instruction::stack::swap(context, 12, self.stack_size)
                     .map(|_| None)
             }
             InstructionName::SWAP13 => {
-                crate::assembly::instruction::stack::swap(context, 13, self.stack.elements.len())
+                crate::assembly::instruction::stack::swap(context, 13, self.stack_size)
                     .map(|_| None)
             }
             InstructionName::SWAP14 => {
-                crate::assembly::instruction::stack::swap(context, 14, self.stack.elements.len())
+                crate::assembly::instruction::stack::swap(context, 14, self.stack_size)
                     .map(|_| None)
             }
             InstructionName::SWAP15 => {
-                crate::assembly::instruction::stack::swap(context, 15, self.stack.elements.len())
+                crate::assembly::instruction::stack::swap(context, 15, self.stack_size)
                     .map(|_| None)
             }
             InstructionName::SWAP16 => {
-                crate::assembly::instruction::stack::swap(context, 16, self.stack.elements.len())
+                crate::assembly::instruction::stack::swap(context, 16, self.stack_size)
                     .map(|_| None)
             }
             InstructionName::SWAPX => {
@@ -393,12 +318,8 @@ impl solx_codegen_evm::WriteLLVM for Element {
                     .pop_constant()?
                     .to_usize()
                     .ok_or_else(|| anyhow::anyhow!("SWAPX offset too large"))?;
-                crate::assembly::instruction::stack::swap(
-                    context,
-                    offset,
-                    self.stack.elements.len(),
-                )
-                .map(|_| None)
+                crate::assembly::instruction::stack::swap(context, offset, self.stack_size)
+                    .map(|_| None)
             }
 
             InstructionName::POP => crate::assembly::instruction::stack::pop(context).map(|_| None),
@@ -414,7 +335,7 @@ impl solx_codegen_evm::WriteLLVM for Element {
                 crate::assembly::instruction::jump::unconditional(
                     context,
                     destination,
-                    self.stack.hash(),
+                    self.stack_hash.expect("Always exists"),
                 )
                 .map(|_| None)
             }
@@ -424,7 +345,7 @@ impl solx_codegen_evm::WriteLLVM for Element {
                 crate::assembly::instruction::jump::unconditional(
                     context,
                     destination,
-                    self.stack.hash(),
+                    self.stack_hash.expect("Always exists"),
                 )
                 .map(|_| None)
             }
@@ -435,8 +356,8 @@ impl solx_codegen_evm::WriteLLVM for Element {
                 crate::assembly::instruction::jump::conditional(
                     context,
                     destination,
-                    self.stack.hash(),
-                    self.stack.elements.len(),
+                    self.stack_hash.expect("Always exists"),
+                    self.stack_size,
                 )
                 .map(|_| None)
             }
@@ -1158,7 +1079,7 @@ impl solx_codegen_evm::WriteLLVM for Element {
                 match result {
                     Some(value) if value.is_int_value() => {
                         let pointer = context.evmla().expect("Always exists").stack
-                            [self.stack.elements.len() - output_size]
+                            [self.stack_size - output_size]
                             .to_llvm()
                             .into_pointer_value();
                         context.build_store(
@@ -1178,7 +1099,7 @@ impl solx_codegen_evm::WriteLLVM for Element {
                                 context.field_type(),
                                 solx_codegen_evm::AddressSpace::Stack,
                                 context.evmla().expect("Always exists").stack
-                                    [self.stack.elements.len() - output_size + index]
+                                    [self.stack_size - output_size + index]
                                     .to_llvm()
                                     .into_pointer_value(),
                             );
@@ -1232,16 +1153,13 @@ impl solx_codegen_evm::WriteLLVM for Element {
         }?;
 
         if let Some(result) = result {
-            let pointer = context.evmla().expect("Always exists").stack
-                [self.stack.elements.len() - 1]
+            let pointer = context.evmla().expect("Always exists").stack[self.stack_size - 1]
                 .to_llvm()
                 .into_pointer_value();
             context.build_store(
                 solx_codegen_evm::Pointer::new_stack_field(context, pointer),
                 result,
             )?;
-            context.evmla_mut().expect("Always exists").stack[self.stack.elements.len() - 1]
-                .original = original;
         }
 
         Ok(())
