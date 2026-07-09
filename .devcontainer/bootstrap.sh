@@ -34,8 +34,13 @@ echo "==> Building LLVM ${MLIR_FLAG:+(with MLIR) }— ~1h cold, minutes on warm 
     ${MLIR_FLAG} \
     --extra-args "-DLLVM_PARALLEL_LINK_JOBS='2'"
 
-echo "==> Building solc libraries"
-./target/release/solx-dev solc build
+echo "==> Building solc libraries (downloads and builds a static Boost first)"
+# --build-boost matches CI: the runner image ships no system Boost.
+# MLIR must match the LLVM build, as in slang-tests.yaml.
+./target/release/solx-dev solc build \
+    --build-boost \
+    --ccache-variant ccache \
+    ${MLIR_FLAG}
 
 cat <<'EOF'
 ==> Toolchain ready. Next steps:

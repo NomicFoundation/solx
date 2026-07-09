@@ -63,7 +63,7 @@ The pull only needs repeating when the pinned digest changes. Then:
    - `.cargo/config.toml` already points `LLVM_SYS_211_PREFIX`, `MLIR_SYS_210_PREFIX`, and `TABLEGEN_210_PREFIX` at that installation, so no environment setup is needed — `cargo` and rust-analyzer find it as soon as it exists.
    - MLIR is enabled by default because the Slang frontend pipeline (`cargo test-slang`) requires it. Pass `--no-mlir` to skip it and shave build time if you only work on the solc/Yul pipeline.
    - Assertions are enabled, matching CI.
-4. `./target/release/solx-dev solc build` — builds the solc fork libraries into `solx-solidity/build/` (again already wired up via `SOLC_PREFIX`/`BOOST_PREFIX`).
+4. `./target/release/solx-dev solc build --build-boost --ccache-variant ccache --enable-mlir` — builds the solc fork libraries into `solx-solidity/build/` (again already wired up via `SOLC_PREFIX`/`BOOST_PREFIX`). `--build-boost` downloads and builds a static Boost into `solx-solidity/boost/` first — the runner image deliberately ships no system Boost, matching how CI builds solc.
 
 Until step 3 has completed, `cargo check`/rust-analyzer fail in `llvm-sys`'s build script with a missing `llvm-config` — that is the expected symptom of "LLVM not built yet", not a broken container.
 
@@ -73,6 +73,7 @@ First stop: `.devcontainer/smoke-test.sh` checks the container's basic health (n
 
 - **`error: Missing manifest in toolchain '1.96.0-…'`** — an interrupted first `cargo` run (e.g. Ctrl+C during the toolchain download) leaves a half-extracted toolchain, and it persists in the `solx-rustup` volume across container rebuilds. Fix: `rustup toolchain uninstall <the toolchain from the error>`, then rerun; the pinned toolchain reinstalls automatically.
 - **`llvm-sys` fails with a missing `llvm-config`** — LLVM has not been built yet (or the bootstrap was interrupted before finishing). Rerun `.devcontainer/bootstrap.sh`; ccache makes the retry cheap.
+- **Files vanish or builds break mid-bootstrap in confusing ways** — the workspace is a bind mount: the container and your host checkout are the same files. Switching branches, `git clean`, or anything else that rewrites the tree on the host while a bootstrap or build runs in the container will break it in nonsensical-looking ways (and a host-side switch to a branch without `.devcontainer/` may prompt VS Code to recreate the container mid-run). Leave the checkout alone until the build finishes; the bootstrap is idempotent and resumes cheaply after a rerun.
 
 ### Rebuilding after a submodule bump
 
