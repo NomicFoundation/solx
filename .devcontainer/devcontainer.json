@@ -32,7 +32,11 @@
         "source=solx-ccache,target=/var/cache/solx-ccache,type=volume"
     ],
     "containerEnv": {
-        "CCACHE_DIR": "/var/cache/solx-ccache"
+        "CCACHE_DIR": "/var/cache/solx-ccache",
+        // Hash the compiler binary, not its mtime (matches CI): an image
+        // rebuild refreshes mtimes on an unchanged clang, which would
+        // otherwise cold-miss the entire cache.
+        "CCACHE_COMPILERCHECK": "content"
     },
 
     "postCreateCommand": ".devcontainer/post-create.sh",

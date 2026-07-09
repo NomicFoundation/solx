@@ -9,10 +9,15 @@ cd "$(dirname "$0")/.."
 # MLIR is on by default: it is required for the Slang frontend pipeline
 # (cargo test-slang) and CI caches it as a separate artifact variant anyway.
 MLIR_FLAG="--enable-mlir"
+CLEAN_FLAG=""
 for arg in "$@"; do
     case "${arg}" in
         --no-mlir) MLIR_FLAG="" ;;
-        *) echo "unknown option: ${arg} (supported: --no-mlir)" >&2; exit 1 ;;
+        # Wipes target-llvm before building. Needed when the persistent build
+        # tree was configured in a previous container image (see the guide's
+        # troubleshooting section).
+        --clean) CLEAN_FLAG="--clean" ;;
+        *) echo "unknown option: ${arg} (supported: --no-mlir, --clean)" >&2; exit 1 ;;
     esac
 done
 
@@ -38,7 +43,7 @@ echo "==> Building LLVM ${MLIR_FLAG:+(with MLIR) }— ~1h cold, minutes on warm 
 ./target/release/solx-dev llvm build \
     --enable-assertions \
     --ccache-variant ccache \
-    ${MLIR_FLAG} \
+    ${MLIR_FLAG} ${CLEAN_FLAG} \
     --extra-args "-DLLVM_PARALLEL_LINK_JOBS='2'"
 
 echo "==> Building solc libraries (downloads and builds a static Boost first)"
