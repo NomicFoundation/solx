@@ -69,6 +69,8 @@ Until step 3 has completed, `cargo check`/rust-analyzer fail in `llvm-sys`'s bui
 
 ### Troubleshooting
 
+First stop: `.devcontainer/smoke-test.sh` checks the container's basic health (non-root user, writable volumes, toolchain on PATH, Rust pin resolution) in under a minute — CI runs the same script to validate devcontainer changes. Known failure modes:
+
 - **`error: Missing manifest in toolchain '1.96.0-…'`** — an interrupted first `cargo` run (e.g. Ctrl+C during the toolchain download) leaves a half-extracted toolchain, and it persists in the `solx-rustup` volume across container rebuilds. Fix: `rustup toolchain uninstall <the toolchain from the error>`, then rerun; the pinned toolchain reinstalls automatically.
 - **`llvm-sys` fails with a missing `llvm-config`** — LLVM has not been built yet (or the bootstrap was interrupted before finishing). Rerun `.devcontainer/bootstrap.sh`; ccache makes the retry cheap.
 
