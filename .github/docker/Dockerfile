@@ -4,8 +4,17 @@
 #
 # The custom LLVM 21.1 backend is NOT baked into this image — it is built from
 # source in every CI job via the build-llvm composite action.
+#
+# Two stages, all from public sources:
+#   base — what a developer needs to build solx/LLVM/solc. The devcontainer
+#          builds this stage locally (`docker build --target base`), so it
+#          needs no access to the private published image; keep the split
+#          honest and don't add dev-relevant tools below the `ci` line.
+#   ci   — CI-only reporting and test tooling on top (valgrind for solx-llvm
+#          regression tests, cargo coverage/report tools). Must stay the final
+#          stage: docker-ci-image.yaml publishes the default target.
 
-FROM ubuntu:26.04@sha256:b7f48194d4d8b763a478a621cdc81c27be222ba2206ca3ca6bc42b49685f3d9e
+FROM ubuntu:26.04@sha256:b7f48194d4d8b763a478a621cdc81c27be222ba2206ca3ca6bc42b49685f3d9e AS base
 
 LABEL org.opencontainers.image.source="https://github.com/NomicFoundation/solx"
 LABEL org.opencontainers.image.description="CI runner image for solx"
@@ -98,14 +107,6 @@ RUN set -eux; \
     GCC_VER=$(ls /usr/lib/gcc/${TRIPLE}/ | sort -V | tail -1); \
     ln -sf "/usr/lib/gcc/${TRIPLE}/${GCC_VER}/libstdc++.a" "/usr/lib/${TRIPLE}/libstdc++.a"
 
-# ── Valgrind (for LLVM regression tests under valgrind) ───────────────────
-ENV VALGRIND_VERSION=3.23.0
-RUN curl -fsSL -o valgrind-${VALGRIND_VERSION}.tar.bz2 \
-        https://sourceware.org/pub/valgrind/valgrind-${VALGRIND_VERSION}.tar.bz2 \
-    && tar -xf valgrind-${VALGRIND_VERSION}.tar.bz2 \
-    && cd valgrind-${VALGRIND_VERSION} && ./configure && make && make install \
-    && cd .. && rm -rf valgrind-${VALGRIND_VERSION}.tar.bz2 valgrind-${VALGRIND_VERSION}
-
 # ── Rust ─────────────────────────────────────────────────────────────────────
 # Version must match rust-toolchain.toml in the solx repo.
 ARG RUST_VERSION=1.93.0
@@ -117,6 +118,28 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 ENV PATH="/root/.cargo/bin:/usr/lib/llvm-21/bin:${PATH}" \
     LD_LIBRARY_PATH="/usr/lib/llvm-21/lib"
 
+# ── Node.js (for SFW, npm-based CI tools, and Hardhat project tests) ──────
+ARG NODE_MAJOR=24
+RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+        | gpg --dearmor -o /usr/share/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] \
+        https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
+        > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# ═════ CI-only stage — nothing below is needed for local development ═════
+FROM base AS ci
+ARG TARGETPLATFORM
+
+# ── Valgrind (for LLVM regression tests under valgrind) ───────────────────
+ENV VALGRIND_VERSION=3.23.0
+RUN curl -fsSL -o valgrind-${VALGRIND_VERSION}.tar.bz2 \
+        https://sourceware.org/pub/valgrind/valgrind-${VALGRIND_VERSION}.tar.bz2 \
+    && tar -xf valgrind-${VALGRIND_VERSION}.tar.bz2 \
+    && cd valgrind-${VALGRIND_VERSION} && ./configure && make && make install \
+    && cd .. && rm -rf valgrind-${VALGRIND_VERSION}.tar.bz2 valgrind-${VALGRIND_VERSION}
+
 # ── Cargo tools ────────────────────────────────────────────────────────────
 # When updating versions here, also update the matching pins in:
 #   .github/actions/cargo-check/action.yml
@@ -126,16 +149,6 @@ RUN cargo install \
     cargo-llvm-cov@0.8.4 \
     cargo-udeps@0.1.60 \
     --locked
-
-# ── Node.js (for SFW and npm-based CI tools) ─────────────────────────────
-ARG NODE_MAJOR=24
-RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
-        | gpg --dearmor -o /usr/share/keyrings/nodesource.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] \
-        https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
-        > /etc/apt/sources.list.d/nodesource.list \
-    && apt-get update && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/*
 
 # Smoke-test: ensure key tools are on PATH
 RUN set -eux \

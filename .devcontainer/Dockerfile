@@ -1,16 +1,21 @@
-# Development container for solx — a thin layer over the CI runner image, so
-# local builds run on the exact toolchain CI uses.
+# Development container for solx — a thin layer over the `base` stage of the
+# CI runner Dockerfile, so local builds run on the same toolchain CI uses.
 #
-# The custom LLVM EVM backend is intentionally NOT part of this image (nor of
-# solx-ci-runner itself): it changes with every solx-llvm submodule bump and
-# weighs several GB, so baking it in would bloat and stale the image. It is
-# built from source inside the container instead — see bootstrap.sh and
+# The base image is built locally, not pulled: devcontainer.json's
+# initializeCommand runs
+#   docker build --target base -t solx-devcontainer-base .github/docker
+# on the host before this file builds. That needs no registry auth (the
+# published solx-ci-runner image is private; the base stage's sources are all
+# public) and tracks the checkout's Dockerfile by construction. The `ci`
+# stage's extras (valgrind, cargo reporting tools) are not needed here.
+#
+# The custom LLVM EVM backend is intentionally NOT part of any image: it
+# changes with every solx-llvm submodule bump and weighs several GB, so
+# baking it in would bloat and stale the image. It is built from source
+# inside the container instead — see bootstrap.sh and
 # docs/src/developer-guide/00-development-container.md.
-#
-# KEEP-IN-SYNC: when the solx-ci-runner digest is repinned across the CI
-# workflows, repin it here too.
 
-FROM ghcr.io/nomicfoundation/solx-ci-runner@sha256:79b926f62cddf00086b8a385f89e3f3281e2f37b993491e773f17d7549f7363a
+FROM solx-devcontainer-base
 
 # ── Non-root user with sudo ──────────────────────────────────────────────────
 # CI runs as root; a devcontainer wants a UID-mapped non-root user so files

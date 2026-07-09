@@ -1,6 +1,6 @@
 # Development Container
 
-The repository ships a [devcontainer](https://containers.dev/) at `.devcontainer/` that reproduces the CI build environment locally: it layers a non-root user and a shared Rust toolchain on top of `ghcr.io/nomicfoundation/solx-ci-runner`, the same image every CI job runs in. Anything that builds in the container builds in CI, and vice versa.
+The repository ships a [devcontainer](https://containers.dev/) at `.devcontainer/` that reproduces the CI build environment locally: it layers a non-root user and a shared Rust toolchain on top of the `base` stage of the CI runner Dockerfile (`.github/docker/Dockerfile`) — the same definition the `solx-ci-runner` CI image is built from. Anything that builds in the container builds in CI, and vice versa.
 
 It works with VS Code (**Dev Containers: Reopen in Container**), the [devcontainer CLI](https://github.com/devcontainers/cli), and GitHub Codespaces.
 
@@ -14,7 +14,9 @@ A cold LLVM build is the dominant cost, and it is resource-hungry:
 
 ## What the image contains — and what it deliberately does not
 
-The `solx-ci-runner` image provides the *system* toolchain: cmake, ninja, clang/LLD 21, ccache, rustup, and Node.js. Two things are **not** in the image and are built from source inside the container:
+The base image provides the *system* toolchain: cmake, ninja, clang/LLD 21, ccache, rustup, and Node.js. It is **built locally, not pulled**: the published `solx-ci-runner` package is private, but every source the Dockerfile's `base` stage draws from is public, so `devcontainer.json`'s `initializeCommand` builds it on your machine (~5–10 minutes the first time, cached by Docker afterwards) with no registry authentication at all. The `ci` stage on top of it — valgrind, cargo coverage/report tools — is CI-only and skipped. One trade-off to know: a locally built base re-resolves apt packages, so it is not bit-for-bit identical to the frozen image CI pulled; for development this does not matter.
+
+Two things are **not** in any image and are built from source inside the container:
 
 1. **The custom LLVM framework with the EVM backend** (the `solx-llvm` submodule). It is not baked into the image because it changes with every submodule bump and weighs several GB — a baked-in copy would bloat every CI image pull and be stale the moment the submodule moves. CI builds it per-job behind an Actions cache keyed on the submodule commit; the devcontainer builds it once locally and keeps it in a named volume, with ccache absorbing most of the cost of rebuilds.
 2. **The solc fork libraries** (the `solx-solidity` submodule), which **solx** links statically.
@@ -23,20 +25,8 @@ The Rust toolchain itself is also resolved lazily: rustup downloads the version 
 
 ## Getting started
 
-The `solx-ci-runner` package is **private**, so pulling it requires a GitHub token with the `read:packages` scope — an unauthenticated first open fails the container build with `unauthorized`. The login does not need to persist: the image is pinned by digest, so once it is in the local Docker cache every (re)build reuses it without contacting GHCR. Pull it once and log straight back out:
-
-```shell
-gh auth token | docker login ghcr.io --username <your-github-username> --password-stdin
-grep -oP 'ghcr\.io\S+' .devcontainer/Dockerfile | xargs docker pull
-docker logout ghcr.io
-```
-
-(If your `gh` token lacks the scope, `gh auth refresh --scopes read:packages` adds it, or use any PAT with `read:packages`. Docker Desktop stores logins in the OS keychain rather than in `~/.docker/config.json`, so keeping the login is also fine there.)
-
-The pull only needs repeating when the pinned digest changes. Then:
-
 1. Clone the repository (submodules can be left uninitialized; the bootstrap handles them) and open it in VS Code.
-2. Run **Dev Containers: Reopen in Container**. The first open builds the thin local image layer and then prints the next step.
+2. Run **Dev Containers: Reopen in Container**. The first open builds the base image (~5–10 min, cached afterwards) and the thin dev layer, then prints the next step.
 3. Build the toolchain:
 
    ```shell
@@ -73,6 +63,7 @@ First stop: `.devcontainer/smoke-test.sh` checks the container's basic health (n
 
 - **`error: Missing manifest in toolchain '1.96.0-…'`** — an interrupted first `cargo` run (e.g. Ctrl+C during the toolchain download) leaves a half-extracted toolchain, and it persists in the `solx-rustup` volume across container rebuilds. Fix: `rustup toolchain uninstall <the toolchain from the error>`, then rerun; the pinned toolchain reinstalls automatically.
 - **`llvm-sys` fails with a missing `llvm-config`** — LLVM has not been built yet (or the bootstrap was interrupted before finishing). Rerun `.devcontainer/bootstrap.sh`; ccache makes the retry cheap.
+- **The base image seems stale (e.g. an old clang after an LLVM apt bump)** — Docker's layer cache only invalidates when the Dockerfile changes, not when upstream apt packages move. Force a fresh base with `docker build --no-cache --target base -t solx-devcontainer-base .github/docker`, then rebuild the container.
 - **Files vanish or builds break mid-bootstrap in confusing ways** — the workspace is a bind mount: the container and your host checkout are the same files. Switching branches, `git clean`, or anything else that rewrites the tree on the host while a bootstrap or build runs in the container will break it in nonsensical-looking ways (and a host-side switch to a branch without `.devcontainer/` may prompt VS Code to recreate the container mid-run). Leave the checkout alone until the build finishes; the bootstrap is idempotent and resumes cheaply after a rerun.
 
 ### Rebuilding after a submodule bump
