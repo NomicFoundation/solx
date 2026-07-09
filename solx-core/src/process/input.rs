@@ -26,8 +26,6 @@ pub struct Input {
     pub code_segment: solx_utils::CodeSegment,
     /// The EVM version to produce bytecode for.
     pub evm_version: Option<solx_utils::EVMVersion>,
-    /// The mapping of auxiliary identifiers, e.g. Yul object names, to full contract paths.
-    pub identifier_paths: BTreeMap<String, String>,
     /// Solidity debug info.
     pub debug_info: Option<solx_utils::DebugInfo>,
     /// Output selection for the compilation.
@@ -55,7 +53,6 @@ impl Input {
         contract_ir: ContractIR,
         code_segment: solx_utils::CodeSegment,
         evm_version: Option<solx_utils::EVMVersion>,
-        identifier_paths: BTreeMap<String, String>,
         debug_info: Option<solx_utils::DebugInfo>,
         output_selection: solx_standard_json::InputSelection,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
@@ -71,7 +68,6 @@ impl Input {
             contract_ir,
             code_segment,
             evm_version,
-            identifier_paths,
             debug_info,
             output_selection,
             immutables,

@@ -42,8 +42,6 @@ pub struct Project {
     pub contracts: BTreeMap<String, Contract>,
     /// The Solidity AST JSONs of the source files.
     pub ast_jsons: Option<BTreeMap<String, Option<serde_json::Value>>>,
-    /// The mapping of auxiliary identifiers, e.g. Yul object names, to full contract paths.
-    pub identifier_paths: BTreeMap<String, String>,
     /// The library addresses.
     pub libraries: solx_utils::Libraries,
     /// Solidity function definitions.
@@ -63,11 +61,6 @@ impl Project {
         libraries: solx_utils::Libraries,
         debug_info: Option<solx_utils::DebugInfo>,
     ) -> Self {
-        let mut identifier_paths = BTreeMap::new();
-        for (path, contract) in contracts.iter() {
-            identifier_paths.insert(contract.identifier().to_owned(), path.to_owned());
-        }
-
         let solc_version = match language {
             solx_standard_json::InputLanguage::Solidity
             | solx_standard_json::InputLanguage::Yul => Some(
@@ -81,7 +74,6 @@ impl Project {
             solc_version,
             contracts,
             ast_jsons,
-            identifier_paths,
             libraries,
             debug_info,
         }
@@ -96,10 +88,21 @@ impl Project {
         via_ir: bool,
         solc_output: &mut solx_standard_json::Output,
         debug_info: Option<solx_utils::DebugInfo>,
+        output_selection: &solx_standard_json::InputSelection,
         output_config: Option<&solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<Self> {
         #[cfg(feature = "mlir")]
         let _ = (via_ir, output_config);
+
+        solc_output
+            .contracts
+            .values_mut()
+            .flat_map(|file| file.values_mut())
+            .filter_map(|contract| contract.evm.as_mut()?.legacy_assembly.as_mut())
+            .collect::<Vec<_>>()
+            .into_par_iter()
+            .try_for_each(|legacy_assembly| legacy_assembly.materialize())?;
+
         #[cfg(not(feature = "mlir"))]
         if !via_ir {
             let legacy_assemblies: BTreeMap<
@@ -117,7 +120,8 @@ impl Project {
                                     contract
                                         .evm
                                         .as_mut()
-                                        .and_then(|evm| evm.legacy_assembly.as_mut())?,
+                                        .and_then(|evm| evm.legacy_assembly.as_mut())
+                                        .map(|legacy_assembly| legacy_assembly.parsed_mut())?,
                                 ))
                             })
                             .collect();
@@ -161,7 +165,13 @@ impl Project {
                 let legacy_assembly = contract
                     .evm
                     .as_mut()
-                    .and_then(|evm| evm.legacy_assembly.take());
+                    .and_then(|evm| evm.legacy_assembly.take())
+                    .map(solx_standard_json::OutputContractEVMLegacyAssembly::into_parsed);
+                let output_legacy_assembly = output_selection.check_selection(
+                    name.path.as_str(),
+                    name.name.as_deref(),
+                    solx_standard_json::InputSelector::EVMLegacyAssembly,
+                );
 
                 #[cfg(feature = "mlir")]
                 let result = contract.mlir.as_ref().map(|output| {
@@ -214,7 +224,7 @@ impl Project {
                     contract.devdoc,
                     contract.storage_layout,
                     contract.transient_storage_layout,
-                    legacy_assembly,
+                    legacy_assembly.filter(|_| output_legacy_assembly),
                     contract.ir,
                     #[cfg(feature = "mlir")]
                     mlir_stages,
@@ -632,7 +642,6 @@ impl Project {
                         runtime_code_ir,
                         solx_utils::CodeSegment::Runtime,
                         evm_version,
-                        self.identifier_paths.clone(),
                         runtime_debug_info,
                         output_selection.to_owned(),
                         None,
@@ -658,7 +667,6 @@ impl Project {
                         deploy_code_ir,
                         solx_utils::CodeSegment::Deploy,
                         evm_version,
-                        self.identifier_paths.clone(),
                         deploy_debug_info,
                         output_selection.to_owned(),
                         immutables,

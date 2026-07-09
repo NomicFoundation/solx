@@ -359,6 +359,7 @@ impl<'arguments> Compiler<'arguments> {
             via_ir,
             &mut solc_output,
             Some(debug_info),
+            &solc_input.settings.output_selection,
             output_config.as_ref(),
         )?;
         run_solx_project.borrow_mut().finish();
@@ -461,6 +462,7 @@ impl<'arguments> Compiler<'arguments> {
                     via_ir,
                     &mut solc_output,
                     Some(function_definitions),
+                    &solc_input.settings.output_selection,
                     output_config.as_ref(),
                 )?;
                 run_solx_project.borrow_mut().finish();

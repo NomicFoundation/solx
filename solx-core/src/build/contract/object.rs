@@ -19,10 +19,12 @@ pub struct Object {
     /// Text assembly.
     pub assembly: Option<String>,
     /// Bytecode.
+    #[serde(with = "serde_bytes")]
     pub bytecode: Option<Vec<u8>>,
     /// Hexadecimal bytecode.
     pub bytecode_hex: Option<String>,
     /// Debug info.
+    #[serde(with = "serde_bytes")]
     pub debug_info: Option<Vec<u8>>,
     /// EVM legacy assembly IR (solx internal representation).
     pub evmla: Option<String>,
@@ -37,6 +39,7 @@ pub struct Object {
     /// Code segment.
     pub code_segment: solx_utils::CodeSegment,
     /// The metadata bytes. Only appended to runtime code.
+    #[serde(with = "serde_bytes")]
     pub metadata_bytes: Option<Vec<u8>>,
     /// Immutables of the runtime code.
     pub immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
@@ -139,7 +142,7 @@ impl Object {
     ///
     pub fn assemble(
         &self,
-        all_objects: &[&Self],
+        objects_by_id: &BTreeMap<&str, &Self>,
     ) -> anyhow::Result<inkwell::memory_buffer::MemoryBuffer> {
         let memory_buffer = self.to_memory_buffer()?;
 
@@ -148,9 +151,8 @@ impl Object {
 
         memory_buffers.extend(self.dependencies.inner.iter().map(|dependency| {
             let original_dependency_identifier = dependency.to_owned();
-            let dependency = all_objects
-                .iter()
-                .find(|object| object.identifier.as_str() == dependency.as_str())
+            let dependency = objects_by_id
+                .get(dependency.as_str())
                 .expect("Dependency not found");
             let dependency_bytecode = dependency.bytecode.as_deref().expect("Bytecode is not set");
             let memory_buffer = inkwell::memory_buffer::MemoryBuffer::create_from_memory_range(

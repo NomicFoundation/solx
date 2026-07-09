@@ -45,6 +45,11 @@ unsafe extern "C" {
     /// Get the Solidity compiler version.
     ///
     fn solidity_version() -> *const std::os::raw::c_char;
+
+    ///
+    /// Free a string allocated by the Solidity compiler.
+    ///
+    fn solidity_free(data: *const std::os::raw::c_char);
 }
 
 impl Default for Solc {
@@ -164,7 +169,7 @@ impl solx_core::Frontend for Solc {
 
         let mut error_message = std::ptr::null_mut();
         let error_pointer = &mut error_message;
-        let output_string = unsafe {
+        let mut solc_output = unsafe {
             let output_pointer = if use_import_callback {
                 solidity_compile_default_callback(
                     input_c_string.as_ptr(),
@@ -179,23 +184,23 @@ impl solx_core::Frontend for Solc {
                 solidity_compile(input_c_string.as_ptr(), std::ptr::null(), std::ptr::null())
             };
             if !error_message.is_null() {
-                let error_message = CStr::from_ptr(error_message).to_string_lossy().into_owned();
-                anyhow::bail!("solc standard JSON I/O: {error_message}");
+                let message = CStr::from_ptr(error_message).to_string_lossy().into_owned();
+                solidity_free(error_message);
+                solidity_free(output_pointer);
+                anyhow::bail!("solc standard JSON I/O: {message}");
             }
             if output_pointer.is_null() {
                 anyhow::bail!("solc standard JSON I/O returned a null pointer");
             }
-            CStr::from_ptr(output_pointer)
-                .to_string_lossy()
-                .into_owned()
-        };
-
-        let mut solc_output = match solx_utils::deserialize_from_str::<solx_standard_json::Output>(
-            output_string.as_str(),
-        ) {
-            Ok(solc_output) => solc_output,
-            Err(error) => {
-                anyhow::bail!("solc standard JSON output parsing: {error:?}");
+            let output = solx_utils::deserialize_from_slice::<solx_standard_json::Output>(
+                CStr::from_ptr(output_pointer).to_bytes(),
+            );
+            solidity_free(output_pointer);
+            match output {
+                Ok(solc_output) => solc_output,
+                Err(error) => {
+                    anyhow::bail!("solc standard JSON output parsing: {error:?}");
+                }
             }
         };
 
