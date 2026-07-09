@@ -14,6 +14,8 @@ use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::NodeId;
 
 use solx_mlir::Context;
+use solx_mlir::Contract;
+use solx_mlir::Type;
 
 use self::function::FunctionEmitter;
 use self::function::expression::call::type_conversion::TypeConversion;
@@ -37,11 +39,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
     /// Returns whether `contract` is payable (declares a `receive()` function or
     /// a `payable` `fallback()` function). Single source of truth for payability
-    /// derivation — used both when emitting the `sol.contract` op and when
+    /// derivation, used both when emitting the `sol.contract` op and when
     /// resolving `SlangType::Contract` to a `Sol_ContractType`.
-    // TODO: walk the inheritance tree like solc does (`receiveFunction` /
-    // `fallbackFunction` on `ContractDefinition`, `ContractType::isPayable`)
-    // and move this helper into Slang.
+    // TODO: walk the inheritance tree and move this into Slang.
     pub fn is_contract_payable(contract: &ContractDefinition) -> bool {
         contract.functions().iter().any(|function| {
             matches!(function.kind(), FunctionKind::Receive)
@@ -62,20 +62,20 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         self.pre_register_functions(contract);
         let storage_layout = Self::compute_storage_layout(contract);
 
-        let contract_type = self
-            .state
-            .builder
-            .types
-            .contract(&contract_name, Self::is_contract_payable(contract));
-
-        // Emit sol.contract and functions.
-        let module_body = self.state.module.body();
-        let contract_body = self.state.builder.emit_sol_contract(
+        let contract_type = Type::contract(
+            self.state.melior,
             &contract_name,
-            // TODO: investigate how other contract kinds (e.g. interface, library) should be represented in MLIR
+            Self::is_contract_payable(contract),
+        );
+
+        let module_body = self.state.module.body();
+        let sol_contract = Contract::define(
+            &contract_name,
             solx_mlir::ContractKind::Contract,
+            self.state,
             &module_body,
         );
+        let contract_body = sol_contract.body;
 
         // TODO: emit declarations for inherited state variables once derived
         // contracts compile through this path.
@@ -87,13 +87,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 continue;
             };
             let element_type =
-                TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder)?;
-            self.state.builder.emit_sol_state_var(
+                TypeConversion::resolve_state_variable_type(&state_variable, self.state)?;
+            sol_contract.declare_state_var(
                 &slot.name,
+                element_type,
                 slot.slot,
                 slot.byte_offset,
-                element_type,
-                &contract_body,
+                self.state,
             );
         }
 
@@ -122,7 +122,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             }
             let mlir_name = FunctionEmitter::mlir_function_name(&function);
             let (parameter_types, return_types) =
-                TypeConversion::resolve_function_types(&function, &self.state.builder);
+                TypeConversion::resolve_function_types(&function, self.state);
 
             self.state.register_function_signature(
                 function.node_id(),

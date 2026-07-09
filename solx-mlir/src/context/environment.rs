@@ -4,14 +4,14 @@
 
 use std::collections::HashMap;
 
-use melior::ir::Type;
-use melior::ir::Value;
+use crate::Place;
+use crate::Type;
 
 /// Tracks variable bindings (alloca'd pointers) for lexical scoping.
 ///
 /// Each variable stores the alloca'd pointer and the element type of that
-/// pointer (e.g. `ui64` for a `uint64` variable). Reads produce `sol.load`
-/// with the declared element type; writes produce `sol.store`.
+/// pointer. Reads produce `sol.load` with the declared element type; writes
+/// produce `sol.store`.
 ///
 /// Implements lexical scoping: variable lookups search from the innermost
 /// scope outward. `enter_scope()` / `exit_scope()` bracket blocks that
@@ -19,7 +19,7 @@ use melior::ir::Value;
 pub struct Environment<'context, 'block> {
     /// Stack of scopes, each mapping variable names to `(pointer, element_type)`.
     /// The outermost scope (index 0) holds function parameters.
-    scopes: Vec<HashMap<String, (Value<'context, 'block>, Type<'context>)>>,
+    scopes: Vec<HashMap<String, (Place<'context, 'block>, Type<'context>)>>,
 }
 
 impl<'context, 'block> Default for Environment<'context, 'block> {
@@ -55,7 +55,7 @@ impl<'context, 'block> Environment<'context, 'block> {
     pub fn define_variable(
         &mut self,
         name: String,
-        pointer: Value<'context, 'block>,
+        pointer: Place<'context, 'block>,
         element_type: Type<'context>,
     ) {
         self.scopes
@@ -77,7 +77,7 @@ impl<'context, 'block> Environment<'context, 'block> {
     // TODO: key on the Slang `NodeId` of the declaration instead of the textual
     // name to disambiguate same-named locals across scopes without relying on
     // `enter_scope`/`exit_scope` discipline at the call sites.
-    pub fn variable_with_type(&self, name: &str) -> (Value<'context, 'block>, Type<'context>) {
+    pub fn variable_with_type(&self, name: &str) -> (Place<'context, 'block>, Type<'context>) {
         for scope in self.scopes.iter().rev() {
             if let Some(entry) = scope.get(name) {
                 return *entry;

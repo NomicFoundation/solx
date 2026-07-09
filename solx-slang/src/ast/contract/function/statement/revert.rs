@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
 use melior::ir::BlockRef;
-use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
@@ -12,6 +11,9 @@ use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::NamedArguments;
 use slang_solidity_v2::ast::Parameters;
 use slang_solidity_v2::ast::RevertStatement;
+
+use solx_mlir::Effect;
+use solx_mlir::Value;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
@@ -51,7 +53,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let error = match revert.error().resolve_to_definition() {
             None => {
-                self.state.builder.emit_sol_revert("", &[], false, &block);
+                Effect::new(self.state, block).revert("", &[], false);
                 return Ok(Some(block));
             }
             Some(Definition::Error(error)) => error,
@@ -79,17 +81,19 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     .get_type()
                     .expect("parameter type resolved by semantic analysis"),
                 None,
-                &self.state.builder,
+                self.state,
             );
-            *value = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(
+            *value = TypeConversion::from_target_type(parameter_type, self.state).emit(
                 *value,
-                &self.state.builder,
+                self.state,
                 &evaluated.block,
             );
         }
-        self.state
-            .builder
-            .emit_sol_revert(&signature, &evaluated.values, true, &evaluated.block);
+        Effect::new(self.state, evaluated.block).revert(
+            &signature,
+            evaluated.values.as_slice(),
+            true,
+        );
         Ok(Some(evaluated.block))
     }
 
@@ -136,9 +140,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             Some(_) => anyhow::bail!("revert message must be a string literal"),
         };
-        self.state
-            .builder
-            .emit_sol_revert(&signature, &[], false, &block);
+        Effect::new(self.state, block).revert(&signature, &[], false);
         Ok(Some(block))
     }
 

@@ -12,9 +12,9 @@ pub struct StorageSlot {
     /// Byte offset within the slot. Non-zero only for variables packed
     /// into a shared slot.
     pub byte_offset: u32,
-    /// MLIR symbol name, formatted as `{label}_{node_id}` to match solc.
-    /// The slang AST node id disambiguates like-named variables across
-    /// inherited contracts.
+    /// MLIR symbol name, formatted as `{label}_{node_id}`. The slang AST
+    /// node id disambiguates like-named variables across inherited
+    /// contracts.
     pub name: String,
 }
 

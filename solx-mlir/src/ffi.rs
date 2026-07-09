@@ -6,12 +6,10 @@
 //! libraries built from solx-llvm.
 //!
 
-use mlir_sys::MlirBlock;
 use mlir_sys::MlirContext;
 use mlir_sys::MlirDialectHandle;
 use mlir_sys::MlirDialectRegistry;
 use mlir_sys::MlirPass;
-use mlir_sys::MlirRegion;
 
 unsafe extern "C" {
     // ---- Sol dialect registration ----
@@ -167,26 +165,4 @@ unsafe extern "C" {
         base_addr_ty: mlir_sys::MlirType,
         element_type: mlir_sys::MlirType,
     ) -> mlir_sys::MlirType;
-
-    // ---- MLIR core (not in mlir-sys) ----
-
-    /// Returns the region that owns the given block.
-    pub fn mlirBlockGetParentRegion(block: MlirBlock) -> MlirRegion;
-}
-
-/// Returns the parent region of a block as a `RegionRef`.
-///
-/// # Safety
-///
-/// The block must be attached to a region (i.e., not detached).
-pub fn block_parent_region<'context, 'block>(
-    block: &melior::ir::BlockRef<'context, 'block>,
-) -> melior::ir::RegionRef<'context, 'block> {
-    // SAFETY: The block is attached (guaranteed by melior's ownership model).
-    // `mlirBlockGetParentRegion` returns a non-owning handle to the parent.
-    unsafe {
-        melior::ir::RegionRef::from_raw(mlirBlockGetParentRegion(melior::ir::BlockLike::to_raw(
-            block,
-        )))
-    }
 }

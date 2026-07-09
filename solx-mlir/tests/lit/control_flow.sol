@@ -7,13 +7,20 @@
 // CHECK:   } else {
 // CHECK:     sol.return
 
+// CHECK: sol.func @{{.*if_no_else.*}}
+// CHECK:   sol.if %{{.*}} {
+// CHECK:     sol.store
+// CHECK:     sol.yield
+// CHECK:   } else {
+// CHECK-NOT: sol.yield
+// CHECK:   sol.load
+
 // CHECK: sol.func @{{.*while_loop.*}}
 // CHECK:   sol.while {
 // CHECK:     sol.condition %{{.*}}
 // CHECK:   } do {
 // CHECK:     sol.yield
 
-// For-loop step uses unchecked add (sol.add not sol.cadd)
 // CHECK: sol.func @{{.*for_loop.*}}
 // CHECK:   sol.for cond {
 // CHECK:     sol.condition %{{.*}}
@@ -55,6 +62,12 @@ contract C {
             return 1;
         } else {
             return 0;
+        }
+    }
+
+    function if_no_else(uint256 condition) public pure returns (uint256 x) {
+        if (condition > 10) {
+            x = condition + 1;
         }
     }
 

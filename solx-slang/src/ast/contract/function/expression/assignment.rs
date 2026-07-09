@@ -2,14 +2,14 @@
 //! Assignment expression lowering.
 //!
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Type;
-use melior::ir::Value;
-use melior::ir::ValueLike;
 use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+
+use solx_mlir::Place;
+use solx_mlir::Type;
+use solx_mlir::Value;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
@@ -22,8 +22,8 @@ enum AssignmentTarget<'context, 'block> {
     ///
     /// Covers local variables, function parameters, and the result of an
     /// `a[i]` / `m[k]` index-access expression on the left-hand side.
-    Pointer(Value<'context, 'block>, Type<'context>),
-    /// State variable — storage slot and declared element type.
+    Place(Place<'context, 'block>, Type<'context>),
+    /// State variable: storage slot and declared element type.
     Storage(StorageSlot, Type<'context>),
 }
 
@@ -53,16 +53,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             .get(&state_variable.node_id())
                             .ok_or_else(|| anyhow::anyhow!("unregistered state variable: {name}"))?
                             .clone();
-                        let element_type = TypeConversion::resolve_slang_type(
-                            &declared_type,
-                            None,
-                            &self.state.builder,
-                        );
+                        let element_type =
+                            TypeConversion::resolve_slang_type(&declared_type, None, self.state);
                         AssignmentTarget::Storage(slot, element_type)
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                         let (pointer, element_type) = self.environment.variable_with_type(&name);
-                        AssignmentTarget::Pointer(pointer, element_type)
+                        AssignmentTarget::Place(pointer, element_type)
                     }
                     None => unreachable!("slang resolves every identifier reference"),
                     Some(_) => unimplemented!(
@@ -79,7 +76,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         "assignment to a reference-typed `a[i]` element in storage/calldata is not yet supported"
                     );
                 }
-                (AssignmentTarget::Pointer(address, element_type), block)
+                (AssignmentTarget::Place(address, element_type), block)
             }
             Expression::MemberAccessExpression(access) => {
                 let (address, element_type, block) = self
@@ -90,7 +87,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         "assignment to a reference-typed struct field in storage/calldata is not yet supported"
                     );
                 }
-                (AssignmentTarget::Pointer(address, element_type), block)
+                (AssignmentTarget::Place(address, element_type), block)
             }
             _ => unimplemented!(
                 "assignment target {:?} is not yet supported",
@@ -126,61 +123,34 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 ast::AssignmentExpressionOperator::SlashEqual(_) => Operator::Divide,
             };
             let (old, target_type) = match &target {
-                AssignmentTarget::Pointer(pointer, element_type) => {
-                    let old = self
-                        .state
-                        .builder
-                        .emit_sol_load(*pointer, *element_type, &block)?;
+                AssignmentTarget::Place(pointer, element_type) => {
+                    let old = pointer.load(*element_type, self.state, &block);
                     (old, *element_type)
                 }
                 AssignmentTarget::Storage(slot, element_type) => {
-                    let old = self.emit_storage_load(slot, *element_type, &block)?;
+                    let old = self.emit_storage_load(slot, *element_type, &block);
                     (old, *element_type)
                 }
             };
             let (rhs, block) = self.emit_value(&right, block)?;
-            let old = TypeConversion::from_target_type(target_type, &self.state.builder).emit(
-                old,
-                &self.state.builder,
-                &block,
-            );
-            let rhs = TypeConversion::from_target_type(target_type, &self.state.builder).emit(
-                rhs,
-                &self.state.builder,
-                &block,
-            );
-            let result = block
-                .append_operation(operator.emit_sol_binary_operation(
-                    self.checked,
-                    self.state.builder.context,
-                    self.state.builder.unknown_location,
-                    old,
-                    rhs,
-                ))
-                .result(0)
-                .expect("binary operation always produces one result")
-                .into();
+            let old = TypeConversion::from_target_type(target_type, self.state)
+                .emit(old, self.state, &block);
+            let rhs = TypeConversion::from_target_type(target_type, self.state)
+                .emit(rhs, self.state, &block);
+            let result = operator.emit(self.checked, old, rhs, self.state, &block);
             (result, block)
         };
 
         let result = match &target {
-            AssignmentTarget::Pointer(pointer, element_type) => {
-                let stored_value = TypeConversion::from_target_type(
-                    *element_type,
-                    &self.state.builder,
-                )
-                .emit(value, &self.state.builder, &block);
-                self.state
-                    .builder
-                    .emit_sol_store(stored_value, *pointer, &block);
+            AssignmentTarget::Place(pointer, element_type) => {
+                let stored_value = TypeConversion::from_target_type(*element_type, self.state)
+                    .emit(value, self.state, &block);
+                pointer.store(stored_value, self.state, &block);
                 stored_value
             }
             AssignmentTarget::Storage(slot, element_type) => {
-                let stored_value = TypeConversion::from_target_type(
-                    *element_type,
-                    &self.state.builder,
-                )
-                .emit(value, &self.state.builder, &block);
+                let stored_value = TypeConversion::from_target_type(*element_type, self.state)
+                    .emit(value, self.state, &block);
                 self.emit_storage_store(slot, stored_value, *element_type, &block);
                 stored_value
             }

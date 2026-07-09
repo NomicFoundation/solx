@@ -167,10 +167,10 @@ impl Frontend for Slang {
                 continue;
             };
             let source_unit = file.ast();
-            let melior_context = solx_mlir::Context::create_mlir_context();
+            let melior = solx_mlir::Context::create_melior_context();
 
             let evm_version = input_json.settings.evm_version.unwrap_or_default();
-            let mut context = solx_mlir::Context::new(&melior_context, evm_version);
+            let mut context = solx_mlir::Context::new(&melior, evm_version);
             let mut emitter = AstEmitter::new(&mut context);
             let Some((contract_name, method_identifiers)) = emitter.emit(&source_unit)? else {
                 continue;
@@ -214,7 +214,7 @@ impl Frontend for Slang {
         paths: &[PathBuf],
         libraries: solx_utils::Libraries,
     ) -> anyhow::Result<solx_standard_json::Output> {
-        let mut solc_input = solx_standard_json::Input::from_yul_paths(
+        let mut input = solx_standard_json::Input::from_yul_paths(
             paths,
             libraries,
             solx_standard_json::InputOptimizer::default(),
@@ -223,14 +223,14 @@ impl Frontend for Slang {
             vec![],
         );
 
-        self.validate_yul_standard_json(&mut solc_input)
+        self.validate_yul_standard_json(&mut input)
     }
 
     fn validate_yul_standard_json(
         &self,
-        solc_input: &mut solx_standard_json::Input,
+        input: &mut solx_standard_json::Input,
     ) -> anyhow::Result<solx_standard_json::Output> {
-        let mut output = solx_standard_json::Output::new(&solc_input.sources);
+        let mut output = solx_standard_json::Output::new(&input.sources);
         output
             .errors
             .push(solx_standard_json::OutputError::new_error(
