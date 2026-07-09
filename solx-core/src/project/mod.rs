@@ -94,11 +94,30 @@ impl Project {
         #[cfg(feature = "mlir")]
         let _ = (via_ir, output_config);
 
+        // Parse only the legacy assemblies that are actually read: the EVMLA
+        // pipeline lowers them into its compile IR, and any pipeline emits them
+        // when the output selection requests them. A via-IR compile that does
+        // not request legacy assembly never touches the tree, so leave it `Raw`
+        // and skip its (serial-head-bound) parse.
         solc_output
             .contracts
-            .values_mut()
-            .flat_map(|file| file.values_mut())
-            .filter_map(|contract| contract.evm.as_mut()?.legacy_assembly.as_mut())
+            .iter_mut()
+            .flat_map(|(path, file)| {
+                file.iter_mut()
+                    .map(move |(name, contract)| (path, name, contract))
+            })
+            .filter_map(|(path, name, contract)| {
+                if via_ir
+                    && !output_selection.check_selection(
+                        path.as_str(),
+                        Some(name.as_str()),
+                        solx_standard_json::InputSelector::EVMLegacyAssembly,
+                    )
+                {
+                    return None;
+                }
+                contract.evm.as_mut()?.legacy_assembly.as_mut()
+            })
             .collect::<Vec<_>>()
             .into_par_iter()
             .try_for_each(|legacy_assembly| legacy_assembly.materialize())?;
@@ -162,16 +181,19 @@ impl Project {
                     .evm
                     .as_mut()
                     .and_then(|evm| evm.method_identifiers.take());
-                let legacy_assembly = contract
-                    .evm
-                    .as_mut()
-                    .and_then(|evm| evm.legacy_assembly.take())
-                    .map(solx_standard_json::OutputContractEVMLegacyAssembly::into_parsed);
                 let output_legacy_assembly = output_selection.check_selection(
                     name.path.as_str(),
                     name.name.as_deref(),
                     solx_standard_json::InputSelector::EVMLegacyAssembly,
                 );
+                // Mirror the materialization gate above: an assembly left `Raw`
+                // there (via-IR, not selected as output) is never unwrapped.
+                let legacy_assembly = contract
+                    .evm
+                    .as_mut()
+                    .and_then(|evm| evm.legacy_assembly.take())
+                    .filter(|_| !via_ir || output_legacy_assembly)
+                    .map(solx_standard_json::OutputContractEVMLegacyAssembly::into_parsed);
 
                 #[cfg(feature = "mlir")]
                 let result = contract.mlir.as_ref().map(|output| {
