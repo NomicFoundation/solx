@@ -23,6 +23,13 @@ ccache --set-config=max_size=20G
 echo "==> Initializing submodules (shallow, as in CI)"
 git submodule update --init --recursive --depth 1
 
+# Boost artifacts land inside the solx-solidity submodule and are not in the
+# fork's .gitignore; without this local exclude, git status enumerates the
+# extracted Boost tree (tens of thousands of files) and VS Code's git
+# extension drowns in it ("too many changes").
+EXCLUDE_FILE=$(git -C solx-solidity rev-parse --git-path info/exclude)
+grep -qxF '/boost*' "${EXCLUDE_FILE}" 2>/dev/null || echo '/boost*' >> "${EXCLUDE_FILE}"
+
 echo "==> Building solx-dev"
 cargo build --release --bin solx-dev
 
