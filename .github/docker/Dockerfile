@@ -141,9 +141,15 @@ FROM base AS dev
 # created in the bind-mounted workspace belong to the host user (the
 # devcontainer runtime remaps the UID/GID to the host's on Linux).
 # ubuntu:26.04 ships a default `ubuntu` user squatting UID 1000; replace it.
+#
+# valgrind comes from apt here (seconds), unlike the ci stage's pinned
+# from-source build — dev needs a working valgrind, not CI's exact version.
+# Keeping it in the image (rather than ad-hoc installs) also keeps LLVM's
+# cmake valgrind detection stable across container rebuilds; the persistent
+# target-llvm build tree bakes it in.
 ARG USERNAME=dev
 RUN userdel --remove ubuntu 2>/dev/null; \
-    apt-get update && apt-get install -y --no-install-recommends sudo \
+    apt-get update && apt-get install -y --no-install-recommends sudo valgrind \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 1000 --user-group --create-home --shell /bin/bash ${USERNAME} \
     && echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} \
