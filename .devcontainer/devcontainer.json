@@ -43,7 +43,26 @@
                 // works in the solx-llvm submodule once LLVM has been built.
                 "clangd.arguments": [
                     "--compile-commands-dir=${workspaceFolder}/target-llvm/build-final"
-                ]
+                ],
+                // VS Code's default excludes don't know Rust: without these,
+                // the server watches/searches the build trees (target-llvm
+                // alone is hundreds of thousands of files once built) and
+                // starves its event loop — symptom: multi-second keystroke
+                // lag in integrated terminals after the first bootstrap.
+                "files.watcherExclude": {
+                    "**/target/**": true,
+                    "**/target-slang/**": true,
+                    "**/target-llvm/**": true,
+                    "**/solx-solidity/build/**": true,
+                    "**/solx-solidity/boost/**": true
+                },
+                "search.exclude": {
+                    "**/target": true,
+                    "**/target-slang": true,
+                    "**/target-llvm": true,
+                    "**/solx-solidity/build": true,
+                    "**/solx-solidity/boost": true
+                }
             }
         }
     }
