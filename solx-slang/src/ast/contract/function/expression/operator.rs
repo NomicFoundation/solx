@@ -2,8 +2,6 @@
 //! Solidity operator parsed from source text.
 //!
 
-use melior::ir::BlockRef;
-
 use solx_mlir::Context;
 use solx_mlir::Value;
 
@@ -99,29 +97,25 @@ impl Operator {
     /// # Panics
     ///
     /// Panics if called on a comparison or assignment operator.
-    pub fn emit<'context, 'block>(
+    pub fn emit<'context>(
         self,
         checked: bool,
-        lhs: Value<'context, 'block>,
-        rhs: Value<'context, 'block>,
+        lhs: Value<'context>,
+        rhs: Value<'context>,
         context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block>
-    where
-        'context: 'block,
-    {
+    ) -> Value<'context> {
         match self {
-            Self::Add | Self::Increment => lhs.add(rhs, checked, context, block),
-            Self::Subtract | Self::Decrement => lhs.subtract(rhs, checked, context, block),
-            Self::Multiply => lhs.multiply(rhs, checked, context, block),
-            Self::Divide => lhs.divide(rhs, checked, context, block),
-            Self::Remainder => lhs.remainder(rhs, context, block),
-            Self::Exponentiation => lhs.exponentiate(rhs, checked, context, block),
-            Self::BitwiseAnd => lhs.bitand(rhs, context, block),
-            Self::BitwiseOr => lhs.bitor(rhs, context, block),
-            Self::BitwiseXor => lhs.bitxor(rhs, context, block),
-            Self::ShiftLeft => lhs.shl(rhs, context, block),
-            Self::ShiftRight => lhs.shr(rhs, context, block),
+            Self::Add | Self::Increment => lhs.add(rhs, checked, context),
+            Self::Subtract | Self::Decrement => lhs.subtract(rhs, checked, context),
+            Self::Multiply => lhs.multiply(rhs, checked, context),
+            Self::Divide => lhs.divide(rhs, checked, context),
+            Self::Remainder => lhs.remainder(rhs, context),
+            Self::Exponentiation => lhs.exponentiate(rhs, checked, context),
+            Self::BitwiseAnd => lhs.bitand(rhs, context),
+            Self::BitwiseOr => lhs.bitor(rhs, context),
+            Self::BitwiseXor => lhs.bitxor(rhs, context),
+            Self::ShiftLeft => lhs.shl(rhs, context),
+            Self::ShiftRight => lhs.shr(rhs, context),
             _ => unreachable!("emit called on non-arithmetic operator: {self:?}"),
         }
     }

@@ -3,7 +3,6 @@
 //!
 
 use melior::ir::Attribute;
-use melior::ir::BlockLike;
 
 use crate::Context;
 use crate::Type;
@@ -11,22 +10,17 @@ use crate::Value;
 use crate::ods::sol::DecodeOperation;
 use crate::ods::sol::EncodeOperation;
 
-impl<'context, 'block> Value<'context, 'block> {
+impl<'context> Value<'context> {
     /// Emits `sol.encode` producing a `bytes memory` payload from `inputs`.
     ///
     /// A `selector`, when present, is prepended as the first four bytes and must already be
     /// `!sol.fixed_bytes<4>`. `packed` selects the ABI-packed encoding (no per-element padding).
-    pub fn encode<B>(
+    pub fn encode(
         inputs: &[Self],
         selector: Option<Self>,
         packed: bool,
         context: &Context<'context>,
-        block: &B,
-    ) -> Self
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
+    ) -> Self {
         let inputs = inputs
             .iter()
             .map(|element| element.into_mlir())
@@ -41,29 +35,19 @@ impl<'context, 'block> Value<'context, 'block> {
         if packed {
             builder = builder.packed(Attribute::unit(context.melior));
         }
-        Self::new(
-            block
+        Self::from(
+            context
+                .current_block()
                 .append_operation(builder.build().into())
                 .result(0)
-                .expect("sol.encode always produces one result")
-                .into(),
+                .expect("sol.encode always produces one result"),
         )
     }
 
     /// Emits `sol.decode` recovering a single value of `result_type` from the `payload` bytes.
-    pub fn decode<B>(
-        payload: Self,
-        result_type: Type<'context>,
-        context: &Context<'context>,
-        block: &B,
-    ) -> Self
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        Self::new(mlir_op!(
+    pub fn decode(payload: Self, result_type: Type<'context>, context: &Context<'context>) -> Self {
+        Self::from(mlir_op!(
             context,
-            block,
             DecodeOperation
                 .addr(payload)
                 .outs(&[result_type.into_mlir()])

@@ -2,7 +2,6 @@
 //! Solidity type conversion classification and dispatch.
 //!
 
-use melior::ir::BlockRef;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::LiteralKind;
@@ -252,34 +251,26 @@ impl<'context> TypeConversion<'context> {
     }
 
     /// Emits the conversion, returning the cast value.
-    pub fn emit<'block>(
-        self,
-        value: Value<'context, 'block>,
-        context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block>
-    where
-        'context: 'block,
-    {
+    pub fn emit(self, value: Value<'context>, context: &Context<'context>) -> Value<'context> {
         if value.r#type() == self.to_target_type(context) {
             return value;
         }
         match self {
             Self::Bool => {
-                let zero = Value::constant(0, value.r#type(), context, block);
-                value.compare(zero, CmpPredicate::Ne, context, block)
+                let zero = Value::constant(0, value.r#type(), context);
+                value.compare(zero, CmpPredicate::Ne, context)
             }
             Self::Address => {
                 let address_type = Type::address(context.melior, false);
                 let truncated = if value.r#type().is_integer() {
                     let ui160 = Type::unsigned(context.melior, solx_utils::BIT_LENGTH_ETH_ADDRESS);
-                    value.cast(ui160, context, block)
+                    value.cast(ui160, context)
                 } else {
                     value
                 };
-                truncated.address_cast(address_type, context, block)
+                truncated.address_cast(address_type, context)
             }
-            Self::Cast(target_type) => value.cast(target_type, context, block),
+            Self::Cast(target_type) => value.cast(target_type, context),
         }
     }
 }

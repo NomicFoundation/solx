@@ -8,7 +8,6 @@ pub mod storage_slot;
 
 use std::collections::HashMap;
 
-use melior::ir::BlockRef;
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ElementaryType;
@@ -18,8 +17,8 @@ use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::TypeName;
 
+use solx_mlir::Block;
 use solx_mlir::Context;
-use solx_mlir::Effect;
 use solx_mlir::Environment;
 use solx_mlir::Function;
 use solx_mlir::Place;
@@ -33,9 +32,7 @@ use self::statement::StatementEmitter;
 use self::storage_slot::StorageSlot;
 
 /// Lowers a Solidity function definition to a `sol.func` operation.
-pub struct FunctionEmitter<'state, 'context> {
-    /// The shared MLIR context.
-    state: &'state Context<'context>,
+pub struct FunctionEmitter<'state> {
     /// Containing contract.
     contract: &'state ContractDefinition,
     /// State variable node ID to `(slot, byte_offset)` mapping. The byte
@@ -44,15 +41,13 @@ pub struct FunctionEmitter<'state, 'context> {
     storage_layout: &'state HashMap<NodeId, StorageSlot>,
 }
 
-impl<'state, 'context> FunctionEmitter<'state, 'context> {
+impl<'state> FunctionEmitter<'state> {
     /// Creates a new function emitter.
     pub fn new(
-        state: &'state Context<'context>,
         contract: &'state ContractDefinition,
         storage_layout: &'state HashMap<NodeId, StorageSlot>,
     ) -> Self {
         Self {
-            state,
             contract,
             storage_layout,
         }
@@ -64,10 +59,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// # Errors
     ///
     /// Returns an error if the function body contains unsupported statements.
-    pub fn emit_sol(
+    pub fn emit_sol<'context>(
         &self,
         function: &FunctionDefinition,
-        contract_body: &BlockRef<'context, '_>,
+        contract_body: Block<'context>,
+        context: &mut Context<'context>,
     ) -> anyhow::Result<String> {
         let Some(ref body) = function.body() else {
             return Ok(Self::mlir_function_name(function));
@@ -77,7 +73,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mlir_name = Self::mlir_function_name(function);
 
         let (mlir_parameter_types, result_types) =
-            TypeConversion::resolve_function_types(function, self.state);
+            TypeConversion::resolve_function_types(function, context);
 
         let selector = function.compute_selector();
 
@@ -100,9 +96,10 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             selector,
             state_mutability,
             mlir_kind,
-            self.state,
+            context,
             contract_body,
         );
+        context.current_block = Some(function_entry_block);
 
         let mut environment = Environment::new();
 
@@ -112,14 +109,14 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 .map(|id| id.name())
                 .unwrap_or_else(|| "_".to_owned());
             let parameter_type = mlir_parameter_types[index];
-            let parameter_value = Value::argument(&function_entry_block, index);
-            let pointer = Place::stack(parameter_type, self.state, &function_entry_block);
-            pointer.store(parameter_value, self.state, &function_entry_block);
+            let parameter_value = function_entry_block.argument(index);
+            let pointer = Place::stack(parameter_type, context);
+            pointer.store(parameter_value, context);
 
             environment.define_variable(parameter_name, pointer, parameter_type);
         }
 
-        let mut return_slots: Vec<Option<Place<'context, '_>>> = Vec::new();
+        let mut return_slots: Vec<Option<Place<'context>>> = Vec::new();
         if let Some(returns) = function.returns() {
             for (index, parameter) in returns.iter().enumerate() {
                 let Some(identifier) = parameter.name() else {
@@ -127,12 +124,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     continue;
                 };
                 let return_type = result_types[index];
-                let pointer = Place::stack(return_type, self.state, &function_entry_block);
+                let pointer = Place::stack(return_type, context);
                 // TODO: replace with a typed-zero helper covering address, fixed-bytes, and
                 // memory-resident types.
                 if return_type.is_integer() {
-                    let zero = Value::constant(0, return_type, self.state, &function_entry_block);
-                    pointer.store(zero, self.state, &function_entry_block);
+                    let zero = Value::constant(0, return_type, context);
+                    pointer.store(zero, context);
                 } else {
                     unimplemented!(
                         "zero-initialization for non-integer named return: {return_type}"
@@ -143,33 +140,22 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             }
         }
 
-        let mut current_block = function_entry_block;
-
         if matches!(function.kind(), FunctionKind::Constructor) {
-            let emitter =
-                ExpressionEmitter::new(self.state, &environment, self.storage_layout, true);
-            current_block = emitter.emit_state_var_initializers(self.contract, current_block)?;
+            let emitter = ExpressionEmitter::new(&environment, self.storage_layout, true);
+            emitter.emit_state_var_initializers(self.contract, context)?;
         }
 
-        let mut terminated = false;
         for statement in body.statements().iter() {
-            let mut emitter = StatementEmitter::new(
-                self.state,
-                &mut environment,
-                self.storage_layout,
-                &result_types,
-            );
-            match emitter.emit(&statement, current_block)? {
-                Some(next) => current_block = next,
-                None => {
-                    terminated = true;
-                    break;
-                }
+            let mut emitter =
+                StatementEmitter::new(&mut environment, self.storage_layout, &result_types);
+            emitter.emit(&statement, context)?;
+            if context.current_block().is_terminated() {
+                break;
             }
         }
 
-        if !terminated {
-            self.emit_default_return(&result_types, &return_slots, &current_block);
+        if !context.current_block().is_terminated() {
+            Self::emit_default_return(&result_types, &return_slots, context);
         }
 
         Ok(mlir_name)
@@ -186,22 +172,28 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Returns an error if a state-variable initializer has an unresolved
     /// type or contains unsupported constructs, or if the explicit
     /// constructor body contains unsupported statements.
-    pub fn emit_constructor(&self, contract_body: &BlockRef<'context, '_>) -> anyhow::Result<()> {
+    pub fn emit_constructor<'context>(
+        &self,
+        contract_body: Block<'context>,
+        context: &mut Context<'context>,
+    ) -> anyhow::Result<()> {
         if let Some(constructor) = self.contract.constructor() {
-            self.emit_sol(&constructor, contract_body)?;
+            self.emit_sol(&constructor, contract_body, context)?;
             return Ok(());
         }
         let entry = Function::new("constructor()".to_owned(), Vec::new(), Vec::new()).define(
             None,
             StateMutability::NonPayable,
             Some(solx_mlir::FunctionKind::Constructor),
-            self.state,
+            context,
             contract_body,
         );
+        context.current_block = Some(entry);
         let environment = Environment::new();
-        let emitter = ExpressionEmitter::new(self.state, &environment, self.storage_layout, true);
-        let block = emitter.emit_state_var_initializers(self.contract, entry)?;
-        Effect::new(self.state, block).r#return(&[]);
+        let emitter = ExpressionEmitter::new(&environment, self.storage_layout, true);
+        emitter.emit_state_var_initializers(self.contract, context)?;
+        let block = context.current_block();
+        block.r#return(&[], context);
         Ok(())
     }
 
@@ -282,29 +274,26 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
     }
 
-    /// Emits a default `sol.return` if the block lacks a terminator.
+    /// Emits a default `sol.return`.
     ///
     /// For each return position, loads the current value from the named-return
     /// slot when one was allocated, otherwise materializes a typed zero
     /// constant.
-    fn emit_default_return(
-        &self,
+    fn emit_default_return<'context>(
         result_types: &[Type<'context>],
-        return_slots: &[Option<Place<'context, '_>>],
-        block: &BlockRef<'context, '_>,
+        return_slots: &[Option<Place<'context>>],
+        context: &mut Context<'context>,
     ) {
-        if Effect::new(self.state, *block).is_terminated() {
-            return;
-        }
-        let mut values: Vec<Value<'context, '_>> = Vec::with_capacity(result_types.len());
+        let mut values: Vec<Value<'context>> = Vec::with_capacity(result_types.len());
         for (index, result_type) in result_types.iter().enumerate() {
             let value = match return_slots.get(index).copied().flatten() {
-                Some(pointer) => pointer.load(*result_type, self.state, block),
-                None => Value::constant(0, *result_type, self.state, block),
+                Some(pointer) => pointer.load(*result_type, context),
+                None => Value::constant(0, *result_type, context),
             };
             values.push(value);
         }
-        Effect::new(self.state, *block).r#return(&values);
+        let block = context.current_block();
+        block.r#return(&values, context);
     }
 
     /// Maps Slang's `FunctionMutability` to the Sol dialect's `StateMutability`.

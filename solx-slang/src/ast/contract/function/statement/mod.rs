@@ -9,14 +9,12 @@ pub mod variable_declaration;
 
 use std::collections::HashMap;
 
-use melior::ir::BlockRef;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Statement;
 use slang_solidity_v2::ast::Statements;
 
 use solx_mlir::Context;
-use solx_mlir::Effect;
 use solx_mlir::Environment;
 use solx_mlir::Type;
 
@@ -26,13 +24,11 @@ use crate::ast::contract::function::storage_slot::StorageSlot;
 
 /// Lowers Solidity statements to MLIR operations with control flow.
 ///
-/// Returns `Some(block)` as the continuation block, or `None` when control
-/// flow has been terminated by `return`, `break`, or `continue`.
-pub struct StatementEmitter<'state, 'context, 'block> {
-    /// The shared MLIR context.
-    state: &'state Context<'context>,
+/// Statements append at the insertion cursor and reposition it; `return`,
+/// `break`, and `continue` terminate the block the cursor points at.
+pub struct StatementEmitter<'state, 'context> {
     /// Variable environment (mutable for new declarations and loop targets).
-    environment: &'state mut Environment<'context, 'block>,
+    environment: &'state mut Environment<'context>,
     /// State variable node ID to storage slot mapping.
     storage_layout: &'state HashMap<NodeId, StorageSlot>,
     /// The function's declared return types, for `emit_return` to cast to.
@@ -43,16 +39,14 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     checked: bool,
 }
 
-impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
+impl<'state, 'context> StatementEmitter<'state, 'context> {
     /// Creates a new statement emitter.
     pub fn new(
-        state: &'state Context<'context>,
-        environment: &'state mut Environment<'context, 'block>,
+        environment: &'state mut Environment<'context>,
         storage_layout: &'state HashMap<NodeId, StorageSlot>,
         return_types: &'state [Type<'context>],
     ) -> Self {
         Self {
-            state,
             environment,
             storage_layout,
             return_types,
@@ -60,10 +54,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         }
     }
 
-    /// Emits MLIR for a statement.
-    ///
-    /// Returns `Some(block)` as the continuation block for the next statement,
-    /// or `None` if control flow was terminated.
+    /// Emits MLIR for a statement, appending at and repositioning the insertion cursor.
     ///
     /// # Errors
     ///
@@ -71,11 +62,11 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     pub fn emit(
         &mut self,
         statement: &Statement,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        context: &mut Context<'context>,
+    ) -> anyhow::Result<()> {
         match statement {
             Statement::VariableDeclarationStatement(declaration) => {
-                self.emit_variable_declaration(declaration, block)
+                self.emit_variable_declaration(declaration, context)
             }
             Statement::ExpressionStatement(expression_statement) => {
                 let expression = expression_statement.expression();
@@ -83,36 +74,32 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     && let Expression::Identifier(identifier) = call.operand()
                     && identifier.name() == revert::IDENTIFIER
                 {
-                    return self.emit_revert_call(call, block);
+                    return self.emit_revert_call(call, context);
                 }
-                let emitter = ExpressionEmitter::new(
-                    self.state,
-                    self.environment,
-                    self.storage_layout,
-                    self.checked,
-                );
-                let (_, block) = emitter.emit(&expression, block)?;
-                Ok(Some(block))
+                let emitter =
+                    ExpressionEmitter::new(self.environment, self.storage_layout, self.checked);
+                emitter.emit(&expression, context)?;
+                Ok(())
             }
             Statement::ReturnStatement(return_statement) => {
-                self.emit_return(return_statement, block)
+                self.emit_return(return_statement, context)
             }
-            Statement::IfStatement(if_statement) => self.emit_if(if_statement, block),
-            Statement::ForStatement(for_statement) => self.emit_for(for_statement, block),
-            Statement::WhileStatement(while_statement) => self.emit_while(while_statement, block),
-            Statement::DoWhileStatement(do_while) => self.emit_do_while(do_while, block),
-            Statement::BreakStatement(_) => self.emit_break(block),
-            Statement::ContinueStatement(_) => self.emit_continue(block),
-            Statement::Block(inner) => self.emit_block(inner.statements(), block),
+            Statement::IfStatement(if_statement) => self.emit_if(if_statement, context),
+            Statement::ForStatement(for_statement) => self.emit_for(for_statement, context),
+            Statement::WhileStatement(while_statement) => self.emit_while(while_statement, context),
+            Statement::DoWhileStatement(do_while) => self.emit_do_while(do_while, context),
+            Statement::BreakStatement(_) => self.emit_break(context),
+            Statement::ContinueStatement(_) => self.emit_continue(context),
+            Statement::Block(inner) => self.emit_block(inner.statements(), context),
             Statement::UncheckedBlock(inner) => {
                 let saved_checked = self.checked;
                 self.checked = false;
-                let result = self.emit_block(inner.block().statements(), block);
+                let result = self.emit_block(inner.block().statements(), context);
                 self.checked = saved_checked;
                 result
             }
-            Statement::RevertStatement(revert) => self.emit_revert(revert, block),
-            Statement::EmitStatement(emit_statement) => self.emit_event(emit_statement, block),
+            Statement::RevertStatement(revert) => self.emit_revert(revert, context),
+            Statement::EmitStatement(emit_statement) => self.emit_event(emit_statement, context),
             _ => anyhow::bail!(
                 "unsupported statement: {:?}",
                 std::mem::discriminant(statement)
@@ -120,7 +107,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         }
     }
 
-    /// Emits a sequence of statements inside a new lexical scope.
+    /// Emits a sequence of statements inside a new lexical scope, stopping once a statement
+    /// terminates the current block.
     ///
     /// # Errors
     ///
@@ -128,39 +116,31 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     pub fn emit_block(
         &mut self,
         statements: Statements,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        context: &mut Context<'context>,
+    ) -> anyhow::Result<()> {
         self.environment.enter_scope();
-        let mut current = block;
         for statement in statements.iter() {
-            match self.emit(&statement, current)? {
-                Some(next) => current = next,
-                None => {
-                    self.environment.exit_scope();
-                    return Ok(None);
-                }
+            self.emit(&statement, context)?;
+            if context.current_block().is_terminated() {
+                break;
             }
         }
         self.environment.exit_scope();
-        Ok(Some(current))
+        Ok(())
     }
 
     /// Emits a `sol.break` terminator.
-    fn emit_break(
-        &self,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        Effect::new(self.state, block).r#break();
-        Ok(None)
+    fn emit_break(&self, context: &mut Context<'context>) -> anyhow::Result<()> {
+        let block = context.current_block();
+        block.r#break(context);
+        Ok(())
     }
 
     /// Emits a `sol.continue` terminator.
-    fn emit_continue(
-        &self,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        Effect::new(self.state, block).r#continue();
-        Ok(None)
+    fn emit_continue(&self, context: &mut Context<'context>) -> anyhow::Result<()> {
+        let block = context.current_block();
+        block.r#continue(context);
+        Ok(())
     }
 
     /// Emits a return statement.
@@ -172,50 +152,43 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     fn emit_return(
         &mut self,
         return_statement: &slang_solidity_v2::ast::ReturnStatement,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        context: &mut Context<'context>,
+    ) -> anyhow::Result<()> {
         let Some(expression) = return_statement.expression() else {
-            Effect::new(self.state, block).r#return(&[]);
-            return Ok(None);
+            let block = context.current_block();
+            block.r#return(&[], context);
+            return Ok(());
         };
 
-        let emitter = ExpressionEmitter::new(
-            self.state,
-            self.environment,
-            self.storage_layout,
-            self.checked,
-        );
+        let emitter = ExpressionEmitter::new(self.environment, self.storage_layout, self.checked);
 
-        let (values, block) = if let Expression::TupleExpression(tuple) = &expression
+        let values = if let Expression::TupleExpression(tuple) = &expression
             && tuple.items().len() > 1
         {
             let items = tuple.items();
             let mut values = Vec::with_capacity(items.len());
-            let mut current = block;
             for item in items.iter() {
                 let inner = item
                     .expression()
                     .ok_or_else(|| anyhow::anyhow!("empty tuple element in return"))?;
-                let (value, next) = emitter.emit_value(&inner, current)?;
+                let value = emitter.emit_value(&inner, context)?;
                 values.push(value);
-                current = next;
             }
-            (values, current)
+            values
         } else {
-            let (value, block) = emitter.emit_value(&expression, block)?;
-            (vec![value], block)
+            vec![emitter.emit_value(&expression, context)?]
         };
 
         let cast_values: Vec<_> = values
             .into_iter()
             .zip(self.return_types.iter())
             .map(|(value, &return_type)| {
-                TypeConversion::from_target_type(return_type, self.state)
-                    .emit(value, self.state, &block)
+                TypeConversion::from_target_type(return_type, context).emit(value, context)
             })
             .collect();
 
-        Effect::new(self.state, block).r#return(&cast_values);
-        Ok(None)
+        let block = context.current_block();
+        block.r#return(&cast_values, context);
+        Ok(())
     }
 }

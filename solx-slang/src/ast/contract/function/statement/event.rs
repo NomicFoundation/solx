@@ -3,21 +3,20 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
-use melior::ir::BlockRef;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::EmitStatement;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NamedArguments;
 use slang_solidity_v2::ast::Parameters;
-use solx_mlir::Effect;
+use solx_mlir::Context;
 use solx_mlir::Value;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::statement::StatementEmitter;
 
-impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
+impl<'state, 'context> StatementEmitter<'state, 'context> {
     /// Lowers an `emit Event(args);` statement to a `sol.emit` operation.
     ///
     /// Resolves the event definition, classifies each argument as indexed
@@ -34,8 +33,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     pub fn emit_event(
         &self,
         emit_statement: &EmitStatement,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        context: &mut Context<'context>,
+    ) -> anyhow::Result<()> {
         let Some(Definition::Event(event_definition)) =
             emit_statement.event().resolve_to_definition()
         else {
@@ -57,31 +56,21 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             parameters.len()
         );
 
-        let emitter = ExpressionEmitter::new(
-            self.state,
-            self.environment,
-            self.storage_layout,
-            self.checked,
-        );
-        let mut indexed_arguments: Vec<Value<'context, 'block>> = Vec::new();
-        let mut non_indexed_arguments: Vec<Value<'context, 'block>> = Vec::new();
-        let mut current_block = block;
+        let emitter = ExpressionEmitter::new(self.environment, self.storage_layout, self.checked);
+        let mut indexed_arguments: Vec<Value<'context>> = Vec::new();
+        let mut non_indexed_arguments: Vec<Value<'context>> = Vec::new();
         for (parameter, argument) in parameters.iter().zip(ordered_arguments) {
-            let (value, next_block) = emitter.emit_value(&argument, current_block)?;
-            current_block = next_block;
+            let value = emitter.emit_value(&argument, context)?;
             let indexed = parameter.is_indexed();
             let parameter_type = TypeConversion::resolve_slang_type(
                 &parameter
                     .get_type()
                     .expect("parameter type resolved by semantic analysis"),
                 None,
-                self.state,
+                context,
             );
-            let value = TypeConversion::from_target_type(parameter_type, self.state).emit(
-                value,
-                self.state,
-                &current_block,
-            );
+            let value =
+                TypeConversion::from_target_type(parameter_type, context).emit(value, context);
             if indexed {
                 // TODO: indexed reference-type parameters must store the
                 // keccak256 hash of their encoded value as the topic, not the
@@ -103,12 +92,14 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     })?,
             )
         };
-        Effect::new(self.state, current_block).emit(
+        let block = context.current_block();
+        block.emit(
             signature.as_deref(),
             &indexed_arguments,
             &non_indexed_arguments,
+            context,
         );
-        Ok(Some(current_block))
+        Ok(())
     }
 
     /// Orders named event arguments by the event's parameter declaration order.

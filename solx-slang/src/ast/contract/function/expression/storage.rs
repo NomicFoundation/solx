@@ -2,11 +2,10 @@
 //! Storage load/store expression lowering via Sol dialect.
 //!
 
-use melior::ir::BlockRef;
-
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Expression;
+use solx_mlir::Context;
 use solx_mlir::Place;
 use solx_mlir::Type;
 use solx_mlir::Value;
@@ -16,28 +15,28 @@ use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::storage_slot::StorageSlot;
 
-impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
+impl<'state, 'context> ExpressionEmitter<'state, 'context> {
     /// Emits a storage load via `sol.addr_of` + `sol.load`.
     pub fn emit_storage_load(
         &self,
         slot: &StorageSlot,
         element_type: Type<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block> {
-        let pointer = self.emit_storage_addr_of(slot, element_type, block);
-        pointer.load(element_type, self.state, block)
+        context: &Context<'context>,
+    ) -> Value<'context> {
+        let pointer = self.emit_storage_addr_of(slot, element_type, context);
+        pointer.load(element_type, context)
     }
 
     /// Emits a storage store via `sol.addr_of` + `sol.store`.
     pub fn emit_storage_store(
         &self,
         slot: &StorageSlot,
-        value: Value<'context, 'block>,
+        value: Value<'context>,
         element_type: Type<'context>,
-        block: &BlockRef<'context, 'block>,
+        context: &Context<'context>,
     ) {
-        let pointer = self.emit_storage_addr_of(slot, element_type, block);
-        pointer.store(value, self.state, block);
+        let pointer = self.emit_storage_addr_of(slot, element_type, context);
+        pointer.store(value, context);
     }
 
     /// Emits every state-variable inline initializer (`T x = <expr>;`)
@@ -54,8 +53,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     pub fn emit_state_var_initializers(
         &self,
         contract: &ContractDefinition,
-        mut block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+        context: &mut Context<'context>,
+    ) -> anyhow::Result<()> {
         for member in contract.members().iter() {
             let ContractMember::StateVariableDefinition(state_variable) = member else {
                 continue;
@@ -75,25 +74,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     state_variable.name().name()
                 )
             })?;
-            let element_type = TypeConversion::resolve_slang_type(&declared_type, None, self.state);
-            let address_type = Self::address_type(
-                self.state,
-                element_type,
-                DataLocation::Storage,
-                &declared_type,
-            );
-            let storage_ref = Place::addr_of(&slot.name, address_type, self.state, &block);
-            let (value, next_block) = self.emit_value(&initializer, block)?;
-            block = next_block;
+            let element_type = TypeConversion::resolve_slang_type(&declared_type, None, context);
+            let address_type =
+                Self::address_type(context, element_type, DataLocation::Storage, &declared_type);
+            let storage_ref = Place::addr_of(&slot.name, address_type, context);
+            let value = self.emit_value(&initializer, context)?;
             if declared_type.is_reference_type() {
-                storage_ref.copy_from(value, self.state, &block);
+                storage_ref.copy_from(value, context);
             } else {
-                let stored_value = TypeConversion::from_target_type(element_type, self.state)
-                    .emit(value, self.state, &block);
-                storage_ref.store(stored_value, self.state, &block);
+                let stored_value =
+                    TypeConversion::from_target_type(element_type, context).emit(value, context);
+                storage_ref.store(stored_value, context);
             }
         }
-        Ok(block)
+        Ok(())
     }
 
     /// Returns a `!sol.ptr<element_type, Storage>` pointer via `sol.addr_of`.
@@ -101,9 +95,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         &self,
         slot: &StorageSlot,
         element_type: Type<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Place<'context, 'block> {
-        let pointer_type = Type::pointer(self.state.melior, element_type, DataLocation::Storage);
-        Place::addr_of(&slot.name, pointer_type, self.state, block)
+        context: &Context<'context>,
+    ) -> Place<'context> {
+        let pointer_type = Type::pointer(context.melior, element_type, DataLocation::Storage);
+        Place::addr_of(&slot.name, pointer_type, context)
     }
 }
