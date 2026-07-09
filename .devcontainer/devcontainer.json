@@ -3,18 +3,13 @@
 // including how the custom LLVM backend is built inside the container.
 {
     "name": "solx",
-    // Build the CI runner Dockerfile's `base` stage locally before the
-    // container build: no registry auth needed (the published image is
-    // private) and in sync with the checkout by construction. ~5-10 min the
-    // first time, cached by Docker afterwards.
-    "initializeCommand": [
-        "docker", "build",
-        "--target", "base",
-        "-t", "solx-devcontainer-base",
-        ".github/docker"
-    ],
+    // Build the CI runner Dockerfile's `dev` stage locally: no registry auth
+    // needed (the published image is private) and in sync with the checkout
+    // by construction. ~5-10 min the first time, layer-cached afterwards.
     "build": {
-        "dockerfile": "Dockerfile"
+        "dockerfile": "../.github/docker/Dockerfile",
+        "context": "../.github/docker",
+        "target": "dev"
     },
     "remoteUser": "dev",
 

@@ -5,12 +5,13 @@
 # The custom LLVM 21.1 backend is NOT baked into this image — it is built from
 # source in every CI job via the build-llvm composite action.
 #
-# Two stages, all from public sources:
-#   base — what a developer needs to build solx/LLVM/solc. The devcontainer
-#          builds this stage locally (`docker build --target base`), so it
-#          needs no access to the private published image; keep the split
-#          honest and don't add dev-relevant tools below the `ci` line.
-#   ci   — CI-only reporting and test tooling on top (valgrind for solx-llvm
+# Three stages, all from public sources:
+#   base — what a developer needs to build solx/LLVM/solc. Keep the split
+#          honest and don't add dev-relevant tools to the `ci` stage.
+#   dev  — devcontainer additions on base (non-root user, shared rustup).
+#          Built locally by .devcontainer/devcontainer.json (`target: dev`),
+#          so it needs no access to the private published image.
+#   ci   — CI-only reporting and test tooling on base (valgrind for solx-llvm
 #          regression tests, cargo coverage/report tools). Must stay the final
 #          stage: docker-ci-image.yaml publishes the default target.
 
@@ -127,6 +128,39 @@ RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
         > /etc/apt/sources.list.d/nodesource.list \
     && apt-get update && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# ═════ Devcontainer stage — not part of the published CI image ═════
+# See docs/src/developer-guide/00-development-container.md. The custom LLVM
+# EVM backend is intentionally NOT baked into any stage: it changes with
+# every solx-llvm submodule bump and weighs several GB. It is built from
+# source inside the container instead (.devcontainer/bootstrap.sh).
+FROM base AS dev
+
+# ── Non-root user with sudo ─────────────────────────────────────────────────
+# CI runs as root; a devcontainer wants a UID-mapped non-root user so files
+# created in the bind-mounted workspace belong to the host user (the
+# devcontainer runtime remaps the UID/GID to the host's on Linux).
+# ubuntu:26.04 ships a default `ubuntu` user squatting UID 1000; replace it.
+ARG USERNAME=dev
+RUN userdel --remove ubuntu 2>/dev/null; \
+    apt-get update && apt-get install -y --no-install-recommends sudo \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --uid 1000 --user-group --create-home --shell /bin/bash ${USERNAME} \
+    && echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} \
+    && chmod 440 /etc/sudoers.d/${USERNAME}
+
+# ── Shared rustup/cargo ──────────────────────────────────────────────────────
+# base homes rustup in /root, unreachable for the non-root user. Install a
+# shared one in the official rust-image layout instead; the actual toolchain
+# is not baked in — rustup downloads the version pinned in rust-toolchain.toml
+# on the first cargo invocation, so this layer never goes stale on a
+# toolchain bump.
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:${PATH}
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        | sh -s -- -y --default-toolchain none --profile default \
+    && chmod -R a+w ${RUSTUP_HOME} ${CARGO_HOME}
 
 # ═════ CI-only stage — nothing below is needed for local development ═════
 FROM base AS ci

@@ -73,8 +73,9 @@ jobs:
       - name: Shellcheck devcontainer scripts
         run: shellcheck .devcontainer/*.sh
 
-      # Runs the container lifecycle: initializeCommand (builds the base
-      # stage), the dev image layer, post-create.sh, then the smoke test.
+      # Builds the runner Dockerfile's `dev` stage (locally, no registry
+      # auth), runs the container lifecycle incl. post-create.sh, then the
+      # smoke test inside.
       - name: Build devcontainer and run smoke test
         uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca # v0.3.1900000450
         with:
