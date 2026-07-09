@@ -27,12 +27,21 @@ impl TargetMachine {
     /// `-evm-stack-region-offset <value>`
     /// `-evm-metadata-size <value>`
     ///
+    /// LLVM command line options are process-global and survive across translation units
+    /// compiled in the same worker process, so `-evm-metadata-size` is always passed:
+    /// the explicit default heals a stale value left by a previous unit. It is passed
+    /// before `llvm_options` when unset (so user options keep overriding the default)
+    /// and after them when set (so the computed value keeps overriding user options).
+    ///
     pub fn new(
         optimizer_settings: &OptimizerSettings,
         llvm_options: &[String],
     ) -> anyhow::Result<Self> {
-        let mut arguments = Vec::with_capacity(1 + llvm_options.len());
+        let mut arguments = Vec::with_capacity(4 + llvm_options.len());
         arguments.push(Self::TARGET.to_string());
+        if optimizer_settings.metadata_size.is_none() {
+            arguments.push("-evm-metadata-size=0".to_owned());
+        }
         arguments.extend_from_slice(llvm_options);
         if let Some(size) = optimizer_settings.spill_area_size {
             arguments.push(format!(
@@ -44,10 +53,8 @@ impl TargetMachine {
         if let Some(size) = optimizer_settings.metadata_size {
             arguments.push(format!("-evm-metadata-size={size}"));
         }
-        if arguments.len() > 1 {
-            let arguments: Vec<&str> = arguments.iter().map(|argument| argument.as_str()).collect();
-            inkwell::support::parse_command_line_options(arguments.as_slice(), "LLVM options");
-        }
+        let arguments: Vec<&str> = arguments.iter().map(|argument| argument.as_str()).collect();
+        inkwell::support::parse_command_line_options(arguments.as_slice(), "LLVM options");
 
         let target_machine = inkwell::targets::Target::from_name(Self::TARGET.to_string().as_str())
             .ok_or_else(|| anyhow::anyhow!("LLVM target machine `{}` not found", Self::TARGET))?

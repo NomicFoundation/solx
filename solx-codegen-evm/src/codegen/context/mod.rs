@@ -323,14 +323,10 @@ impl<'ctx> Context<'ctx> {
                     && self.optimizer.settings().is_fallback_to_size_enabled()
                 {
                     crate::codegen::IS_SIZE_FALLBACK
-                        .compare_exchange(
-                            false,
-                            true,
-                            std::sync::atomic::Ordering::Relaxed,
-                            std::sync::atomic::Ordering::Relaxed,
-                        )
-                        .expect("Failed to set the global size fallback flag");
-                    self.optimizer = Optimizer::new(OptimizerSettings::size());
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                    let mut size_fallback_settings = OptimizerSettings::size();
+                    size_fallback_settings.metadata_size = self.optimizer.settings().metadata_size;
+                    self.optimizer = Optimizer::new(size_fallback_settings);
                     self.module = module_size_fallback;
                     for function in self.module.get_functions() {
                         Function::set_size_attributes(self.llvm, function);

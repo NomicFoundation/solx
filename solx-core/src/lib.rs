@@ -28,9 +28,11 @@ pub use self::error::Error;
 pub use self::error::stack_too_deep::StackTooDeep as StackTooDeepError;
 pub use self::frontend::Frontend;
 pub use self::process::EXECUTABLE;
-pub use self::process::input::Input as EVMProcessInput;
+pub use self::process::child::run as run_subprocess;
+pub use self::process::job::Job as EVMProcessJob;
 pub use self::process::output::Output as EVMProcessOutput;
-pub use self::process::run as run_subprocess;
+pub use self::process::pool::Pool as EVMProcessPool;
+pub use self::process::session::Session as EVMProcessSession;
 pub use self::project::Project;
 pub use self::project::contract::Contract as ProjectContract;
 
