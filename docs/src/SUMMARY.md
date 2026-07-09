@@ -17,6 +17,7 @@
 
 # Developer Guide
 
+- [Development Container](./developer-guide/00-development-container.md)
 - [Testing](./developer-guide/01-testing.md)
 - [Debugging and Inspecting Output](./developer-guide/02-debugging.md)
 - [LLVM Options](./developer-guide/03-llvm-options.md)

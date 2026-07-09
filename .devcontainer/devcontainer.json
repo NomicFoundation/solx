@@ -1,0 +1,50 @@
+// Development container for solx. See
+// docs/src/developer-guide/00-development-container.md for the full guide,
+// including how the custom LLVM backend is built inside the container.
+{
+    "name": "solx",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "remoteUser": "dev",
+
+    // A cold LLVM build links tools at 2-4 GB RSS each and the build tree
+    // alone takes tens of GB. Docker Desktop's default 8 GB VM will thrash.
+    "hostRequirements": {
+        "cpus": 8,
+        "memory": "16gb",
+        "storage": "64gb"
+    },
+
+    // Build state lives in named volumes: it survives container rebuilds and
+    // stays off the bind mount, which is slow on macOS/Windows hosts.
+    "mounts": [
+        "source=solx-target,target=${containerWorkspaceFolder}/target,type=volume",
+        "source=solx-target-slang,target=${containerWorkspaceFolder}/target-slang,type=volume",
+        "source=solx-target-llvm,target=${containerWorkspaceFolder}/target-llvm,type=volume",
+        "source=solx-rustup,target=/usr/local/rustup,type=volume",
+        "source=solx-cargo,target=/usr/local/cargo,type=volume",
+        "source=solx-ccache,target=/var/cache/solx-ccache,type=volume"
+    ],
+    "containerEnv": {
+        "CCACHE_DIR": "/var/cache/solx-ccache"
+    },
+
+    "postCreateCommand": ".devcontainer/post-create.sh",
+
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "rust-lang.rust-analyzer",
+                "llvm-vs-code-extensions.vscode-clangd"
+            ],
+            "settings": {
+                // solx-dev leaves CMAKE_EXPORT_COMPILE_COMMANDS on, so clangd
+                // works in the solx-llvm submodule once LLVM has been built.
+                "clangd.arguments": [
+                    "--compile-commands-dir=${workspaceFolder}/target-llvm/build-final"
+                ]
+            }
+        }
+    }
+}

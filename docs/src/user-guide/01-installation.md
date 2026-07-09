@@ -69,6 +69,9 @@ This repository maintains intuitive and stable naming for the executables and pr
 > Building from source is only necessary for development, research, and debugging purposes.
 > Deployment and production use cases should rely only on [the officially released executables](#static-executables).
 
+> For development, the repository also ships a [devcontainer](../developer-guide/00-development-container.md)
+> that provides all dependencies below on the exact toolchain image CI uses.
+
 1. Install the necessary system-wide dependencies.
 
    * For Linux (Debian):
