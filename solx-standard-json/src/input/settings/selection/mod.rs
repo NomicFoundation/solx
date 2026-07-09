@@ -187,7 +187,31 @@ impl Selection {
     ///
     /// Checks if the debug info is requested for at least one contract.
     ///
+    /// Used to reject debug info requests for non-Solidity input, so umbrella selectors
+    /// such as `evm.bytecode` do not count: they must remain valid for all languages.
+    ///
     pub fn is_debug_info_set_for_any(&self) -> bool {
+        for file in self.inner.values() {
+            for contract in file.values() {
+                if contract.contains(&Selector::EVM)
+                    || contract.contains(&Selector::BytecodeDebugInfo)
+                    || contract.contains(&Selector::RuntimeBytecodeDebugInfo)
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    ///
+    /// Checks if the debug info will be emitted for at least one contract.
+    ///
+    /// Unlike [`Self::is_debug_info_set_for_any`], this also counts every umbrella selector
+    /// under which `check_selection` emits debug info: the `*` wildcard and the `evm` /
+    /// `evm.bytecode` / `evm.deployedBytecode` groups.
+    ///
+    pub fn is_debug_info_emitted_for_any(&self) -> bool {
         for file in self.inner.values() {
             for contract in file.values() {
                 if contract.contains(&Selector::Any)

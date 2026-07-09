@@ -121,6 +121,28 @@ fn yul_standard_json_output_has_contracts() -> anyhow::Result<()> {
 }
 
 #[cfg(feature = "solc")]
+#[test]
+fn yul_bytecode_umbrella_selection_is_not_rejected() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("yul_bytecode_umbrella.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("\"object\""))
+        .stdout(
+            predicate::str::contains("Debug info is only supported for Solidity source code input")
+                .not(),
+        );
+
+    Ok(())
+}
+
+#[cfg(feature = "solc")]
 #[test_case(crate::common::standard_json!("metadata_hash_ipfs_and_metadata.json"), true, true)]
 #[test_case(crate::common::standard_json!("metadata_hash_ipfs_no_metadata.json"), true, false)]
 #[test_case(crate::common::standard_json!("metadata_hash_none_and_metadata.json"), false, true)]

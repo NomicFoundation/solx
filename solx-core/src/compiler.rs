@@ -350,7 +350,7 @@ impl<'arguments> Compiler<'arguments> {
 
         let linker_symbols = solc_input.settings.libraries.as_linker_symbols()?;
         solc_input.resolve_sources()?;
-        let debug_info = if output_selection.is_debug_info_set_for_any() {
+        let debug_info = if output_selection.is_debug_info_emitted_for_any() {
             Some(solc_output.get_debug_info(&solc_input.sources))
         } else {
             None
@@ -452,7 +452,7 @@ impl<'arguments> Compiler<'arguments> {
                 let debug_info = if solc_input
                     .settings
                     .output_selection
-                    .is_debug_info_set_for_any()
+                    .is_debug_info_emitted_for_any()
                 {
                     Some(solc_output.get_debug_info(&solc_input.sources))
                 } else {
