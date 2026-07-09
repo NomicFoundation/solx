@@ -23,7 +23,7 @@ def main() -> int:
                         help="markdown report path")
     args = parser.parse_args()
 
-    lines = ["## Compile-time benchmark (`--standard-json`, EVMLA pipeline)", ""]
+    lines = ["## Compile-time benchmark (`--standard-json`)", ""]
 
     versions = args.dir / "versions.txt"
     if versions.exists():
