@@ -29,14 +29,25 @@ impl<'arguments> Compiler<'arguments> {
     }
 
     ///
-    /// Initialize the compiler runtime: rayon thread pool, LLVM stack trace, and
-    /// EVM target.
+    /// Initialize the compiler runtime: LLVM stack trace, EVM target, and
+    /// rayon thread pool.
     ///
-    /// If `arguments.recursive_process` is set, runs the subprocess handler and
+    /// If `arguments.recursive_process` is set, runs the worker subprocess loop and
     /// returns `Ok(true)` -- the caller should return immediately.
     /// Otherwise returns `Ok(false)`.
     ///
+    /// The rayon thread pool is built after the worker branch: workers compile
+    /// one translation unit at a time and never use it.
+    ///
     pub fn initialize(&self) -> anyhow::Result<bool> {
+        inkwell::support::enable_llvm_pretty_stack_trace();
+        solx_codegen_evm::initialize_target();
+
+        if self.arguments.recursive_process {
+            crate::run_subprocess()?;
+            return Ok(true);
+        }
+
         let mut thread_pool_builder = rayon::ThreadPoolBuilder::new();
         if let Some(threads) = self.arguments.threads {
             thread_pool_builder = thread_pool_builder.num_threads(threads);
@@ -45,14 +56,6 @@ impl<'arguments> Compiler<'arguments> {
             .stack_size(WORKER_THREAD_STACK_SIZE)
             .build_global()
             .expect("rayon thread pool parameters are valid");
-
-        inkwell::support::enable_llvm_pretty_stack_trace();
-        solx_codegen_evm::initialize_target();
-
-        if self.arguments.recursive_process {
-            crate::run_subprocess()?;
-            return Ok(true);
-        }
 
         Ok(false)
     }

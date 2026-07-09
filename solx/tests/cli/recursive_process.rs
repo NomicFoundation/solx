@@ -11,9 +11,9 @@ fn missing_input() -> anyhow::Result<()> {
     let args = &["--recursive-process"];
 
     let result = crate::cli::execute_solx(args)?;
-    result.failure().stderr(predicate::str::contains(
-        "Input length prefix reading error: failed to fill whole buffer",
-    ));
+    result
+        .failure()
+        .stderr(predicate::str::contains("The worker received no session"));
 
     Ok(())
 }
@@ -22,11 +22,7 @@ fn missing_input() -> anyhow::Result<()> {
 fn excess_args() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        "--recursive-process",
-        crate::common::TEST_SOLIDITY_CONTRACT,
-        "excess",
-    ];
+    let args = &["--recursive-process", crate::common::TEST_SOLIDITY_CONTRACT];
 
     let result = crate::cli::execute_solx(args)?;
     result.failure().stderr(predicate::str::contains(

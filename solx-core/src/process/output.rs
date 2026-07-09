@@ -1,6 +1,4 @@
 //!
-//! Process for compiling a single compilation unit.
-//!
 //! The EVM output data.
 //!
 
