@@ -159,7 +159,7 @@ impl<'emitter, 'state, 'context> CallEmitter<'emitter, 'state, 'context> {
                 let aggregate = self
                     .expression_emitter
                     .emit_value(&access.operand(), context)?;
-                let value = Value::length(aggregate, context);
+                let value = aggregate.length(context);
                 Ok(Some(value))
             }
             Some(BuiltIn::AddressSend) => {
