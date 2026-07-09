@@ -13,6 +13,7 @@ use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::NodeId;
 
+use solx_mlir::Block;
 use solx_mlir::Context;
 use solx_mlir::Contract;
 use solx_mlir::Type;
@@ -68,12 +69,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             Self::is_contract_payable(contract),
         );
 
-        let module_body = self.state.module.body();
+        let module_body = Block::from(self.state.module.body());
         let sol_contract = Contract::define(
             &contract_name,
             solx_mlir::ContractKind::Contract,
             self.state,
-            &module_body,
+            module_body,
         );
         let contract_body = sol_contract.body;
 
@@ -98,15 +99,18 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         }
 
         self.state.current_contract_type = Some(contract_type);
-        FunctionEmitter::new(self.state, contract, &storage_layout)
-            .emit_constructor(&contract_body)?;
+        FunctionEmitter::new(contract, &storage_layout)
+            .emit_constructor(contract_body, self.state)?;
         self.state.current_contract_type = None;
 
         // Slang's `functions()` filters out Constructor and Modifier kinds.
         for function in contract.functions() {
             self.state.current_contract_type = Some(contract_type);
-            FunctionEmitter::new(self.state, contract, &storage_layout)
-                .emit_sol(&function, &contract_body)?;
+            FunctionEmitter::new(contract, &storage_layout).emit_sol(
+                &function,
+                contract_body,
+                self.state,
+            )?;
             self.state.current_contract_type = None;
         }
 

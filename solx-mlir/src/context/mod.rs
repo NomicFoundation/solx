@@ -21,6 +21,7 @@ use melior::ir::operation::OperationMutLike;
 use melior::pass::PassManager;
 use slang_solidity_v2::ast::NodeId;
 
+use crate::Block;
 use crate::Type;
 use crate::llvm_module::RawLlvmModule;
 
@@ -40,6 +41,9 @@ pub struct Context<'context> {
     /// The MLIR type of the contract currently being emitted, used to type
     /// `this` expressions. Frontends set this before emitting function bodies.
     pub current_contract_type: Option<Type<'context>>,
+    /// The block value producers and effects append to during function-body emission. The
+    /// control-flow emitters move it onto region entry blocks; it is absent between functions.
+    pub current_block: Option<Block<'context>>,
 }
 
 impl<'context> Context<'context> {
@@ -126,6 +130,7 @@ impl<'context> Context<'context> {
             module,
             function_signatures: HashMap::new(),
             current_contract_type: None,
+            current_block: None,
         }
     }
 
@@ -177,6 +182,13 @@ impl<'context> Context<'context> {
             &function.parameter_types,
             &function.return_types,
         ))
+    }
+
+    /// The block the insertion cursor points at, which the function-body emitters position before
+    /// any emission.
+    pub fn current_block(&self) -> Block<'context> {
+        self.current_block
+            .expect("the function body positions the insertion cursor")
     }
 
     /// Run the Sol-to-LLVM conversion pass pipeline on a module in-place.

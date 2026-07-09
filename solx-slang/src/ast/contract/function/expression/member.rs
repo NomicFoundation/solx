@@ -2,18 +2,18 @@
 //! Member access expression lowering for struct fields: `s.field`.
 //!
 
-use melior::ir::BlockRef;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use solx_mlir::Context;
 use solx_mlir::Place;
 use solx_mlir::Type;
 use solx_mlir::Value;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 
-impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
+impl<'state, 'context> ExpressionEmitter<'state, 'context> {
     /// Lowers `s.field` for a struct base to `sol.gep`, followed by a
     /// `sol.load` of the addressed field unless the field already IS the
     /// value (non-ptr-ref-in-storage rule).
@@ -23,14 +23,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     pub fn emit_struct_field(
         &self,
         access: &MemberAccessExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<(Value<'context, 'block>, BlockRef<'context, 'block>)>> {
-        let Some((address, element_type, block)) = self.emit_struct_field_address(access, block)?
-        else {
+        context: &mut Context<'context>,
+    ) -> anyhow::Result<Option<Value<'context>>> {
+        let Some((address, element_type)) = self.emit_struct_field_address(access, context)? else {
             return Ok(None);
         };
-        let value = address.load(element_type, self.state, &block);
-        Ok(Some((value, block)))
+        let value = address.load(element_type, context);
+        Ok(Some(value))
     }
 
     /// Emits the address yielded by `s.field` together with the field's
@@ -42,14 +41,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     pub fn emit_struct_field_address(
         &self,
         access: &MemberAccessExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<
-        Option<(
-            Place<'context, 'block>,
-            Type<'context>,
-            BlockRef<'context, 'block>,
-        )>,
-    > {
+        context: &mut Context<'context>,
+    ) -> anyhow::Result<Option<(Place<'context>, Type<'context>)>> {
         let base = access.operand();
         let Some(SlangType::Struct(struct_type)) = base.get_type() else {
             return Ok(None);
@@ -65,16 +58,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .position(|member| member.name().name() == member_name)
             .ok_or_else(|| anyhow::anyhow!("unknown struct member: {member_name}"))?;
 
-        let (base_value, block) = self.emit_value(&base, block)?;
+        let base_value = self.emit_value(&base, context)?;
 
         let index_value = Value::constant(
             field_index as i64,
-            Type::unsigned(self.state.melior, solx_utils::BIT_LENGTH_X64),
-            self.state,
-            &block,
+            Type::unsigned(context.melior, solx_utils::BIT_LENGTH_X64),
+            context,
         );
         let element_type = base_value.r#type().element_type(field_index as u64);
-        let address = Place::from(base_value).gep(index_value, element_type, self.state, &block);
-        Ok(Some((address, element_type, block)))
+        let address = Place::from(base_value).gep(index_value, element_type, context);
+        Ok(Some((address, element_type)))
     }
 }

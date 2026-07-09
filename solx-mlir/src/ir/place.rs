@@ -2,7 +2,6 @@
 //! A `!sol.ptr<T, Loc>` place in the Sol dialect: a typed address, and the loads, stores, and steps it supports.
 //!
 
-use melior::ir::BlockLike;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
 use melior::ir::attribute::FlatSymbolRefAttribute;
@@ -25,29 +24,19 @@ use crate::ods::sol::StoreOperation;
 /// SSA value: a `storage` / `calldata` reference is itself the place, so it converts to and from
 /// [`Value`] freely.
 #[derive(Clone, Copy)]
-pub struct Place<'context, 'block> {
+pub struct Place<'context> {
     /// The wrapped melior value.
-    pub inner: MlirValue<'context, 'block>,
+    pub inner: MlirValue<'context, 'context>,
 }
 
-impl<'context, 'block> Place<'context, 'block> {
-    /// Wraps a place value: a `!sol.ptr<...>`, or a by-reference `Storage` / `CallData` aggregate.
-    pub fn new(inner: MlirValue<'context, 'block>) -> Self {
-        Self { inner }
-    }
-
+impl<'context> Place<'context> {
     /// Allocates a stack slot for `pointee` and returns the place: a
     /// `sol.alloca` yielding `!sol.ptr<pointee, Stack>`.
-    pub fn stack<B>(pointee: Type<'context>, context: &Context<'context>, block: &B) -> Self
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
+    pub fn stack(pointee: Type<'context>, context: &Context<'context>) -> Self {
         let address_type =
             Type::pointer(context.melior, pointee, solx_utils::DataLocation::Stack).into_mlir();
-        Self::new(mlir_op!(
+        Self::from(mlir_op!(
             context,
-            block,
             AllocaOperation
                 .alloc_type(TypeAttribute::new(address_type))
                 .addr(address_type)
@@ -56,32 +45,14 @@ impl<'context, 'block> Place<'context, 'block> {
 
     /// Allocates a fresh memory buffer typed as `pointee` and returns the place: a `sol.malloc`
     /// yielding the buffer, for a memory aggregate constructed via a literal.
-    pub fn malloc<B>(pointee: Type<'context>, context: &Context<'context>, block: &B) -> Self
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        Self::new(mlir_op!(
-            context,
-            block,
-            MallocOperation.addr(pointee.into_mlir())
-        ))
+    pub fn malloc(pointee: Type<'context>, context: &Context<'context>) -> Self {
+        Self::from(mlir_op!(context, MallocOperation.addr(pointee.into_mlir())))
     }
 
     /// The place a named contract symbol denotes: `sol.addr_of @symbol` of `place_type`.
-    pub fn addr_of<B>(
-        symbol: &str,
-        place_type: Type<'context>,
-        context: &Context<'context>,
-        block: &B,
-    ) -> Self
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        Self::new(mlir_op!(
+    pub fn addr_of(symbol: &str, place_type: Type<'context>, context: &Context<'context>) -> Self {
+        Self::from(mlir_op!(
             context,
-            block,
             AddrOfOperation
                 .var(FlatSymbolRefAttribute::new(context.melior, symbol))
                 .addr(place_type.into_mlir())
@@ -90,74 +61,44 @@ impl<'context, 'block> Place<'context, 'block> {
 
     /// Loads the value of `result_type` from this place (`sol.load`). Short-circuits when the
     /// place already *is* the value: a reference element in `Storage` / `CallData`.
-    pub fn load<B>(
-        self,
-        result_type: Type<'context>,
-        context: &Context<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
+    pub fn load(self, result_type: Type<'context>, context: &Context<'context>) -> Value<'context> {
         if self.r#type() == result_type {
             return self.into();
         }
-        Value::new(mlir_op!(
+        Value::from(mlir_op!(
             context,
-            block,
             LoadOperation.addr(self.inner).out(result_type.into_mlir())
         ))
     }
 
     /// Stores `value` into this place (`sol.store`).
-    pub fn store<B>(self, value: Value<'context, 'block>, context: &Context<'context>, block: &B)
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
+    pub fn store(self, value: Value<'context>, context: &Context<'context>) {
         mlir_op_void!(
             context,
-            block,
             StoreOperation.val(value.into_mlir()).addr(self.inner)
         );
     }
 
     /// Deep-copies the reference `value`'s pointee into this place (`sol.copy`): the
     /// reference-to-reference counterpart of the scalar [`Self::store`].
-    pub fn copy_from<B>(
-        self,
-        value: Value<'context, 'block>,
-        context: &Context<'context>,
-        block: &B,
-    ) where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
+    pub fn copy_from(self, value: Value<'context>, context: &Context<'context>) {
         mlir_op_void!(
             context,
-            block,
             CopyOperation.src(value.into_mlir()).dst(self.inner)
         );
     }
 
     /// Steps to the place of element `element_type` at `index` within this aggregate place (`sol.gep`).
     /// The result place type comes from [`Type::gep_result_type`].
-    pub fn gep<B>(
+    pub fn gep(
         self,
-        index: Value<'context, 'block>,
+        index: Value<'context>,
         element_type: Type<'context>,
         context: &Context<'context>,
-        block: &B,
-    ) -> Self
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
+    ) -> Self {
         let address_type = self.r#type().gep_result_type(element_type);
-        Self::new(mlir_op!(
+        Self::from(mlir_op!(
             context,
-            block,
             GepOperation
                 .base_addr(self.inner)
                 .idx(index.into_mlir())
@@ -167,20 +108,14 @@ impl<'context, 'block> Place<'context, 'block> {
 
     /// Steps to the place of the mapping entry for `key` (`sol.map`). The dialect derives no map
     /// result type C-side, so the caller supplies the entry place type `entry_type`.
-    pub fn map<B>(
+    pub fn map(
         self,
-        key: Value<'context, 'block>,
+        key: Value<'context>,
         entry_type: Type<'context>,
         context: &Context<'context>,
-        block: &B,
-    ) -> Self
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        Self::new(mlir_op!(
+    ) -> Self {
+        Self::from(mlir_op!(
             context,
-            block,
             MapOperation
                 .mapping(self.inner)
                 .key(key.into_mlir())
@@ -194,14 +129,28 @@ impl<'context, 'block> Place<'context, 'block> {
     }
 
     /// The inner melior value, for the op-construction boundary.
-    pub fn into_mlir(self) -> MlirValue<'context, 'block> {
+    pub fn into_mlir(self) -> MlirValue<'context, 'context> {
         self.inner
     }
 }
 
-impl<'context, 'block> From<Value<'context, 'block>> for Place<'context, 'block> {
+impl<'context, V> From<V> for Place<'context>
+where
+    V: ValueLike<'context>,
+{
+    /// Wraps a place value, laundering its block-scoped lifetime to `'context`.
+    fn from(value: V) -> Self {
+        Self {
+            inner: unsafe { MlirValue::from_raw(value.to_raw()) },
+        }
+    }
+}
+
+impl<'context> From<Value<'context>> for Place<'context> {
     /// A `!sol.ptr` value is itself a place; both wrap the same SSA handle.
-    fn from(value: Value<'context, 'block>) -> Self {
-        Self::new(value.into_mlir())
+    fn from(value: Value<'context>) -> Self {
+        Self {
+            inner: value.into_mlir(),
+        }
     }
 }

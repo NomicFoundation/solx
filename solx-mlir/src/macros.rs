@@ -7,7 +7,6 @@
 //!
 
 /// Builds an inlined dialect op and yields it as an `Operation`, without appending.
-#[macro_export]
 macro_rules! mlir_op_build {
     ($context:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
         $operation::builder($context.melior, $context.location())
@@ -19,23 +18,27 @@ macro_rules! mlir_op_build {
 
 /// Builds an inlined dialect op ([`mlir_op_build!`]), appends it to `$block`, and
 /// returns its single result value. The `expect` message is derived from the op.
-#[macro_export]
+/// Omitting `$block` appends at the `current_block()` cursor.
 macro_rules! mlir_op {
+    ($context:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
+        mlir_op!($context, $context.current_block(), $operation $(.$method($($argument),*))*)
+    };
     ($context:expr, $block:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
         $block
-            .append_operation($crate::mlir_op_build!($context, $operation $(.$method($($argument),*))*))
+            .append_operation(mlir_op_build!($context, $operation $(.$method($($argument),*))*))
             .result(0)
             .expect(concat!(stringify!($operation), " produces one result"))
-            .into()
     };
 }
 
 /// [`mlir_op!`] for a value-less op: a statement or effect such as `sol.store`
 /// or `sol.return`: appends the op ([`mlir_op_build!`]) and yields `()`.
-#[macro_export]
 macro_rules! mlir_op_void {
+    ($context:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
+        mlir_op_void!($context, $context.current_block(), $operation $(.$method($($argument),*))*)
+    };
     ($context:expr, $block:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
-        $block.append_operation($crate::mlir_op_build!($context, $operation $(.$method($($argument),*))*));
+        $block.append_operation(mlir_op_build!($context, $operation $(.$method($($argument),*))*));
     };
 }
 
@@ -44,7 +47,6 @@ macro_rules! mlir_op_void {
 /// `; region if condition` clause makes that region optional: it receives a block — returned as
 /// `Some` — only when `condition` holds, and is left empty (`None`) otherwise, modelling an absent
 /// `else`.
-#[macro_export]
 macro_rules! mlir_region_op {
     (
         $context:expr, $block:expr, $operation:ident

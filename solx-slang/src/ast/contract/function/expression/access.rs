@@ -2,11 +2,11 @@
 //! Index access expression lowering: `a[i]`, `m[k]`, `s[i]`.
 //!
 
-use melior::ir::BlockRef;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::IndexAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use solx_mlir::Context;
 use solx_mlir::Place;
 use solx_mlir::Type;
 use solx_mlir::Value;
@@ -15,7 +15,7 @@ use solx_utils::DataLocation;
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
-impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
+impl<'state, 'context> ExpressionEmitter<'state, 'context> {
     /// Lowers `a[i]` / `m[k]` for arrays, dynamic `bytes`, mappings, and
     /// strings to `sol.gep` (sequential containers) or `sol.map` (mappings),
     /// followed by a `sol.load` of the addressed element. For dynamic
@@ -29,8 +29,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     pub fn emit_index_access(
         &self,
         index_access: &IndexAccessExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        context: &mut Context<'context>,
+    ) -> anyhow::Result<Option<Value<'context>>> {
         let base = index_access.operand();
         let base_type = base
             .get_type()
@@ -40,20 +40,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             let index_expression = index_access
                 .start()
                 .expect("slang validates a[i] has an index expression");
-            let (base_value, block) = self.emit_value(&base, block)?;
-            let (index_value, block) = self.emit_value(&index_expression, block)?;
-            let value = base_value.fixed_bytes_index(index_value, self.state, &block);
-            return Ok((Some(value), block));
+            let base_value = self.emit_value(&base, context)?;
+            let index_value = self.emit_value(&index_expression, context)?;
+            let value = base_value.fixed_bytes_index(index_value, context);
+            return Ok(Some(value));
         }
 
-        let (address, element_type, block) = self.emit_index_access_address(index_access, block)?;
-        let value = address.load(element_type, self.state, &block);
+        let (address, element_type) = self.emit_index_access_address(index_access, context)?;
+        let value = address.load(element_type, context);
         let result_type = index_access
             .get_type()
             .expect("slang types every index-access expression");
-        let slang_expected = TypeConversion::resolve_slang_type(&result_type, None, self.state);
-        let value = value.bytes_cast(slang_expected, self.state, &block);
-        Ok((Some(value), block))
+        let slang_expected = TypeConversion::resolve_slang_type(&result_type, None, context);
+        let value = value.bytes_cast(slang_expected, context);
+        Ok(Some(value))
     }
 
     /// Emits the address yielded by `a[i]` / `m[k]` together with the element
@@ -65,12 +65,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     pub fn emit_index_access_address(
         &self,
         index_access: &IndexAccessExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
-        Place<'context, 'block>,
-        Type<'context>,
-        BlockRef<'context, 'block>,
-    )> {
+        context: &mut Context<'context>,
+    ) -> anyhow::Result<(Place<'context>, Type<'context>)> {
         if index_access.end().is_some() {
             unimplemented!("range index (a[i:j]) is not yet supported");
         }
@@ -86,28 +82,25 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .get_type()
             .expect("slang types every index-access expression");
 
-        let (base_value, block) = self.emit_value(&base, block)?;
-        let (index_value, block) = self.emit_value(&index_expression, block)?;
+        let base_value = self.emit_value(&base, context)?;
+        let index_value = self.emit_value(&index_expression, context)?;
 
         let (address, element_type) = match &base_type {
             SlangType::Mapping(_) => {
-                let element_type =
-                    TypeConversion::resolve_slang_type(&result_type, None, self.state);
+                let element_type = TypeConversion::resolve_slang_type(&result_type, None, context);
                 let base_location = Self::resolve_base_location(&base_type);
                 let address_type =
-                    Self::address_type(self.state, element_type, base_location, &result_type);
-                let address =
-                    Place::from(base_value).map(index_value, address_type, self.state, &block);
+                    Self::address_type(context, element_type, base_location, &result_type);
+                let address = Place::from(base_value).map(index_value, address_type, context);
                 (address, element_type)
             }
             _ => {
                 let element_type = base_value.r#type().element_type(0);
-                let address =
-                    Place::from(base_value).gep(index_value, element_type, self.state, &block);
+                let address = Place::from(base_value).gep(index_value, element_type, context);
                 (address, element_type)
             }
         };
-        Ok((address, element_type, block))
+        Ok((address, element_type))
     }
 
     /// Maps a slang container type's data location to the dialect-side

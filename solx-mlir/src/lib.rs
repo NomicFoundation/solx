@@ -9,14 +9,15 @@
 #![allow(clippy::too_many_arguments)]
 
 #[macro_use]
-pub mod macros;
-pub mod context;
-pub mod dialect;
-pub mod ffi;
-pub mod ir;
-pub mod llvm_module;
-pub mod ods;
-pub mod output;
+mod macros;
+
+pub(crate) mod context;
+pub(crate) mod dialect;
+pub(crate) mod ffi;
+pub(crate) mod ir;
+pub(crate) mod llvm_module;
+pub(crate) mod ods;
+pub(crate) mod output;
 
 pub use self::context::Context;
 pub use self::context::contract::Contract;
@@ -27,7 +28,7 @@ pub use self::ir::attributes::CmpPredicate;
 pub use self::ir::attributes::ContractKind;
 pub use self::ir::attributes::FunctionKind;
 pub use self::ir::attributes::StateMutability;
-pub use self::ir::effect::Effect;
+pub use self::ir::block::Block;
 pub use self::ir::place::Place;
 pub use self::ir::r#type::Type;
 pub use self::ir::r#type::array_size::ArraySize;

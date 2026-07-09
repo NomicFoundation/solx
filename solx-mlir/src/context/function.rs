@@ -2,9 +2,7 @@
 //! Function call resolution metadata, and the `sol.func` / `sol.call` it emits.
 //!
 
-use melior::ir::Block;
-use melior::ir::BlockLike;
-use melior::ir::BlockRef;
+use melior::ir::Block as MlirBlock;
 use melior::ir::Region;
 use melior::ir::RegionLike;
 use melior::ir::attribute::FlatSymbolRefAttribute;
@@ -15,6 +13,7 @@ use melior::ir::operation::OperationLike;
 use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
 
+use crate::Block;
 use crate::Context;
 use crate::FunctionKind;
 use crate::StateMutability;
@@ -53,14 +52,14 @@ impl<'context> Function<'context> {
     /// parameter types, returned for the body. `selector` / `kind` are the optional dispatch
     /// attributes; an original function type is attached for selector-dispatched and constructor
     /// functions.
-    pub fn define<'block>(
+    pub fn define(
         &self,
         selector: Option<u32>,
         state_mutability: StateMutability,
         kind: Option<FunctionKind>,
         context: &Context<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> BlockRef<'context, 'block> {
+        contract_body: Block<'context>,
+    ) -> Block<'context> {
         let parameter_types = self
             .parameter_types
             .iter()
@@ -73,7 +72,7 @@ impl<'context> Function<'context> {
             .collect::<Vec<_>>();
         let function_type = FunctionType::new(context.melior, &parameter_types, &return_types);
         let body_region = Region::new();
-        let entry_block = Block::new(
+        let entry_block = MlirBlock::new(
             &parameter_types
                 .iter()
                 .map(|parameter_type| (*parameter_type, context.location()))
@@ -99,26 +98,23 @@ impl<'context> Function<'context> {
             operation_builder =
                 operation_builder.orig_fn_type(TypeAttribute::new(function_type.into()));
         }
-        let operation = block.append_operation(operation_builder.build().into());
-        operation
-            .region(0)
-            .expect("func has one region")
-            .first_block()
-            .expect("func body has entry block")
+        let operation = contract_body.append_operation(operation_builder.build().into());
+        Block::from(
+            operation
+                .region(0)
+                .expect("func has one region")
+                .first_block()
+                .expect("func body has entry block"),
+        )
     }
 
     /// Emits a `sol.call` to `callee` by symbol, returning its results in declaration order.
-    pub fn call<'block, B>(
+    pub fn call(
         callee: &str,
-        operands: &[Value<'context, 'block>],
+        operands: &[Value<'context>],
         result_types: &[Type<'context>],
         context: &Context<'context>,
-        block: &B,
-    ) -> anyhow::Result<Vec<Value<'context, 'block>>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
+    ) -> anyhow::Result<Vec<Value<'context>>> {
         let operands = operands
             .iter()
             .map(|operand| operand.into_mlir())
@@ -127,7 +123,7 @@ impl<'context> Function<'context> {
             .iter()
             .map(|result_type| result_type.into_mlir())
             .collect::<Vec<_>>();
-        let operation = block.append_operation(mlir_op_build!(
+        let operation = context.current_block().append_operation(mlir_op_build!(
             context,
             CallOperation
                 .callee(FlatSymbolRefAttribute::new(context.melior, callee))
@@ -136,7 +132,7 @@ impl<'context> Function<'context> {
         ));
         let mut results = Vec::with_capacity(result_types.len());
         for index in 0..result_types.len() {
-            results.push(Value::new(operation.result(index)?.into()));
+            results.push(Value::from(operation.result(index)?));
         }
         Ok(results)
     }

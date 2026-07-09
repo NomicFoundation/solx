@@ -16,19 +16,19 @@ use crate::Type;
 /// Implements lexical scoping: variable lookups search from the innermost
 /// scope outward. `enter_scope()` / `exit_scope()` bracket blocks that
 /// introduce new variables.
-pub struct Environment<'context, 'block> {
+pub struct Environment<'context> {
     /// Stack of scopes, each mapping variable names to `(pointer, element_type)`.
     /// The outermost scope (index 0) holds function parameters.
-    scopes: Vec<HashMap<String, (Place<'context, 'block>, Type<'context>)>>,
+    scopes: Vec<HashMap<String, (Place<'context>, Type<'context>)>>,
 }
 
-impl<'context, 'block> Default for Environment<'context, 'block> {
+impl<'context> Default for Environment<'context> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'context, 'block> Environment<'context, 'block> {
+impl<'context> Environment<'context> {
     /// Creates a new environment with a single root scope.
     pub fn new() -> Self {
         Self {
@@ -55,7 +55,7 @@ impl<'context, 'block> Environment<'context, 'block> {
     pub fn define_variable(
         &mut self,
         name: String,
-        pointer: Place<'context, 'block>,
+        pointer: Place<'context>,
         element_type: Type<'context>,
     ) {
         self.scopes
@@ -77,7 +77,7 @@ impl<'context, 'block> Environment<'context, 'block> {
     // TODO: key on the Slang `NodeId` of the declaration instead of the textual
     // name to disambiguate same-named locals across scopes without relying on
     // `enter_scope`/`exit_scope` discipline at the call sites.
-    pub fn variable_with_type(&self, name: &str) -> (Place<'context, 'block>, Type<'context>) {
+    pub fn variable_with_type(&self, name: &str) -> (Place<'context>, Type<'context>) {
         for scope in self.scopes.iter().rev() {
             if let Some(entry) = scope.get(name) {
                 return *entry;

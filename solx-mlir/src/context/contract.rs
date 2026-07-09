@@ -2,14 +2,13 @@
 //! The Contract declaration entity: emits `sol.contract` and its `sol.state_var` members.
 //!
 
-use melior::ir::BlockLike;
-use melior::ir::BlockRef;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
 use melior::ir::r#type::IntegerType;
 use ruint::aliases::U256;
 
+use crate::Block;
 use crate::Context;
 use crate::ContractKind;
 use crate::Type;
@@ -18,31 +17,29 @@ use crate::ods::sol::StateVarOperation;
 
 /// A `sol.contract` declaration and the insertion point for its `sol.state_var` members.
 #[derive(Clone, Copy)]
-pub struct Contract<'context, 'block> {
+pub struct Contract<'context> {
     /// The contract's body region entry block, where its members and functions are emitted.
-    pub body: BlockRef<'context, 'block>,
+    pub body: Block<'context>,
 }
 
-impl<'context, 'block> Contract<'context, 'block> {
+impl<'context> Contract<'context> {
     /// Emits `sol.contract @name` of `kind` into `module_body`, returning it wrapping the body region.
-    pub fn define<B>(
+    pub fn define(
         name: &str,
         kind: ContractKind,
         context: &Context<'context>,
-        module_body: &B,
-    ) -> Self
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
+        module_body: Block<'context>,
+    ) -> Self {
         let body = mlir_region_op!(
-            context, module_body,
+            context, &module_body.inner,
             ContractOperation
                 .sym_name(StringAttribute::new(context.melior, name))
                 .kind(kind.attribute(context.melior));
             body_region
         );
-        Self { body }
+        Self {
+            body: Block::from(body),
+        }
     }
 
     /// Emits a `sol.state_var @name` member of `element_type` at storage `slot`/`byte_offset`.
@@ -56,7 +53,7 @@ impl<'context, 'block> Contract<'context, 'block> {
     ) {
         mlir_op_void!(
             context,
-            &self.body,
+            self.body,
             StateVarOperation
                 .sym_name(StringAttribute::new(context.melior, name))
                 .r#type(TypeAttribute::new(element_type.into_mlir()))

@@ -4558,7 +4558,6 @@ name = "solx-slang"
 version = "0.1.4"
 dependencies = [
  "anyhow",
- "melior",
  "num-bigint",
  "num-traits",
  "ruint",
