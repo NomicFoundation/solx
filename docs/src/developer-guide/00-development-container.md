@@ -30,10 +30,11 @@ The Rust toolchain itself is also resolved lazily: rustup downloads the version 
 3. Build the toolchain:
 
    ```shell
-   .devcontainer/bootstrap.sh
+   .devcontainer/bootstrap.sh          # MLIR-enabled build (default)
+   .devcontainer/bootstrap.sh --no-mlir  # skip MLIR if you only touch the solc/Yul pipeline
    ```
 
-   This is the ~1 hour step (cold). It is kept out of the automatic container setup precisely because of that cost — you should know when you are paying it.
+   This is the ~1 hour step (cold). It is kept out of the automatic container setup precisely because of that cost — you should know when you are paying it. The wrapper takes two flags: `--no-mlir` (build LLVM without MLIR — see [How LLVM is installed](#how-llvm-is-installed)) and `--clean` (wipe `target-llvm/` first — see [Troubleshooting](#troubleshooting)).
 
 4. Build and test **solx**:
 
@@ -51,7 +52,7 @@ The Rust toolchain itself is also resolved lazily: rustup downloads the version 
 3. `./target/release/solx-dev llvm build --enable-assertions --enable-mlir --ccache-variant ccache` — configures and builds LLVM:
    - The build tree lives in `target-llvm/build-final/`, the installation in `target-llvm/target-final/`.
    - `.cargo/config.toml` already points `LLVM_SYS_211_PREFIX`, `MLIR_SYS_210_PREFIX`, and `TABLEGEN_210_PREFIX` at that installation, so no environment setup is needed — `cargo` and rust-analyzer find it as soon as it exists.
-   - MLIR is enabled by default because the Slang frontend pipeline (`cargo test-slang`) requires it. Pass `--no-mlir` to skip it and shave build time if you only work on the solc/Yul pipeline.
+   - MLIR is enabled by default because the Slang frontend pipeline (`cargo test-slang`) requires it. To skip it and shave build time if you only work on the solc/Yul pipeline: pass `--no-mlir` to `bootstrap.sh`, or — if you drive `solx-dev` directly — simply omit `--enable-mlir` (there is no `--no-mlir` at the `solx-dev` layer; it is a boolean flag). Either way, keep the LLVM and solc builds consistent — MLIR must be enabled or disabled on both.
    - Assertions are enabled, matching CI.
 4. `./target/release/solx-dev solc build --build-boost --ccache-variant ccache --enable-mlir` — builds the solc fork libraries into `solx-solidity/build/` (again already wired up via `SOLC_PREFIX`/`BOOST_PREFIX`). `--build-boost` downloads and builds a static Boost into `solx-solidity/boost/` first — the runner image deliberately ships no system Boost, matching how CI builds solc.
 
