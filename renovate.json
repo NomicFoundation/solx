@@ -17,6 +17,19 @@
         "(?<depName>yarn|pnpm|bun)\\s*=\\s*\"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""
       ],
       "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the solx-latest release pin feeding the integration harness's `solx-latest` toolchain. The version appears twice in the download URL (path segment and file name), hence two matchStrings; both occurrences resolve to the same dependency and are bumped together.",
+      "managerFilePatterns": [
+        "/^solx-compiler-downloader/dev-compilers\\.json$/"
+      ],
+      "matchStrings": [
+        "github\\.com/NomicFoundation/solx/releases/download/(?<currentValue>\\d+\\.\\d+\\.\\d+)/",
+        "solx-\\$\\{PLATFORM\\}-v(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "NomicFoundation/solx",
+      "datasourceTemplate": "github-releases"
     }
   ],
   "packageRules": [
@@ -95,6 +108,12 @@
       "description": "custom.regex deps only feed the integration harness; label so the gated suite runs.",
       "matchManagers": ["custom.regex"],
       "addLabels": ["ci:integration"]
+    },
+    {
+      "description": "solx-latest release pin: only the full benchmark matrix exercises the released binary, so bump PRs need that suite to prove the new release works in the harness. ci:integration is repeated because the workflow's label gate requires it alongside the full-matrix label.",
+      "matchManagers": ["custom.regex"],
+      "matchDepNames": ["NomicFoundation/solx"],
+      "addLabels": ["ci:integration", "ci:integration-benchmark-full"]
     }
   ],
   "labels": ["dependencies"],
