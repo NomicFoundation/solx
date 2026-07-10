@@ -326,8 +326,8 @@ pub fn sed_file<P: AsRef<Path>>(file_path: P, patterns: &[&str]) -> anyhow::Resu
 }
 
 ///
-/// A shell shim that wraps a compiler executable and records every invocation
-/// in a marker file.
+/// A native shim binary that wraps a compiler executable and records every
+/// invocation in a marker file.
 ///
 /// Build systems resolve compilers through their own configuration layers, so
 /// a harness bug can leave them silently compiling with a bundled compiler
@@ -335,11 +335,17 @@ pub fn sed_file<P: AsRef<Path>>(file_path: P, patterns: &[&str]) -> anyhow::Resu
 /// Passing the shim path instead of the real compiler lets test runners verify
 /// after each build that the configured compiler was actually invoked.
 ///
+/// The shim must be a real native executable, not a script: Hardhat 3 sniffs
+/// the compiler file's content (`isBinaryFile`) and loads anything that looks
+/// like text as a solc-js module. It is therefore generated as a tiny Rust
+/// program and compiled with `rustc` at harness startup (always available,
+/// since `solx-dev` itself is built by cargo).
+///
 pub struct CompilerInvocationShim {
     /// Path to pass to the build system instead of the real compiler.
     pub compiler_path: PathBuf,
     /// File created by the shim on every compiler invocation.
-    /// `None` on platforms without shell shims, where verification is disabled.
+    /// `None` on platforms without shims, where verification is disabled.
     marker_path: Option<PathBuf>,
 }
 
@@ -353,8 +359,6 @@ impl CompilerInvocationShim {
     pub fn new(compiler_path: PathBuf, directory: &Path) -> anyhow::Result<Self> {
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
-
             std::fs::create_dir_all(directory).map_err(|error| {
                 anyhow::anyhow!("Creating compiler shim directory {directory:?}: {error}")
             })?;
@@ -362,13 +366,34 @@ impl CompilerInvocationShim {
             let shim_path = directory.join(compiler_path.file_name().ok_or_else(|| {
                 anyhow::anyhow!("Compiler path {compiler_path:?} has no file name")
             })?);
-            let script = format!("#!/bin/sh\n: > {marker_path:?}\nexec {compiler_path:?} \"$@\"\n");
-            std::fs::write(shim_path.as_path(), script)
-                .map_err(|error| anyhow::anyhow!("Writing compiler shim {shim_path:?}: {error}"))?;
-            std::fs::set_permissions(shim_path.as_path(), std::fs::Permissions::from_mode(0o755))
-                .map_err(|error| {
-                anyhow::anyhow!("Setting compiler shim permissions {shim_path:?}: {error}")
+            let source_path = directory.join("shim.rs");
+            let source = format!(
+                "fn main() {{
+    let _ = std::fs::write({marker_path:?}, b\"\");
+    let error = std::os::unix::process::CommandExt::exec(
+        std::process::Command::new({compiler_path:?}).args(std::env::args_os().skip(1)),
+    );
+    eprintln!(\"compiler invocation shim: {{error}}\");
+    std::process::exit(127);
+}}
+"
+            );
+            std::fs::write(source_path.as_path(), source).map_err(|error| {
+                anyhow::anyhow!("Writing compiler shim source {source_path:?}: {error}")
             })?;
+            let mut rustc_command = Command::new("rustc");
+            rustc_command.arg("-O");
+            rustc_command.arg(source_path.as_path());
+            rustc_command.arg("-o");
+            rustc_command.arg(shim_path.as_path());
+            command(
+                &mut rustc_command,
+                format!(
+                    "{} compiler invocation shim for {compiler_path:?}",
+                    solx_utils::cargo_status_ok("Compiling"),
+                )
+                .as_str(),
+            )?;
             Ok(Self {
                 compiler_path: shim_path,
                 marker_path: Some(marker_path),
