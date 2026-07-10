@@ -42,7 +42,7 @@ pub fn build(
     let ninja_available = crate::utils::exists("ninja").is_ok();
 
     // Fix Boost library names for Windows (remove version suffix)
-    fix_boost_library_names(boost_config)?;
+    let boost_compiler = fix_boost_library_names(boost_config)?;
 
     let mut cmake = Command::new("cmake");
     cmake.current_dir(build_dir);
@@ -80,7 +80,7 @@ pub fn build(
         cmake.arg(arg);
     }
     // Windows-specific Boost flags
-    cmake.arg("-DBoost_COMPILER=-mgw15");
+    cmake.arg(format!("-DBoost_COMPILER={boost_compiler}"));
     cmake.arg("-DBoost_ARCHITECTURE=-x64");
 
     // MLIR configuration
@@ -123,12 +123,15 @@ pub fn build(
 }
 
 ///
-/// Fix Boost library names for Windows.
+/// Fix Boost library names for Windows and report the MinGW compiler tag.
 ///
-/// The Boost build creates versioned library names like `libboost_system-mgw15-...`.
-/// CMake expects them without the version suffix, so we create copies.
+/// The Boost build tags versioned libraries like `libboost_system-mgw16-...` with
+/// the MinGW GCC major version. CMake expects the unsuffixed names, and its
+/// `BoostConfig` rejects any variant whose tag differs from `Boost_COMPILER`, so the
+/// tag (`-mgw16`) is read back from the built libraries rather than hardcoded to a
+/// GCC version that drifts with the toolchain.
 ///
-fn fix_boost_library_names(boost_config: &BoostConfig) -> anyhow::Result<()> {
+fn fix_boost_library_names(boost_config: &BoostConfig) -> anyhow::Result<String> {
     let lib_dir = boost_config.lib_dir();
 
     let libraries = [
@@ -143,6 +146,7 @@ fn fix_boost_library_names(boost_config: &BoostConfig) -> anyhow::Result<()> {
         "libboost_unit_test_framework",
     ];
 
+    let mut compiler_tag = None;
     for lib_base in libraries {
         // Find the versioned library file
         let entries: Vec<PathBuf> = std::fs::read_dir(&lib_dir)?
@@ -164,6 +168,13 @@ fn fix_boost_library_names(boost_config: &BoostConfig) -> anyhow::Result<()> {
         });
 
         if let Some(versioned_lib) = versioned_lib {
+            if compiler_tag.is_none() {
+                compiler_tag = versioned_lib
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .and_then(|name| name.split('-').nth(1))
+                    .map(|tag| format!("-{tag}"));
+            }
             let target_lib = lib_dir.join(format!("{lib_base}.a"));
             std::fs::copy(&versioned_lib, &target_lib)?;
             eprintln!(
@@ -174,5 +185,10 @@ fn fix_boost_library_names(boost_config: &BoostConfig) -> anyhow::Result<()> {
         }
     }
 
-    Ok(())
+    compiler_tag.ok_or_else(|| {
+        anyhow::anyhow!(
+            "Unable to determine the Boost MinGW compiler tag from libraries in {}",
+            lib_dir.display()
+        )
+    })
 }
