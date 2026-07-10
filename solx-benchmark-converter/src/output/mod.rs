@@ -5,6 +5,7 @@
 pub mod comparison;
 pub mod format;
 pub mod json;
+pub mod markdown;
 pub mod xlsx;
 
 use std::path::PathBuf;

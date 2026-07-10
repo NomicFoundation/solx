@@ -10,6 +10,10 @@ license = "MIT OR Apache-2.0"
 name = "solx-benchmark-converter"
 path = "src/benchmark_converter/main.rs"
 
+[[bin]]
+name = "solx-benchmark-summary"
+path = "src/benchmark_summary/main.rs"
+
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
