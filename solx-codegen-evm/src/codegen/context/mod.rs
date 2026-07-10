@@ -633,30 +633,20 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
 
     fn create_debug_info_location(&self) -> Option<inkwell::debug_info::DILocation<'ctx>> {
         let debug_info = self.debug_info.as_ref()?;
-        let current_function = self
-            .current_function
-            .as_ref()
-            .expect("Always exists")
-            .borrow();
-        let current_location = self
+        // Compiler-generated code with no Solidity statement gets line 0 —
+        // the DWARF convention for "no source association". Falling back to
+        // the enclosing declaration's line would misattribute such code to
+        // the function or contract signature in consumers.
+        let (line, column) = self
             .solidity()
             .and_then(|solidity_data| solidity_data.get_solx_location())
-            .or(current_function.solx_debug_info_location())
-            .cloned()
-            .unwrap_or_else(|| {
-                solx_utils::DebugInfoMappedLocation::new_with_location(
-                    self.contract_name.path.to_owned(),
-                    1,
-                    1,
-                    0,
-                    None,
+            .map_or((0, 0), |location| {
+                (
+                    location.line.unwrap_or_default(),
+                    location.column.unwrap_or_default(),
                 )
             });
-        debug_info.create_location(
-            self,
-            current_location.line.unwrap_or_default(),
-            current_location.column.unwrap_or_default(),
-        )
+        debug_info.create_location(self, line, column)
     }
 
     fn output_config(&self) -> Option<&OutputConfig> {
