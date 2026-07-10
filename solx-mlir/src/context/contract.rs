@@ -37,9 +37,7 @@ impl<'context> Contract<'context> {
                 .kind(kind.attribute(context.melior));
             body_region
         );
-        Self {
-            body: Block::from(body),
-        }
+        Self { body }
     }
 
     /// Emits a `sol.state_var @name` member of `element_type` at storage `slot`/`byte_offset`.
