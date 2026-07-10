@@ -404,20 +404,27 @@ pub fn test(
             )
         })
         .collect();
-    let output: solx_benchmark_converter::Output = (
-        benchmark,
-        comparisons,
-        solx_benchmark_converter::OutputFormat::Xlsx,
-    )
-        .try_into()?;
-
     std::fs::create_dir_all(output_directory.as_path()).map_err(|error| {
         anyhow::anyhow!(
             "{} Hardhat output reports directory {output_directory:?}: {error}",
             "Creating".bright_green().bold(),
         )
     })?;
-    let mut output_path = crate::utils::absolute_path(output_directory)?;
+    let base_path = crate::utils::absolute_path(output_directory)?;
+
+    // Emit the merged benchmark JSON next to the XLSX so the workflow's summary
+    // step can render the PR comment from the native data model.
+    let mut benchmark_json_path = base_path.clone();
+    benchmark_json_path.push("hardhat-benchmark.json");
+    std::fs::write(&benchmark_json_path, serde_json::to_string(&benchmark)?)?;
+
+    let output: solx_benchmark_converter::Output = (
+        benchmark,
+        comparisons,
+        solx_benchmark_converter::OutputFormat::Xlsx,
+    )
+        .try_into()?;
+    let mut output_path = base_path;
     output_path.push("hardhat-report.xlsx");
     eprintln!(
         "{} the spreadsheet report to {}",
