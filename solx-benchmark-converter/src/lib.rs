@@ -26,3 +26,5 @@ pub use crate::input::testing_time::TestingTimeReport;
 pub use crate::output::Output;
 pub use crate::output::comparison::Comparison as OutputComparison;
 pub use crate::output::format::Format as OutputFormat;
+pub use crate::output::markdown::SummarySuite;
+pub use crate::output::markdown::render as render_summary;
