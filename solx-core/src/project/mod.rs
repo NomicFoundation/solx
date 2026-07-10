@@ -539,22 +539,8 @@ impl Project {
                 #[cfg(feature = "mlir")]
                 let mlir = contract.mlir.take();
 
-                let mut deploy_debug_info = output_selection
-                    .check_selection(
-                        path.as_str(),
-                        contract_name.name.as_deref(),
-                        solx_standard_json::InputSelector::BytecodeDebugInfo,
-                    )
-                    .then(|| self.debug_info.clone())
-                    .flatten();
-                let mut runtime_debug_info = output_selection
-                    .check_selection(
-                        path.as_str(),
-                        contract_name.name.as_deref(),
-                        solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
-                    )
-                    .then(|| self.debug_info.clone())
-                    .flatten();
+                let mut deploy_debug_info: Option<solx_utils::DebugInfo> = None;
+                let mut runtime_debug_info: Option<solx_utils::DebugInfo> = None;
 
                 let (deploy_code_ir, runtime_code_ir): (ContractIR, ContractIR) = match contract.ir
                 {
@@ -562,22 +548,34 @@ impl Project {
                         let runtime_code: ContractYul =
                             *deploy_code.runtime_code.take().expect("Always exists");
 
-                        if let Some(ref mut debug_info) = deploy_debug_info {
-                            debug_info.retain_source_ids(
-                                &deploy_code.object.sources.keys().copied().collect(),
-                            );
-                            if let Some(contract_name) = contract_name.name.as_deref() {
-                                debug_info.retain_current_contract(contract_name);
-                            }
-                        }
-                        if let Some(ref mut debug_info) = runtime_debug_info {
-                            debug_info.retain_source_ids(
-                                &runtime_code.object.sources.keys().copied().collect(),
-                            );
-                            if let Some(contract_name) = contract_name.name.as_deref() {
-                                debug_info.retain_current_contract(contract_name);
-                            }
-                        }
+                        deploy_debug_info = self.debug_info.as_ref().and_then(|debug_info| {
+                            output_selection
+                                .check_selection(
+                                    path.as_str(),
+                                    contract_name.name.as_deref(),
+                                    solx_standard_json::InputSelector::BytecodeDebugInfo,
+                                )
+                                .then(|| {
+                                    debug_info.filter_to(
+                                        &deploy_code.object.sources.keys().copied().collect(),
+                                        contract_name.name.as_deref(),
+                                    )
+                                })
+                        });
+                        runtime_debug_info = self.debug_info.as_ref().and_then(|debug_info| {
+                            output_selection
+                                .check_selection(
+                                    path.as_str(),
+                                    contract_name.name.as_deref(),
+                                    solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
+                                )
+                                .then(|| {
+                                    debug_info.filter_to(
+                                        &runtime_code.object.sources.keys().copied().collect(),
+                                        contract_name.name.as_deref(),
+                                    )
+                                })
+                        });
 
                         (deploy_code.into(), runtime_code.into())
                     }
@@ -585,18 +583,34 @@ impl Project {
                         let runtime_code: ContractEVMLegacyAssembly =
                             *deploy_code.runtime_code.take().expect("Always exists");
 
-                        if let Some(ref mut debug_info) = deploy_debug_info {
-                            debug_info.retain_source_ids(&deploy_code.assembly.source_ids());
-                            if let Some(contract_name) = contract_name.name.as_deref() {
-                                debug_info.retain_current_contract(contract_name);
-                            }
-                        }
-                        if let Some(ref mut debug_info) = runtime_debug_info {
-                            debug_info.retain_source_ids(&runtime_code.assembly.source_ids());
-                            if let Some(contract_name) = contract_name.name.as_deref() {
-                                debug_info.retain_current_contract(contract_name);
-                            }
-                        }
+                        deploy_debug_info = self.debug_info.as_ref().and_then(|debug_info| {
+                            output_selection
+                                .check_selection(
+                                    path.as_str(),
+                                    contract_name.name.as_deref(),
+                                    solx_standard_json::InputSelector::BytecodeDebugInfo,
+                                )
+                                .then(|| {
+                                    debug_info.filter_to(
+                                        &deploy_code.assembly.source_ids(),
+                                        contract_name.name.as_deref(),
+                                    )
+                                })
+                        });
+                        runtime_debug_info = self.debug_info.as_ref().and_then(|debug_info| {
+                            output_selection
+                                .check_selection(
+                                    path.as_str(),
+                                    contract_name.name.as_deref(),
+                                    solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
+                                )
+                                .then(|| {
+                                    debug_info.filter_to(
+                                        &runtime_code.assembly.source_ids(),
+                                        contract_name.name.as_deref(),
+                                    )
+                                })
+                        });
 
                         (deploy_code.into(), runtime_code.into())
                     }

@@ -30,9 +30,9 @@ pub struct DebugInfo {
     /// Solidity AST function definitions.
     /// The key is the AST node ID.
     pub function_definitions: HashMap<usize, FunctionDefinition>,
-    /// Generic Solidity AST nodes.
-    /// The key is the start byte offset.
-    pub ast_nodes: HashMap<usize, AstNode>,
+    /// Generic Solidity AST nodes, grouped by source ID.
+    /// The outer key is the source ID; the inner key is the start byte offset.
+    pub ast_nodes: HashMap<usize, HashMap<usize, AstNode>>,
     /// Source ID to source file path mapping.
     #[serde(default)]
     pub source_ids: BTreeMap<usize, String>,
@@ -45,7 +45,7 @@ impl DebugInfo {
     pub fn new(
         contract_definitions: HashMap<String, ContractDefinition>,
         function_definitions: HashMap<usize, FunctionDefinition>,
-        ast_nodes: HashMap<usize, AstNode>,
+        ast_nodes: HashMap<usize, HashMap<usize, AstNode>>,
         source_ids: BTreeMap<usize, String>,
     ) -> Self {
         Self {
@@ -57,25 +57,38 @@ impl DebugInfo {
     }
 
     ///
-    /// Retains only the debug info for the specified source IDs.
+    /// Builds the debug info restricted to the given source IDs and, when set, the current contract.
+    /// Only the retained sources' AST nodes are cloned.
     ///
-    pub fn retain_source_ids(&mut self, source_ids: &BTreeSet<usize>) {
-        self.contract_definitions.retain(|_, contract_definition| {
-            source_ids.contains(&contract_definition.solc_location.source_id)
-        });
-        self.function_definitions.retain(|_, function_definition| {
-            source_ids.contains(&function_definition.solc_location.source_id)
-        });
-        self.ast_nodes
-            .retain(|_, ast_node| source_ids.contains(&ast_node.solc_location.source_id));
-    }
-
-    ///
-    /// Retains only the contract definition of the current contract.
-    ///
-    pub fn retain_current_contract(&mut self, contract_name: &str) {
-        self.contract_definitions
-            .retain(|name, _| name == contract_name);
+    pub fn filter_to(&self, source_ids: &BTreeSet<usize>, contract_name: Option<&str>) -> Self {
+        Self {
+            contract_definitions: self
+                .contract_definitions
+                .iter()
+                .filter(|(name, contract_definition)| {
+                    source_ids.contains(&contract_definition.solc_location.source_id)
+                        && contract_name.is_none_or(|current| current == name.as_str())
+                })
+                .map(|(name, contract_definition)| (name.clone(), contract_definition.clone()))
+                .collect(),
+            function_definitions: self
+                .function_definitions
+                .iter()
+                .filter(|(_, function_definition)| {
+                    source_ids.contains(&function_definition.solc_location.source_id)
+                })
+                .map(|(id, function_definition)| (*id, function_definition.clone()))
+                .collect(),
+            ast_nodes: source_ids
+                .iter()
+                .filter_map(|source_id| {
+                    self.ast_nodes
+                        .get(source_id)
+                        .map(|nodes| (*source_id, nodes.clone()))
+                })
+                .collect(),
+            source_ids: self.source_ids.clone(),
+        }
     }
 }
 

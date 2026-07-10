@@ -159,7 +159,8 @@ impl Output {
             HashMap::new();
         let mut function_definitions: HashMap<usize, solx_utils::DebugInfoFunctionDefinition> =
             HashMap::new();
-        let mut ast_nodes: HashMap<usize, solx_utils::DebugInfoAstNode> = HashMap::new();
+        let mut ast_nodes: HashMap<usize, HashMap<usize, solx_utils::DebugInfoAstNode>> =
+            HashMap::new();
 
         // Build source_id -> path mapping
         let source_ids: BTreeMap<usize, String> = self
@@ -192,11 +193,18 @@ impl Output {
                     ast_json,
                 ));
 
-                ast_nodes.extend(Source::get_ast_nodes(
-                    &|path: &str, ast: &serde_json::Value| Source::ast_node(path, ast, &line_index),
-                    path.as_str(),
-                    ast_json,
-                ));
+                ast_nodes.insert(
+                    source.id,
+                    Source::get_ast_nodes(
+                        &|path: &str, ast: &serde_json::Value| {
+                            Source::ast_node(path, ast, &line_index)
+                        },
+                        path.as_str(),
+                        ast_json,
+                    )
+                    .into_iter()
+                    .collect(),
+                );
             }
         }
 
