@@ -326,6 +326,96 @@ pub fn sed_file<P: AsRef<Path>>(file_path: P, patterns: &[&str]) -> anyhow::Resu
 }
 
 ///
+/// A shell shim that wraps a compiler executable and records every invocation
+/// in a marker file.
+///
+/// Build systems resolve compilers through their own configuration layers, so
+/// a harness bug can leave them silently compiling with a bundled compiler
+/// while the report attributes the results to the configured one (see #497).
+/// Passing the shim path instead of the real compiler lets test runners verify
+/// after each build that the configured compiler was actually invoked.
+///
+pub struct CompilerInvocationShim {
+    /// Path to pass to the build system instead of the real compiler.
+    pub compiler_path: PathBuf,
+    /// File created by the shim on every compiler invocation.
+    /// `None` on platforms without shell shims, where verification is disabled.
+    marker_path: Option<PathBuf>,
+}
+
+impl CompilerInvocationShim {
+    ///
+    /// Creates a shim for `compiler_path` inside `directory`.
+    ///
+    /// On non-Unix hosts the real compiler path is passed through unchanged
+    /// and `verify` always succeeds.
+    ///
+    pub fn new(compiler_path: PathBuf, directory: &Path) -> anyhow::Result<Self> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            std::fs::create_dir_all(directory).map_err(|error| {
+                anyhow::anyhow!("Creating compiler shim directory {directory:?}: {error}")
+            })?;
+            let marker_path = directory.join("invoked");
+            let shim_path = directory.join(compiler_path.file_name().ok_or_else(|| {
+                anyhow::anyhow!("Compiler path {compiler_path:?} has no file name")
+            })?);
+            let script = format!("#!/bin/sh\n: > {marker_path:?}\nexec {compiler_path:?} \"$@\"\n");
+            std::fs::write(shim_path.as_path(), script)
+                .map_err(|error| anyhow::anyhow!("Writing compiler shim {shim_path:?}: {error}"))?;
+            std::fs::set_permissions(shim_path.as_path(), std::fs::Permissions::from_mode(0o755))
+                .map_err(|error| {
+                anyhow::anyhow!("Setting compiler shim permissions {shim_path:?}: {error}")
+            })?;
+            Ok(Self {
+                compiler_path: shim_path,
+                marker_path: Some(marker_path),
+            })
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = directory;
+            Ok(Self {
+                compiler_path,
+                marker_path: None,
+            })
+        }
+    }
+
+    ///
+    /// Clears the invocation marker; call before each build.
+    ///
+    pub fn reset(&self) -> anyhow::Result<()> {
+        if let Some(marker_path) = self.marker_path.as_deref()
+            && marker_path.exists()
+        {
+            std::fs::remove_file(marker_path).map_err(|error| {
+                anyhow::anyhow!("Removing compiler invocation marker {marker_path:?}: {error}")
+            })?;
+        }
+        Ok(())
+    }
+
+    ///
+    /// Errors if the compiler was never invoked since the last `reset`.
+    ///
+    pub fn verify(&self, toolchain_name: &str, project_name: &str) -> anyhow::Result<()> {
+        if let Some(marker_path) = self.marker_path.as_deref()
+            && !marker_path.exists()
+        {
+            anyhow::bail!(
+                "Harness self-check failed: project {project_name} built successfully with {toolchain_name}, \
+                but the configured compiler was never invoked — the build system used another compiler \
+                and the results would be attributed to the wrong toolchain (see #497)."
+            );
+        }
+        Ok(())
+    }
+}
+
+///
 /// Identify XCode version using `pkgutil`.
 ///
 pub fn get_xcode_version() -> anyhow::Result<u32> {
@@ -357,4 +447,55 @@ pub fn get_xcode_version() -> anyhow::Result<u32> {
         .parse()
         .map_err(|error| anyhow::anyhow!("Failed to parse XCode version: {error}"))?;
     Ok(xcode_version)
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::process::Command;
+
+    use super::CompilerInvocationShim;
+
+    #[test]
+    fn shim_records_compiler_invocation() {
+        let directory =
+            std::env::temp_dir().join(format!("solx-dev-shim-test-{}", std::process::id()));
+        let compiler_path = directory.join("fake-compiler");
+
+        std::fs::create_dir_all(directory.as_path()).expect("Always valid");
+        std::fs::write(compiler_path.as_path(), "#!/bin/sh\nexit 0\n").expect("Always valid");
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(
+                compiler_path.as_path(),
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .expect("Always valid");
+        }
+
+        let shim = CompilerInvocationShim::new(compiler_path, directory.join("shim").as_path())
+            .expect("Always valid");
+        shim.reset().expect("Always valid");
+        assert!(
+            shim.verify("toolchain", "project").is_err(),
+            "must fail before the compiler is invoked"
+        );
+
+        let status = Command::new(shim.compiler_path.as_path())
+            .arg("--version")
+            .status()
+            .expect("Always valid");
+        assert!(status.success(), "shim must exec the wrapped compiler");
+        assert!(
+            shim.verify("toolchain", "project").is_ok(),
+            "must pass after the compiler is invoked"
+        );
+
+        shim.reset().expect("Always valid");
+        assert!(
+            shim.verify("toolchain", "project").is_err(),
+            "must fail again after a reset"
+        );
+
+        std::fs::remove_dir_all(directory).expect("Always valid");
+    }
 }

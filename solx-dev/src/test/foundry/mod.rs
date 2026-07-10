@@ -58,6 +58,21 @@ pub fn test(
         .name
         .clone();
 
+    let mut compiler_shims = BTreeMap::new();
+    for (identifier, compiler) in config
+        .compilers
+        .iter()
+        .filter(|(_identifier, compiler)| !compiler.disabled)
+    {
+        let shim_directory =
+            crate::utils::absolute_path(format!("./temp-compiler-shims/foundry/{identifier}"))?;
+        let compiler_path = crate::utils::absolute_path(compiler.path.as_str())?;
+        compiler_shims.insert(
+            identifier.clone(),
+            crate::utils::CompilerInvocationShim::new(compiler_path, shim_directory.as_path())?,
+        );
+    }
+
     for (project_name, project) in config
         .projects
         .into_iter()
@@ -72,7 +87,7 @@ pub fn test(
         let mut project_directory = crate::utils::absolute_path(projects_directory.as_path())?;
         project_directory.push(project_name.as_str());
 
-        for ((_identifier, compiler), codegen) in config
+        for ((identifier, compiler), codegen) in config
             .compilers
             .iter()
             .filter(|(_identifier, compiler)| !compiler.disabled)
@@ -192,9 +207,12 @@ pub fn test(
                 ],
             )?;
 
-            let compiler_path = crate::utils::absolute_path(compiler.path.as_str())?;
-            let compiler_path_str = compiler_path.to_string_lossy();
+            let compiler_shim = compiler_shims
+                .get(identifier.as_str())
+                .expect("Always exists");
+            let compiler_path_str = compiler_shim.compiler_path.to_string_lossy();
             let toolchain_name = format!("{}-{codegen}", compiler.name);
+            compiler_shim.reset()?;
 
             let mut forge_build_command = Command::new("forge");
             forge_build_command.arg("build");
@@ -228,12 +246,15 @@ pub fn test(
             ) {
                 Ok(build_output) => build_output,
                 Err(_) => {
-                    if format!("{}-{}", correctness_candidate_compiler, codegen) == toolchain_name {
-                        build_correctness_table
-                            .entry(project_name.clone())
-                            .or_insert_with(BTreeMap::new)
-                            .insert(toolchain_name.clone(), 1);
-                    }
+                    build_correctness_table
+                        .entry(project_name.clone())
+                        .or_insert_with(BTreeMap::new)
+                        .insert(toolchain_name.clone(), 1);
+                    benchmark_inputs.push(solx_benchmark_converter::Input::new(
+                        solx_benchmark_converter::BuildFailuresReport(1),
+                        project_name.clone(),
+                        toolchain_name.clone(),
+                    ));
                     eprintln!(
                         "{} Foundry project {} with {} failed",
                         solx_utils::cargo_status_error("Building"),
@@ -244,6 +265,7 @@ pub fn test(
                 }
             };
             let compilation_time = build_timestamp_start.elapsed().as_millis() as u64;
+            compiler_shim.verify(toolchain_name.as_str(), project_name.as_str())?;
             for error in build_output.errors.iter() {
                 eprintln!(
                     "{}",
@@ -445,7 +467,28 @@ pub fn test(
         }
     }
 
-    let benchmark = solx_benchmark_converter::Benchmark::from_inputs(benchmark_inputs.into_iter())?;
+    // A toolchain that ran but contributed nothing would be silently absent
+    // from the report, misreported as clean (see #497).
+    if !benchmark_inputs.is_empty() {
+        for ((_identifier, compiler), codegen) in config
+            .compilers
+            .iter()
+            .filter(|(_identifier, compiler)| !compiler.disabled)
+            .cartesian_product(["legacy", "viaIR"])
+        {
+            let toolchain_name = format!("{}-{codegen}", compiler.name);
+            if !benchmark_inputs
+                .iter()
+                .any(|input| input.toolchain == toolchain_name)
+            {
+                anyhow::bail!(
+                    "Harness self-check failed: toolchain {toolchain_name} is enabled but produced no benchmark data",
+                );
+            }
+        }
+    }
+
+    let benchmark = solx_benchmark_converter::Benchmark::from_inputs(benchmark_inputs)?;
     let enabled_compiler_names: std::collections::HashSet<&str> = config
         .compilers
         .values()
@@ -527,18 +570,19 @@ pub fn test(
                 continue;
             }
 
+            // Only comparable when both toolchains actually ran the tests;
+            // a toolchain that failed to build has no test entry.
             let reference_test_failures = test_correctness_table
                 .get(project)
                 .and_then(|toolchains| toolchains.get(&reference_toolchain))
-                .copied()
-                .unwrap_or_default();
+                .copied();
             let candidate_test_failures = test_correctness_table
                 .get(project)
                 .and_then(|toolchains| toolchains.get(&candidate_toolchain))
-                .copied()
-                .unwrap_or_default();
-            if candidate_test_failures > reference_test_failures
-                && reference_build_errors < candidate_build_errors
+                .copied();
+            if let (Some(reference_test_failures), Some(candidate_test_failures)) =
+                (reference_test_failures, candidate_test_failures)
+                && candidate_test_failures > reference_test_failures
             {
                 errors.push(format!(
                     "{} Testing correctness mismatch for project {} between reference toolchain {} ({} failures) and candidate toolchain {} ({} failures)",

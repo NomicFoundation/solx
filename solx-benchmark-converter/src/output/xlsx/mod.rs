@@ -93,18 +93,33 @@ impl Xlsx {
     }
 
     ///
-    /// Returns the final workbook with all worksheets.
+    /// Returns the final workbook with all non-empty worksheets.
+    ///
+    /// Worksheets without data rows are dropped: some suites legitimately
+    /// never produce certain measurements (e.g. Hardhat collects no gas or
+    /// size), and an empty sheet with dangling comparison columns reads as
+    /// broken data rather than absent data. An all-empty workbook is kept
+    /// as-is, since XLSX requires at least one worksheet.
     ///
     pub fn finalize(self) -> rust_xlsxwriter::Workbook {
+        let worksheets = [
+            self.build_failures_worksheet,
+            self.test_failures_worksheet,
+            self.runtime_fee_worksheet,
+            self.deploy_fee_worksheet,
+            self.runtime_size_worksheet,
+            self.deploy_size_worksheet,
+            self.compilation_time_worksheet,
+            self.testing_time_worksheet,
+        ];
+
         let mut workbook = rust_xlsxwriter::Workbook::new();
-        workbook.push_worksheet(self.build_failures_worksheet.into_inner());
-        workbook.push_worksheet(self.test_failures_worksheet.into_inner());
-        workbook.push_worksheet(self.runtime_fee_worksheet.into_inner());
-        workbook.push_worksheet(self.deploy_fee_worksheet.into_inner());
-        workbook.push_worksheet(self.runtime_size_worksheet.into_inner());
-        workbook.push_worksheet(self.deploy_size_worksheet.into_inner());
-        workbook.push_worksheet(self.compilation_time_worksheet.into_inner());
-        workbook.push_worksheet(self.testing_time_worksheet.into_inner());
+        let all_empty = worksheets.iter().all(|worksheet| worksheet.rows.is_empty());
+        for worksheet in worksheets {
+            if all_empty || !worksheet.rows.is_empty() {
+                workbook.push_worksheet(worksheet.into_inner());
+            }
+        }
         workbook
     }
 }
