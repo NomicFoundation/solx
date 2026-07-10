@@ -50,7 +50,7 @@ jobs:
       packages: read
     runs-on: solx-linux-amd64-self-hosted
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:a3e9312d6442e028a4b9eed17ea597380ae86abf3ff4d45ba957d5a10a805790
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:90f34266781eeef5625ccf756af9d2248743e7891f8831e5fc901670eb766f6c
       options: -m 110g
     steps:
       - name: Checkout PR
