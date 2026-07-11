@@ -115,13 +115,14 @@ jobs:
       - name: Preserve lit tools before disk cleanup
         shell: bash
         run: |
+          EXE=${{ runner.os == 'Windows' && '.exe' || '' }}
           LIT=llvm-lit${{ runner.os == 'Windows' && '.py' || '' }}
           mkdir -p "${RUNNER_TEMP}/lit-tools"
           cp -r \
-            target-llvm/target-final/bin/FileCheck \
+            target-llvm/target-final/bin/FileCheck${EXE} \
             target-llvm/target-final/bin/${LIT} \
             solx-llvm/llvm/utils/lit \
-            solx-solidity/build/solc/solc \
+            solx-solidity/build/solc/solc${EXE} \
             "${RUNNER_TEMP}/lit-tools/"
           echo "${RUNNER_TEMP}/lit-tools" >> "${GITHUB_PATH}"
           echo "PYTHONPATH=${RUNNER_TEMP}/lit-tools/lit" >> "${GITHUB_ENV}"
