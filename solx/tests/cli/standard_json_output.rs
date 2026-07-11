@@ -121,6 +121,28 @@ fn yul_standard_json_output_has_contracts() -> anyhow::Result<()> {
 }
 
 #[cfg(feature = "solc")]
+#[test]
+fn yul_bytecode_umbrella_selection_is_not_rejected() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("yul_bytecode_umbrella.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("\"object\""))
+        .stdout(
+            predicate::str::contains("Debug info is only supported for Solidity source code input")
+                .not(),
+        );
+
+    Ok(())
+}
+
+#[cfg(feature = "solc")]
 #[test_case(crate::common::standard_json!("metadata_hash_ipfs_and_metadata.json"), true, true)]
 #[test_case(crate::common::standard_json!("metadata_hash_ipfs_no_metadata.json"), true, false)]
 #[test_case(crate::common::standard_json!("metadata_hash_none_and_metadata.json"), false, true)]
@@ -281,6 +303,22 @@ fn select_specific_bytecode(path: &str, expected_key: &str) -> anyhow::Result<()
     result
         .success()
         .stdout(predicate::str::contains(expected_key));
+
+    Ok(())
+}
+
+#[test_case(crate::common::standard_json!("select_evm_bytecode_debug_info.json"), "bytecode")]
+#[test_case(crate::common::standard_json!("select_evm_deployed_bytecode_debug_info.json"), "deployedBytecode")]
+fn select_specific_debug_info(path: &str, expected_key: &str) -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &["--standard-json", path];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains(expected_key))
+        .stdout(predicate::str::contains("\"debugInfo\"").count(1));
 
     Ok(())
 }
@@ -469,6 +507,42 @@ fn select_ast_only() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("\"evm\"").not())
         .stdout(predicate::str::contains("\"bytecode\"").not())
         .stdout(predicate::str::contains("\"abi\"").not());
+
+    Ok(())
+}
+
+#[test]
+fn select_wildcard_and_per_file_are_unioned() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("select_wildcard_and_per_file.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("\"abi\""))
+        .stdout(predicate::str::contains("\"bytecode\""));
+
+    Ok(())
+}
+
+#[test]
+fn select_per_file_cross_file_dependency() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("select_cross_file_dependency.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("Contract path not found for hash").not())
+        .stdout(predicate::str::contains("\"bytecode\""));
 
     Ok(())
 }

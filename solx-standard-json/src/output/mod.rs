@@ -159,7 +159,8 @@ impl Output {
             HashMap::new();
         let mut function_definitions: HashMap<usize, solx_utils::DebugInfoFunctionDefinition> =
             HashMap::new();
-        let mut ast_nodes: HashMap<usize, solx_utils::DebugInfoAstNode> = HashMap::new();
+        let mut ast_nodes: HashMap<usize, HashMap<usize, solx_utils::DebugInfoAstNode>> =
+            HashMap::new();
 
         // Build source_id -> path mapping
         let source_ids: BTreeMap<usize, String> = self
@@ -170,26 +171,40 @@ impl Output {
 
         for (path, source) in self.sources.iter() {
             if let Some(ref ast_json) = source.ast {
+                let content = sources
+                    .get(path)
+                    .and_then(|source| source.content())
+                    .unwrap_or_default();
+                let line_index = solx_utils::DebugInfoLineIndex::new(content);
+
                 contract_definitions.extend(Source::get_ast_nodes(
-                    &Source::contract_definition,
+                    &|path: &str, ast: &serde_json::Value| {
+                        Source::contract_definition(path, ast, &line_index)
+                    },
                     path.as_str(),
                     ast_json,
-                    sources,
                 ));
 
                 function_definitions.extend(Source::get_ast_nodes(
-                    &Source::function_definition,
+                    &|path: &str, ast: &serde_json::Value| {
+                        Source::function_definition(path, ast, &line_index)
+                    },
                     path.as_str(),
                     ast_json,
-                    sources,
                 ));
 
-                ast_nodes.extend(Source::get_ast_nodes(
-                    &Source::ast_node,
-                    path.as_str(),
-                    ast_json,
-                    sources,
-                ));
+                ast_nodes.insert(
+                    source.id,
+                    Source::get_ast_nodes(
+                        &|path: &str, ast: &serde_json::Value| {
+                            Source::ast_node(path, ast, &line_index)
+                        },
+                        path.as_str(),
+                        ast_json,
+                    )
+                    .into_iter()
+                    .collect(),
+                );
             }
         }
 
