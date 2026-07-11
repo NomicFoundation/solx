@@ -84,10 +84,26 @@ fn cross_source_line_attribution(
 ) -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        "--standard-json",
-        crate::common::standard_json!("debug_info_cross_source_collision.json"),
-    ];
+    let fixture_path = crate::common::standard_json!("debug_info_cross_source_collision.json");
+    let fixture: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(fixture_path)?)?;
+    let source_a = fixture["sources"]["A.sol"]["content"]
+        .as_str()
+        .expect("Always exists");
+    let source_b = fixture["sources"]["B.sol"]["content"]
+        .as_str()
+        .expect("Always exists");
+    assert_eq!(
+        source_a.len(),
+        source_b.len(),
+        "the sources must stay byte-length-identical: without the offset collision this test passes vacuously",
+    );
+    assert_eq!(
+        source_a.find("contract"),
+        source_b.find("contract"),
+        "the sources must keep their AST byte offsets aligned: without the offset collision this test passes vacuously",
+    );
+
+    let args = &["--standard-json", fixture_path];
 
     let result = crate::cli::execute_solx(args)?.success();
     let output: serde_json::Value = serde_json::from_slice(result.get_output().stdout.as_slice())?;
