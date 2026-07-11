@@ -37,6 +37,7 @@ pub fn test(
     })?;
 
     let mut benchmark_inputs = Vec::with_capacity(config.projects.len() * 4);
+    let mut attempted_projects = Vec::with_capacity(config.projects.len());
     let mut build_correctness_table = BTreeMap::new();
     let mut test_correctness_table = BTreeMap::new();
     let correctness_reference_compiler = config
@@ -58,6 +59,21 @@ pub fn test(
         .name
         .clone();
 
+    let mut compiler_shims = BTreeMap::new();
+    for (identifier, compiler) in config
+        .compilers
+        .iter()
+        .filter(|(_identifier, compiler)| !compiler.disabled)
+    {
+        let shim_directory =
+            crate::utils::absolute_path(format!("./temp-compiler-shims/hardhat/{identifier}"))?;
+        let compiler_path = crate::utils::absolute_path(compiler.path.as_str())?;
+        compiler_shims.insert(
+            identifier.clone(),
+            crate::shim::CompilerInvocationShim::new(compiler_path, shim_directory.as_path())?,
+        );
+    }
+
     for (project_name, project) in config
         .projects
         .into_iter()
@@ -69,14 +85,15 @@ pub fn test(
                         .any(|element| project_name.contains(element)))
         })
     {
+        attempted_projects.push(project_name.clone());
         let mut project_directory = crate::utils::absolute_path(projects_directory.as_path())?;
         project_directory.push(project_name.as_str());
 
-        for ((_identifier, compiler), codegen) in config
+        for ((identifier, compiler), codegen) in config
             .compilers
             .iter()
             .filter(|(_identifier, compiler)| !compiler.disabled)
-            .cartesian_product(["legacy", "viaIR"])
+            .cartesian_product(crate::test::CODEGENS)
         {
             crate::utils::remove(project_directory.as_path(), project_name.as_str())?;
 
@@ -226,9 +243,12 @@ pub fn test(
                 )?;
             }
 
-            let compiler_path = crate::utils::absolute_path(compiler.path.as_str())?;
-            let compiler_path_str = compiler_path.to_string_lossy();
-            let toolchain_name = format!("{}-{codegen}", compiler.name);
+            let compiler_shim = compiler_shims
+                .get(identifier.as_str())
+                .expect("Always exists");
+            let compiler_path_str = compiler_shim.compiler_path.to_string_lossy();
+            let toolchain_name = crate::test::toolchain_name(compiler.name.as_str(), codegen);
+            compiler_shim.reset()?;
 
             let mut npm_compile_command = Command::new("npm");
             npm_compile_command.current_dir(&*project_directory_str);
@@ -254,12 +274,15 @@ pub fn test(
                 .as_str(),
             );
             if let Err(error) = build_status {
-                if format!("{}-{}", correctness_candidate_compiler, codegen) == toolchain_name {
-                    build_correctness_table
-                        .entry(project_name.clone())
-                        .or_insert_with(BTreeMap::new)
-                        .insert(toolchain_name.clone(), 1);
-                }
+                build_correctness_table
+                    .entry(project_name.clone())
+                    .or_insert_with(BTreeMap::new)
+                    .insert(toolchain_name.clone(), 1);
+                benchmark_inputs.push(solx_benchmark_converter::Input::new(
+                    solx_benchmark_converter::BuildFailuresReport(1),
+                    project_name.clone(),
+                    toolchain_name.clone(),
+                ));
                 eprintln!(
                     "{} Hardhat project {} with {} failed: {error}",
                     solx_utils::cargo_status_error("Building"),
@@ -269,6 +292,12 @@ pub fn test(
                 continue;
             }
             let compilation_time = build_timestamp_start.elapsed().as_millis() as u64;
+            // solc toolchains compile with Hardhat's own downloaded compiler —
+            // the configured path is never passed to the project, so only solx
+            // toolchains can be identity-checked.
+            if toolchain_name.contains("solx") {
+                compiler_shim.verify(toolchain_name.as_str(), project_name.as_str())?;
+            }
 
             let mut npm_test_command = Command::new("npm");
             npm_test_command.current_dir(&*project_directory_str);
@@ -331,7 +360,19 @@ pub fn test(
         }
     }
 
-    let benchmark = solx_benchmark_converter::Benchmark::from_inputs(benchmark_inputs.into_iter())?;
+    let enabled_compilers: Vec<&str> = config
+        .compilers
+        .values()
+        .filter(|compiler| !compiler.disabled)
+        .map(|compiler| compiler.name.as_str())
+        .collect();
+    crate::test::verify_benchmark_coverage(
+        benchmark_inputs.as_slice(),
+        attempted_projects.as_slice(),
+        enabled_compilers.as_slice(),
+    )?;
+
+    let benchmark = solx_benchmark_converter::Benchmark::from_inputs(benchmark_inputs)?;
     let enabled_compiler_names: std::collections::HashSet<&str> = config
         .compilers
         .values()
@@ -386,10 +427,12 @@ pub fn test(
     output.write_to_file(output_path)?;
 
     let mut errors = Vec::new();
-    for project in build_correctness_table.keys() {
-        for codegen in ["legacy", "viaIR"] {
-            let reference_toolchain = format!("{}-{}", correctness_reference_compiler, codegen);
-            let candidate_toolchain = format!("{}-{}", correctness_candidate_compiler, codegen);
+    for project in attempted_projects.iter() {
+        for codegen in crate::test::CODEGENS {
+            let reference_toolchain =
+                crate::test::toolchain_name(correctness_reference_compiler.as_str(), codegen);
+            let candidate_toolchain =
+                crate::test::toolchain_name(correctness_candidate_compiler.as_str(), codegen);
             let reference_build_errors = build_correctness_table
                 .get(project)
                 .and_then(|toolchains| toolchains.get(&reference_toolchain))
@@ -413,18 +456,19 @@ pub fn test(
                 continue;
             }
 
+            // Only comparable when both toolchains actually ran the tests;
+            // a toolchain that failed to build has no test entry.
             let reference_test_failures = test_correctness_table
                 .get(project)
                 .and_then(|toolchains| toolchains.get(&reference_toolchain))
-                .copied()
-                .unwrap_or_default();
+                .copied();
             let candidate_test_failures = test_correctness_table
                 .get(project)
                 .and_then(|toolchains| toolchains.get(&candidate_toolchain))
-                .copied()
-                .unwrap_or_default();
-            if candidate_test_failures > reference_test_failures
-                && reference_build_errors < candidate_build_errors
+                .copied();
+            if let (Some(reference_test_failures), Some(candidate_test_failures)) =
+                (reference_test_failures, candidate_test_failures)
+                && candidate_test_failures > reference_test_failures
             {
                 errors.push(format!(
                     "{} Testing correctness mismatch for project {} between reference toolchain {} ({} failures) and candidate toolchain {} ({} failures)",

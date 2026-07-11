@@ -9,6 +9,7 @@ pub mod arguments;
 pub(crate) mod build_type;
 pub(crate) mod ccache_variant;
 pub(crate) mod llvm;
+pub(crate) mod shim;
 pub(crate) mod solc;
 pub(crate) mod test;
 pub(crate) mod utils;

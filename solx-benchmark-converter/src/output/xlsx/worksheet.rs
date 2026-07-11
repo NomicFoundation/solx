@@ -206,6 +206,9 @@ impl Worksheet {
         total_toolchains: u16,
         diff_index: u16,
     ) -> anyhow::Result<()> {
+        if self.rows.is_empty() {
+            return Ok(());
+        }
         let column_identifier = format!(
             "{}\n------- vs -------\n{}",
             toolchain_name_1.replace('-', "\n"),
@@ -246,17 +249,19 @@ impl Worksheet {
     }
 
     ///
-    /// Returns the alphabetical column identifier by its index.
+    /// Returns the alphabetical column identifier by its 0-based index.
     ///
     pub fn column_identifier(index: u16) -> String {
         let mut identifier = String::new();
-        let mut index = index;
+        let mut index = index as i32;
 
-        while index > 0 {
+        loop {
             let letter = (b'A' + (index % 26) as u8) as char;
             identifier.insert(0, letter);
-            index /= 26;
-            index = index.saturating_sub(1);
+            index = index / 26 - 1;
+            if index < 0 {
+                break;
+            }
         }
 
         identifier
@@ -356,5 +361,27 @@ impl Worksheet {
         let format = format.set_border(rust_xlsxwriter::FormatBorder::None);
         let format = format.set_num_format("0.000%");
         format
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Worksheet;
+
+    #[test]
+    fn column_identifier_survives_the_z_boundary() {
+        for (index, expected) in [
+            (0, "A"),
+            (1, "B"),
+            (25, "Z"),
+            (26, "AA"),
+            (27, "AB"),
+            (51, "AZ"),
+            (52, "BA"),
+            (701, "ZZ"),
+            (702, "AAA"),
+        ] {
+            assert_eq!(Worksheet::column_identifier(index), expected);
+        }
     }
 }

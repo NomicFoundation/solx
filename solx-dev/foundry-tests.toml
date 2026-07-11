@@ -9,6 +9,7 @@
 #   name = "00.solc"              # Display name in reports (hyphens become newlines)
 #   path = "./path/to/compiler"   # Path to compiler executable
 #   description = "..."           # Compiler description
+#   solidity_version = "0.8.30"   # Override Solidity version (optional)
 #   is_correctness_reference = true/false  # Reference for correctness checks
 #   is_correctness_candidate = true/false  # Candidate for correctness checks
 #   disabled = true/false         # Whether to skip this compiler

@@ -48,7 +48,6 @@ disabled = true
 name = "01.solx-latest"
 path = "./temp-compilers/solx-latest"
 description = "solx downloaded from the latest release"
-solidity_version = "0.8.30"
 disabled = true
 
 [compilers.solx-main]

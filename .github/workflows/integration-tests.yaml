@@ -41,6 +41,9 @@ jobs:
 
   integration:
     needs: [label-check, cooldown-check]
+    # Well above a cold full-matrix run (~4h with LLVM builds), well below the
+    # 6h default that a single hung compile would otherwise squat the runner for.
+    timeout-minutes: 300
     permissions:
       contents: read
       pull-requests: write
