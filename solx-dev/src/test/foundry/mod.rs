@@ -37,6 +37,7 @@ pub fn test(
     })?;
 
     let mut benchmark_inputs = Vec::with_capacity(config.projects.len() * 4);
+    let mut attempted_projects = Vec::with_capacity(config.projects.len());
     let mut build_correctness_table = BTreeMap::new();
     let mut test_correctness_table = BTreeMap::new();
     let correctness_reference_compiler = config
@@ -69,7 +70,7 @@ pub fn test(
         let compiler_path = crate::utils::absolute_path(compiler.path.as_str())?;
         compiler_shims.insert(
             identifier.clone(),
-            crate::utils::CompilerInvocationShim::new(compiler_path, shim_directory.as_path())?,
+            crate::shim::CompilerInvocationShim::new(compiler_path, shim_directory.as_path())?,
         );
     }
 
@@ -84,6 +85,7 @@ pub fn test(
                         .any(|element| project_name.contains(element)))
         })
     {
+        attempted_projects.push(project_name.clone());
         let mut project_directory = crate::utils::absolute_path(projects_directory.as_path())?;
         project_directory.push(project_name.as_str());
 
@@ -291,13 +293,20 @@ pub fn test(
                         == "error"
                 })
                 .count();
+            // A build that emits no bytecode is a failure even when the
+            // compiler reports zero errors; recording 0 would read as clean.
+            let build_failures = if built_contracts_count == 0 {
+                build_errors.max(1)
+            } else {
+                build_errors
+            };
             build_correctness_table
                 .entry(project_name.clone())
                 .or_insert_with(BTreeMap::new)
-                .insert(toolchain_name.clone(), build_errors);
-            if build_errors > 0 || built_contracts_count == 0 {
+                .insert(toolchain_name.clone(), build_failures);
+            if build_failures > 0 {
                 benchmark_inputs.push(solx_benchmark_converter::Input::new(
-                    solx_benchmark_converter::BuildFailuresReport(build_errors),
+                    solx_benchmark_converter::BuildFailuresReport(build_failures),
                     project_name.clone(),
                     toolchain_name.clone(),
                 ));
@@ -467,26 +476,18 @@ pub fn test(
         }
     }
 
-    // A toolchain that ran but contributed nothing would be silently absent
-    // from the report, misreported as clean (see #497).
-    if !benchmark_inputs.is_empty() {
-        for ((_identifier, compiler), codegen) in config
-            .compilers
-            .iter()
-            .filter(|(_identifier, compiler)| !compiler.disabled)
-            .cartesian_product(["legacy", "viaIR"])
-        {
-            let toolchain_name = format!("{}-{codegen}", compiler.name);
-            if !benchmark_inputs
-                .iter()
-                .any(|input| input.toolchain == toolchain_name)
-            {
-                anyhow::bail!(
-                    "Harness self-check failed: toolchain {toolchain_name} is enabled but produced no benchmark data",
-                );
-            }
-        }
-    }
+    let enabled_toolchains: Vec<String> = config
+        .compilers
+        .values()
+        .filter(|compiler| !compiler.disabled)
+        .cartesian_product(["legacy", "viaIR"])
+        .map(|(compiler, codegen)| format!("{}-{codegen}", compiler.name))
+        .collect();
+    crate::test::verify_benchmark_coverage(
+        benchmark_inputs.as_slice(),
+        attempted_projects.as_slice(),
+        enabled_toolchains.as_slice(),
+    )?;
 
     let benchmark = solx_benchmark_converter::Benchmark::from_inputs(benchmark_inputs)?;
     let enabled_compiler_names: std::collections::HashSet<&str> = config
