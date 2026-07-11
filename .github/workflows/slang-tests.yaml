@@ -98,10 +98,13 @@ jobs:
           git -C solx-solidity fetch origin main
           git -C solx-solidity checkout FETCH_HEAD
 
+      # Release: RelWithDebInfo bakes -g3 debug info into the statically
+      # linked solc.exe, producing a ~2 GB PE that the Windows loader
+      # rejects ("Exec format error"), and the lit tests execute solc.
       - name: Build solc
         uses: ./.github/actions/build-solc
         with:
-          cmake-build-type: RelWithDebInfo
+          cmake-build-type: Release
           enable-mlir: 'true'
 
       # bindgen's embedded clang needs to know it's targeting MinGW,
