@@ -24,7 +24,9 @@ use std::path::PathBuf;
 pub struct CompilerInvocationShim {
     /// Path to pass to the build system instead of the real compiler.
     pub compiler_path: PathBuf,
-    /// File the shim appends each invocation's arguments to.
+    /// File the shim appends each invocation's arguments to, one argument
+    /// per line with embedded newlines escaped, so an argument can be matched
+    /// exactly without a boundary-losing re-tokenization.
     /// `None` on platforms without shims, where verification is disabled.
     marker_path: Option<PathBuf>,
 }
@@ -50,18 +52,18 @@ impl CompilerInvocationShim {
             let source = format!(
                 "fn main() {{
     let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
-    let mut line = args
-        .iter()
-        .map(|arg| arg.to_string_lossy())
-        .collect::<Vec<_>>()
-        .join(\" \");
-    line.push('\\n');
-    if let Ok(mut marker) = std::fs::OpenOptions::new()
+    let mut lines = String::new();
+    for arg in args.iter() {{
+        lines.push_str(arg.to_string_lossy().replace('\\n', \"\\\\n\").as_str());
+        lines.push('\\n');
+    }}
+    let recorded = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open({marker_path:?})
-    {{
-        let _ = std::io::Write::write_all(&mut marker, line.as_bytes());
+        .and_then(|mut marker| std::io::Write::write_all(&mut marker, lines.as_bytes()));
+    if let Err(error) = recorded {{
+        eprintln!(\"compiler invocation shim: recording invocation: {{error}}\");
     }}
     let error = std::os::unix::process::CommandExt::exec(
         std::process::Command::new({compiler_path:?}).args(args),
@@ -133,17 +135,17 @@ impl CompilerInvocationShim {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => anyhow::bail!(
                 "Harness self-check failed: project {project_name} built successfully with {toolchain_name}, \
                 but the configured compiler was never invoked — the build system used another compiler \
-                and the results would be attributed to the wrong toolchain (see #497)."
+                and the results would be attributed to the wrong toolchain (see #497). A 'compiler \
+                invocation shim' error in the build log means the marker could not be written instead."
             ),
             Err(error) => {
                 anyhow::bail!("Reading compiler invocation marker {marker_path:?}: {error}")
             }
         };
-        if !invocations.lines().any(|invocation| {
-            invocation
-                .split_whitespace()
-                .any(|argument| argument == "--standard-json")
-        }) {
+        if !invocations
+            .lines()
+            .any(|argument| argument == "--standard-json")
+        {
             anyhow::bail!(
                 "Harness self-check failed: project {project_name} built successfully with {toolchain_name}, \
                 but the configured compiler was only probed ({invocations:?}) and never compiled — \
@@ -194,6 +196,16 @@ mod tests {
         assert!(
             shim.verify("toolchain", "project").is_err(),
             "a version probe must not count as a compile"
+        );
+
+        let status = Command::new(shim.compiler_path.as_path())
+            .arg("--foo=--standard-json bar")
+            .status()
+            .expect("Always valid");
+        assert!(status.success(), "shim must exec the wrapped compiler");
+        assert!(
+            shim.verify("toolchain", "project").is_err(),
+            "an argument merely containing the compile flag must not count"
         );
 
         let status = Command::new(shim.compiler_path.as_path())

@@ -93,7 +93,7 @@ pub fn test(
             .compilers
             .iter()
             .filter(|(_identifier, compiler)| !compiler.disabled)
-            .cartesian_product(["legacy", "viaIR"])
+            .cartesian_product(crate::test::CODEGENS)
         {
             crate::utils::remove(project_directory.as_path(), project_name.as_str())?;
 
@@ -247,7 +247,7 @@ pub fn test(
                 .get(identifier.as_str())
                 .expect("Always exists");
             let compiler_path_str = compiler_shim.compiler_path.to_string_lossy();
-            let toolchain_name = format!("{}-{codegen}", compiler.name);
+            let toolchain_name = crate::test::toolchain_name(compiler.name.as_str(), codegen);
             compiler_shim.reset()?;
 
             let mut npm_compile_command = Command::new("npm");
@@ -291,12 +291,6 @@ pub fn test(
                 );
                 continue;
             }
-            // The correctness gate iterates this table's keys, so successes
-            // must be recorded too or the project's tests are never compared.
-            build_correctness_table
-                .entry(project_name.clone())
-                .or_insert_with(BTreeMap::new)
-                .insert(toolchain_name.clone(), 0);
             let compilation_time = build_timestamp_start.elapsed().as_millis() as u64;
             // solc toolchains compile with Hardhat's own downloaded compiler —
             // the configured path is never passed to the project, so only solx
@@ -366,17 +360,16 @@ pub fn test(
         }
     }
 
-    let enabled_toolchains: Vec<String> = config
+    let enabled_compilers: Vec<&str> = config
         .compilers
         .values()
         .filter(|compiler| !compiler.disabled)
-        .cartesian_product(["legacy", "viaIR"])
-        .map(|(compiler, codegen)| format!("{}-{codegen}", compiler.name))
+        .map(|compiler| compiler.name.as_str())
         .collect();
     crate::test::verify_benchmark_coverage(
         benchmark_inputs.as_slice(),
         attempted_projects.as_slice(),
-        enabled_toolchains.as_slice(),
+        enabled_compilers.as_slice(),
     )?;
 
     let benchmark = solx_benchmark_converter::Benchmark::from_inputs(benchmark_inputs)?;
@@ -434,10 +427,12 @@ pub fn test(
     output.write_to_file(output_path)?;
 
     let mut errors = Vec::new();
-    for project in build_correctness_table.keys() {
-        for codegen in ["legacy", "viaIR"] {
-            let reference_toolchain = format!("{}-{}", correctness_reference_compiler, codegen);
-            let candidate_toolchain = format!("{}-{}", correctness_candidate_compiler, codegen);
+    for project in attempted_projects.iter() {
+        for codegen in crate::test::CODEGENS {
+            let reference_toolchain =
+                crate::test::toolchain_name(correctness_reference_compiler.as_str(), codegen);
+            let candidate_toolchain =
+                crate::test::toolchain_name(correctness_candidate_compiler.as_str(), codegen);
             let reference_build_errors = build_correctness_table
                 .get(project)
                 .and_then(|toolchains| toolchains.get(&reference_toolchain))

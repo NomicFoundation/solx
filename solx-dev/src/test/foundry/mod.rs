@@ -93,7 +93,7 @@ pub fn test(
             .compilers
             .iter()
             .filter(|(_identifier, compiler)| !compiler.disabled)
-            .cartesian_product(["legacy", "viaIR"])
+            .cartesian_product(crate::test::CODEGENS)
         {
             crate::utils::remove(project_directory.as_path(), project_name.as_str())?;
 
@@ -213,7 +213,7 @@ pub fn test(
                 .get(identifier.as_str())
                 .expect("Always exists");
             let compiler_path_str = compiler_shim.compiler_path.to_string_lossy();
-            let toolchain_name = format!("{}-{codegen}", compiler.name);
+            let toolchain_name = crate::test::toolchain_name(compiler.name.as_str(), codegen);
             compiler_shim.reset()?;
 
             let mut forge_build_command = Command::new("forge");
@@ -293,10 +293,11 @@ pub fn test(
                         == "error"
                 })
                 .count();
-            // A build that emits no bytecode is a failure even when the
-            // compiler reports zero errors; recording 0 would read as clean.
-            let build_failures = if built_contracts_count == 0 {
-                build_errors.max(1)
+            // A build that emits no bytecode with zero errors is worse than
+            // any error count: the sentinel can neither read as clean nor be
+            // absorbed by a reference toolchain's real errors in the gate.
+            let build_failures = if build_errors == 0 && built_contracts_count == 0 {
+                usize::MAX
             } else {
                 build_errors
             };
@@ -306,7 +307,7 @@ pub fn test(
                 .insert(toolchain_name.clone(), build_failures);
             if build_failures > 0 {
                 benchmark_inputs.push(solx_benchmark_converter::Input::new(
-                    solx_benchmark_converter::BuildFailuresReport(build_failures),
+                    solx_benchmark_converter::BuildFailuresReport(build_errors.max(1)),
                     project_name.clone(),
                     toolchain_name.clone(),
                 ));
@@ -476,17 +477,16 @@ pub fn test(
         }
     }
 
-    let enabled_toolchains: Vec<String> = config
+    let enabled_compilers: Vec<&str> = config
         .compilers
         .values()
         .filter(|compiler| !compiler.disabled)
-        .cartesian_product(["legacy", "viaIR"])
-        .map(|(compiler, codegen)| format!("{}-{codegen}", compiler.name))
+        .map(|compiler| compiler.name.as_str())
         .collect();
     crate::test::verify_benchmark_coverage(
         benchmark_inputs.as_slice(),
         attempted_projects.as_slice(),
-        enabled_toolchains.as_slice(),
+        enabled_compilers.as_slice(),
     )?;
 
     let benchmark = solx_benchmark_converter::Benchmark::from_inputs(benchmark_inputs)?;
@@ -543,11 +543,21 @@ pub fn test(
     );
     output.write_to_file(output_path)?;
 
+    // usize::MAX marks a zero-error build that emitted no bytecode.
+    let display_build_errors = |count: usize| {
+        if count == usize::MAX {
+            "no bytecode".to_owned()
+        } else {
+            format!("{count} errors")
+        }
+    };
     let mut errors = Vec::new();
-    for project in build_correctness_table.keys() {
-        for codegen in ["legacy", "viaIR"] {
-            let reference_toolchain = format!("{}-{}", correctness_reference_compiler, codegen);
-            let candidate_toolchain = format!("{}-{}", correctness_candidate_compiler, codegen);
+    for project in attempted_projects.iter() {
+        for codegen in crate::test::CODEGENS {
+            let reference_toolchain =
+                crate::test::toolchain_name(correctness_reference_compiler.as_str(), codegen);
+            let candidate_toolchain =
+                crate::test::toolchain_name(correctness_candidate_compiler.as_str(), codegen);
             let reference_build_errors = build_correctness_table
                 .get(project)
                 .and_then(|toolchains| toolchains.get(&reference_toolchain))
@@ -560,13 +570,13 @@ pub fn test(
                 .unwrap_or_default();
             if candidate_build_errors > reference_build_errors {
                 errors.push(format!(
-                    "{} Building correctness mismatch for project {} between reference toolchain {} ({} errors) and candidate toolchain {} ({} errors)",
+                    "{} Building correctness mismatch for project {} between reference toolchain {} ({}) and candidate toolchain {} ({})",
                     solx_utils::cargo_status_error("Error"),
                     project.bright_white().bold(),
                     reference_toolchain.bright_white().bold(),
-                    reference_build_errors,
+                    display_build_errors(reference_build_errors),
                     candidate_toolchain.bright_white().bold(),
-                    candidate_build_errors
+                    display_build_errors(candidate_build_errors)
                 ));
                 continue;
             }
