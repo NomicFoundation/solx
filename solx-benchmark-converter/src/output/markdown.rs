@@ -2,13 +2,14 @@
 //! Markdown summary of an integration-test benchmark comparison.
 //!
 //! Renders the one-comment PR summary the integration workflow posts: the
-//! correctness gate (bytecode size everywhere + solx-tester gas), new
-//! failures, and a threshold-gated compile-time tripwire. The verdict is
-//! computed here — the single source of truth shared by every suite — instead
-//! of parsing the XLSX back offline.
+//! correctness verdict (bytecode size everywhere + solx-tester gas), new
+//! failures vs main, and a threshold-gated compile-time tripwire. The verdict
+//! is computed here — the single source of truth shared by every suite —
+//! instead of parsing the XLSX back offline.
 //!
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fmt::Write;
 
 use crate::benchmark::Benchmark;
@@ -17,7 +18,7 @@ use crate::benchmark::Benchmark;
 const COMPILE_TIME_PROJECT_THRESHOLD_PERCENT: f64 = 15.0;
 /// A suite-aggregate compile-time move large enough to highlight.
 const COMPILE_TIME_SUITE_THRESHOLD_PERCENT: f64 = 5.0;
-/// Cap on individually-listed items (outliers, top movers) before "+N more".
+/// Cap on individually-listed items (outliers, movers, new failures) before "+N more".
 const MAX_LISTED: usize = 5;
 
 ///
@@ -44,7 +45,6 @@ pub fn render(suites: &[SummarySuite]) -> String {
     let stats: Vec<SuiteStats> = suites.iter().map(SuiteStats::from_suite).collect();
 
     let full_matrix = stats.iter().any(|s| s.has_baselines);
-    let gate_failed = stats.iter().any(SuiteStats::gate_failed);
 
     let mut out = String::new();
     let mode = if full_matrix {
@@ -54,30 +54,19 @@ pub fn render(suites: &[SummarySuite]) -> String {
     };
     let _ = writeln!(out, "### 🧪 Integration tests — {mode} · PR vs `main`\n");
 
-    if gate_failed {
-        let _ = writeln!(
-            out,
-            "❌ **Not output-preserving** — a gated signal changed, a new failure appeared, or a suite produced no report; see below.\n"
-        );
-    } else {
-        let _ = writeln!(
-            out,
-            "✅ **Output-preserving** — bytecode size identical across all suites, solx-tester gas identical, no new failures.\n"
-        );
-    }
-
+    render_verdict(&mut out, &stats);
     render_results_table(&mut out, &stats);
+    render_new_failures(&mut out, &stats);
+    render_output_changes(&mut out, &stats);
     render_compile_time(&mut out, &stats);
-    render_top_movers(&mut out, &stats);
     if full_matrix {
         render_baselines(&mut out, &stats);
     }
 
     let _ = writeln!(
         out,
-        "\n---\n_Gate = **size** (deterministic, all suites) + **solx-tester gas** (deterministic REVM). \
-         Foundry/Hardhat gas is fuzz/CREATE-noisy and excluded; compile-time is a non-gating tripwire — \
-         authoritative deltas live in the `ci:compile-benchmark` comment._"
+        "\n---\n_Suites run the **release** solx binary. Foundry/Hardhat gas jitters run-to-run \
+         (fuzz/invariant tests, CREATE-context deploys), so it never gates._"
     );
 
     out
@@ -103,9 +92,19 @@ struct SuiteStats {
     gas_cells: u64,
     gas_diffs: u64,
     gas_present: bool,
+    /// Relative gas differences seen on a non-gating suite, in percent. The
+    /// median is reported — a max would routinely be a huge but meaningless
+    /// CREATE-deploy outlier.
+    gas_jitter_percents: Vec<f64>,
 
-    build_failures: usize,
-    test_failures: usize,
+    /// Failures on the PR runs in excess of their main counterparts.
+    new_build_failures: usize,
+    new_test_failures: usize,
+    /// Failures already present on the main runs.
+    baseline_build_failures: usize,
+    baseline_test_failures: usize,
+    /// The rows behind `new_*_failures`, for the inline listing.
+    failure_regressions: Vec<FailureRegression>,
 
     /// Compile-time aggregates keyed by pipeline (legacy / viaIR).
     compile: BTreeMap<String, CompileAggregate>,
@@ -130,6 +129,14 @@ struct Movement {
     mode: String,
     main: u64,
     pr: u64,
+}
+
+struct FailureRegression {
+    label: String,
+    mode: String,
+    kind: &'static str,
+    main: usize,
+    pr: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -158,6 +165,11 @@ impl SuiteStats {
         for test in benchmark.tests.values() {
             projects.insert(test.metadata.selector.project.clone());
             let contract = test.metadata.selector.case.as_deref().unwrap_or("");
+            let row_label = if contract.is_empty() {
+                test.metadata.selector.project.as_str()
+            } else {
+                contract
+            };
 
             // Classify every run once and index the PR/main runs by pairing key.
             let mut pr_runs: BTreeMap<String, &crate::benchmark::test::run::Run> = BTreeMap::new();
@@ -170,16 +182,12 @@ impl SuiteStats {
                         pr_runs.insert(key, run);
                     }
                     Role::Main => {
+                        stats.baseline_build_failures += run.build_failures;
+                        stats.baseline_test_failures += run.test_failures;
                         main_runs.insert(key, run);
                     }
                     Role::Latest | Role::Solc => stats.has_baselines = true,
                     Role::Other => {}
-                }
-
-                // Failures are counted on the PR runs only.
-                if matches!(role, Role::Pr) {
-                    stats.build_failures += run.build_failures;
-                    stats.test_failures += run.test_failures;
                 }
 
                 // Full-matrix baseline totals: sum bytecode per role and pipeline.
@@ -209,16 +217,45 @@ impl SuiteStats {
                 }
             }
 
-            // Correctness diff: pair each PR run with its main counterpart.
+            // Pair each PR run with its main counterpart. Failures compare even
+            // without a counterpart (baseline 0: everything is new); size/gas
+            // need both sides.
             for (key, pr) in pr_runs.iter() {
-                let Some(main) = main_runs.get(key) else {
+                let main = main_runs.get(key);
+                let mode = humanize_mode(key);
+
+                let (main_build, main_test) =
+                    main.map_or((0, 0), |m| (m.build_failures, m.test_failures));
+                for (kind, main_v, pr_v) in [
+                    ("build", main_build, pr.build_failures),
+                    ("test", main_test, pr.test_failures),
+                ] {
+                    if pr_v > main_v {
+                        match kind {
+                            "build" => stats.new_build_failures += pr_v - main_v,
+                            _ => stats.new_test_failures += pr_v - main_v,
+                        }
+                        stats.failure_regressions.push(FailureRegression {
+                            label: row_label.to_owned(),
+                            mode: mode.clone(),
+                            kind,
+                            main: main_v,
+                            pr: pr_v,
+                        });
+                    }
+                }
+
+                let Some(main) = main else {
                     continue;
                 };
-                let mode = pretty_mode(key);
 
-                for (pr_v, main_v) in [
-                    (pr.average_size(), main.average_size()),
-                    (pr.average_runtime_size(), main.average_runtime_size()),
+                for (kind, pr_v, main_v) in [
+                    ("deploy", pr.average_size(), main.average_size()),
+                    (
+                        "runtime",
+                        pr.average_runtime_size(),
+                        main.average_runtime_size(),
+                    ),
                 ] {
                     if pr_v == 0 && main_v == 0 {
                         continue;
@@ -228,7 +265,13 @@ impl SuiteStats {
                     if pr_v != main_v {
                         stats.size_diffs += 1;
                         stats.size_delta_bytes += pr_v as i128 - main_v as i128;
-                        push_movement(&mut stats.top_size_movers, contract, &mode, main_v, pr_v);
+                        push_movement(
+                            &mut stats.top_size_movers,
+                            row_label,
+                            &format!("{mode}, {kind}"),
+                            main_v,
+                            pr_v,
+                        );
                     }
                 }
 
@@ -241,19 +284,23 @@ impl SuiteStats {
                         if suite.gas_is_gate {
                             push_movement(
                                 &mut stats.top_gas_movers,
-                                contract,
+                                row_label,
                                 &mode,
                                 main_gas,
                                 pr_gas,
                             );
+                        } else if main_gas != 0 {
+                            let jitter =
+                                (pr_gas as f64 - main_gas as f64).abs() / main_gas as f64 * 100.0;
+                            stats.gas_jitter_percents.push(jitter);
                         }
                     }
                 }
             }
         }
 
-        // Per-project compile-time percentages (for outlier detection) need a
-        // second pass now that pipelines are known.
+        // Per-project compile-time percentages (for outlier detection and the
+        // median) need a second pass now that pipelines are known.
         for test in benchmark.tests.values() {
             let project = test.metadata.selector.project.as_str();
             let mut pr: BTreeMap<String, u64> = BTreeMap::new();
@@ -293,34 +340,42 @@ impl SuiteStats {
         stats
     }
 
-    fn gate_failed(&self) -> bool {
-        !self.available
-            || self.size_diffs > 0
-            || (self.gas_is_gate && self.gas_diffs > 0)
-            || self.build_failures > 0
-            || self.test_failures > 0
+    fn new_failures(&self) -> usize {
+        self.new_build_failures + self.new_test_failures
+    }
+
+    fn baseline_failures(&self) -> usize {
+        self.baseline_build_failures + self.baseline_test_failures
     }
 
     fn failures_cell(&self) -> String {
-        if self.build_failures == 0 && self.test_failures == 0 {
-            "✅ 0".to_owned()
+        let pre = match self.baseline_failures() {
+            0 => String::new(),
+            n => format!(" ({} pre-existing)", commas(n as u64)),
+        };
+        if self.new_failures() == 0 {
+            format!("✅ 0{pre}")
         } else {
-            format!(
-                "❌ {} build / {} test",
-                self.build_failures, self.test_failures
-            )
+            let mut kinds = Vec::new();
+            if self.new_build_failures > 0 {
+                kinds.push(format!("+{} build", commas(self.new_build_failures as u64)));
+            }
+            if self.new_test_failures > 0 {
+                kinds.push(format!("+{} test", commas(self.new_test_failures as u64)));
+            }
+            format!("❌ {}{pre}", kinds.join(", "))
         }
     }
 
     fn size_cell(&self) -> String {
         if !self.size_present {
-            return "—".to_owned();
+            return "⚪ not collected".to_owned();
         }
         if self.size_diffs == 0 {
-            format!("✅ `0 / {}`", commas(self.size_cells))
+            format!("✅ 0 of {}", commas(self.size_cells))
         } else {
             format!(
-                "❌ `{} / {}` ({:+} B)",
+                "⚠️ {} of {} ({:+} B)",
                 commas(self.size_diffs),
                 commas(self.size_cells),
                 self.size_delta_bytes
@@ -330,16 +385,27 @@ impl SuiteStats {
 
     fn gas_cell(&self) -> String {
         if !self.gas_present {
-            return "—".to_owned();
+            return "⚪ not collected".to_owned();
         }
         if !self.gas_is_gate {
-            return "⚪ noise (excluded)".to_owned();
+            if self.gas_diffs == 0 {
+                return "⚪ no jitter (not gated)".to_owned();
+            }
+            let med = match median(&self.gas_jitter_percents) {
+                Some(med) if med >= 0.05 => format!("{med:.1}%"),
+                _ => "<0.1%".to_owned(),
+            };
+            return format!(
+                "⚪ jitter {} of {}, median {med} (not gated)",
+                commas(self.gas_diffs),
+                commas(self.gas_cells)
+            );
         }
         if self.gas_diffs == 0 {
-            format!("✅ `0 / {}`", commas(self.gas_cells))
+            format!("✅ 0 of {}", commas(self.gas_cells))
         } else {
             format!(
-                "❌ `{} / {}`",
+                "⚠️ {} of {}",
                 commas(self.gas_diffs),
                 commas(self.gas_cells)
             )
@@ -354,16 +420,124 @@ impl SuiteStats {
         }
     }
 
+    /// The report file name shown as link text and referenced by "+N more" lines.
+    fn report_file(&self) -> String {
+        format!("{}.xlsx", self.label.to_lowercase())
+    }
+
     fn report_cell(&self) -> String {
         match self.report_url.as_deref() {
-            Some(url) => format!("[xlsx ↓]({url})"),
+            Some(url) => format!("[{} ↓]({url})", self.report_file()),
             None => "—".to_owned(),
         }
     }
 }
 
+///
+/// The verdict lines: output invariance, new failures, and harness health —
+/// three independent signals, each stated with its numbers.
+///
+fn render_verdict(out: &mut String, stats: &[SuiteStats]) {
+    let size_cells: u64 = stats.iter().map(|s| s.size_cells).sum();
+    let size_diffs: u64 = stats.iter().map(|s| s.size_diffs).sum();
+    let size_delta: i128 = stats.iter().map(|s| s.size_delta_bytes).sum();
+    let gated: Vec<&SuiteStats> = stats.iter().filter(|s| s.gas_is_gate).collect();
+    let gated_gas_cells: u64 = gated.iter().map(|s| s.gas_cells).sum();
+    let gated_gas_diffs: u64 = gated.iter().map(|s| s.gas_diffs).sum();
+    let gas_label = gated
+        .iter()
+        .filter(|s| s.gas_present)
+        .map(|s| s.label.as_str())
+        .collect::<Vec<_>>()
+        .join(" / ");
+
+    if size_diffs == 0 && gated_gas_diffs == 0 {
+        let mut clauses = Vec::new();
+        if size_cells > 0 {
+            clauses.push(format!(
+                "bytecode size identical ({} comparisons)",
+                commas(size_cells)
+            ));
+        }
+        if gated_gas_cells > 0 {
+            clauses.push(format!(
+                "{gas_label} gas identical ({})",
+                commas(gated_gas_cells)
+            ));
+        }
+        if clauses.is_empty() {
+            clauses.push("no size or gated-gas data was collected".to_owned());
+        }
+        let _ = writeln!(out, "✅ **Output-preserving** — {}.", clauses.join(", "));
+    } else {
+        let mut parts = Vec::new();
+        if size_diffs > 0 {
+            parts.push(format!(
+                "{} of {} size comparisons differ ({:+} B total)",
+                commas(size_diffs),
+                commas(size_cells),
+                size_delta
+            ));
+        }
+        if gated_gas_diffs > 0 {
+            parts.push(format!(
+                "{} of {} {gas_label} gas comparisons differ",
+                commas(gated_gas_diffs),
+                commas(gated_gas_cells)
+            ));
+        }
+        let _ = writeln!(
+            out,
+            "⚠️ **Output changed** — {}. If this PR is meant to be output-preserving, investigate before merging.",
+            parts.join("; ")
+        );
+    }
+
+    if stats.iter().all(|s| s.new_failures() == 0) {
+        let pre: Vec<String> = stats
+            .iter()
+            .filter(|s| s.baseline_failures() > 0)
+            .map(|s| format!("{}'s {}", s.label, commas(s.baseline_failures() as u64)))
+            .collect();
+        if pre.is_empty() {
+            let _ = writeln!(out, "✅ **No new failures**.");
+        } else {
+            let _ = writeln!(
+                out,
+                "✅ **No new failures** — {} failures already present on `main`.",
+                pre.join(" / ")
+            );
+        }
+    } else {
+        let parts: Vec<String> = stats
+            .iter()
+            .filter(|s| s.new_failures() > 0)
+            .map(|s| {
+                let mut kinds = Vec::new();
+                if s.new_build_failures > 0 {
+                    kinds.push(format!("+{} build", commas(s.new_build_failures as u64)));
+                }
+                if s.new_test_failures > 0 {
+                    kinds.push(format!("+{} test", commas(s.new_test_failures as u64)));
+                }
+                format!("{}: {}", s.label, kinds.join(", "))
+            })
+            .collect();
+        let _ = writeln!(out, "❌ **New failures** — {}.", parts.join("; "));
+    }
+
+    for s in stats.iter().filter(|s| !s.available) {
+        let _ = writeln!(
+            out,
+            "❌ **Suite errored** — {} produced no report.",
+            s.label
+        );
+    }
+    let _ = writeln!(out);
+}
+
 fn render_results_table(out: &mut String, stats: &[SuiteStats]) {
-    let _ = writeln!(out, "| Suite | Failures | Size Δ | Gas Δ | Report |");
+    let _ = writeln!(out, "| Suite | New failures | Size Δ | Gas Δ | Report |");
     let _ = writeln!(out, "|---|---|---|---|---|");
     for s in stats {
         if !s.available {
@@ -386,6 +560,75 @@ fn render_results_table(out: &mut String, stats: &[SuiteStats]) {
     }
 }
 
+///
+/// The rows behind a red "New failures" verdict, inline so the regressed
+/// projects can be judged without opening the XLSX.
+///
+fn render_new_failures(out: &mut String, stats: &[SuiteStats]) {
+    if stats.iter().all(|s| s.failure_regressions.is_empty()) {
+        return;
+    }
+    let _ = writeln!(out, "\n**New failures (PR vs `main`):**\n");
+    for s in stats {
+        for regression in s.failure_regressions.iter().take(MAX_LISTED) {
+            let _ = writeln!(
+                out,
+                "- {}: `{}` [{}] {} failures {} → {}",
+                s.label,
+                regression.label,
+                regression.mode,
+                regression.kind,
+                regression.main,
+                regression.pr
+            );
+        }
+        let extra = s.failure_regressions.len().saturating_sub(MAX_LISTED);
+        if extra > 0 {
+            let _ = writeln!(out, "- +{extra} more — see {}", s.report_file());
+        }
+    }
+}
+
+///
+/// The rows behind an "Output changed" verdict, inline — a bytecode size
+/// change means semantics possibly changed, so it is never folded away.
+///
+fn render_output_changes(out: &mut String, stats: &[SuiteStats]) {
+    for s in stats {
+        for (title, unit, movers) in [
+            ("largest size changes", " B", &s.top_size_movers),
+            ("largest gas changes", "", &s.top_gas_movers),
+        ] {
+            if movers.is_empty() {
+                continue;
+            }
+            let _ = writeln!(out, "\n**{} — {title}:**\n", s.label);
+            for m in movers.iter().take(MAX_LISTED) {
+                let pct = if m.main != 0 {
+                    format!(
+                        " ({})",
+                        percent((m.pr as f64 - m.main as f64) / m.main as f64 * 100.0)
+                    )
+                } else {
+                    String::new()
+                };
+                let _ = writeln!(
+                    out,
+                    "- `{}` [{}] {} → {}{unit}{pct}",
+                    m.label,
+                    m.mode,
+                    commas(m.main),
+                    commas(m.pr),
+                );
+            }
+            let extra = movers.len().saturating_sub(MAX_LISTED);
+            if extra > 0 {
+                let _ = writeln!(out, "- +{extra} more — full list in {}", s.report_file());
+            }
+        }
+    }
+}
+
 fn render_compile_time(out: &mut String, stats: &[SuiteStats]) {
     let with_ct: Vec<&SuiteStats> = stats.iter().filter(|s| !s.compile.is_empty()).collect();
     if with_ct.is_empty() {
@@ -395,9 +638,12 @@ fn render_compile_time(out: &mut String, stats: &[SuiteStats]) {
     let pipelines = ["legacy", "viaIR"];
     let _ = writeln!(
         out,
-        "\n**Compile time** — wall-clock, shared runner (authoritative Δ in `ci:compile-benchmark`)\n"
+        "\n**Compile time** — wall-clock tripwire, positive = PR slower (authoritative Δ in `ci:compile-benchmark`)\n"
     );
-    let _ = writeln!(out, "| Suite | legacy | viaIR |");
+    let _ = writeln!(
+        out,
+        "| Suite | legacy (agg / median) | viaIR (agg / median) |"
+    );
     let _ = writeln!(out, "|---|---|---|");
 
     let mut any_suite_flag = false;
@@ -410,11 +656,17 @@ fn render_compile_time(out: &mut String, stats: &[SuiteStats]) {
                     let pct = (agg.pr_total_ms as f64 - agg.main_total_ms as f64)
                         / agg.main_total_ms as f64
                         * 100.0;
-                    if pct.abs() >= COMPILE_TIME_SUITE_THRESHOLD_PERCENT {
+                    let aggregate = if pct.abs() >= COMPILE_TIME_SUITE_THRESHOLD_PERCENT {
                         any_suite_flag = true;
                         format!("⚠️ **{}**", percent(pct))
                     } else {
                         percent(pct)
+                    };
+                    let project_pcts: Vec<f64> =
+                        agg.per_project.iter().map(|(_, pct)| *pct).collect();
+                    match median(project_pcts.as_slice()) {
+                        Some(med) => format!("{aggregate} / {}", percent(med)),
+                        None => aggregate,
                     }
                 }
                 _ => "—".to_owned(),
@@ -428,11 +680,7 @@ fn render_compile_time(out: &mut String, stats: &[SuiteStats]) {
                 }
             }
         }
-        let _ = writeln!(
-            out,
-            "| {} ({}) | {} | {} |",
-            s.label, s.project_count, cells[0], cells[1]
-        );
+        let _ = writeln!(out, "| {} | {} | {} |", s.suite_cell(), cells[0], cells[1]);
     }
 
     if outliers.is_empty() && !any_suite_flag {
@@ -462,48 +710,6 @@ fn render_compile_time(out: &mut String, stats: &[SuiteStats]) {
     }
 }
 
-fn render_top_movers(out: &mut String, stats: &[SuiteStats]) {
-    let has_movers = stats
-        .iter()
-        .any(|s| !s.top_size_movers.is_empty() || !s.top_gas_movers.is_empty());
-    if !has_movers {
-        return;
-    }
-    let _ = writeln!(
-        out,
-        "\n<details><summary>Top movers (output changed)</summary>\n"
-    );
-    for s in stats {
-        for (title, movers) in [("size", &s.top_size_movers), ("gas", &s.top_gas_movers)] {
-            if movers.is_empty() {
-                continue;
-            }
-            let _ = writeln!(out, "**{} — {title}:**", s.label);
-            for m in movers.iter().take(MAX_LISTED) {
-                let pct = if m.main != 0 {
-                    (m.pr as f64 - m.main as f64) / m.main as f64 * 100.0
-                } else {
-                    0.0
-                };
-                let _ = writeln!(
-                    out,
-                    "- `{}` [{}] {} → {} ({})",
-                    m.label,
-                    m.mode,
-                    commas(m.main),
-                    commas(m.pr),
-                    percent(pct)
-                );
-            }
-            let extra = movers.len().saturating_sub(MAX_LISTED);
-            if extra > 0 {
-                let _ = writeln!(out, "- +{extra} more");
-            }
-        }
-    }
-    let _ = writeln!(out, "\n</details>");
-}
-
 fn render_baselines(out: &mut String, stats: &[SuiteStats]) {
     let relevant: Vec<&SuiteStats> = stats.iter().filter(|s| s.has_baselines).collect();
     if relevant.is_empty() {
@@ -511,22 +717,25 @@ fn render_baselines(out: &mut String, stats: &[SuiteStats]) {
     }
     let _ = writeln!(
         out,
-        "\n<details><summary>Bytecode size vs solc / released solx (full matrix)</summary>\n"
+        "\n**Bytecode size — PR vs baselines** (positive = PR larger)\n"
     );
-    let _ = writeln!(
-        out,
-        "| Suite | pipeline | vs `00.solc` | vs `01.solx` (latest) |"
-    );
+    let _ = writeln!(out, "| Suite | Pipeline | vs solc | vs released solx |");
     let _ = writeln!(out, "|---|---|---|---|");
     for s in relevant {
-        for pipeline in ["legacy", "viaIR"] {
+        let pipelines: BTreeSet<&String> = s
+            .size_by_role_pipeline
+            .keys()
+            .filter(|(role, _)| *role == Role::Pr)
+            .map(|(_, pipeline)| pipeline)
+            .collect();
+        for pipeline in pipelines {
             let pr = s
                 .size_by_role_pipeline
-                .get(&(Role::Pr, pipeline.to_owned()))
+                .get(&(Role::Pr, pipeline.clone()))
                 .copied();
             let Some(pr) = pr else { continue };
             let vs = |role: Role| -> String {
-                match s.size_by_role_pipeline.get(&(role, pipeline.to_owned())) {
+                match s.size_by_role_pipeline.get(&(role, pipeline.clone())) {
                     Some(&base) if base != 0 => {
                         percent((pr as f64 - base as f64) / base as f64 * 100.0)
                     }
@@ -536,14 +745,13 @@ fn render_baselines(out: &mut String, stats: &[SuiteStats]) {
             let _ = writeln!(
                 out,
                 "| {} | {} | {} | {} |",
-                s.label,
+                s.suite_cell(),
                 pipeline,
                 vs(Role::Solc),
                 vs(Role::Latest)
             );
         }
     }
-    let _ = writeln!(out, "\n</details>");
 }
 
 ///
@@ -585,10 +793,25 @@ fn pipeline_of(mode: &str) -> String {
     mode.rsplit('-').next().unwrap_or("").to_owned()
 }
 
-/// A pairing key back to a compact human-readable mode (drop the leading solx
-/// token that the key already stripped).
-fn pretty_mode(key: &str) -> String {
-    key.replace('-', "/")
+///
+/// A pairing key rendered for humans: the redundant `solx` token dropped and
+/// the codegen shorthands spelled out (`E` → EVMLA, `Y` → Yul).
+///
+fn humanize_mode(key: &str) -> String {
+    let tokens: Vec<&str> = key
+        .split('-')
+        .filter(|token| *token != "solx" && !token.is_empty())
+        .map(|token| match token {
+            "E" => "EVMLA",
+            "Y" => "Yul",
+            other => other,
+        })
+        .collect();
+    if tokens.is_empty() {
+        key.to_owned()
+    } else {
+        tokens.join(" ")
+    }
 }
 
 fn push_movement(movers: &mut Vec<Movement>, label: &str, mode: &str, main: u64, pr: u64) {
@@ -608,6 +831,16 @@ fn sort_movers_by_magnitude(movers: &mut [Movement]) {
         let db = (b.pr as i128 - b.main as i128).unsigned_abs();
         db.cmp(&da)
     });
+}
+
+/// The median of the given percentages, if any were collected.
+fn median(pcts: &[f64]) -> Option<f64> {
+    if pcts.is_empty() {
+        return None;
+    }
+    let mut pcts = pcts.to_vec();
+    pcts.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    Some(pcts[pcts.len() / 2])
 }
 
 /// Formats a percentage with a sign and one decimal.
@@ -648,6 +881,24 @@ mod tests {
             let mut run = Run::default();
             run.size.push(*deploy_size);
             run.gas.push(*gas);
+            test.runs.insert((*mode).to_owned(), run);
+        }
+        (selector.to_string(), test)
+    }
+
+    fn failure_test(project: &str, runs: &[(&str, usize, usize)]) -> (String, Test) {
+        let selector = Selector {
+            project: project.to_owned(),
+            case: None,
+            input: None,
+        };
+        let mut test = Test::new(Metadata::new(selector.clone(), vec![]));
+        for (mode, build_failures, test_failures) in runs {
+            let run = Run {
+                build_failures: *build_failures,
+                test_failures: *test_failures,
+                ..Default::default()
+            };
             test.runs.insert((*mode).to_owned(), run);
         }
         (selector.to_string(), test)
@@ -700,11 +951,12 @@ mod tests {
         )];
         let out = render(&[suite("solx-tester", true, tests)]);
         assert!(out.contains("✅ **Output-preserving**"), "{out}");
-        assert!(!out.contains("Top movers"), "{out}");
+        assert!(out.contains("✅ **No new failures**"), "{out}");
+        assert!(!out.contains("largest size changes"), "{out}");
     }
 
     #[test]
-    fn size_diff_trips_the_gate_and_lists_movers() {
+    fn size_diff_reports_output_changed_with_inline_movers() {
         let tests = vec![contract_test(
             "p",
             "C",
@@ -714,13 +966,19 @@ mod tests {
             ],
         )];
         let out = render(&[suite("solx-tester", true, tests)]);
-        assert!(out.contains("❌ **Not output-preserving**"), "{out}");
-        assert!(out.contains("(+42 B)"), "{out}");
-        assert!(out.contains("Top movers"), "{out}");
+        assert!(out.contains("⚠️ **Output changed**"), "{out}");
+        assert!(out.contains("(+42 B total)"), "{out}");
+        assert!(out.contains("largest size changes"), "{out}");
+        assert!(
+            out.contains("- `C` [EVMLA, deploy] 100 → 142 B (+42.0%)"),
+            "{out}"
+        );
+        // The size change informs; only failures and errored suites alarm.
+        assert!(!out.contains("❌"), "{out}");
     }
 
     #[test]
-    fn foundry_gas_jitter_does_not_trip_the_gate() {
+    fn foundry_gas_jitter_is_reported_with_magnitude_not_gated() {
         let tests = vec![contract_test(
             "p",
             "C",
@@ -731,7 +989,52 @@ mod tests {
         )];
         let out = render(&[suite("Foundry", false, tests)]);
         assert!(out.contains("✅ **Output-preserving**"), "{out}");
-        assert!(out.contains("⚪ noise (excluded)"), "{out}");
+        assert!(
+            out.contains("⚪ jitter 1 of 1, median 1.0% (not gated)"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn pre_existing_failures_do_not_alarm() {
+        let tests = vec![failure_test(
+            "proj",
+            &[("02.solx-main-legacy", 0, 5), ("03.solx-legacy", 0, 5)],
+        )];
+        let out = render(&[suite("Foundry", false, tests)]);
+        assert!(
+            out.contains(
+                "✅ **No new failures** — Foundry's 5 failures already present on `main`."
+            ),
+            "{out}"
+        );
+        assert!(out.contains("| ✅ 0 (5 pre-existing) |"), "{out}");
+        assert!(!out.contains("❌"), "{out}");
+    }
+
+    #[test]
+    fn new_failures_alarm_and_are_listed() {
+        let tests = vec![failure_test(
+            "proj",
+            &[("02.solx-main-legacy", 0, 5), ("03.solx-legacy", 1, 7)],
+        )];
+        let out = render(&[suite("Foundry", false, tests)]);
+        assert!(
+            out.contains("❌ **New failures** — Foundry: +1 build, +2 test."),
+            "{out}"
+        );
+        assert!(
+            out.contains("| ❌ +1 build, +2 test (5 pre-existing) |"),
+            "{out}"
+        );
+        assert!(
+            out.contains("- Foundry: `proj` [legacy] test failures 5 → 7"),
+            "{out}"
+        );
+        assert!(
+            out.contains("- Foundry: `proj` [legacy] build failures 0 → 1"),
+            "{out}"
+        );
     }
 
     #[test]
@@ -749,16 +1052,18 @@ mod tests {
         let out = render(&[suite("Foundry", false, tests)]);
         assert!(out.contains("Project outliers"), "{out}");
         assert!(out.contains("`slow`"), "{out}");
+        assert!(out.contains("positive = PR slower"), "{out}");
     }
 
     #[test]
-    fn compile_time_within_noise_is_quiet() {
+    fn compile_time_within_noise_is_quiet_and_shows_median() {
         let tests = vec![compile_test(
             "p",
             &[("02.solx-main-legacy", 1000), ("03.solx-legacy", 1010)],
         )];
         let out = render(&[suite("Foundry", false, tests)]);
         assert!(out.contains("Within noise"), "{out}");
+        assert!(out.contains("+1.0% / +1.0%"), "{out}");
         assert!(!out.contains("Project outliers"), "{out}");
     }
 
@@ -773,13 +1078,58 @@ mod tests {
             ],
         );
         let out = render(&[suite("solx-tester", true, vec![ok]), unavailable("Foundry")]);
-        assert!(out.contains("❌ **Not output-preserving**"), "{out}");
+        assert!(
+            out.contains("❌ **Suite errored** — Foundry produced no report."),
+            "{out}"
+        );
         assert!(
             out.contains("| Foundry | ❌ no report — suite errored"),
             "{out}"
         );
-        // The healthy suite still renders its row.
+        // The healthy suite still renders its verdict and row.
+        assert!(out.contains("✅ **Output-preserving**"), "{out}");
         assert!(out.contains("| solx-tester |"), "{out}");
+    }
+
+    #[test]
+    fn report_link_is_named_after_the_suite() {
+        let tests = vec![contract_test(
+            "p",
+            "C",
+            &[
+                ("02.solx-main-legacy", 100, 5000),
+                ("03.solx-legacy", 100, 5000),
+            ],
+        )];
+        let mut s = suite("Foundry", false, tests);
+        s.report_url = Some("https://example.com/artifact".to_owned());
+        let out = render(&[s]);
+        assert!(
+            out.contains("[foundry.xlsx ↓](https://example.com/artifact)"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn baselines_table_names_baselines_and_direction() {
+        let tests = vec![contract_test(
+            "p",
+            "C",
+            &[
+                ("00.solc-legacy", 1000, 0),
+                ("02.solx-main-legacy", 1057, 0),
+                ("03.solx-legacy", 1057, 0),
+            ],
+        )];
+        let out = render(&[suite("Foundry", false, tests)]);
+        assert!(out.contains("full matrix"), "{out}");
+        assert!(out.contains("positive = PR larger"), "{out}");
+        assert!(
+            out.contains("| Suite | Pipeline | vs solc | vs released solx |"),
+            "{out}"
+        );
+        assert!(out.contains("| Foundry | legacy | +5.7% | — |"), "{out}");
+        assert!(!out.contains("00.solc"), "{out}");
     }
 
     #[test]
