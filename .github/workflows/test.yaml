@@ -46,7 +46,8 @@ jobs:
       # while the negation-style filter above needs 'every'. The docker dir is
       # included because the devcontainer builds its `base` stage locally;
       # rust-toolchain.toml because the container resolves it lazily on first
-      # use.
+      # use; this workflow itself so edits to the validation harness (the
+      # validate-devcontainer job, the devcontainers/ci pin) are validated too.
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: filter-devcontainer
         with:
@@ -55,6 +56,7 @@ jobs:
               - '.devcontainer/**'
               - '.github/docker/**'
               - 'rust-toolchain.toml'
+              - '.github/workflows/test.yaml'
 
   # Smoke-test the devcontainer: the runner Dockerfile's `base` stage and the
   # dev layer build (locally, no registry auth — same flow as a developer
