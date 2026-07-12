@@ -63,9 +63,9 @@
       "groupName": "dockerfile minor/patch"
     },
     {
-      "description": "Pinned git-rev cargo deps: inkwell/melior are forks tied to the LLVM 21.1 backend, slang_solidity is pinned for __private_backend_api compat, web3 (tomusdrw) is archived upstream. Disable Renovate's default git-digest updates — these are bumped manually when feature/build compat warrants. Note: matches on depName (Cargo.toml key), not packageName (which is the git URL for git-source deps).",
+      "description": "Pinned git-rev cargo deps: inkwell/melior are forks tied to the LLVM 21.1 backend, slang_solidity_v2 is the WIP Slang v2 frontend revision bumped manually, web3 (tomusdrw) is archived upstream. Disable Renovate's default git-digest updates — these are bumped manually when feature/build compat warrants. Note: matches on depName (Cargo.toml key), not packageName (which is the git URL for git-source deps).",
       "matchManagers": ["cargo"],
-      "matchDepNames": ["inkwell", "melior", "slang_solidity", "web3"],
+      "matchDepNames": ["inkwell", "melior", "slang_solidity_v2", "web3"],
       "enabled": false
     },
     {
