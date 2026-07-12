@@ -150,6 +150,14 @@ jobs:
           results-xml: 'slang-unit-tests-results.xml'
           check-name: 'Slang Unit Tests Results'
 
+      - name: Verify lit tools run outside MSYS2
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          ls -la "${RUNNER_TEMP}/lit-tools"
+          FileCheck --version
+          solc --version
+
       - name: Run MLIR lit tests
         shell: bash
         env:
