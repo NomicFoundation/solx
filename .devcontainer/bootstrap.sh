@@ -28,13 +28,21 @@ ccache --set-config=max_size=20G
 echo "==> Initializing submodules (shallow, as in CI)"
 # A submodule left on a branch is the guide's fork-hacking flow; updating it
 # would silently detach it back to the recorded SHA and rebuild upstream.
+# A deliberately pinned DETACHED checkout is indistinguishable from a stale
+# post-bump tree, so it is reset — announced below; use a branch to keep it.
+# </dev/null: a git prompt must not swallow the loop's remaining input.
 while read -r submodule; do
     if [ -e "${submodule}/.git" ] \
         && branch=$(git -C "${submodule}" symbolic-ref --short -q HEAD); then
         echo "==> ${submodule} is on branch '${branch}' — leaving it untouched"
+        # Nested submodules still follow the developer's checkout.
+        git -C "${submodule}" submodule update --init --recursive --depth 1 </dev/null
         continue
     fi
-    git submodule update --init --recursive --depth 1 "${submodule}"
+    case "$(git submodule status -- "${submodule}")" in
+        +*) echo "==> ${submodule}: detached checkout differs from the recorded commit — resetting" ;;
+    esac
+    git submodule update --init --recursive --depth 1 "${submodule}" </dev/null
 done < <(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
 
 # Boost artifacts land inside the solx-solidity submodule and are not in the
