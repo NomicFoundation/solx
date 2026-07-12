@@ -45,15 +45,6 @@ while read -r submodule; do
     git submodule update --init --recursive --depth 1 "${submodule}" </dev/null
 done < <(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
 
-# Boost artifacts land inside the solx-solidity submodule and are not in the
-# fork's .gitignore; without this local exclude, git status enumerates the
-# extracted Boost tree (tens of thousands of files) and VS Code's git
-# extension drowns in it ("too many changes").
-# TODO: delete once the submodule pin includes the fork's boost .gitignore
-# entries (cherry-pick of NomicFoundation/solx-solidity#111 onto 0.8.34).
-EXCLUDE_FILE=$(git -C solx-solidity rev-parse --git-path info/exclude)
-grep -qxF '/boost*' "${EXCLUDE_FILE}" 2>/dev/null || echo '/boost*' >> "${EXCLUDE_FILE}"
-
 echo "==> Building solx-dev"
 cargo build --release --bin solx-dev
 
