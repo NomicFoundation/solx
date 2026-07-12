@@ -50,9 +50,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ── LLVM 21 (system toolchain for coverage, sanitizers, lipo) ────────────────
-# Must match the LLVM version shipped inside rustc (1.96.0 → LLVM 21) so that
-# llvm-cov / llvm-profdata can read the profraw format emitted by instrumented
-# Rust binaries.
+# llvm-cov / llvm-profdata must read the profraw format emitted by
+# instrumented Rust binaries. rustc 1.96.0 embeds LLVM 22 — one major ahead
+# of these tools — but still emits format versions LLVM 21 reads. Re-check on
+# every toolchain bump: a format bump breaks the coverage job with an opaque
+# profdata error.
 # clang-format/clang-tidy (and python3-venv/psutil above) are not used by solx
 # itself; they serve solx-llvm's regression CI, which runs in this image.
 RUN curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
@@ -147,11 +149,10 @@ RUN userdel --remove ubuntu 2>/dev/null; \
     && chmod 440 /etc/sudoers.d/dev
 
 # ── Shared rustup/cargo ──────────────────────────────────────────────────────
-# base ships no Rust (CI's root-homed install lives in the ci stage). Install
-# a shared rustup in the official rust-image layout; the actual toolchain is
-# not baked in — rustup downloads the version pinned in rust-toolchain.toml
-# on the first cargo invocation, so this layer never goes stale on a
-# toolchain bump.
+# base ships no Rust. Install a shared rustup in the official rust-image
+# layout; the actual toolchain is not baked in — rustup downloads the version
+# pinned in rust-toolchain.toml on the first cargo invocation, so this layer
+# never goes stale on a toolchain bump.
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:${PATH}
@@ -163,12 +164,24 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 FROM base AS ci
 ARG TARGETPLATFORM
 
+# ── Valgrind (for LLVM regression tests under valgrind) ───────────────────
+# Kept above the Rust layer: VALGRIND_VERSION effectively never changes,
+# while RUST_VERSION bumps every few weeks and would rebuild everything below.
+ENV VALGRIND_VERSION=3.23.0
+RUN curl -fsSL -o valgrind-${VALGRIND_VERSION}.tar.bz2 \
+        https://sourceware.org/pub/valgrind/valgrind-${VALGRIND_VERSION}.tar.bz2 \
+    && tar -xf valgrind-${VALGRIND_VERSION}.tar.bz2 \
+    && cd valgrind-${VALGRIND_VERSION} && ./configure && make -j"$(nproc)" && make install \
+    && cd .. && rm -rf valgrind-${VALGRIND_VERSION}.tar.bz2 valgrind-${VALGRIND_VERSION}
+
 # ── Rust ─────────────────────────────────────────────────────────────────────
-# Version must match rust-toolchain.toml in the solx repo; jobs resolve that
-# pin via rustup anyway, so a matching default only saves the download.
-# Lives in ci, not base: CI jobs run as root, while the dev stage ships its
-# own shared rustup — a /root-homed toolchain is dead weight in the dev image.
-# rust-src serves the -Zbuild-std actions (build-rust, rust-unit-tests).
+# Version must match rust-toolchain.toml (a renovate customManager bumps both
+# in one PR); jobs resolve that pin via rustup anyway, so a matching default
+# only saves the download. Lives in ci, not base: CI jobs run as root, while
+# the dev stage ships its own shared rustup — a /root-homed toolchain is dead
+# weight in the dev image. rust-src serves the -Zbuild-std actions
+# (build-rust, rust-unit-tests). On a bump, re-check the LLVM section
+# comment in base (rustc's embedded LLVM major moves).
 ARG RUST_VERSION=1.96.0
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         | sh -s -- -y --default-toolchain "${RUST_VERSION}" --profile default \
@@ -176,14 +189,6 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
     && rustup component add rust-src
 
 ENV PATH="/root/.cargo/bin:${PATH}"
-
-# ── Valgrind (for LLVM regression tests under valgrind) ───────────────────
-ENV VALGRIND_VERSION=3.23.0
-RUN curl -fsSL -o valgrind-${VALGRIND_VERSION}.tar.bz2 \
-        https://sourceware.org/pub/valgrind/valgrind-${VALGRIND_VERSION}.tar.bz2 \
-    && tar -xf valgrind-${VALGRIND_VERSION}.tar.bz2 \
-    && cd valgrind-${VALGRIND_VERSION} && ./configure && make -j"$(nproc)" && make install \
-    && cd .. && rm -rf valgrind-${VALGRIND_VERSION}.tar.bz2 valgrind-${VALGRIND_VERSION}
 
 # ── Cargo tools ────────────────────────────────────────────────────────────
 # When updating versions here, also update the matching pins in:
