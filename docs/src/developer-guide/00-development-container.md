@@ -14,7 +14,7 @@ A cold LLVM build is the dominant cost, and it is resource-hungry:
 
 ## What the image contains — and what it deliberately does not
 
-The container image is the `dev` stage of the runner Dockerfile — the shared `base` stage (cmake, ninja, clang/LLD 21, ccache, rustup, Node.js) plus a non-root user, a shared rustup layout, and valgrind (from apt; CI's `ci` stage builds its own pinned version, so valgrind versions may differ between the two). It is **built locally, not pulled**: the published `solx-ci-runner` package is private, but every source these stages draw from is public, so the devcontainer builds `--target dev` on your machine (~5–10 minutes the first time, layer-cached afterwards) with no registry authentication at all. The `ci` stage — valgrind, cargo coverage/report tools — is CI-only and skipped. One trade-off to know: a locally built image re-resolves apt packages, so it is not bit-for-bit identical to the frozen image CI pulls; for development this does not matter.
+The container image is the `dev` stage of the runner Dockerfile — the shared `base` stage (cmake, ninja, clang/LLD 21, ccache, Node.js) plus a non-root user, a shared rustup layout, and valgrind (from apt; CI's `ci` stage builds its own pinned version, so valgrind versions may differ between the two). It is **built locally, not pulled**: the published `solx-ci-runner` package is private, but every source these stages draw from is public, so the devcontainer builds `--target dev` on your machine (~5–10 minutes the first time, layer-cached afterwards) with no registry authentication at all. The `ci` stage — a root-homed Rust install, valgrind, cargo coverage/report tools — is CI-only and skipped. One trade-off to know: a locally built image re-resolves apt packages, so it is not bit-for-bit identical to the frozen image CI pulls; for development this does not matter.
 
 Two things are **not** in any image and are built from source inside the container:
 
@@ -87,16 +87,16 @@ Build state lives in Docker named volumes so it survives **Rebuild Container** a
 | `solx-cargo` | `/usr/local/cargo` | cargo registry/git caches |
 | `solx-ccache` | `/var/cache/solx-ccache` | LLVM compiler cache |
 
-The target volumes carry a per-checkout suffix (the devcontainer's `${devcontainerId}`), so two checkouts or worktrees opened as devcontainers never share a build tree. The cache volumes are shared across checkouts deliberately. Docker never removes named volumes on its own: deleting a checkout leaves its target volumes behind — list them with `docker volume ls --filter name=solx-` and remove what you no longer need.
+The target volumes carry a per-checkout suffix (the devcontainer's `${devcontainerId}`), so two checkouts or worktrees opened as devcontainers never share a build tree — concurrent builds would contend on cargo locks, and alternating ones thrash fingerprints. The cache volumes are shared across checkouts deliberately: cargo and ccache are safe under concurrent use, and a warm shared ccache is the point of persisting it. rustup is the exception — it has no cross-process locking, so avoid triggering the first toolchain download in two fresh containers at once (recovery, if it happens: the `Missing manifest` entry under Troubleshooting). Docker never removes named volumes on its own: deleting a checkout leaves its target volumes behind.
 
-To start truly fresh, remove the volumes (`docker volume ls --filter name=solx-`, then `docker volume rm …`) in addition to rebuilding the container.
+To start truly fresh, or to prune volumes left by deleted checkouts, list them with `docker volume ls --filter name=solx-` and `docker volume rm` what you no longer need, in addition to rebuilding the container.
 
 ## Working on the LLVM fork itself
 
 The devcontainer is also the intended environment for hacking on `solx-llvm`: the fork is not built standalone — `solx-dev` owns the CMake configuration (in `solx-dev/src/llvm/`), and `solx-llvm`'s own regression CI drives its builds through a **solx** checkout in the same runner image.
 
-1. Point the submodule at your branch: `git -C solx-llvm checkout <branch>` (after `git -C solx-llvm fetch --unshallow origin <branch>` if needed). Rerunning `bootstrap.sh` is safe: it leaves any submodule sitting on a branch untouched instead of resetting it to the recorded SHA.
-2. Rebuild: `./target/release/solx-dev llvm build --enable-assertions --enable-mlir --enable-tests --ccache-variant ccache`. `--enable-tests` builds FileCheck, `llvm-lit`, and the `check-*` targets so the regression suite runs locally; without it the build ships no test harness (it also implies the full toolset, so expect a longer first build).
+1. Point the submodule at your branch: `git -C solx-llvm checkout <branch>` (after `git -C solx-llvm fetch --unshallow origin <branch>` if needed). Rerunning `bootstrap.sh` is safe: it leaves any submodule sitting on a branch untouched instead of resetting it to the recorded SHA. A **detached** checkout of a pinned commit is reset (announced in the log) — put throwaway work on a branch to protect it.
+2. Rebuild: `./target/release/solx-dev llvm build --enable-assertions --enable-mlir --enable-tests --ccache-variant ccache --extra-args "-DLLVM_PARALLEL_LINK_JOBS='2'"`. `--enable-tests` builds FileCheck, `llvm-lit`, and the `check-*` targets so the regression suite runs locally (it implies the full toolset — expect a longer first build); the link-jobs cap keeps peak memory inside the 16 GB host minimum.
 3. C++ language support: `solx-dev` exports `compile_commands.json` into `target-llvm/build-final/`, and the devcontainer configures clangd to read it, so cross-references in the submodule work after the first build.
 
 ## Notes for Slang contributors

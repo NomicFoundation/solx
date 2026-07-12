@@ -23,11 +23,9 @@
 
     // Build state lives in named volumes: it survives container rebuilds and
     // stays off the bind mount, which is slow on macOS/Windows hosts.
-    // Target volumes are per-checkout (${devcontainerId}): two checkouts or
-    // worktrees sharing one build tree contend on cargo locks and thrash
-    // fingerprints. The rustup/cargo/ccache volumes stay shared across
-    // checkouts on purpose — they are concurrency-safe caches, and sharing
-    // the LLVM ccache is the point of persisting it.
+    // Target volumes are per-checkout (${devcontainerId}); rustup/cargo/ccache
+    // are shared across checkouts — rationale and the rustup first-run caveat
+    // in the guide's Persistence section.
     "mounts": [
         "source=solx-target-${devcontainerId},target=${containerWorkspaceFolder}/target,type=volume",
         "source=solx-target-slang-${devcontainerId},target=${containerWorkspaceFolder}/target-slang,type=volume",
