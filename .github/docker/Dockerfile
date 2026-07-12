@@ -11,7 +11,7 @@
 #   dev  — devcontainer additions on base (non-root user, shared rustup).
 #          Built locally by .devcontainer/devcontainer.json (`target: dev`),
 #          so it needs no access to the private published image.
-#   ci   — CI-only reporting and test tooling on base (valgrind for solx-llvm
+#   ci   — CI-only tooling on base (root-homed Rust, valgrind for solx-llvm
 #          regression tests, cargo coverage/report tools). Must stay the final
 #          stage: docker-ci-image.yaml publishes the default target.
 
@@ -50,7 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ── LLVM 21 (system toolchain for coverage, sanitizers, lipo) ────────────────
-# Must match the LLVM version shipped inside rustc (1.93.0 → LLVM 21) so that
+# Must match the LLVM version shipped inside rustc (1.96.0 → LLVM 21) so that
 # llvm-cov / llvm-profdata can read the profraw format emitted by instrumented
 # Rust binaries.
 # clang-format/clang-tidy (and python3-venv/psutil above) are not used by solx
@@ -108,15 +108,7 @@ RUN set -eux; \
     GCC_VER=$(ls /usr/lib/gcc/${TRIPLE}/ | sort -V | tail -1); \
     ln -sf "/usr/lib/gcc/${TRIPLE}/${GCC_VER}/libstdc++.a" "/usr/lib/${TRIPLE}/libstdc++.a"
 
-# ── Rust ─────────────────────────────────────────────────────────────────────
-# Version must match rust-toolchain.toml in the solx repo.
-ARG RUST_VERSION=1.93.0
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-        | sh -s -- -y --default-toolchain "${RUST_VERSION}" --profile default \
-    && . "$HOME/.cargo/env" \
-    && rustup component add rust-src
-
-ENV PATH="/root/.cargo/bin:/usr/lib/llvm-21/bin:${PATH}" \
+ENV PATH="/usr/lib/llvm-21/bin:${PATH}" \
     LD_LIBRARY_PATH="/usr/lib/llvm-21/lib"
 
 # ── Node.js (for SFW, npm-based CI tools, and Hardhat project tests) ──────
@@ -147,18 +139,17 @@ FROM base AS dev
 # Keeping it in the image (rather than ad-hoc installs) also keeps LLVM's
 # cmake valgrind detection stable across container rebuilds; the persistent
 # target-llvm build tree bakes it in.
-ARG USERNAME=dev
 RUN userdel --remove ubuntu 2>/dev/null; \
     apt-get update && apt-get install -y --no-install-recommends sudo valgrind \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --uid 1000 --user-group --create-home --shell /bin/bash ${USERNAME} \
-    && echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} \
-    && chmod 440 /etc/sudoers.d/${USERNAME}
+    && useradd --uid 1000 --user-group --create-home --shell /bin/bash dev \
+    && echo "dev ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev \
+    && chmod 440 /etc/sudoers.d/dev
 
 # ── Shared rustup/cargo ──────────────────────────────────────────────────────
-# base homes rustup in /root, unreachable for the non-root user. Install a
-# shared one in the official rust-image layout instead; the actual toolchain
-# is not baked in — rustup downloads the version pinned in rust-toolchain.toml
+# base ships no Rust (CI's root-homed install lives in the ci stage). Install
+# a shared rustup in the official rust-image layout; the actual toolchain is
+# not baked in — rustup downloads the version pinned in rust-toolchain.toml
 # on the first cargo invocation, so this layer never goes stale on a
 # toolchain bump.
 ENV RUSTUP_HOME=/usr/local/rustup \
@@ -172,12 +163,26 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 FROM base AS ci
 ARG TARGETPLATFORM
 
+# ── Rust ─────────────────────────────────────────────────────────────────────
+# Version must match rust-toolchain.toml in the solx repo; jobs resolve that
+# pin via rustup anyway, so a matching default only saves the download.
+# Lives in ci, not base: CI jobs run as root, while the dev stage ships its
+# own shared rustup — a /root-homed toolchain is dead weight in the dev image.
+# rust-src serves the -Zbuild-std actions (build-rust, rust-unit-tests).
+ARG RUST_VERSION=1.96.0
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        | sh -s -- -y --default-toolchain "${RUST_VERSION}" --profile default \
+    && . "$HOME/.cargo/env" \
+    && rustup component add rust-src
+
+ENV PATH="/root/.cargo/bin:${PATH}"
+
 # ── Valgrind (for LLVM regression tests under valgrind) ───────────────────
 ENV VALGRIND_VERSION=3.23.0
 RUN curl -fsSL -o valgrind-${VALGRIND_VERSION}.tar.bz2 \
         https://sourceware.org/pub/valgrind/valgrind-${VALGRIND_VERSION}.tar.bz2 \
     && tar -xf valgrind-${VALGRIND_VERSION}.tar.bz2 \
-    && cd valgrind-${VALGRIND_VERSION} && ./configure && make && make install \
+    && cd valgrind-${VALGRIND_VERSION} && ./configure && make -j"$(nproc)" && make install \
     && cd .. && rm -rf valgrind-${VALGRIND_VERSION}.tar.bz2 valgrind-${VALGRIND_VERSION}
 
 # ── Cargo tools ────────────────────────────────────────────────────────────
