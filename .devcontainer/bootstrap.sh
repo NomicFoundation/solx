@@ -26,12 +26,23 @@ done
 ccache --set-config=max_size=20G
 
 echo "==> Initializing submodules (shallow, as in CI)"
-git submodule update --init --recursive --depth 1
+# A submodule left on a branch is the guide's fork-hacking flow; updating it
+# would silently detach it back to the recorded SHA and rebuild upstream.
+while read -r submodule; do
+    if [ -e "${submodule}/.git" ] \
+        && branch=$(git -C "${submodule}" symbolic-ref --short -q HEAD); then
+        echo "==> ${submodule} is on branch '${branch}' — leaving it untouched"
+        continue
+    fi
+    git submodule update --init --recursive --depth 1 "${submodule}"
+done < <(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
 
 # Boost artifacts land inside the solx-solidity submodule and are not in the
 # fork's .gitignore; without this local exclude, git status enumerates the
 # extracted Boost tree (tens of thousands of files) and VS Code's git
 # extension drowns in it ("too many changes").
+# TODO: delete once the submodule pin includes the fork's boost .gitignore
+# entries (cherry-pick of NomicFoundation/solx-solidity#111 onto 0.8.34).
 EXCLUDE_FILE=$(git -C solx-solidity rev-parse --git-path info/exclude)
 grep -qxF '/boost*' "${EXCLUDE_FILE}" 2>/dev/null || echo '/boost*' >> "${EXCLUDE_FILE}"
 
