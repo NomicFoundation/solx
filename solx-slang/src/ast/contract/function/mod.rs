@@ -302,7 +302,7 @@ impl<'state> FunctionEmitter<'state> {
     /// independently of the Slang AST representation.
     fn map_state_mutability(function: &FunctionDefinition) -> StateMutability {
         use slang_solidity_v2::ast::FunctionMutability;
-        match function.mutability() {
+        match function.attributes().mutability() {
             FunctionMutability::Pure => StateMutability::Pure,
             FunctionMutability::View => StateMutability::View,
             FunctionMutability::Payable => StateMutability::Payable,

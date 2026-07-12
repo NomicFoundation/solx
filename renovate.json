@@ -69,12 +69,6 @@
       "enabled": false
     },
     {
-      "description": "slang_solidity_v2 and slang_solidity_v2_common are two workspace deps pinned to the same NomicFoundation/slang revision and must move in lockstep; group their digest updates into one PR so the two revs never drift apart. Note: matches on depName (Cargo.toml key), not packageName (the git URL for git-source deps).",
-      "matchManagers": ["cargo"],
-      "matchDepNames": ["slang_solidity_v2", "slang_solidity_v2_common"],
-      "groupName": "slang_solidity_v2"
-    },
-    {
       "description": "Pin reqwest to 0.12.x until web3 (tomusdrw, transitive) also moves off 0.12. solx-compiler-downloader uses reqwest with default-features = false and only [\"blocking\", \"json\"] — no TLS feature. While web3's reqwest 0.12 lock entry is the same major, cargo feature unification adds web3's TLS features (http-rustls-tls) to the shared compiled crate and HTTPS works for free. Splitting majors (0.12 here, 0.13 there) breaks unification, leaves the 0.13 build with no TLS, and HTTPS fails with `invalid URL, scheme is not http`. PR #399 hit exactly this and PR #406's URL switch couldn't fix it. `allowedVersions` keeps 0.12.x patch bumps (security fixes) flowing while blocking the 0.13 jump. Drop this rule when rust-web3 itself moves to reqwest 0.13.",
       "matchManagers": ["cargo"],
       "matchDepNames": ["reqwest"],

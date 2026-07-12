@@ -10,9 +10,10 @@ use std::path::PathBuf;
 
 use slang_solidity_v2::compilation::CompilationBuilder;
 use slang_solidity_v2::compilation::CompilationUnit;
+use slang_solidity_v2::compilation::FileId;
 use slang_solidity_v2::diagnostics::DiagnosticExtensions;
+use slang_solidity_v2::utils::EvmTarget;
 use slang_solidity_v2::utils::LanguageVersion;
-use slang_solidity_v2_common::evm_targets::EvmTarget;
 
 use solx_core::Frontend;
 use solx_standard_json::CollectableError;
@@ -51,8 +52,8 @@ impl Slang {
     ///
     /// Returns an error if the compilation builder fails to initialize or
     /// if import resolution fails.
-    pub fn compile(&self, sources: BTreeMap<String, String>) -> anyhow::Result<CompilationUnit> {
-        let paths: Vec<String> = sources.keys().cloned().collect();
+    fn compile(&self, sources: BTreeMap<FileId, String>) -> anyhow::Result<CompilationUnit> {
+        let file_ids: Vec<FileId> = sources.keys().cloned().collect();
         let configuration = CompilationConfig::new(sources);
         let version: LanguageVersion =
             self.version.default.clone().try_into().map_err(|error| {
@@ -65,8 +66,8 @@ impl Slang {
         // handles EVM-version targeting downstream, so admit every built-in here.
         let mut builder = CompilationBuilder::create(version, EvmTarget::LATEST, configuration);
 
-        for path in paths.iter() {
-            builder.add_file(path.clone());
+        for file_id in file_ids {
+            builder.add_file(file_id);
         }
 
         Ok(builder.build())
@@ -122,7 +123,7 @@ impl Frontend for Slang {
                     ));
                 continue;
             };
-            sources.insert(path.clone(), source_code.to_owned());
+            sources.insert(path.as_str().into(), source_code.to_owned());
         }
 
         let unit = self.compile(sources)?;
@@ -130,16 +131,16 @@ impl Frontend for Slang {
         output
             .errors
             .extend(unit.diagnostics().iter().map(|diagnostic| {
-                let file_identifier = diagnostic.file_id();
+                let file_id = diagnostic.file_id();
                 let text_range = diagnostic.text_range();
                 let source_location =
                     solx_standard_json::output::error::source_location::SourceLocation::new(
-                        file_identifier,
+                        file_id.to_string(),
                         text_range.start as isize,
                         text_range.end as isize,
                     );
                 solx_standard_json::OutputError::new_error_with_data(
-                    Some(file_identifier),
+                    Some(file_id.as_str()),
                     None,
                     diagnostic.message(),
                     Some(source_location),
@@ -147,10 +148,11 @@ impl Frontend for Slang {
                 )
             }));
 
-        for file_identifier in &unit.file_ids() {
-            if let Some(output_source) = output.sources.get_mut(file_identifier) {
+        for file in unit.files() {
+            let file_id = file.id();
+            if let Some(output_source) = output.sources.get_mut(file_id.as_str()) {
                 output_source.ast = Some(
-                    serde_json::to_value(unit.file(file_identifier).map(|file| file.ast()))
+                    serde_json::to_value(file.ast())
                         .map_err(|error| anyhow::anyhow!("AST serialization: {error}"))?,
                 );
             }
@@ -160,12 +162,8 @@ impl Frontend for Slang {
             return Ok(output);
         }
 
-        let file_identifiers = unit.file_ids();
-
-        for file_identifier in &file_identifiers {
-            let Some(file) = unit.file(file_identifier) else {
-                continue;
-            };
+        for file in unit.files() {
+            let file_id = file.id();
             let source_unit = file.ast();
             let melior = solx_mlir::Context::create_melior_context();
 
@@ -181,7 +179,7 @@ impl Frontend for Slang {
                 solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX
             );
             let capture_sol_dialect = input_json.settings.output_selection.check_selection(
-                file_identifier,
+                file_id.as_str(),
                 Some(contract_name.as_str()),
                 solx_standard_json::InputSelector::MLIR,
             );
@@ -201,7 +199,7 @@ impl Frontend for Slang {
 
             output
                 .contracts
-                .entry(file_identifier.to_string())
+                .entry(file_id.to_string())
                 .or_default()
                 .insert(contract_name, contract);
         }
