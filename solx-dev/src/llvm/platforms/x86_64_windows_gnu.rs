@@ -60,6 +60,7 @@ pub fn build(
                 "-DCMAKE_C_COMPILER='clang'",
                 "-DCMAKE_CXX_COMPILER='clang++'",
                 "-DLLVM_USE_LINKER='lld'",
+                "-DCMAKE_EXE_LINKER_FLAGS='-static'",
             ])
             .args(crate::llvm::platforms::shared::shared_build_opts_projects(
                 enable_mlir,

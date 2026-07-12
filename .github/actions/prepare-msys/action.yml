@@ -40,5 +40,13 @@ runs:
       shell: msys2 {0}
       run: |
         rustup set default-host x86_64-pc-windows-gnu
-        echo "$(cygpath '${{ steps.msys2.outputs.msys2-location }}')/mingw64/bin" >> "${GITHUB_PATH}"
-        echo "$(cygpath "$USERPROFILE")/.cargo/bin" >> "${GITHUB_PATH}"
+        echo '${{ steps.msys2.outputs.msys2-location }}\mingw64\bin' >> "${GITHUB_PATH}"
+        echo "${USERPROFILE}\\.cargo\\bin" >> "${GITHUB_PATH}"
+
+    # Added to GITHUB_PATH after mingw64\bin, so it lands earlier in PATH:
+    # non-msys2 steps must resolve python3 to the stock CPython, not the
+    # pip-less MinGW python that mingw-w64-x86_64-python puts in mingw64\bin.
+    - name: Install Python
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      with:
+        python-version: '3.14'

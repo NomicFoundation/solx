@@ -98,10 +98,13 @@ jobs:
           git -C solx-solidity fetch origin main
           git -C solx-solidity checkout FETCH_HEAD
 
+      # Release: RelWithDebInfo bakes -g3 debug info into the statically
+      # linked solc.exe, producing a ~2 GB PE that the Windows loader
+      # rejects ("Exec format error"), and the lit tests execute solc.
       - name: Build solc
         uses: ./.github/actions/build-solc
         with:
-          cmake-build-type: RelWithDebInfo
+          cmake-build-type: Release
           enable-mlir: 'true'
 
       # bindgen's embedded clang needs to know it's targeting MinGW,
@@ -115,13 +118,14 @@ jobs:
       - name: Preserve lit tools before disk cleanup
         shell: bash
         run: |
+          EXE=${{ runner.os == 'Windows' && '.exe' || '' }}
           LIT=llvm-lit${{ runner.os == 'Windows' && '.py' || '' }}
           mkdir -p "${RUNNER_TEMP}/lit-tools"
           cp -r \
-            target-llvm/target-final/bin/FileCheck \
+            target-llvm/target-final/bin/FileCheck${EXE} \
             target-llvm/target-final/bin/${LIT} \
             solx-llvm/llvm/utils/lit \
-            solx-solidity/build/solc/solc \
+            solx-solidity/build/solc/solc${EXE} \
             "${RUNNER_TEMP}/lit-tools/"
           echo "${RUNNER_TEMP}/lit-tools" >> "${GITHUB_PATH}"
           echo "PYTHONPATH=${RUNNER_TEMP}/lit-tools/lit" >> "${GITHUB_ENV}"
@@ -148,6 +152,14 @@ jobs:
           cargo-test-command: 'test-slang'
           results-xml: 'slang-unit-tests-results.xml'
           check-name: 'Slang Unit Tests Results'
+
+      - name: Verify lit tools run outside MSYS2
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          ls -la "${RUNNER_TEMP}/lit-tools"
+          FileCheck --version
+          solc --version
 
       - name: Run MLIR lit tests
         shell: bash

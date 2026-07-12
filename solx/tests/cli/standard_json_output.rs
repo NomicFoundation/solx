@@ -307,6 +307,7 @@ fn select_specific_bytecode(path: &str, expected_key: &str) -> anyhow::Result<()
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test_case(crate::common::standard_json!("select_evm_bytecode_debug_info.json"), "bytecode")]
 #[test_case(crate::common::standard_json!("select_evm_deployed_bytecode_debug_info.json"), "deployedBytecode")]
 fn select_specific_debug_info(path: &str, expected_key: &str) -> anyhow::Result<()> {
@@ -511,6 +512,7 @@ fn select_ast_only() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn select_wildcard_and_per_file_are_unioned() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -529,6 +531,7 @@ fn select_wildcard_and_per_file_are_unioned() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn select_per_file_cross_file_dependency() -> anyhow::Result<()> {
     crate::common::setup()?;
