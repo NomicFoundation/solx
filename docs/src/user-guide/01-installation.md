@@ -70,7 +70,7 @@ This repository maintains intuitive and stable naming for the executables and pr
 > Deployment and production use cases should rely only on [the officially released executables](#static-executables).
 
 > For development, the repository also ships a [devcontainer](../developer-guide/00-development-container.md)
-> that provides all dependencies below on the exact toolchain image CI uses.
+> that provides all dependencies below on the same toolchain image definition CI uses.
 
 1. Install the necessary system-wide dependencies.
 

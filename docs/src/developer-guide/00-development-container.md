@@ -95,8 +95,8 @@ To start truly fresh, remove the volumes (`docker volume ls --filter name=solx-`
 
 The devcontainer is also the intended environment for hacking on `solx-llvm`: the fork is not built standalone — `solx-dev` owns the CMake configuration (in `solx-dev/src/llvm/`), and `solx-llvm`'s own regression CI drives its builds through a **solx** checkout in the same runner image.
 
-1. Point the submodule at your branch: `git -C solx-llvm checkout <branch>` (after `git -C solx-llvm fetch --unshallow origin <branch>` if needed).
-2. Rebuild: `./target/release/solx-dev llvm build --enable-assertions --enable-mlir --ccache-variant ccache`.
+1. Point the submodule at your branch: `git -C solx-llvm checkout <branch>` (after `git -C solx-llvm fetch --unshallow origin <branch>` if needed). Rerunning `bootstrap.sh` is safe: it leaves any submodule sitting on a branch untouched instead of resetting it to the recorded SHA.
+2. Rebuild: `./target/release/solx-dev llvm build --enable-assertions --enable-mlir --enable-tests --ccache-variant ccache`. `--enable-tests` builds FileCheck, `llvm-lit`, and the `check-*` targets so the regression suite runs locally; without it the build ships no test harness (it also implies the full toolset, so expect a longer first build).
 3. C++ language support: `solx-dev` exports `compile_commands.json` into `target-llvm/build-final/`, and the devcontainer configures clangd to read it, so cross-references in the submodule work after the first build.
 
 ## Notes for Slang contributors
