@@ -80,14 +80,16 @@ Build state lives in Docker named volumes so it survives **Rebuild Container** a
 
 | Volume | Mount point | Holds |
 |---|---|---|
-| `solx-target` | `target/` | solx build artifacts, `solx-dev` |
-| `solx-target-slang` | `target-slang/` | `cargo *-slang` alias artifacts |
-| `solx-target-llvm` | `target-llvm/` | LLVM build tree + installation |
+| `solx-target-<id>` | `target/` | solx build artifacts, `solx-dev` |
+| `solx-target-slang-<id>` | `target-slang/` | `cargo *-slang` alias artifacts |
+| `solx-target-llvm-<id>` | `target-llvm/` | LLVM build tree + installation |
 | `solx-rustup` | `/usr/local/rustup` | downloaded Rust toolchains |
 | `solx-cargo` | `/usr/local/cargo` | cargo registry/git caches |
 | `solx-ccache` | `/var/cache/solx-ccache` | LLVM compiler cache |
 
-To start truly fresh, remove the volumes (`docker volume rm solx-target-llvm …`) in addition to rebuilding the container.
+The target volumes carry a per-checkout suffix (the devcontainer's `${devcontainerId}`), so two checkouts or worktrees opened as devcontainers never share a build tree. The cache volumes are shared across checkouts deliberately. Docker never removes named volumes on its own: deleting a checkout leaves its target volumes behind — list them with `docker volume ls --filter name=solx-` and remove what you no longer need.
+
+To start truly fresh, remove the volumes (`docker volume ls --filter name=solx-`, then `docker volume rm …`) in addition to rebuilding the container.
 
 ## Working on the LLVM fork itself
 
