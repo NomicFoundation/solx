@@ -49,8 +49,7 @@ impl Pool {
     ///
     /// Compiles one translation unit on a pooled or freshly spawned worker.
     ///
-    /// The worker rejoins the pool only after a clean run that leaves it reusable; any error
-    /// drops it through the early return.
+    /// On success the worker rejoins the pool; any error drops it through the early return.
     ///
     pub fn execute(&self, job: &Job) -> crate::Result<EVMOutput> {
         let idle = self.idle.lock().expect(POISON).pop();
@@ -59,9 +58,7 @@ impl Pool {
             None => Worker::spawn(self.executable.as_path(), &self.session)?,
         };
         let output = worker.execute(job)?;
-        if self.session.allows_worker_reuse() && job.allows_worker_reuse() {
-            self.idle.lock().expect(POISON).push(worker);
-        }
+        self.idle.lock().expect(POISON).push(worker);
         Ok(output)
     }
 }

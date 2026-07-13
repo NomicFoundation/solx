@@ -53,14 +53,4 @@ impl Job {
             optimizer_settings,
         }
     }
-
-    ///
-    /// Whether a worker may be reused after this unit.
-    ///
-    /// A stack-too-deep spill area emits the process-global `-evm-stack-region-*` cl-options,
-    /// which would leak into the next unit, so a spilling unit runs on a throwaway worker.
-    ///
-    pub fn allows_worker_reuse(&self) -> bool {
-        self.optimizer_settings.spill_area_size.is_none()
-    }
 }

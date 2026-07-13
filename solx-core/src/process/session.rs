@@ -44,14 +44,4 @@ impl Session {
             output_config,
         }
     }
-
-    ///
-    /// Whether a worker may be reused across this session's units.
-    ///
-    /// Extra `llvm_options` accumulate in a worker's process-global LLVM cl-option state on
-    /// every parse, so a session that carries them runs each unit on a fresh worker.
-    ///
-    pub fn allows_worker_reuse(&self) -> bool {
-        self.llvm_options.is_empty()
-    }
 }

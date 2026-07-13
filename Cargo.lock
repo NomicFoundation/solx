@@ -2341,7 +2341,7 @@ dependencies = [
 [[package]]
 name = "inkwell"
 version = "0.7.1"
-source = "git+https://github.com/NomicFoundation/inkwell?rev=4f9f86e15f43dc8555b8b51d4dda01e60f756f22#4f9f86e15f43dc8555b8b51d4dda01e60f756f22"
+source = "git+https://github.com/NomicFoundation/inkwell?branch=az-reset-option-occurrences#dd7c761865dc985a07a6c63f6de2614388d49cfd"
 dependencies = [
  "inkwell_internals",
  "libc",
@@ -2354,7 +2354,7 @@ dependencies = [
 [[package]]
 name = "inkwell_internals"
 version = "0.12.0"
-source = "git+https://github.com/NomicFoundation/inkwell?rev=4f9f86e15f43dc8555b8b51d4dda01e60f756f22#4f9f86e15f43dc8555b8b51d4dda01e60f756f22"
+source = "git+https://github.com/NomicFoundation/inkwell?branch=az-reset-option-occurrences#dd7c761865dc985a07a6c63f6de2614388d49cfd"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2602,7 +2602,7 @@ checksum = "6373607a59f0be73a39b6fe456b8192fcc3585f602af20751600e974dd455e77"
 [[package]]
 name = "llvm-sys"
 version = "211.0.0"
-source = "git+https://github.com/NomicFoundation/llvm-sys.rs?branch=main#afdfa3146ca4dcc4f9bf023fb5caa3fe14f5d908"
+source = "git+https://github.com/NomicFoundation/llvm-sys.rs?branch=az-reset-option-occurrences#bfc06932fc84da16a36017a77a1b7f940813adf0"
 dependencies = [
  "anyhow",
  "cc",
