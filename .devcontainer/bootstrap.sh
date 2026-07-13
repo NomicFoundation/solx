@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Builds the full solx toolchain inside the devcontainer: submodules, the
 # solx-dev builder, the custom LLVM backend, and the solc fork libraries.
-# Idempotent — rerun it after a solx-llvm submodule bump; ccache (persisted in
-# a named volume) makes rebuilds much cheaper than the cold build.
+# Idempotent — after a submodule bump, refresh the checkout first
+# (git submodule update --init --recursive --depth 1) and rerun; ccache
+# (persisted in a named volume) makes rebuilds much cheaper than the cold build.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -26,22 +27,23 @@ done
 ccache --set-config=max_size=20G
 
 echo "==> Initializing submodules (shallow, as in CI)"
-# A submodule left on a branch is the guide's fork-hacking flow; updating it
-# would silently detach it back to the recorded SHA and rebuild upstream.
-# A deliberately pinned DETACHED checkout is indistinguishable from a stale
-# post-bump tree, so it is reset — announced below; use a branch to keep it.
+# Only never-initialized submodules are fetched; an existing checkout is the
+# developer's (fork branches, deliberate pins) and is never moved — one that
+# differs from the recorded commit gets a warning instead.
 # </dev/null: a git prompt must not swallow the loop's remaining input.
 while read -r submodule; do
-    if [ -e "${submodule}/.git" ] \
-        && branch=$(git -C "${submodule}" symbolic-ref --short -q HEAD); then
-        echo "==> ${submodule} is on branch '${branch}' — leaving it untouched"
-        # Nested submodules still follow the developer's checkout.
-        git -C "${submodule}" submodule update --init --recursive --depth 1 </dev/null
+    if [ -e "${submodule}/.git" ]; then
+        case "$(git submodule status -- "${submodule}")" in
+            +*) cat <<EOF
+==> WARNING: ${submodule} checkout differs from the recorded commit.
+    If it is stale (e.g. after a submodule bump), refresh it before building:
+        git submodule update --init --recursive --depth 1
+    Ignore this if the checkout is intentional (fork branch, pinned commit).
+EOF
+            ;;
+        esac
         continue
     fi
-    case "$(git submodule status -- "${submodule}")" in
-        +*) echo "==> ${submodule}: detached checkout differs from the recorded commit — resetting" ;;
-    esac
     git submodule update --init --recursive --depth 1 "${submodule}" </dev/null
 done < <(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
 

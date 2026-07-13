@@ -47,7 +47,7 @@ The Rust toolchain itself is also resolved lazily: rustup downloads the version 
 
 `bootstrap.sh` is a thin wrapper over the same `solx-dev` builder CI uses. Step by step:
 
-1. `git submodule update --init --recursive --depth 1` — fetches `solx-llvm` and `solx-solidity` shallowly, exactly as CI does. If you need full history in a submodule (e.g. to bisect), run `git fetch --unshallow` inside it.
+1. `git submodule update --init --recursive --depth 1` — fetches `solx-llvm` and `solx-solidity` shallowly, exactly as CI does, but only for submodules that were never initialized. An existing checkout is never moved: if it differs from the recorded commit, the bootstrap prints a warning with that same command and carries on — refreshing is your explicit step (see [Rebuilding after a submodule bump](#rebuilding-after-a-submodule-bump)). If you need full history in a submodule (e.g. to bisect), run `git fetch --unshallow` inside it.
 2. `cargo build --release --bin solx-dev` — builds the builder. This first `cargo` call also downloads the pinned Rust toolchain.
 3. `./target/release/solx-dev llvm build --enable-assertions --enable-mlir --ccache-variant ccache` — configures and builds LLVM:
    - The build tree lives in `target-llvm/build-final/`, the installation in `target-llvm/target-final/`.
@@ -70,7 +70,14 @@ First stop: `.devcontainer/smoke-test.sh` checks the container's basic health (n
 
 ### Rebuilding after a submodule bump
 
-Rerun `.devcontainer/bootstrap.sh` (or the `solx-dev llvm build` invocation directly). The ccache volume persists across container rebuilds, so a rebuild after a typical `solx-llvm` bump takes minutes, not an hour. Add `--clean` to `solx-dev llvm build` if a stale build tree misbehaves.
+Refresh the submodule checkout, then rerun the bootstrap:
+
+```shell
+git submodule update --init --recursive --depth 1
+.devcontainer/bootstrap.sh
+```
+
+The bootstrap never moves an initialized submodule itself — skipping the first command just rebuilds the old checkout (it warns when one differs from the recorded commit). The ccache volume persists across container rebuilds, so a rebuild after a typical `solx-llvm` bump takes minutes, not an hour. Add `--clean` to `solx-dev llvm build` if a stale build tree misbehaves.
 
 For sanitizer or coverage LLVM builds, see [Building with Sanitizers](./04-sanitizers.md) — the same flags work inside the container.
 
@@ -95,7 +102,7 @@ To start truly fresh, or to prune volumes left by deleted checkouts, list them w
 
 The devcontainer is also the intended environment for hacking on `solx-llvm`: the fork is not built standalone — `solx-dev` owns the CMake configuration (in `solx-dev/src/llvm/`), and `solx-llvm`'s own regression CI drives its builds through a **solx** checkout in the same runner image.
 
-1. Point the submodule at your branch: `git -C solx-llvm checkout <branch>` (after `git -C solx-llvm fetch --unshallow origin <branch>` if needed). Rerunning `bootstrap.sh` is safe: it leaves any submodule sitting on a branch untouched instead of resetting it to the recorded SHA. A **detached** checkout of a pinned commit is reset (announced in the log) — put throwaway work on a branch to protect it.
+1. Point the submodule at your branch: `git -C solx-llvm checkout <branch>` (after `git -C solx-llvm fetch --unshallow origin <branch>` if needed). Rerunning `bootstrap.sh` is safe: it never moves an initialized submodule — it only notes that the checkout differs from the recorded commit.
 2. Rebuild: `./target/release/solx-dev llvm build --enable-assertions --enable-mlir --enable-tests --ccache-variant ccache --extra-args "-DLLVM_PARALLEL_LINK_JOBS='2'"`. `--enable-tests` builds FileCheck, `llvm-lit`, and the `check-*` targets so the regression suite runs locally (it implies the full toolset — expect a longer first build); the link-jobs cap keeps peak memory inside the 16 GB host minimum.
 3. C++ language support: `solx-dev` exports `compile_commands.json` into `target-llvm/build-final/`, and the devcontainer configures clangd to read it, so cross-references in the submodule work after the first build.
 
