@@ -2,6 +2,10 @@
 //! CLI tests for the eponymous option.
 //!
 
+use std::collections::BTreeSet;
+
+use object::Object;
+use object::ObjectSection;
 use predicates::prelude::*;
 use tempfile::TempDir;
 use test_case::test_case;
@@ -62,4 +66,98 @@ fn output_dir() -> anyhow::Result<()> {
         .stderr(predicate::str::contains("Compiler run successful"));
 
     Ok(())
+}
+
+///
+/// The fixture's two sources have byte-identical lengths, so every AST node byte offset in
+/// `B.sol` collides with one in `A.sol`, while their line numbers differ. Keying AST nodes
+/// by byte offset alone lets one source's locations overwrite the other's, attributing
+/// `Alpha`'s DWARF line rows to `Betaa`'s declaration lines.
+///
+#[test_case("A.sol", "Alpha", 4, 6 ; "first_source")]
+#[test_case("B.sol", "Betaa", 8, 10 ; "second_source")]
+fn cross_source_line_attribution(
+    path: &str,
+    name: &str,
+    first_line: u64,
+    last_line: u64,
+) -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let fixture_path = crate::common::standard_json!("debug_info_cross_source_collision.json");
+    let fixture: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(fixture_path)?)?;
+    let source_a = fixture["sources"]["A.sol"]["content"]
+        .as_str()
+        .expect("Always exists");
+    let source_b = fixture["sources"]["B.sol"]["content"]
+        .as_str()
+        .expect("Always exists");
+    assert_eq!(
+        source_a.len(),
+        source_b.len(),
+        "the sources must stay byte-length-identical: without the offset collision this test passes vacuously",
+    );
+    assert_eq!(
+        source_a.find("contract"),
+        source_b.find("contract"),
+        "the sources must keep their AST byte offsets aligned: without the offset collision this test passes vacuously",
+    );
+
+    let args = &["--standard-json", fixture_path];
+
+    let result = crate::cli::execute_solx(args)?.success();
+    let output: serde_json::Value = serde_json::from_slice(result.get_output().stdout.as_slice())?;
+
+    let debug_info = output["contracts"][path][name]["evm"]["deployedBytecode"]["debugInfo"]
+        .as_str()
+        .expect("Always exists");
+    let lines = debug_line_numbers(hex::decode(debug_info)?.as_slice())?;
+
+    assert!(!lines.is_empty(), "{name} has an empty DWARF line table");
+    for line in lines {
+        assert!(
+            (first_line..=last_line).contains(&line),
+            "{name} line {line} is outside of its source range {first_line}..={last_line}",
+        );
+    }
+
+    Ok(())
+}
+
+///
+/// Collects the distinct non-zero line numbers from the DWARF `.debug_line` program.
+///
+fn debug_line_numbers(elf: &[u8]) -> anyhow::Result<BTreeSet<u64>> {
+    let object_file = object::File::parse(elf)?;
+    let endian = if object_file.is_little_endian() {
+        gimli::RunTimeEndian::Little
+    } else {
+        gimli::RunTimeEndian::Big
+    };
+    let dwarf = gimli::Dwarf::load(|section| -> gimli::Result<_> {
+        let data = object_file
+            .section_by_name(section.name())
+            .and_then(|section| section.data().ok())
+            .unwrap_or_default();
+        Ok(gimli::EndianSlice::new(data, endian))
+    })?;
+
+    let mut lines = BTreeSet::new();
+    let mut units = dwarf.units();
+    while let Some(unit_header) = units.next()? {
+        let unit = dwarf.unit(unit_header)?;
+        let Some(program) = unit.line_program.clone() else {
+            continue;
+        };
+        let mut rows = program.rows();
+        while let Some((_, row)) = rows.next_row()? {
+            if row.end_sequence() {
+                continue;
+            }
+            if let Some(line) = row.line() {
+                lines.insert(line.get());
+            }
+        }
+    }
+    Ok(lines)
 }

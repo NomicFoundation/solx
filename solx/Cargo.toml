@@ -38,6 +38,9 @@ predicates = "3.1"
 tempfile = "3.27"
 test-case = "3.3"
 
+gimli.workspace = true
+hex.workspace = true
 inkwell.workspace = true
+object.workspace = true
 
 solx-codegen-evm = { path = "../solx-codegen-evm" }
