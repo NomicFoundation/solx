@@ -57,17 +57,17 @@ impl Worker {
     }
 
     ///
-    /// Sends `job` and receives the compilation result, or an error if the worker died.
+    /// Sends `job` to the worker and returns the compilation result it replies with.
     ///
-    pub fn execute(&mut self, job: &Job) -> anyhow::Result<crate::Result<EVMOutput>> {
+    pub fn execute(&mut self, job: &Job) -> crate::Result<EVMOutput> {
         self.child
             .stdin
             .as_mut()
             .expect("The worker stdin is always piped")
             .send(job)?;
         self.stdout
-            .recv()?
-            .ok_or_else(|| anyhow::anyhow!("The worker closed the response channel"))
+            .recv::<crate::Result<EVMOutput>>()?
+            .ok_or_else(|| anyhow::anyhow!("The worker closed the response channel"))?
     }
 }
 
