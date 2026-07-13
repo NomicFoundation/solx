@@ -529,11 +529,7 @@ pub fn test(
     })?;
     let base_path = crate::utils::absolute_path(output_directory)?;
 
-    // Emit the merged benchmark JSON next to the XLSX so the workflow's summary
-    // step can render the PR comment from the native data model.
-    let mut benchmark_json_path = base_path.clone();
-    benchmark_json_path.push("foundry-benchmark.json");
-    std::fs::write(&benchmark_json_path, serde_json::to_string(&benchmark)?)?;
+    crate::test::write_benchmark_json(&benchmark, base_path.as_path(), "foundry-benchmark.json")?;
 
     let output: solx_benchmark_converter::Output = (
         benchmark,
