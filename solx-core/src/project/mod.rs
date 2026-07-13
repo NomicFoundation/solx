@@ -697,7 +697,7 @@ impl Project {
                         optimizer_settings.clone(),
                     );
 
-                    let result = Self::run_multi_pass_pipeline(&pool, &contract_name, &mut job);
+                    let result = Self::run_multi_pass_pipeline(&pool, &mut job);
                     (result, metadata)
                 };
 
@@ -716,7 +716,7 @@ impl Project {
                         optimizer_settings.clone(),
                     );
 
-                    Self::run_multi_pass_pipeline(&pool, &contract_name, &mut job)
+                    Self::run_multi_pass_pipeline(&pool, &mut job)
                 };
 
                 let build = EVMContractBuild::new(
@@ -814,15 +814,12 @@ impl Project {
     ///
     fn run_multi_pass_pipeline(
         pool: &EVMProcessPool,
-        contract_name: &solx_utils::ContractName,
         job: &mut EVMProcessJob,
     ) -> crate::Result<EVMProcessOutput> {
-        let mut result: crate::Result<EVMProcessOutput>;
         let mut pass_count = 0;
         loop {
-            result = pool.execute(contract_name, job);
             pass_count += 1;
-            match result {
+            match pool.execute(job) {
                 Err(Error::StackTooDeep(stack_too_deep)) => {
                     assert!(
                         pass_count <= 2,
@@ -834,12 +831,9 @@ impl Project {
                     }
                     job.optimizer_settings
                         .set_spill_area_size(stack_too_deep.spill_area_size);
-
-                    continue;
                 }
-                _ => break,
+                result => break result,
             }
         }
-        result
     }
 }
