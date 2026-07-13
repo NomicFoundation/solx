@@ -17,42 +17,65 @@ use solx_benchmark_converter::SummarySuite;
 use self::arguments::Arguments;
 
 ///
-/// Loads a suite's benchmark, returning `None` when the file is absent.
+/// Loads a suite's benchmark, returning `None` when the suite was not part of
+/// this run.
 ///
 fn load_suite(
     label: &str,
+    report_file: &str,
     path: Option<PathBuf>,
     report_url: Option<String>,
     gas_is_gate: bool,
-) -> anyhow::Result<Option<SummarySuite>> {
+) -> Option<SummarySuite> {
     // No flag at all: the suite was not part of this run.
-    let Some(path) = path else {
-        return Ok(None);
+    let path = path?;
+    // A missing or unreadable file means the suite errored before writing a
+    // valid report. Surface it as a failed row rather than dropping it — and
+    // never let one bad suite abort the summary for the healthy ones.
+    let benchmark = match Benchmark::try_from(path.clone()) {
+        Ok(benchmark) => Some(benchmark),
+        Err(error) => {
+            eprintln!(
+                "Warning: {label} benchmark {path:?} is unusable ({error}); rendering the suite as errored."
+            );
+            None
+        }
     };
-    // Flag given but no file: the suite was expected but errored before writing
-    // its report. Surface it as a failed row rather than dropping it.
-    let benchmark = if path.exists() {
-        Some(Benchmark::try_from(path)?)
-    } else {
-        eprintln!("Warning: {label} benchmark {path:?} is absent; the suite errored.");
-        None
-    };
-    Ok(Some(SummarySuite {
+    Some(SummarySuite {
         label: label.to_owned(),
+        report_file: report_file.to_owned(),
         benchmark,
         // A skipped upload step passes its URL through as an empty string.
         report_url: report_url.filter(|url| !url.is_empty()),
         gas_is_gate,
-    }))
+    })
 }
 
 fn main() -> anyhow::Result<()> {
     let arguments = Arguments::try_parse()?;
 
     let suites: Vec<SummarySuite> = [
-        load_suite("solx-tester", arguments.tester, arguments.tester_url, true)?,
-        load_suite("Foundry", arguments.foundry, arguments.foundry_url, false)?,
-        load_suite("Hardhat", arguments.hardhat, arguments.hardhat_url, false)?,
+        load_suite(
+            "solx-tester",
+            "solx-tester-report.xlsx",
+            arguments.tester,
+            arguments.tester_url,
+            true,
+        ),
+        load_suite(
+            "Foundry",
+            "foundry-report.xlsx",
+            arguments.foundry,
+            arguments.foundry_url,
+            false,
+        ),
+        load_suite(
+            "Hardhat",
+            "hardhat-report.xlsx",
+            arguments.hardhat,
+            arguments.hardhat_url,
+            false,
+        ),
     ]
     .into_iter()
     .flatten()

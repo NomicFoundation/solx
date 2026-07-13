@@ -27,6 +27,9 @@ const MAX_LISTED: usize = 5;
 pub struct SummarySuite {
     /// Human-readable suite name shown in the table.
     pub label: String,
+    /// File name of the XLSX report inside the uploaded artifact, shown as
+    /// link text and referenced by "+N more" pointers.
+    pub report_file: String,
     /// The merged benchmark holding every toolchain's runs. `None` when the
     /// suite was expected but produced no report (it errored before writing) —
     /// rendered as an explicit failed row rather than silently dropped.
@@ -78,11 +81,21 @@ pub fn render(suites: &[SummarySuite]) -> String {
 #[derive(Default)]
 struct SuiteStats {
     label: String,
+    report_file: String,
     report_url: Option<String>,
     gas_is_gate: bool,
     /// False when the suite was expected but produced no report.
     available: bool,
     project_count: usize,
+    /// Total runs seen, and how many classified as the PR toolchain — data
+    /// with zero PR runs means the toolchain naming drifted from classify().
+    total_runs: usize,
+    pr_runs_seen: usize,
+    /// PR runs with no main counterpart, and the failures recorded on them.
+    /// They have nothing to compare against, so they are surfaced as
+    /// unbaselined rather than counted as regressions against zero.
+    unbaselined_runs: usize,
+    unbaselined_failures: usize,
 
     size_cells: u64,
     size_diffs: u64,
@@ -108,8 +121,10 @@ struct SuiteStats {
 
     /// Compile-time aggregates keyed by pipeline (legacy / viaIR).
     compile: BTreeMap<String, CompileAggregate>,
-    /// Total bytecode size per (role, pipeline) for the full-matrix baselines.
-    size_by_role_pipeline: BTreeMap<(Role, String), u64>,
+    /// (PR total, baseline total) bytecode per (baseline role, pipeline),
+    /// summed only over contracts both toolchains emitted — a toolchain that
+    /// failed some builds is excluded from the comparison, not counted as 0.
+    baseline_pairs: BTreeMap<(Role, String), (u64, u64)>,
     has_baselines: bool,
 
     top_size_movers: Vec<Movement>,
@@ -152,6 +167,7 @@ impl SuiteStats {
     fn from_suite(suite: &SummarySuite) -> Self {
         let mut stats = SuiteStats {
             label: suite.label.clone(),
+            report_file: suite.report_file.clone(),
             report_url: suite.report_url.clone(),
             gas_is_gate: suite.gas_is_gate,
             available: suite.benchmark.is_some(),
@@ -175,10 +191,13 @@ impl SuiteStats {
             let mut pr_runs: BTreeMap<String, &crate::benchmark::test::run::Run> = BTreeMap::new();
             let mut main_runs: BTreeMap<String, &crate::benchmark::test::run::Run> =
                 BTreeMap::new();
+            let mut by_role_pipeline: BTreeMap<(Role, String), u64> = BTreeMap::new();
             for (mode, run) in test.runs.iter() {
+                stats.total_runs += 1;
                 let (role, key) = classify(mode);
                 match role {
                     Role::Pr => {
+                        stats.pr_runs_seen += 1;
                         pr_runs.insert(key, run);
                     }
                     Role::Main => {
@@ -190,14 +209,13 @@ impl SuiteStats {
                     Role::Other => {}
                 }
 
-                // Full-matrix baseline totals: sum bytecode per role and pipeline.
+                // This test's bytecode per role and pipeline; paired into the
+                // full-matrix baseline totals after the loop.
                 if matches!(role, Role::Pr | Role::Main | Role::Latest | Role::Solc) {
-                    let pipeline = pipeline_of(mode);
                     let bytes = run.average_size() + run.average_runtime_size();
                     if bytes != 0 {
-                        *stats
-                            .size_by_role_pipeline
-                            .entry((role, pipeline))
+                        *by_role_pipeline
+                            .entry((role, pipeline_of(mode)))
                             .or_default() += bytes;
                     }
                 }
@@ -217,18 +235,36 @@ impl SuiteStats {
                 }
             }
 
-            // Pair each PR run with its main counterpart. Failures compare even
-            // without a counterpart (baseline 0: everything is new); size/gas
-            // need both sides.
+            // Baseline comparisons pair only cells present for both the PR
+            // and the baseline toolchain on this test.
+            for ((role, pipeline), &base_bytes) in by_role_pipeline.iter() {
+                if !matches!(role, Role::Solc | Role::Latest) {
+                    continue;
+                }
+                if let Some(&pr_bytes) = by_role_pipeline.get(&(Role::Pr, pipeline.clone())) {
+                    let entry = stats
+                        .baseline_pairs
+                        .entry((*role, pipeline.clone()))
+                        .or_default();
+                    entry.0 += pr_bytes;
+                    entry.1 += base_bytes;
+                }
+            }
+
+            // Pair each PR run with its main counterpart. A run without one
+            // has nothing to compare against — surfaced as unbaselined, not
+            // as a regression against an imaginary zero.
             for (key, pr) in pr_runs.iter() {
-                let main = main_runs.get(key);
+                let Some(main) = main_runs.get(key) else {
+                    stats.unbaselined_runs += 1;
+                    stats.unbaselined_failures += pr.build_failures + pr.test_failures;
+                    continue;
+                };
                 let mode = humanize_mode(key);
 
-                let (main_build, main_test) =
-                    main.map_or((0, 0), |m| (m.build_failures, m.test_failures));
                 for (kind, main_v, pr_v) in [
-                    ("build", main_build, pr.build_failures),
-                    ("test", main_test, pr.test_failures),
+                    ("build", main.build_failures, pr.build_failures),
+                    ("test", main.test_failures, pr.test_failures),
                 ] {
                     if pr_v > main_v {
                         match kind {
@@ -244,10 +280,6 @@ impl SuiteStats {
                         });
                     }
                 }
-
-                let Some(main) = main else {
-                    continue;
-                };
 
                 for (kind, pr_v, main_v) in [
                     ("deploy", pr.average_size(), main.average_size()),
@@ -348,13 +380,24 @@ impl SuiteStats {
         self.baseline_build_failures + self.baseline_test_failures
     }
 
+    /// The benchmark had runs but none classified as the PR toolchain — the
+    /// naming convention drifted from `classify()`; better a loud error than
+    /// a green comment over empty data.
+    fn classification_failed(&self) -> bool {
+        self.available && self.total_runs > 0 && self.pr_runs_seen == 0
+    }
+
     fn failures_cell(&self) -> String {
         let pre = match self.baseline_failures() {
             0 => String::new(),
             n => format!(" ({} pre-existing)", commas(n as u64)),
         };
+        let unbaselined = match self.unbaselined_failures {
+            0 => String::new(),
+            n => format!(", ⚪ {} unbaselined", commas(n as u64)),
+        };
         if self.new_failures() == 0 {
-            format!("✅ 0{pre}")
+            format!("✅ 0{pre}{unbaselined}")
         } else {
             let mut kinds = Vec::new();
             if self.new_build_failures > 0 {
@@ -363,7 +406,7 @@ impl SuiteStats {
             if self.new_test_failures > 0 {
                 kinds.push(format!("+{} test", commas(self.new_test_failures as u64)));
             }
-            format!("❌ {}{pre}", kinds.join(", "))
+            format!("❌ {}{pre}{unbaselined}", kinds.join(", "))
         }
     }
 
@@ -420,14 +463,9 @@ impl SuiteStats {
         }
     }
 
-    /// The report file name shown as link text and referenced by "+N more" lines.
-    fn report_file(&self) -> String {
-        format!("{}.xlsx", self.label.to_lowercase())
-    }
-
     fn report_cell(&self) -> String {
         match self.report_url.as_deref() {
-            Some(url) => format!("[{} ↓]({url})", self.report_file()),
+            Some(url) => format!("[{} ↓]({url})", self.report_file),
             None => "—".to_owned(),
         }
     }
@@ -466,9 +504,14 @@ fn render_verdict(out: &mut String, stats: &[SuiteStats]) {
             ));
         }
         if clauses.is_empty() {
-            clauses.push("no size or gated-gas data was collected".to_owned());
+            // Never a green checkmark over empty data.
+            let _ = writeln!(
+                out,
+                "⚪ **No output data** — no size or gated-gas comparisons were collected."
+            );
+        } else {
+            let _ = writeln!(out, "✅ **Output-preserving** — {}.", clauses.join(", "));
         }
-        let _ = writeln!(out, "✅ **Output-preserving** — {}.", clauses.join(", "));
     } else {
         let mut parts = Vec::new();
         if size_diffs > 0 {
@@ -529,8 +572,34 @@ fn render_verdict(out: &mut String, stats: &[SuiteStats]) {
     for s in stats.iter().filter(|s| !s.available) {
         let _ = writeln!(
             out,
-            "❌ **Suite errored** — {} produced no report.",
+            "❌ **Suite errored** — {} produced no usable report.",
             s.label
+        );
+    }
+    for s in stats.iter().filter(|s| s.classification_failed()) {
+        let _ = writeln!(
+            out,
+            "❌ **Harness error** — {}: benchmark data matched no recognized toolchain naming.",
+            s.label
+        );
+    }
+    let unbaselined: Vec<String> = stats
+        .iter()
+        .filter(|s| s.unbaselined_runs > 0)
+        .map(|s| {
+            format!(
+                "{}: {} runs ({} failures)",
+                s.label,
+                s.unbaselined_runs,
+                commas(s.unbaselined_failures as u64)
+            )
+        })
+        .collect();
+    if !unbaselined.is_empty() {
+        let _ = writeln!(
+            out,
+            "⚠️ **No baseline** — {} have no `main` counterpart; their failures are not compared.",
+            unbaselined.join("; ")
         );
     }
     let _ = writeln!(out);
@@ -545,6 +614,15 @@ fn render_results_table(out: &mut String, stats: &[SuiteStats]) {
                 out,
                 "| {} | ❌ no report — suite errored | — | — | — |",
                 s.label
+            );
+            continue;
+        }
+        if s.classification_failed() {
+            let _ = writeln!(
+                out,
+                "| {} | ❌ unrecognized toolchain naming | — | — | {} |",
+                s.label,
+                s.report_cell()
             );
             continue;
         }
@@ -584,7 +662,7 @@ fn render_new_failures(out: &mut String, stats: &[SuiteStats]) {
         }
         let extra = s.failure_regressions.len().saturating_sub(MAX_LISTED);
         if extra > 0 {
-            let _ = writeln!(out, "- +{extra} more — see {}", s.report_file());
+            let _ = writeln!(out, "- +{extra} more — see {}", s.report_file);
         }
     }
 }
@@ -623,7 +701,7 @@ fn render_output_changes(out: &mut String, stats: &[SuiteStats]) {
             }
             let extra = movers.len().saturating_sub(MAX_LISTED);
             if extra > 0 {
-                let _ = writeln!(out, "- +{extra} more — full list in {}", s.report_file());
+                let _ = writeln!(out, "- +{extra} more — full list in {}", s.report_file);
             }
         }
     }
@@ -635,23 +713,34 @@ fn render_compile_time(out: &mut String, stats: &[SuiteStats]) {
         return;
     }
 
-    let pipelines = ["legacy", "viaIR"];
+    // Columns come from the pipelines actually present so a new codegen
+    // shows up instead of silently vanishing from the tripwire.
+    let pipelines: Vec<&str> = with_ct
+        .iter()
+        .flat_map(|s| s.compile.keys())
+        .map(String::as_str)
+        .collect::<BTreeSet<&str>>()
+        .into_iter()
+        .collect();
     let _ = writeln!(
         out,
         "\n**Compile time** — wall-clock tripwire, positive = PR slower (authoritative Δ in `ci:compile-benchmark`)\n"
     );
-    let _ = writeln!(
-        out,
-        "| Suite | legacy (agg / median) | viaIR (agg / median) |"
-    );
-    let _ = writeln!(out, "|---|---|---|");
+    let mut header = "| Suite |".to_owned();
+    let mut divider = "|---|".to_owned();
+    for pipeline in pipelines.iter() {
+        let _ = write!(header, " {pipeline} (agg / median) |");
+        divider.push_str("---|");
+    }
+    let _ = writeln!(out, "{header}");
+    let _ = writeln!(out, "{divider}");
 
     let mut any_suite_flag = false;
     let mut outliers: Vec<(String, String, f64)> = Vec::new();
     for s in &with_ct {
-        let mut cells = Vec::new();
-        for pipeline in pipelines {
-            let cell = match s.compile.get(pipeline) {
+        let mut row = format!("| {} |", s.suite_cell());
+        for pipeline in pipelines.iter() {
+            let cell = match s.compile.get(*pipeline) {
                 Some(agg) if agg.main_total_ms != 0 => {
                     let pct = (agg.pr_total_ms as f64 - agg.main_total_ms as f64)
                         / agg.main_total_ms as f64
@@ -671,16 +760,16 @@ fn render_compile_time(out: &mut String, stats: &[SuiteStats]) {
                 }
                 _ => "—".to_owned(),
             };
-            cells.push(cell);
-            if let Some(agg) = s.compile.get(pipeline) {
+            let _ = write!(row, " {cell} |");
+            if let Some(agg) = s.compile.get(*pipeline) {
                 for (project, pct) in agg.per_project.iter() {
                     if pct.abs() >= COMPILE_TIME_PROJECT_THRESHOLD_PERCENT {
-                        outliers.push((project.clone(), pipeline.to_owned(), *pct));
+                        outliers.push((project.clone(), (*pipeline).to_owned(), *pct));
                     }
                 }
             }
         }
-        let _ = writeln!(out, "| {} | {} | {} |", s.suite_cell(), cells[0], cells[1]);
+        let _ = writeln!(out, "{row}");
     }
 
     if outliers.is_empty() && !any_suite_flag {
@@ -711,32 +800,29 @@ fn render_compile_time(out: &mut String, stats: &[SuiteStats]) {
 }
 
 fn render_baselines(out: &mut String, stats: &[SuiteStats]) {
-    let relevant: Vec<&SuiteStats> = stats.iter().filter(|s| s.has_baselines).collect();
+    let relevant: Vec<&SuiteStats> = stats
+        .iter()
+        .filter(|s| !s.baseline_pairs.is_empty())
+        .collect();
     if relevant.is_empty() {
         return;
     }
     let _ = writeln!(
         out,
-        "\n**Bytecode size — PR vs baselines** (positive = PR larger)\n"
+        "\n**Bytecode size — PR vs baselines** (positive = PR larger; contracts built by both only)\n"
     );
     let _ = writeln!(out, "| Suite | Pipeline | vs solc | vs released solx |");
     let _ = writeln!(out, "|---|---|---|---|");
     for s in relevant {
         let pipelines: BTreeSet<&String> = s
-            .size_by_role_pipeline
+            .baseline_pairs
             .keys()
-            .filter(|(role, _)| *role == Role::Pr)
             .map(|(_, pipeline)| pipeline)
             .collect();
         for pipeline in pipelines {
-            let pr = s
-                .size_by_role_pipeline
-                .get(&(Role::Pr, pipeline.clone()))
-                .copied();
-            let Some(pr) = pr else { continue };
             let vs = |role: Role| -> String {
-                match s.size_by_role_pipeline.get(&(role, pipeline.clone())) {
-                    Some(&base) if base != 0 => {
+                match s.baseline_pairs.get(&(role, pipeline.clone())) {
+                    Some(&(pr, base)) if base != 0 => {
                         percent((pr as f64 - base as f64) / base as f64 * 100.0)
                     }
                     _ => "—".to_owned(),
@@ -833,14 +919,21 @@ fn sort_movers_by_magnitude(movers: &mut [Movement]) {
     });
 }
 
-/// The median of the given percentages, if any were collected.
+/// The median of the given percentages, if any were collected. Even-length
+/// input averages the two middle elements — at n=2 the upper-middle would be
+/// the maximum, not a median.
 fn median(pcts: &[f64]) -> Option<f64> {
     if pcts.is_empty() {
         return None;
     }
     let mut pcts = pcts.to_vec();
     pcts.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    Some(pcts[pcts.len() / 2])
+    let mid = pcts.len() / 2;
+    Some(if pcts.len().is_multiple_of(2) {
+        (pcts[mid - 1] + pcts[mid]) / 2.0
+    } else {
+        pcts[mid]
+    })
 }
 
 /// Formats a percentage with a sign and one decimal.
@@ -924,6 +1017,7 @@ mod tests {
         benchmark.tests.extend(tests);
         SummarySuite {
             label: label.to_owned(),
+            report_file: format!("{}-report.xlsx", label.to_lowercase()),
             benchmark: Some(benchmark),
             report_url: None,
             gas_is_gate,
@@ -933,6 +1027,7 @@ mod tests {
     fn unavailable(label: &str) -> SummarySuite {
         SummarySuite {
             label: label.to_owned(),
+            report_file: format!("{}-report.xlsx", label.to_lowercase()),
             benchmark: None,
             report_url: None,
             gas_is_gate: false,
@@ -1079,7 +1174,7 @@ mod tests {
         );
         let out = render(&[suite("solx-tester", true, vec![ok]), unavailable("Foundry")]);
         assert!(
-            out.contains("❌ **Suite errored** — Foundry produced no report."),
+            out.contains("❌ **Suite errored** — Foundry produced no usable report."),
             "{out}"
         );
         assert!(
@@ -1105,9 +1200,87 @@ mod tests {
         s.report_url = Some("https://example.com/artifact".to_owned());
         let out = render(&[s]);
         assert!(
-            out.contains("[foundry.xlsx ↓](https://example.com/artifact)"),
+            out.contains("[foundry-report.xlsx ↓](https://example.com/artifact)"),
             "{out}"
         );
+    }
+
+    #[test]
+    fn unrecognized_toolchain_naming_is_a_loud_error_not_a_green_verdict() {
+        // A renamed compiler entry: the main marker still classifies, but the
+        // candidate name no longer matches any known pattern.
+        let tests = vec![contract_test(
+            "p",
+            "C",
+            &[
+                ("02.mason-main-legacy", 100, 5000),
+                ("03.mason-legacy", 100, 5000),
+            ],
+        )];
+        let out = render(&[suite("Foundry", false, tests)]);
+        assert!(
+            out.contains(
+                "❌ **Harness error** — Foundry: benchmark data matched no recognized toolchain naming."
+            ),
+            "{out}"
+        );
+        assert!(
+            out.contains("| Foundry | ❌ unrecognized toolchain naming |"),
+            "{out}"
+        );
+        assert!(!out.contains("✅ **Output-preserving**"), "{out}");
+    }
+
+    #[test]
+    fn unbaselined_runs_are_marked_not_counted_as_new_failures() {
+        // The PR run has no main counterpart (e.g. main's run recorded
+        // nothing, or the PR enables a new mode).
+        let tests = vec![failure_test("proj", &[("03.solx-legacy", 0, 5)])];
+        let out = render(&[suite("Foundry", false, tests)]);
+        assert!(!out.contains("❌ **New failures**"), "{out}");
+        assert!(
+            out.contains(
+                "⚠️ **No baseline** — Foundry: 1 runs (5 failures) have no `main` counterpart"
+            ),
+            "{out}"
+        );
+        assert!(out.contains("| ✅ 0, ⚪ 5 unbaselined |"), "{out}");
+    }
+
+    #[test]
+    fn baselines_compare_common_contracts_only() {
+        // C2 is built by the PR but not by solc — it must not skew the
+        // comparison as an imaginary zero-size solc contract.
+        let tests = vec![
+            contract_test(
+                "p",
+                "C1",
+                &[
+                    ("00.solc-legacy", 1000, 0),
+                    ("02.solx-main-legacy", 1057, 0),
+                    ("03.solx-legacy", 1057, 0),
+                ],
+            ),
+            contract_test(
+                "p",
+                "C2",
+                &[
+                    ("02.solx-main-legacy", 5000, 0),
+                    ("03.solx-legacy", 5000, 0),
+                ],
+            ),
+        ];
+        let out = render(&[suite("Foundry", false, tests)]);
+        assert!(out.contains("contracts built by both only"), "{out}");
+        assert!(out.contains("| Foundry | legacy | +5.7% | — |"), "{out}");
+    }
+
+    #[test]
+    fn median_averages_the_two_middles_for_even_input() {
+        assert_eq!(median(&[]), None);
+        assert_eq!(median(&[3.0]), Some(3.0));
+        assert_eq!(median(&[1.0, 3.0]), Some(2.0));
+        assert_eq!(median(&[1.0, 2.0, 30.0]), Some(2.0));
     }
 
     #[test]
