@@ -55,7 +55,7 @@ jobs:
     # once the queue clears.
     runs-on: solx-linux-amd64
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:90f34266781eeef5625ccf756af9d2248743e7891f8831e5fc901670eb766f6c
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:2c8db6eea1393f7b1824d632597f9ac3f8ca7ae34d63b301e80c11a13d896583
       options: -m 110g
     # Warm caches: ~10 min builds + ~20 min benchmark. Worst case: a PR that
     # bumps solx-llvm (or its build scripts) builds both the PR and main LLVM

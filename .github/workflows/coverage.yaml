@@ -44,7 +44,7 @@ jobs:
       pull-requests: write
       packages: read
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:90f34266781eeef5625ccf756af9d2248743e7891f8831e5fc901670eb766f6c
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:2c8db6eea1393f7b1824d632597f9ac3f8ca7ae34d63b301e80c11a13d896583
     env:
       BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
       SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
