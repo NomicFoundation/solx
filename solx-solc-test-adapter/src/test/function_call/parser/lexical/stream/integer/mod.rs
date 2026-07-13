@@ -72,13 +72,12 @@ pub fn parse(input: &str) -> Result<Output, Error> {
             },
             State::Minus => match character {
                 Some(character) => {
-                    if Integer::CHARACTERS_DECIMAL.contains(&character) {
-                        integer.push(character);
-                        size += 1;
-                        state = State::Decimal;
-                    } else {
+                    if !Integer::CHARACTERS_DECIMAL.contains(&character) {
                         return Err(Error::NotAnInteger);
                     }
+                    integer.push(character);
+                    size += 1;
+                    state = State::Decimal;
                 }
                 None => return Err(Error::NotAnInteger),
             },
