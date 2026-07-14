@@ -45,6 +45,7 @@ fn main() -> anyhow::Result<()> {
         }
     }
     benchmark.remove_zero_deploy_gas();
+    benchmark.remove_blacklisted();
 
     let comparisons = Vec::new();
     let output: solx_benchmark_converter::Output =
