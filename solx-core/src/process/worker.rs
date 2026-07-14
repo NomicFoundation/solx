@@ -9,6 +9,7 @@ use std::process::ChildStdout;
 use std::process::Command;
 use std::process::Stdio;
 
+use crate::error::Error;
 use crate::process::channel::FrameRead;
 use crate::process::channel::FrameWrite;
 use crate::process::job::Job;
@@ -65,9 +66,13 @@ impl Worker {
             .as_mut()
             .expect("The worker stdin is always piped")
             .send(job)?;
-        self.stdout
-            .recv::<crate::Result<EVMOutput>>()?
-            .ok_or_else(|| anyhow::anyhow!("The worker closed the response channel"))?
+        match self.stdout.recv::<crate::Result<EVMOutput>>()? {
+            Some(result) => result,
+            None => Err(Error::Generic(format!(
+                "The worker exited without replying: {}",
+                self.child.wait()?
+            ))),
+        }
     }
 }
 
