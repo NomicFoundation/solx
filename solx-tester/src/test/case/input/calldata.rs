@@ -43,8 +43,7 @@ impl Calldata {
                         Value::Known(value) => value,
                         Value::Any => anyhow::bail!("The `*` wildcard is not allowed in calldata"),
                     };
-                    let mut bytes = [0u8; solx_utils::BYTE_LENGTH_FIELD];
-                    value.to_big_endian(&mut bytes);
+                    let bytes = value.to_be_bytes::<{ solx_utils::BYTE_LENGTH_FIELD }>();
                     result.extend(bytes);
                 }
                 result

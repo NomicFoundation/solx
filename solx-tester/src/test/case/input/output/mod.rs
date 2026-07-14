@@ -5,7 +5,6 @@
 pub mod event;
 
 use std::collections::BTreeMap;
-use std::str::FromStr;
 
 use crate::compilers::mode::Mode;
 use crate::directories::matter_labs::test::metadata::case::input::expected::Expected as MatterLabsTestExpected;
@@ -102,20 +101,12 @@ impl Output {
     /// Convert from Ethereum compiler test metadata expected.
     ///
     pub fn from_ethereum_expected(
-        expected: &[web3::types::U256],
+        expected: &[revm::primitives::U256],
         exception: bool,
         events: &[solx_solc_test_adapter::Event],
-        contract_address: &web3::types::Address,
+        contract_address: &revm::primitives::Address,
     ) -> Self {
-        let return_data = expected
-            .iter()
-            .map(|value| {
-                Value::Known(
-                    web3::types::U256::from_str(&crate::utils::u256_as_string(value))
-                        .expect("Solidity adapter default contract address constant is invalid"),
-                )
-            })
-            .collect();
+        let return_data = expected.iter().map(|value| Value::Known(*value)).collect();
 
         let events = events
             .iter()
@@ -130,8 +121,8 @@ impl Output {
     }
 }
 
-impl From<web3::types::U256> for Output {
-    fn from(value: web3::types::U256) -> Self {
+impl From<revm::primitives::U256> for Output {
+    fn from(value: revm::primitives::U256) -> Self {
         Self {
             return_data: vec![Value::Known(value)],
             exception: false,
@@ -143,9 +134,9 @@ impl From<web3::types::U256> for Output {
 impl From<bool> for Output {
     fn from(value: bool) -> Self {
         let value = if value {
-            web3::types::U256::one()
+            revm::primitives::U256::from(1)
         } else {
-            web3::types::U256::zero()
+            revm::primitives::U256::ZERO
         };
         value.into()
     }
@@ -167,11 +158,7 @@ impl From<(revm::context::result::Output, Vec<revm::primitives::Log>)> for Outpu
             .map(|log| {
                 let topics = revm_topics_to_vec_value(log.data.topics());
                 let data_value = revm_bytes_to_vec_value(log.data.data);
-                Event::new(
-                    Some(web3::types::Address::from_slice(log.address.as_slice())),
-                    topics,
-                    data_value,
-                )
+                Event::new(Some(log.address), topics, data_value)
             })
             .collect();
         Self::new(return_data_value, false, events)

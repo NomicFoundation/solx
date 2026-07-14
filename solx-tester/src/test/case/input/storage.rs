@@ -4,7 +4,9 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::str::FromStr;
+
+use revm::primitives::Address;
+use revm::primitives::U256;
 
 use crate::directories::matter_labs::test::metadata::case::input::storage::Storage as MatterLabsTestContractStorage;
 use crate::test::case::input::value::Value;
@@ -16,7 +18,7 @@ use crate::test::instance::Instance;
 #[derive(Debug, Clone, Default)]
 pub struct Storage {
     /// The inner storage hashmap data.
-    pub inner: HashMap<web3::types::Address, HashMap<web3::types::U256, web3::types::U256>>,
+    pub inner: HashMap<Address, HashMap<U256, U256>>,
 }
 
 impl Storage {
@@ -40,7 +42,7 @@ impl Storage {
                         anyhow::anyhow!("Instance `{instance}` is not successfully deployed")
                     })
             } else {
-                web3::types::Address::from_str(address.as_str())
+                crate::utils::address_from_hex_str(address.as_str())
                     .map_err(|error| anyhow::anyhow!("Invalid address literal: {error}"))
             }
             .map_err(|error| anyhow::anyhow!("Invalid storage address: {error}"))?;
@@ -68,10 +70,6 @@ impl Storage {
                     Value::Known(value) => value,
                     Value::Any => anyhow::bail!("Storage value can not be `*`"),
                 };
-
-                let mut value_bytes = [0u8; solx_utils::BYTE_LENGTH_FIELD];
-                value.to_big_endian(value_bytes.as_mut_slice());
-                let value = web3::types::U256::from(value_bytes);
 
                 contract_storage_values.insert(key, value);
             }

@@ -3,7 +3,8 @@
 //!
 
 use std::collections::BTreeMap;
-use std::str::FromStr;
+
+use revm::primitives::Address;
 
 use crate::directories::matter_labs::test::metadata::case::input::expected::variant::extended::event::Event as MatterLabsTestExpectedEvent;
 use crate::test::instance::Instance;
@@ -15,7 +16,7 @@ use crate::test::case::input::value::Value;
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Event {
     /// The event address.
-    address: Option<web3::types::Address>,
+    address: Option<Address>,
     /// The event topics.
     topics: Vec<Value>,
     /// The event values.
@@ -27,7 +28,7 @@ impl Event {
     /// A shortcut constructor.
     ///
     pub fn new(
-        address: Option<web3::types::Address>,
+        address: Option<Address>,
         topics: Vec<Value>,
         values: Vec<Value>,
     ) -> Self {
@@ -62,7 +63,7 @@ impl Event {
                             anyhow::anyhow!("Instance `{instance}` was not successfully deployed")
                         })
                 } else {
-                    web3::types::Address::from_str(address.as_str())
+                    crate::utils::address_from_hex_str(address.as_str())
                         .map_err(|error| anyhow::anyhow!("Invalid address literal: {error}"))
                 }
                 .map_err(|error| anyhow::anyhow!("Invalid event address `{address}`: {error}"))?,
@@ -82,7 +83,7 @@ impl Event {
     ///
     pub fn from_ethereum(
         event: &solx_solc_test_adapter::Event,
-        contract_address: &web3::types::Address,
+        contract_address: &Address,
     ) -> Self {
         let topics = event
             .topics
@@ -94,7 +95,7 @@ impl Event {
                     &crate::utils::address_as_string(contract_address),
                 );
                 Value::Known(
-                    web3::types::U256::from_str(&topic_str)
+                    crate::utils::u256_from_hex_str(&topic_str)
                         .expect("Solidity adapter default contract address constant is invalid"),
                 )
             })
@@ -110,7 +111,7 @@ impl Event {
                     &crate::utils::address_as_string(contract_address),
                 );
                 Value::Known(
-                    web3::types::U256::from_str(&value_str)
+                    crate::utils::u256_from_hex_str(&value_str)
                         .expect("Solidity adapter default contract address constant is invalid"),
                 )
             })

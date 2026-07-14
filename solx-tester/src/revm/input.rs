@@ -5,6 +5,8 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+use revm::primitives::Address;
+
 use crate::test::instance::Instance;
 
 ///
@@ -42,8 +44,8 @@ impl Input {
     pub fn get_instances(
         &self,
         contracts: &BTreeMap<String, String>,
-        library_addresses: BTreeMap<String, web3::types::Address>,
-        main_address: Option<web3::types::Address>,
+        library_addresses: BTreeMap<String, Address>,
+        main_address: Option<Address>,
     ) -> anyhow::Result<BTreeMap<String, Instance>> {
         let mut instances = BTreeMap::new();
 

@@ -22,6 +22,6 @@ serde_yaml.workspace = true
 semver.workspace = true
 md5.workspace = true
 regex.workspace = true
-web3.workspace = true
+alloy-primitives.workspace = true
 
 solx-utils = { path = "../solx-utils" }

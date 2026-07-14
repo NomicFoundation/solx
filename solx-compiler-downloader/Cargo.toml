@@ -18,4 +18,5 @@ default-features = false
 features = [
     "blocking",
     "json",
+    "rustls-tls",
 ]

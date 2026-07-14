@@ -76,13 +76,7 @@ sha2 = "0.11"
 sha3 = "0.12"
 md5 = "0.8"
 ruint = "1.17"
-
-# Testing
-[workspace.dependencies.web3]
-git = "https://github.com/tomusdrw/rust-web3"
-rev = "8d889ae3270508f1e68b6a29bbe51b2bedf7fb1e"
-default-features = false
-features = ["http-rustls-tls", "test", "signing"]
+alloy-primitives = "1.6"
 
 # LLVM
 [workspace.dependencies.inkwell]
