@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use crate::error::Error;
 use crate::process::job::Job;
 use crate::process::output::Output as EVMOutput;
 use crate::process::session::Session;
@@ -16,8 +17,10 @@ const POISON: &str = "lock is never poisoned because worker threads do not panic
 ///
 /// The pool of persistent worker subprocesses.
 ///
-/// Workers are spawned on demand and returned to the idle list after each successful job,
-/// so the number of live workers never exceeds the number of dispatching threads.
+/// A worker returns to the idle list after every job it survives — a success or a per-unit
+/// compile error alike — and is retired only by a transport failure or a `StackTooDeep` reply,
+/// after which the child exits. The number of live workers never exceeds the number of
+/// dispatching threads.
 ///
 pub struct Pool {
     /// The worker executable path.
@@ -49,16 +52,25 @@ impl Pool {
     ///
     /// Compiles one translation unit on a pooled or freshly spawned worker.
     ///
-    /// On success the worker rejoins the pool; any error drops it through the early return.
+    /// A worker that survives the job rejoins the pool, including after a per-unit compile error.
+    /// A transport failure or a `StackTooDeep` reply retires it instead.
     ///
     pub fn execute(&self, job: &Job) -> crate::Result<EVMOutput> {
-        let idle = self.idle.lock().expect(POISON).pop();
-        let mut worker = match idle {
+        let mut worker = match self.idle.lock().expect(POISON).pop() {
             Some(worker) => worker,
             None => Worker::spawn(self.executable.as_path(), &self.session)?,
         };
-        let output = worker.execute(job)?;
-        self.idle.lock().expect(POISON).push(worker);
-        Ok(output)
+        match worker.execute(job) {
+            Ok(output) => {
+                self.idle.lock().expect(POISON).push(worker);
+                Ok(output)
+            }
+            Err(error) => {
+                if matches!(error, Error::StandardJson(_)) {
+                    self.idle.lock().expect(POISON).push(worker);
+                }
+                Err(error)
+            }
+        }
     }
 }
