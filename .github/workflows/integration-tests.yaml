@@ -343,8 +343,11 @@ jobs:
       # ran but produced no JSON renders as "errored", while a suite skipped by
       # an earlier hard failure is omitted instead of reported as errored.
       # No continue-on-error: losing the summary must fail the job visibly.
+      # !cancelled(), not always(): a run cancelled mid-suite (concurrency
+      # auto-cancel on push) must not overwrite the last real summary with a
+      # bogus "suite errored" row.
       - name: Generate integration summary
-        if: always()
+        if: ${{ !cancelled() }}
         env:
           TESTER_URL: ${{ steps.solx-tester-report.outputs.artifact-url }}
           FOUNDRY_URL: ${{ steps.foundry-report.outputs.artifact-url }}
@@ -368,7 +371,7 @@ jobs:
           cat integration-summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Post integration summary comment
-        if: always() && hashFiles('integration-summary.md') != ''
+        if: ${{ !cancelled() && hashFiles('integration-summary.md') != '' }}
         uses: mshick/add-pr-comment@ec328af66588ab8f77cdeb2c264f14aba45bbf59 # v3.12
         with:
           message-id: 'integration-test-summary'
