@@ -1368,7 +1368,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ab67060fc6b8ef687992d439ca0fa36e7ed17e9a0b16b25b601e8757df720de"
 dependencies = [
  "data-encoding",
- "syn 2.0.117",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -2341,7 +2341,7 @@ dependencies = [
 [[package]]
 name = "inkwell"
 version = "0.7.1"
-source = "git+https://github.com/NomicFoundation/inkwell?branch=az-reset-option-occurrences#dd7c761865dc985a07a6c63f6de2614388d49cfd"
+source = "git+https://github.com/NomicFoundation/inkwell?rev=c2ac839f8f2b67246c9676fe29e7935e95e460fb#c2ac839f8f2b67246c9676fe29e7935e95e460fb"
 dependencies = [
  "inkwell_internals",
  "libc",
@@ -2354,7 +2354,7 @@ dependencies = [
 [[package]]
 name = "inkwell_internals"
 version = "0.12.0"
-source = "git+https://github.com/NomicFoundation/inkwell?branch=az-reset-option-occurrences#dd7c761865dc985a07a6c63f6de2614388d49cfd"
+source = "git+https://github.com/NomicFoundation/inkwell?rev=c2ac839f8f2b67246c9676fe29e7935e95e460fb#c2ac839f8f2b67246c9676fe29e7935e95e460fb"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2602,7 +2602,7 @@ checksum = "6373607a59f0be73a39b6fe456b8192fcc3585f602af20751600e974dd455e77"
 [[package]]
 name = "llvm-sys"
 version = "211.0.0"
-source = "git+https://github.com/NomicFoundation/llvm-sys.rs?branch=az-reset-option-occurrences#bfc06932fc84da16a36017a77a1b7f940813adf0"
+source = "git+https://github.com/NomicFoundation/llvm-sys.rs?rev=1aef1b289d307fdd9561e159fcc3953a34f77840#1aef1b289d307fdd9561e159fcc3953a34f77840"
 dependencies = [
  "anyhow",
  "cc",
