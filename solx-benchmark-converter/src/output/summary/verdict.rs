@@ -1,10 +1,9 @@
 //!
 //! The decision layer of the integration summary.
 //!
-//! Pure functions reduce the per-suite statistics to typed verdicts — the
-//! complete decision table behind the comment's headline lines, testable
-//! without parsing markdown. Turning a verdict into prose is the rendering
-//! layer's concern; nothing here formats beyond carrying labels.
+//! Pure functions reduce the per-suite statistics to the typed verdicts
+//! behind the comment's headline lines. Turning a verdict into prose is the
+//! rendering layer's concern; nothing here formats beyond carrying labels.
 //!
 
 use super::stats::SuiteStats;
