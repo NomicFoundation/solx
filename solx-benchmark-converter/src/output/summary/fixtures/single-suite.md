@@ -6,6 +6,3 @@
 | Suite | New failures | Size Δ | Gas Δ | Report |
 |---|---|---|---|---|
 | solx-tester | ✅ 0 | ✅ 0 of 1 | ✅ 0 of 1 | — |
-
----
-_Suites run the **release** solx binary. Foundry/Hardhat gas jitters run-to-run (fuzz/invariant tests, CREATE-context deploys), so it never gates._
