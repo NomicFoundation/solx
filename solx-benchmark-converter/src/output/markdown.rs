@@ -7,6 +7,10 @@
 //! is computed here — the single source of truth shared by every suite —
 //! instead of parsing the XLSX back offline.
 //!
+//! Golden tests pin full rendered comments under `output/summary/fixtures/`;
+//! after an intended output change, regenerate them with
+//! `UPDATE_SUMMARY_FIXTURES=1 cargo test -p solx-benchmark-converter`.
+//!
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -1012,9 +1016,19 @@ mod tests {
         (selector.to_string(), test)
     }
 
+    /// Merges the given tests by selector, like the real report ingestion
+    /// does — a project's failure and compile-time entries share one key.
     fn suite(label: &str, gas_is_gate: bool, tests: Vec<(String, Test)>) -> SummarySuite {
         let mut benchmark = Benchmark::default();
-        benchmark.tests.extend(tests);
+        for (name, test) in tests {
+            let entry = benchmark
+                .tests
+                .entry(name)
+                .or_insert_with(|| Test::new(test.metadata.clone()));
+            for (mode, run) in test.runs {
+                entry.runs.entry(mode).or_default().extend(&run);
+            }
+        }
         SummarySuite {
             label: label.to_owned(),
             report_file: format!("{}-report.xlsx", label.to_lowercase()),
@@ -1187,25 +1201,6 @@ mod tests {
     }
 
     #[test]
-    fn report_link_is_named_after_the_suite() {
-        let tests = vec![contract_test(
-            "p",
-            "C",
-            &[
-                ("02.solx-main-legacy", 100, 5000),
-                ("03.solx-legacy", 100, 5000),
-            ],
-        )];
-        let mut s = suite("Foundry", false, tests);
-        s.report_url = Some("https://example.com/artifact".to_owned());
-        let out = render(&[s]);
-        assert!(
-            out.contains("[foundry-report.xlsx ↓](https://example.com/artifact)"),
-            "{out}"
-        );
-    }
-
-    #[test]
     fn unrecognized_toolchain_naming_is_a_loud_error_not_a_green_verdict() {
         // A renamed compiler entry: the main marker still classifies, but the
         // candidate name no longer matches any known pattern.
@@ -1311,5 +1306,289 @@ mod tests {
         assert_eq!(commas(42), "42");
         assert_eq!(commas(47660), "47,660");
         assert_eq!(commas(101098), "101,098");
+    }
+
+    /// Compares a rendered comment against its golden fixture — the fixtures
+    /// are the reviewable specification of the comment format. Set
+    /// `UPDATE_SUMMARY_FIXTURES=1` to regenerate after an intended change.
+    fn assert_matches_fixture(name: &str, rendered: &str) {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src/output/summary/fixtures")
+            .join(format!("{name}.md"));
+        if std::env::var_os("UPDATE_SUMMARY_FIXTURES").is_some() {
+            std::fs::create_dir_all(path.parent().expect("fixture directory"))
+                .expect("fixture directory creation");
+            std::fs::write(path.as_path(), rendered).expect("fixture writing");
+            return;
+        }
+        let expected = std::fs::read_to_string(path.as_path()).unwrap_or_else(|error| {
+            panic!(
+                "Fixture {path:?} unreadable ({error}); regenerate with \
+                 UPDATE_SUMMARY_FIXTURES=1 cargo test -p solx-benchmark-converter"
+            )
+        });
+        assert_eq!(
+            rendered, expected,
+            "Rendered summary diverges from fixture {name:?}; if the change is \
+             intended, regenerate with UPDATE_SUMMARY_FIXTURES=1 cargo test -p \
+             solx-benchmark-converter"
+        );
+    }
+
+    /// The everyday green run: three suites, pre-existing failures, Foundry
+    /// gas jitter, compile time within noise.
+    #[test]
+    fn fixture_standard_output_preserving() {
+        let mut tester = suite(
+            "solx-tester",
+            true,
+            vec![
+                contract_test(
+                    "solx-solidity",
+                    "test/libsolidity/semanticTests/structs/delete_struct.sol",
+                    &[
+                        ("00.solx-main-solx-E-M3B3-0.8.34", 214, 85_899),
+                        ("01.solx-solx-E-M3B3-0.8.34", 214, 85_899),
+                        ("00.solx-main-solx-Y-M3B3-0.8.34", 198, 85_412),
+                        ("01.solx-solx-Y-M3B3-0.8.34", 198, 85_412),
+                    ],
+                ),
+                contract_test(
+                    "tests/solidity",
+                    "simple/default.sol",
+                    &[
+                        ("00.solx-main-solx-E-M3B3-0.8.34", 460, 21_442),
+                        ("01.solx-solx-E-M3B3-0.8.34", 460, 21_442),
+                    ],
+                ),
+            ],
+        );
+        tester.report_url = Some("https://example.com/artifacts/tester".to_owned());
+
+        let mut foundry = suite(
+            "Foundry",
+            false,
+            vec![
+                contract_test(
+                    "uniswap-v4",
+                    "src/PoolManager.sol:PoolManager",
+                    &[
+                        ("02.solx-main-legacy", 22_104, 812_004),
+                        ("03.solx-legacy", 22_104, 812_650),
+                        ("02.solx-main-viaIR", 21_876, 809_112),
+                        ("03.solx-viaIR", 21_876, 809_112),
+                    ],
+                ),
+                contract_test(
+                    "solady",
+                    "src/tokens/ERC20.sol:ERC20",
+                    &[
+                        ("02.solx-main-legacy", 9_412, 412_338),
+                        ("03.solx-legacy", 9_412, 412_780),
+                        ("02.solx-main-viaIR", 9_268, 410_006),
+                        ("03.solx-viaIR", 9_268, 410_006),
+                    ],
+                ),
+                failure_test(
+                    "solady",
+                    &[("02.solx-main-legacy", 0, 3), ("03.solx-legacy", 0, 3)],
+                ),
+                compile_test(
+                    "uniswap-v4",
+                    &[
+                        ("02.solx-main-legacy", 48_210),
+                        ("03.solx-legacy", 48_530),
+                        ("02.solx-main-viaIR", 61_020),
+                        ("03.solx-viaIR", 60_800),
+                    ],
+                ),
+                compile_test(
+                    "solady",
+                    &[
+                        ("02.solx-main-legacy", 96_410),
+                        ("03.solx-legacy", 96_150),
+                        ("02.solx-main-viaIR", 118_240),
+                        ("03.solx-viaIR", 119_030),
+                    ],
+                ),
+            ],
+        );
+        foundry.report_url = Some("https://example.com/artifacts/foundry".to_owned());
+
+        let mut hardhat = suite(
+            "Hardhat",
+            false,
+            vec![
+                failure_test(
+                    "ethers-project",
+                    &[("02.solx-main-legacy", 0, 2), ("03.solx-legacy", 0, 2)],
+                ),
+                compile_test(
+                    "ethers-project",
+                    &[
+                        ("02.solx-main-legacy", 15_020),
+                        ("03.solx-legacy", 15_110),
+                        ("02.solx-main-viaIR", 18_490),
+                        ("03.solx-viaIR", 18_530),
+                    ],
+                ),
+            ],
+        );
+        hardhat.report_url = Some("https://example.com/artifacts/hardhat".to_owned());
+
+        let out = render(&[tester, foundry, hardhat]);
+        assert_matches_fixture("standard-output-preserving", &out);
+    }
+
+    /// Size and gated-gas differences: the warning verdict, inline movers,
+    /// and the "+N more" truncation past `MAX_LISTED`.
+    #[test]
+    fn fixture_output_changed() {
+        let tester = suite(
+            "solx-tester",
+            true,
+            vec![contract_test(
+                "solx-solidity",
+                "test/libsolidity/semanticTests/structs/delete_struct.sol",
+                &[
+                    ("00.solx-main-solx-Y-M3B3-0.8.34", 214, 85_899),
+                    ("01.solx-solx-Y-M3B3-0.8.34", 214, 85_902),
+                ],
+            )],
+        );
+
+        let mut foundry_tests = Vec::new();
+        for index in 0..7u64 {
+            foundry_tests.push(contract_test(
+                "solady",
+                format!("src/C{index}.sol:C{index}").as_str(),
+                &[
+                    ("02.solx-main-legacy", 1_000 + index * 100, 0),
+                    ("03.solx-legacy", 1_000 + index * 100 + 10 + index, 0),
+                ],
+            ));
+        }
+        let foundry = suite("Foundry", false, foundry_tests);
+
+        let out = render(&[tester, foundry]);
+        assert_matches_fixture("output-changed", &out);
+    }
+
+    /// Build and test regressions: the red verdict and the inline listing of
+    /// regressed projects.
+    #[test]
+    fn fixture_new_failures() {
+        let foundry = suite(
+            "Foundry",
+            false,
+            vec![
+                failure_test(
+                    "uniswap-v4",
+                    &[("02.solx-main-legacy", 0, 5), ("03.solx-legacy", 1, 7)],
+                ),
+                failure_test(
+                    "solady",
+                    &[("02.solx-main-viaIR", 2, 0), ("03.solx-viaIR", 2, 3)],
+                ),
+                failure_test(
+                    "op",
+                    &[("02.solx-main-legacy", 0, 4), ("03.solx-legacy", 0, 4)],
+                ),
+            ],
+        );
+        let out = render(&[foundry]);
+        assert_matches_fixture("new-failures", &out);
+    }
+
+    /// Every harness-degradation signal at once: an errored suite, toolchain
+    /// naming that matches nothing, and runs without a `main` baseline.
+    #[test]
+    fn fixture_degraded_harness() {
+        let foundry = suite(
+            "Foundry",
+            false,
+            vec![contract_test(
+                "p",
+                "C",
+                &[
+                    ("02.mason-main-legacy", 100, 5_000),
+                    ("03.mason-legacy", 100, 5_000),
+                ],
+            )],
+        );
+        let hardhat = suite(
+            "Hardhat",
+            false,
+            vec![failure_test("hh-project", &[("03.solx-legacy", 0, 5)])],
+        );
+        let out = render(&[unavailable("solx-tester"), foundry, hardhat]);
+        assert_matches_fixture("degraded-harness", &out);
+    }
+
+    /// The full-matrix run: solc and released-solx baselines plus a
+    /// compile-time project outlier.
+    #[test]
+    fn fixture_full_matrix() {
+        let tester = suite(
+            "solx-tester",
+            true,
+            vec![contract_test(
+                "tests/solidity",
+                "simple/default.sol",
+                &[
+                    ("00.solx-main-solx-E-M3B3-0.8.34", 460, 21_442),
+                    ("01.solx-solx-E-M3B3-0.8.34", 460, 21_442),
+                ],
+            )],
+        );
+        let foundry = suite(
+            "Foundry",
+            false,
+            vec![
+                contract_test(
+                    "op",
+                    "src/L2Bridge.sol:L2Bridge",
+                    &[
+                        ("00.solc-0.8.34-legacy", 1_000, 0),
+                        ("01.solx-latest-legacy", 940, 0),
+                        ("02.solx-main-legacy", 902, 0),
+                        ("03.solx-legacy", 902, 0),
+                        ("00.solc-0.8.34-viaIR", 980, 0),
+                        ("01.solx-latest-viaIR", 921, 0),
+                        ("02.solx-main-viaIR", 918, 0),
+                        ("03.solx-viaIR", 918, 0),
+                    ],
+                ),
+                compile_test(
+                    "op",
+                    &[("02.solx-main-legacy", 10_000), ("03.solx-legacy", 13_100)],
+                ),
+                compile_test(
+                    "base",
+                    &[("02.solx-main-legacy", 20_000), ("03.solx-legacy", 20_150)],
+                ),
+            ],
+        );
+        let out = render(&[tester, foundry]);
+        assert_matches_fixture("full-matrix", &out);
+    }
+
+    /// The smallest possible run: one healthy suite, nothing else collected.
+    #[test]
+    fn fixture_single_suite() {
+        let tester = suite(
+            "solx-tester",
+            true,
+            vec![contract_test(
+                "tests/solidity",
+                "simple/default.sol",
+                &[
+                    ("00.solx-main-solx-E-M3B3-0.8.34", 460, 21_442),
+                    ("01.solx-solx-E-M3B3-0.8.34", 460, 21_442),
+                ],
+            )],
+        );
+        let out = render(&[tester]);
+        assert_matches_fixture("single-suite", &out);
     }
 }
