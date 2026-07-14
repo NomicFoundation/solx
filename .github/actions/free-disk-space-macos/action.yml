@@ -1,0 +1,130 @@
+name: "free-disk-space-macos"
+
+description: |
+  Frees disk on GitHub-hosted macOS runners until a target amount is
+  available, cheapest phase first, and skips entirely when the stock disk
+  already suffices. Removes simulator runtimes, inactive Xcode bundles, and
+  unused SDKs/tool caches — none of which solx's build needs.
+
+  This job's peak demand above the post-cleanup baseline is ~52 GiB (cold
+  LLVM build, measured Jul 2026; cached runs ~34 GiB), so the default
+  100 GiB target covers the worst case plus runner-image variance (stock
+  free space has swung between ~11 and ~108 GiB across image updates).
+
+inputs:
+  target-gb:
+    description: "Stop freeing space once at least this many GiB are available."
+    required: false
+    default: "100"
+
+runs:
+  using: "composite"
+  steps:
+    - name: "Free disk space (macOS)"
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        TARGET_GB="${{ inputs.target-gb }}"
+
+        avail_gb() {
+          df -Pk . | awk 'NR==2 { printf "%d", $4 / 1048576 }'
+        }
+
+        echo "=== Before macOS cleanup ===" && df -h .
+
+        if [ "$(avail_gb)" -ge "${TARGET_GB}" ]; then
+          echo "Already >= ${TARGET_GB} GiB available; skipping cleanup"
+          exit 0
+        fi
+
+        # 1. Simulator runtimes — stored on read-only APFS snapshot volumes,
+        #    so plain `rm` fails.  `simctl runtime delete all` unmounts them.
+        #    May warn on already-deleted runtimes; that is harmless.
+        echo "--- Removing simulator runtimes ---"
+        xcrun simctl delete all 2>&1 || true
+        xcrun simctl runtime delete all 2>&1 || true
+
+        # 2. Xcode — remove versioned copies EXCEPT the one that
+        #    xcode-select points to (we need its toolchain for C/C++ builds),
+        #    in batches of 4 until the target is met. Each bundle is GiBs of
+        #    small files and `rm -rf` is I/O-bound per inode, so the bundles
+        #    within a batch are removed concurrently (one worker each).
+        #    Active Xcode path looks like /Applications/Xcode_16.2.app/Contents/Developer.
+        echo "--- Removing inactive Xcode versions ---"
+        ACTIVE_XCODE="$(xcode-select -p 2>/dev/null | sed 's|/Contents/Developer/*$||' || true)"
+        ACTIVE_XCODE="${ACTIVE_XCODE%/}"
+        removed=0
+        if [ -z "${ACTIVE_XCODE}" ] || [[ "${ACTIVE_XCODE}" != /Applications/Xcode*.app ]]; then
+          echo "  warning: active Xcode path '${ACTIVE_XCODE}' is not an Xcode app; skipping Xcode removal"
+        else
+          echo "Active Xcode (keeping): ${ACTIVE_XCODE}"
+          to_remove=()
+          for app in /Applications/Xcode_*.app; do
+            [ -d "$app" ] || continue
+            if [ "$app" = "$ACTIVE_XCODE" ]; then
+              echo "  skip (active): $app"
+            else
+              to_remove+=("$app")
+            fi
+          done
+
+          # Soft-fail: a stray rm error shouldn't sink the whole job — rm's
+          # stderr will pinpoint the bad path. `removed` counts attempts,
+          # not per-bundle success: xargs returns non-zero if *any* child
+          # failed, and a count off by the failed bundles beats reporting
+          # zero after tens of GiB were freed.
+          batch=()
+          flush_batch() {
+            [ "${#batch[@]}" -gt 0 ] || return 0
+            printf '  removing: %s\n' "${batch[@]}"
+            if ! printf '%s\0' "${batch[@]}" \
+                | xargs -0 -n1 -P "${#batch[@]}" sudo rm -rf; then
+              echo "  warning: one or more Xcode removals failed (see rm stderr above)"
+            fi
+            removed=$((removed + ${#batch[@]}))
+            batch=()
+          }
+
+          if [ "${#to_remove[@]}" -gt 0 ]; then
+            for app in "${to_remove[@]}"; do
+              if [ "$(avail_gb)" -ge "${TARGET_GB}" ]; then
+                break
+              fi
+              batch+=("$app")
+              if [ "${#batch[@]}" -eq 4 ]; then
+                flush_batch
+              fi
+            done
+            # A trailing partial batch is only removed if still needed.
+            if [ "$(avail_gb)" -lt "${TARGET_GB}" ]; then
+              flush_batch
+            fi
+          fi
+          echo "Removed ${removed} of ${#to_remove[@]} inactive Xcode version(s); $(avail_gb) GiB now available"
+        fi
+
+        # 3. Remaining large packages that this project never uses — only
+        #    reached when the Xcode phase alone couldn't meet the target.
+        #    Each path is removed individually so a missing path doesn't
+        #    mask a real permission error on another.
+        if [ "$(avail_gb)" -lt "${TARGET_GB}" ]; then
+          echo "--- Removing unused SDKs and caches ---"
+          for dir in \
+            /Library/Developer/CoreSimulator \
+            /usr/local/lib/android \
+            "${RUNNER_TOOL_CACHE:-/Users/runner/hostedtoolcache}"; do
+            if [ -d "$dir" ]; then
+              echo "  removing: $dir"
+              sudo rm -rf "$dir" || echo "  warning: failed to remove $dir"
+            else
+              echo "  not found (skipped): $dir"
+            fi
+          done
+        fi
+
+        if [ "$(avail_gb)" -lt "${TARGET_GB}" ]; then
+          echo "warning: still below ${TARGET_GB} GiB after all cleanup phases; a cold LLVM build may hit ENOSPC"
+        fi
+
+        echo "=== After macOS cleanup ===" && df -h .
