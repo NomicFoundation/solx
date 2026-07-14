@@ -216,6 +216,8 @@ mod tests {
                  UPDATE_SUMMARY_FIXTURES=1 cargo test -p solx-benchmark-converter"
             )
         });
+        // Windows checkouts rewrite the fixtures to CRLF (no .gitattributes).
+        let expected = expected.replace("\r\n", "\n");
         assert_eq!(
             rendered, expected,
             "Rendered summary diverges from fixture {name:?}; if the change is \
