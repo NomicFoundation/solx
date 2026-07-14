@@ -22,6 +22,3 @@
 |---|---|---|---|
 | Foundry · 2 proj | legacy | -9.8% | -4.0% |
 | Foundry · 2 proj | viaIR | -6.3% | -0.3% |
-
----
-_Suites run the **release** solx binary. Foundry/Hardhat gas jitters run-to-run (fuzz/invariant tests, CREATE-context deploys), so it never gates._

@@ -17,6 +17,3 @@
 | Hardhat | +0.6% / +0.6% | +0.2% / +0.2% |
 
 _Within noise — no suite ≥ 5%, no project ≥ 15%._
-
----
-_Suites run the **release** solx binary. Foundry/Hardhat gas jitters run-to-run (fuzz/invariant tests, CREATE-context deploys), so it never gates._

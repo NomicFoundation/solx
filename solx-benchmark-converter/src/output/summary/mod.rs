@@ -79,12 +79,6 @@ pub fn render(suites: &[SummarySuite]) -> String {
         render_baselines(&mut out, &stats);
     }
 
-    let _ = writeln!(
-        out,
-        "\n---\n_Suites run the **release** solx binary. Foundry/Hardhat gas jitters run-to-run \
-         (fuzz/invariant tests, CREATE-context deploys), so it never gates._"
-    );
-
     out
 }
 

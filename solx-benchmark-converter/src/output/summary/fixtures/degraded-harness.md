@@ -11,6 +11,3 @@
 | solx-tester | ❌ no report — suite errored | — | — | — |
 | Foundry | ❌ unrecognized toolchain naming | — | — | — |
 | Hardhat | ✅ 0, ⚪ 5 unbaselined | ⚪ not collected | ⚪ not collected | — |
-
----
-_Suites run the **release** solx binary. Foundry/Hardhat gas jitters run-to-run (fuzz/invariant tests, CREATE-context deploys), so it never gates._
