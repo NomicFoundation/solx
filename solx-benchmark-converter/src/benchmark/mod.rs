@@ -31,6 +31,29 @@ pub struct Benchmark {
 }
 
 impl Benchmark {
+    /// Tests whose measurements are known-meaningless noise (proxy fallbacks
+    /// and brutalized multicalls whose gas depends on the delegated payload),
+    /// as `(project, contract, function)`. Filtered out of the benchmark
+    /// itself so every report — spreadsheet and PR summary alike — agrees on
+    /// the data set.
+    const BLACKLIST: [(&str, &str, &str); 3] = [
+        (
+            "aave-v3",
+            "lib/solidity-utils/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy",
+            "fallback()",
+        ),
+        (
+            "solady",
+            "test/utils/mocks/MockMulticallable.sol:MockMulticallable",
+            "multicallBrutalized(bytes[])",
+        ),
+        (
+            "solady",
+            "src/accounts/ERC6551Proxy.sol:ERC6551Proxy",
+            "fallback()",
+        ),
+    ];
+
     ///
     /// Creates a benchmark from multiple inputs.
     ///
@@ -40,6 +63,7 @@ impl Benchmark {
             benchmark.extend(input)?;
         }
         benchmark.remove_zero_deploy_gas();
+        benchmark.remove_blacklisted();
         Ok(benchmark)
     }
 
@@ -320,6 +344,27 @@ impl Benchmark {
             })
         });
     }
+
+    ///
+    /// Removes the tests blacklisted as measurement noise.
+    ///
+    pub fn remove_blacklisted(&mut self) {
+        self.tests.retain(|_, test| {
+            let selector = &test.metadata.selector;
+            let contract = selector.case.as_deref();
+            let function = selector
+                .input
+                .as_ref()
+                .and_then(|input| input.runtime_name());
+            !Self::BLACKLIST
+                .iter()
+                .any(|(project_b, contract_b, function_b)| {
+                    selector.project.as_str() == *project_b
+                        && contract == Some(*contract_b)
+                        && function == Some(*function_b)
+                })
+        });
+    }
 }
 
 impl TryFrom<PathBuf> for Benchmark {
@@ -331,5 +376,67 @@ impl TryFrom<PathBuf> for Benchmark {
         let json: Self = serde_json::from_str(text.as_str())
             .map_err(|error| anyhow::anyhow!("Benchmark file {path:?} parsing: {error}"))?;
         Ok(json)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Benchmark;
+    use super::Test;
+    use super::TestInput;
+    use super::TestMetadata;
+    use super::TestSelector;
+
+    fn insert_test(benchmark: &mut Benchmark, project: &str, contract: &str, function: &str) {
+        let selector = TestSelector {
+            project: project.to_owned(),
+            case: Some(contract.to_owned()),
+            input: Some(TestInput::Runtime {
+                input_index: 0,
+                name: function.to_owned(),
+            }),
+        };
+        benchmark.tests.insert(
+            selector.to_string(),
+            Test::new(TestMetadata::new(selector, vec![])),
+        );
+    }
+
+    #[test]
+    fn remove_blacklisted_drops_only_listed_rows() {
+        let mut benchmark = Benchmark::default();
+        insert_test(
+            &mut benchmark,
+            "solady",
+            "src/accounts/ERC6551Proxy.sol:ERC6551Proxy",
+            "fallback()",
+        );
+        insert_test(
+            &mut benchmark,
+            "solady",
+            "src/accounts/ERC6551Proxy.sol:ERC6551Proxy",
+            "someFunction()",
+        );
+        insert_test(
+            &mut benchmark,
+            "other-project",
+            "src/accounts/ERC6551Proxy.sol:ERC6551Proxy",
+            "fallback()",
+        );
+
+        benchmark.remove_blacklisted();
+
+        assert_eq!(benchmark.tests.len(), 2);
+        for test in benchmark.tests.values() {
+            let selector = &test.metadata.selector;
+            assert!(
+                selector.project != "solady"
+                    || selector
+                        .input
+                        .as_ref()
+                        .and_then(|input| input.runtime_name())
+                        != Some("fallback()")
+            );
+        }
     }
 }
