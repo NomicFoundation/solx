@@ -87,7 +87,7 @@ features = ["http-rustls-tls", "test", "signing"]
 # LLVM
 [workspace.dependencies.inkwell]
 git = "https://github.com/NomicFoundation/inkwell"
-branch = "az-reset-option-occurrences"
+rev = "c2ac839f8f2b67246c9676fe29e7935e95e460fb"
 default-features = false
 features = [
     "llvm21-1",
