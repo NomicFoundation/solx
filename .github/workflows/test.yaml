@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:a3e9312d6442e028a4b9eed17ea597380ae86abf3ff4d45ba957d5a10a805790
-      # Host tooling bind-mounted so the free-disk-space action can reclaim
+      # Host tooling bind-mounted so the free-disk-space-linux action can reclaim
       # ~24 GB before the cold LLVM build fills the runner's 14 GB budget.
       # Anchor shared with build-and-test below; keep in sync with the
       # matching list in cache-warmup.yaml.
@@ -66,8 +66,8 @@ jobs:
         with:
           submodules: true
 
-      - name: Free disk space
-        uses: ./.github/actions/free-disk-space
+      - name: Free disk space (Linux)
+        uses: ./.github/actions/free-disk-space-linux
 
       # This step is required to checkout submodules
       # that are disabled in .gitmodules config
@@ -162,7 +162,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.image || '' }} # Special workaround to allow matrix builds with optional container
-      # Host tooling bind-mounts for the free-disk-space action. These apply
+      # Host tooling bind-mounts for the free-disk-space-linux action. These apply
       # only when a container is started (matrix legs with `image:` set); the
       # macOS/Windows legs run bare and the paths are irrelevant there.
       volumes: *free-disk-volumes
@@ -178,9 +178,9 @@ jobs:
       # Only meaningful on containerized Linux legs (the hosted x86 leg is the
       # disk-constrained one); a no-op on macOS/Windows since the mount points
       # don't exist there.
-      - name: Free disk space
+      - name: Free disk space (Linux)
         if: runner.os == 'Linux' && matrix.image != ''
-        uses: ./.github/actions/free-disk-space
+        uses: ./.github/actions/free-disk-space-linux
 
       # This step is required to checkout submodules
       # that are disabled in .gitmodules config
