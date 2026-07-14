@@ -12,11 +12,18 @@
 //! `UPDATE_SUMMARY_FIXTURES=1 cargo test -p solx-benchmark-converter`.
 //!
 
+mod toolchain;
+
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt::Write;
 
 use crate::benchmark::Benchmark;
+
+use self::toolchain::Role;
+use self::toolchain::classify;
+use self::toolchain::humanize_mode;
+use self::toolchain::pipeline_of;
 
 /// A compile-time move on one project large enough to surface individually.
 const COMPILE_TIME_PROJECT_THRESHOLD_PERCENT: f64 = 15.0;
@@ -156,15 +163,6 @@ struct FailureRegression {
     kind: &'static str,
     main: usize,
     pr: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum Role {
-    Pr,
-    Main,
-    Latest,
-    Solc,
-    Other,
 }
 
 impl SuiteStats {
@@ -841,66 +839,6 @@ fn render_baselines(out: &mut String, stats: &[SuiteStats]) {
                 vs(Role::Latest)
             );
         }
-    }
-}
-
-///
-/// Classifies a run's mode string into a role and its pairing key.
-///
-/// Mode strings look like `02.solx-main-legacy` or `01.solx-solx-E-M3B3-0.8.34`.
-/// The pairing key is every token after the leading `NN.solx`/`NN.solc`
-/// identifier, minus the role markers `main`/`latest`, so a PR run pairs with
-/// its main counterpart.
-///
-fn classify(mode: &str) -> (Role, String) {
-    let mut tokens = mode.split('-');
-    let head = tokens.next().unwrap_or("");
-    let rest: Vec<&str> = tokens.collect();
-
-    let role = if head.ends_with(".solc") {
-        Role::Solc
-    } else if rest.contains(&"latest") {
-        Role::Latest
-    } else if rest.contains(&"main") {
-        Role::Main
-    } else if head.ends_with(".solx") {
-        Role::Pr
-    } else {
-        Role::Other
-    };
-
-    let key = rest
-        .into_iter()
-        .filter(|t| *t != "main" && *t != "latest")
-        .collect::<Vec<_>>()
-        .join("-");
-    (role, key)
-}
-
-/// The compilation pipeline (`legacy` / `viaIR`) a mode belongs to, or its
-/// trailing token otherwise.
-fn pipeline_of(mode: &str) -> String {
-    mode.rsplit('-').next().unwrap_or("").to_owned()
-}
-
-///
-/// A pairing key rendered for humans: the redundant `solx` token dropped and
-/// the codegen shorthands spelled out (`E` → EVMLA, `Y` → Yul).
-///
-fn humanize_mode(key: &str) -> String {
-    let tokens: Vec<&str> = key
-        .split('-')
-        .filter(|token| *token != "solx" && !token.is_empty())
-        .map(|token| match token {
-            "E" => "EVMLA",
-            "Y" => "Yul",
-            other => other,
-        })
-        .collect();
-    if tokens.is_empty() {
-        key.to_owned()
-    } else {
-        tokens.join(" ")
     }
 }
 
