@@ -12,18 +12,17 @@
 //! `UPDATE_SUMMARY_FIXTURES=1 cargo test -p solx-benchmark-converter`.
 //!
 
+mod stats;
 mod toolchain;
 
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt::Write;
 
 use crate::benchmark::Benchmark;
 
+use self::stats::SuiteStats;
+use self::stats::median;
 use self::toolchain::Role;
-use self::toolchain::classify;
-use self::toolchain::humanize_mode;
-use self::toolchain::pipeline_of;
 
 /// A compile-time move on one project large enough to surface individually.
 const COMPILE_TIME_PROJECT_THRESHOLD_PERCENT: f64 = 15.0;
@@ -86,309 +85,7 @@ pub fn render(suites: &[SummarySuite]) -> String {
     out
 }
 
-///
-/// Everything the renderer needs about one suite, computed in a single pass.
-///
-#[derive(Default)]
-struct SuiteStats {
-    label: String,
-    report_file: String,
-    report_url: Option<String>,
-    gas_is_gate: bool,
-    /// False when the suite was expected but produced no report.
-    available: bool,
-    project_count: usize,
-    /// Total runs seen, and how many classified as the PR toolchain — data
-    /// with zero PR runs means the toolchain naming drifted from classify().
-    total_runs: usize,
-    pr_runs_seen: usize,
-    /// PR runs with no main counterpart, and the failures recorded on them.
-    /// They have nothing to compare against, so they are surfaced as
-    /// unbaselined rather than counted as regressions against zero.
-    unbaselined_runs: usize,
-    unbaselined_failures: usize,
-
-    size_cells: u64,
-    size_diffs: u64,
-    size_delta_bytes: i128,
-    size_present: bool,
-
-    gas_cells: u64,
-    gas_diffs: u64,
-    gas_present: bool,
-    /// Relative gas differences seen on a non-gating suite, in percent. The
-    /// median is reported — a max would routinely be a huge but meaningless
-    /// CREATE-deploy outlier.
-    gas_jitter_percents: Vec<f64>,
-
-    /// Failures on the PR runs in excess of their main counterparts.
-    new_build_failures: usize,
-    new_test_failures: usize,
-    /// Failures already present on the main runs.
-    baseline_build_failures: usize,
-    baseline_test_failures: usize,
-    /// The rows behind `new_*_failures`, for the inline listing.
-    failure_regressions: Vec<FailureRegression>,
-
-    /// Compile-time aggregates keyed by pipeline (legacy / viaIR).
-    compile: BTreeMap<String, CompileAggregate>,
-    /// (PR total, baseline total) bytecode per (baseline role, pipeline),
-    /// summed only over contracts both toolchains emitted — a toolchain that
-    /// failed some builds is excluded from the comparison, not counted as 0.
-    baseline_pairs: BTreeMap<(Role, String), (u64, u64)>,
-    has_baselines: bool,
-
-    top_size_movers: Vec<Movement>,
-    top_gas_movers: Vec<Movement>,
-}
-
-#[derive(Default)]
-struct CompileAggregate {
-    pr_total_ms: u64,
-    main_total_ms: u64,
-    /// Per-project percentage change, PR vs main.
-    per_project: Vec<(String, f64)>,
-}
-
-struct Movement {
-    label: String,
-    mode: String,
-    main: u64,
-    pr: u64,
-}
-
-struct FailureRegression {
-    label: String,
-    mode: String,
-    kind: &'static str,
-    main: usize,
-    pr: usize,
-}
-
 impl SuiteStats {
-    fn from_suite(suite: &SummarySuite) -> Self {
-        let mut stats = SuiteStats {
-            label: suite.label.clone(),
-            report_file: suite.report_file.clone(),
-            report_url: suite.report_url.clone(),
-            gas_is_gate: suite.gas_is_gate,
-            available: suite.benchmark.is_some(),
-            ..Default::default()
-        };
-        let Some(benchmark) = suite.benchmark.as_ref() else {
-            return stats;
-        };
-
-        let mut projects = std::collections::BTreeSet::new();
-        for test in benchmark.tests.values() {
-            projects.insert(test.metadata.selector.project.clone());
-            let contract = test.metadata.selector.case.as_deref().unwrap_or("");
-            let row_label = if contract.is_empty() {
-                test.metadata.selector.project.as_str()
-            } else {
-                contract
-            };
-
-            // Classify every run once and index the PR/main runs by pairing key.
-            let mut pr_runs: BTreeMap<String, &crate::benchmark::test::run::Run> = BTreeMap::new();
-            let mut main_runs: BTreeMap<String, &crate::benchmark::test::run::Run> =
-                BTreeMap::new();
-            let mut by_role_pipeline: BTreeMap<(Role, String), u64> = BTreeMap::new();
-            for (mode, run) in test.runs.iter() {
-                stats.total_runs += 1;
-                let (role, key) = classify(mode);
-                match role {
-                    Role::Pr => {
-                        stats.pr_runs_seen += 1;
-                        pr_runs.insert(key, run);
-                    }
-                    Role::Main => {
-                        stats.baseline_build_failures += run.build_failures;
-                        stats.baseline_test_failures += run.test_failures;
-                        main_runs.insert(key, run);
-                    }
-                    Role::Latest | Role::Solc => stats.has_baselines = true,
-                    Role::Other => {}
-                }
-
-                // This test's bytecode per role and pipeline; paired into the
-                // full-matrix baseline totals after the loop.
-                if matches!(role, Role::Pr | Role::Main | Role::Latest | Role::Solc) {
-                    let bytes = run.average_size() + run.average_runtime_size();
-                    if bytes != 0 {
-                        *by_role_pipeline
-                            .entry((role, pipeline_of(mode)))
-                            .or_default() += bytes;
-                    }
-                }
-
-                // Compile-time aggregates (project-level runs carry it).
-                if !run.compilation_time.is_empty()
-                    && let Role::Pr | Role::Main = role
-                {
-                    let pipeline = pipeline_of(mode);
-                    let entry = stats.compile.entry(pipeline).or_default();
-                    let ms = run.average_compilation_time();
-                    match role {
-                        Role::Pr => entry.pr_total_ms += ms,
-                        Role::Main => entry.main_total_ms += ms,
-                        _ => {}
-                    }
-                }
-            }
-
-            // Baseline comparisons pair only cells present for both the PR
-            // and the baseline toolchain on this test.
-            for ((role, pipeline), &base_bytes) in by_role_pipeline.iter() {
-                if !matches!(role, Role::Solc | Role::Latest) {
-                    continue;
-                }
-                if let Some(&pr_bytes) = by_role_pipeline.get(&(Role::Pr, pipeline.clone())) {
-                    let entry = stats
-                        .baseline_pairs
-                        .entry((*role, pipeline.clone()))
-                        .or_default();
-                    entry.0 += pr_bytes;
-                    entry.1 += base_bytes;
-                }
-            }
-
-            // Pair each PR run with its main counterpart. A run without one
-            // has nothing to compare against — surfaced as unbaselined, not
-            // as a regression against an imaginary zero.
-            for (key, pr) in pr_runs.iter() {
-                let Some(main) = main_runs.get(key) else {
-                    stats.unbaselined_runs += 1;
-                    stats.unbaselined_failures += pr.build_failures + pr.test_failures;
-                    continue;
-                };
-                let mode = humanize_mode(key);
-
-                for (kind, main_v, pr_v) in [
-                    ("build", main.build_failures, pr.build_failures),
-                    ("test", main.test_failures, pr.test_failures),
-                ] {
-                    if pr_v > main_v {
-                        match kind {
-                            "build" => stats.new_build_failures += pr_v - main_v,
-                            _ => stats.new_test_failures += pr_v - main_v,
-                        }
-                        stats.failure_regressions.push(FailureRegression {
-                            label: row_label.to_owned(),
-                            mode: mode.clone(),
-                            kind,
-                            main: main_v,
-                            pr: pr_v,
-                        });
-                    }
-                }
-
-                for (kind, pr_v, main_v) in [
-                    ("deploy", pr.average_size(), main.average_size()),
-                    (
-                        "runtime",
-                        pr.average_runtime_size(),
-                        main.average_runtime_size(),
-                    ),
-                ] {
-                    if pr_v == 0 && main_v == 0 {
-                        continue;
-                    }
-                    stats.size_present = true;
-                    stats.size_cells += 1;
-                    if pr_v != main_v {
-                        stats.size_diffs += 1;
-                        stats.size_delta_bytes += pr_v as i128 - main_v as i128;
-                        push_movement(
-                            &mut stats.top_size_movers,
-                            row_label,
-                            &format!("{mode}, {kind}"),
-                            main_v,
-                            pr_v,
-                        );
-                    }
-                }
-
-                let (pr_gas, main_gas) = (pr.average_gas(), main.average_gas());
-                if pr_gas != 0 || main_gas != 0 {
-                    stats.gas_present = true;
-                    stats.gas_cells += 1;
-                    if pr_gas != main_gas {
-                        stats.gas_diffs += 1;
-                        if suite.gas_is_gate {
-                            push_movement(
-                                &mut stats.top_gas_movers,
-                                row_label,
-                                &mode,
-                                main_gas,
-                                pr_gas,
-                            );
-                        } else if main_gas != 0 {
-                            let jitter =
-                                (pr_gas as f64 - main_gas as f64).abs() / main_gas as f64 * 100.0;
-                            stats.gas_jitter_percents.push(jitter);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Per-project compile-time percentages (for outlier detection and the
-        // median) need a second pass now that pipelines are known.
-        for test in benchmark.tests.values() {
-            let project = test.metadata.selector.project.as_str();
-            let mut pr: BTreeMap<String, u64> = BTreeMap::new();
-            let mut main: BTreeMap<String, u64> = BTreeMap::new();
-            for (mode, run) in test.runs.iter() {
-                if run.compilation_time.is_empty() {
-                    continue;
-                }
-                match classify(mode).0 {
-                    Role::Pr => {
-                        pr.insert(pipeline_of(mode), run.average_compilation_time());
-                    }
-                    Role::Main => {
-                        main.insert(pipeline_of(mode), run.average_compilation_time());
-                    }
-                    _ => {}
-                }
-            }
-            for (pipeline, &pr_ms) in pr.iter() {
-                if let Some(&main_ms) = main.get(pipeline)
-                    && main_ms != 0
-                {
-                    let pct = (pr_ms as f64 - main_ms as f64) / main_ms as f64 * 100.0;
-                    stats
-                        .compile
-                        .entry(pipeline.clone())
-                        .or_default()
-                        .per_project
-                        .push((project.to_owned(), pct));
-                }
-            }
-        }
-
-        stats.project_count = projects.len();
-        sort_movers_by_magnitude(&mut stats.top_size_movers);
-        sort_movers_by_magnitude(&mut stats.top_gas_movers);
-        stats
-    }
-
-    fn new_failures(&self) -> usize {
-        self.new_build_failures + self.new_test_failures
-    }
-
-    fn baseline_failures(&self) -> usize {
-        self.baseline_build_failures + self.baseline_test_failures
-    }
-
-    /// The benchmark had runs but none classified as the PR toolchain — the
-    /// naming convention drifted from `classify()`; better a loud error than
-    /// a green comment over empty data.
-    fn classification_failed(&self) -> bool {
-        self.available && self.total_runs > 0 && self.pr_runs_seen == 0
-    }
-
     fn failures_cell(&self) -> String {
         let pre = match self.baseline_failures() {
             0 => String::new(),
@@ -413,27 +110,27 @@ impl SuiteStats {
     }
 
     fn size_cell(&self) -> String {
-        if !self.size_present {
+        if !self.size.collected() {
             return "⚪ not collected".to_owned();
         }
-        if self.size_diffs == 0 {
-            format!("✅ 0 of {}", commas(self.size_cells))
+        if self.size.diffs == 0 {
+            format!("✅ 0 of {}", commas(self.size.cells))
         } else {
             format!(
                 "⚠️ {} of {} ({:+} B)",
-                commas(self.size_diffs),
-                commas(self.size_cells),
-                self.size_delta_bytes
+                commas(self.size.diffs),
+                commas(self.size.cells),
+                self.size.delta
             )
         }
     }
 
     fn gas_cell(&self) -> String {
-        if !self.gas_present {
+        if !self.gas.collected() {
             return "⚪ not collected".to_owned();
         }
         if !self.gas_is_gate {
-            if self.gas_diffs == 0 {
+            if self.gas.diffs == 0 {
                 return "⚪ no jitter (not gated)".to_owned();
             }
             let med = match median(&self.gas_jitter_percents) {
@@ -442,17 +139,17 @@ impl SuiteStats {
             };
             return format!(
                 "⚪ jitter {} of {}, median {med} (not gated)",
-                commas(self.gas_diffs),
-                commas(self.gas_cells)
+                commas(self.gas.diffs),
+                commas(self.gas.cells)
             );
         }
-        if self.gas_diffs == 0 {
-            format!("✅ 0 of {}", commas(self.gas_cells))
+        if self.gas.diffs == 0 {
+            format!("✅ 0 of {}", commas(self.gas.cells))
         } else {
             format!(
                 "⚠️ {} of {}",
-                commas(self.gas_diffs),
-                commas(self.gas_cells)
+                commas(self.gas.diffs),
+                commas(self.gas.cells)
             )
         }
     }
@@ -478,15 +175,15 @@ impl SuiteStats {
 /// three independent signals, each stated with its numbers.
 ///
 fn render_verdict(out: &mut String, stats: &[SuiteStats]) {
-    let size_cells: u64 = stats.iter().map(|s| s.size_cells).sum();
-    let size_diffs: u64 = stats.iter().map(|s| s.size_diffs).sum();
-    let size_delta: i128 = stats.iter().map(|s| s.size_delta_bytes).sum();
+    let size_cells: u64 = stats.iter().map(|s| s.size.cells).sum();
+    let size_diffs: u64 = stats.iter().map(|s| s.size.diffs).sum();
+    let size_delta: i128 = stats.iter().map(|s| s.size.delta).sum();
     let gated: Vec<&SuiteStats> = stats.iter().filter(|s| s.gas_is_gate).collect();
-    let gated_gas_cells: u64 = gated.iter().map(|s| s.gas_cells).sum();
-    let gated_gas_diffs: u64 = gated.iter().map(|s| s.gas_diffs).sum();
+    let gated_gas_cells: u64 = gated.iter().map(|s| s.gas.cells).sum();
+    let gated_gas_diffs: u64 = gated.iter().map(|s| s.gas.diffs).sum();
     let gas_label = gated
         .iter()
-        .filter(|s| s.gas_present)
+        .filter(|s| s.gas.collected())
         .map(|s| s.label.as_str())
         .collect::<Vec<_>>()
         .join(" / ");
@@ -683,7 +380,7 @@ fn render_output_changes(out: &mut String, stats: &[SuiteStats]) {
                 continue;
             }
             let _ = writeln!(out, "\n**{} — {title}:**\n", s.label);
-            for m in movers.iter().take(MAX_LISTED) {
+            for m in movers.ranked().into_iter().take(MAX_LISTED) {
                 let pct = if m.main != 0 {
                     format!(
                         " ({})",
@@ -824,9 +521,9 @@ fn render_baselines(out: &mut String, stats: &[SuiteStats]) {
         for pipeline in pipelines {
             let vs = |role: Role| -> String {
                 match s.baseline_pairs.get(&(role, pipeline.clone())) {
-                    Some(&(pr, base)) if base != 0 => {
-                        percent((pr as f64 - base as f64) / base as f64 * 100.0)
-                    }
+                    Some(pair) if pair.baseline != 0 => percent(
+                        (pair.pr as f64 - pair.baseline as f64) / pair.baseline as f64 * 100.0,
+                    ),
                     _ => "—".to_owned(),
                 }
             };
@@ -840,42 +537,6 @@ fn render_baselines(out: &mut String, stats: &[SuiteStats]) {
             );
         }
     }
-}
-
-fn push_movement(movers: &mut Vec<Movement>, label: &str, mode: &str, main: u64, pr: u64) {
-    movers.push(Movement {
-        label: label.to_owned(),
-        mode: mode.to_owned(),
-        main,
-        pr,
-    });
-}
-
-/// Orders movers by descending magnitude so the renderer lists the biggest
-/// first and counts the rest as "+N more".
-fn sort_movers_by_magnitude(movers: &mut [Movement]) {
-    movers.sort_by(|a, b| {
-        let da = (a.pr as i128 - a.main as i128).unsigned_abs();
-        let db = (b.pr as i128 - b.main as i128).unsigned_abs();
-        db.cmp(&da)
-    });
-}
-
-/// The median of the given percentages, if any were collected. Even-length
-/// input averages the two middle elements — at n=2 the upper-middle would be
-/// the maximum, not a median.
-fn median(pcts: &[f64]) -> Option<f64> {
-    if pcts.is_empty() {
-        return None;
-    }
-    let mut pcts = pcts.to_vec();
-    pcts.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let mid = pcts.len() / 2;
-    Some(if pcts.len().is_multiple_of(2) {
-        (pcts[mid - 1] + pcts[mid]) / 2.0
-    } else {
-        pcts[mid]
-    })
 }
 
 /// Formats a percentage with a sign and one decimal.
@@ -1206,14 +867,6 @@ mod tests {
         let out = render(&[suite("Foundry", false, tests)]);
         assert!(out.contains("contracts built by both only"), "{out}");
         assert!(out.contains("| Foundry | legacy | +5.7% | — |"), "{out}");
-    }
-
-    #[test]
-    fn median_averages_the_two_middles_for_even_input() {
-        assert_eq!(median(&[]), None);
-        assert_eq!(median(&[3.0]), Some(3.0));
-        assert_eq!(median(&[1.0, 3.0]), Some(2.0));
-        assert_eq!(median(&[1.0, 2.0, 30.0]), Some(2.0));
     }
 
     #[test]
