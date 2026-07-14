@@ -141,35 +141,49 @@ jobs:
           fi
           exit "$ec"
 
-      # lldb autopsy of the Intel-only SIGSEGV (deterministic, single-thread,
-      # not heap corruption per run 29366844647: identical 0x12-pattern
-      # registers even under MallocScribble; ASAN silent). Line tables are
-      # kept in the build, so `bt` resolves the inlined frames at the crash
-      # site to file:line, and the last --verbose line names the test.
-      - name: 'Diagnose: lldb crash autopsy (Intel)'
+      # Toolchain probes for the Intel SIGSEGV. The lldb autopsy (run
+      # 29371120991) showed an aligned SSE store to a structurally misaligned
+      # frame slot in Input::try_from_ethereum — a codegen bug matching the
+      # rust-lang/rust#159035 family (enum-niche miscompile, present in
+      # 1.96.1, LLVM fix backport pending as 1.97.1). If 1.95.0 is green and
+      # nightly (fixed LLVM) is green while the pinned 1.96.1 crashes, the fix
+      # is a toolchain bump, not a code change.
+      - name: 'Probe: rustc 1.95.0 (Intel)'
         if: matrix.runner == 'macos-15-large'
         continue-on-error: true
-        timeout-minutes: 25
+        timeout-minutes: 30
         run: |
-          lldb --batch \
-            -o run \
-            -k 'thread backtrace -c 25' \
-            -k 'disassemble --pc --count 12' \
-            -k 'register read rax rbx rcx rdx rsi rdi r8 r9 rip rsp' \
-            -k 'quit' \
-            -- ./target/release/solx-tester \
-              --solidity-compiler ./target/release/solx \
-              --path semanticTests \
-              --threads 1 \
-              --verbose
+          set +e
+          rustup toolchain install 1.95.0 --profile minimal || exit 1
+          ${SFW_PREFIX:-} cargo +1.95.0 build --frozen --release \
+            -p solx-tester --bin solx-tester --target-dir target-195 || exit 1
+          ./target-195/release/solx-tester \
+            --solidity-compiler ./target/release/solx \
+            --path semanticTests
+          ec=$?
+          if [ "$ec" -gt 128 ]; then
+            echo "::error::1.95.0 tester killed by signal $((ec - 128)) (SIG$(kill -l $((ec - 128))))"
+          fi
+          exit "$ec"
 
-      # Offline-symbolication backup for the recorded .ips offsets.
-      - name: Upload solx-tester binary
-        if: always() && matrix.runner == 'macos-15-large'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: solx-tester-binary-${{ matrix.runner }}
-          path: target/release/solx-tester
+      - name: 'Probe: rustc nightly (Intel)'
+        if: matrix.runner == 'macos-15-large'
+        continue-on-error: true
+        timeout-minutes: 30
+        run: |
+          set +e
+          rustup toolchain install nightly --profile minimal || exit 1
+          rustup run nightly rustc --version --verbose
+          ${SFW_PREFIX:-} cargo +nightly build --frozen --release \
+            -p solx-tester --bin solx-tester --target-dir target-nightly || exit 1
+          ./target-nightly/release/solx-tester \
+            --solidity-compiler ./target/release/solx \
+            --path semanticTests
+          ec=$?
+          if [ "$ec" -gt 128 ]; then
+            echo "::error::nightly tester killed by signal $((ec - 128)) (SIG$(kill -l $((ec - 128))))"
+          fi
+          exit "$ec"
 
       - name: Collect crash reports and samples
         if: always()
