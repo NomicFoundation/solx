@@ -20,6 +20,3 @@
 - `src/C3.sol:C3` [legacy, deploy] 1,300 → 1,313 B (+1.0%)
 - `src/C2.sol:C2` [legacy, deploy] 1,200 → 1,212 B (+1.0%)
 - +2 more — full list in foundry-report.xlsx
-
----
-_Suites run the **release** solx binary. Foundry/Hardhat gas jitters run-to-run (fuzz/invariant tests, CREATE-context deploys), so it never gates._

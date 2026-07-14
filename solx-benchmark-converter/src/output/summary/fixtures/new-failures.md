@@ -12,6 +12,3 @@
 - Foundry: `solady` [viaIR] test failures 0 → 3
 - Foundry: `uniswap-v4` [legacy] build failures 0 → 1
 - Foundry: `uniswap-v4` [legacy] test failures 5 → 7
-
----
-_Suites run the **release** solx binary. Foundry/Hardhat gas jitters run-to-run (fuzz/invariant tests, CREATE-context deploys), so it never gates._
