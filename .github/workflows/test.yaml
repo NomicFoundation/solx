@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:a3e9312d6442e028a4b9eed17ea597380ae86abf3ff4d45ba957d5a10a805790
-      # Host tooling bind-mounted so the free-disk-space action can reclaim
+      # Host tooling bind-mounted so the free-disk-space-linux action can reclaim
       # ~24 GB before the cold LLVM build fills the runner's 14 GB budget.
       # Anchor shared with build-and-test below; keep in sync with the
       # matching list in cache-warmup.yaml.
@@ -66,8 +66,8 @@ jobs:
         with:
           submodules: true
 
-      - name: Free disk space
-        uses: ./.github/actions/free-disk-space
+      - name: Free disk space (Linux)
+        uses: ./.github/actions/free-disk-space-linux
 
       # This step is required to checkout submodules
       # that are disabled in .gitmodules config
@@ -162,7 +162,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.image || '' }} # Special workaround to allow matrix builds with optional container
-      # Host tooling bind-mounts for the free-disk-space action. These apply
+      # Host tooling bind-mounts for the free-disk-space-linux action. These apply
       # only when a container is started (matrix legs with `image:` set); the
       # macOS/Windows legs run bare and the paths are irrelevant there.
       volumes: *free-disk-volumes
@@ -178,9 +178,9 @@ jobs:
       # Only meaningful on containerized Linux legs (the hosted x86 leg is the
       # disk-constrained one); a no-op on macOS/Windows since the mount points
       # don't exist there.
-      - name: Free disk space
+      - name: Free disk space (Linux)
         if: runner.os == 'Linux' && matrix.image != ''
-        uses: ./.github/actions/free-disk-space
+        uses: ./.github/actions/free-disk-space-linux
 
       # This step is required to checkout submodules
       # that are disabled in .gitmodules config
@@ -198,77 +198,7 @@ jobs:
 
       - name: Free disk space (macOS)
         if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "=== Before macOS cleanup ===" && df -h .
-
-          # 1. Simulator runtimes — stored on read-only APFS snapshot volumes,
-          #    so plain `rm` fails.  `simctl runtime delete all` unmounts them.
-          #    May warn on already-deleted runtimes; that is harmless.
-          echo "--- Removing simulator runtimes ---"
-          xcrun simctl delete all 2>&1 || true
-          xcrun simctl runtime delete all 2>&1 || true
-
-          # 2. Xcode — remove every versioned copy EXCEPT the one that
-          #    xcode-select points to (we need its toolchain for C/C++ builds).
-          #    Active Xcode path looks like /Applications/Xcode_16.2.app/Contents/Developer.
-          echo "--- Removing inactive Xcode versions ---"
-          ACTIVE_XCODE="$(xcode-select -p 2>/dev/null | sed 's|/Contents/Developer/*$||' || true)"
-          ACTIVE_XCODE="${ACTIVE_XCODE%/}"
-          removed=0
-          if [ -z "${ACTIVE_XCODE}" ] || [[ "${ACTIVE_XCODE}" != /Applications/Xcode*.app ]]; then
-            echo "  warning: active Xcode path '${ACTIVE_XCODE}' is not an Xcode app; skipping Xcode removal"
-          else
-            echo "Active Xcode (keeping): ${ACTIVE_XCODE}"
-            to_remove=()
-            for app in /Applications/Xcode_*.app; do
-              [ -d "$app" ] || continue
-              if [ "$app" = "$ACTIVE_XCODE" ]; then
-                echo "  skip (active): $app"
-              else
-                echo "  removing: $app"
-                to_remove+=("$app")
-              fi
-            done
-            # Each Xcode bundle is ~15 GB of small files; `rm -rf` is I/O-bound
-            # per inode, so run them concurrently (one worker per bundle).
-            # Soft-fail: a stray rm error shouldn't sink the whole job — rm's
-            # stderr will pinpoint the bad path above.
-            #
-            # `removed` reflects the attempt count, not per-bundle success:
-            # xargs returns non-zero if *any* child failed, so gating the
-            # count on xargs success would print "Removed 0" even after
-            # ~30 GB was freed. The count is off by the number of failed
-            # bundles — usually one in practice — which is still a much
-            # better signal than zero.
-            if [ "${#to_remove[@]}" -gt 0 ]; then
-              removed=${#to_remove[@]}
-              if ! printf '%s\0' "${to_remove[@]}" \
-                  | xargs -0 -n1 -P "${#to_remove[@]}" sudo rm -rf; then
-                echo "  warning: one or more Xcode removals failed (see rm stderr above)"
-              fi
-            fi
-          fi
-          echo "Removed ${removed} inactive Xcode version(s)"
-
-          # 3. Remaining large packages that this project never uses.
-          #    Each path is removed individually so a missing path doesn't
-          #    mask a real permission error on another.
-          echo "--- Removing unused SDKs and caches ---"
-          for dir in \
-            /Library/Developer/CoreSimulator \
-            /usr/local/lib/android \
-            "${RUNNER_TOOL_CACHE:-/Users/runner/hostedtoolcache}"; do
-            if [ -d "$dir" ]; then
-              echo "  removing: $dir"
-              sudo rm -rf "$dir" || echo "  warning: failed to remove $dir"
-            else
-              echo "  not found (skipped): $dir"
-            fi
-          done
-
-          echo "=== After macOS cleanup ===" && df -h .
+        uses: ./.github/actions/free-disk-space-macos
 
       - name: Cache cargo artifacts
         if: ${{ !matrix.image }}

@@ -1,4 +1,4 @@
-name: "free-disk-space"
+name: "free-disk-space-linux"
 
 description: |
   Reclaims ~20-25 GB of disk on GitHub-hosted Ubuntu runners by removing

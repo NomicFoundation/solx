@@ -47,7 +47,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.image || '' }}
-      # Host tooling bind-mounts for the free-disk-space action, applied only
+      # Host tooling bind-mounts for the free-disk-space-linux action, applied only
       # when a container is started (matrix legs with `image:` set).
       # Anchor shared with the three single-job LLVM warm-ups below; keep in
       # sync with the matching list in test.yaml.
@@ -64,9 +64,9 @@ jobs:
         with:
           submodules: true
 
-      - name: Free disk space
+      - name: Free disk space (Linux)
         if: runner.os == 'Linux' && matrix.image != ''
-        uses: ./.github/actions/free-disk-space
+        uses: ./.github/actions/free-disk-space-linux
 
       - name: Checkout submodules
         run: |
@@ -138,9 +138,9 @@ jobs:
         with:
           submodules: true
 
-      - name: Free disk space
+      - name: Free disk space (Linux)
         if: runner.os == 'Linux' && matrix.image != ''
-        uses: ./.github/actions/free-disk-space
+        uses: ./.github/actions/free-disk-space-linux
 
       - name: Checkout submodules
         run: |
@@ -184,8 +184,8 @@ jobs:
         with:
           submodules: true
 
-      - name: Free disk space
-        uses: ./.github/actions/free-disk-space
+      - name: Free disk space (Linux)
+        uses: ./.github/actions/free-disk-space-linux
 
       - name: Checkout submodules
         run: |
@@ -225,8 +225,8 @@ jobs:
         with:
           submodules: true
 
-      - name: Free disk space
-        uses: ./.github/actions/free-disk-space
+      - name: Free disk space (Linux)
+        uses: ./.github/actions/free-disk-space-linux
 
       - name: Checkout submodules
         run: |
@@ -267,8 +267,8 @@ jobs:
         with:
           submodules: true
 
-      - name: Free disk space
-        uses: ./.github/actions/free-disk-space
+      - name: Free disk space (Linux)
+        uses: ./.github/actions/free-disk-space-linux
 
       - name: Checkout submodules
         run: |
