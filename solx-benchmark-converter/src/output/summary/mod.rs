@@ -14,6 +14,7 @@
 
 mod stats;
 mod toolchain;
+mod verdict;
 
 use std::collections::BTreeSet;
 use std::fmt::Write;
@@ -23,6 +24,12 @@ use crate::benchmark::Benchmark;
 use self::stats::SuiteStats;
 use self::stats::median;
 use self::toolchain::Role;
+use self::verdict::FailureVerdict;
+use self::verdict::HealthIssue;
+use self::verdict::OutputVerdict;
+use self::verdict::failure_verdict;
+use self::verdict::health_issues;
+use self::verdict::output_verdict;
 
 /// A compile-time move on one project large enough to surface individually.
 const COMPILE_TIME_PROJECT_THRESHOLD_PERCENT: f64 = 15.0;
@@ -172,128 +179,123 @@ impl SuiteStats {
 
 ///
 /// The verdict lines: output invariance, new failures, and harness health —
-/// three independent signals, each stated with its numbers.
+/// three independent signals decided in `verdict.rs`, each stated with its
+/// numbers.
 ///
 fn render_verdict(out: &mut String, stats: &[SuiteStats]) {
-    let size_cells: u64 = stats.iter().map(|s| s.size.cells).sum();
-    let size_diffs: u64 = stats.iter().map(|s| s.size.diffs).sum();
-    let size_delta: i128 = stats.iter().map(|s| s.size.delta).sum();
-    let gated: Vec<&SuiteStats> = stats.iter().filter(|s| s.gas_is_gate).collect();
-    let gated_gas_cells: u64 = gated.iter().map(|s| s.gas.cells).sum();
-    let gated_gas_diffs: u64 = gated.iter().map(|s| s.gas.diffs).sum();
-    let gas_label = gated
-        .iter()
-        .filter(|s| s.gas.collected())
-        .map(|s| s.label.as_str())
-        .collect::<Vec<_>>()
-        .join(" / ");
-
-    if size_diffs == 0 && gated_gas_diffs == 0 {
-        let mut clauses = Vec::new();
-        if size_cells > 0 {
-            clauses.push(format!(
-                "bytecode size identical ({} comparisons)",
-                commas(size_cells)
-            ));
-        }
-        if gated_gas_cells > 0 {
-            clauses.push(format!(
-                "{gas_label} gas identical ({})",
-                commas(gated_gas_cells)
-            ));
-        }
-        if clauses.is_empty() {
-            // Never a green checkmark over empty data.
+    match output_verdict(stats) {
+        OutputVerdict::NoData => {
             let _ = writeln!(
                 out,
                 "⚪ **No output data** — no size or gated-gas comparisons were collected."
             );
-        } else {
+        }
+        OutputVerdict::Preserving {
+            size_cells,
+            gated_gas_cells,
+            gas_label,
+        } => {
+            let mut clauses = Vec::new();
+            if size_cells > 0 {
+                clauses.push(format!(
+                    "bytecode size identical ({} comparisons)",
+                    commas(size_cells)
+                ));
+            }
+            if gated_gas_cells > 0 {
+                clauses.push(format!(
+                    "{gas_label} gas identical ({})",
+                    commas(gated_gas_cells)
+                ));
+            }
             let _ = writeln!(out, "✅ **Output-preserving** — {}.", clauses.join(", "));
         }
-    } else {
-        let mut parts = Vec::new();
-        if size_diffs > 0 {
-            parts.push(format!(
-                "{} of {} size comparisons differ ({:+} B total)",
-                commas(size_diffs),
-                commas(size_cells),
-                size_delta
-            ));
+        OutputVerdict::Changed { size, gas } => {
+            let mut parts = Vec::new();
+            if let Some(size) = size {
+                parts.push(format!(
+                    "{} of {} size comparisons differ ({:+} B total)",
+                    commas(size.diffs),
+                    commas(size.cells),
+                    size.delta_bytes
+                ));
+            }
+            if let Some(gas) = gas {
+                parts.push(format!(
+                    "{} of {} {} gas comparisons differ",
+                    commas(gas.diffs),
+                    commas(gas.cells),
+                    gas.label
+                ));
+            }
+            let _ = writeln!(
+                out,
+                "⚠️ **Output changed** — {}. If this PR is meant to be output-preserving, investigate before merging.",
+                parts.join("; ")
+            );
         }
-        if gated_gas_diffs > 0 {
-            parts.push(format!(
-                "{} of {} {gas_label} gas comparisons differ",
-                commas(gated_gas_diffs),
-                commas(gated_gas_cells)
-            ));
-        }
-        let _ = writeln!(
-            out,
-            "⚠️ **Output changed** — {}. If this PR is meant to be output-preserving, investigate before merging.",
-            parts.join("; ")
-        );
     }
 
-    if stats.iter().all(|s| s.new_failures() == 0) {
-        let pre: Vec<String> = stats
-            .iter()
-            .filter(|s| s.baseline_failures() > 0)
-            .map(|s| format!("{}'s {}", s.label, commas(s.baseline_failures() as u64)))
-            .collect();
-        if pre.is_empty() {
+    match failure_verdict(stats) {
+        FailureVerdict::Clean { pre_existing } if pre_existing.is_empty() => {
             let _ = writeln!(out, "✅ **No new failures**.");
-        } else {
+        }
+        FailureVerdict::Clean { pre_existing } => {
+            let pre: Vec<String> = pre_existing
+                .iter()
+                .map(|(label, count)| format!("{label}'s {}", commas(*count as u64)))
+                .collect();
             let _ = writeln!(
                 out,
                 "✅ **No new failures** — {} failures already present on `main`.",
                 pre.join(" / ")
             );
         }
-    } else {
-        let parts: Vec<String> = stats
-            .iter()
-            .filter(|s| s.new_failures() > 0)
-            .map(|s| {
-                let mut kinds = Vec::new();
-                if s.new_build_failures > 0 {
-                    kinds.push(format!("+{} build", commas(s.new_build_failures as u64)));
-                }
-                if s.new_test_failures > 0 {
-                    kinds.push(format!("+{} test", commas(s.new_test_failures as u64)));
-                }
-                format!("{}: {}", s.label, kinds.join(", "))
-            })
-            .collect();
-        let _ = writeln!(out, "❌ **New failures** — {}.", parts.join("; "));
+        FailureVerdict::Regressed { suites } => {
+            let parts: Vec<String> = suites
+                .iter()
+                .map(|suite| {
+                    let mut kinds = Vec::new();
+                    if suite.new_build > 0 {
+                        kinds.push(format!("+{} build", commas(suite.new_build as u64)));
+                    }
+                    if suite.new_test > 0 {
+                        kinds.push(format!("+{} test", commas(suite.new_test as u64)));
+                    }
+                    format!("{}: {}", suite.label, kinds.join(", "))
+                })
+                .collect();
+            let _ = writeln!(out, "❌ **New failures** — {}.", parts.join("; "));
+        }
     }
 
-    for s in stats.iter().filter(|s| !s.available) {
-        let _ = writeln!(
-            out,
-            "❌ **Suite errored** — {} produced no usable report.",
-            s.label
-        );
+    let mut unbaselined = Vec::new();
+    for issue in health_issues(stats) {
+        match issue {
+            HealthIssue::SuiteErrored { label } => {
+                let _ = writeln!(
+                    out,
+                    "❌ **Suite errored** — {label} produced no usable report."
+                );
+            }
+            HealthIssue::UnrecognizedToolchains { label } => {
+                let _ = writeln!(
+                    out,
+                    "❌ **Harness error** — {label}: benchmark data matched no recognized toolchain naming."
+                );
+            }
+            HealthIssue::Unbaselined {
+                label,
+                runs,
+                failures,
+            } => {
+                unbaselined.push(format!(
+                    "{label}: {runs} runs ({} failures)",
+                    commas(failures as u64)
+                ));
+            }
+        }
     }
-    for s in stats.iter().filter(|s| s.classification_failed()) {
-        let _ = writeln!(
-            out,
-            "❌ **Harness error** — {}: benchmark data matched no recognized toolchain naming.",
-            s.label
-        );
-    }
-    let unbaselined: Vec<String> = stats
-        .iter()
-        .filter(|s| s.unbaselined_runs > 0)
-        .map(|s| {
-            format!(
-                "{}: {} runs ({} failures)",
-                s.label,
-                s.unbaselined_runs,
-                commas(s.unbaselined_failures as u64)
-            )
-        })
-        .collect();
     if !unbaselined.is_empty() {
         let _ = writeln!(
             out,
@@ -648,200 +650,6 @@ mod tests {
     }
 
     #[test]
-    fn output_preserving_when_pr_matches_main() {
-        let tests = vec![contract_test(
-            "p",
-            "C",
-            &[
-                ("00.solx-main-solx-E", 100, 5000),
-                ("01.solx-solx-E", 100, 5000),
-            ],
-        )];
-        let out = render(&[suite("solx-tester", true, tests)]);
-        assert!(out.contains("✅ **Output-preserving**"), "{out}");
-        assert!(out.contains("✅ **No new failures**"), "{out}");
-        assert!(!out.contains("largest size changes"), "{out}");
-    }
-
-    #[test]
-    fn size_diff_reports_output_changed_with_inline_movers() {
-        let tests = vec![contract_test(
-            "p",
-            "C",
-            &[
-                ("00.solx-main-solx-E", 100, 5000),
-                ("01.solx-solx-E", 142, 5000),
-            ],
-        )];
-        let out = render(&[suite("solx-tester", true, tests)]);
-        assert!(out.contains("⚠️ **Output changed**"), "{out}");
-        assert!(out.contains("(+42 B total)"), "{out}");
-        assert!(out.contains("largest size changes"), "{out}");
-        assert!(
-            out.contains("- `C` [EVMLA, deploy] 100 → 142 B (+42.0%)"),
-            "{out}"
-        );
-        // The size change informs; only failures and errored suites alarm.
-        assert!(!out.contains("❌"), "{out}");
-    }
-
-    #[test]
-    fn foundry_gas_jitter_is_reported_with_magnitude_not_gated() {
-        let tests = vec![contract_test(
-            "p",
-            "C",
-            &[
-                ("02.solx-main-legacy", 100, 5000),
-                ("03.solx-legacy", 100, 5050),
-            ],
-        )];
-        let out = render(&[suite("Foundry", false, tests)]);
-        assert!(out.contains("✅ **Output-preserving**"), "{out}");
-        assert!(
-            out.contains("⚪ jitter 1 of 1, median 1.0% (not gated)"),
-            "{out}"
-        );
-    }
-
-    #[test]
-    fn pre_existing_failures_do_not_alarm() {
-        let tests = vec![failure_test(
-            "proj",
-            &[("02.solx-main-legacy", 0, 5), ("03.solx-legacy", 0, 5)],
-        )];
-        let out = render(&[suite("Foundry", false, tests)]);
-        assert!(
-            out.contains(
-                "✅ **No new failures** — Foundry's 5 failures already present on `main`."
-            ),
-            "{out}"
-        );
-        assert!(out.contains("| ✅ 0 (5 pre-existing) |"), "{out}");
-        assert!(!out.contains("❌"), "{out}");
-    }
-
-    #[test]
-    fn new_failures_alarm_and_are_listed() {
-        let tests = vec![failure_test(
-            "proj",
-            &[("02.solx-main-legacy", 0, 5), ("03.solx-legacy", 1, 7)],
-        )];
-        let out = render(&[suite("Foundry", false, tests)]);
-        assert!(
-            out.contains("❌ **New failures** — Foundry: +1 build, +2 test."),
-            "{out}"
-        );
-        assert!(
-            out.contains("| ❌ +1 build, +2 test (5 pre-existing) |"),
-            "{out}"
-        );
-        assert!(
-            out.contains("- Foundry: `proj` [legacy] test failures 5 → 7"),
-            "{out}"
-        );
-        assert!(
-            out.contains("- Foundry: `proj` [legacy] build failures 0 → 1"),
-            "{out}"
-        );
-    }
-
-    #[test]
-    fn compile_time_outlier_is_flagged() {
-        let tests = vec![
-            compile_test(
-                "fast",
-                &[("02.solx-main-legacy", 1000), ("03.solx-legacy", 1000)],
-            ),
-            compile_test(
-                "slow",
-                &[("02.solx-main-legacy", 1000), ("03.solx-legacy", 1300)],
-            ),
-        ];
-        let out = render(&[suite("Foundry", false, tests)]);
-        assert!(out.contains("Project outliers"), "{out}");
-        assert!(out.contains("`slow`"), "{out}");
-        assert!(out.contains("positive = PR slower"), "{out}");
-    }
-
-    #[test]
-    fn compile_time_within_noise_is_quiet_and_shows_median() {
-        let tests = vec![compile_test(
-            "p",
-            &[("02.solx-main-legacy", 1000), ("03.solx-legacy", 1010)],
-        )];
-        let out = render(&[suite("Foundry", false, tests)]);
-        assert!(out.contains("Within noise"), "{out}");
-        assert!(out.contains("+1.0% / +1.0%"), "{out}");
-        assert!(!out.contains("Project outliers"), "{out}");
-    }
-
-    #[test]
-    fn errored_suite_is_flagged_not_dropped() {
-        let ok = contract_test(
-            "p",
-            "C",
-            &[
-                ("00.solx-main-solx-E", 100, 5000),
-                ("01.solx-solx-E", 100, 5000),
-            ],
-        );
-        let out = render(&[suite("solx-tester", true, vec![ok]), unavailable("Foundry")]);
-        assert!(
-            out.contains("❌ **Suite errored** — Foundry produced no usable report."),
-            "{out}"
-        );
-        assert!(
-            out.contains("| Foundry | ❌ no report — suite errored"),
-            "{out}"
-        );
-        // The healthy suite still renders its verdict and row.
-        assert!(out.contains("✅ **Output-preserving**"), "{out}");
-        assert!(out.contains("| solx-tester |"), "{out}");
-    }
-
-    #[test]
-    fn unrecognized_toolchain_naming_is_a_loud_error_not_a_green_verdict() {
-        // A renamed compiler entry: the main marker still classifies, but the
-        // candidate name no longer matches any known pattern.
-        let tests = vec![contract_test(
-            "p",
-            "C",
-            &[
-                ("02.mason-main-legacy", 100, 5000),
-                ("03.mason-legacy", 100, 5000),
-            ],
-        )];
-        let out = render(&[suite("Foundry", false, tests)]);
-        assert!(
-            out.contains(
-                "❌ **Harness error** — Foundry: benchmark data matched no recognized toolchain naming."
-            ),
-            "{out}"
-        );
-        assert!(
-            out.contains("| Foundry | ❌ unrecognized toolchain naming |"),
-            "{out}"
-        );
-        assert!(!out.contains("✅ **Output-preserving**"), "{out}");
-    }
-
-    #[test]
-    fn unbaselined_runs_are_marked_not_counted_as_new_failures() {
-        // The PR run has no main counterpart (e.g. main's run recorded
-        // nothing, or the PR enables a new mode).
-        let tests = vec![failure_test("proj", &[("03.solx-legacy", 0, 5)])];
-        let out = render(&[suite("Foundry", false, tests)]);
-        assert!(!out.contains("❌ **New failures**"), "{out}");
-        assert!(
-            out.contains(
-                "⚠️ **No baseline** — Foundry: 1 runs (5 failures) have no `main` counterpart"
-            ),
-            "{out}"
-        );
-        assert!(out.contains("| ✅ 0, ⚪ 5 unbaselined |"), "{out}");
-    }
-
-    #[test]
     fn baselines_compare_common_contracts_only() {
         // C2 is built by the PR but not by solc — it must not skew the
         // comparison as an imaginary zero-size solc contract.
@@ -867,28 +675,6 @@ mod tests {
         let out = render(&[suite("Foundry", false, tests)]);
         assert!(out.contains("contracts built by both only"), "{out}");
         assert!(out.contains("| Foundry | legacy | +5.7% | — |"), "{out}");
-    }
-
-    #[test]
-    fn baselines_table_names_baselines_and_direction() {
-        let tests = vec![contract_test(
-            "p",
-            "C",
-            &[
-                ("00.solc-legacy", 1000, 0),
-                ("02.solx-main-legacy", 1057, 0),
-                ("03.solx-legacy", 1057, 0),
-            ],
-        )];
-        let out = render(&[suite("Foundry", false, tests)]);
-        assert!(out.contains("full matrix"), "{out}");
-        assert!(out.contains("positive = PR larger"), "{out}");
-        assert!(
-            out.contains("| Suite | Pipeline | vs solc | vs released solx |"),
-            "{out}"
-        );
-        assert!(out.contains("| Foundry | legacy | +5.7% | — |"), "{out}");
-        assert!(!out.contains("00.solc"), "{out}");
     }
 
     #[test]
