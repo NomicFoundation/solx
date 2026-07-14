@@ -7,10 +7,9 @@
 //! is computed here — the single source of truth shared by every suite —
 //! instead of parsing the XLSX back offline.
 //!
-//! The layers, each reviewable on its own: `toolchain` interprets mode
-//! strings (role and pairing), `stats` reduces each suite's benchmark to
-//! numbers, `verdict` turns the numbers into typed decisions, and `render`
-//! turns decisions and numbers into markdown.
+//! `toolchain` interprets mode strings (role and pairing), `stats` reduces
+//! each suite's benchmark to numbers, `verdict` turns the numbers into typed
+//! decisions, and `render` turns decisions and numbers into markdown.
 //!
 //! Golden tests pin full rendered comments under `output/summary/fixtures/`;
 //! after an intended output change, regenerate them with
@@ -199,8 +198,7 @@ mod tests {
         assert!(out.contains("| Foundry | legacy | +5.7% | — |"), "{out}");
     }
 
-    /// Compares a rendered comment against its golden fixture — the fixtures
-    /// are the reviewable specification of the comment format. Set
+    /// Compares a rendered comment against its golden fixture. Set
     /// `UPDATE_SUMMARY_FIXTURES=1` to regenerate after an intended change.
     fn assert_matches_fixture(name: &str, rendered: &str) {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
