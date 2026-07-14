@@ -209,7 +209,9 @@ impl<'ctx> Context<'ctx> {
         })?;
         run_init_verify.borrow_mut().finish();
 
-        let module_size_fallback = self.module.clone();
+        let needs_size_fallback = self.optimizer.settings() == &OptimizerSettings::cycles()
+            && self.optimizer.settings().is_fallback_to_size_enabled();
+        let module_size_fallback = needs_size_fallback.then(|| self.module.clone());
         let run_optimize_verify = profiler.start_evm_translation_unit(
             contract_path,
             self.code_segment,
@@ -243,7 +245,12 @@ impl<'ctx> Context<'ctx> {
         })?;
         run_optimize_verify.borrow_mut().finish();
 
-        let assembly_buffer = if output_assembly || self.output_config.is_some() {
+        let assembly_buffer = if output_assembly
+            || self
+                .output_config
+                .as_ref()
+                .is_some_and(|output_config| output_config.output_assembly)
+        {
             let run_emit_llvm_assembly = profiler.start_evm_translation_unit(
                 contract_path,
                 self.code_segment,
@@ -319,9 +326,7 @@ impl<'ctx> Context<'ctx> {
             let mut warnings = Vec::with_capacity(1);
             let bytecode_size = bytecode_buffer.as_slice().len();
             if bytecode_size > bytecode_size_limit {
-                if self.optimizer.settings() == &OptimizerSettings::cycles()
-                    && self.optimizer.settings().is_fallback_to_size_enabled()
-                {
+                if needs_size_fallback {
                     crate::codegen::IS_SIZE_FALLBACK
                         .compare_exchange(
                             false,
@@ -331,7 +336,8 @@ impl<'ctx> Context<'ctx> {
                         )
                         .expect("Failed to set the global size fallback flag");
                     self.optimizer = Optimizer::new(OptimizerSettings::size());
-                    self.module = module_size_fallback;
+                    self.module = module_size_fallback
+                        .expect("cloned when the settings enable the size fallback");
                     for function in self.module.get_functions() {
                         Function::set_size_attributes(self.llvm, function);
                     }
@@ -826,8 +832,7 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
             inkwell::values::ValueKind::Instruction(inner) => Some(inner),
         };
         if let Some(instruction_value) = instruction_value {
-            let debug_location = self.create_debug_info_location();
-            instruction_value.set_debug_location(debug_location);
+            self.set_instruction_debug_location(instruction_value);
         }
 
         self.modify_call_site_value(arguments, call_site_value, function);
