@@ -48,10 +48,16 @@ jobs:
       contents: read
       pull-requests: write
       packages: read
-    runs-on: solx-linux-amd64-self-hosted
-    container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:a3e9312d6442e028a4b9eed17ea597380ae86abf3ff4d45ba957d5a10a805790
-      options: -m 110g
+    # HACK (temporary, for testing PR #524 on large macOS runners): run the
+    # integration suite on GitHub's large macOS runners instead of the
+    # self-hosted Linux container. macOS runners can't use a job `container:`,
+    # so it is dropped and LLVM/solc are built from source on the runner (same
+    # build-llvm/build-solc actions used by test.yaml's macOS legs).
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15-large, macos-15-xlarge]
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout PR
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -83,6 +89,83 @@ jobs:
         continue-on-error: true
         with:
           working-directory: temp-solx-main
+
+      # LLVM is built from source here (up to twice: PR + main baseline) and
+      # will exhaust the runner disk without this. Copied verbatim from
+      # test.yaml's macOS legs.
+      - name: Free disk space (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Before macOS cleanup ===" && df -h .
+
+          # 1. Simulator runtimes — stored on read-only APFS snapshot volumes,
+          #    so plain `rm` fails.  `simctl runtime delete all` unmounts them.
+          #    May warn on already-deleted runtimes; that is harmless.
+          echo "--- Removing simulator runtimes ---"
+          xcrun simctl delete all 2>&1 || true
+          xcrun simctl runtime delete all 2>&1 || true
+
+          # 2. Xcode — remove every versioned copy EXCEPT the one that
+          #    xcode-select points to (we need its toolchain for C/C++ builds).
+          #    Active Xcode path looks like /Applications/Xcode_16.2.app/Contents/Developer.
+          echo "--- Removing inactive Xcode versions ---"
+          ACTIVE_XCODE="$(xcode-select -p 2>/dev/null | sed 's|/Contents/Developer/*$||' || true)"
+          ACTIVE_XCODE="${ACTIVE_XCODE%/}"
+          removed=0
+          if [ -z "${ACTIVE_XCODE}" ] || [[ "${ACTIVE_XCODE}" != /Applications/Xcode*.app ]]; then
+            echo "  warning: active Xcode path '${ACTIVE_XCODE}' is not an Xcode app; skipping Xcode removal"
+          else
+            echo "Active Xcode (keeping): ${ACTIVE_XCODE}"
+            to_remove=()
+            for app in /Applications/Xcode_*.app; do
+              [ -d "$app" ] || continue
+              if [ "$app" = "$ACTIVE_XCODE" ]; then
+                echo "  skip (active): $app"
+              else
+                echo "  removing: $app"
+                to_remove+=("$app")
+              fi
+            done
+            # Each Xcode bundle is ~15 GB of small files; `rm -rf` is I/O-bound
+            # per inode, so run them concurrently (one worker per bundle).
+            # Soft-fail: a stray rm error shouldn't sink the whole job — rm's
+            # stderr will pinpoint the bad path above.
+            #
+            # `removed` reflects the attempt count, not per-bundle success:
+            # xargs returns non-zero if *any* child failed, so gating the
+            # count on xargs success would print "Removed 0" even after
+            # ~30 GB was freed. The count is off by the number of failed
+            # bundles — usually one in practice — which is still a much
+            # better signal than zero.
+            if [ "${#to_remove[@]}" -gt 0 ]; then
+              removed=${#to_remove[@]}
+              if ! printf '%s\0' "${to_remove[@]}" \
+                  | xargs -0 -n1 -P "${#to_remove[@]}" sudo rm -rf; then
+                echo "  warning: one or more Xcode removals failed (see rm stderr above)"
+              fi
+            fi
+          fi
+          echo "Removed ${removed} inactive Xcode version(s)"
+
+          # 3. Remaining large packages that this project never uses.
+          #    Each path is removed individually so a missing path doesn't
+          #    mask a real permission error on another.
+          echo "--- Removing unused SDKs and caches ---"
+          for dir in \
+            /Library/Developer/CoreSimulator \
+            /usr/local/lib/android \
+            "${RUNNER_TOOL_CACHE:-/Users/runner/hostedtoolcache}"; do
+            if [ -d "$dir" ]; then
+              echo "  removing: $dir"
+              sudo rm -rf "$dir" || echo "  warning: failed to remove $dir"
+            else
+              echo "  not found (skipped): $dir"
+            fi
+          done
+
+          echo "=== After macOS cleanup ===" && df -h .
 
       - name: Setup SFW
         uses: ./.github/actions/setup-sfw
@@ -281,16 +364,16 @@ jobs:
         id: solx-tester-report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: solx-tester-report
+          name: solx-tester-report-${{ matrix.runner }}
           path: solx-tester-report.xlsx
 
       - name: Post solx-tester report comment
         if: always() && steps.solx-tester-report.outcome == 'success'
         uses: mshick/add-pr-comment@ec328af66588ab8f77cdeb2c264f14aba45bbf59 # v3.12
         with:
-          message-id: 'solx-tester-report'
+          message-id: 'solx-tester-report-${{ matrix.runner }}'
           message: |
-            📊 **solx Tester Report**
+            📊 **solx Tester Report** (`${{ matrix.runner }}`)
 
             ➡️ [**Download**](${{ steps.solx-tester-report.outputs.artifact-url }})
 
@@ -323,16 +406,16 @@ jobs:
         id: hardhat-report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: hardhat-report
+          name: hardhat-report-${{ matrix.runner }}
           path: ./temp-hardhat-reports/hardhat-report.xlsx
 
       - name: Post Hardhat report comment
         if: always() && steps.hardhat-report.outcome == 'success'
         uses: mshick/add-pr-comment@ec328af66588ab8f77cdeb2c264f14aba45bbf59 # v3.12
         with:
-          message-id: 'hardhat-report'
+          message-id: 'hardhat-report-${{ matrix.runner }}'
           message: |
-            📊 **Hardhat Projects Report**
+            📊 **Hardhat Projects Report** (`${{ matrix.runner }}`)
 
             ➡️ [**Download**](${{ steps.hardhat-report.outputs.artifact-url }})
 
@@ -346,16 +429,16 @@ jobs:
         id: foundry-report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: foundry-report
+          name: foundry-report-${{ matrix.runner }}
           path: ./temp-foundry-reports/foundry-report.xlsx
 
       - name: Post Foundry report comment
         if: always() && steps.foundry-report.outcome == 'success'
         uses: mshick/add-pr-comment@ec328af66588ab8f77cdeb2c264f14aba45bbf59 # v3.12
         with:
-          message-id: 'foundry-report'
+          message-id: 'foundry-report-${{ matrix.runner }}'
           message: |
-            📊 **Foundry Projects Report**
+            📊 **Foundry Projects Report** (`${{ matrix.runner }}`)
 
             ➡️ [**Download**](${{ steps.foundry-report.outputs.artifact-url }})
 
