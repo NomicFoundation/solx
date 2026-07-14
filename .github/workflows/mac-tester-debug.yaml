@@ -28,7 +28,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [macos-15, macos-15-large, macos-15-xlarge]
+        # macos-15-xlarge is commented out while iterating on the Intel crash:
+        # its baseline (main: full suite in 5m31s, run 29364158123) is already
+        # recorded, and it is the most expensive runner of the three.
+        runner: [macos-15, macos-15-large]  # macos-15-xlarge
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     env:
@@ -132,6 +135,75 @@ jobs:
             elapsed=$((elapsed + 30))
           done
           wait "$PID"
+          ec=$?
+          if [ "$ec" -gt 128 ]; then
+            echo "::error::solx-tester killed by signal $((ec - 128)) (SIG$(kill -l $((ec - 128))))"
+          fi
+          exit "$ec"
+
+      # The three steps below chase the Intel-only SIGSEGV (garbage pointer
+      # assembled from caller-address bytes, i.e. memory corruption; see run
+      # 29364158123). `--path semanticTests` narrows to the Ethereum corpus
+      # where it crashes. All are diagnostics: continue-on-error, Intel-only.
+
+      # Concurrency dependence: the crash normally fires within ~30s at
+      # default threads. Surviving a whole single-threaded corpus pass
+      # strongly suggests a data race / cross-thread lifetime bug.
+      - name: 'Diagnose: single-threaded corpus (Intel)'
+        if: matrix.runner == 'macos-15-large'
+        continue-on-error: true
+        timeout-minutes: 25
+        run: |
+          set +e
+          ./target/release/solx-tester \
+            --solidity-compiler ./target/release/solx \
+            --path semanticTests \
+            --threads 1
+          ec=$?
+          if [ "$ec" -gt 128 ]; then
+            echo "::error::solx-tester killed by signal $((ec - 128)) (SIG$(kill -l $((ec - 128))))"
+          fi
+          exit "$ec"
+
+      # macOS malloc debugging, no rebuild: freed memory is filled with 0x55,
+      # fresh allocations with 0xAA. If the crash pointer changes from 0x12…
+      # to one of those patterns, it is use-after-free / use-of-uninitialized
+      # respectively; guard pages may move the crash to the corrupting write.
+      - name: 'Diagnose: malloc scribble (Intel)'
+        if: matrix.runner == 'macos-15-large'
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          MallocScribble: '1'
+          MallocPreScribble: '1'
+          MallocGuardEdges: '1'
+        run: |
+          set +e
+          ./target/release/solx-tester \
+            --solidity-compiler ./target/release/solx \
+            --path semanticTests
+          ec=$?
+          if [ "$ec" -gt 128 ]; then
+            echo "::error::solx-tester killed by signal $((ec - 128)) (SIG$(kill -l $((ec - 128))))"
+          fi
+          exit "$ec"
+
+      # AddressSanitizer names the exact allocation/free/use sites. Only
+      # solx-tester is instrumented (separate target dir, nightly rustc);
+      # the solx subprocess stays the stable release build.
+      - name: 'Diagnose: ASAN corpus run (Intel)'
+        if: matrix.runner == 'macos-15-large'
+        continue-on-error: true
+        timeout-minutes: 40
+        run: |
+          set +e
+          rustup toolchain install nightly --profile minimal || exit 1
+          RUSTFLAGS="-Zsanitizer=address" ${SFW_PREFIX:-} cargo +nightly build \
+            --release -p solx-tester --bin solx-tester \
+            --target x86_64-apple-darwin --target-dir target-asan || exit 1
+          ./target-asan/x86_64-apple-darwin/release/solx-tester \
+            --solidity-compiler ./target/release/solx \
+            --path semanticTests
           ec=$?
           if [ "$ec" -gt 128 ]; then
             echo "::error::solx-tester killed by signal $((ec - 128)) (SIG$(kill -l $((ec - 128))))"
