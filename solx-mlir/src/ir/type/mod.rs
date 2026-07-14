@@ -44,9 +44,14 @@ impl<'context> Type<'context> {
         Self::new(MlirType::from(IntegerType::signed(context, bits as u32)))
     }
 
-    /// A signless integer type of `bits` width (`i<bits>`): the boolean `i1`.
+    /// A signless integer type of `bits` width (`i<bits>`).
     pub fn signless(context: &'context melior::Context, bits: usize) -> Self {
         Self::new(MlirType::from(IntegerType::new(context, bits as u32)))
+    }
+
+    /// The boolean type: a signless `i1`.
+    pub fn boolean(context: &'context melior::Context) -> Self {
+        Self::signless(context, solx_utils::BIT_LENGTH_BOOLEAN)
     }
 
     /// A `sol::AddressType` with the given payability.

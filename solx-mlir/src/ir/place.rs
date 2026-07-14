@@ -5,6 +5,7 @@
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
 
+use crate::Context;
 use crate::Type;
 use crate::Value;
 
@@ -19,6 +20,25 @@ pub struct Place<'context> {
 }
 
 impl<'context> Place<'context> {
+    /// The place of the aggregate field at `field_index`: a `sol.gep` stepped by the index
+    /// materialized as a `ui64` constant.
+    pub fn gep_field(
+        self,
+        field_index: usize,
+        field_type: Type<'context>,
+        context: &Context<'context>,
+    ) -> Self {
+        self.gep(
+            Value::constant(
+                field_index as i64,
+                Type::unsigned(context.melior, solx_utils::BIT_LENGTH_X64),
+                context,
+            ),
+            field_type,
+            context,
+        )
+    }
+
     /// The pointer type `!sol.ptr<T, Loc>`.
     pub fn r#type(self) -> Type<'context> {
         Type::new(self.inner.r#type())

@@ -68,7 +68,7 @@ impl<'context> Value<'context> {
     pub fn boolean(value: bool, context: &Context<'context>) -> Self {
         Self::constant_from_bigint(
             &BigInt::from(u8::from(value)),
-            Type::signless(context.melior, solx_utils::BIT_LENGTH_BOOLEAN),
+            Type::boolean(context.melior),
             context,
         )
     }
@@ -81,7 +81,7 @@ impl<'context> Value<'context> {
         if self.r#type() == target_type {
             return self;
         }
-        if target_type == Type::signless(context.melior, solx_utils::BIT_LENGTH_BOOLEAN) {
+        if target_type == Type::boolean(context.melior) {
             return self.is_nonzero(context);
         }
         if target_type == Type::address(context.melior, false) {

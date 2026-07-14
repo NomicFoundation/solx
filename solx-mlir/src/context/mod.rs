@@ -159,31 +159,6 @@ impl<'context> Context<'context> {
         );
     }
 
-    /// Resolves a function by its AST definition id.
-    ///
-    /// Returns the mangled MLIR name, declared parameter types, and return
-    /// types.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the definition was not registered.
-    pub fn resolve_function(
-        &self,
-        definition_node_id: NodeId,
-    ) -> anyhow::Result<(&str, &[Type<'context>], &[Type<'context>])> {
-        let function = self
-            .function_signatures
-            .get(&definition_node_id)
-            .ok_or_else(|| {
-                anyhow::anyhow!("undefined function for definition {definition_node_id:?}")
-            })?;
-        Ok((
-            function.mlir_name.as_str(),
-            &function.parameter_types,
-            &function.return_types,
-        ))
-    }
-
     /// The block the insertion cursor points at, which the function-body emitters position before
     /// any emission.
     pub fn current_block(&self) -> Block<'context> {

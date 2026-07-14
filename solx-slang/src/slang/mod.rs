@@ -2,8 +2,7 @@
 //! Slang Solidity frontend implementation.
 //!
 
-/// Compilation builder configuration for the Slang frontend.
-pub mod compilation_config;
+mod compilation_config;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -19,7 +18,7 @@ use solx_core::Frontend;
 use solx_standard_json::CollectableError;
 use solx_standard_json::output::error::source_location::SourceLocation;
 
-use crate::ast::AstEmitter;
+use crate::source_unit::SourceUnit;
 
 use self::compilation_config::CompilationConfig;
 
@@ -27,7 +26,7 @@ use self::compilation_config::CompilationConfig;
 #[derive(Debug)]
 pub struct Slang {
     /// The Slang compiler latest supported version.
-    version: solx_standard_json::Version,
+    pub version: solx_standard_json::Version,
 }
 
 impl Default for Slang {
@@ -44,14 +43,16 @@ impl Slang {
     /// The name of the Slang frontend, used in error messages and output metadata.
     pub const NAME: &'static str = "Slang";
 
-    /// Builds a Slang compilation unit from the given source files.
+    /// Builds a Slang compilation unit from the given source files, parsing every source and
+    /// resolving imports.
     ///
-    /// Uses the `CompilationBuilder` to parse all sources and resolve imports.
+    /// Every EVM built-in is admitted (`EvmTarget::LATEST`): Slang gates built-in availability on
+    /// the target, whereas solx handles EVM-version targeting downstream.
     ///
     /// # Errors
     ///
-    /// Returns an error if the compilation builder fails to initialize or
-    /// if import resolution fails.
+    /// Returns an error if the compilation builder fails to initialize or if import resolution
+    /// fails.
     fn compile(&self, sources: BTreeMap<FileId, String>) -> anyhow::Result<CompilationUnit> {
         let file_ids: Vec<FileId> = sources.keys().cloned().collect();
         let configuration = CompilationConfig::new(sources);
@@ -62,8 +63,6 @@ impl Slang {
                     self.version.default
                 )
             })?;
-        // The Slang frontend gates EVM built-in availability on the target; solx
-        // handles EVM-version targeting downstream, so admit every built-in here.
         let mut builder = CompilationBuilder::create(version, EvmTarget::LATEST, configuration);
 
         for file_id in file_ids {
@@ -133,17 +132,15 @@ impl Frontend for Slang {
             .extend(unit.diagnostics().iter().map(|diagnostic| {
                 let file_id = diagnostic.file_id();
                 let text_range = diagnostic.text_range();
-                let source_location =
-                    solx_standard_json::output::error::source_location::SourceLocation::new(
-                        file_id.to_string(),
-                        text_range.start as isize,
-                        text_range.end as isize,
-                    );
                 solx_standard_json::OutputError::new_error_with_data(
                     Some(file_id.as_str()),
                     None,
                     diagnostic.message(),
-                    Some(source_location),
+                    Some(SourceLocation::new(
+                        file_id.to_string(),
+                        text_range.start as isize,
+                        text_range.end as isize,
+                    )),
                     Some(&input_json.sources),
                 )
             }));
@@ -162,46 +159,34 @@ impl Frontend for Slang {
             return Ok(output);
         }
 
+        let evm_version = input_json.settings.evm_version.unwrap_or_default();
         for file in unit.files() {
             let file_id = file.id();
             let source_unit = file.ast();
-            let melior = solx_mlir::Context::create_melior_context();
-
-            let evm_version = input_json.settings.evm_version.unwrap_or_default();
-            let mut context = solx_mlir::Context::new(&melior, evm_version);
-            let mut emitter = AstEmitter::new(&mut context);
-            let Some((contract_name, method_identifiers)) = emitter.emit(&source_unit)? else {
-                continue;
-            };
-
-            let runtime_code_identifier = format!(
-                "{contract_name}{}",
-                solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX
-            );
-            let capture_sol_dialect = input_json.settings.output_selection.check_selection(
-                file_id.as_str(),
-                Some(contract_name.as_str()),
-                solx_standard_json::InputSelector::MLIR,
-            );
-            let mlir_stages =
-                context.finalize_module(&runtime_code_identifier, capture_sol_dialect)?;
-
-            let evm = Some(solx_standard_json::output::contract::evm::EVM {
-                method_identifiers: Some(method_identifiers),
-                ..Default::default()
-            });
-
-            let contract = solx_standard_json::output::contract::Contract {
-                mlir: Some(mlir_stages),
-                evm,
-                ..Default::default()
-            };
-
-            output
-                .contracts
-                .entry(file_id.to_string())
-                .or_default()
-                .insert(contract_name, contract);
+            let emitted = SourceUnit::emit_contracts(&source_unit, evm_version, |contract_name| {
+                input_json.settings.output_selection.check_selection(
+                    file_id.as_str(),
+                    Some(contract_name),
+                    solx_standard_json::InputSelector::MLIR,
+                )
+            })?;
+            for contract in emitted {
+                output
+                    .contracts
+                    .entry(file_id.to_string())
+                    .or_default()
+                    .insert(
+                        contract.name,
+                        solx_standard_json::output::contract::Contract {
+                            mlir: Some(contract.mlir),
+                            evm: Some(solx_standard_json::output::contract::evm::EVM {
+                                method_identifiers: Some(contract.method_identifiers),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        },
+                    );
+            }
         }
 
         Ok(output)
@@ -212,7 +197,7 @@ impl Frontend for Slang {
         paths: &[PathBuf],
         libraries: solx_utils::Libraries,
     ) -> anyhow::Result<solx_standard_json::Output> {
-        let mut input = solx_standard_json::Input::from_yul_paths(
+        let mut solc_input = solx_standard_json::Input::from_yul_paths(
             paths,
             libraries,
             solx_standard_json::InputOptimizer::default(),
@@ -221,14 +206,14 @@ impl Frontend for Slang {
             vec![],
         );
 
-        self.validate_yul_standard_json(&mut input)
+        self.validate_yul_standard_json(&mut solc_input)
     }
 
     fn validate_yul_standard_json(
         &self,
-        input: &mut solx_standard_json::Input,
+        solc_input: &mut solx_standard_json::Input,
     ) -> anyhow::Result<solx_standard_json::Output> {
-        let mut output = solx_standard_json::Output::new(&input.sources);
+        let mut output = solx_standard_json::Output::new(&solc_input.sources);
         output
             .errors
             .push(solx_standard_json::OutputError::new_error(

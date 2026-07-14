@@ -13,7 +13,8 @@ use slang_solidity_v2::diagnostics::kinds::compilation::UnresolvedImport;
 
 /// Provides file reading and import resolution for the Slang compilation builder.
 pub struct CompilationConfig {
-    sources: BTreeMap<FileId, String>,
+    /// The file contents keyed by identifier, for reading and import resolution.
+    pub sources: BTreeMap<FileId, String>,
 }
 
 impl CompilationConfig {
@@ -38,16 +39,6 @@ impl CompilationBuilderConfig for CompilationConfig {
         source_file_id: &FileId,
         import_path: &str,
     ) -> Result<FileId, UnresolvedImport> {
-        let import_path = import_path
-            .strip_prefix('"')
-            .and_then(|stripped| stripped.strip_suffix('"'))
-            .or_else(|| {
-                import_path
-                    .strip_prefix('\'')
-                    .and_then(|stripped| stripped.strip_suffix('\''))
-            })
-            .unwrap_or(import_path);
-
         let candidate = FileId::from(import_path);
         if self.sources.contains_key(&candidate) {
             return Ok(candidate);
