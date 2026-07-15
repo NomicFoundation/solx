@@ -8,6 +8,6 @@
 
 | Suite | New failures | Size Δ | Gas Δ | Report |
 |---|---|---|---|---|
-| solx-tester | ❌ no report — suite errored | — | — | — |
+| solx-tester | ❌ no report — suite errored | — | — | [solx-tester-report.xlsx ↓](https://example.com/artifacts/tester) |
 | Foundry | ❌ unrecognized toolchain naming | — | — | — |
 | Hardhat | ✅ 0, ⚪ 5 unbaselined | ⚪ not collected | ⚪ not collected | — |
