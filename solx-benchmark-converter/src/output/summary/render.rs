@@ -10,7 +10,7 @@
 
 use std::collections::BTreeSet;
 
-use askama::Template;
+use serde::Serialize;
 
 use super::stats::CompileAggregate;
 use super::stats::DiffCounter;
@@ -128,7 +128,11 @@ impl SuiteStats {
     }
 }
 
+/// The comment's layout, embedded so the binary stays self-contained.
+const TEMPLATE: &str = include_str!("../../../templates/summary.md");
+
 /// One row of the results table, a cell per column.
+#[derive(Serialize)]
 struct SuiteRow {
     suite: String,
     failures: String,
@@ -139,6 +143,7 @@ struct SuiteRow {
 
 /// One bulleted listing under a bold heading, already truncated: a "+N more"
 /// pointer is its last bullet.
+#[derive(Serialize)]
 struct ListingSection {
     heading: String,
     bullets: Vec<String>,
@@ -146,6 +151,7 @@ struct ListingSection {
 
 /// The compile-time table and its threshold verdict lines; the columns are
 /// data-driven, so the header repeats per pipeline.
+#[derive(Serialize)]
 struct CompileView {
     pipelines: Vec<String>,
     rows: Vec<Vec<String>>,
@@ -156,9 +162,8 @@ struct CompileView {
 ///
 /// The full summary comment.
 ///
-#[derive(Template)]
-#[template(path = "summary.md", escape = "none")]
-struct SummaryTemplate {
+#[derive(Serialize)]
+struct SummaryView {
     full_matrix: bool,
     output_line: String,
     failures_line: String,
@@ -177,7 +182,7 @@ struct SummaryTemplate {
 pub(crate) fn render_summary(stats: &[SuiteStats]) -> String {
     let (health_lines, unbaselined_line) = health_lines(stats);
     let full_matrix = stats.iter().any(|s| s.has_baselines);
-    SummaryTemplate {
+    let view = SummaryView {
         full_matrix,
         output_line: output_line(output_verdict(stats)),
         failures_line: failures_line(failure_verdict(stats)),
@@ -192,9 +197,10 @@ pub(crate) fn render_summary(stats: &[SuiteStats]) -> String {
         } else {
             Vec::new()
         },
-    }
-    .render()
-    .expect("template rendering writes to a String")
+    };
+    minijinja::Environment::new()
+        .render_named_str("summary.md", TEMPLATE, &view)
+        .expect("the template is static and the golden-fixture tests pin every path")
 }
 
 /// The output-invariance verdict line.

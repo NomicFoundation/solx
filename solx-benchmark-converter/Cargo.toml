@@ -22,4 +22,4 @@ serde.workspace = true
 serde_json.workspace = true
 glob.workspace = true
 rust_xlsxwriter = "0.96"
-askama = "0.14"
+minijinja = "2.21"
