@@ -239,10 +239,7 @@ impl MatterLabsTest {
     fn get_libraries(
         &self,
         address_iterator: &mut AddressIterator,
-    ) -> (
-        solx_utils::Libraries,
-        BTreeMap<String, Address>,
-    ) {
+    ) -> (solx_utils::Libraries, BTreeMap<String, Address>) {
         let mut libraries = BTreeMap::new();
         let mut library_addresses = BTreeMap::new();
 

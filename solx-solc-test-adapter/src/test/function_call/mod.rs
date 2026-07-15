@@ -207,7 +207,8 @@ impl TryFrom<parser::Call> for FunctionCall {
                         }
                         let input = U256::from_be_slice(input.as_slice());
                         let expected = expected.into_iter().next().expect("length checked above");
-                        let expected_bytes = expected.to_be_bytes::<{ solx_utils::BYTE_LENGTH_FIELD }>();
+                        let expected_bytes =
+                            expected.to_be_bytes::<{ solx_utils::BYTE_LENGTH_FIELD }>();
                         Ok(Self::Account {
                             input: input.to::<usize>(),
                             expected: Address::from_slice(
@@ -259,8 +260,8 @@ impl FunctionCall {
     fn parse_value(value: Option<Value>) -> anyhow::Result<Option<U256>> {
         match value {
             Some(value) => {
-                let mut amount = U256::from_str_radix(value.amount.as_str(), 10)
-                    .expect(VALIDATED_BY_THE_PARSER);
+                let mut amount =
+                    U256::from_str_radix(value.amount.as_str(), 10).expect(VALIDATED_BY_THE_PARSER);
                 if value.unit == Unit::Ether {
                     amount = amount
                         .checked_mul(U256::from(u64::pow(10, 18)))

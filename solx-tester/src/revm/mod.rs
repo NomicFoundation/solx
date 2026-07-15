@@ -237,11 +237,7 @@ impl REVM {
     ///
     /// Sets the account storage.
     ///
-    pub fn extend_account_storage(
-        &mut self,
-        account: &Address,
-        storage: HashMap<U256, U256>,
-    ) {
+    pub fn extend_account_storage(&mut self, account: &Address, storage: HashMap<U256, U256>) {
         let address = *account;
 
         let account_info = self

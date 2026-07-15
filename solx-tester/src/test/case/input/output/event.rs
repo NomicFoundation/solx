@@ -27,11 +27,7 @@ impl Event {
     ///
     /// A shortcut constructor.
     ///
-    pub fn new(
-        address: Option<Address>,
-        topics: Vec<Value>,
-        values: Vec<Value>,
-    ) -> Self {
+    pub fn new(address: Option<Address>, topics: Vec<Value>, values: Vec<Value>) -> Self {
         Self {
             address,
             topics,

@@ -72,8 +72,7 @@ impl Value {
                 .next_back()
                 .and_then(|value| value.parse().ok())
                 .unwrap_or_default();
-            let mut hash =
-                crate::utils::u256_from_hex_str(REVM::BLOCK_HASH).expect("Always valid");
+            let mut hash = crate::utils::u256_from_hex_str(REVM::BLOCK_HASH).expect("Always valid");
             hash += U256::from(offset);
             hash
         } else if value == "$BLOCK_NUMBER" {

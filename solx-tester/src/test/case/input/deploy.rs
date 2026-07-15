@@ -85,8 +85,7 @@ impl Deploy {
 
         let tx = REVM::new_deploy_transaction(self.caller, self.value, calldata.clone());
 
-        let initial_balance =
-            (U256::from(1) << 100) + U256::from(self.value.unwrap_or_default());
+        let initial_balance = (U256::from(1) << 100) + U256::from(self.value.unwrap_or_default());
         vm.set_account(&self.caller, initial_balance);
         vm.set_block_data(
             revm::primitives::U256::from(input_index + 1),

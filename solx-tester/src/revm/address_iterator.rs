@@ -26,8 +26,7 @@ impl AddressIterator {
 
         let hash = solx_utils::Keccak256Hash::from_slice(&stream.out());
         let address = Address::from_slice(
-            &hash.as_bytes()
-                [solx_utils::BYTE_LENGTH_FIELD - solx_utils::BYTE_LENGTH_ETH_ADDRESS..],
+            &hash.as_bytes()[solx_utils::BYTE_LENGTH_FIELD - solx_utils::BYTE_LENGTH_ETH_ADDRESS..],
         );
 
         if increment_nonce {
