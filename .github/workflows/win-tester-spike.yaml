@@ -82,16 +82,19 @@ jobs:
           cmake-build-type: RelWithDebInfo
           working-dir: 'solx-solidity'
 
-      # The v1-llvm cache bundles a libstdc++.a copied from the MSYS2 GCC at
-      # cache-creation time (build-llvm/action.yml: LIBSTDCPP_SOURCE_PATH),
-      # but MSYS2's GCC drifts under an unchanged cache key — llvm-sys glue
-      # compiled by today's GCC (16.1.0) cannot link against yesterday's
-      # bundled libstdc++ (multiple definition of _M_replace_cold; runs
-      # 29415024519 and 29416821285, release and dev profile alike). Refresh
-      # the bundled copy to match the compiler actually in use.
-      - name: Refresh bundled libstdc++ to the runner's GCC
+      # The LLVM install tree bundles a *static* libstdc++.a (build-llvm:
+      # LIBSTDCPP_SOURCE_PATH) for self-contained release binaries. In this
+      # job it poisons the link: freshly compiled llvm-sys C++ objects carry
+      # basic_string COMDATs, and pulling the static archive's explicit-
+      # instantiation objects (string-inst.o) conflicts with them — even when
+      # both come from the same GCC 16.1.0 (runs 29415024519, 29416821285,
+      # 29419846703). Removing the bundled copy lets `-lstdc++` resolve to
+      # MSYS2's shared libstdc++.dll.a, which never pulls those objects.
+      # Runtime cost: solx.exe needs libstdc++-6.dll, present on PATH in the
+      # msys2 shell all tester steps run under.
+      - name: Drop bundled static libstdc++ (link shared instead)
         shell: msys2 {0}
-        run: cp -v /mingw64/lib/libstdc++.a target-llvm/target-final/lib/libstdc++.a
+        run: rm -v target-llvm/target-final/lib/libstdc++.a
 
       # Verbatim from test.yaml: the Windows disk cannot hold LLVM sources,
       # build trees, and a Rust workspace build at once.
