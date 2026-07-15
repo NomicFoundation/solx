@@ -32,14 +32,8 @@ jobs:
       RUST_BACKTRACE: full
       BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
       SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
-      # Dev profile, deliberately: the restored v1-llvm cache (and its bundled
-      # libstdc++.a) predates the runner's current MSYS2 GCC, and only the
-      # dev-profile llvm-sys objects in main's Swatinem cache share that ABI.
-      # A release build recompiles llvm-sys with today's GCC and dies on
-      # multiple-definition conflicts against the cached libstdc++.a (run
-      # 29415024519). Timings below are therefore upper bounds.
-      TESTER_BIN: ./target/x86_64-pc-windows-gnu/debug/solx-tester.exe
-      SOLX_BIN: ./target/x86_64-pc-windows-gnu/debug/solx.exe
+      TESTER_BIN: ./target/x86_64-pc-windows-gnu/release/solx-tester.exe
+      SOLX_BIN: ./target/x86_64-pc-windows-gnu/release/solx.exe
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -88,6 +82,17 @@ jobs:
           cmake-build-type: RelWithDebInfo
           working-dir: 'solx-solidity'
 
+      # The v1-llvm cache bundles a libstdc++.a copied from the MSYS2 GCC at
+      # cache-creation time (build-llvm/action.yml: LIBSTDCPP_SOURCE_PATH),
+      # but MSYS2's GCC drifts under an unchanged cache key — llvm-sys glue
+      # compiled by today's GCC (16.1.0) cannot link against yesterday's
+      # bundled libstdc++ (multiple definition of _M_replace_cold; runs
+      # 29415024519 and 29416821285, release and dev profile alike). Refresh
+      # the bundled copy to match the compiler actually in use.
+      - name: Refresh bundled libstdc++ to the runner's GCC
+        shell: msys2 {0}
+        run: cp -v /mingw64/lib/libstdc++.a target-llvm/target-final/lib/libstdc++.a
+
       # Verbatim from test.yaml: the Windows disk cannot hold LLVM sources,
       # build trees, and a Rust workspace build at once.
       - name: Free disk space (remove LLVM source and build artifacts)
@@ -109,7 +114,7 @@ jobs:
         shell: msys2 {0}
         run: |
           ${SFW_PREFIX:-} cargo fetch --locked
-          ${SFW_PREFIX:-} cargo build --frozen \
+          ${SFW_PREFIX:-} cargo build --frozen --release \
             --target x86_64-pc-windows-gnu --bin solx --bin solx-tester
 
       - name: Smoke test (one test, one thread)
