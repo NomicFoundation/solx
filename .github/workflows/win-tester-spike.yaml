@@ -103,8 +103,11 @@ jobs:
         run: |
           echo "Before cleanup:" && df -h .
           rm -rf solx-llvm target-llvm/build-final
-          # Remove solx-solidity source, keeping build/ and boost/ for tests
-          find solx-solidity -mindepth 1 -maxdepth 1 ! -name build ! -name boost -exec rm -rf {} +
+          # Remove solx-solidity source, keeping build/ and boost/ — and,
+          # unlike test.yaml's original, test/: the Ethereum corpus is read
+          # from solx-solidity/test/libsolidity/semanticTests at run time
+          # (run 29421232920: all 1559 corpus tests INVALID after pruning).
+          find solx-solidity -mindepth 1 -maxdepth 1 ! -name build ! -name boost ! -name test -exec rm -rf {} +
           rm -rf .git/modules
           echo "After cleanup:" && df -h .
 
