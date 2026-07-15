@@ -19,7 +19,9 @@ use self::arguments::Arguments;
 
 ///
 /// Loads a suite's benchmark, returning `None` when the suite was not part of
-/// this run.
+/// this run (no flag). A flag pointing to a missing or unreadable file means
+/// the suite errored before writing a valid report — rendered as a failed row
+/// rather than aborting the summary for the healthy suites.
 ///
 fn load_suite(
     label: &str,
@@ -29,11 +31,7 @@ fn load_suite(
     gas_is_gate: bool,
     matrix: ToolchainMatrix,
 ) -> Option<SummarySuite> {
-    // No flag at all: the suite was not part of this run.
     let path = path?;
-    // A missing or unreadable file means the suite errored before writing a
-    // valid report. Surface it as a failed row rather than dropping it — and
-    // never let one bad suite abort the summary for the healthy ones.
     let benchmark = match Benchmark::try_from(path.clone()) {
         Ok(benchmark) => Some(benchmark),
         Err(error) => {
