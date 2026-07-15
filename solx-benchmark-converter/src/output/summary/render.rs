@@ -1,9 +1,11 @@
 //!
-//! The markdown rendering of the integration summary (askama spike).
+//! The markdown rendering of the integration summary.
 //!
-//! The comment's structure lives in `templates/summary.md`; this file holds
-//! the cell-level formatting the template calls back into, the custom
-//! filters, and the view models precomputed for the data-driven tables.
+//! The comment's shape — section order, headers, table pipes, bullet and
+//! blank-line discipline — lives in `templates/summary.md`; everything the
+//! template interpolates is a string precomputed here. The boundary rule:
+//! the template may test presence (`if let`, `is_empty`), never magnitude;
+//! anything that formats a value is Rust.
 //!
 
 use std::collections::BTreeSet;
@@ -126,29 +128,29 @@ impl SuiteStats {
     }
 }
 
-/// One "largest changes" listing, ranked; the template truncates it.
-struct MoverSection {
-    suite_label: String,
-    title: &'static str,
-    unit: &'static str,
-    movers: Vec<MoverRow>,
-    report_file: String,
+/// One row of the results table, a cell per column.
+struct SuiteRow {
+    suite: String,
+    failures: String,
+    size: String,
+    gas: String,
+    report: String,
 }
 
-/// One mover, with the raw numbers so the template formats them.
-struct MoverRow {
-    label: String,
-    mode: String,
-    main: u64,
-    pr: u64,
+/// One bulleted listing under a bold heading, already truncated: a "+N more"
+/// pointer is its last bullet.
+struct ListingSection {
+    heading: String,
+    bullets: Vec<String>,
 }
 
-/// The compile-time table, precomputed because its columns are data-driven.
+/// The compile-time table and its threshold verdict lines; the columns are
+/// data-driven, so the header repeats per pipeline.
 struct CompileView {
     pipelines: Vec<String>,
     rows: Vec<Vec<String>>,
-    within_noise: bool,
-    outliers: Option<String>,
+    within_noise_line: Option<String>,
+    outliers_line: Option<String>,
 }
 
 ///
@@ -156,15 +158,15 @@ struct CompileView {
 ///
 #[derive(Template)]
 #[template(path = "summary.md", escape = "none")]
-struct SummaryTemplate<'a> {
+struct SummaryTemplate {
     full_matrix: bool,
-    output: OutputVerdict,
-    failures: FailureVerdict,
-    issues: Vec<HealthIssue>,
-    unbaselined: Vec<String>,
-    stats: &'a [SuiteStats],
-    has_new_failures: bool,
-    mover_sections: Vec<MoverSection>,
+    output_line: String,
+    failures_line: String,
+    health_lines: Vec<String>,
+    unbaselined_line: Option<String>,
+    suite_rows: Vec<SuiteRow>,
+    new_failure_bullets: Vec<String>,
+    mover_sections: Vec<ListingSection>,
     compile: Option<CompileView>,
     baseline_rows: Vec<Vec<String>>,
 }
@@ -173,34 +175,20 @@ struct SummaryTemplate<'a> {
 /// Renders the full summary comment for the given per-suite statistics.
 ///
 pub(crate) fn render_summary(stats: &[SuiteStats]) -> String {
-    let issues = health_issues(stats);
-    let unbaselined: Vec<String> = issues
-        .iter()
-        .filter_map(|issue| match issue {
-            HealthIssue::Unbaselined {
-                label,
-                runs,
-                failures,
-            } => Some(format!(
-                "{label}: {runs} runs ({} failures)",
-                commas(*failures as u64)
-            )),
-            _ => None,
-        })
-        .collect();
+    let (health_lines, unbaselined_line) = health_lines(stats);
     let full_matrix = stats.iter().any(|s| s.has_baselines);
     SummaryTemplate {
         full_matrix,
-        output: output_verdict(stats),
-        failures: failure_verdict(stats),
-        issues,
-        unbaselined,
-        stats,
-        has_new_failures: stats.iter().any(|s| !s.failure_regressions.is_empty()),
-        mover_sections: build_mover_sections(stats),
-        compile: build_compile_view(stats),
+        output_line: output_line(output_verdict(stats)),
+        failures_line: failures_line(failure_verdict(stats)),
+        health_lines,
+        unbaselined_line,
+        suite_rows: stats.iter().map(suite_row).collect(),
+        new_failure_bullets: new_failure_bullets(stats),
+        mover_sections: mover_sections(stats),
+        compile: compile_view(stats),
         baseline_rows: if full_matrix {
-            build_baseline_rows(stats)
+            baseline_rows(stats)
         } else {
             Vec::new()
         },
@@ -209,7 +197,212 @@ pub(crate) fn render_summary(stats: &[SuiteStats]) -> String {
     .expect("template rendering writes to a String")
 }
 
-fn build_mover_sections(stats: &[SuiteStats]) -> Vec<MoverSection> {
+/// The output-invariance verdict line.
+fn output_line(verdict: OutputVerdict) -> String {
+    match verdict {
+        OutputVerdict::NoData => {
+            "⚪ **No output data** — no size or gated-gas comparisons were collected.".to_owned()
+        }
+        OutputVerdict::Preserving {
+            size_cells,
+            gated_gas_cells,
+            gas_label,
+        } => {
+            let mut clauses = Vec::new();
+            if size_cells > 0 {
+                clauses.push(format!(
+                    "bytecode size identical ({} comparisons)",
+                    commas(size_cells)
+                ));
+            }
+            if gated_gas_cells > 0 {
+                clauses.push(format!(
+                    "{gas_label} gas identical ({})",
+                    commas(gated_gas_cells)
+                ));
+            }
+            format!("✅ **Output-preserving** — {}.", clauses.join(", "))
+        }
+        OutputVerdict::Changed { size, gas } => {
+            let mut parts = Vec::new();
+            if let Some(size) = size {
+                parts.push(format!(
+                    "{} of {} size comparisons differ ({:+} B total)",
+                    commas(size.diffs),
+                    commas(size.cells),
+                    size.delta_bytes
+                ));
+            }
+            if let Some(gas) = gas {
+                parts.push(format!(
+                    "{} of {} {} gas comparisons differ",
+                    commas(gas.diffs),
+                    commas(gas.cells),
+                    gas.label
+                ));
+            }
+            format!(
+                "⚠️ **Output changed** — {}. If this PR is meant to be output-preserving, \
+                 investigate before merging.",
+                parts.join("; ")
+            )
+        }
+    }
+}
+
+/// The failure-regression verdict line.
+fn failures_line(verdict: FailureVerdict) -> String {
+    match verdict {
+        FailureVerdict::NoData => {
+            "⚪ **No failure data** — no PR run had a `main` counterpart to compare against."
+                .to_owned()
+        }
+        FailureVerdict::Clean { pre_existing } if pre_existing.is_empty() => {
+            "✅ **No new failures**.".to_owned()
+        }
+        FailureVerdict::Clean { pre_existing } => {
+            let pre: Vec<String> = pre_existing
+                .iter()
+                .map(|(label, count)| format!("{label}'s {}", commas(*count as u64)))
+                .collect();
+            format!(
+                "✅ **No new failures** — {} failures already present on `main`.",
+                pre.join(" / ")
+            )
+        }
+        FailureVerdict::Regressed { suites } => {
+            let parts: Vec<String> = suites
+                .iter()
+                .map(|suite| {
+                    let mut kinds = Vec::new();
+                    if suite.new_build > 0 {
+                        kinds.push(format!("+{} build", commas(suite.new_build as u64)));
+                    }
+                    if suite.new_test > 0 {
+                        kinds.push(format!("+{} test", commas(suite.new_test as u64)));
+                    }
+                    format!("{}: {}", suite.label, kinds.join(", "))
+                })
+                .collect();
+            format!("❌ **New failures** — {}.", parts.join("; "))
+        }
+    }
+}
+
+/// The harness-health lines, plus the aggregated no-baseline line that closes
+/// the verdict block.
+fn health_lines(stats: &[SuiteStats]) -> (Vec<String>, Option<String>) {
+    let mut lines = Vec::new();
+    let mut unbaselined = Vec::new();
+    for issue in health_issues(stats) {
+        match issue {
+            HealthIssue::SuiteErrored { label } => {
+                lines.push(format!(
+                    "❌ **Suite errored** — {label} produced no usable report."
+                ));
+            }
+            HealthIssue::EmptySuite { label } => {
+                lines.push(format!(
+                    "❌ **Suite empty** — {label}'s report contains no runs."
+                ));
+            }
+            HealthIssue::UnrecognizedToolchains { label } => {
+                lines.push(format!(
+                    "❌ **Harness error** — {label}: benchmark data matched no recognized \
+                     toolchain naming."
+                ));
+            }
+            HealthIssue::UnrecognizedRuns { label, modes } => {
+                let shown: Vec<String> = modes
+                    .iter()
+                    .take(MAX_LISTED)
+                    .map(|mode| format!("`{mode}`"))
+                    .collect();
+                let extra = modes.len().saturating_sub(MAX_LISTED);
+                let more = if extra > 0 {
+                    format!(" (+{extra} more)")
+                } else {
+                    String::new()
+                };
+                lines.push(format!(
+                    "❌ **Harness error** — {label}: runs matched no declared toolchain: {}{more}.",
+                    shown.join(", ")
+                ));
+            }
+            HealthIssue::Unbaselined {
+                label,
+                runs,
+                failures,
+            } => {
+                unbaselined.push(format!(
+                    "{label}: {runs} runs ({} failures)",
+                    commas(failures as u64)
+                ));
+            }
+        }
+    }
+    let unbaselined_line = (!unbaselined.is_empty()).then(|| {
+        format!(
+            "⚠️ **No baseline** — {} have no `main` counterpart; their failures are not compared.",
+            unbaselined.join("; ")
+        )
+    });
+    (lines, unbaselined_line)
+}
+
+fn suite_row(s: &SuiteStats) -> SuiteRow {
+    let dashed = |failures: &str| SuiteRow {
+        suite: s.label.clone(),
+        failures: failures.to_owned(),
+        size: "—".to_owned(),
+        gas: "—".to_owned(),
+        report: s.report_cell(),
+    };
+    if !s.available {
+        return dashed("❌ no report — suite errored");
+    }
+    if s.is_empty_report() {
+        return dashed("❌ empty report");
+    }
+    if s.classification_failed() {
+        return dashed("❌ unrecognized toolchain naming");
+    }
+    SuiteRow {
+        suite: s.suite_cell(),
+        failures: s.failures_cell(),
+        size: s.size.cell(true),
+        gas: s.gas_cell(),
+        report: s.report_cell(),
+    }
+}
+
+/// The bullets behind a red "New failures" verdict, inline so the regressed
+/// projects can be judged without opening the XLSX.
+fn new_failure_bullets(stats: &[SuiteStats]) -> Vec<String> {
+    let mut bullets = Vec::new();
+    for s in stats {
+        for regression in s.failure_regressions.iter().take(MAX_LISTED) {
+            bullets.push(format!(
+                "{}: `{}` [{}] {} failures {} → {}",
+                s.label,
+                regression.label,
+                regression.mode,
+                regression.kind,
+                regression.main,
+                regression.pr
+            ));
+        }
+        let extra = s.failure_regressions.len().saturating_sub(MAX_LISTED);
+        if extra > 0 {
+            bullets.push(format!("+{extra} more — see {}", s.report_file));
+        }
+    }
+    bullets
+}
+
+/// The listings behind an "Output changed" verdict, inline — a bytecode size
+/// change means semantics possibly changed, so it is never folded away.
+fn mover_sections(stats: &[SuiteStats]) -> Vec<ListingSection> {
     let mut sections = Vec::new();
     for s in stats {
         for (title, unit, movers) in [
@@ -219,32 +412,44 @@ fn build_mover_sections(stats: &[SuiteStats]) -> Vec<MoverSection> {
             if movers.is_empty() {
                 continue;
             }
-            sections.push(MoverSection {
-                suite_label: s.label.clone(),
-                title,
-                unit,
-                movers: movers
-                    .ranked()
-                    .into_iter()
-                    .map(|m| MoverRow {
-                        label: m.label.clone(),
-                        mode: m.mode.clone(),
-                        main: m.main,
-                        pr: m.pr,
-                    })
-                    .collect(),
-                report_file: s.report_file.clone(),
+            let ranked = movers.ranked();
+            let mut bullets: Vec<String> = ranked
+                .iter()
+                .take(MAX_LISTED)
+                .map(|m| {
+                    let pct = match relative_percent(m.pr, m.main) {
+                        Some(pct) => format!(" ({})", percent(pct)),
+                        None => String::new(),
+                    };
+                    format!(
+                        "`{}` [{}] {} → {}{unit}{pct}",
+                        m.label,
+                        m.mode,
+                        commas(m.main),
+                        commas(m.pr)
+                    )
+                })
+                .collect();
+            let extra = ranked.len().saturating_sub(MAX_LISTED);
+            if extra > 0 {
+                bullets.push(format!("+{extra} more — full list in {}", s.report_file));
+            }
+            sections.push(ListingSection {
+                heading: format!("{} — {title}", s.label),
+                bullets,
             });
         }
     }
     sections
 }
 
-fn build_compile_view(stats: &[SuiteStats]) -> Option<CompileView> {
+fn compile_view(stats: &[SuiteStats]) -> Option<CompileView> {
     let with_ct: Vec<&SuiteStats> = stats.iter().filter(|s| !s.compile.is_empty()).collect();
     if with_ct.is_empty() {
         return None;
     }
+    // Columns come from the pipelines actually present so a new codegen
+    // shows up instead of silently vanishing from the tripwire.
     let pipelines: Vec<String> = with_ct
         .iter()
         .flat_map(|s| s.compile.keys())
@@ -277,13 +482,19 @@ fn build_compile_view(stats: &[SuiteStats]) -> Option<CompileView> {
         rows.push(row);
     }
 
-    let within_noise = outlier_entries.is_empty() && !any_suite_flag;
-    let outliers = (!outlier_entries.is_empty()).then(|| outliers_line(&mut outlier_entries));
+    let within_noise_line = (outlier_entries.is_empty() && !any_suite_flag).then(|| {
+        format!(
+            "_Within noise — no suite ≥ {}%, no project ≥ {}%._",
+            COMPILE_TIME_SUITE_THRESHOLD_PERCENT as u64,
+            COMPILE_TIME_PROJECT_THRESHOLD_PERCENT as u64
+        )
+    });
+    let outliers_line = (!outlier_entries.is_empty()).then(|| outliers_line(&mut outlier_entries));
     Some(CompileView {
         pipelines,
         rows,
-        within_noise,
-        outliers,
+        within_noise_line,
+        outliers_line,
     })
 }
 
@@ -330,7 +541,7 @@ fn outliers_line(outliers: &mut [(String, String, f64)]) -> String {
     line
 }
 
-fn build_baseline_rows(stats: &[SuiteStats]) -> Vec<Vec<String>> {
+fn baseline_rows(stats: &[SuiteStats]) -> Vec<Vec<String>> {
     let mut rows = Vec::new();
     for s in stats.iter().filter(|s| !s.baseline_pairs.is_empty()) {
         let pipelines: BTreeSet<&String> = s
@@ -374,32 +585,6 @@ fn commas(n: u64) -> String {
         out.push(*byte as char);
     }
     out
-}
-
-/// Custom template filters.
-mod filters {
-    /// Thousands separators for u64 counts.
-    pub fn commas(n: &u64, _: &dyn askama::Values) -> askama::Result<String> {
-        Ok(super::commas(*n))
-    }
-
-    /// Thousands separators for usize counts.
-    pub fn commas_usize(n: &usize, _: &dyn askama::Values) -> askama::Result<String> {
-        Ok(super::commas(*n as u64))
-    }
-
-    /// The " (+x.x%)" suffix for a mover row, empty on a zero base.
-    pub fn rel_suffix(pr: &u64, _: &dyn askama::Values, main: &u64) -> askama::Result<String> {
-        Ok(match super::relative_percent(*pr, *main) {
-            Some(pct) => format!(" ({})", super::percent(pct)),
-            None => String::new(),
-        })
-    }
-
-    /// A float threshold rendered as its integer floor.
-    pub fn floor_u64(f: f64, _: &dyn askama::Values) -> askama::Result<String> {
-        Ok(format!("{}", f as u64))
-    }
 }
 
 #[cfg(test)]
