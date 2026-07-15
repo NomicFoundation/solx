@@ -13,6 +13,7 @@ use clap::Parser;
 
 use solx_benchmark_converter::Benchmark;
 use solx_benchmark_converter::SummarySuite;
+use solx_benchmark_converter::ToolchainMatrix;
 
 use self::arguments::Arguments;
 
@@ -26,6 +27,7 @@ fn load_suite(
     path: Option<PathBuf>,
     report_url: Option<String>,
     gas_is_gate: bool,
+    matrix: ToolchainMatrix,
 ) -> Option<SummarySuite> {
     // No flag at all: the suite was not part of this run.
     let path = path?;
@@ -48,6 +50,7 @@ fn load_suite(
         // A skipped upload step passes its URL through as an empty string.
         report_url: report_url.filter(|url| !url.is_empty()),
         gas_is_gate,
+        matrix,
     })
 }
 
@@ -61,6 +64,7 @@ fn main() -> anyhow::Result<()> {
             arguments.tester,
             arguments.tester_url,
             true,
+            ToolchainMatrix::Tester,
         ),
         load_suite(
             "Foundry",
@@ -68,6 +72,7 @@ fn main() -> anyhow::Result<()> {
             arguments.foundry,
             arguments.foundry_url,
             false,
+            ToolchainMatrix::Project,
         ),
         load_suite(
             "Hardhat",
@@ -75,6 +80,7 @@ fn main() -> anyhow::Result<()> {
             arguments.hardhat,
             arguments.hardhat_url,
             false,
+            ToolchainMatrix::Project,
         ),
     ]
     .into_iter()

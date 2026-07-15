@@ -27,4 +27,5 @@ pub use crate::output::Output;
 pub use crate::output::comparison::Comparison as OutputComparison;
 pub use crate::output::format::Format as OutputFormat;
 pub use crate::output::summary::SummarySuite;
+pub use crate::output::summary::ToolchainMatrix;
 pub use crate::output::summary::render as render_summary;
