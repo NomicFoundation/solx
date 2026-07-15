@@ -4,6 +4,7 @@
 ✅ **No new failures**.
 ❌ **Suite errored** — solx-tester produced no usable report.
 ❌ **Harness error** — Foundry: benchmark data matched no recognized toolchain naming.
+❌ **Harness error** — Hardhat: runs matched no declared toolchain: `04.mason-legacy`.
 ⚠️ **No baseline** — Hardhat: 1 runs (5 failures) have no `main` counterpart; their failures are not compared.
 
 | Suite | New failures | Size Δ | Gas Δ | Report |

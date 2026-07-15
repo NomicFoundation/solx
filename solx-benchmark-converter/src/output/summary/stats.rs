@@ -7,6 +7,7 @@
 //!
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use super::SummarySuite;
 use super::toolchain::Role;
@@ -149,6 +150,9 @@ pub(crate) struct SuiteStats {
     /// unbaselined rather than counted as regressions against zero.
     pub(crate) unbaselined_runs: usize,
     pub(crate) unbaselined_failures: usize,
+    /// Mode strings matching no declared toolchain name — always surfaced as
+    /// a harness error, whether or not PR runs are present.
+    pub(crate) unrecognized_modes: BTreeSet<String>,
 
     pub(crate) size: DiffCounter,
     pub(crate) gas: DiffCounter,
@@ -209,7 +213,7 @@ impl SuiteStats {
             let mut by_role_pipeline: BTreeMap<(Role, String), u64> = BTreeMap::new();
             for (mode, run) in test.runs.iter() {
                 stats.total_runs += 1;
-                let (role, key) = classify(mode);
+                let (role, key) = classify(mode, suite.matrix);
                 match role {
                     Role::Pr => {
                         stats.pr_runs_seen += 1;
@@ -221,7 +225,9 @@ impl SuiteStats {
                         main_runs.insert(key, run);
                     }
                     Role::Latest | Role::Solc => stats.has_baselines = true,
-                    Role::Other => {}
+                    Role::Other => {
+                        stats.unrecognized_modes.insert(mode.clone());
+                    }
                 }
 
                 // This test's bytecode per role and pipeline; paired into the
@@ -339,7 +345,7 @@ impl SuiteStats {
                 if run.compilation_time.is_empty() {
                     continue;
                 }
-                match classify(mode).0 {
+                match classify(mode, suite.matrix).0 {
                     Role::Pr => {
                         pr.insert(pipeline_of(mode), run.average_compilation_time());
                     }

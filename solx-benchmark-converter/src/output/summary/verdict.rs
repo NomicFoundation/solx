@@ -84,6 +84,9 @@ pub(crate) enum HealthIssue {
     SuiteErrored { label: String },
     /// The suite's benchmark data matched no recognized toolchain naming.
     UnrecognizedToolchains { label: String },
+    /// Individual runs matching no declared toolchain name, in a suite whose
+    /// PR data is otherwise present — e.g. a renamed or foreign baseline.
+    UnrecognizedRuns { label: String, modes: Vec<String> },
     /// PR runs with no `main` counterpart; their failures are not compared.
     Unbaselined {
         label: String,
@@ -174,6 +177,15 @@ pub(crate) fn health_issues(stats: &[SuiteStats]) -> Vec<HealthIssue> {
     for s in stats.iter().filter(|s| s.classification_failed()) {
         issues.push(HealthIssue::UnrecognizedToolchains {
             label: s.label.clone(),
+        });
+    }
+    for s in stats
+        .iter()
+        .filter(|s| !s.classification_failed() && !s.unrecognized_modes.is_empty())
+    {
+        issues.push(HealthIssue::UnrecognizedRuns {
+            label: s.label.clone(),
+            modes: s.unrecognized_modes.iter().cloned().collect(),
         });
     }
     for s in stats.iter().filter(|s| s.unbaselined_runs > 0) {
@@ -327,14 +339,24 @@ mod tests {
             unbaselined_failures: 5,
             ..available("Hardhat")
         };
+        let foreign_run = SuiteStats {
+            total_runs: 2,
+            pr_runs_seen: 1,
+            unrecognized_modes: ["04.mason-legacy".to_owned()].into(),
+            ..available("Foundry 2")
+        };
         assert_eq!(
-            health_issues(&[errored, drifted, unbaselined]),
+            health_issues(&[errored, drifted, unbaselined, foreign_run]),
             vec![
                 HealthIssue::SuiteErrored {
                     label: "solx-tester".to_owned(),
                 },
                 HealthIssue::UnrecognizedToolchains {
                     label: "Foundry".to_owned(),
+                },
+                HealthIssue::UnrecognizedRuns {
+                    label: "Foundry 2".to_owned(),
+                    modes: vec!["04.mason-legacy".to_owned()],
                 },
                 HealthIssue::Unbaselined {
                     label: "Hardhat".to_owned(),
