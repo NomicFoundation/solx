@@ -218,6 +218,24 @@ pub(crate) fn render_verdict(out: &mut String, stats: &[SuiteStats]) {
                     "❌ **Harness error** — {label}: benchmark data matched no recognized toolchain naming."
                 );
             }
+            HealthIssue::UnrecognizedRuns { label, modes } => {
+                let shown: Vec<String> = modes
+                    .iter()
+                    .take(MAX_LISTED)
+                    .map(|mode| format!("`{mode}`"))
+                    .collect();
+                let extra = modes.len().saturating_sub(MAX_LISTED);
+                let more = if extra > 0 {
+                    format!(" (+{extra} more)")
+                } else {
+                    String::new()
+                };
+                let _ = writeln!(
+                    out,
+                    "❌ **Harness error** — {label}: runs matched no declared toolchain: {}{more}.",
+                    shown.join(", ")
+                );
+            }
             HealthIssue::Unbaselined {
                 label,
                 runs,

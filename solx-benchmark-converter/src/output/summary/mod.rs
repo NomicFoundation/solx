@@ -33,6 +33,8 @@ use self::render::render_results_table;
 use self::render::render_verdict;
 use self::stats::SuiteStats;
 
+pub use self::toolchain::ToolchainMatrix;
+
 ///
 /// One suite (solx-tester / Foundry / Hardhat) fed into the summary.
 ///
@@ -51,6 +53,8 @@ pub struct SummarySuite {
     /// Whether this suite's gas is deterministic and therefore gates
     /// correctness (true only for solx-tester's fixed REVM harness).
     pub gas_is_gate: bool,
+    /// Which toolchain naming matrix the benchmark's mode strings follow.
+    pub matrix: ToolchainMatrix,
 }
 
 ///
@@ -157,6 +161,16 @@ mod tests {
             benchmark: Some(benchmark),
             report_url: None,
             gas_is_gate,
+            matrix: matrix_for(label),
+        }
+    }
+
+    /// The same suite-to-matrix mapping the summary binary applies.
+    fn matrix_for(label: &str) -> ToolchainMatrix {
+        if label == "solx-tester" {
+            ToolchainMatrix::Tester
+        } else {
+            ToolchainMatrix::Project
         }
     }
 
@@ -167,6 +181,7 @@ mod tests {
             benchmark: None,
             report_url: None,
             gas_is_gate: false,
+            matrix: matrix_for(label),
         }
     }
 
@@ -392,7 +407,8 @@ mod tests {
     }
 
     /// Every harness-degradation signal at once: an errored suite, toolchain
-    /// naming that matches nothing, and runs without a `main` baseline.
+    /// naming that matches nothing, a foreign run next to healthy PR data,
+    /// and runs without a `main` baseline.
     #[test]
     fn fixture_degraded_harness() {
         let foundry = suite(
@@ -410,7 +426,10 @@ mod tests {
         let hardhat = suite(
             "Hardhat",
             false,
-            vec![failure_test("hh-project", &[("03.solx-legacy", 0, 5)])],
+            vec![failure_test(
+                "hh-project",
+                &[("03.solx-legacy", 0, 5), ("04.mason-legacy", 0, 0)],
+            )],
         );
         // The errored suite keeps its report link: the XLSX can outlive a
         // benchmark-JSON write failure.
