@@ -305,12 +305,14 @@ mod tests {
     /// gas jitter, compile time within noise.
     #[test]
     fn fixture_standard_output_preserving() {
+        // The workflow wraps the tester benchmark in a single "solx-tester"
+        // project before conversion, so its row never shows a project count.
         let mut tester = suite(
             "solx-tester",
             true,
             vec![
                 contract_test(
-                    "solx-solidity",
+                    "solx-tester",
                     "test/libsolidity/semanticTests/structs/delete_struct.sol",
                     &[
                         ("00.solx-main-solx-E-M3B3-0.8.34", 214, 85_899),
@@ -320,7 +322,7 @@ mod tests {
                     ],
                 ),
                 contract_test(
-                    "tests/solidity",
+                    "solx-tester",
                     "simple/default.sol",
                     &[
                         ("00.solx-main-solx-E-M3B3-0.8.34", 460, 21_442),
@@ -440,8 +442,8 @@ mod tests {
         assert_matches_fixture("output-changed", &out);
     }
 
-    /// Build and test regressions: the red verdict and the inline listing of
-    /// regressed projects.
+    /// Build and test regressions: the red verdict, the inline listing of
+    /// regressed projects, and its "+N more" truncation past `MAX_LISTED`.
     #[test]
     fn fixture_new_failures() {
         let foundry = suite(
@@ -459,6 +461,14 @@ mod tests {
                 failure_test(
                     "op",
                     &[("02.solx-main-legacy", 0, 4), ("03.solx-legacy", 0, 4)],
+                ),
+                failure_test(
+                    "aave",
+                    &[("02.solx-main-legacy", 0, 0), ("03.solx-legacy", 1, 2)],
+                ),
+                failure_test(
+                    "morpho",
+                    &[("02.solx-main-viaIR", 0, 1), ("03.solx-viaIR", 0, 2)],
                 ),
             ],
         );
@@ -499,15 +509,15 @@ mod tests {
         assert_matches_fixture("degraded-harness", &out);
     }
 
-    /// The full-matrix run: solc and released-solx baselines plus a
-    /// compile-time project outlier.
+    /// The full-matrix run: solc and released-solx baselines plus enough
+    /// compile-time project outliers to truncate past `MAX_LISTED`.
     #[test]
     fn fixture_full_matrix() {
         let tester = suite(
             "solx-tester",
             true,
             vec![contract_test(
-                "tests/solidity",
+                "solx-tester",
                 "simple/default.sol",
                 &[
                     ("00.solx-main-solx-E-M3B3-0.8.34", 460, 21_442),
@@ -515,34 +525,40 @@ mod tests {
                 ],
             )],
         );
-        let foundry = suite(
-            "Foundry",
-            false,
-            vec![
-                contract_test(
-                    "op",
-                    "src/L2Bridge.sol:L2Bridge",
-                    &[
-                        ("00.solc-0.8.34-legacy", 1_000, 0),
-                        ("01.solx-latest-legacy", 940, 0),
-                        ("02.solx-main-legacy", 902, 0),
-                        ("03.solx-legacy", 902, 0),
-                        ("00.solc-0.8.34-viaIR", 980, 0),
-                        ("01.solx-latest-viaIR", 921, 0),
-                        ("02.solx-main-viaIR", 918, 0),
-                        ("03.solx-viaIR", 918, 0),
-                    ],
-                ),
-                compile_test(
-                    "op",
-                    &[("02.solx-main-legacy", 10_000), ("03.solx-legacy", 13_100)],
-                ),
-                compile_test(
-                    "base",
-                    &[("02.solx-main-legacy", 20_000), ("03.solx-legacy", 20_150)],
-                ),
-            ],
-        );
+        let mut foundry_tests = vec![
+            contract_test(
+                "op",
+                "src/L2Bridge.sol:L2Bridge",
+                &[
+                    ("00.solc-0.8.34-legacy", 1_000, 0),
+                    ("01.solx-latest-legacy", 940, 0),
+                    ("02.solx-main-legacy", 902, 0),
+                    ("03.solx-legacy", 902, 0),
+                    ("00.solc-0.8.34-viaIR", 980, 0),
+                    ("01.solx-latest-viaIR", 921, 0),
+                    ("02.solx-main-viaIR", 918, 0),
+                    ("03.solx-viaIR", 918, 0),
+                ],
+            ),
+            compile_test(
+                "op",
+                &[("02.solx-main-legacy", 10_000), ("03.solx-legacy", 13_100)],
+            ),
+            compile_test(
+                "base",
+                &[("02.solx-main-legacy", 20_000), ("03.solx-legacy", 20_150)],
+            ),
+        ];
+        for index in 0..5u64 {
+            foundry_tests.push(compile_test(
+                format!("proj-{index}").as_str(),
+                &[
+                    ("02.solx-main-legacy", 10_000),
+                    ("03.solx-legacy", 11_600 + index * 100),
+                ],
+            ));
+        }
+        let foundry = suite("Foundry", false, foundry_tests);
         let out = render(&[tester, foundry]);
         assert_matches_fixture("full-matrix", &out);
     }
@@ -564,5 +580,47 @@ mod tests {
         );
         let out = render(&[tester]);
         assert_matches_fixture("single-suite", &out);
+    }
+
+    /// The ungated gas shapes: a jitter median below the display floor and a
+    /// suite whose collected gas is identical everywhere.
+    #[test]
+    fn fixture_gas_jitter() {
+        let foundry = suite(
+            "Foundry",
+            false,
+            vec![
+                contract_test(
+                    "solady",
+                    "src/A.sol:A",
+                    &[
+                        ("02.solx-main-legacy", 100, 1_000_000),
+                        ("03.solx-legacy", 100, 1_000_200),
+                    ],
+                ),
+                contract_test(
+                    "solady",
+                    "src/B.sol:B",
+                    &[
+                        ("02.solx-main-legacy", 100, 500_000),
+                        ("03.solx-legacy", 100, 500_100),
+                    ],
+                ),
+            ],
+        );
+        let hardhat = suite(
+            "Hardhat",
+            false,
+            vec![contract_test(
+                "hh-project",
+                "contracts/C.sol:C",
+                &[
+                    ("02.solx-main-legacy", 200, 42_000),
+                    ("03.solx-legacy", 200, 42_000),
+                ],
+            )],
+        );
+        let out = render(&[foundry, hardhat]);
+        assert_matches_fixture("gas-jitter", &out);
     }
 }
