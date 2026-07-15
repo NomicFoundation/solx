@@ -232,6 +232,21 @@ mod tests {
     }
 
     #[test]
+    fn compile_improvements_are_not_sirened() {
+        let tests = vec![compile_test(
+            "a",
+            &[("02.solx-main-legacy", 1_000), ("03.solx-legacy", 700)],
+        )];
+        let out = render(&[suite("Foundry", false, tests)]);
+        assert!(out.contains("| **-30.0%** / -30.0% |"), "{out}");
+        assert!(
+            out.contains("**Project outliers (≥15%):** `a` legacy **-30.0%**"),
+            "{out}"
+        );
+        assert!(!out.contains("⚠️"), "{out}");
+    }
+
+    #[test]
     fn one_sided_gas_is_not_averaged_into_jitter() {
         // Gas going 0 → 50,000 has no percentage; it must be stated apart,
         // not understated by an empty-median "<0.1%".

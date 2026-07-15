@@ -433,9 +433,15 @@ pub(crate) fn render_compile_time(out: &mut String, stats: &[SuiteStats]) {
                     let pct = (agg.pr_total_ms as f64 - agg.main_total_ms as f64)
                         / agg.main_total_ms as f64
                         * 100.0;
-                    let aggregate = if pct.abs() >= COMPILE_TIME_SUITE_THRESHOLD_PERCENT {
+                    // Both directions defeat "within noise", but only a
+                    // slowdown gets the siren — a large improvement is
+                    // signal, not an alarm.
+                    let aggregate = if pct >= COMPILE_TIME_SUITE_THRESHOLD_PERCENT {
                         any_suite_flag = true;
                         format!("⚠️ **{}**", percent(pct))
+                    } else if pct <= -COMPILE_TIME_SUITE_THRESHOLD_PERCENT {
+                        any_suite_flag = true;
+                        format!("**{}**", percent(pct))
                     } else {
                         percent(pct)
                     };
@@ -475,8 +481,13 @@ pub(crate) fn render_compile_time(out: &mut String, stats: &[SuiteStats]) {
             .take(MAX_LISTED)
             .map(|(project, pipeline, pct)| format!("`{project}` {pipeline} **{}**", percent(*pct)))
             .collect();
+        let siren = if outliers.iter().any(|(_, _, pct)| *pct > 0.0) {
+            "⚠️ "
+        } else {
+            ""
+        };
         let mut line = format!(
-            "\n⚠️ **Project outliers (>{}%):** {}",
+            "\n{siren}**Project outliers (≥{}%):** {}",
             COMPILE_TIME_PROJECT_THRESHOLD_PERCENT as u64,
             shown.join(" · ")
         );
