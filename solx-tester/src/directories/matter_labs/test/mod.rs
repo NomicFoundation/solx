@@ -253,8 +253,7 @@ impl MatterLabsTest {
             let mut file_libraries = BTreeMap::new();
             for name in metadata_file_libraries.keys() {
                 let address = address_iterator.next(
-                    &crate::utils::address_from_hex_str(DEFAULT_CALLER_ADDRESS)
-                        .expect("Always valid"),
+                    &Address::from_str(DEFAULT_CALLER_ADDRESS).expect("Always valid"),
                     true,
                 );
                 file_libraries.insert(

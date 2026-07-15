@@ -3,8 +3,10 @@
 //!
 
 use std::collections::BTreeMap;
+use std::str::FromStr;
 
 use revm::primitives::Address;
+use revm::primitives::U256;
 
 use crate::directories::matter_labs::test::metadata::case::input::expected::variant::extended::event::Event as MatterLabsTestExpectedEvent;
 use crate::test::instance::Instance;
@@ -59,7 +61,7 @@ impl Event {
                             anyhow::anyhow!("Instance `{instance}` was not successfully deployed")
                         })
                 } else {
-                    crate::utils::address_from_hex_str(address.as_str())
+                    Address::from_str(address.as_str())
                         .map_err(|error| anyhow::anyhow!("Invalid address literal: {error}"))
                 }
                 .map_err(|error| anyhow::anyhow!("Invalid event address `{address}`: {error}"))?,
@@ -91,7 +93,7 @@ impl Event {
                     &crate::utils::address_as_string(contract_address),
                 );
                 Value::Known(
-                    crate::utils::u256_from_hex_str(&topic_str)
+                    U256::from_str_radix(&topic_str, 16)
                         .expect("Solidity adapter default contract address constant is invalid"),
                 )
             })
@@ -107,7 +109,7 @@ impl Event {
                     &crate::utils::address_as_string(contract_address),
                 );
                 Value::Known(
-                    crate::utils::u256_from_hex_str(&value_str)
+                    U256::from_str_radix(&value_str, 16)
                         .expect("Solidity adapter default contract address constant is invalid"),
                 )
             })

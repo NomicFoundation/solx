@@ -53,31 +53,12 @@ pub fn account_address(index: usize) -> Address {
 }
 
 ///
-/// Parses a hexadecimal string (with optional `0x` prefix, no checksum validation) into a `U256`.
+/// Parses a bare or `0x`-prefixed hexadecimal string into a `U256`.
 ///
-/// Preserves the lenient hex parsing that `web3`'s `U256::from_str` previously provided.
+/// Kept over `U256::from_str` because the lexer emits bare hex, which `from_str` reads as decimal.
 ///
-pub fn u256_from_hex_str(value: &str) -> anyhow::Result<U256> {
+pub(crate) fn u256_from_hex_str(value: &str) -> anyhow::Result<U256> {
     let value = value.strip_prefix("0x").unwrap_or(value);
     U256::from_str_radix(value, 16)
         .map_err(|error| anyhow::anyhow!("Invalid hexadecimal literal `{value}`: {error}"))
-}
-
-///
-/// Parses a hexadecimal address (with optional `0x` prefix, no checksum validation) into an `Address`.
-///
-/// Preserves the lenient hex parsing that `web3`'s `Address::from_str` previously provided.
-///
-pub fn address_from_hex_str(value: &str) -> anyhow::Result<Address> {
-    let value = value.strip_prefix("0x").unwrap_or(value);
-    let bytes = alloy_primitives::hex::decode(value)
-        .map_err(|error| anyhow::anyhow!("Invalid address literal `{value}`: {error}"))?;
-    if bytes.len() != solx_utils::BYTE_LENGTH_ETH_ADDRESS {
-        anyhow::bail!(
-            "Invalid address literal `{value}`: expected {} bytes, got {}",
-            solx_utils::BYTE_LENGTH_ETH_ADDRESS,
-            bytes.len()
-        );
-    }
-    Ok(Address::from_slice(&bytes))
 }

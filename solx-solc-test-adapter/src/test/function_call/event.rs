@@ -2,6 +2,8 @@
 //! The event.
 //!
 
+use std::str::FromStr;
+
 use alloy_primitives::Address;
 use alloy_primitives::U256;
 use alloy_primitives::keccak256;
@@ -26,9 +28,10 @@ impl TryFrom<SyntaxEvent> for Event {
     type Error = anyhow::Error;
 
     fn try_from(event: SyntaxEvent) -> Result<Self, Self::Error> {
-        let address = event.address.as_ref().map(|address| {
-            crate::address_from_hex_str(address).expect(super::VALIDATED_BY_THE_PARSER)
-        });
+        let address = event
+            .address
+            .as_ref()
+            .map(|address| Address::from_str(address).expect(super::VALIDATED_BY_THE_PARSER));
         let mut expected = Vec::new();
         let mut topics = Vec::new();
         if let Some(literals) = event.expected {

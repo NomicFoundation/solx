@@ -8,10 +8,6 @@ use std::path::PathBuf;
 use revm::primitives::Address;
 use revm::primitives::U256;
 
-// Single definition lives in the adapter crate; re-exported so `crate::utils::*` still resolves.
-pub use solx_solc_test_adapter::address_from_hex_str;
-pub use solx_solc_test_adapter::u256_from_hex_str;
-
 ///
 /// Overrides the default formatting for `Address`, which replaces the middle with an ellipsis.
 ///

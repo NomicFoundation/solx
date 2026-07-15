@@ -4,6 +4,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::str::FromStr;
 
 use revm::primitives::Address;
 use revm::primitives::U256;
@@ -42,7 +43,7 @@ impl Storage {
                         anyhow::anyhow!("Instance `{instance}` is not successfully deployed")
                     })
             } else {
-                crate::utils::address_from_hex_str(address.as_str())
+                Address::from_str(address.as_str())
                     .map_err(|error| anyhow::anyhow!("Invalid address literal: {error}"))
             }
             .map_err(|error| anyhow::anyhow!("Invalid storage address: {error}"))?;

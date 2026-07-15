@@ -2,6 +2,7 @@
 //! The contract call input variant.
 //!
 
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -85,7 +86,7 @@ impl Runtime {
 
         if test.selector.path == "solx-solidity/test/libsolidity/semanticTests/state/tx_origin.sol"
         {
-            self.caller = crate::utils::address_from_hex_str(REVM::TX_ORIGIN).unwrap();
+            self.caller = Address::from_str(REVM::TX_ORIGIN).unwrap();
         }
         let tx = REVM::new_runtime_transaction(
             self.address,

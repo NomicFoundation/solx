@@ -3,7 +3,9 @@
 //!
 
 use std::collections::BTreeMap;
+use std::str::FromStr;
 
+use revm::primitives::Address;
 use revm::primitives::U256;
 use serde::Serialize;
 use serde::Serializer;
@@ -56,23 +58,23 @@ impl Value {
                 .ok_or_else(|| anyhow::anyhow!("`-0` is invalid literal"))?;
             U256::MAX.checked_sub(value).expect("Always valid")
         } else if let Some(value) = value.strip_prefix("0x") {
-            crate::utils::u256_from_hex_str(value)
+            U256::from_str_radix(value, 16)
                 .map_err(|error| anyhow::anyhow!("Invalid hexadecimal literal: {error}"))?
         } else if value == "$CHAIN_ID" {
             U256::from(REVM::CHAIND_ID)
         } else if value == "$GAS_LIMIT" {
             U256::from(REVM::BLOCK_GAS_LIMIT)
         } else if value == "$COINBASE" {
-            crate::utils::u256_from_hex_str(REVM::COIN_BASE).expect("Always valid")
+            U256::from_str(REVM::COIN_BASE).expect("Always valid")
         } else if value == "$PREVRANDAO" {
-            crate::utils::u256_from_hex_str(REVM::BLOCK_PREVRANDAO).expect("Always valid")
+            U256::from_str(REVM::BLOCK_PREVRANDAO).expect("Always valid")
         } else if value.starts_with("$BLOCK_HASH") {
             let offset: u64 = value
                 .split(':')
                 .next_back()
                 .and_then(|value| value.parse().ok())
                 .unwrap_or_default();
-            let mut hash = crate::utils::u256_from_hex_str(REVM::BLOCK_HASH).expect("Always valid");
+            let mut hash = U256::from_str(REVM::BLOCK_HASH).expect("Always valid");
             hash += U256::from(offset);
             hash
         } else if value == "$BLOCK_NUMBER" {
@@ -81,7 +83,7 @@ impl Value {
             U256::from(REVM::BLOCK_TIMESTAMP)
         } else if value == "$TX_ORIGIN" {
             crate::utils::address_to_u256(
-                &crate::utils::address_from_hex_str(REVM::TX_ORIGIN).expect("Alwyays valid"),
+                &Address::from_str(REVM::TX_ORIGIN).expect("Alwyays valid"),
             )
         } else if value == "$BASE_FEE" {
             U256::from(REVM::BASE_FEE)
