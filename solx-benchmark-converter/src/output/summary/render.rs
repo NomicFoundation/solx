@@ -1,16 +1,14 @@
 //!
 //! The markdown rendering of the integration summary.
 //!
-//! The comment's shape — section order, headers, table pipes, bullet and
-//! blank-line discipline — lives in `templates/summary.md`; everything the
-//! template interpolates is a string precomputed here. The boundary rule:
-//! the template may test presence (`if let`, `is_empty`), never magnitude;
-//! anything that formats a value is Rust.
+//! Two layers with one rule between them: the line-builders below format
+//! every value into finished sentences, cells, and bullets; `render_summary`
+//! holds the comment's shape — section order, headers, table pipes, bullet
+//! and blank-line discipline — and tests only presence, never magnitude.
 //!
 
 use std::collections::BTreeSet;
-
-use serde::Serialize;
+use std::fmt::Write;
 
 use super::stats::CompileAggregate;
 use super::stats::DiffCounter;
@@ -128,11 +126,7 @@ impl SuiteStats {
     }
 }
 
-/// The comment's layout, embedded so the binary stays self-contained.
-const TEMPLATE: &str = include_str!("../../../templates/summary.md");
-
 /// One row of the results table, a cell per column.
-#[derive(Serialize)]
 struct SuiteRow {
     suite: String,
     failures: String,
@@ -143,7 +137,6 @@ struct SuiteRow {
 
 /// One bulleted listing under a bold heading, already truncated: a "+N more"
 /// pointer is its last bullet.
-#[derive(Serialize)]
 struct ListingSection {
     heading: String,
     bullets: Vec<String>,
@@ -151,7 +144,6 @@ struct ListingSection {
 
 /// The compile-time table and its threshold verdict lines; the columns are
 /// data-driven, so the header repeats per pipeline.
-#[derive(Serialize)]
 struct CompileView {
     pipelines: Vec<String>,
     rows: Vec<Vec<String>>,
@@ -160,47 +152,94 @@ struct CompileView {
 }
 
 ///
-/// The full summary comment.
-///
-#[derive(Serialize)]
-struct SummaryView {
-    full_matrix: bool,
-    output_line: String,
-    failures_line: String,
-    health_lines: Vec<String>,
-    unbaselined_line: Option<String>,
-    suite_rows: Vec<SuiteRow>,
-    new_failure_bullets: Vec<String>,
-    mover_sections: Vec<ListingSection>,
-    compile: Option<CompileView>,
-    baseline_rows: Vec<Vec<String>>,
-}
-
-///
 /// Renders the full summary comment for the given per-suite statistics.
 ///
 pub(crate) fn render_summary(stats: &[SuiteStats]) -> String {
     let (health_lines, unbaselined_line) = health_lines(stats);
     let full_matrix = stats.iter().any(|s| s.has_baselines);
-    let view = SummaryView {
-        full_matrix,
-        output_line: output_line(output_verdict(stats)),
-        failures_line: failures_line(failure_verdict(stats)),
-        health_lines,
-        unbaselined_line,
-        suite_rows: stats.iter().map(suite_row).collect(),
-        new_failure_bullets: new_failure_bullets(stats),
-        mover_sections: mover_sections(stats),
-        compile: compile_view(stats),
-        baseline_rows: if full_matrix {
-            baseline_rows(stats)
-        } else {
-            Vec::new()
-        },
+    let mut out = String::new();
+
+    let mode = if full_matrix {
+        "full matrix"
+    } else {
+        "standard"
     };
-    minijinja::Environment::new()
-        .render_named_str("summary.md", TEMPLATE, &view)
-        .expect("the template is static and the golden-fixture tests pin every path")
+    let _ = writeln!(out, "### 🧪 Integration tests — {mode} · PR vs `main`\n");
+    let _ = writeln!(out, "{}", output_line(output_verdict(stats)));
+    let _ = writeln!(out, "{}", failures_line(failure_verdict(stats)));
+    for line in health_lines {
+        let _ = writeln!(out, "{line}");
+    }
+    if let Some(line) = unbaselined_line {
+        let _ = writeln!(out, "{line}");
+    }
+    let _ = writeln!(out);
+
+    let _ = writeln!(out, "| Suite | New failures | Size Δ | Gas Δ | Report |");
+    let _ = writeln!(out, "|---|---|---|---|---|");
+    for row in stats.iter().map(suite_row) {
+        let _ = writeln!(
+            out,
+            "| {} | {} | {} | {} | {} |",
+            row.suite, row.failures, row.size, row.gas, row.report
+        );
+    }
+
+    let bullets = new_failure_bullets(stats);
+    if !bullets.is_empty() {
+        let _ = writeln!(out, "\n**New failures (PR vs `main`):**\n");
+        for bullet in bullets {
+            let _ = writeln!(out, "- {bullet}");
+        }
+    }
+
+    for section in mover_sections(stats) {
+        let _ = writeln!(out, "\n**{}:**\n", section.heading);
+        for bullet in section.bullets {
+            let _ = writeln!(out, "- {bullet}");
+        }
+    }
+
+    if let Some(compile) = compile_view(stats) {
+        let _ = writeln!(
+            out,
+            "\n**Compile time** — wall-clock tripwire, positive = PR slower (authoritative Δ in `ci:compile-benchmark`)\n"
+        );
+        let mut header = "| Suite |".to_owned();
+        let mut divider = "|---|".to_owned();
+        for pipeline in compile.pipelines.iter() {
+            let _ = write!(header, " {pipeline} (agg / median) |");
+            divider.push_str("---|");
+        }
+        let _ = writeln!(out, "{header}");
+        let _ = writeln!(out, "{divider}");
+        for row in compile.rows {
+            let _ = writeln!(out, "| {} |", row.join(" | "));
+        }
+        if let Some(line) = compile.within_noise_line {
+            let _ = writeln!(out, "\n{line}");
+        }
+        if let Some(line) = compile.outliers_line {
+            let _ = writeln!(out, "\n{line}");
+        }
+    }
+
+    if full_matrix {
+        let rows = baseline_rows(stats);
+        if !rows.is_empty() {
+            let _ = writeln!(
+                out,
+                "\n**Bytecode size — PR vs baselines** (positive = PR larger; contracts built by both only)\n"
+            );
+            let _ = writeln!(out, "| Suite | Pipeline | vs solc | vs released solx |");
+            let _ = writeln!(out, "|---|---|---|---|");
+            for row in rows {
+                let _ = writeln!(out, "| {} |", row.join(" | "));
+            }
+        }
+    }
+
+    out
 }
 
 /// The output-invariance verdict line.
