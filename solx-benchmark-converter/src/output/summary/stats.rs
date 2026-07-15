@@ -145,6 +145,9 @@ pub(crate) struct SuiteStats {
     /// with zero PR runs means the toolchain naming drifted from classify().
     pub(crate) total_runs: usize,
     pub(crate) pr_runs_seen: usize,
+    /// PR runs that found a `main` counterpart — the failure verdict only
+    /// means something when at least one suite compared something.
+    pub(crate) paired_runs: usize,
     /// PR runs with no main counterpart, and the failures recorded on them.
     /// They have nothing to compare against, so they are surfaced as
     /// unbaselined rather than counted as regressions against zero.
@@ -160,6 +163,10 @@ pub(crate) struct SuiteStats {
     /// median is reported — a max would routinely be a huge but meaningless
     /// CREATE-deploy outlier.
     pub(crate) gas_jitter_percents: Vec<f64>,
+    /// Non-gated differing pairs whose `main` side recorded no gas: no
+    /// percentage exists, so they are reported next to the jitter median
+    /// rather than silently understated by it.
+    pub(crate) gas_diffs_without_main: u64,
 
     /// Failures on the PR runs in excess of their main counterparts.
     pub(crate) new_build_failures: usize,
@@ -300,6 +307,7 @@ impl SuiteStats {
                     stats.unbaselined_failures += pr.build_failures + pr.test_failures;
                     continue;
                 };
+                stats.paired_runs += 1;
                 let mode = humanize_mode(key);
 
                 for (kind, main_v, pr_v) in [
@@ -349,6 +357,8 @@ impl SuiteStats {
                         let jitter =
                             (pr_gas as f64 - main_gas as f64).abs() / main_gas as f64 * 100.0;
                         stats.gas_jitter_percents.push(jitter);
+                    } else {
+                        stats.gas_diffs_without_main += 1;
                     }
                 }
             }
@@ -367,10 +377,16 @@ impl SuiteStats {
     }
 
     /// The benchmark had runs but none classified as the PR toolchain — the
-    /// naming convention drifted from `classify()`; better a loud error than
-    /// a green comment over empty data.
+    /// naming convention drifted from the declared tables; better a loud
+    /// error than a green comment over empty data.
     pub(crate) fn classification_failed(&self) -> bool {
         self.available && self.total_runs > 0 && self.pr_runs_seen == 0
+    }
+
+    /// The report parsed but contains no runs at all — a suite that tested
+    /// nothing must not render as a clean pass.
+    pub(crate) fn is_empty_report(&self) -> bool {
+        self.available && self.total_runs == 0
     }
 }
 

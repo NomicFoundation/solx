@@ -57,6 +57,9 @@ pub(crate) struct GasChange {
 ///
 #[derive(Debug, PartialEq)]
 pub(crate) enum FailureVerdict {
+    /// No suite paired a PR run with a `main` counterpart — never a green
+    /// checkmark over zero comparisons.
+    NoData,
     /// No suite regressed; failures already present on `main` are carried
     /// per suite label so the verdict can say so.
     Clean { pre_existing: Vec<(String, usize)> },
@@ -82,6 +85,8 @@ pub(crate) struct SuiteFailures {
 pub(crate) enum HealthIssue {
     /// The suite ran but produced no usable report.
     SuiteErrored { label: String },
+    /// The report parsed but recorded no runs — the suite tested nothing.
+    EmptySuite { label: String },
     /// The suite's benchmark data matched no recognized toolchain naming.
     UnrecognizedToolchains { label: String },
     /// Individual runs matching no declared toolchain name, in a suite whose
@@ -137,12 +142,21 @@ pub(crate) fn output_verdict(stats: &[SuiteStats]) -> OutputVerdict {
 }
 
 ///
-/// The failure-regression verdict over all suites.
+/// The failure-regression verdict, over the suites that actually compared
+/// something — errored, empty, and unclassifiable suites carry no PR-vs-main
+/// pairs and must not feed a green line.
 ///
 pub(crate) fn failure_verdict(stats: &[SuiteStats]) -> FailureVerdict {
-    if stats.iter().all(|s| s.new_failures() == 0) {
+    let compared: Vec<&SuiteStats> = stats
+        .iter()
+        .filter(|s| s.available && !s.classification_failed())
+        .collect();
+    if compared.iter().all(|s| s.paired_runs == 0) {
+        return FailureVerdict::NoData;
+    }
+    if compared.iter().all(|s| s.new_failures() == 0) {
         FailureVerdict::Clean {
-            pre_existing: stats
+            pre_existing: compared
                 .iter()
                 .filter(|s| s.baseline_failures() > 0)
                 .map(|s| (s.label.clone(), s.baseline_failures()))
@@ -150,7 +164,7 @@ pub(crate) fn failure_verdict(stats: &[SuiteStats]) -> FailureVerdict {
         }
     } else {
         FailureVerdict::Regressed {
-            suites: stats
+            suites: compared
                 .iter()
                 .filter(|s| s.new_failures() > 0)
                 .map(|s| SuiteFailures {
@@ -171,6 +185,11 @@ pub(crate) fn health_issues(stats: &[SuiteStats]) -> Vec<HealthIssue> {
     let mut issues = Vec::new();
     for s in stats.iter().filter(|s| !s.available) {
         issues.push(HealthIssue::SuiteErrored {
+            label: s.label.clone(),
+        });
+    }
+    for s in stats.iter().filter(|s| s.is_empty_report()) {
+        issues.push(HealthIssue::EmptySuite {
             label: s.label.clone(),
         });
     }
@@ -289,6 +308,7 @@ mod tests {
     #[test]
     fn clean_failures_carry_the_pre_existing_counts() {
         let foundry = SuiteStats {
+            paired_runs: 1,
             baseline_test_failures: 5,
             ..available("Foundry")
         };
@@ -303,6 +323,7 @@ mod tests {
     #[test]
     fn regressed_lists_only_the_regressed_suites() {
         let foundry = SuiteStats {
+            paired_runs: 1,
             new_build_failures: 1,
             new_test_failures: 2,
             baseline_test_failures: 5,
@@ -317,6 +338,34 @@ mod tests {
                     new_test: 2,
                 }],
             }
+        );
+    }
+
+    #[test]
+    fn failure_verdict_is_no_data_when_nothing_compared() {
+        // An errored suite, a drifted suite, and an all-unbaselined suite:
+        // none paired a PR run with main, so a green "no new failures" would
+        // be a pass over zero comparisons.
+        let errored = SuiteStats {
+            label: "solx-tester".to_owned(),
+            available: false,
+            ..Default::default()
+        };
+        let drifted = SuiteStats {
+            total_runs: 2,
+            pr_runs_seen: 0,
+            baseline_test_failures: 40,
+            ..available("Foundry")
+        };
+        let unbaselined = SuiteStats {
+            total_runs: 1,
+            pr_runs_seen: 1,
+            unbaselined_runs: 1,
+            ..available("Hardhat")
+        };
+        assert_eq!(
+            failure_verdict(&[errored, drifted, unbaselined]),
+            FailureVerdict::NoData
         );
     }
 
@@ -345,11 +394,15 @@ mod tests {
             unrecognized_modes: ["04.mason-legacy".to_owned()].into(),
             ..available("Foundry 2")
         };
+        let empty = available("Hardhat 2");
         assert_eq!(
-            health_issues(&[errored, drifted, unbaselined, foreign_run]),
+            health_issues(&[errored, drifted, unbaselined, foreign_run, empty]),
             vec![
                 HealthIssue::SuiteErrored {
                     label: "solx-tester".to_owned(),
+                },
+                HealthIssue::EmptySuite {
+                    label: "Hardhat 2".to_owned(),
                 },
                 HealthIssue::UnrecognizedToolchains {
                     label: "Foundry".to_owned(),
