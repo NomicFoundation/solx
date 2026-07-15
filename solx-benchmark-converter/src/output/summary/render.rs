@@ -9,8 +9,10 @@
 use std::collections::BTreeSet;
 use std::fmt::Write;
 
+use super::stats::DiffCounter;
 use super::stats::SuiteStats;
 use super::stats::median;
+use super::stats::relative_percent;
 use super::toolchain::Role;
 use super::verdict::FailureVerdict;
 use super::verdict::HealthIssue;
@@ -25,6 +27,28 @@ const COMPILE_TIME_PROJECT_THRESHOLD_PERCENT: f64 = 15.0;
 const COMPILE_TIME_SUITE_THRESHOLD_PERCENT: f64 = 5.0;
 /// Cap on individually-listed items (outliers, movers, new failures) before "+N more".
 const MAX_LISTED: usize = 5;
+/// Jitter medians below this render as "<0.1%": the floor under which the
+/// one-decimal display precision would round to a bare 0.0%.
+const JITTER_MEDIAN_FLOOR_PERCENT: f64 = 0.05;
+
+impl DiffCounter {
+    /// One comparison column's table cell; the byte delta rides along for
+    /// size cells.
+    fn cell(&self, delta_suffix: bool) -> String {
+        if !self.collected() {
+            return "⚪ not collected".to_owned();
+        }
+        if self.diffs == 0 {
+            return format!("✅ 0 of {}", commas(self.cells));
+        }
+        let delta = if delta_suffix {
+            format!(" ({:+} B)", self.delta)
+        } else {
+            String::new()
+        };
+        format!("⚠️ {} of {}{delta}", commas(self.diffs), commas(self.cells))
+    }
+}
 
 impl SuiteStats {
     fn failures_cell(&self) -> String {
@@ -50,22 +74,6 @@ impl SuiteStats {
         }
     }
 
-    fn size_cell(&self) -> String {
-        if !self.size.collected() {
-            return "⚪ not collected".to_owned();
-        }
-        if self.size.diffs == 0 {
-            format!("✅ 0 of {}", commas(self.size.cells))
-        } else {
-            format!(
-                "⚠️ {} of {} ({:+} B)",
-                commas(self.size.diffs),
-                commas(self.size.cells),
-                self.size.delta
-            )
-        }
-    }
-
     fn gas_cell(&self) -> String {
         if !self.gas.collected() {
             return "⚪ not collected".to_owned();
@@ -77,7 +85,7 @@ impl SuiteStats {
             let mut parts = Vec::new();
             if !self.gas_jitter_percents.is_empty() {
                 let med = match median(&self.gas_jitter_percents) {
-                    Some(med) if med >= 0.05 => format!("{med:.1}%"),
+                    Some(med) if med >= JITTER_MEDIAN_FLOOR_PERCENT => format!("{med:.1}%"),
                     _ => "<0.1%".to_owned(),
                 };
                 parts.push(format!(
@@ -97,15 +105,7 @@ impl SuiteStats {
             }
             return format!("⚪ {} (not gated)", parts.join("; "));
         }
-        if self.gas.diffs == 0 {
-            format!("✅ 0 of {}", commas(self.gas.cells))
-        } else {
-            format!(
-                "⚠️ {} of {}",
-                commas(self.gas.diffs),
-                commas(self.gas.cells)
-            )
-        }
+        self.gas.cell(false)
     }
 
     fn suite_cell(&self) -> String {
@@ -319,7 +319,7 @@ pub(crate) fn render_results_table(out: &mut String, stats: &[SuiteStats]) {
             "| {} | {} | {} | {} | {} |",
             s.suite_cell(),
             s.failures_cell(),
-            s.size_cell(),
+            s.size.cell(true),
             s.gas_cell(),
             s.report_cell(),
         );
@@ -370,13 +370,9 @@ pub(crate) fn render_output_changes(out: &mut String, stats: &[SuiteStats]) {
             }
             let _ = writeln!(out, "\n**{} — {title}:**\n", s.label);
             for m in movers.ranked().into_iter().take(MAX_LISTED) {
-                let pct = if m.main != 0 {
-                    format!(
-                        " ({})",
-                        percent((m.pr as f64 - m.main as f64) / m.main as f64 * 100.0)
-                    )
-                } else {
-                    String::new()
+                let pct = match relative_percent(m.pr, m.main) {
+                    Some(pct) => format!(" ({})", percent(pct)),
+                    None => String::new(),
                 };
                 let _ = writeln!(
                     out,
@@ -428,11 +424,11 @@ pub(crate) fn render_compile_time(out: &mut String, stats: &[SuiteStats]) {
     for s in &with_ct {
         let mut row = format!("| {} |", s.suite_cell());
         for pipeline in pipelines.iter() {
-            let cell = match s.compile.get(*pipeline) {
-                Some(agg) if agg.main_total_ms != 0 => {
-                    let pct = (agg.pr_total_ms as f64 - agg.main_total_ms as f64)
-                        / agg.main_total_ms as f64
-                        * 100.0;
+            let paired = s.compile.get(*pipeline).and_then(|agg| {
+                relative_percent(agg.pr_total_ms, agg.main_total_ms).map(|pct| (agg, pct))
+            });
+            let cell = match paired {
+                Some((agg, pct)) => {
                     // Both directions defeat "within noise", but only a
                     // slowdown gets the siren — a large improvement is
                     // signal, not an alarm.
@@ -452,7 +448,7 @@ pub(crate) fn render_compile_time(out: &mut String, stats: &[SuiteStats]) {
                         None => aggregate,
                     }
                 }
-                _ => "—".to_owned(),
+                None => "—".to_owned(),
             };
             let _ = write!(row, " {cell} |");
             if let Some(agg) = s.compile.get(*pipeline) {
@@ -520,12 +516,11 @@ pub(crate) fn render_baselines(out: &mut String, stats: &[SuiteStats]) {
             .collect();
         for pipeline in pipelines {
             let vs = |role: Role| -> String {
-                match s.baseline_pairs.get(&(role, pipeline.clone())) {
-                    Some(pair) if pair.baseline != 0 => percent(
-                        (pair.pr as f64 - pair.baseline as f64) / pair.baseline as f64 * 100.0,
-                    ),
-                    _ => "—".to_owned(),
-                }
+                s.baseline_pairs
+                    .get(&(role, pipeline.clone()))
+                    .and_then(|pair| relative_percent(pair.pr, pair.baseline))
+                    .map(percent)
+                    .unwrap_or_else(|| "—".to_owned())
             };
             let _ = writeln!(
                 out,
