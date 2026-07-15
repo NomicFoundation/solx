@@ -213,7 +213,6 @@ impl SuiteStats {
                 contract
             };
 
-            // Classify every run once and index the PR/main runs by pairing key.
             let mut pr_runs: BTreeMap<String, &crate::benchmark::test::run::Run> = BTreeMap::new();
             let mut main_runs: BTreeMap<String, &crate::benchmark::test::run::Run> =
                 BTreeMap::new();
@@ -239,8 +238,6 @@ impl SuiteStats {
                     }
                 }
 
-                // This test's bytecode per role and pipeline; paired into the
-                // full-matrix baseline totals after the loop.
                 if matches!(role, Role::Pr | Role::Main | Role::Latest | Role::Solc) {
                     let bytes = run.average_size() + run.average_runtime_size();
                     if bytes != 0 {
@@ -281,8 +278,6 @@ impl SuiteStats {
                 }
             }
 
-            // Baseline comparisons pair only cells present for both the PR
-            // and the baseline toolchain on this test.
             for ((role, pipeline), &base_bytes) in by_role_pipeline.iter() {
                 if !matches!(role, Role::Solc | Role::Latest) {
                     continue;
@@ -297,9 +292,6 @@ impl SuiteStats {
                 }
             }
 
-            // Pair each PR run with its main counterpart. A run without one
-            // has nothing to compare against — surfaced as unbaselined, not
-            // as a regression against an imaginary zero.
             for (key, pr) in pr_runs.iter() {
                 let Some(main) = main_runs.get(key) else {
                     stats.unbaselined_runs += 1;
