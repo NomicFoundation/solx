@@ -7,27 +7,30 @@ name: Cross-OS Tests
 # The build-toolchain action keeps the LLVM params identical to test.yaml's
 # legs, so LLVM comes from the finished-install caches saved on main.
 #
-# TODO(Stage 3): before opening the PR, switch the trigger to
-# pull_request label `ci:cross-os` + workflow_dispatch + weekly cron on
-# main. The push trigger below is temporary, for verification runs on this
-# branch.
+# Must stay out of the required checks: a label-gated required check can
+# hang the merge queue.
 
 on:
-  push:
-    branches:
-      - cross-os-tester
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+  schedule:
+    # Mondays 06:00 UTC, on main.
+    - cron: '0 6 * * 1'
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   # Job id and job env match test.yaml's build-and-test job: rust-cache keys
   # hash both, and the Windows leg restores that job's cache.
   build-and-test:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:cross-os')
+    name: tester (${{ matrix.runner }})
     strategy:
       fail-fast: false
       matrix:
