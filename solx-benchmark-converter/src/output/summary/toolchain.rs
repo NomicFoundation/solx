@@ -75,9 +75,19 @@ pub(crate) fn classify(mode: &str, matrix: ToolchainMatrix) -> (Role, String) {
     }
 }
 
-/// The compilation pipeline (`legacy` / `viaIR`) a mode belongs to, or its
-/// trailing token otherwise.
+/// The compilation pipeline a mode belongs to: the project suites' trailing
+/// `legacy`/`viaIR` token, the tester's `E`/`Y` codegen token (spelled out —
+/// the trailing token there is the solc version), or the trailing token when
+/// nothing is recognized.
 pub(crate) fn pipeline_of(mode: &str) -> String {
+    for token in mode.split('-') {
+        match token {
+            "legacy" | "viaIR" => return token.to_owned(),
+            "E" => return "EVMLA".to_owned(),
+            "Y" => return "Yul".to_owned(),
+            _ => {}
+        }
+    }
     mode.rsplit('-').next().unwrap_or("").to_owned()
 }
 
@@ -184,9 +194,14 @@ mod tests {
     }
 
     #[test]
-    fn pipeline_is_the_trailing_token() {
+    fn pipeline_is_derived_from_recognized_tokens() {
         assert_eq!(pipeline_of("02.solx-main-viaIR"), "viaIR");
         assert_eq!(pipeline_of("03.solx-legacy"), "legacy");
+        // Tester modes: the codegen is the pipeline, not the trailing
+        // solc version.
+        assert_eq!(pipeline_of("01.solx-solx-E-M3B3-0.8.34"), "EVMLA");
+        assert_eq!(pipeline_of("00.solx-main-solx-Y-M3B3-0.8.34"), "Yul");
+        assert_eq!(pipeline_of("something-odd"), "odd");
     }
 
     #[test]
