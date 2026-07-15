@@ -274,8 +274,7 @@ impl SuiteStats {
                 let entry = stats.compile.entry(pipeline.clone()).or_default();
                 entry.pr_total_ms += pr_ms;
                 entry.main_total_ms += main_ms;
-                if main_ms != 0 {
-                    let pct = (pr_ms as f64 - main_ms as f64) / main_ms as f64 * 100.0;
+                if let Some(pct) = relative_percent(pr_ms, main_ms) {
                     entry
                         .per_project
                         .push((test.metadata.selector.project.clone(), pct));
@@ -353,10 +352,8 @@ impl SuiteStats {
                         stats
                             .top_gas_movers
                             .push(row_label, mode.as_str(), main_gas, pr_gas);
-                    } else if main_gas != 0 {
-                        let jitter =
-                            (pr_gas as f64 - main_gas as f64).abs() / main_gas as f64 * 100.0;
-                        stats.gas_jitter_percents.push(jitter);
+                    } else if let Some(pct) = relative_percent(pr_gas, main_gas) {
+                        stats.gas_jitter_percents.push(pct.abs());
                     } else {
                         stats.gas_diffs_without_main += 1;
                     }
@@ -388,6 +385,13 @@ impl SuiteStats {
     pub(crate) fn is_empty_report(&self) -> bool {
         self.available && self.total_runs == 0
     }
+}
+
+/// The relative PR-vs-base percentage, `None` on a zero base — every
+/// percentage in the summary comes from here, so zero-base handling cannot
+/// drift between columns.
+pub(crate) fn relative_percent(pr: u64, base: u64) -> Option<f64> {
+    (base != 0).then(|| (pr as f64 - base as f64) / base as f64 * 100.0)
 }
 
 /// The median of the given percentages, if any were collected. Even-length
