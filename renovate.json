@@ -30,6 +30,18 @@
       ],
       "depNameTemplate": "NomicFoundation/solx",
       "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Keep the CI image's baked default toolchain in lockstep with rust-toolchain.toml: emits the same `rust` dependency as the built-in rust-toolchain manager, so both files land in one update PR. The ARG drifted 1.93.0→1.96.0 unnoticed before this manager existed.",
+      "managerFilePatterns": [
+        "/^\\.github/docker/Dockerfile$/"
+      ],
+      "matchStrings": [
+        "ARG RUST_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "rust",
+      "datasourceTemplate": "rust-version"
     }
   ],
   "packageRules": [

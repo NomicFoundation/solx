@@ -1,0 +1,81 @@
+// Development container for solx. See
+// docs/src/developer-guide/00-development-container.md for the full guide,
+// including how the custom LLVM backend is built inside the container.
+{
+    "name": "solx",
+    // Build the CI runner Dockerfile's `dev` stage locally: no registry auth
+    // needed (the published image is private) and in sync with the checkout
+    // by construction. ~5-10 min the first time, layer-cached afterwards.
+    "build": {
+        "dockerfile": "../.github/docker/Dockerfile",
+        "context": "../.github/docker",
+        "target": "dev"
+    },
+    "remoteUser": "dev",
+
+    // A cold LLVM build links tools at 2-4 GB RSS each and the build tree
+    // alone takes tens of GB. Docker Desktop's default 8 GB VM will thrash.
+    "hostRequirements": {
+        "cpus": 8,
+        "memory": "16gb",
+        "storage": "64gb"
+    },
+
+    // Build state lives in named volumes: it survives container rebuilds and
+    // stays off the bind mount, which is slow on macOS/Windows hosts.
+    // Target volumes are per-checkout (${devcontainerId}); rustup/cargo/ccache
+    // are shared across checkouts — rationale and the rustup first-run caveat
+    // in the guide's Persistence section.
+    "mounts": [
+        "source=solx-target-${devcontainerId},target=${containerWorkspaceFolder}/target,type=volume",
+        "source=solx-target-slang-${devcontainerId},target=${containerWorkspaceFolder}/target-slang,type=volume",
+        "source=solx-target-llvm-${devcontainerId},target=${containerWorkspaceFolder}/target-llvm,type=volume",
+        "source=solx-rustup,target=/usr/local/rustup,type=volume",
+        "source=solx-cargo,target=/usr/local/cargo,type=volume",
+        "source=solx-ccache,target=/var/cache/solx-ccache,type=volume"
+    ],
+    "containerEnv": {
+        "CCACHE_DIR": "/var/cache/solx-ccache",
+        // Hash the compiler binary, not its mtime (matches CI): an image
+        // rebuild refreshes mtimes on an unchanged clang, which would
+        // otherwise cold-miss the entire cache.
+        "CCACHE_COMPILERCHECK": "content"
+    },
+
+    "postCreateCommand": ".devcontainer/post-create.sh",
+
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "rust-lang.rust-analyzer",
+                "llvm-vs-code-extensions.vscode-clangd"
+            ],
+            "settings": {
+                // solx-dev leaves CMAKE_EXPORT_COMPILE_COMMANDS on, so clangd
+                // works in the solx-llvm submodule once LLVM has been built.
+                "clangd.arguments": [
+                    "--compile-commands-dir=${workspaceFolder}/target-llvm/build-final"
+                ],
+                // VS Code's default excludes don't know Rust: without these,
+                // the server watches/searches the build trees (target-llvm
+                // alone is hundreds of thousands of files once built) and
+                // starves its event loop — symptom: multi-second keystroke
+                // lag in integrated terminals after the first bootstrap.
+                "files.watcherExclude": {
+                    "**/target/**": true,
+                    "**/target-slang/**": true,
+                    "**/target-llvm/**": true,
+                    "**/solx-solidity/build/**": true,
+                    "**/solx-solidity/boost/**": true
+                },
+                "search.exclude": {
+                    "**/target": true,
+                    "**/target-slang": true,
+                    "**/target-llvm": true,
+                    "**/solx-solidity/build": true,
+                    "**/solx-solidity/boost": true
+                }
+            }
+        }
+    }
+}

@@ -4,8 +4,18 @@
 #
 # The custom LLVM 21.1 backend is NOT baked into this image — it is built from
 # source in every CI job via the build-llvm composite action.
+#
+# Three stages, all from public sources:
+#   base — what a developer needs to build solx/LLVM/solc. Keep the split
+#          honest and don't add dev-relevant tools to the `ci` stage.
+#   dev  — devcontainer additions on base (non-root user, shared rustup).
+#          Built locally by .devcontainer/devcontainer.json (`target: dev`),
+#          so it needs no access to the private published image.
+#   ci   — CI-only tooling on base (root-homed Rust, valgrind for solx-llvm
+#          regression tests, cargo coverage/report tools). Must stay the final
+#          stage: docker-ci-image.yaml publishes the default target.
 
-FROM ubuntu:26.04@sha256:b7f48194d4d8b763a478a621cdc81c27be222ba2206ca3ca6bc42b49685f3d9e
+FROM ubuntu:26.04@sha256:b7f48194d4d8b763a478a621cdc81c27be222ba2206ca3ca6bc42b49685f3d9e AS base
 
 LABEL org.opencontainers.image.source="https://github.com/NomicFoundation/solx"
 LABEL org.opencontainers.image.description="CI runner image for solx"
@@ -40,9 +50,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ── LLVM 21 (system toolchain for coverage, sanitizers, lipo) ────────────────
-# Must match the LLVM version shipped inside rustc (1.93.0 → LLVM 21) so that
-# llvm-cov / llvm-profdata can read the profraw format emitted by instrumented
-# Rust binaries.
+# llvm-cov / llvm-profdata must read the profraw format emitted by
+# instrumented Rust binaries. rustc 1.96.1 embeds LLVM 22 — one major ahead
+# of these tools — but still emits format versions LLVM 21 reads. Re-check on
+# every toolchain bump: a format bump breaks the coverage job with an opaque
+# profdata error.
 # clang-format/clang-tidy (and python3-venv/psutil above) are not used by solx
 # itself; they serve solx-llvm's regression CI, which runs in this image.
 RUN curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
@@ -98,24 +110,85 @@ RUN set -eux; \
     GCC_VER=$(ls /usr/lib/gcc/${TRIPLE}/ | sort -V | tail -1); \
     ln -sf "/usr/lib/gcc/${TRIPLE}/${GCC_VER}/libstdc++.a" "/usr/lib/${TRIPLE}/libstdc++.a"
 
+ENV PATH="/usr/lib/llvm-21/bin:${PATH}" \
+    LD_LIBRARY_PATH="/usr/lib/llvm-21/lib"
+
+# ── Node.js (for SFW, npm-based CI tools, and Hardhat project tests) ──────
+ARG NODE_MAJOR=24
+RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+        | gpg --dearmor -o /usr/share/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] \
+        https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
+        > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# ═════ Devcontainer stage — not part of the published CI image ═════
+# See docs/src/developer-guide/00-development-container.md. The custom LLVM
+# EVM backend is intentionally NOT baked into any stage: it changes with
+# every solx-llvm submodule bump and weighs several GB. It is built from
+# source inside the container instead (.devcontainer/bootstrap.sh).
+FROM base AS dev
+
+# ── Non-root user with sudo ─────────────────────────────────────────────────
+# CI runs as root; a devcontainer wants a UID-mapped non-root user so files
+# created in the bind-mounted workspace belong to the host user (the
+# devcontainer runtime remaps the UID/GID to the host's on Linux).
+# ubuntu:26.04 ships a default `ubuntu` user squatting UID 1000; replace it.
+#
+# valgrind comes from apt here (seconds), unlike the ci stage's pinned
+# from-source build — dev needs a working valgrind, not CI's exact version.
+# Keeping it in the image (rather than ad-hoc installs) also keeps LLVM's
+# cmake valgrind detection stable across container rebuilds; the persistent
+# target-llvm build tree bakes it in.
+RUN userdel --remove ubuntu 2>/dev/null; \
+    apt-get update && apt-get install -y --no-install-recommends sudo valgrind \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --uid 1000 --user-group --create-home --shell /bin/bash dev \
+    && echo "dev ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev \
+    && chmod 440 /etc/sudoers.d/dev
+
+# ── Shared rustup/cargo ──────────────────────────────────────────────────────
+# base ships no Rust. Install a shared rustup in the official rust-image
+# layout; the actual toolchain is not baked in — rustup downloads the version
+# pinned in rust-toolchain.toml on the first cargo invocation, so this layer
+# never goes stale on a toolchain bump.
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:${PATH}
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        | sh -s -- -y --default-toolchain none --profile default \
+    && chmod -R a+w ${RUSTUP_HOME} ${CARGO_HOME}
+
+# ═════ CI-only stage — nothing below is needed for local development ═════
+FROM base AS ci
+ARG TARGETPLATFORM
+
 # ── Valgrind (for LLVM regression tests under valgrind) ───────────────────
+# Kept above the Rust layer: VALGRIND_VERSION effectively never changes,
+# while RUST_VERSION bumps every few weeks and would rebuild everything below.
 ENV VALGRIND_VERSION=3.23.0
 RUN curl -fsSL -o valgrind-${VALGRIND_VERSION}.tar.bz2 \
         https://sourceware.org/pub/valgrind/valgrind-${VALGRIND_VERSION}.tar.bz2 \
     && tar -xf valgrind-${VALGRIND_VERSION}.tar.bz2 \
-    && cd valgrind-${VALGRIND_VERSION} && ./configure && make && make install \
+    && cd valgrind-${VALGRIND_VERSION} && ./configure && make -j"$(nproc)" && make install \
     && cd .. && rm -rf valgrind-${VALGRIND_VERSION}.tar.bz2 valgrind-${VALGRIND_VERSION}
 
 # ── Rust ─────────────────────────────────────────────────────────────────────
-# Version must match rust-toolchain.toml in the solx repo.
-ARG RUST_VERSION=1.93.0
+# Version must match rust-toolchain.toml (a renovate customManager bumps both
+# in one PR); jobs resolve that pin via rustup anyway, so a matching default
+# only saves the download. Lives in ci, not base: CI jobs run as root, while
+# the dev stage ships its own shared rustup — a /root-homed toolchain is dead
+# weight in the dev image. rust-src serves the -Zbuild-std actions
+# (build-rust, rust-unit-tests). On a bump, re-check the LLVM section
+# comment in base (rustc's embedded LLVM major moves).
+ARG RUST_VERSION=1.96.1
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         | sh -s -- -y --default-toolchain "${RUST_VERSION}" --profile default \
     && . "$HOME/.cargo/env" \
     && rustup component add rust-src
 
-ENV PATH="/root/.cargo/bin:/usr/lib/llvm-21/bin:${PATH}" \
-    LD_LIBRARY_PATH="/usr/lib/llvm-21/lib"
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # ── Cargo tools ────────────────────────────────────────────────────────────
 # When updating versions here, also update the matching pins in:
@@ -126,16 +199,6 @@ RUN cargo install \
     cargo-llvm-cov@0.8.4 \
     cargo-udeps@0.1.60 \
     --locked
-
-# ── Node.js (for SFW and npm-based CI tools) ─────────────────────────────
-ARG NODE_MAJOR=24
-RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
-        | gpg --dearmor -o /usr/share/keyrings/nodesource.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] \
-        https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
-        > /etc/apt/sources.list.d/nodesource.list \
-    && apt-get update && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/*
 
 # Smoke-test: ensure key tools are on PATH
 RUN set -eux \

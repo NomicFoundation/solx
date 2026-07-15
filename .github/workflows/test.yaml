@@ -28,6 +28,7 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      devcontainer: ${{ steps.filter-devcontainer.outputs.devcontainer }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
@@ -41,6 +42,48 @@ jobs:
               - '!**/*.md'
               - '!**/*.mdx'
               - '!**/LICENSE*'
+      # Separate step: the OR-list below needs the default 'some' quantifier,
+      # while the negation-style filter above needs 'every'. The docker dir is
+      # included because the devcontainer builds its `base` stage locally;
+      # rust-toolchain.toml because the container resolves it lazily on first
+      # use; this workflow itself so edits to the validation harness (the
+      # validate-devcontainer job, the devcontainers/ci pin) are validated too.
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: filter-devcontainer
+        with:
+          filters: |
+            devcontainer:
+              - '.devcontainer/**'
+              - '.github/docker/**'
+              - 'rust-toolchain.toml'
+              - '.github/workflows/test.yaml'
+
+  # Smoke-test the devcontainer: the runner Dockerfile's `base` stage and the
+  # dev layer build (locally, no registry auth — same flow as a developer
+  # machine), the non-root user and volume mounts work, and the pinned Rust
+  # toolchain resolves. Deliberately does NOT build LLVM — that stays a
+  # documented local step (docs/src/developer-guide/00-development-container.md).
+  validate-devcontainer:
+    needs: changes
+    if: needs.changes.outputs.devcontainer == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+
+      - name: Checkout source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Shellcheck devcontainer scripts
+        run: shellcheck .devcontainer/*.sh
+
+      # Builds the runner Dockerfile's `dev` stage (locally, no registry
+      # auth), runs the container lifecycle incl. post-create.sh, then the
+      # smoke test inside.
+      - name: Build devcontainer and run smoke test
+        uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca # v0.3.1900000450
+        with:
+          configFile: .devcontainer/devcontainer.json
+          push: never
+          runCmd: .devcontainer/smoke-test.sh
 
   # Check for cargo issues
   cargo-checks:
@@ -48,7 +91,7 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:a3e9312d6442e028a4b9eed17ea597380ae86abf3ff4d45ba957d5a10a805790
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:2c8db6eea1393f7b1824d632597f9ac3f8ca7ae34d63b301e80c11a13d896583
       # Host tooling bind-mounted so the free-disk-space-linux action can reclaim
       # ~24 GB before the cold LLVM build fills the runner's 14 GB budget.
       # Anchor shared with build-and-test below; keep in sync with the
@@ -150,11 +193,11 @@ jobs:
             runner: macos-15
           - name: "Linux x86 gnu"
             runner: ubuntu-24.04
-            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:a3e9312d6442e028a4b9eed17ea597380ae86abf3ff4d45ba957d5a10a805790
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:2c8db6eea1393f7b1824d632597f9ac3f8ca7ae34d63b301e80c11a13d896583
             target: "x86_64-unknown-linux-gnu"
           - name: "Linux ARM64 gnu"
             runner: ubuntu-24.04-arm
-            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:a3e9312d6442e028a4b9eed17ea597380ae86abf3ff4d45ba957d5a10a805790
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:2c8db6eea1393f7b1824d632597f9ac3f8ca7ae34d63b301e80c11a13d896583
             target: "aarch64-unknown-linux-gnu"
           - name: "Windows"
             runner: windows-2025
