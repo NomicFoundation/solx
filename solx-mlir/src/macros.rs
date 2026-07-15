@@ -43,16 +43,15 @@ macro_rules! mlir_op_void {
 }
 
 /// Appends a region-bearing control-flow op (`sol.if`/`for`/`while`/`do`) and hands back each
-/// region's fresh entry block for the caller to emit into and terminate. A trailing
-/// `; region if condition` clause makes that region optional: it receives a block — returned as
-/// `Some` — only when `condition` holds, and is left empty (`None`) otherwise, modelling an absent
-/// `else`.
+/// region's fresh entry block for the caller to emit into and terminate. A trailing `; empty name…`
+/// clause sets a region the op's shape requires but this method leaves bodiless — an `if` with no
+/// `else` — and it is not handed back.
 macro_rules! mlir_region_op {
     (
         $context:expr, $block:expr, $operation:ident
         $(.$method:ident($($argument:expr),* $(,)?))*
         ; $($region:ident),+
-        $(; $optional_region:ident if $optional_condition:expr)?
+        $(; empty $($empty_region:ident),+)?
         $(,)?
     ) => {{
         $(
@@ -62,21 +61,15 @@ macro_rules! mlir_region_op {
                 region
             };
         )+
-        $(
-            let $optional_region = {
-                let region = melior::ir::Region::new();
-                if $optional_condition {
-                    melior::ir::RegionLike::append_block(&region, melior::ir::Block::new(&[]));
-                }
-                region
-            };
-        )?
+        $($(
+            let $empty_region = melior::ir::Region::new();
+        )+)?
         let operation = melior::ir::BlockLike::append_operation(
             $block,
             $operation::builder($context.melior, $context.location())
                 $(.$method($($crate::IntoOds::into_ods($argument)),*))*
                 $(.$region($region))+
-                $(.$optional_region($optional_region))?
+                $($(.$empty_region($empty_region))+)?
                 .build()
                 .into(),
         );
@@ -93,12 +86,6 @@ macro_rules! mlir_region_op {
                     .expect(concat!(stringify!($region), " has an entry block")),
                 )
             ),+
-            $(
-                , melior::ir::RegionLike::first_block(
-                    &regions.next().expect(concat!("missing ", stringify!($optional_region))),
-                )
-                .map($crate::Block::from)
-            )?
         )
     }};
 }
@@ -191,17 +178,20 @@ impl<'slice, T, const N: usize> IntoOds<&'slice [T]> for &'slice [T; N] {
 /// result types `field()` / `address()` / `boolean()` / `memory()` / `calldata()` / `fixed_bytes(N)`
 /// / `ptr(pointee, stack)`; the receiver-derived `self` / `self_ty` / `gep_of(elem)`; attributes
 /// `int_attr` / `str_attr` / `symbol_attr` / `predicate_attr` / `ty_attr` / `count_attr`; variadic
-/// operands `single` / `many` / `concat`; conditional setters `flag` / `optional_str` /
-/// `optional_value`. The operation slot may be `checked(CheckedOp, UncheckedOp)`, which threads a
-/// `checked: bool` selector.
+/// operands `single` / `many` / `concat`; conditional setters `optional_str` / `optional_value`; the
+/// always-set unit flag `unit_flag`. The operation slot may be `checked(CheckedOp, UncheckedOp)`,
+/// which threads a `checked: bool` selector.
+///
+/// A `base | flagged (…) … { … } flagged .setter ;` declaration stamps a pair of methods off one
+/// chain: `base` omits the unit-flag setter and `flagged` appends `.setter(unit_flag)`, so a binary
+/// mode is two named methods rather than one method taking a `bool`.
 ///
 /// Dispositions: `-> value` / `-> place` append at the `current_block()` cursor and wrap the single
 /// result; `-> value nop_if_same(param)` short-circuits when the receiver already has that type; an
 /// arrowless declaration is value-less and appends to the receiver block for a `Block` method, or at
 /// the `current_block()` cursor for a `Value` / `Place`. A `Block` declaration listing region names
-/// after `;` opens a region-bearing op and returns each region's entry block; a trailing
-/// `; name if param` region is materialized only when the flag holds and is returned as an `Option`.
-/// Every argument is routed through [`IntoOds`] to the setter's type.
+/// after `;` opens a region-bearing op and returns each region's entry block, or the sole block when
+/// one region is named. Every argument is routed through [`IntoOds`] to the setter's type.
 macro_rules! sol_ops {
     () => {};
 
@@ -209,7 +199,6 @@ macro_rules! sol_ops {
     (@ty ty) => { $crate::Type<'context> };
     (@ty str) => { &str };
     (@ty i64) => { i64 };
-    (@ty bool) => { bool };
     (@ty values) => { &[$crate::Value<'context>] };
     (@ty predicate) => { $crate::CmpPredicate };
     (@ty optional_str) => { ::core::option::Option<&str> };
@@ -227,7 +216,7 @@ macro_rules! sol_ops {
         $crate::Type::address($context.melior, false)
     };
     (@arg [$context:ident] [$receiver:tt] boolean()) => {
-        $crate::Type::signless($context.melior, solx_utils::BIT_LENGTH_BOOLEAN)
+        $crate::Type::boolean($context.melior)
     };
     (@arg [$context:ident] [$receiver:tt] memory()) => {
         $crate::Type::string($context.melior, solx_utils::DataLocation::Memory)
@@ -278,12 +267,8 @@ macro_rules! sol_ops {
     };
 
     (@chain $builder:ident [$context:ident] [$receiver:tt]) => { $builder };
-    (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (flag($flag:ident)) $($rest:tt)*) => {{
-        let $builder = if $flag {
-            $builder.$setter(::melior::ir::Attribute::unit($context.melior))
-        } else {
-            $builder
-        };
+    (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (unit_flag) $($rest:tt)*) => {{
+        let $builder = $builder.$setter(::melior::ir::Attribute::unit($context.melior));
         sol_ops!(@chain $builder [$context] [$receiver] $($rest)*)
     }};
     (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (optional_str($text:ident)) $($rest:tt)*) => {{
@@ -331,14 +316,14 @@ macro_rules! sol_ops {
     (@disp_ty value) => { $crate::Value<'context> };
     (@disp_ty place) => { $crate::Place<'context> };
 
+    (@region_tuple $region:ident ; empty $($empty_region:ident),+) => {
+        $crate::Block<'context>
+    };
     (@region_tuple $first:ident, $second:ident) => {
         ($crate::Block<'context>, $crate::Block<'context>)
     };
     (@region_tuple $first:ident, $second:ident, $third:ident) => {
         ($crate::Block<'context>, $crate::Block<'context>, $crate::Block<'context>)
-    };
-    (@region_tuple $region:ident ; $optional_region:ident if $flag:ident) => {
-        ($crate::Block<'context>, ::core::option::Option<$crate::Block<'context>>)
     };
 
     (@one_result [$context:ident] $operation:expr, $message:expr) => {
@@ -353,6 +338,32 @@ macro_rules! sol_ops {
     };
     (@emit place [$context:ident] $operation:expr, $message:expr) => {
         $crate::Place::from(sol_ops!(@one_result [$context] $operation, $message))
+    };
+
+    (
+        Value :: $base:ident | $flagged:ident ($($argument:ident : $kind:ident),* $(,)?)
+        -> value { $operation:ident $($chain:tt)* } flagged .$setter:ident ;
+        $($rest:tt)*
+    ) => {
+        sol_ops!(Value :: $base ($($argument : $kind),*) -> value { $operation $($chain)* });
+        sol_ops!(
+            Value :: $flagged ($($argument : $kind),*)
+            -> value { $operation $($chain)* .$setter(unit_flag) }
+        );
+        sol_ops!($($rest)*);
+    };
+
+    (
+        Block :: $base:ident | $flagged:ident (self $(, $argument:ident : $kind:ident)* $(,)?)
+        { $operation:ident $($chain:tt)* } flagged .$setter:ident ;
+        $($rest:tt)*
+    ) => {
+        sol_ops!(Block :: $base (self $(, $argument : $kind)*) { $operation $($chain)* });
+        sol_ops!(
+            Block :: $flagged (self $(, $argument : $kind)*)
+            { $operation $($chain)* .$setter(unit_flag) }
+        );
+        sol_ops!($($rest)*);
     };
 
     (

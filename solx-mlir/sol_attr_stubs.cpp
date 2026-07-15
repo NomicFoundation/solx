@@ -128,4 +128,8 @@ MlirType solxCreateEnumType(MlirContext ctx, uint32_t max) {
     return wrap(mlir::sol::EnumType::get(context, max));
 }
 
+bool solxIsAddressType(MlirType ty) {
+    return mlir::isa<mlir::sol::AddressType>(unwrap(ty));
+}
+
 } /* extern "C" */

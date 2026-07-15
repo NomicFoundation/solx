@@ -29,6 +29,9 @@ impl<'context> Type<'context> {
     /// Bit width of a Solidity function selector: 4 bytes.
     pub const SELECTOR_BIT_WIDTH: u32 = solx_utils::BIT_LENGTH_X32 as u32;
 
+    /// Byte width of a Solidity function selector.
+    pub const SELECTOR_BYTE_WIDTH: u32 = solx_utils::BYTE_LENGTH_X32 as u32;
+
     /// Wraps a melior type.
     pub fn new(inner: MlirType<'context>) -> Self {
         Self { inner }
@@ -44,9 +47,12 @@ impl<'context> Type<'context> {
         Self::new(MlirType::from(IntegerType::signed(context, bits as u32)))
     }
 
-    /// A signless integer type of `bits` width (`i<bits>`): the boolean `i1`.
-    pub fn signless(context: &'context melior::Context, bits: usize) -> Self {
-        Self::new(MlirType::from(IntegerType::new(context, bits as u32)))
+    /// The boolean type: a signless `i1`.
+    pub fn boolean(context: &'context melior::Context) -> Self {
+        Self::new(MlirType::from(IntegerType::new(
+            context,
+            solx_utils::BIT_LENGTH_BOOLEAN as u32,
+        )))
     }
 
     /// A `sol::AddressType` with the given payability.
@@ -165,9 +171,14 @@ impl<'context> Type<'context> {
             .width()
     }
 
-    /// The integer attribute of `value` at this type, built via the big-integer FFI constructor for
-    /// values wider than `i64`.
-    pub fn big_integer_attribute(self, value: &BigInt) -> Attribute<'context> {
+    /// Whether this is a `sol::AddressType`, regardless of payability.
+    pub fn is_address(self) -> bool {
+        unsafe { ffi::solxIsAddressType(self.inner.to_raw()) }
+    }
+
+    /// The integer attribute of `value` at this type, built via the arbitrary-width FFI constructor
+    /// for values wider than `i64`.
+    pub fn integer_attribute(self, value: &BigInt) -> Attribute<'context> {
         let (sign, words) = value.to_u64_digits();
         unsafe {
             Attribute::from_raw(ffi::solxCreateIntegerAttr(
