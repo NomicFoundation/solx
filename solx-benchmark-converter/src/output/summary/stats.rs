@@ -211,6 +211,8 @@ impl SuiteStats {
             let mut main_runs: BTreeMap<String, &crate::benchmark::test::run::Run> =
                 BTreeMap::new();
             let mut by_role_pipeline: BTreeMap<(Role, String), u64> = BTreeMap::new();
+            let mut pr_compile: BTreeMap<String, u64> = BTreeMap::new();
+            let mut main_compile: BTreeMap<String, u64> = BTreeMap::new();
             for (mode, run) in test.runs.iter() {
                 stats.total_runs += 1;
                 let (role, key) = classify(mode, suite.matrix);
@@ -241,18 +243,35 @@ impl SuiteStats {
                     }
                 }
 
-                // Compile-time aggregates (project-level runs carry it).
-                if !run.compilation_time.is_empty()
-                    && let Role::Pr | Role::Main = role
-                {
-                    let pipeline = pipeline_of(mode);
-                    let entry = stats.compile.entry(pipeline).or_default();
+                if !run.compilation_time.is_empty() {
                     let ms = run.average_compilation_time();
                     match role {
-                        Role::Pr => entry.pr_total_ms += ms,
-                        Role::Main => entry.main_total_ms += ms,
+                        Role::Pr => *pr_compile.entry(pipeline_of(mode)).or_default() += ms,
+                        Role::Main => *main_compile.entry(pipeline_of(mode)).or_default() += ms,
                         _ => {}
                     }
+                }
+            }
+
+            // Compile time compares PR∩main per pipeline, so the aggregate
+            // and the per-project percentages derive from identical data — a
+            // project building on only one side is excluded, not counted as
+            // zero. One-sided pipelines still get their table column.
+            for pipeline in pr_compile.keys().chain(main_compile.keys()) {
+                stats.compile.entry(pipeline.clone()).or_default();
+            }
+            for (pipeline, &pr_ms) in pr_compile.iter() {
+                let Some(&main_ms) = main_compile.get(pipeline) else {
+                    continue;
+                };
+                let entry = stats.compile.entry(pipeline.clone()).or_default();
+                entry.pr_total_ms += pr_ms;
+                entry.main_total_ms += main_ms;
+                if main_ms != 0 {
+                    let pct = (pr_ms as f64 - main_ms as f64) / main_ms as f64 * 100.0;
+                    entry
+                        .per_project
+                        .push((test.metadata.selector.project.clone(), pct));
                 }
             }
 
@@ -331,41 +350,6 @@ impl SuiteStats {
                             (pr_gas as f64 - main_gas as f64).abs() / main_gas as f64 * 100.0;
                         stats.gas_jitter_percents.push(jitter);
                     }
-                }
-            }
-        }
-
-        // Per-project compile-time percentages (for outlier detection and the
-        // median) need a second pass now that pipelines are known.
-        for test in benchmark.tests.values() {
-            let project = test.metadata.selector.project.as_str();
-            let mut pr: BTreeMap<String, u64> = BTreeMap::new();
-            let mut main: BTreeMap<String, u64> = BTreeMap::new();
-            for (mode, run) in test.runs.iter() {
-                if run.compilation_time.is_empty() {
-                    continue;
-                }
-                match classify(mode, suite.matrix).0 {
-                    Role::Pr => {
-                        pr.insert(pipeline_of(mode), run.average_compilation_time());
-                    }
-                    Role::Main => {
-                        main.insert(pipeline_of(mode), run.average_compilation_time());
-                    }
-                    _ => {}
-                }
-            }
-            for (pipeline, &pr_ms) in pr.iter() {
-                if let Some(&main_ms) = main.get(pipeline)
-                    && main_ms != 0
-                {
-                    let pct = (pr_ms as f64 - main_ms as f64) / main_ms as f64 * 100.0;
-                    stats
-                        .compile
-                        .entry(pipeline.clone())
-                        .or_default()
-                        .per_project
-                        .push((project.to_owned(), pct));
                 }
             }
         }
