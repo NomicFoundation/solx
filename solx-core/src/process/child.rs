@@ -2,7 +2,6 @@
 //! The subprocess-side worker: reads a session, then compiles jobs until `stdin` closes.
 //!
 
-use std::sync::atomic::Ordering;
 use std::thread::Builder;
 
 use crate::error::Error;
@@ -25,10 +24,7 @@ pub fn run() -> anyhow::Result<()> {
                 .recv()?
                 .ok_or_else(|| anyhow::anyhow!("The worker received no session"))?;
 
-            inkwell::support::error_handling::install_stack_error_handler(evm_stack_error_handler);
-
             while let Some(job) = stdin.recv::<Job>()? {
-                solx_codegen_evm::IS_SIZE_FALLBACK.store(false, Ordering::Relaxed);
                 let result = Contract::compile_to_evm(
                     session.language,
                     session.solc_version.clone(),
@@ -62,24 +58,4 @@ pub fn run() -> anyhow::Result<()> {
         .expect("Threading error")
         .join()
         .expect("Threading error")
-}
-
-///
-/// Handles LLVM stack-too-deep errors.
-///
-/// # Safety
-///
-/// This function is unsafe because it is called from the LLVM stackifier.
-/// The function must terminate the process after handling the error.
-///
-unsafe extern "C" fn evm_stack_error_handler(spill_area_size: u64) {
-    let result: crate::Result<EVMOutput> = Err(Error::stack_too_deep(
-        spill_area_size,
-        solx_codegen_evm::IS_SIZE_FALLBACK.load(Ordering::Relaxed),
-    ));
-    std::io::stdout()
-        .send(&result)
-        .unwrap_or_else(|error| panic!("Stack-too-deep response writing error: {error}"));
-    unsafe { inkwell::support::shutdown_llvm() };
-    std::process::exit(solx_utils::EXIT_CODE_SUCCESS);
 }
