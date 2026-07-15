@@ -5,7 +5,7 @@
 
 | Suite | New failures | Size Δ | Gas Δ | Report |
 |---|---|---|---|---|
-| solx-tester · 2 proj | ✅ 0 | ✅ 0 of 3 | ✅ 0 of 3 | [solx-tester-report.xlsx ↓](https://example.com/artifacts/tester) |
+| solx-tester | ✅ 0 | ✅ 0 of 3 | ✅ 0 of 3 | [solx-tester-report.xlsx ↓](https://example.com/artifacts/tester) |
 | Foundry · 2 proj | ✅ 0 (3 pre-existing) | ✅ 0 of 4 | ⚪ jitter 2 of 4, median 0.1% (not gated) | [foundry-report.xlsx ↓](https://example.com/artifacts/foundry) |
 | Hardhat | ✅ 0 (2 pre-existing) | ⚪ not collected | ⚪ not collected | [hardhat-report.xlsx ↓](https://example.com/artifacts/hardhat) |
 
