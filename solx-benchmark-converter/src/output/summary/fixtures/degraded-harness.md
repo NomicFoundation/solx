@@ -1,7 +1,7 @@
 ### 🧪 Integration tests — standard · PR vs `main`
 
 ⚪ **No output data** — no size or gated-gas comparisons were collected.
-✅ **No new failures**.
+⚪ **No failure data** — no PR run had a `main` counterpart to compare against.
 ❌ **Suite errored** — solx-tester produced no usable report.
 ❌ **Harness error** — Foundry: benchmark data matched no recognized toolchain naming.
 ❌ **Harness error** — Hardhat: runs matched no declared toolchain: `04.mason-legacy`.
