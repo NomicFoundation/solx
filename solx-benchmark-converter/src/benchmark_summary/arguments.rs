@@ -9,8 +9,9 @@ use clap::Parser;
 ///
 /// Generates the single PR summary comment from the per-suite benchmark JSONs.
 ///
-/// Each suite is optional: a missing benchmark file (the suite did not run, or
-/// produced no data) is simply omitted from the comment.
+/// Each suite is optional: a suite whose flag is not passed is omitted from
+/// the comment, while a flag pointing to a missing or unreadable file renders
+/// that suite as errored.
 ///
 #[derive(Debug, Parser)]
 #[command(about, long_about = None, arg_required_else_help = true)]
