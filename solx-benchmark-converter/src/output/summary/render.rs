@@ -247,8 +247,9 @@ pub(crate) fn render_results_table(out: &mut String, stats: &[SuiteStats]) {
         if !s.available {
             let _ = writeln!(
                 out,
-                "| {} | ❌ no report — suite errored | — | — | — |",
-                s.label
+                "| {} | ❌ no report — suite errored | — | — | {} |",
+                s.label,
+                s.report_cell()
             );
             continue;
         }

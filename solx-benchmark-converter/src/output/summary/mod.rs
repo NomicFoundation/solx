@@ -412,7 +412,11 @@ mod tests {
             false,
             vec![failure_test("hh-project", &[("03.solx-legacy", 0, 5)])],
         );
-        let out = render(&[unavailable("solx-tester"), foundry, hardhat]);
+        // The errored suite keeps its report link: the XLSX can outlive a
+        // benchmark-JSON write failure.
+        let mut tester = unavailable("solx-tester");
+        tester.report_url = Some("https://example.com/artifacts/tester".to_owned());
+        let out = render(&[tester, foundry, hardhat]);
         assert_matches_fixture("degraded-harness", &out);
     }
 
