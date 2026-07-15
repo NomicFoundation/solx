@@ -21,16 +21,9 @@ mod stats;
 mod toolchain;
 mod verdict;
 
-use std::fmt::Write;
-
 use crate::benchmark::Benchmark;
 
-use self::render::render_baselines;
-use self::render::render_compile_time;
-use self::render::render_new_failures;
-use self::render::render_output_changes;
-use self::render::render_results_table;
-use self::render::render_verdict;
+use self::render::render_summary;
 use self::stats::SuiteStats;
 
 pub use self::toolchain::ToolchainMatrix;
@@ -62,27 +55,7 @@ pub struct SummarySuite {
 ///
 pub fn render(suites: &[SummarySuite]) -> String {
     let stats: Vec<SuiteStats> = suites.iter().map(SuiteStats::from_suite).collect();
-
-    let full_matrix = stats.iter().any(|s| s.has_baselines);
-
-    let mut out = String::new();
-    let mode = if full_matrix {
-        "full matrix"
-    } else {
-        "standard"
-    };
-    let _ = writeln!(out, "### 🧪 Integration tests — {mode} · PR vs `main`\n");
-
-    render_verdict(&mut out, &stats);
-    render_results_table(&mut out, &stats);
-    render_new_failures(&mut out, &stats);
-    render_output_changes(&mut out, &stats);
-    render_compile_time(&mut out, &stats);
-    if full_matrix {
-        render_baselines(&mut out, &stats);
-    }
-
-    out
+    render_summary(&stats)
 }
 
 #[cfg(test)]

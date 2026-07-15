@@ -1,14 +1,16 @@
 //!
-//! The markdown rendering of the integration summary.
+//! The markdown rendering of the integration summary (askama spike).
 //!
-//! Everything here turns already-decided verdicts and already-computed
-//! statistics into text; no thresholds or comparisons are evaluated in this
-//! file except the presentation caps below.
+//! The comment's structure lives in `templates/summary.md`; this file holds
+//! the cell-level formatting the template calls back into, the custom
+//! filters, and the view models precomputed for the data-driven tables.
 //!
 
 use std::collections::BTreeSet;
-use std::fmt::Write;
 
+use askama::Template;
+
+use super::stats::CompileAggregate;
 use super::stats::DiffCounter;
 use super::stats::SuiteStats;
 use super::stats::median;
@@ -124,242 +126,91 @@ impl SuiteStats {
     }
 }
 
-///
-/// The verdict lines: output invariance, new failures, and harness health —
-/// three independent signals decided in `verdict.rs`, each stated with its
-/// numbers.
-///
-pub(crate) fn render_verdict(out: &mut String, stats: &[SuiteStats]) {
-    match output_verdict(stats) {
-        OutputVerdict::NoData => {
-            let _ = writeln!(
-                out,
-                "⚪ **No output data** — no size or gated-gas comparisons were collected."
-            );
-        }
-        OutputVerdict::Preserving {
-            size_cells,
-            gated_gas_cells,
-            gas_label,
-        } => {
-            let mut clauses = Vec::new();
-            if size_cells > 0 {
-                clauses.push(format!(
-                    "bytecode size identical ({} comparisons)",
-                    commas(size_cells)
-                ));
-            }
-            if gated_gas_cells > 0 {
-                clauses.push(format!(
-                    "{gas_label} gas identical ({})",
-                    commas(gated_gas_cells)
-                ));
-            }
-            let _ = writeln!(out, "✅ **Output-preserving** — {}.", clauses.join(", "));
-        }
-        OutputVerdict::Changed { size, gas } => {
-            let mut parts = Vec::new();
-            if let Some(size) = size {
-                parts.push(format!(
-                    "{} of {} size comparisons differ ({:+} B total)",
-                    commas(size.diffs),
-                    commas(size.cells),
-                    size.delta_bytes
-                ));
-            }
-            if let Some(gas) = gas {
-                parts.push(format!(
-                    "{} of {} {} gas comparisons differ",
-                    commas(gas.diffs),
-                    commas(gas.cells),
-                    gas.label
-                ));
-            }
-            let _ = writeln!(
-                out,
-                "⚠️ **Output changed** — {}. If this PR is meant to be output-preserving, investigate before merging.",
-                parts.join("; ")
-            );
-        }
-    }
+/// One "largest changes" listing, ranked; the template truncates it.
+struct MoverSection {
+    suite_label: String,
+    title: &'static str,
+    unit: &'static str,
+    movers: Vec<MoverRow>,
+    report_file: String,
+}
 
-    match failure_verdict(stats) {
-        FailureVerdict::NoData => {
-            let _ = writeln!(
-                out,
-                "⚪ **No failure data** — no PR run had a `main` counterpart to compare against."
-            );
-        }
-        FailureVerdict::Clean { pre_existing } if pre_existing.is_empty() => {
-            let _ = writeln!(out, "✅ **No new failures**.");
-        }
-        FailureVerdict::Clean { pre_existing } => {
-            let pre: Vec<String> = pre_existing
-                .iter()
-                .map(|(label, count)| format!("{label}'s {}", commas(*count as u64)))
-                .collect();
-            let _ = writeln!(
-                out,
-                "✅ **No new failures** — {} failures already present on `main`.",
-                pre.join(" / ")
-            );
-        }
-        FailureVerdict::Regressed { suites } => {
-            let parts: Vec<String> = suites
-                .iter()
-                .map(|suite| {
-                    let mut kinds = Vec::new();
-                    if suite.new_build > 0 {
-                        kinds.push(format!("+{} build", commas(suite.new_build as u64)));
-                    }
-                    if suite.new_test > 0 {
-                        kinds.push(format!("+{} test", commas(suite.new_test as u64)));
-                    }
-                    format!("{}: {}", suite.label, kinds.join(", "))
-                })
-                .collect();
-            let _ = writeln!(out, "❌ **New failures** — {}.", parts.join("; "));
-        }
-    }
+/// One mover, with the raw numbers so the template formats them.
+struct MoverRow {
+    label: String,
+    mode: String,
+    main: u64,
+    pr: u64,
+}
 
-    let mut unbaselined = Vec::new();
-    for issue in health_issues(stats) {
-        match issue {
-            HealthIssue::SuiteErrored { label } => {
-                let _ = writeln!(
-                    out,
-                    "❌ **Suite errored** — {label} produced no usable report."
-                );
-            }
-            HealthIssue::EmptySuite { label } => {
-                let _ = writeln!(
-                    out,
-                    "❌ **Suite empty** — {label}'s report contains no runs."
-                );
-            }
-            HealthIssue::UnrecognizedToolchains { label } => {
-                let _ = writeln!(
-                    out,
-                    "❌ **Harness error** — {label}: benchmark data matched no recognized toolchain naming."
-                );
-            }
-            HealthIssue::UnrecognizedRuns { label, modes } => {
-                let shown: Vec<String> = modes
-                    .iter()
-                    .take(MAX_LISTED)
-                    .map(|mode| format!("`{mode}`"))
-                    .collect();
-                let extra = modes.len().saturating_sub(MAX_LISTED);
-                let more = if extra > 0 {
-                    format!(" (+{extra} more)")
-                } else {
-                    String::new()
-                };
-                let _ = writeln!(
-                    out,
-                    "❌ **Harness error** — {label}: runs matched no declared toolchain: {}{more}.",
-                    shown.join(", ")
-                );
-            }
+/// The compile-time table, precomputed because its columns are data-driven.
+struct CompileView {
+    pipelines: Vec<String>,
+    rows: Vec<Vec<String>>,
+    within_noise: bool,
+    outliers: Option<String>,
+}
+
+///
+/// The full summary comment.
+///
+#[derive(Template)]
+#[template(path = "summary.md", escape = "none")]
+struct SummaryTemplate<'a> {
+    full_matrix: bool,
+    output: OutputVerdict,
+    failures: FailureVerdict,
+    issues: Vec<HealthIssue>,
+    unbaselined: Vec<String>,
+    stats: &'a [SuiteStats],
+    has_new_failures: bool,
+    mover_sections: Vec<MoverSection>,
+    compile: Option<CompileView>,
+    baseline_rows: Vec<Vec<String>>,
+}
+
+///
+/// Renders the full summary comment for the given per-suite statistics.
+///
+pub(crate) fn render_summary(stats: &[SuiteStats]) -> String {
+    let issues = health_issues(stats);
+    let unbaselined: Vec<String> = issues
+        .iter()
+        .filter_map(|issue| match issue {
             HealthIssue::Unbaselined {
                 label,
                 runs,
                 failures,
-            } => {
-                unbaselined.push(format!(
-                    "{label}: {runs} runs ({} failures)",
-                    commas(failures as u64)
-                ));
-            }
-        }
+            } => Some(format!(
+                "{label}: {runs} runs ({} failures)",
+                commas(*failures as u64)
+            )),
+            _ => None,
+        })
+        .collect();
+    let full_matrix = stats.iter().any(|s| s.has_baselines);
+    SummaryTemplate {
+        full_matrix,
+        output: output_verdict(stats),
+        failures: failure_verdict(stats),
+        issues,
+        unbaselined,
+        stats,
+        has_new_failures: stats.iter().any(|s| !s.failure_regressions.is_empty()),
+        mover_sections: build_mover_sections(stats),
+        compile: build_compile_view(stats),
+        baseline_rows: if full_matrix {
+            build_baseline_rows(stats)
+        } else {
+            Vec::new()
+        },
     }
-    if !unbaselined.is_empty() {
-        let _ = writeln!(
-            out,
-            "⚠️ **No baseline** — {} have no `main` counterpart; their failures are not compared.",
-            unbaselined.join("; ")
-        );
-    }
-    let _ = writeln!(out);
+    .render()
+    .expect("template rendering writes to a String")
 }
 
-pub(crate) fn render_results_table(out: &mut String, stats: &[SuiteStats]) {
-    let _ = writeln!(out, "| Suite | New failures | Size Δ | Gas Δ | Report |");
-    let _ = writeln!(out, "|---|---|---|---|---|");
-    for s in stats {
-        if !s.available {
-            let _ = writeln!(
-                out,
-                "| {} | ❌ no report — suite errored | — | — | {} |",
-                s.label,
-                s.report_cell()
-            );
-            continue;
-        }
-        if s.is_empty_report() {
-            let _ = writeln!(
-                out,
-                "| {} | ❌ empty report | — | — | {} |",
-                s.label,
-                s.report_cell()
-            );
-            continue;
-        }
-        if s.classification_failed() {
-            let _ = writeln!(
-                out,
-                "| {} | ❌ unrecognized toolchain naming | — | — | {} |",
-                s.label,
-                s.report_cell()
-            );
-            continue;
-        }
-        let _ = writeln!(
-            out,
-            "| {} | {} | {} | {} | {} |",
-            s.suite_cell(),
-            s.failures_cell(),
-            s.size.cell(true),
-            s.gas_cell(),
-            s.report_cell(),
-        );
-    }
-}
-
-///
-/// The rows behind a red "New failures" verdict, inline so the regressed
-/// projects can be judged without opening the XLSX.
-///
-pub(crate) fn render_new_failures(out: &mut String, stats: &[SuiteStats]) {
-    if stats.iter().all(|s| s.failure_regressions.is_empty()) {
-        return;
-    }
-    let _ = writeln!(out, "\n**New failures (PR vs `main`):**\n");
-    for s in stats {
-        for regression in s.failure_regressions.iter().take(MAX_LISTED) {
-            let _ = writeln!(
-                out,
-                "- {}: `{}` [{}] {} failures {} → {}",
-                s.label,
-                regression.label,
-                regression.mode,
-                regression.kind,
-                regression.main,
-                regression.pr
-            );
-        }
-        let extra = s.failure_regressions.len().saturating_sub(MAX_LISTED);
-        if extra > 0 {
-            let _ = writeln!(out, "- +{extra} more — see {}", s.report_file);
-        }
-    }
-}
-
-///
-/// The rows behind an "Output changed" verdict, inline — a bytecode size
-/// change means semantics possibly changed, so it is never folded away.
-///
-pub(crate) fn render_output_changes(out: &mut String, stats: &[SuiteStats]) {
+fn build_mover_sections(stats: &[SuiteStats]) -> Vec<MoverSection> {
+    let mut sections = Vec::new();
     for s in stats {
         for (title, unit, movers) in [
             ("largest size changes", " B", &s.top_size_movers),
@@ -368,147 +219,120 @@ pub(crate) fn render_output_changes(out: &mut String, stats: &[SuiteStats]) {
             if movers.is_empty() {
                 continue;
             }
-            let _ = writeln!(out, "\n**{} — {title}:**\n", s.label);
-            for m in movers.ranked().into_iter().take(MAX_LISTED) {
-                let pct = match relative_percent(m.pr, m.main) {
-                    Some(pct) => format!(" ({})", percent(pct)),
-                    None => String::new(),
-                };
-                let _ = writeln!(
-                    out,
-                    "- `{}` [{}] {} → {}{unit}{pct}",
-                    m.label,
-                    m.mode,
-                    commas(m.main),
-                    commas(m.pr),
-                );
-            }
-            let extra = movers.len().saturating_sub(MAX_LISTED);
-            if extra > 0 {
-                let _ = writeln!(out, "- +{extra} more — full list in {}", s.report_file);
-            }
+            sections.push(MoverSection {
+                suite_label: s.label.clone(),
+                title,
+                unit,
+                movers: movers
+                    .ranked()
+                    .into_iter()
+                    .map(|m| MoverRow {
+                        label: m.label.clone(),
+                        mode: m.mode.clone(),
+                        main: m.main,
+                        pr: m.pr,
+                    })
+                    .collect(),
+                report_file: s.report_file.clone(),
+            });
         }
     }
+    sections
 }
 
-pub(crate) fn render_compile_time(out: &mut String, stats: &[SuiteStats]) {
+fn build_compile_view(stats: &[SuiteStats]) -> Option<CompileView> {
     let with_ct: Vec<&SuiteStats> = stats.iter().filter(|s| !s.compile.is_empty()).collect();
     if with_ct.is_empty() {
-        return;
+        return None;
     }
-
-    // Columns come from the pipelines actually present so a new codegen
-    // shows up instead of silently vanishing from the tripwire.
-    let pipelines: Vec<&str> = with_ct
+    let pipelines: Vec<String> = with_ct
         .iter()
         .flat_map(|s| s.compile.keys())
-        .map(String::as_str)
-        .collect::<BTreeSet<&str>>()
+        .map(String::clone)
+        .collect::<BTreeSet<String>>()
         .into_iter()
         .collect();
-    let _ = writeln!(
-        out,
-        "\n**Compile time** — wall-clock tripwire, positive = PR slower (authoritative Δ in `ci:compile-benchmark`)\n"
-    );
-    let mut header = "| Suite |".to_owned();
-    let mut divider = "|---|".to_owned();
-    for pipeline in pipelines.iter() {
-        let _ = write!(header, " {pipeline} (agg / median) |");
-        divider.push_str("---|");
-    }
-    let _ = writeln!(out, "{header}");
-    let _ = writeln!(out, "{divider}");
 
     let mut any_suite_flag = false;
-    let mut outliers: Vec<(String, String, f64)> = Vec::new();
+    let mut outlier_entries: Vec<(String, String, f64)> = Vec::new();
+    let mut rows = Vec::new();
     for s in &with_ct {
-        let mut row = format!("| {} |", s.suite_cell());
+        let mut row = vec![s.suite_cell()];
         for pipeline in pipelines.iter() {
-            let paired = s.compile.get(*pipeline).and_then(|agg| {
+            let paired = s.compile.get(pipeline).and_then(|agg| {
                 relative_percent(agg.pr_total_ms, agg.main_total_ms).map(|pct| (agg, pct))
             });
-            let cell = match paired {
-                Some((agg, pct)) => {
-                    // Both directions defeat "within noise", but only a
-                    // slowdown gets the siren — a large improvement is
-                    // signal, not an alarm.
-                    let aggregate = if pct >= COMPILE_TIME_SUITE_THRESHOLD_PERCENT {
-                        any_suite_flag = true;
-                        format!("⚠️ **{}**", percent(pct))
-                    } else if pct <= -COMPILE_TIME_SUITE_THRESHOLD_PERCENT {
-                        any_suite_flag = true;
-                        format!("**{}**", percent(pct))
-                    } else {
-                        percent(pct)
-                    };
-                    let project_pcts: Vec<f64> =
-                        agg.per_project.iter().map(|(_, pct)| *pct).collect();
-                    match median(project_pcts.as_slice()) {
-                        Some(med) => format!("{aggregate} / {}", percent(med)),
-                        None => aggregate,
-                    }
-                }
+            row.push(match paired {
+                Some((agg, pct)) => compile_cell(agg, pct, &mut any_suite_flag),
                 None => "—".to_owned(),
-            };
-            let _ = write!(row, " {cell} |");
-            if let Some(agg) = s.compile.get(*pipeline) {
+            });
+            if let Some(agg) = s.compile.get(pipeline) {
                 for (project, pct) in agg.per_project.iter() {
                     if pct.abs() >= COMPILE_TIME_PROJECT_THRESHOLD_PERCENT {
-                        outliers.push((project.clone(), (*pipeline).to_owned(), *pct));
+                        outlier_entries.push((project.clone(), pipeline.clone(), *pct));
                     }
                 }
             }
         }
-        let _ = writeln!(out, "{row}");
+        rows.push(row);
     }
 
-    if outliers.is_empty() && !any_suite_flag {
-        let _ = writeln!(
-            out,
-            "\n_Within noise — no suite ≥ {}%, no project ≥ {}%._",
-            COMPILE_TIME_SUITE_THRESHOLD_PERCENT as u64,
-            COMPILE_TIME_PROJECT_THRESHOLD_PERCENT as u64
-        );
-    }
-    if !outliers.is_empty() {
-        outliers.sort_by(|a, b| b.2.abs().partial_cmp(&a.2.abs()).unwrap());
-        let shown: Vec<String> = outliers
-            .iter()
-            .take(MAX_LISTED)
-            .map(|(project, pipeline, pct)| format!("`{project}` {pipeline} **{}**", percent(*pct)))
-            .collect();
-        let siren = if outliers.iter().any(|(_, _, pct)| *pct > 0.0) {
-            "⚠️ "
-        } else {
-            ""
-        };
-        let mut line = format!(
-            "\n{siren}**Project outliers (≥{}%):** {}",
-            COMPILE_TIME_PROJECT_THRESHOLD_PERCENT as u64,
-            shown.join(" · ")
-        );
-        if outliers.len() > MAX_LISTED {
-            let _ = write!(line, " (+{} more)", outliers.len() - MAX_LISTED);
-        }
-        let _ = writeln!(out, "{line}");
+    let within_noise = outlier_entries.is_empty() && !any_suite_flag;
+    let outliers = (!outlier_entries.is_empty()).then(|| outliers_line(&mut outlier_entries));
+    Some(CompileView {
+        pipelines,
+        rows,
+        within_noise,
+        outliers,
+    })
+}
+
+/// One aggregate/median compile cell. Both directions defeat "within noise",
+/// but only a slowdown gets the siren — a large improvement is signal, not
+/// an alarm.
+fn compile_cell(agg: &CompileAggregate, pct: f64, any_suite_flag: &mut bool) -> String {
+    let aggregate = if pct >= COMPILE_TIME_SUITE_THRESHOLD_PERCENT {
+        *any_suite_flag = true;
+        format!("⚠️ **{}**", percent(pct))
+    } else if pct <= -COMPILE_TIME_SUITE_THRESHOLD_PERCENT {
+        *any_suite_flag = true;
+        format!("**{}**", percent(pct))
+    } else {
+        percent(pct)
+    };
+    let project_pcts: Vec<f64> = agg.per_project.iter().map(|(_, pct)| *pct).collect();
+    match median(project_pcts.as_slice()) {
+        Some(med) => format!("{aggregate} / {}", percent(med)),
+        None => aggregate,
     }
 }
 
-pub(crate) fn render_baselines(out: &mut String, stats: &[SuiteStats]) {
-    let relevant: Vec<&SuiteStats> = stats
+fn outliers_line(outliers: &mut [(String, String, f64)]) -> String {
+    outliers.sort_by(|a, b| b.2.abs().partial_cmp(&a.2.abs()).unwrap());
+    let shown: Vec<String> = outliers
         .iter()
-        .filter(|s| !s.baseline_pairs.is_empty())
+        .take(MAX_LISTED)
+        .map(|(project, pipeline, pct)| format!("`{project}` {pipeline} **{}**", percent(*pct)))
         .collect();
-    if relevant.is_empty() {
-        return;
-    }
-    let _ = writeln!(
-        out,
-        "\n**Bytecode size — PR vs baselines** (positive = PR larger; contracts built by both only)\n"
+    let siren = if outliers.iter().any(|(_, _, pct)| *pct > 0.0) {
+        "⚠️ "
+    } else {
+        ""
+    };
+    let mut line = format!(
+        "{siren}**Project outliers (≥{}%):** {}",
+        COMPILE_TIME_PROJECT_THRESHOLD_PERCENT as u64,
+        shown.join(" · ")
     );
-    let _ = writeln!(out, "| Suite | Pipeline | vs solc | vs released solx |");
-    let _ = writeln!(out, "|---|---|---|---|");
-    for s in relevant {
+    if outliers.len() > MAX_LISTED {
+        line.push_str(&format!(" (+{} more)", outliers.len() - MAX_LISTED));
+    }
+    line
+}
+
+fn build_baseline_rows(stats: &[SuiteStats]) -> Vec<Vec<String>> {
+    let mut rows = Vec::new();
+    for s in stats.iter().filter(|s| !s.baseline_pairs.is_empty()) {
         let pipelines: BTreeSet<&String> = s
             .baseline_pairs
             .keys()
@@ -522,16 +346,15 @@ pub(crate) fn render_baselines(out: &mut String, stats: &[SuiteStats]) {
                     .map(percent)
                     .unwrap_or_else(|| "—".to_owned())
             };
-            let _ = writeln!(
-                out,
-                "| {} | {} | {} | {} |",
+            rows.push(vec![
                 s.suite_cell(),
-                pipeline,
+                pipeline.clone(),
                 vs(Role::Solc),
-                vs(Role::Latest)
-            );
+                vs(Role::Latest),
+            ]);
         }
     }
+    rows
 }
 
 /// Formats a percentage with a sign and one decimal.
@@ -551,6 +374,32 @@ fn commas(n: u64) -> String {
         out.push(*byte as char);
     }
     out
+}
+
+/// Custom template filters.
+mod filters {
+    /// Thousands separators for u64 counts.
+    pub fn commas(n: &u64, _: &dyn askama::Values) -> askama::Result<String> {
+        Ok(super::commas(*n))
+    }
+
+    /// Thousands separators for usize counts.
+    pub fn commas_usize(n: &usize, _: &dyn askama::Values) -> askama::Result<String> {
+        Ok(super::commas(*n as u64))
+    }
+
+    /// The " (+x.x%)" suffix for a mover row, empty on a zero base.
+    pub fn rel_suffix(pr: &u64, _: &dyn askama::Values, main: &u64) -> askama::Result<String> {
+        Ok(match super::relative_percent(*pr, *main) {
+            Some(pct) => format!(" ({})", super::percent(pct)),
+            None => String::new(),
+        })
+    }
+
+    /// A float threshold rendered as its integer floor.
+    pub fn floor_u64(f: f64, _: &dyn askama::Values) -> askama::Result<String> {
+        Ok(format!("{}", f as u64))
+    }
 }
 
 #[cfg(test)]
