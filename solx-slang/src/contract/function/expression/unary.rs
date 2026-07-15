@@ -24,9 +24,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             }
             PrefixExpressionOperator::Tilde(_) => {
                 let result_type = self.typing(node.get_type());
-                self.expression(&node.operand())
-                    .coerce(result_type, self)
-                    .not(self)
+                self.coerced(&node.operand(), result_type).not(self)
             }
             PrefixExpressionOperator::Bang(_) => {
                 let value = self.expression(&node.operand());
@@ -42,7 +40,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 match magnitude {
                     Some(magnitude) => Value::constant_from_bigint(&-magnitude, result_type, self),
                     None => {
-                        let value = self.expression(&node.operand()).coerce(result_type, self);
+                        let value = self.coerced(&node.operand(), result_type);
                         Value::zero(result_type, self).subtract(value, self.checked, self)
                     }
                 }

@@ -32,7 +32,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             .zip(ordered)
             .map(|(parameter, argument)| {
                 let parameter_type = self.typing(parameter.get_type());
-                let value = self.expression(&argument).coerce(parameter_type, self);
+                let value = self.coerced(&argument, parameter_type);
                 (parameter, value)
             })
             .collect()

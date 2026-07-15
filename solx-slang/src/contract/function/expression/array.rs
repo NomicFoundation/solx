@@ -25,7 +25,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         let element_values = node
             .items()
             .iter()
-            .map(|item| self.expression(&item).coerce(element_type, self))
+            .map(|item| self.coerced(&item, element_type))
             .collect::<Vec<_>>();
         Value::array_literal(
             &element_values,

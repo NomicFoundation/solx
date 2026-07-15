@@ -36,7 +36,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         let declared_type = self.typing(node.declaration().get_type());
         match node.value() {
             Some(initializer) => {
-                let value = self.expression(&initializer).coerce(declared_type, self);
+                let value = self.coerced(&initializer, declared_type);
                 self.define_local(node.declaration().name().name(), declared_type, |_scope| {
                     value
                 });

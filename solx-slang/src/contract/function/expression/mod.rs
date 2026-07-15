@@ -118,6 +118,25 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         }
     }
 
+    /// Emits an expression and coerces its value to `target_type`.
+    pub fn coerced(
+        &mut self,
+        expression: &Expression,
+        target_type: MlirType<'context>,
+    ) -> Value<'context> {
+        self.expression(expression).coerce(target_type, self)
+    }
+
+    /// Emits an expression and converts its value to `target_type` through an explicit `T(x)` cast,
+    /// the explicit sibling of `coerced`.
+    pub fn converted(
+        &mut self,
+        expression: &Expression,
+        target_type: MlirType<'context>,
+    ) -> Value<'context> {
+        self.expression(expression).convert(target_type, self)
+    }
+
     /// Evaluates both operands of a binary expression and coerces them to the binder's result type.
     pub fn coerced_operands(
         &mut self,
@@ -126,8 +145,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         right: &Expression,
     ) -> (Value<'context>, Value<'context>) {
         let result_type = self.typing(slang_type);
-        let lhs = self.expression(left).coerce(result_type, self);
-        let rhs = self.expression(right).coerce(result_type, self);
-        (lhs, rhs)
+        (
+            self.coerced(left, result_type),
+            self.coerced(right, result_type),
+        )
     }
 }

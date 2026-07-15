@@ -131,12 +131,13 @@ impl Call {
                 Some(solx_utils::DataLocation::Memory),
             );
             let field_address = struct_address.gep_field(index, field_type, scope);
-            field_address.store(scope.expression(&argument).coerce(field_type, scope), scope);
+            field_address.store(scope.coerced(&argument, field_type), scope);
         }
         vec![struct_address.into()]
     }
 
-    /// Converts the conversion's one operand to the call's result type under the explicit `T(x)` cast.
+    /// Converts the conversion's one operand to the call's result type through an explicit `T(x)`
+    /// cast.
     fn type_conversion<'context>(
         call: &FunctionCallExpression,
         arguments: &PositionalArguments,
@@ -147,7 +148,7 @@ impl Call {
             .next()
             .expect("classification admits exactly one argument");
         let target_type = scope.typing(call.get_type());
-        vec![scope.expression(&operand).convert(target_type, scope)]
+        vec![scope.converted(&operand, target_type)]
     }
 
     /// Statement-style built-ins (`assert`, `require`, `revert`) produce no value.
@@ -186,9 +187,7 @@ impl Call {
                     Some(expression) => {
                         let string_memory_type =
                             MlirType::string(scope.melior, solx_utils::DataLocation::Memory);
-                        let message_value = scope
-                            .expression(&expression)
-                            .coerce(string_memory_type, scope);
+                        let message_value = scope.coerced(&expression, string_memory_type);
                         (
                             vec![message_value],
                             Some(Self::ERROR_STRING_SIGNATURE.to_owned()),
@@ -386,12 +385,7 @@ impl Call {
                 let Some(value_argument) = value_argument else {
                     return Some(new_slot);
                 };
-                Place::from(new_slot).store(
-                    scope
-                        .expression(&value_argument)
-                        .coerce(element_type, scope),
-                    scope,
-                );
+                Place::from(new_slot).store(scope.coerced(&value_argument, element_type), scope);
                 None
             }
             _ => unimplemented!("unsupported member call: {}", access.member().name()),

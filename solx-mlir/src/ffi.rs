@@ -158,6 +158,12 @@ unsafe extern "C" {
     /// Whether the type is a `sol::AddressType`, regardless of payability.
     pub fn solxIsAddressType(ty: mlir_sys::MlirType) -> bool;
 
+    /// Whether the type is bytes-like: `sol::FixedBytesType` or `sol::ByteType`.
+    pub fn solxIsBytesLikeType(ty: mlir_sys::MlirType) -> bool;
+
+    /// Returns the byte width of a bytes-like type.
+    pub fn solxBytesLikeTypeWidth(ty: mlir_sys::MlirType) -> u32;
+
     /// Returns the element type of a non-mapping reference type. For
     /// struct types, `struct_field_idx` selects the member.
     pub fn mlirSolGetEltType(ty: mlir_sys::MlirType, struct_field_idx: u64) -> mlir_sys::MlirType;

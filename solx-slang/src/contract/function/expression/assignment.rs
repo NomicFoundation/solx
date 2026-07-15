@@ -10,9 +10,10 @@ use solx_mlir::Value;
 use crate::scope::function::FunctionScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// `lhs = rhs` and the compound `lhs op= rhs`, lowered through the left operand's place. The
-    /// right operand is fully evaluated before the place's old value is read, matching solc's
-    /// evaluation order; plain `=` stores the right operand without the read-modify load.
+    /// Plain `=` and the compound `op=` forms, lowered through the left operand's place. The right
+    /// operand is evaluated before the place's old value is read; `=` coerces and stores it without
+    /// the read-modify load, a shift compound keeps it at its own type, and every other compound
+    /// coerces it to the place's type.
     pub fn assignment(&mut self, node: &AssignmentExpression) -> Value<'context> {
         let (place, element_type) = self.expression_place(&node.left_operand());
         if place.r#type() == element_type {
@@ -20,9 +21,13 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 "assignment through a reference-typed place in storage or calldata is not yet supported"
             );
         }
-        let rhs = self
-            .expression(&node.right_operand())
-            .coerce(element_type, self);
+        let rhs = match node.operator() {
+            AssignmentExpressionOperator::LessThanLessThanEqual(_)
+            | AssignmentExpressionOperator::GreaterThanGreaterThanEqual(_) => {
+                self.expression(&node.right_operand())
+            }
+            _ => self.coerced(&node.right_operand(), element_type),
+        };
         let stored =
             match node.operator() {
                 AssignmentExpressionOperator::Equal(_) => rhs,
@@ -53,9 +58,11 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 AssignmentExpressionOperator::LessThanLessThanEqual(_) => {
                     place.load(element_type, self).shl(rhs, self)
                 }
-                AssignmentExpressionOperator::GreaterThanGreaterThanEqual(_)
-                | AssignmentExpressionOperator::GreaterThanGreaterThanGreaterThanEqual(_) => {
+                AssignmentExpressionOperator::GreaterThanGreaterThanEqual(_) => {
                     place.load(element_type, self).shr(rhs, self)
+                }
+                AssignmentExpressionOperator::GreaterThanGreaterThanGreaterThanEqual(_) => {
+                    unreachable!("Solidity has no >>> operator")
                 }
             };
         place.store(stored, self);
