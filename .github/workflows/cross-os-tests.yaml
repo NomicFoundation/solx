@@ -13,27 +13,34 @@ name: Cross-OS Tests
 #
 # The build-toolchain action keeps the toolchain params identical to
 # test.yaml's legs, so LLVM/solc come from the finished-install caches
-# saved on main (v1-llvm-*, v1-solc-*).
+# saved on main (v1-llvm-*, v1-solc-*). Verified end-to-end on run
+# 29429860239 (macos-15 ~22 min, windows-2025 ~37 min, full suites green
+# on the free runners).
 #
-# TODO(Stage 3): before opening the PR, switch the trigger to
-# pull_request label `ci:cross-os` + workflow_dispatch + weekly cron on
-# main. The push trigger below is temporary, for verification runs on this
-# branch.
+# Triggers: the `ci:cross-os` PR label for on-demand validation of
+# platform-sensitive changes, workflow_dispatch, and a weekly cron on main
+# as a drift net. Advisory only — do not make this a required check
+# (label-gated required checks can hang the merge queue).
 
 on:
-  push:
-    branches:
-      - cross-os-tester
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+  schedule:
+    # Mondays 06:00 UTC, on main.
+    - cron: '0 6 * * 1'
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   tester:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:cross-os')
+    name: tester (${{ matrix.runner }})
     strategy:
       fail-fast: false
       matrix:
