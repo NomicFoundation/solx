@@ -1,0 +1,99 @@
+name: Cross-OS Tests
+
+# Runs the full solx-tester suite on free macOS/Windows runners. Cross-OS
+# legs test platform behavior — process management, IPC, paths, toolchain
+# quirks — not output quality, which stays on the Linux integration suite;
+# Hardhat/Foundry are deliberately not replicated here.
+#
+# Rationale: the suite caught two real platform-only bugs in one week — the
+# #524 worker-pool hang on macOS (fixed before merge) and the rustc 1.96.1
+# enum-niche miscompile (#547) — both invisible on Linux. Windows had never
+# executed solx-tester before this workflow's spike (74,605 cases green,
+# ~16 min, run 29426196846).
+#
+# The build-toolchain action keeps the toolchain params identical to
+# test.yaml's legs, so LLVM/solc come from the finished-install caches
+# saved on main (v1-llvm-*, v1-solc-*).
+#
+# TODO(Stage 3): before opening the PR, switch the trigger to
+# pull_request label `ci:cross-os` + workflow_dispatch + weekly cron on
+# main. The push trigger below is temporary, for verification runs on this
+# branch.
+
+on:
+  push:
+    branches:
+      - cross-os-tester
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tester:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Full-suite baselines: macos-15 ≈ 10–15 min; windows-2025 corpus
+          # 14 min + complex 1.5 min (spike runs 29374444399, 29426196846).
+          # Watchdogs sized ~2x so a trip means pathology, not slowness.
+          - runner: macos-15
+            watchdog-seconds: '2700'
+          - runner: windows-2025
+            target: x86_64-pc-windows-gnu
+            watchdog-seconds: '4500'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 150
+    env:
+      CARGO_INCREMENTAL: "0"
+      RUST_BACKTRACE: full
+      # Keep symbols (Cargo.toml sets strip = true) so crash reports and
+      # `sample` output are readable.
+      CARGO_PROFILE_RELEASE_STRIP: none
+      CARGO_PROFILE_RELEASE_DEBUG: line-tables-only
+      BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+      SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          submodules: true
+          persist-credentials: false
+
+      - name: Build toolchain
+        uses: ./.github/actions/build-toolchain
+
+      # Read-only restore of test.yaml's cache; prefix and step position
+      # (after build-toolchain, so the key sees the same post-msys rustup
+      # host) must match test.yaml or the keys diverge.
+      - name: Cache cargo artifacts
+        if: runner.os == 'Windows'
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          prefix-key: build-and-test-v2
+          cache-on-failure: true
+          save-if: 'false'
+
+      # The Windows disk cannot hold LLVM sources, build trees, and a Rust
+      # workspace build at once. Unlike test.yaml's variant, solx-solidity's
+      # test/ is kept: the Ethereum corpus is read from it at run time.
+      - name: Free disk space (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "Before cleanup:" && df -h .
+          rm -rf solx-llvm target-llvm/build-final
+          find solx-solidity -mindepth 1 -maxdepth 1 ! -name build ! -name boost ! -name test -exec rm -rf {} +
+          rm -rf .git/modules
+          echo "After cleanup:" && df -h .
+
+      - name: Run tester suite
+        uses: ./.github/actions/run-tester-suite
+        with:
+          target: ${{ matrix.target || '' }}
+          watchdog-seconds: ${{ matrix.watchdog-seconds }}
+          diagnostics-name: tester-diagnostics-${{ matrix.runner }}
