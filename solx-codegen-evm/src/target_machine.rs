@@ -27,11 +27,14 @@ impl TargetMachine {
     /// `-evm-stack-region-offset <value>`
     /// `-evm-metadata-size <value>`
     ///
+    /// LLVM command line options are process-global, so their occurrences are reset before
+    /// each parse: a unit never inherits an option set by a previous one in the same worker.
+    ///
     pub fn new(
         optimizer_settings: &OptimizerSettings,
         llvm_options: &[String],
     ) -> anyhow::Result<Self> {
-        let mut arguments = Vec::with_capacity(1 + llvm_options.len());
+        let mut arguments = Vec::with_capacity(4 + llvm_options.len());
         arguments.push(Self::TARGET.to_string());
         arguments.extend_from_slice(llvm_options);
         if let Some(size) = optimizer_settings.spill_area_size {
@@ -44,10 +47,9 @@ impl TargetMachine {
         if let Some(size) = optimizer_settings.metadata_size {
             arguments.push(format!("-evm-metadata-size={size}"));
         }
-        if arguments.len() > 1 {
-            let arguments: Vec<&str> = arguments.iter().map(|argument| argument.as_str()).collect();
-            inkwell::support::parse_command_line_options(arguments.as_slice(), "LLVM options");
-        }
+        let arguments: Vec<&str> = arguments.iter().map(|argument| argument.as_str()).collect();
+        inkwell::support::reset_all_option_occurrences();
+        inkwell::support::parse_command_line_options(arguments.as_slice(), "LLVM options");
 
         let target_machine = inkwell::targets::Target::from_name(Self::TARGET.to_string().as_str())
             .ok_or_else(|| anyhow::anyhow!("LLVM target machine `{}` not found", Self::TARGET))?

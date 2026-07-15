@@ -126,7 +126,7 @@ impl Contract {
         code_segment: solx_utils::CodeSegment,
         evm_version: Option<solx_utils::EVMVersion>,
         debug_info: Option<solx_utils::DebugInfo>,
-        output_selection: solx_standard_json::InputSelection,
+        output_selection: &solx_standard_json::InputSelection,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
         metadata_bytes: Option<Vec<u8>>,
         mut optimizer_settings: solx_codegen_evm::OptimizerSettings,
@@ -201,9 +201,6 @@ impl Contract {
                     output_debug_info,
                     solidity_data,
                     output_config,
-                );
-                inkwell::support::error_handling::install_stack_error_handler(
-                    crate::process::evm_stack_error_handler,
                 );
                 let run_yul_lowering = profiler.start_evm_translation_unit(
                     contract_name.full_path.as_str(),
@@ -341,9 +338,6 @@ impl Contract {
                     solidity_data,
                     output_config,
                 );
-                inkwell::support::error_handling::install_stack_error_handler(
-                    crate::process::evm_stack_error_handler,
-                );
                 context.set_evmla_data(evmla_data);
                 context.set_capture_evmla(output_selection.check_selection(
                     contract_name.path.as_str(),
@@ -462,9 +456,6 @@ impl Contract {
                     None,
                     output_config,
                 );
-                inkwell::support::error_handling::install_stack_error_handler(
-                    crate::process::evm_stack_error_handler,
-                );
                 if output_selection.check_selection(
                     contract_name.path.as_str(),
                     contract_name.name.as_deref(),
@@ -573,9 +564,6 @@ impl Contract {
                     false,
                     None,
                     output_config,
-                );
-                inkwell::support::error_handling::install_stack_error_handler(
-                    crate::process::evm_stack_error_handler,
                 );
                 if output_selection.check_selection(
                     contract_name.path.as_str(),

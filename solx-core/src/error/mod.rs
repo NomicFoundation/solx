@@ -55,6 +55,12 @@ impl From<anyhow::Error> for Error {
     }
 }
 
+impl From<std::io::Error> for Error {
+    fn from(error: std::io::Error) -> Self {
+        Error::Generic(error.to_string())
+    }
+}
+
 impl From<solx_standard_json::OutputError> for Error {
     fn from(error: solx_standard_json::OutputError) -> Self {
         Error::StandardJson(error)

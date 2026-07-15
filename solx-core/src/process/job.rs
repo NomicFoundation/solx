@@ -1,7 +1,5 @@
 //!
-//! Process for compiling a single compilation unit.
-//!
-//! The EVM input data.
+//! The per-unit job data.
 //!
 
 use std::collections::BTreeMap;
@@ -10,71 +8,49 @@ use std::collections::BTreeSet;
 use crate::project::contract::ir::IR as ContractIR;
 
 ///
-/// The EVM input data.
+/// The per-unit job data.
+///
+/// Sent to a worker subprocess for every translation unit, complementing the session data.
 ///
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct Input {
-    /// The input contract language.
-    pub language: solx_standard_json::InputLanguage,
-    /// The `solc` compiler version, used only for Solidity and Yul projects.
-    pub solc_version: Option<solx_standard_json::Version>,
+pub struct Job {
     /// The input contract name.
     pub contract_name: solx_utils::ContractName,
     /// The input contract IR.
     pub contract_ir: ContractIR,
     /// The code segment.
     pub code_segment: solx_utils::CodeSegment,
-    /// The EVM version to produce bytecode for.
-    pub evm_version: Option<solx_utils::EVMVersion>,
     /// Solidity debug info.
     pub debug_info: Option<solx_utils::DebugInfo>,
-    /// Output selection for the compilation.
-    pub output_selection: solx_standard_json::InputSelection,
     /// Immutables produced by the runtime code run.
     pub immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
     /// The metadata bytes.
     pub metadata_bytes: Option<Vec<u8>>,
     /// The optimizer settings.
     pub optimizer_settings: solx_codegen_evm::OptimizerSettings,
-    /// The extra LLVM arguments.
-    pub llvm_options: Vec<String>,
-    /// The output config for IR artifacts.
-    pub output_config: Option<solx_codegen_evm::OutputConfig>,
 }
 
-impl Input {
+impl Job {
     ///
     /// A shortcut constructor.
     ///
     pub fn new(
-        language: solx_standard_json::InputLanguage,
-        solc_version: Option<solx_standard_json::Version>,
         contract_name: solx_utils::ContractName,
         contract_ir: ContractIR,
         code_segment: solx_utils::CodeSegment,
-        evm_version: Option<solx_utils::EVMVersion>,
         debug_info: Option<solx_utils::DebugInfo>,
-        output_selection: solx_standard_json::InputSelection,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
         metadata_bytes: Option<Vec<u8>>,
         optimizer_settings: solx_codegen_evm::OptimizerSettings,
-        llvm_options: Vec<String>,
-        output_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> Self {
         Self {
-            language,
-            solc_version,
             contract_name,
             contract_ir,
             code_segment,
-            evm_version,
             debug_info,
-            output_selection,
             immutables,
             metadata_bytes,
             optimizer_settings,
-            llvm_options,
-            output_config,
         }
     }
 }
