@@ -213,6 +213,24 @@ mod tests {
         assert!(out.contains("| Foundry | legacy | +5.7% | — |"), "{out}");
     }
 
+    #[test]
+    fn compile_aggregate_pairs_pr_and_main() {
+        // Project b builds only on the PR side — it must be excluded from
+        // the aggregate, not skew it as a one-sided +9000 ms.
+        let tests = vec![
+            compile_test(
+                "a",
+                &[("02.solx-main-legacy", 1_000), ("03.solx-legacy", 1_030)],
+            ),
+            compile_test("b", &[("03.solx-legacy", 9_000)]),
+        ];
+        let out = render(&[suite("Foundry", false, tests)]);
+        assert!(
+            out.contains("| Foundry · 2 proj | +3.0% / +3.0% |"),
+            "{out}"
+        );
+    }
+
     /// Compares a rendered comment against its golden fixture. Set
     /// `UPDATE_SUMMARY_FIXTURES=1` to regenerate after an intended change.
     fn assert_matches_fixture(name: &str, rendered: &str) {
