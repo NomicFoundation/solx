@@ -1,0 +1,196 @@
+name: Mac solx-tester debug (524)
+
+# Temporary debugging workflow: pin down PR #524's macOS behavior per tip.
+#
+# Timeline: PR #545 observed a 4h26m silent tester hang on macos-15-xlarge
+# with #524 at 6bd1976a (cl-options reset landed before the LLVM
+# reset-option-occurrences pin). The current tip 1ae05b1d (worker retention
+# fix b8469e03 + the LLVM pin) is green and faster than main on both arm64
+# runners: 4m31s on xlarge (run 29399344551, main: 5m31s) and 10m32s on
+# macos-15 (run 29374444399, main: 12–15.5m).
+#
+# The old-tip hang is confirmed: reproduced on macos-15 at 6bd1976a with
+# watchdog samples (run 29401155956) — tester in wait_with_output, workers
+# idle in recv(stdin), wedge in top-level dispatch.
+#
+# This branch state points at the CURRENT tip 1ae05b1d and runs the one
+# remaining untested platform: macOS x86-64. solx-tester is rebuilt with
+# rustc nightly to dodge the 1.96.1 enum-niche miscompile (#547); solx
+# itself stays on the pinned stable so the compiler under test is
+# unchanged. The watchdog is 75 min there — the suite is slow on the
+# 2012-era Intel minis even when healthy (>23.5 min for the corpus alone).
+
+on:
+  push:
+    branches:
+      - mac-tester-debug-524
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tester:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Intel datapoint for the current tip (arm64 legs already green).
+        runner: [macos-15-large]
+    runs-on: ${{ matrix.runner }}
+    # Intel budget: ~45 min ccache LLVM build (no finished-install cache for
+    # this submodule pin on x86) + nightly tester rebuild + a slow suite
+    # under a 75-minute watchdog.
+    timeout-minutes: 180
+    env:
+      RUST_BACKTRACE: full
+      # Keep symbols in the release binaries (Cargo.toml sets strip = true)
+      # so crash reports and `sample` output are readable.
+      CARGO_PROFILE_RELEASE_STRIP: none
+      CARGO_PROFILE_RELEASE_DEBUG: line-tables-only
+      BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+      SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+      TESTER_BIN: ./target/release/solx-tester
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          submodules: true
+
+      - name: Checkout submodules
+        uses: ./.github/actions/checkout-submodules
+
+      - name: Runner environment
+        run: |
+          sysctl hw.memsize hw.ncpu machdep.cpu.brand_string || true
+          df -h .
+          ulimit -a
+
+      - name: Free disk space (macOS)
+        uses: ./.github/actions/free-disk-space-macos
+
+      - name: Setup SFW
+        uses: ./.github/actions/setup-sfw
+
+      - name: Build LLVM
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: RelWithDebInfo
+          enable-assertions: 'true'
+          enable-mlir: 'true'
+          enable-utils: 'true'
+
+      - name: Build solc
+        uses: ./.github/actions/build-solc
+        with:
+          cmake-build-type: RelWithDebInfo
+          working-dir: 'solx-solidity'
+
+      - name: Build solx and solx-tester
+        run: |
+          ${SFW_PREFIX:-} cargo fetch --locked
+          ${SFW_PREFIX:-} cargo build --frozen --release --bin solx --bin solx-tester
+
+      # Workaround for #547 (rustc 1.96.1 enum-niche miscompile, Intel-only):
+      # rebuild just the tester with nightly, which carries the fixed LLVM.
+      # solx keeps the pinned stable so the compiler under test is unchanged.
+      - name: Build solx-tester with nightly (Intel, #547 workaround)
+        if: matrix.runner == 'macos-15-large'
+        run: |
+          rustup toolchain install nightly --profile minimal
+          rustup run nightly rustc --version --verbose
+          ${SFW_PREFIX:-} cargo +nightly build --frozen --release \
+            -p solx-tester --bin solx-tester --target-dir target-nightly
+          echo "TESTER_BIN=./target-nightly/release/solx-tester" >> "$GITHUB_ENV"
+
+      # Timestamp marker: the crash-report collector only prints reports newer
+      # than this, excluding crashes from earlier steps (e.g. the LLVM build).
+      - name: Mark crash-report baseline
+        run: touch "${RUNNER_TEMP}/ips-baseline"
+
+      # solx-tester is invoked directly (not via `solx-dev test solx-tester`):
+      # the wrapper reduces a signal death to "subprocess failed without exit
+      # code", while here the exit code names the signal.
+      - name: Smoke test (one test, one thread)
+        id: smoke
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          set +e
+          "$TESTER_BIN" \
+            --solidity-compiler ./target/release/solx \
+            --path tests/solidity/simple/default.sol \
+            --threads 1 \
+            --verbose
+          ec=$?
+          if [ "$ec" -gt 128 ]; then
+            echo "::error::solx-tester killed by signal $((ec - 128)) (SIG$(kill -l $((ec - 128))))"
+          fi
+          exit "$ec"
+
+      # The watchdog exists for the hang failure mode: a run that neither
+      # crashes nor finishes. `sample` captures where the tester and its solx
+      # workers are stuck before the kill.
+      - name: Full run (default threads, watchdog)
+        id: full
+        continue-on-error: true
+        timeout-minutes: 90
+        run: |
+          set +e
+          WATCHDOG_SECS=1800
+          if [ "${{ matrix.runner }}" = "macos-15-large" ]; then
+            WATCHDOG_SECS=4500
+          fi
+          "$TESTER_BIN" --solidity-compiler ./target/release/solx &
+          PID=$!
+          elapsed=0
+          while kill -0 "$PID" 2>/dev/null; do
+            if [ "$elapsed" -ge "$WATCHDOG_SECS" ]; then
+              echo "::error::solx-tester still running after ${elapsed}s; sampling, then killing"
+              pgrep -fl 'solx' || true
+              sample "$PID" 10 -file solx-tester-hang.sample.txt || true
+              for p in $(pgrep -f -- '--recursive-process' | head -5); do
+                sample "$p" 5 -file "solx-worker-${p}.sample.txt" || true
+              done
+              kill -9 "$PID"
+              wait "$PID"
+              exit 124
+            fi
+            sleep 30
+            elapsed=$((elapsed + 30))
+          done
+          wait "$PID"
+          ec=$?
+          if [ "$ec" -gt 128 ]; then
+            echo "::error::solx-tester killed by signal $((ec - 128)) (SIG$(kill -l $((ec - 128))))"
+          fi
+          exit "$ec"
+
+      - name: Collect crash reports and samples
+        if: always()
+        run: |
+          mkdir -p diagnostics
+          cp ./*.sample.txt diagnostics/ 2>/dev/null || true
+          find "${HOME}/Library/Logs/DiagnosticReports" -type f -newer "${RUNNER_TEMP}/ips-baseline" 2>/dev/null \
+            | while read -r report; do
+                echo "=== ${report} ==="
+                head -c 20000 "${report}"
+                echo
+                cp "${report}" diagnostics/ || true
+              done
+          ls -la diagnostics/ || true
+
+      - name: Upload diagnostics
+        if: always() && hashFiles('diagnostics/*') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mac-tester-diagnostics-${{ matrix.runner }}
+          path: diagnostics/
+
+      - name: Fail if any stage failed
+        if: steps.smoke.outcome != 'success' || steps.full.outcome != 'success'
+        run: |
+          echo "smoke: ${{ steps.smoke.outcome }}, full: ${{ steps.full.outcome }}"
+          exit 1
