@@ -2,8 +2,6 @@
 //! The string literal.
 //!
 
-use std::str::FromStr;
-
 use crate::test::function_call::parser::lexical::Location;
 use crate::test::function_call::parser::lexical::StringLiteral as LexicalStringLiteral;
 use crate::test::function_call::parser::syntax::tree::literal::alignment::Alignment;
@@ -80,9 +78,9 @@ impl Literal {
                 }
                 State::HexSecond => {
                     code.push(char);
-                    let code_u8 = web3::types::U256::from_str(code.as_str())
+                    let code_u8 = crate::u256_from_hex_str(code.as_str())
                         .map_err(|error| anyhow::anyhow!("Invalid escape sequence: {error}"))?
-                        .as_u32() as u8;
+                        .byte(0);
                     code.clear();
                     result.push(code_u8);
                     state = State::Char;

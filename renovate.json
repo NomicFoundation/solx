@@ -63,16 +63,10 @@
       "groupName": "dockerfile minor/patch"
     },
     {
-      "description": "Pinned git-rev cargo deps: inkwell/melior are forks tied to the LLVM 21.1 backend, slang_solidity_v2 is the WIP Slang v2 frontend revision bumped manually, web3 (tomusdrw) is archived upstream. Disable Renovate's default git-digest updates — these are bumped manually when feature/build compat warrants. Note: matches on depName (Cargo.toml key), not packageName (which is the git URL for git-source deps).",
+      "description": "Pinned git-rev cargo deps: inkwell/melior are forks tied to the LLVM 21.1 backend, slang_solidity_v2 is the WIP Slang v2 frontend revision bumped manually. Disable Renovate's default git-digest updates — these are bumped manually when feature/build compat warrants. Note: matches on depName (Cargo.toml key), not packageName (which is the git URL for git-source deps).",
       "matchManagers": ["cargo"],
-      "matchDepNames": ["inkwell", "melior", "slang_solidity_v2", "web3"],
+      "matchDepNames": ["inkwell", "melior", "slang_solidity_v2"],
       "enabled": false
-    },
-    {
-      "description": "Pin reqwest to 0.12.x until web3 (tomusdrw, transitive) also moves off 0.12. solx-compiler-downloader uses reqwest with default-features = false and only [\"blocking\", \"json\"] — no TLS feature. While web3's reqwest 0.12 lock entry is the same major, cargo feature unification adds web3's TLS features (http-rustls-tls) to the shared compiled crate and HTTPS works for free. Splitting majors (0.12 here, 0.13 there) breaks unification, leaves the 0.13 build with no TLS, and HTTPS fails with `invalid URL, scheme is not http`. PR #399 hit exactly this and PR #406's URL switch couldn't fix it. `allowedVersions` keeps 0.12.x patch bumps (security fixes) flowing while blocking the 0.13 jump. Drop this rule when rust-web3 itself moves to reqwest 0.13.",
-      "matchManagers": ["cargo"],
-      "matchDepNames": ["reqwest"],
-      "allowedVersions": "<0.13"
     },
     {
       "description": "Pin mlir-sys to <220 (MLIR v21). solx-llvm is built against LLVM 21.1; mlir-sys 220 targets MLIR v22 which requires a coordinated solx-llvm migration to LLVM 22 first. solx-mlir/Cargo.toml carries a TODO to track mlir-sys 211 availability — the 211 line is what we want, not the 220 jump. PR #420 was the unwanted bump. Drop this rule once solx-llvm migrates to LLVM 22 (or once mlir-sys 211 ships and we move to it).",

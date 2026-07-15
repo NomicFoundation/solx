@@ -30,7 +30,6 @@ glob.workspace = true
 itertools.workspace = true
 object.workspace = true
 rayon.workspace = true
-web3.workspace = true
 which = "8.0"
 ron = "0.12"
 rlp = "0.6"

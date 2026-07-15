@@ -25,10 +25,7 @@ use revm::{
     state::AccountInfo,
 };
 
-use crate::revm::revm_type_conversions::web3_u256_to_revm_u256;
 use crate::test::case::input::calldata::Calldata;
-
-use self::revm_type_conversions::web3_address_to_revm_address;
 
 /// The overloaded REVM Context type.
 type Context = revm::context::Context<
@@ -167,12 +164,12 @@ impl REVM {
     /// Fills a deploy transaction with the given parameters.
     ///
     pub fn new_deploy_transaction(
-        caller: web3::types::Address,
+        caller: Address,
         value: Option<u128>,
         code: Vec<u8>,
     ) -> revm::context::TxEnv {
         revm::context::TxEnv::builder()
-            .caller(web3_address_to_revm_address(&caller))
+            .caller(caller)
             .data(revm::primitives::Bytes::from(code))
             .value(revm::primitives::U256::from(value.unwrap_or_default()))
             .create()
@@ -185,16 +182,16 @@ impl REVM {
     /// Fills a runtime transaction with the given parameters.
     ///
     pub fn new_runtime_transaction(
-        address: web3::types::Address,
-        caller: web3::types::Address,
+        address: Address,
+        caller: Address,
         calldata: Calldata,
         value: Option<u128>,
     ) -> revm::context::TxEnv {
         revm::context::TxEnv::builder()
-            .caller(web3_address_to_revm_address(&caller))
+            .caller(caller)
             .data(revm::primitives::Bytes::from(calldata.inner))
             .value(revm::primitives::U256::from(value.unwrap_or_default()))
-            .to(web3_address_to_revm_address(&address))
+            .to(address)
             .gas_price(Self::GAS_PRICE as u128)
             .gas_limit(Self::BLOCK_GAS_LIMIT)
             .build_fill()
@@ -203,9 +200,8 @@ impl REVM {
     ///
     /// Sets the account data and balance.
     ///
-    pub fn set_account(&mut self, account: &web3::types::Address, balance: web3::types::U256) {
-        let address = web3_address_to_revm_address(account);
-        let balance = web3_u256_to_revm_u256(balance);
+    pub fn set_account(&mut self, account: &Address, balance: U256) {
+        let address = *account;
 
         let nonce = self
             .db_mut()
@@ -226,7 +222,7 @@ impl REVM {
     ///
     /// Returns addresses that must be funded for testing.
     ///
-    pub fn get_rich_addresses() -> Vec<web3::types::Address> {
+    pub fn get_rich_addresses() -> Vec<Address> {
         (0..=9)
             .map(|address_id| {
                 format!(
@@ -234,23 +230,15 @@ impl REVM {
                     address_id, "012"
                 )
             })
-            .map(|string| web3::types::Address::from_str(&string).unwrap())
+            .map(|string| Address::from_str(&string).unwrap())
             .collect()
     }
 
     ///
     /// Sets the account storage.
     ///
-    pub fn extend_account_storage(
-        &mut self,
-        account: &web3::types::Address,
-        storage: HashMap<web3::types::U256, web3::types::U256>,
-    ) {
-        let address = web3_address_to_revm_address(account);
-        let storage: HashMap<revm::primitives::U256, revm::primitives::U256> = storage
-            .into_iter()
-            .map(|(key, value)| (web3_u256_to_revm_u256(key), web3_u256_to_revm_u256(value)))
-            .collect();
+    pub fn extend_account_storage(&mut self, account: &Address, storage: HashMap<U256, U256>) {
+        let address = *account;
 
         let account_info = self
             .db_mut()

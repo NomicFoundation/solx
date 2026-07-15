@@ -2,8 +2,6 @@
 //! The hex literal.
 //!
 
-use std::str::FromStr;
-
 use crate::test::function_call::parser::lexical::HexLiteral as LexicalHexLiteral;
 use crate::test::function_call::parser::lexical::Location;
 use crate::test::function_call::parser::syntax::tree::literal::alignment::Alignment;
@@ -38,9 +36,9 @@ impl Literal {
     ///
     pub fn as_bytes_be(&self) -> Vec<u8> {
         let mut result = vec![0u8; solx_utils::BYTE_LENGTH_FIELD];
-        web3::types::U256::from_str(self.inner.inner.as_str())
-            .expect("validated by parser before semantic conversion")
-            .to_big_endian(&mut result);
+        let number = crate::u256_from_hex_str(self.inner.inner.as_str())
+            .expect("validated by parser before semantic conversion");
+        result.copy_from_slice(number.to_be_bytes_vec().as_slice());
         result = result[result.len() - self.inner.inner.len().div_ceil(2)..].to_owned();
         result
     }

@@ -5,6 +5,8 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
+use revm::primitives::Address;
+use revm::primitives::U256;
 use serde::Serialize;
 use serde::Serializer;
 
@@ -19,7 +21,7 @@ pub enum Value {
     /// Any value (used for expected data).
     Any,
     /// The known value.
-    Known(web3::types::U256),
+    Known(U256),
 }
 
 impl Value {
@@ -35,7 +37,7 @@ impl Value {
         }
 
         let value = if let Some(instance) = value.strip_suffix(".address") {
-            web3::types::U256::from_big_endian(
+            U256::from_be_slice(
                 instances
                     .get(instance)
                     .ok_or_else(|| anyhow::anyhow!("Instance `{instance}` not found"))?
@@ -43,55 +45,52 @@ impl Value {
                     .ok_or_else(|| {
                         anyhow::anyhow!("Instance `{instance}` was not successfully deployed")
                     })?
-                    .as_bytes(),
+                    .as_slice(),
             )
         } else if let Some(value) = value.strip_prefix('-') {
-            let value = web3::types::U256::from_dec_str(value)
+            let value = U256::from_str_radix(value, 10)
                 .map_err(|error| anyhow::anyhow!("Invalid decimal literal after `-`: {error}"))?;
-            if value > web3::types::U256::one() << 255u8 {
+            if value > U256::from(1) << 255 {
                 anyhow::bail!("Decimal literal after `-` is too big");
             }
             let value = value
-                .checked_sub(web3::types::U256::one())
+                .checked_sub(U256::from(1))
                 .ok_or_else(|| anyhow::anyhow!("`-0` is invalid literal"))?;
-            web3::types::U256::max_value()
-                .checked_sub(value)
-                .expect("Always valid")
+            U256::MAX.checked_sub(value).expect("Always valid")
         } else if let Some(value) = value.strip_prefix("0x") {
-            web3::types::U256::from_str(value)
+            U256::from_str_radix(value, 16)
                 .map_err(|error| anyhow::anyhow!("Invalid hexadecimal literal: {error}"))?
         } else if value == "$CHAIN_ID" {
-            web3::types::U256::from(REVM::CHAIND_ID)
+            U256::from(REVM::CHAIND_ID)
         } else if value == "$GAS_LIMIT" {
-            web3::types::U256::from(REVM::BLOCK_GAS_LIMIT)
+            U256::from(REVM::BLOCK_GAS_LIMIT)
         } else if value == "$COINBASE" {
-            web3::types::U256::from_str_radix(REVM::COIN_BASE, solx_utils::BASE_HEXADECIMAL)
-                .expect("Always valid")
+            U256::from_str(REVM::COIN_BASE).expect("Always valid")
         } else if value == "$PREVRANDAO" {
-            web3::types::U256::from(REVM::BLOCK_PREVRANDAO)
+            U256::from_str(REVM::BLOCK_PREVRANDAO).expect("Always valid")
         } else if value.starts_with("$BLOCK_HASH") {
             let offset: u64 = value
                 .split(':')
                 .next_back()
                 .and_then(|value| value.parse().ok())
                 .unwrap_or_default();
-            let mut hash = web3::types::U256::from_str(REVM::BLOCK_HASH).expect("Always valid");
-            hash += web3::types::U256::from(offset);
+            let mut hash = U256::from_str(REVM::BLOCK_HASH).expect("Always valid");
+            hash += U256::from(offset);
             hash
         } else if value == "$BLOCK_NUMBER" {
-            web3::types::U256::from(REVM::BLOCK_NUMBER)
+            U256::from(REVM::BLOCK_NUMBER)
         } else if value == "$BLOCK_TIMESTAMP" {
-            web3::types::U256::from(REVM::BLOCK_TIMESTAMP)
+            U256::from(REVM::BLOCK_TIMESTAMP)
         } else if value == "$TX_ORIGIN" {
             crate::utils::address_to_u256(
-                &web3::types::Address::from_str(REVM::TX_ORIGIN).expect("Alwyays valid"),
+                &Address::from_str(REVM::TX_ORIGIN).expect("Alwyays valid"),
             )
         } else if value == "$BASE_FEE" {
-            web3::types::U256::from(REVM::BASE_FEE)
+            U256::from(REVM::BASE_FEE)
         } else if value == "$GAS_PRICE" {
-            web3::types::U256::from(REVM::GAS_PRICE)
+            U256::from(REVM::GAS_PRICE)
         } else {
-            web3::types::U256::from_dec_str(value)
+            U256::from_str_radix(value, 10)
                 .map_err(|error| anyhow::anyhow!("Invalid decimal literal: {error}"))?
         };
 

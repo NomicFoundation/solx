@@ -5,6 +5,10 @@
 pub mod event;
 pub mod parser;
 
+use alloy_primitives::Address;
+use alloy_primitives::U256;
+use alloy_primitives::keccak256;
+
 use crate::test::function_call::parser::Call;
 use crate::test::function_call::parser::CallVariant;
 use crate::test::function_call::parser::Identifier;
@@ -34,9 +38,9 @@ pub enum FunctionCall {
         /// The calldata.
         calldata: Vec<u8>,
         /// The value in wei.
-        value: Option<web3::types::U256>,
+        value: Option<U256>,
         /// The expected output.
-        expected: Vec<web3::types::U256>,
+        expected: Vec<U256>,
         /// The flag if failure expected.
         failure: bool,
         /// The expected events.
@@ -47,28 +51,28 @@ pub enum FunctionCall {
         /// The calldata.
         calldata: Vec<u8>,
         /// The value in wei.
-        value: Option<web3::types::U256>,
+        value: Option<U256>,
         /// The expected events.
         events: Vec<Event>,
     },
     /// The `isoltest_builtin_test` standard function.
     IsoltestBuiltinTest {
         /// The expected return value.
-        expected: web3::types::U256,
+        expected: U256,
     },
     /// The `isoltest_side_effects_test` standard function.
     IsoltestSideEffectsTest {
         /// The input.
         input: Vec<u8>,
         /// The expected output.
-        expected: Vec<web3::types::U256>,
+        expected: Vec<U256>,
     },
     /// The `balance` standard function.
     Balance {
         /// The input.
-        input: Option<web3::types::Address>,
+        input: Option<Address>,
         /// The expected output.
-        expected: web3::types::U256,
+        expected: U256,
         /// The expected events.
         events: Vec<Event>,
     },
@@ -82,7 +86,7 @@ pub enum FunctionCall {
         /// The input.
         input: usize,
         /// The expected output.
-        expected: web3::types::Address,
+        expected: Address,
     },
 }
 
@@ -164,7 +168,7 @@ impl TryFrom<parser::Call> for FunctionCall {
                                         "expected cleaned up address as input for balance function"
                                     );
                                 }
-                                Some(web3::types::Address::from_slice(
+                                Some(Address::from_slice(
                                     &input[solx_utils::BYTE_LENGTH_FIELD
                                         - solx_utils::BYTE_LENGTH_ETH_ADDRESS..],
                                 ))
@@ -201,13 +205,13 @@ impl TryFrom<parser::Call> for FunctionCall {
                         if !events.is_empty() {
                             anyhow::bail!("standard functions don't emit events");
                         }
-                        let input = web3::types::U256::from_big_endian(input.as_slice());
+                        let input = U256::from_be_slice(input.as_slice());
                         let expected = expected.into_iter().next().expect("length checked above");
-                        let mut expected_bytes = [0u8; solx_utils::BYTE_LENGTH_FIELD];
-                        expected.to_big_endian(&mut expected_bytes);
+                        let expected_bytes =
+                            expected.to_be_bytes::<{ solx_utils::BYTE_LENGTH_FIELD }>();
                         Ok(Self::Account {
-                            input: input.as_usize(),
-                            expected: web3::types::Address::from_slice(
+                            input: input.to::<usize>(),
+                            expected: Address::from_slice(
                                 &expected_bytes
                                     [expected_bytes.len() - solx_utils::BYTE_LENGTH_ETH_ADDRESS..],
                             ),
@@ -217,8 +221,7 @@ impl TryFrom<parser::Call> for FunctionCall {
                         let calldata = if signature == "()" {
                             input
                         } else {
-                            let mut bytes =
-                                web3::signing::keccak256(signature_str.as_bytes())[0..4].to_vec();
+                            let mut bytes = keccak256(signature_str.as_bytes())[0..4].to_vec();
                             bytes.extend(input);
                             bytes
                         };
@@ -254,14 +257,14 @@ impl FunctionCall {
     ///
     /// Parses value option into wei amount.
     ///
-    fn parse_value(value: Option<Value>) -> anyhow::Result<Option<web3::types::U256>> {
+    fn parse_value(value: Option<Value>) -> anyhow::Result<Option<U256>> {
         match value {
             Some(value) => {
-                let mut amount = web3::types::U256::from_dec_str(value.amount.as_str())
-                    .expect(VALIDATED_BY_THE_PARSER);
+                let mut amount =
+                    U256::from_str_radix(value.amount.as_str(), 10).expect(VALIDATED_BY_THE_PARSER);
                 if value.unit == Unit::Ether {
                     amount = amount
-                        .checked_mul(web3::types::U256::from(u64::pow(10, 18)))
+                        .checked_mul(U256::from(u64::pow(10, 18)))
                         .ok_or_else(|| anyhow::anyhow!("Overflow: amount too much"))?;
                 }
                 Ok(Some(amount))
@@ -289,7 +292,7 @@ impl FunctionCall {
     ///
     /// Parses expected literals into U256 values.
     ///
-    fn parse_expected(expected: Option<Vec<Literal>>) -> anyhow::Result<Vec<web3::types::U256>> {
+    fn parse_expected(expected: Option<Vec<Literal>>) -> anyhow::Result<Vec<U256>> {
         let expected = Self::parse_input(expected)?;
         Ok(Self::bytes_as_u256(expected.as_slice()))
     }
@@ -330,14 +333,14 @@ impl FunctionCall {
     ///
     /// Converts bytes to vector of U256.
     ///
-    fn bytes_as_u256(bytes: &[u8]) -> Vec<web3::types::U256> {
+    fn bytes_as_u256(bytes: &[u8]) -> Vec<U256> {
         let mut result = Vec::new();
         for value in bytes.chunks(solx_utils::BYTE_LENGTH_FIELD) {
             let mut value = value.to_owned();
             while value.len() < solx_utils::BYTE_LENGTH_FIELD {
                 value.push(0);
             }
-            result.push(web3::types::U256::from_big_endian(value.as_slice()));
+            result.push(U256::from_be_slice(value.as_slice()));
         }
         result
     }

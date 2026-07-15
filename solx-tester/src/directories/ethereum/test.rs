@@ -6,6 +6,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use revm::primitives::Address;
+
 use crate::compilers::Compiler;
 use crate::compilers::mode::Mode;
 use crate::directories::Buildable;
@@ -125,11 +127,7 @@ impl EthereumTest {
         mut address_iterator: AddressIterator,
         calls: &[solx_solc_test_adapter::FunctionCall],
         last_source: &str,
-    ) -> anyhow::Result<(
-        web3::types::Address,
-        BTreeMap<String, web3::types::Address>,
-        solx_utils::Libraries,
-    )> {
+    ) -> anyhow::Result<(Address, BTreeMap<String, Address>, solx_utils::Libraries)> {
         let mut caller =
             solx_solc_test_adapter::account_address(solx_solc_test_adapter::DEFAULT_ACCOUNT_INDEX);
 

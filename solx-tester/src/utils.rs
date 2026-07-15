@@ -5,39 +5,39 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use revm::primitives::Address;
+use revm::primitives::U256;
+
 ///
 /// Overrides the default formatting for `Address`, which replaces the middle with an ellipsis.
 ///
-pub fn address_as_string(value: &web3::types::Address) -> String {
-    hex::encode(value.as_bytes())
+pub fn address_as_string(value: &Address) -> String {
+    hex::encode(value.as_slice())
 }
 
 ///
 /// Overrides the default formatting for `U256`, which replaces the middle with an ellipsis.
 ///
-pub fn u256_as_string(value: &web3::types::U256) -> String {
-    let mut bytes = vec![0; solx_utils::BYTE_LENGTH_FIELD];
-    value.to_big_endian(&mut bytes);
-    hex::encode(bytes)
+pub fn u256_as_string(value: &U256) -> String {
+    hex::encode(value.to_be_bytes::<{ solx_utils::BYTE_LENGTH_FIELD }>())
 }
 
 ///
 /// Converts `U256` into `Address`.
 ///
-pub fn u256_to_address(value: &web3::types::U256) -> web3::types::Address {
-    let mut bytes = vec![0; solx_utils::BYTE_LENGTH_FIELD];
-    value.to_big_endian(&mut bytes);
-    web3::types::Address::from_slice(&bytes[bytes.len() - solx_utils::BYTE_LENGTH_ETH_ADDRESS..])
+pub fn u256_to_address(value: &U256) -> Address {
+    let bytes = value.to_be_bytes::<{ solx_utils::BYTE_LENGTH_FIELD }>();
+    Address::from_slice(&bytes[bytes.len() - solx_utils::BYTE_LENGTH_ETH_ADDRESS..])
 }
 
 ///
 /// Converts `Address` into `U256`.
 ///
-pub fn address_to_u256(address: &web3::types::Address) -> web3::types::U256 {
+pub fn address_to_u256(address: &Address) -> U256 {
     let mut buffer = [0u8; solx_utils::BYTE_LENGTH_FIELD];
     buffer[solx_utils::BYTE_LENGTH_FIELD - solx_utils::BYTE_LENGTH_ETH_ADDRESS..]
-        .copy_from_slice(address.as_bytes());
-    web3::types::U256::from_big_endian(&buffer)
+        .copy_from_slice(address.as_slice());
+    U256::from_be_bytes(buffer)
 }
 
 ///

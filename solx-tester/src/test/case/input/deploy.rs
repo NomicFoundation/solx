@@ -6,6 +6,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use revm::context::result::ExecutionResult;
+use revm::primitives::Address;
+use revm::primitives::U256;
 
 use crate::summary::Summary;
 use crate::test::InputContext;
@@ -31,7 +33,7 @@ pub struct Deploy {
     /// The calldata.
     calldata: Calldata,
     /// The caller.
-    caller: web3::types::Address,
+    caller: Address,
     /// The value in wei.
     value: Option<u128>,
     /// The expected output.
@@ -47,7 +49,7 @@ impl Deploy {
         deploy_code: Vec<u8>,
         runtime_code_size: usize,
         calldata: Calldata,
-        caller: web3::types::Address,
+        caller: Address,
         value: Option<u128>,
         expected: Output,
     ) -> Self {
@@ -83,8 +85,7 @@ impl Deploy {
 
         let tx = REVM::new_deploy_transaction(self.caller, self.value, calldata.clone());
 
-        let initial_balance = (web3::types::U256::from(1) << 100)
-            + web3::types::U256::from(self.value.unwrap_or_default());
+        let initial_balance = (U256::from(1) << 100) + U256::from(self.value.unwrap_or_default());
         vm.set_account(&self.caller, initial_balance);
         vm.set_block_data(
             revm::primitives::U256::from(input_index + 1),

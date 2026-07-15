@@ -2,9 +2,7 @@
 //! The integer literal.
 //!
 
-use std::ops::Add;
-use std::ops::BitXor;
-use std::str::FromStr;
+use alloy_primitives::U256;
 
 use crate::test::function_call::parser::lexical::IntegerLiteral as LexicalIntegerLiteral;
 use crate::test::function_call::parser::lexical::Location;
@@ -42,13 +40,13 @@ impl Literal {
         let mut result = vec![0u8; solx_utils::BYTE_LENGTH_FIELD];
         match &self.inner {
             LexicalIntegerLiteral::Decimal { inner, negative } => {
-                let mut number = web3::types::U256::from_dec_str(inner.as_str())
+                let mut number = U256::from_str_radix(inner.as_str(), 10)
                     .expect("validated by parser before semantic conversion");
                 if *negative {
-                    number = number.bitxor(web3::types::U256::max_value());
-                    number = number.add(web3::types::U256::one());
+                    number = !number;
+                    number += U256::from(1);
                 }
-                number.to_big_endian(&mut result);
+                result.copy_from_slice(number.to_be_bytes_vec().as_slice());
                 let first = result
                     .iter()
                     .position(|byte| *byte != 0)
@@ -56,9 +54,9 @@ impl Literal {
                 result = result[first..].to_owned();
             }
             LexicalIntegerLiteral::Hexadecimal(inner) => {
-                web3::types::U256::from_str(inner)
-                    .expect("validated by parser before semantic conversion")
-                    .to_big_endian(&mut result);
+                let number = crate::u256_from_hex_str(inner)
+                    .expect("validated by parser before semantic conversion");
+                result.copy_from_slice(number.to_be_bytes_vec().as_slice());
                 result = result[result.len() - inner.len().div_ceil(2)..].to_owned();
             }
         }

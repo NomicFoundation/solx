@@ -185,7 +185,7 @@ impl Input {
         input: &solx_solc_test_adapter::FunctionCall,
         instances: &BTreeMap<String, Instance>,
         last_source: &str,
-        caller: &web3::types::Address,
+        caller: &revm::primitives::Address,
     ) -> anyhow::Result<Option<Self>> {
         let main_contract_instance = instances
             .values()
@@ -209,8 +209,8 @@ impl Input {
                 };
 
                 let expected = Output::from_ethereum_expected(
-                    &[web3::types::U256::from_big_endian(
-                        main_contract_address.as_bytes(),
+                    &[revm::primitives::U256::from_be_slice(
+                        main_contract_address.as_slice(),
                     )],
                     false,
                     events,
@@ -237,11 +237,11 @@ impl Input {
                     .ok_or_else(|| anyhow::anyhow!("Library `{library}` not found"))?;
 
                 let expected = Output::from_ethereum_expected(
-                    &[web3::types::U256::from_big_endian(
+                    &[revm::primitives::U256::from_be_slice(
                         instance
                             .address()
                             .expect("Must be set by this point")
-                            .as_bytes(),
+                            .as_slice(),
                     )],
                     false,
                     &[],

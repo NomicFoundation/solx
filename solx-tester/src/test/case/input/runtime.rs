@@ -7,6 +7,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use revm::context::result::ExecutionResult;
+use revm::primitives::Address;
+use revm::primitives::U256;
 
 use crate::revm::REVM;
 use crate::revm::revm_type_conversions::revm_bytes_to_vec_value;
@@ -25,11 +27,11 @@ pub struct Runtime {
     /// The input name.
     name: String,
     /// The address.
-    address: web3::types::Address,
+    address: Address,
     /// The calldata.
     calldata: Calldata,
     /// The caller.
-    caller: web3::types::Address,
+    caller: Address,
     /// The value in wei.
     value: Option<u128>,
     /// The contracts storage to set before running.
@@ -44,9 +46,9 @@ impl Runtime {
     ///
     pub fn new(
         name: String,
-        address: web3::types::Address,
+        address: Address,
         calldata: Calldata,
-        caller: web3::types::Address,
+        caller: Address,
         value: Option<u128>,
         storage: Storage,
         expected: Output,
@@ -84,7 +86,7 @@ impl Runtime {
 
         if test.selector.path == "solx-solidity/test/libsolidity/semanticTests/state/tx_origin.sol"
         {
-            self.caller = web3::types::Address::from_str(REVM::TX_ORIGIN).unwrap();
+            self.caller = Address::from_str(REVM::TX_ORIGIN).unwrap();
         }
         let tx = REVM::new_runtime_transaction(
             self.address,
@@ -93,9 +95,9 @@ impl Runtime {
             self.value,
         );
 
-        let mut initial_balance = web3::types::U256::from(self.value.unwrap_or_default());
+        let mut initial_balance = U256::from(self.value.unwrap_or_default());
         if REVM::get_rich_addresses().contains(&self.caller) {
-            initial_balance += web3::types::U256::from(1) << 100;
+            initial_balance += U256::from(1) << 100;
         }
         vm.set_account(&self.caller, initial_balance);
 

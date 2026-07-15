@@ -12,6 +12,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use revm::primitives::Address;
+
 use crate::compilers::Compiler;
 use crate::compilers::mode::Mode;
 use crate::directories::Buildable;
@@ -237,10 +239,7 @@ impl MatterLabsTest {
     fn get_libraries(
         &self,
         address_iterator: &mut AddressIterator,
-    ) -> (
-        solx_utils::Libraries,
-        BTreeMap<String, web3::types::Address>,
-    ) {
+    ) -> (solx_utils::Libraries, BTreeMap<String, Address>) {
         let mut libraries = BTreeMap::new();
         let mut library_addresses = BTreeMap::new();
 
@@ -254,7 +253,7 @@ impl MatterLabsTest {
             let mut file_libraries = BTreeMap::new();
             for name in metadata_file_libraries.keys() {
                 let address = address_iterator.next(
-                    &web3::types::Address::from_str(DEFAULT_CALLER_ADDRESS).expect("Always valid"),
+                    &Address::from_str(DEFAULT_CALLER_ADDRESS).expect("Always valid"),
                     true,
                 );
                 file_libraries.insert(
