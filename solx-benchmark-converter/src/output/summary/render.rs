@@ -71,18 +71,31 @@ impl SuiteStats {
             return "⚪ not collected".to_owned();
         }
         if !self.gas_is_gate {
-            if self.gas.diffs == 0 {
+            // The count and the median come from the same population: pairs
+            // with a `main` percentage. One-sided pairs are stated apart, so
+            // an unbounded 0 → N addition is never averaged into "<0.1%".
+            let mut parts = Vec::new();
+            if !self.gas_jitter_percents.is_empty() {
+                let med = match median(&self.gas_jitter_percents) {
+                    Some(med) if med >= 0.05 => format!("{med:.1}%"),
+                    _ => "<0.1%".to_owned(),
+                };
+                parts.push(format!(
+                    "jitter {} of {}, median {med}",
+                    commas(self.gas_jitter_percents.len() as u64),
+                    commas(self.gas.cells)
+                ));
+            }
+            if self.gas_diffs_without_main > 0 {
+                parts.push(format!(
+                    "{} without `main` gas",
+                    commas(self.gas_diffs_without_main)
+                ));
+            }
+            if parts.is_empty() {
                 return "⚪ no jitter (not gated)".to_owned();
             }
-            let med = match median(&self.gas_jitter_percents) {
-                Some(med) if med >= 0.05 => format!("{med:.1}%"),
-                _ => "<0.1%".to_owned(),
-            };
-            return format!(
-                "⚪ jitter {} of {}, median {med} (not gated)",
-                commas(self.gas.diffs),
-                commas(self.gas.cells)
-            );
+            return format!("⚪ {} (not gated)", parts.join("; "));
         }
         if self.gas.diffs == 0 {
             format!("✅ 0 of {}", commas(self.gas.cells))
@@ -171,6 +184,12 @@ pub(crate) fn render_verdict(out: &mut String, stats: &[SuiteStats]) {
     }
 
     match failure_verdict(stats) {
+        FailureVerdict::NoData => {
+            let _ = writeln!(
+                out,
+                "⚪ **No failure data** — no PR run had a `main` counterpart to compare against."
+            );
+        }
         FailureVerdict::Clean { pre_existing } if pre_existing.is_empty() => {
             let _ = writeln!(out, "✅ **No new failures**.");
         }
@@ -210,6 +229,12 @@ pub(crate) fn render_verdict(out: &mut String, stats: &[SuiteStats]) {
                 let _ = writeln!(
                     out,
                     "❌ **Suite errored** — {label} produced no usable report."
+                );
+            }
+            HealthIssue::EmptySuite { label } => {
+                let _ = writeln!(
+                    out,
+                    "❌ **Suite empty** — {label}'s report contains no runs."
                 );
             }
             HealthIssue::UnrecognizedToolchains { label } => {
@@ -266,6 +291,15 @@ pub(crate) fn render_results_table(out: &mut String, stats: &[SuiteStats]) {
             let _ = writeln!(
                 out,
                 "| {} | ❌ no report — suite errored | — | — | {} |",
+                s.label,
+                s.report_cell()
+            );
+            continue;
+        }
+        if s.is_empty_report() {
+            let _ = writeln!(
+                out,
+                "| {} | ❌ empty report | — | — | {} |",
                 s.label,
                 s.report_cell()
             );

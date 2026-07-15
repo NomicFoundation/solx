@@ -231,6 +231,33 @@ mod tests {
         );
     }
 
+    #[test]
+    fn one_sided_gas_is_not_averaged_into_jitter() {
+        // Gas going 0 → 50,000 has no percentage; it must be stated apart,
+        // not understated by an empty-median "<0.1%".
+        let tests = vec![contract_test(
+            "p",
+            "C",
+            &[
+                ("02.solx-main-legacy", 100, 0),
+                ("03.solx-legacy", 100, 50_000),
+            ],
+        )];
+        let out = render(&[suite("Foundry", false, tests)]);
+        assert!(out.contains("⚪ 1 without `main` gas (not gated)"), "{out}");
+    }
+
+    #[test]
+    fn empty_report_is_a_loud_health_issue() {
+        let out = render(&[suite("Foundry", false, vec![])]);
+        assert!(
+            out.contains("❌ **Suite empty** — Foundry's report contains no runs."),
+            "{out}"
+        );
+        assert!(out.contains("| Foundry | ❌ empty report |"), "{out}");
+        assert!(!out.contains("✅ **No new failures**"), "{out}");
+    }
+
     /// Compares a rendered comment against its golden fixture. Set
     /// `UPDATE_SUMMARY_FIXTURES=1` to regenerate after an intended change.
     fn assert_matches_fixture(name: &str, rendered: &str) {
