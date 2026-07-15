@@ -14,7 +14,7 @@
 |---|---|
 | Foundry · 2 proj | ⚠️ **+10.8%** / +15.9% |
 
-⚠️ **Project outliers (>15%):** `op` legacy **+31.0%**
+⚠️ **Project outliers (≥15%):** `op` legacy **+31.0%**
 
 **Bytecode size — PR vs baselines** (positive = PR larger; contracts built by both only)
 
