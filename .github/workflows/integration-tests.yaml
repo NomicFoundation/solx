@@ -269,7 +269,12 @@ jobs:
       # The XLSX comparison needs both sides; the summary JSON is written from
       # whatever exists, so a failed main-side baseline still yields PR data
       # (rendered as "no baseline") instead of a bogus "suite errored".
+      # continue-on-error: a converter failure must not skip the Foundry and
+      # Hardhat suites below (the summary would silently omit them as
+      # "skipped"); the fail gate reports the converter outcome explicitly.
       - name: Run benchmark converter
+        id: benchmark_converter
+        continue-on-error: true
         if: hashFiles('candidate-benchmark.json') != ''
         run: |
           jq '{data: ., project: "solx-tester", toolchain: "01.solx"}' \
@@ -342,12 +347,15 @@ jobs:
       # A suite's flag is passed only when its step actually ran: a suite that
       # ran but produced no JSON renders as "errored", while a suite skipped by
       # an earlier hard failure is omitted instead of reported as errored.
+      # When every suite was skipped there is nothing to summarize: the step
+      # skips rather than adding a second red step on top of the real failure,
+      # and the previous summary comment is left in place.
       # No continue-on-error: losing the summary must fail the job visibly.
       # !cancelled(), not always(): a run cancelled mid-suite (concurrency
       # auto-cancel on push) must not overwrite the last real summary with a
       # bogus "suite errored" row.
       - name: Generate integration summary
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && (steps.solx_tester_bench_pr.outcome != 'skipped' || steps.foundry_tests.outcome != 'skipped' || steps.hardhat_tests.outcome != 'skipped') }}
         env:
           TESTER_URL: ${{ steps.solx-tester-report.outputs.artifact-url }}
           FOUNDRY_URL: ${{ steps.foundry-report.outputs.artifact-url }}
@@ -377,20 +385,26 @@ jobs:
           message-id: 'integration-test-summary'
           message-path: integration-summary.md
 
+      # "failure", not != "success": a step skipped by an earlier hard
+      # failure already reddens the job there — blaming the skipped suite
+      # here would misattribute it.
       - name: Fail workflow if tests or benchmarks failed
         if: always()
         run: |
           failures=()
-          if [ "${{ steps.solx_tester_tests.outcome }}" != "success" ]; then
+          if [ "${{ steps.solx_tester_tests.outcome }}" = "failure" ]; then
             failures+=("solx-tester tests")
           fi
-          if [ "${{ steps.solx_tester_bench_pr.outcome }}" != "success" ]; then
+          if [ "${{ steps.solx_tester_bench_pr.outcome }}" = "failure" ]; then
             failures+=("solx-tester benchmarks (PR)")
           fi
-          if [ "${{ steps.hardhat_tests.outcome }}" != "success" ]; then
+          if [ "${{ steps.benchmark_converter.outcome }}" = "failure" ]; then
+            failures+=("benchmark converter")
+          fi
+          if [ "${{ steps.hardhat_tests.outcome }}" = "failure" ]; then
             failures+=("hardhat tests")
           fi
-          if [ "${{ steps.foundry_tests.outcome }}" != "success" ]; then
+          if [ "${{ steps.foundry_tests.outcome }}" = "failure" ]; then
             failures+=("foundry tests")
           fi
           if [ ${#failures[@]} -ne 0 ]; then
