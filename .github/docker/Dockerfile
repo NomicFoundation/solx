@@ -51,7 +51,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # ── LLVM 21 (system toolchain for coverage, sanitizers, lipo) ────────────────
 # llvm-cov / llvm-profdata must read the profraw format emitted by
-# instrumented Rust binaries. rustc 1.96.0 embeds LLVM 22 — one major ahead
+# instrumented Rust binaries. rustc 1.96.1 embeds LLVM 22 — one major ahead
 # of these tools — but still emits format versions LLVM 21 reads. Re-check on
 # every toolchain bump: a format bump breaks the coverage job with an opaque
 # profdata error.
@@ -182,7 +182,7 @@ RUN curl -fsSL -o valgrind-${VALGRIND_VERSION}.tar.bz2 \
 # weight in the dev image. rust-src serves the -Zbuild-std actions
 # (build-rust, rust-unit-tests). On a bump, re-check the LLVM section
 # comment in base (rustc's embedded LLVM major moves).
-ARG RUST_VERSION=1.96.0
+ARG RUST_VERSION=1.96.1
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         | sh -s -- -y --default-toolchain "${RUST_VERSION}" --profile default \
     && . "$HOME/.cargo/env" \
