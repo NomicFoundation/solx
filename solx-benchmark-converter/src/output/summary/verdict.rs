@@ -97,6 +97,9 @@ pub(crate) enum HealthIssue {
     /// Individual runs matching no declared toolchain name, in a suite whose
     /// PR data is otherwise present — e.g. a renamed or foreign baseline.
     UnrecognizedRuns { label: String, modes: Vec<String> },
+    /// Recognized runs whose mode carries no recognized pipeline token —
+    /// e.g. a new codegen letter the tables don't know yet.
+    UnrecognizedPipelines { label: String, modes: Vec<String> },
     /// PR runs with no `main` counterpart; their failures are not compared.
     Unbaselined {
         label: String,
@@ -228,6 +231,15 @@ pub(crate) fn health_issues(stats: &[SuiteStats]) -> Vec<HealthIssue> {
         issues.push(HealthIssue::UnrecognizedRuns {
             label: s.label.clone(),
             modes: s.unrecognized_modes.iter().cloned().collect(),
+        });
+    }
+    for s in stats
+        .iter()
+        .filter(|s| !s.unrecognized_pipelines.is_empty())
+    {
+        issues.push(HealthIssue::UnrecognizedPipelines {
+            label: s.label.clone(),
+            modes: s.unrecognized_pipelines.iter().cloned().collect(),
         });
     }
     for s in stats.iter().filter(|s| s.unbaselined_runs > 0) {

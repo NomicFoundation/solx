@@ -75,20 +75,30 @@ pub(crate) fn classify(mode: &str, matrix: ToolchainMatrix) -> (Role, String) {
     }
 }
 
-/// The compilation pipeline a mode belongs to: the project suites' trailing
-/// `legacy`/`viaIR` token, the tester's `E`/`Y` codegen token (spelled out —
-/// the trailing token there is the solc version), or the trailing token when
-/// nothing is recognized.
-pub(crate) fn pipeline_of(mode: &str) -> String {
+/// The compilation pipeline a mode belongs to: the project suites'
+/// `legacy`/`viaIR` token or the tester's codegen token (spelled out — the
+/// trailing token there is the solc version). `None` for unrecognized
+/// tokens, surfaced as a harness error upstream — a silent fallback would
+/// group a new codegen's data under a bogus column.
+pub(crate) fn pipeline_of(mode: &str) -> Option<String> {
     for token in mode.split('-') {
-        match token {
-            "legacy" | "viaIR" => return token.to_owned(),
-            "E" => return "EVMLA".to_owned(),
-            "Y" => return "Yul".to_owned(),
-            _ => {}
+        if matches!(token, "legacy" | "viaIR") {
+            return Some(token.to_owned());
+        }
+        if let Some(codegen) = codegen_name(token) {
+            return Some(codegen.to_owned());
         }
     }
-    mode.rsplit('-').next().unwrap_or("").to_owned()
+    None
+}
+
+/// The spelled-out name of a tester codegen token.
+fn codegen_name(token: &str) -> Option<&'static str> {
+    match token {
+        "E" => Some("EVMLA"),
+        "Y" => Some("Yul"),
+        _ => None,
+    }
 }
 
 ///
@@ -99,11 +109,7 @@ pub(crate) fn humanize_mode(key: &str) -> String {
     let tokens: Vec<&str> = key
         .split('-')
         .filter(|token| *token != "solx" && !token.is_empty())
-        .map(|token| match token {
-            "E" => "EVMLA",
-            "Y" => "Yul",
-            other => other,
-        })
+        .map(|token| codegen_name(token).unwrap_or(token))
         .collect();
     if tokens.is_empty() {
         key.to_owned()
@@ -195,13 +201,20 @@ mod tests {
 
     #[test]
     fn pipeline_is_derived_from_recognized_tokens() {
-        assert_eq!(pipeline_of("02.solx-main-viaIR"), "viaIR");
-        assert_eq!(pipeline_of("03.solx-legacy"), "legacy");
+        assert_eq!(pipeline_of("02.solx-main-viaIR").as_deref(), Some("viaIR"));
+        assert_eq!(pipeline_of("03.solx-legacy").as_deref(), Some("legacy"));
         // Tester modes: the codegen is the pipeline, not the trailing
         // solc version.
-        assert_eq!(pipeline_of("01.solx-solx-E-M3B3-0.8.34"), "EVMLA");
-        assert_eq!(pipeline_of("00.solx-main-solx-Y-M3B3-0.8.34"), "Yul");
-        assert_eq!(pipeline_of("something-odd"), "odd");
+        assert_eq!(
+            pipeline_of("01.solx-solx-E-M3B3-0.8.34").as_deref(),
+            Some("EVMLA")
+        );
+        assert_eq!(
+            pipeline_of("00.solx-main-solx-Y-M3B3-0.8.34").as_deref(),
+            Some("Yul")
+        );
+        // A new codegen letter is a loud None, never a bogus version column.
+        assert_eq!(pipeline_of("01.solx-solx-L-M3B3-0.8.34"), None);
     }
 
     #[test]

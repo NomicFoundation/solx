@@ -167,6 +167,9 @@ pub(crate) struct SuiteStats {
     /// Mode strings matching no declared toolchain name — always surfaced as
     /// a harness error, whether or not PR runs are present.
     pub(crate) unrecognized_modes: BTreeSet<String>,
+    /// Recognized runs whose mode carries no recognized pipeline token —
+    /// their per-pipeline data is excluded and the drift surfaced loudly.
+    pub(crate) unrecognized_pipelines: BTreeSet<String>,
 
     pub(crate) size: DiffCounter,
     /// Size pairs where exactly one side produced a value — excluded from
@@ -251,11 +254,21 @@ impl SuiteStats {
                     }
                 }
 
+                let pipeline = match pipeline_of(mode) {
+                    Some(pipeline) => pipeline,
+                    None => {
+                        if role != Role::Other {
+                            stats.unrecognized_pipelines.insert(mode.clone());
+                        }
+                        continue;
+                    }
+                };
+
                 if matches!(role, Role::Pr | Role::Main | Role::Latest | Role::Solc) {
                     let bytes = run.average_size() + run.average_runtime_size();
                     if bytes != 0 {
                         *by_role_pipeline
-                            .entry((role, pipeline_of(mode)))
+                            .entry((role, pipeline.clone()))
                             .or_default() += bytes;
                     }
                 }
@@ -263,8 +276,8 @@ impl SuiteStats {
                 if !run.compilation_time.is_empty() {
                     let ms = run.average_compilation_time();
                     match role {
-                        Role::Pr => *pr_compile.entry(pipeline_of(mode)).or_default() += ms,
-                        Role::Main => *main_compile.entry(pipeline_of(mode)).or_default() += ms,
+                        Role::Pr => *pr_compile.entry(pipeline).or_default() += ms,
+                        Role::Main => *main_compile.entry(pipeline).or_default() += ms,
                         _ => {}
                     }
                 }

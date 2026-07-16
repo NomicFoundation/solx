@@ -294,6 +294,22 @@ fn failures_line(verdict: FailureVerdict) -> String {
     }
 }
 
+/// Backtick-quoted mode strings, capped at `MAX_LISTED` with a "+N more".
+fn truncated_mode_list(modes: &[String]) -> String {
+    let shown: Vec<String> = modes
+        .iter()
+        .take(MAX_LISTED)
+        .map(|mode| format!("`{mode}`"))
+        .collect();
+    let extra = modes.len().saturating_sub(MAX_LISTED);
+    let more = if extra > 0 {
+        format!(" (+{extra} more)")
+    } else {
+        String::new()
+    };
+    format!("{}{more}", shown.join(", "))
+}
+
 /// The "+N build, +N test" list — one wording shared by the verdict line and
 /// the table cell.
 fn new_failure_kinds(build: usize, test: usize) -> String {
@@ -338,20 +354,15 @@ fn health_lines(stats: &[SuiteStats]) -> (Vec<String>, Vec<String>) {
                 ));
             }
             HealthIssue::UnrecognizedRuns { label, modes } => {
-                let shown: Vec<String> = modes
-                    .iter()
-                    .take(MAX_LISTED)
-                    .map(|mode| format!("`{mode}`"))
-                    .collect();
-                let extra = modes.len().saturating_sub(MAX_LISTED);
-                let more = if extra > 0 {
-                    format!(" (+{extra} more)")
-                } else {
-                    String::new()
-                };
                 lines.push(format!(
-                    "❌ **Harness error** — {label}: runs matched no declared toolchain: {}{more}.",
-                    shown.join(", ")
+                    "❌ **Harness error** — {label}: runs matched no declared toolchain: {}.",
+                    truncated_mode_list(&modes)
+                ));
+            }
+            HealthIssue::UnrecognizedPipelines { label, modes } => {
+                lines.push(format!(
+                    "❌ **Harness error** — {label}: no recognized pipeline token in: {}.",
+                    truncated_mode_list(&modes)
                 ));
             }
             HealthIssue::Unbaselined {
