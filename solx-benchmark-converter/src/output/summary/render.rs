@@ -80,9 +80,7 @@ impl SuiteStats {
             return "⚪ not collected".to_owned();
         }
         if !self.gas_is_gate {
-            // The count and the median come from the same population: pairs
-            // with a `main` percentage. One-sided pairs are stated apart, so
-            // an unbounded 0 → N addition is never averaged into "<0.1%".
+            // Count and median share one population; one-sided pairs are stated apart.
             let mut parts = Vec::new();
             if !self.gas_jitter_percents.is_empty() {
                 let med = match median(&self.gas_jitter_percents) {
@@ -507,8 +505,7 @@ fn compile_view(stats: &[SuiteStats]) -> Option<CompileView> {
     if with_ct.is_empty() {
         return None;
     }
-    // Columns come from the pipelines actually present so a new codegen
-    // shows up instead of silently vanishing from the tripwire.
+    // Columns come from the data, so a new pipeline can't silently vanish.
     let pipelines: Vec<String> = with_ct
         .iter()
         .flat_map(|s| s.compile.keys())
