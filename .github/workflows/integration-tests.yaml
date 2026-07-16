@@ -280,16 +280,22 @@ jobs:
           jq '{data: ., project: "solx-tester", toolchain: "01.solx"}' \
             candidate-benchmark.json > candidate.json
           inputs=(candidate.json)
-          if [ -s reference-benchmark.json ]; then
-            jq '{data: ., project: "solx-tester", toolchain: "00.solx-main"}' \
-              reference-benchmark.json > reference.json
+          # The reference side is best-effort: a truncated or invalid baseline
+          # (its bench step is continue-on-error) must not lose the healthy
+          # candidate data, so its jq runs guarded and the summary JSON is
+          # written before the two-sided XLSX conversion.
+          if [ -s reference-benchmark.json ] && \
+             jq '{data: ., project: "solx-tester", toolchain: "00.solx-main"}' \
+               reference-benchmark.json > reference.json; then
             inputs=(reference.json candidate.json)
-            ./target/release/solx-benchmark-converter \
-              --output-path solx-tester-report.xlsx "${inputs[@]}"
           fi
           ./target/release/solx-benchmark-converter \
             --output-format json \
             --output-path solx-tester-benchmark.json "${inputs[@]}"
+          if [ ${#inputs[@]} -eq 2 ]; then
+            ./target/release/solx-benchmark-converter \
+              --output-path solx-tester-report.xlsx "${inputs[@]}"
+          fi
 
       - name: Upload solx-tester report
         if: always() && hashFiles('solx-tester-report.xlsx') != ''
