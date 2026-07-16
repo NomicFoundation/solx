@@ -521,34 +521,12 @@ pub fn test(
             )
         })
         .collect();
-    std::fs::create_dir_all(output_directory.as_path()).map_err(|error| {
-        anyhow::anyhow!(
-            "{} Foundry output reports directory {output_directory:?}: {error}",
-            "Creating".bright_green().bold(),
-        )
-    })?;
-    let base_path = crate::utils::absolute_path(output_directory)?;
-
-    crate::test::write_benchmark_json(
-        &benchmark,
-        base_path.as_path(),
-        solx_benchmark_converter::SuiteKind::Foundry.benchmark_file(),
-    )?;
-
-    let output: solx_benchmark_converter::Output = (
+    crate::test::write_reports(
         benchmark,
         comparisons,
-        solx_benchmark_converter::OutputFormat::Xlsx,
-    )
-        .try_into()?;
-    let mut output_path = base_path;
-    output_path.push("foundry-report.xlsx");
-    eprintln!(
-        "{} the spreadsheet report to {}",
-        solx_utils::cargo_status_ok("Writing"),
-        output_path.to_string_lossy().bright_white().bold()
-    );
-    output.write_to_file(output_path)?;
+        output_directory,
+        solx_benchmark_converter::SuiteKind::Foundry,
+    )?;
 
     // usize::MAX marks a zero-error build that emitted no bytecode.
     let display_build_errors = |count: usize| {
