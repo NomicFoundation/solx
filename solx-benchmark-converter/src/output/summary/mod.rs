@@ -298,6 +298,28 @@ mod tests {
     }
 
     #[test]
+    fn one_sided_compile_pipeline_keeps_its_column() {
+        // viaIR compiles on the PR side only: no aggregate exists, but the
+        // column must appear with an empty cell instead of vanishing.
+        let tests = vec![
+            compile_test(
+                "a",
+                &[("02.solx-main-legacy", 1_000), ("03.solx-legacy", 1_020)],
+            ),
+            compile_test("b", &[("03.solx-viaIR", 9_000)]),
+        ];
+        let out = render(&[suite("Foundry", false, tests)]);
+        assert!(
+            out.contains("| Suite | legacy (agg / median) | viaIR (agg / median) |"),
+            "{out}"
+        );
+        assert!(
+            out.contains("| Foundry · 2 proj | +2.0% / +2.0% | — |"),
+            "{out}"
+        );
+    }
+
+    #[test]
     fn compile_improvements_are_not_sirened() {
         let tests = vec![compile_test(
             "a",
@@ -615,6 +637,16 @@ mod tests {
                     ("03.solx-legacy", 1_000 + index * 100 + 10 + index, 0),
                 ],
             ));
+        }
+        // Runtime code sizes are comparison cells of their own; this pair's
+        // +48 B outranks every deploy diff, so the top mover says "runtime".
+        let (_, c0) = &mut foundry_tests[0];
+        for (mode, runtime_size) in [("02.solx-main-legacy", 2_000), ("03.solx-legacy", 2_048)] {
+            c0.runs
+                .get_mut(mode)
+                .expect("mode")
+                .runtime_size
+                .push(runtime_size);
         }
         let foundry = suite("Foundry", false, foundry_tests);
 

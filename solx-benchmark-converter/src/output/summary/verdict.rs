@@ -445,11 +445,35 @@ mod tests {
             main_orphan_failures: 7,
             ..available("Foundry 3")
         };
+        let step_failed = SuiteStats {
+            total_runs: 1,
+            pr_runs_seen: 1,
+            outcome: SuiteOutcome::Failure,
+            ..available("Hardhat 3")
+        };
+        let unknown_pipeline = SuiteStats {
+            total_runs: 2,
+            pr_runs_seen: 1,
+            unrecognized_pipelines: ["01.solx-solx-L-M3B3-0.8.34".to_owned()].into(),
+            ..available("Foundry 4")
+        };
         assert_eq!(
-            health_issues(&[errored, drifted, unbaselined, foreign_run, empty, shrunken]),
+            health_issues(&[
+                errored,
+                drifted,
+                unbaselined,
+                foreign_run,
+                empty,
+                shrunken,
+                step_failed,
+                unknown_pipeline
+            ]),
             vec![
                 HealthIssue::SuiteErrored {
                     label: "solx-tester".to_owned(),
+                },
+                HealthIssue::StepFailed {
+                    label: "Hardhat 3".to_owned(),
                 },
                 HealthIssue::EmptySuite {
                     label: "Hardhat 2".to_owned(),
@@ -460,6 +484,10 @@ mod tests {
                 HealthIssue::UnrecognizedRuns {
                     label: "Foundry 2".to_owned(),
                     modes: vec!["04.mason-legacy".to_owned()],
+                },
+                HealthIssue::UnrecognizedPipelines {
+                    label: "Foundry 4".to_owned(),
+                    modes: vec!["01.solx-solx-L-M3B3-0.8.34".to_owned()],
                 },
                 HealthIssue::Unbaselined {
                     label: "Hardhat".to_owned(),
