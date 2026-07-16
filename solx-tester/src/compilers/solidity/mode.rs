@@ -71,9 +71,38 @@ impl Mode {
     }
 
     ///
-    /// Checks if the mode is compatible with the source code pragmas.
+    /// Checks if the mode is compatible with the source code pragmas. Under the Slang frontend,
+    /// tests pinned to `pragma abicoder v1` are incompatible: Slang parses the pragma as an inert
+    /// node and always encodes with v2 semantics.
     ///
     pub fn check_pragmas(&self, sources: &[(String, String)]) -> bool {
+        #[cfg(feature = "slang-ast")]
+        {
+            let mut v1_pinned = false;
+            let mut v2_declared = false;
+            for line in sources
+                .iter()
+                .flat_map(|(_, source_code)| source_code.lines())
+            {
+                let mut split = line.split_whitespace();
+                match (
+                    split.next(),
+                    split.next(),
+                    split.next().map(|version| version.trim_end_matches(';')),
+                ) {
+                    (Some("pragma"), Some("abicoder"), Some("v1")) => v1_pinned = true,
+                    (Some("pragma"), Some("abicoder"), Some("v2"))
+                    | (Some("pragma"), Some("experimental"), Some("ABIEncoderV2")) => {
+                        v2_declared = true;
+                    }
+                    _ => {}
+                }
+            }
+            if v1_pinned && !v2_declared {
+                return false;
+            }
+        }
+
         // Strip pre-release for pragma matching since semver pre-release versions
         // have special matching rules that don't work well with Solidity pragmas.
         // E.g., ">=0.8.0" should match "0.8.34-develop" but semver doesn't agree.
@@ -103,6 +132,10 @@ impl Mode {
     /// Checks if the mode is compatible with the Ethereum tests params.
     ///
     pub fn check_ethereum_tests_params(&self, params: &solx_solc_test_adapter::Params) -> bool {
+        #[cfg(feature = "slang-ast")]
+        if params.abi_encoder_v1_only == solx_solc_test_adapter::ABIEncoderV1Only::True {
+            return false;
+        }
         if self.via_ir {
             params.compile_via_yul != solx_solc_test_adapter::CompileViaYul::False
                 && params.abi_encoder_v1_only != solx_solc_test_adapter::ABIEncoderV1Only::True
