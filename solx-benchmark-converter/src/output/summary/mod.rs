@@ -313,6 +313,29 @@ mod tests {
     }
 
     #[test]
+    fn unknown_codegen_token_is_a_loud_harness_error() {
+        // A new tester codegen letter must not silently group data under a
+        // bogus solc-version pipeline column.
+        let tester = suite(
+            "solx-tester",
+            true,
+            vec![compile_test(
+                "solx-tester",
+                &[
+                    ("00.solx-main-solx-L-M3B3-0.8.34", 1_000),
+                    ("01.solx-solx-L-M3B3-0.8.34", 1_010),
+                ],
+            )],
+        );
+        let out = render(&[tester]);
+        assert!(
+            out.contains("❌ **Harness error** — solx-tester: no recognized pipeline token in:"),
+            "{out}"
+        );
+        assert!(!out.contains("0.8.34 (agg / median)"), "{out}");
+    }
+
+    #[test]
     fn skipped_suite_renders_an_explicit_row() {
         // A suite skipped by an earlier hard failure must appear as "did not
         // run" — a partial summary must never look like a complete one.
