@@ -9,6 +9,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use super::SuiteOutcome;
 use super::SummarySuite;
 use super::toolchain::Role;
 use super::toolchain::classify;
@@ -136,6 +137,8 @@ pub(crate) struct SuiteStats {
     pub(crate) gas_is_gate: bool,
     /// False when the suite was expected but produced no report.
     pub(crate) available: bool,
+    /// How the suite's workflow step ended.
+    pub(crate) outcome: SuiteOutcome,
     pub(crate) project_count: usize,
     /// Total runs seen, and how many classified as the PR toolchain — data
     /// with zero PR runs means the toolchain naming drifted from classify().
@@ -201,6 +204,7 @@ impl SuiteStats {
             report_url: suite.report_url.clone(),
             gas_is_gate: suite.gas_is_gate,
             available: suite.benchmark.is_some(),
+            outcome: suite.outcome,
             ..Default::default()
         };
         let Some(benchmark) = suite.benchmark.as_ref() else {

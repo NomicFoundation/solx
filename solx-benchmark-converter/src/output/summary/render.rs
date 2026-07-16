@@ -12,6 +12,7 @@ use std::collections::BTreeSet;
 
 use askama::Template;
 
+use super::SuiteOutcome;
 use super::stats::CompileAggregate;
 use super::stats::DiffCounter;
 use super::stats::SuiteStats;
@@ -313,6 +314,12 @@ fn health_lines(stats: &[SuiteStats]) -> (Vec<String>, Vec<String>) {
                     "❌ **Suite errored** — {label} produced no usable report."
                 ));
             }
+            HealthIssue::StepFailed { label } => {
+                lines.push(format!(
+                    "⚠️ **Suite step failed** — {label} exited nonzero after its report was \
+                     written; results may be incomplete."
+                ));
+            }
             HealthIssue::EmptySuite { label } => {
                 lines.push(format!(
                     "❌ **Suite empty** — {label}'s report contains no runs."
@@ -387,6 +394,9 @@ fn suite_row(s: &SuiteStats) -> SuiteRow {
         gas: "—".to_owned(),
         report: s.report_cell(),
     };
+    if s.outcome == SuiteOutcome::Skipped {
+        return dashed("⚪ did not run");
+    }
     if !s.available {
         return dashed("❌ no report — suite errored");
     }

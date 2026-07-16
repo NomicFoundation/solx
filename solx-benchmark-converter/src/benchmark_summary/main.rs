@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use clap::Parser;
 
 use solx_benchmark_converter::Benchmark;
+use solx_benchmark_converter::SuiteOutcome;
 use solx_benchmark_converter::SummarySuite;
 use solx_benchmark_converter::ToolchainMatrix;
 
@@ -19,27 +20,33 @@ use self::arguments::Arguments;
 
 ///
 /// Loads a suite's benchmark, returning `None` when the suite was not part of
-/// this run (no flag). A flag pointing to a missing or unreadable file means
-/// the suite errored before writing a valid report — rendered as a failed row
-/// rather than aborting the summary for the healthy suites.
+/// this invocation (no flags at all). A skipped step outcome renders as an
+/// explicit "did not run" row; a flag pointing to a missing or unreadable
+/// file means the suite errored before writing a valid report — rendered as
+/// a failed row rather than aborting the summary for the healthy suites.
 ///
 fn load_suite(
     label: &str,
     report_file: &str,
     path: Option<PathBuf>,
     report_url: Option<String>,
+    outcome: Option<String>,
     gas_is_gate: bool,
     matrix: ToolchainMatrix,
 ) -> Option<SummarySuite> {
-    let path = path?;
-    let benchmark = match Benchmark::try_from(path.clone()) {
-        Ok(benchmark) => Some(benchmark),
-        Err(error) => {
-            eprintln!(
-                "Warning: {label} benchmark {path:?} is unusable ({error}); rendering the suite as errored."
-            );
-            None
-        }
+    let outcome = SuiteOutcome::from_step_outcome(outcome.as_deref());
+    let benchmark = match (outcome, path) {
+        (SuiteOutcome::Skipped, _) => None,
+        (_, None) => return None,
+        (_, Some(path)) => match Benchmark::try_from(path.clone()) {
+            Ok(benchmark) => Some(benchmark),
+            Err(error) => {
+                eprintln!(
+                    "Warning: {label} benchmark {path:?} is unusable ({error}); rendering the suite as errored."
+                );
+                None
+            }
+        },
     };
     Some(SummarySuite {
         label: label.to_owned(),
@@ -49,6 +56,7 @@ fn load_suite(
         report_url: report_url.filter(|url| !url.is_empty()),
         gas_is_gate,
         matrix,
+        outcome,
     })
 }
 
@@ -61,6 +69,7 @@ fn main() -> anyhow::Result<()> {
             "solx-tester-report.xlsx",
             arguments.tester,
             arguments.tester_url,
+            arguments.tester_outcome,
             true,
             ToolchainMatrix::Tester,
         ),
@@ -69,6 +78,7 @@ fn main() -> anyhow::Result<()> {
             "foundry-report.xlsx",
             arguments.foundry,
             arguments.foundry_url,
+            arguments.foundry_outcome,
             false,
             ToolchainMatrix::Project,
         ),
@@ -77,6 +87,7 @@ fn main() -> anyhow::Result<()> {
             "hardhat-report.xlsx",
             arguments.hardhat,
             arguments.hardhat_url,
+            arguments.hardhat_outcome,
             false,
             ToolchainMatrix::Project,
         ),

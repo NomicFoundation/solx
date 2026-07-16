@@ -22,6 +22,10 @@ pub struct Arguments {
     /// Artifact download URL for the solx-tester XLSX report.
     #[arg(long)]
     pub tester_url: Option<String>,
+    /// The solx-tester step outcome (success/failure/skipped); a skipped
+    /// suite renders as an explicit "did not run" row.
+    #[arg(long)]
+    pub tester_outcome: Option<String>,
 
     /// Merged Foundry benchmark JSON (gas is fuzz-noisy → excluded from gate).
     #[arg(long)]
@@ -29,6 +33,9 @@ pub struct Arguments {
     /// Artifact download URL for the Foundry XLSX report.
     #[arg(long)]
     pub foundry_url: Option<String>,
+    /// The Foundry step outcome (success/failure/skipped).
+    #[arg(long)]
+    pub foundry_outcome: Option<String>,
 
     /// Merged Hardhat benchmark JSON (gas is fuzz-noisy → excluded from gate).
     #[arg(long)]
@@ -36,6 +43,9 @@ pub struct Arguments {
     /// Artifact download URL for the Hardhat XLSX report.
     #[arg(long)]
     pub hardhat_url: Option<String>,
+    /// The Hardhat step outcome (success/failure/skipped).
+    #[arg(long)]
+    pub hardhat_outcome: Option<String>,
 
     /// Output markdown file.
     #[arg(long)]
