@@ -51,6 +51,13 @@ impl DiffCounter {
     pub(crate) fn collected(&self) -> bool {
         self.cells > 0
     }
+
+    /// Folds another counter in, for cross-suite aggregate verdicts.
+    pub(crate) fn absorb(&mut self, other: &Self) {
+        self.cells += other.cells;
+        self.diffs += other.diffs;
+        self.delta += other.delta;
+    }
 }
 
 ///
@@ -312,19 +319,21 @@ impl SuiteStats {
                 stats.baseline_test_failures += main.test_failures;
                 let mode = humanize_mode(key);
 
-                for (kind, main_v, pr_v) in [
-                    ("build", main.build_failures, pr.build_failures),
-                    ("test", main.test_failures, pr.test_failures),
+                for (is_build, main_v, pr_v) in [
+                    (true, main.build_failures, pr.build_failures),
+                    (false, main.test_failures, pr.test_failures),
                 ] {
                     if pr_v > main_v {
-                        match kind {
-                            "build" => stats.new_build_failures += pr_v - main_v,
-                            _ => stats.new_test_failures += pr_v - main_v,
-                        }
+                        let counter = if is_build {
+                            &mut stats.new_build_failures
+                        } else {
+                            &mut stats.new_test_failures
+                        };
+                        *counter += pr_v - main_v;
                         stats.failure_regressions.push(FailureRegression {
                             label: row_label.to_owned(),
                             mode: mode.clone(),
-                            kind,
+                            kind: if is_build { "build" } else { "test" },
                             main: main_v,
                             pr: pr_v,
                         });

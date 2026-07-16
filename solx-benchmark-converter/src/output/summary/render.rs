@@ -68,14 +68,10 @@ impl SuiteStats {
         if self.new_failures() == 0 {
             format!("✅ 0{pre}{unbaselined}")
         } else {
-            let mut kinds = Vec::new();
-            if self.new_build_failures > 0 {
-                kinds.push(format!("+{} build", commas(self.new_build_failures as u64)));
-            }
-            if self.new_test_failures > 0 {
-                kinds.push(format!("+{} test", commas(self.new_test_failures as u64)));
-            }
-            format!("❌ {}{pre}{unbaselined}", kinds.join(", "))
+            format!(
+                "❌ {}{pre}{unbaselined}",
+                new_failure_kinds(self.new_build_failures, self.new_test_failures)
+            )
         }
     }
 
@@ -286,19 +282,29 @@ fn failures_line(verdict: FailureVerdict) -> String {
             let parts: Vec<String> = suites
                 .iter()
                 .map(|suite| {
-                    let mut kinds = Vec::new();
-                    if suite.new_build > 0 {
-                        kinds.push(format!("+{} build", commas(suite.new_build as u64)));
-                    }
-                    if suite.new_test > 0 {
-                        kinds.push(format!("+{} test", commas(suite.new_test as u64)));
-                    }
-                    format!("{}: {}", suite.label, kinds.join(", "))
+                    format!(
+                        "{}: {}",
+                        suite.label,
+                        new_failure_kinds(suite.new_build, suite.new_test)
+                    )
                 })
                 .collect();
             format!("❌ **New failures** — {}.", parts.join("; "))
         }
     }
+}
+
+/// The "+N build, +N test" list — one wording shared by the verdict line and
+/// the table cell.
+fn new_failure_kinds(build: usize, test: usize) -> String {
+    let mut kinds = Vec::new();
+    if build > 0 {
+        kinds.push(format!("+{} build", commas(build as u64)));
+    }
+    if test > 0 {
+        kinds.push(format!("+{} test", commas(test as u64)));
+    }
+    kinds.join(", ")
 }
 
 /// The harness-health lines, plus the aggregated no-baseline line that closes
