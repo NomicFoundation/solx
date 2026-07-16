@@ -294,6 +294,15 @@ fn failures_line(verdict: FailureVerdict) -> String {
     }
 }
 
+/// One suite's share of an unpaired-runs warning line — the same wording for
+/// the no-baseline and main-only directions.
+fn unpaired_runs_part(label: &str, runs: usize, failures: usize) -> String {
+    format!(
+        "{label}: {runs} runs ({} failures)",
+        commas(failures as u64)
+    )
+}
+
 /// Backtick-quoted mode strings, capped at `MAX_LISTED` with a "+N more".
 fn truncated_mode_list(modes: &[String]) -> String {
     let shown: Vec<String> = modes
@@ -370,20 +379,14 @@ fn health_lines(stats: &[SuiteStats]) -> (Vec<String>, Vec<String>) {
                 runs,
                 failures,
             } => {
-                unbaselined.push(format!(
-                    "{label}: {runs} runs ({} failures)",
-                    commas(failures as u64)
-                ));
+                unbaselined.push(unpaired_runs_part(&label, runs, failures));
             }
             HealthIssue::MainOnly {
                 label,
                 runs,
                 failures,
             } => {
-                main_only.push(format!(
-                    "{label}: {runs} runs ({} failures)",
-                    commas(failures as u64)
-                ));
+                main_only.push(unpaired_runs_part(&label, runs, failures));
             }
         }
     }
