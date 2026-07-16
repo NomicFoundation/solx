@@ -111,7 +111,7 @@ cargo build --release
 
 ## Code Conventions
 
-- Rust edition 2024, toolchain 1.96.0
+- Rust edition 2024, toolchain 1.97.1
 - `missing_docs` warning is enabled globally — all public items need doc comments
 - Release builds strip debug symbols (`strip = true`)
 - macOS minimum deployment target: 11.0
