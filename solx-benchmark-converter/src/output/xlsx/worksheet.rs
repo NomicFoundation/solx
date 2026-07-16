@@ -122,6 +122,23 @@ impl Worksheet {
     }
 
     ///
+    /// Writes one measurement cell, allocating the toolchain column on
+    /// demand.
+    ///
+    pub fn record(
+        &mut self,
+        toolchain_name: &str,
+        toolchain_id: u16,
+        project: &str,
+        contract: Option<&str>,
+        function: Option<&str>,
+        value: u64,
+    ) -> anyhow::Result<()> {
+        self.add_toolchain_column(toolchain_name, toolchain_id)?;
+        self.write_test_value(project, contract, function, toolchain_id, value)
+    }
+
+    ///
     /// Sets totals for each column in the worksheet.
     ///
     pub fn set_totals(&mut self, column_count: usize) -> anyhow::Result<()> {
