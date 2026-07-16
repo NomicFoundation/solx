@@ -7,6 +7,7 @@
 //!
 
 use super::SuiteOutcome;
+use super::stats::DiffCounter;
 use super::stats::SuiteStats;
 
 ///
@@ -114,38 +115,39 @@ pub(crate) enum HealthIssue {
 /// The output-invariance verdict over all suites.
 ///
 pub(crate) fn output_verdict(stats: &[SuiteStats]) -> OutputVerdict {
-    let size_cells: u64 = stats.iter().map(|s| s.size.cells).sum();
-    let size_diffs: u64 = stats.iter().map(|s| s.size.diffs).sum();
-    let size_delta: i128 = stats.iter().map(|s| s.size.delta).sum();
-    let gated: Vec<&SuiteStats> = stats.iter().filter(|s| s.gas_is_gate).collect();
-    let gated_gas_cells: u64 = gated.iter().map(|s| s.gas.cells).sum();
-    let gated_gas_diffs: u64 = gated.iter().map(|s| s.gas.diffs).sum();
-    let gas_label = gated
-        .iter()
-        .filter(|s| s.gas.collected())
-        .map(|s| s.label.as_str())
-        .collect::<Vec<_>>()
-        .join(" / ");
+    let mut size = DiffCounter::default();
+    let mut gas = DiffCounter::default();
+    let mut gas_labels = Vec::new();
+    for s in stats {
+        size.absorb(&s.size);
+        if s.gas_is_gate {
+            gas.absorb(&s.gas);
+            if s.gas.collected() {
+                gas_labels.push(s.label.as_str());
+            }
+        }
+    }
+    let gas_label = gas_labels.join(" / ");
 
-    if size_diffs == 0 && gated_gas_diffs == 0 {
-        if size_cells == 0 && gated_gas_cells == 0 {
+    if size.diffs == 0 && gas.diffs == 0 {
+        if size.cells == 0 && gas.cells == 0 {
             return OutputVerdict::NoData;
         }
         return OutputVerdict::Preserving {
-            size_cells,
-            gated_gas_cells,
+            size_cells: size.cells,
+            gated_gas_cells: gas.cells,
             gas_label,
         };
     }
     OutputVerdict::Changed {
-        size: (size_diffs > 0).then_some(SizeChange {
-            diffs: size_diffs,
-            cells: size_cells,
-            delta_bytes: size_delta,
+        size: (size.diffs > 0).then_some(SizeChange {
+            diffs: size.diffs,
+            cells: size.cells,
+            delta_bytes: size.delta,
         }),
-        gas: (gated_gas_diffs > 0).then_some(GasChange {
-            diffs: gated_gas_diffs,
-            cells: gated_gas_cells,
+        gas: (gas.diffs > 0).then_some(GasChange {
+            diffs: gas.diffs,
+            cells: gas.cells,
             label: gas_label,
         }),
     }
