@@ -29,6 +29,36 @@ use self::stats::SuiteStats;
 pub use self::toolchain::ToolchainMatrix;
 
 ///
+/// How the suite's workflow step ended — the comment must distinguish a
+/// suite that never ran from one that errored, and qualify data written by
+/// a step that then failed.
+///
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SuiteOutcome {
+    /// The step ran to completion.
+    #[default]
+    Success,
+    /// The step ran but exited nonzero — any report it wrote may be partial.
+    Failure,
+    /// The step never ran (an earlier hard failure); not the suite's fault.
+    Skipped,
+}
+
+impl SuiteOutcome {
+    ///
+    /// Parses a GitHub Actions step outcome; anything unrecognized is
+    /// conservatively a failure.
+    ///
+    pub fn from_step_outcome(outcome: Option<&str>) -> Self {
+        match outcome {
+            None | Some("success") => Self::Success,
+            Some("skipped") => Self::Skipped,
+            Some(_) => Self::Failure,
+        }
+    }
+}
+
+///
 /// One suite (solx-tester / Foundry / Hardhat) fed into the summary.
 ///
 pub struct SummarySuite {
@@ -48,6 +78,8 @@ pub struct SummarySuite {
     pub gas_is_gate: bool,
     /// Which toolchain naming matrix the benchmark's mode strings follow.
     pub matrix: ToolchainMatrix,
+    /// How the suite's workflow step ended.
+    pub outcome: SuiteOutcome,
 }
 
 ///
@@ -135,6 +167,7 @@ mod tests {
             report_url: None,
             gas_is_gate,
             matrix: matrix_for(label),
+            outcome: SuiteOutcome::default(),
         }
     }
 
@@ -155,6 +188,7 @@ mod tests {
             report_url: None,
             gas_is_gate: false,
             matrix: matrix_for(label),
+            outcome: SuiteOutcome::default(),
         }
     }
 
@@ -217,6 +251,50 @@ mod tests {
             "{out}"
         );
         assert!(!out.contains("⚠️"), "{out}");
+    }
+
+    #[test]
+    fn skipped_suite_renders_an_explicit_row() {
+        // A suite skipped by an earlier hard failure must appear as "did not
+        // run" — a partial summary must never look like a complete one.
+        let tester = suite(
+            "solx-tester",
+            true,
+            vec![contract_test(
+                "solx-tester",
+                "simple/default.sol",
+                &[
+                    ("00.solx-main-solx-E-M3B3-0.8.34", 460, 21_442),
+                    ("01.solx-solx-E-M3B3-0.8.34", 460, 21_442),
+                ],
+            )],
+        );
+        let mut foundry = unavailable("Foundry");
+        foundry.outcome = SuiteOutcome::Skipped;
+        let out = render(&[tester, foundry]);
+        assert!(
+            out.contains("| Foundry | ⚪ did not run | — | — | — |"),
+            "{out}"
+        );
+        assert!(!out.contains("Suite errored"), "{out}");
+    }
+
+    #[test]
+    fn failed_step_with_data_is_qualified() {
+        let mut foundry = suite(
+            "Foundry",
+            false,
+            vec![failure_test(
+                "p",
+                &[("02.solx-main-legacy", 0, 1), ("03.solx-legacy", 0, 1)],
+            )],
+        );
+        foundry.outcome = SuiteOutcome::Failure;
+        let out = render(&[foundry]);
+        assert!(
+            out.contains("⚠️ **Suite step failed** — Foundry exited nonzero"),
+            "{out}"
+        );
     }
 
     #[test]

@@ -6,6 +6,7 @@
 //! rendering layer's concern; nothing here formats beyond carrying labels.
 //!
 
+use super::SuiteOutcome;
 use super::stats::SuiteStats;
 
 ///
@@ -85,6 +86,9 @@ pub(crate) struct SuiteFailures {
 pub(crate) enum HealthIssue {
     /// The suite ran but produced no usable report.
     SuiteErrored { label: String },
+    /// The suite's step failed after its report was written — the data is
+    /// real but possibly incomplete, so the green cells need a caveat.
+    StepFailed { label: String },
     /// The report parsed but recorded no runs — the suite tested nothing.
     EmptySuite { label: String },
     /// The suite's benchmark data matched no recognized toolchain naming.
@@ -189,8 +193,19 @@ pub(crate) fn failure_verdict(stats: &[SuiteStats]) -> FailureVerdict {
 ///
 pub(crate) fn health_issues(stats: &[SuiteStats]) -> Vec<HealthIssue> {
     let mut issues = Vec::new();
-    for s in stats.iter().filter(|s| !s.available) {
+    for s in stats
+        .iter()
+        .filter(|s| !s.available && s.outcome != SuiteOutcome::Skipped)
+    {
         issues.push(HealthIssue::SuiteErrored {
+            label: s.label.clone(),
+        });
+    }
+    for s in stats
+        .iter()
+        .filter(|s| s.available && s.outcome == SuiteOutcome::Failure)
+    {
+        issues.push(HealthIssue::StepFailed {
             label: s.label.clone(),
         });
     }

@@ -264,6 +264,7 @@ jobs:
             --benchmark=candidate-benchmark.json
 
       - name: Build benchmark converter
+        id: build_converter
         run: ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-benchmark-converter --bin solx-benchmark-summary
 
       # The XLSX comparison needs both sides; the summary JSON is written from
@@ -350,34 +351,38 @@ jobs:
           name: foundry-report
           path: ./temp-foundry-reports/foundry-report.xlsx
 
-      # A suite's flag is passed only when its step actually ran: a suite that
-      # ran but produced no JSON renders as "errored", while a suite skipped by
-      # an earlier hard failure is omitted instead of reported as errored.
+      # Every suite's step outcome is passed through: a skipped suite renders
+      # an explicit "did not run" row (a partial run must never look complete),
+      # a suite that ran but exited nonzero gets its data qualified, and a
+      # suite that ran but produced no JSON renders as "errored".
       # When every suite was skipped there is nothing to summarize: the step
       # skips rather than adding a second red step on top of the real failure,
-      # and the previous summary comment is left in place.
+      # and the previous summary comment is left in place. Same when the
+      # converter build failed — the binary does not exist to run.
       # No continue-on-error: losing the summary must fail the job visibly.
       # !cancelled(), not always(): a run cancelled mid-suite (concurrency
       # auto-cancel on push) must not overwrite the last real summary with a
       # bogus "suite errored" row.
       - name: Generate integration summary
-        if: ${{ !cancelled() && (steps.solx_tester_bench_pr.outcome != 'skipped' || steps.foundry_tests.outcome != 'skipped' || steps.hardhat_tests.outcome != 'skipped') }}
+        if: ${{ !cancelled() && steps.build_converter.outcome == 'success' && (steps.solx_tester_bench_pr.outcome != 'skipped' || steps.foundry_tests.outcome != 'skipped' || steps.hardhat_tests.outcome != 'skipped') }}
         env:
           TESTER_URL: ${{ steps.solx-tester-report.outputs.artifact-url }}
           FOUNDRY_URL: ${{ steps.foundry-report.outputs.artifact-url }}
           HARDHAT_URL: ${{ steps.hardhat-report.outputs.artifact-url }}
-          TESTER_RAN: ${{ steps.solx_tester_bench_pr.outcome != 'skipped' }}
-          FOUNDRY_RAN: ${{ steps.foundry_tests.outcome != 'skipped' }}
-          HARDHAT_RAN: ${{ steps.hardhat_tests.outcome != 'skipped' }}
+          TESTER_OUTCOME: ${{ steps.solx_tester_bench_pr.outcome }}
+          FOUNDRY_OUTCOME: ${{ steps.foundry_tests.outcome }}
+          HARDHAT_OUTCOME: ${{ steps.hardhat_tests.outcome }}
         run: |
-          args=()
-          if [ "$TESTER_RAN" = "true" ]; then
+          args=(--tester-outcome "$TESTER_OUTCOME")
+          args+=(--foundry-outcome "$FOUNDRY_OUTCOME")
+          args+=(--hardhat-outcome "$HARDHAT_OUTCOME")
+          if [ "$TESTER_OUTCOME" != "skipped" ]; then
             args+=(--tester solx-tester-benchmark.json --tester-url "$TESTER_URL")
           fi
-          if [ "$FOUNDRY_RAN" = "true" ]; then
+          if [ "$FOUNDRY_OUTCOME" != "skipped" ]; then
             args+=(--foundry temp-foundry-reports/foundry-benchmark.json --foundry-url "$FOUNDRY_URL")
           fi
-          if [ "$HARDHAT_RAN" = "true" ]; then
+          if [ "$HARDHAT_OUTCOME" != "skipped" ]; then
             args+=(--hardhat temp-hardhat-reports/hardhat-benchmark.json --hardhat-url "$HARDHAT_URL")
           fi
           ./target/release/solx-benchmark-summary \
