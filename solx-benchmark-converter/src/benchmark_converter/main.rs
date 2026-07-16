@@ -15,13 +15,7 @@ fn main() -> anyhow::Result<()> {
     let arguments = Arguments::try_parse()?;
 
     let mut benchmark = solx_benchmark_converter::Benchmark::default();
-    let input_paths = if arguments.input_paths.len() == 1 {
-        if !arguments.input_paths[0].is_dir() {
-            anyhow::bail!(
-                "Expected a directory with JSON files, but got a file: {:?}",
-                arguments.input_paths[0]
-            );
-        }
+    let input_paths = if arguments.input_paths.len() == 1 && arguments.input_paths[0].is_dir() {
         let resolution_pattern =
             format!("{}/**/*.json", arguments.input_paths[0].to_string_lossy());
         glob::glob(resolution_pattern.as_str())?
