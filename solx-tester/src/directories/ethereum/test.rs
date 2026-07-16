@@ -8,6 +8,8 @@ use std::sync::Mutex;
 
 use revm::primitives::Address;
 
+use solx_utils::ContractName;
+
 use crate::compilers::Compiler;
 use crate::compilers::mode::Mode;
 use crate::directories::Buildable;
@@ -158,7 +160,8 @@ impl EthereumTest {
                             name.clone(),
                             format!("0x{}", crate::utils::address_as_string(&address)),
                         );
-                    libraries_addresses.insert(format!("{source}:{name}"), address);
+                    libraries_addresses
+                        .insert(ContractName::full_path(source.as_str(), name), address);
                 }
                 solx_solc_test_adapter::FunctionCall::Account { input, expected } => {
                     let address = solx_solc_test_adapter::account_address(*input);
