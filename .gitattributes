@@ -1,0 +1,6 @@
+# The askama template's literal bytes become the rendered PR comment: a CRLF
+# checkout (Windows has no eol protection otherwise) leaks \r\n into every
+# rendered line, failing the golden fixtures and CRLF-polluting real comments.
+# The fixtures get the same pin so the comparison is LF on both sides.
+solx-benchmark-converter/templates/*.md text eol=lf
+solx-benchmark-converter/src/output/summary/fixtures/*.md text eol=lf
