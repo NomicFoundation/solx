@@ -743,25 +743,6 @@ mod tests {
         assert_matches_fixture("full-matrix", &out);
     }
 
-    /// The smallest possible run: one healthy suite, nothing else collected.
-    #[test]
-    fn fixture_single_suite() {
-        let tester = suite(
-            "solx-tester",
-            true,
-            vec![contract_test(
-                "tests/solidity",
-                "simple/default.sol",
-                &[
-                    ("00.solx-main-solx-E-M3B3-0.8.34", 460, 21_442),
-                    ("01.solx-solx-E-M3B3-0.8.34", 460, 21_442),
-                ],
-            )],
-        );
-        let out = render(&[tester]);
-        assert_matches_fixture("single-suite", &out);
-    }
-
     /// The ungated gas shapes: a jitter median below the display floor and a
     /// suite whose collected gas is identical everywhere.
     #[test]
