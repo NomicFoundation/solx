@@ -88,10 +88,6 @@ impl TopMovers {
         movers
     }
 
-    pub(crate) fn len(&self) -> usize {
-        self.0.len()
-    }
-
     pub(crate) fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
