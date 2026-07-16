@@ -359,8 +359,6 @@ mod tests {
 
     #[test]
     fn skipped_suite_renders_an_explicit_row() {
-        // A suite skipped by an earlier hard failure must appear as "did not
-        // run" — a partial summary must never look like a complete one.
         let tester = suite(
             "solx-tester",
             true,
@@ -493,7 +491,7 @@ mod tests {
                  UPDATE_SUMMARY_FIXTURES=1 cargo test -p solx-benchmark-converter"
             )
         });
-        // Windows checkouts rewrite the fixtures to CRLF (no .gitattributes).
+        // Belt-and-braces for checkouts predating the .gitattributes LF pin.
         let expected = expected.replace("\r\n", "\n");
         assert_eq!(
             rendered, expected,

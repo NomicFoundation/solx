@@ -188,7 +188,8 @@ pub(crate) struct SuiteStats {
     /// Failures on the PR runs in excess of their main counterparts.
     pub(crate) new_build_failures: usize,
     pub(crate) new_test_failures: usize,
-    /// Failures already present on the main runs.
+    /// Failures already present on the paired main runs — a failing run that
+    /// vanished from the PR side reports as main-only, never as pre-existing.
     pub(crate) baseline_build_failures: usize,
     pub(crate) baseline_test_failures: usize,
     /// The rows behind `new_*_failures`, for the inline listing.
@@ -283,10 +284,8 @@ impl SuiteStats {
                 }
             }
 
-            // Compile time compares PR∩main per pipeline, so the aggregate
-            // and the per-project percentages derive from identical data — a
-            // project building on only one side is excluded, not counted as
-            // zero. One-sided pipelines still get their table column.
+            // Aggregate and median derive from the same PR∩main pairs; a
+            // one-sided pipeline is excluded but keeps its table column.
             for pipeline in pr_compile.keys().chain(main_compile.keys()) {
                 stats.compile.entry(pipeline.clone()).or_default();
             }
@@ -325,9 +324,6 @@ impl SuiteStats {
                     continue;
                 };
                 stats.paired_runs += 1;
-                // Pre-existing counts cover only the main runs actually
-                // compared — a failing run that vanished from the PR side
-                // must not inflate them (it surfaces as main-only below).
                 stats.baseline_build_failures += main.build_failures;
                 stats.baseline_test_failures += main.test_failures;
                 let mode = humanize_mode(key);
@@ -361,10 +357,6 @@ impl SuiteStats {
                         main.average_runtime_size(),
                     ),
                 ] {
-                    // A size on only one side has nothing to compare against:
-                    // stated apart, never counted as an output diff — a
-                    // contract that builds on one toolchain only must not
-                    // flip the "Output changed" headline.
                     if (pr_v == 0) != (main_v == 0) {
                         stats.size_one_sided += 1;
                     } else if stats.size.observe(pr_v, main_v) {

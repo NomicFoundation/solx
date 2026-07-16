@@ -385,9 +385,6 @@ mod tests {
 
     #[test]
     fn failure_verdict_is_no_data_when_nothing_compared() {
-        // An errored suite, a drifted suite, and an all-unbaselined suite:
-        // none paired a PR run with main, so a green "no new failures" would
-        // be a pass over zero comparisons.
         let errored = SuiteStats {
             label: "solx-tester".to_owned(),
             available: false,
