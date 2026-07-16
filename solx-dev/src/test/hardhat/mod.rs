@@ -404,34 +404,12 @@ pub fn test(
             )
         })
         .collect();
-    std::fs::create_dir_all(output_directory.as_path()).map_err(|error| {
-        anyhow::anyhow!(
-            "{} Hardhat output reports directory {output_directory:?}: {error}",
-            "Creating".bright_green().bold(),
-        )
-    })?;
-    let base_path = crate::utils::absolute_path(output_directory)?;
-
-    crate::test::write_benchmark_json(
-        &benchmark,
-        base_path.as_path(),
-        solx_benchmark_converter::SuiteKind::Hardhat.benchmark_file(),
-    )?;
-
-    let output: solx_benchmark_converter::Output = (
+    crate::test::write_reports(
         benchmark,
         comparisons,
-        solx_benchmark_converter::OutputFormat::Xlsx,
-    )
-        .try_into()?;
-    let mut output_path = base_path;
-    output_path.push("hardhat-report.xlsx");
-    eprintln!(
-        "{} the spreadsheet report to {}",
-        solx_utils::cargo_status_ok("Writing"),
-        output_path.to_string_lossy().bright_white().bold()
-    );
-    output.write_to_file(output_path)?;
+        output_directory,
+        solx_benchmark_converter::SuiteKind::Hardhat,
+    )?;
 
     let mut errors = Vec::new();
     for project in attempted_projects.iter() {
