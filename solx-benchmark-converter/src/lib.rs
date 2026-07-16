@@ -21,6 +21,7 @@ pub use crate::input::compilation_time::CompilationTimeReport;
 pub use crate::input::error::Error as InputReportError;
 pub use crate::input::foundry_gas::FoundryGasReport;
 pub use crate::input::foundry_size::FoundrySizeReport;
+pub use crate::input::resolve_paths as resolve_input_paths;
 pub use crate::input::test_failures::TestFailuresReport;
 pub use crate::input::testing_time::TestingTimeReport;
 pub use crate::output::Output;

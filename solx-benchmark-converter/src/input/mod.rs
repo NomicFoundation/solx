@@ -11,6 +11,7 @@ pub mod test_failures;
 pub mod testing_time;
 
 use std::path::Path;
+use std::path::PathBuf;
 
 use crate::benchmark::Benchmark;
 
@@ -138,5 +139,69 @@ impl TryFrom<&Path> for Input {
                 path: path.to_path_buf(),
             })?;
         Ok(json)
+    }
+}
+
+///
+/// Resolves the converter's input paths: a single directory expands to every
+/// JSON file underneath it; explicit file paths pass through unchanged — the
+/// workflow's no-baseline fallback passes exactly one file.
+///
+pub fn resolve_paths(paths: Vec<PathBuf>) -> anyhow::Result<Vec<PathBuf>> {
+    if paths.len() == 1 && paths[0].is_dir() {
+        let resolution_pattern = format!("{}/**/*.json", paths[0].to_string_lossy());
+        return Ok(glob::glob(resolution_pattern.as_str())?
+            .filter_map(Result::ok)
+            .collect());
+    }
+    if paths.is_empty() {
+        anyhow::bail!("No input files provided. Use `--input-paths` to specify input files.");
+    }
+    Ok(paths)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::resolve_paths;
+
+    /// A unique writable directory per test; tests must not share contents.
+    fn scratch_dir(test: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "solx-benchmark-converter-{test}-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(dir.as_path());
+        std::fs::create_dir_all(dir.as_path()).expect("scratch directory creation");
+        dir
+    }
+
+    #[test]
+    fn a_single_file_is_an_input_not_a_directory() {
+        let dir = scratch_dir("single-file");
+        let file = dir.join("candidate.json");
+        std::fs::write(file.as_path(), "{}").expect("file writing");
+        assert_eq!(
+            resolve_paths(vec![file.clone()]).expect("resolution"),
+            [file]
+        );
+    }
+
+    #[test]
+    fn a_single_directory_expands_to_its_json_files() {
+        let dir = scratch_dir("directory");
+        std::fs::create_dir_all(dir.join("nested")).expect("nested directory creation");
+        for name in ["a.json", "nested/b.json", "ignored.txt"] {
+            std::fs::write(dir.join(name), "{}").expect("file writing");
+        }
+        let mut resolved = resolve_paths(vec![dir.clone()]).expect("resolution");
+        resolved.sort();
+        assert_eq!(resolved, [dir.join("a.json"), dir.join("nested/b.json")]);
+    }
+
+    #[test]
+    fn no_inputs_is_an_error() {
+        assert!(resolve_paths(Vec::new()).is_err());
     }
 }
