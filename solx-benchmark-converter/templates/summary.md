@@ -4,8 +4,8 @@
 {{ failures_line }}
 {% for line in health_lines %}{{ line }}
 {% endfor -%}
-{% if let Some(line) = unbaselined_line %}{{ line }}
-{% endif %}
+{% for line in warn_lines %}{{ line }}
+{% endfor %}
 | Suite | New failures | Size Δ | Gas Δ | Report |
 |---|---|---|---|---|
 {% for row in suite_rows %}| {{ row.suite }} | {{ row.failures }} | {{ row.size }} | {{ row.gas }} | {{ row.report }} |

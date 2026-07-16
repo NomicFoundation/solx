@@ -98,6 +98,12 @@ pub(crate) enum HealthIssue {
         runs: usize,
         failures: usize,
     },
+    /// Main runs with no PR counterpart — the comparison set shrank.
+    MainOnly {
+        label: String,
+        runs: usize,
+        failures: usize,
+    },
 }
 
 ///
@@ -212,6 +218,13 @@ pub(crate) fn health_issues(stats: &[SuiteStats]) -> Vec<HealthIssue> {
             label: s.label.clone(),
             runs: s.unbaselined_runs,
             failures: s.unbaselined_failures,
+        });
+    }
+    for s in stats.iter().filter(|s| s.main_orphan_runs > 0) {
+        issues.push(HealthIssue::MainOnly {
+            label: s.label.clone(),
+            runs: s.main_orphan_runs,
+            failures: s.main_orphan_failures,
         });
     }
     issues
@@ -395,8 +408,16 @@ mod tests {
             ..available("Foundry 2")
         };
         let empty = available("Hardhat 2");
+        let shrunken = SuiteStats {
+            total_runs: 3,
+            pr_runs_seen: 1,
+            paired_runs: 1,
+            main_orphan_runs: 1,
+            main_orphan_failures: 7,
+            ..available("Foundry 3")
+        };
         assert_eq!(
-            health_issues(&[errored, drifted, unbaselined, foreign_run, empty]),
+            health_issues(&[errored, drifted, unbaselined, foreign_run, empty, shrunken]),
             vec![
                 HealthIssue::SuiteErrored {
                     label: "solx-tester".to_owned(),
@@ -415,6 +436,11 @@ mod tests {
                     label: "Hardhat".to_owned(),
                     runs: 1,
                     failures: 5,
+                },
+                HealthIssue::MainOnly {
+                    label: "Foundry 3".to_owned(),
+                    runs: 1,
+                    failures: 7,
                 },
             ]
         );

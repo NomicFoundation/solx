@@ -112,6 +112,17 @@ impl SuiteStats {
         self.gas.cell(false)
     }
 
+    fn size_cell(&self) -> String {
+        if self.size_one_sided > 0 {
+            let one_sided = format!("⚪ {} one-sided", commas(self.size_one_sided));
+            if !self.size.collected() {
+                return one_sided;
+            }
+            return format!("{}, {one_sided}", self.size.cell(true));
+        }
+        self.size.cell(true)
+    }
+
     fn suite_cell(&self) -> String {
         if self.project_count > 1 {
             format!("{} · {} proj", self.label, self.project_count)
@@ -163,7 +174,7 @@ struct SummaryTemplate {
     output_line: String,
     failures_line: String,
     health_lines: Vec<String>,
-    unbaselined_line: Option<String>,
+    warn_lines: Vec<String>,
     suite_rows: Vec<SuiteRow>,
     new_failure_bullets: Vec<String>,
     mover_sections: Vec<ListingSection>,
@@ -175,14 +186,14 @@ struct SummaryTemplate {
 /// Renders the full summary comment for the given per-suite statistics.
 ///
 pub(crate) fn render_summary(stats: &[SuiteStats]) -> String {
-    let (health_lines, unbaselined_line) = health_lines(stats);
+    let (health_lines, warn_lines) = health_lines(stats);
     let full_matrix = stats.iter().any(|s| s.has_baselines);
     SummaryTemplate {
         full_matrix,
         output_line: output_line(output_verdict(stats)),
         failures_line: failures_line(failure_verdict(stats)),
         health_lines,
-        unbaselined_line,
+        warn_lines,
         suite_rows: stats.iter().map(suite_row).collect(),
         new_failure_bullets: new_failure_bullets(stats),
         mover_sections: mover_sections(stats),
@@ -291,9 +302,10 @@ fn failures_line(verdict: FailureVerdict) -> String {
 
 /// The harness-health lines, plus the aggregated no-baseline line that closes
 /// the verdict block.
-fn health_lines(stats: &[SuiteStats]) -> (Vec<String>, Option<String>) {
+fn health_lines(stats: &[SuiteStats]) -> (Vec<String>, Vec<String>) {
     let mut lines = Vec::new();
     let mut unbaselined = Vec::new();
+    let mut main_only = Vec::new();
     for issue in health_issues(stats) {
         match issue {
             HealthIssue::SuiteErrored { label } => {
@@ -339,15 +351,32 @@ fn health_lines(stats: &[SuiteStats]) -> (Vec<String>, Option<String>) {
                     commas(failures as u64)
                 ));
             }
+            HealthIssue::MainOnly {
+                label,
+                runs,
+                failures,
+            } => {
+                main_only.push(format!(
+                    "{label}: {runs} runs ({} failures)",
+                    commas(failures as u64)
+                ));
+            }
         }
     }
-    let unbaselined_line = (!unbaselined.is_empty()).then(|| {
-        format!(
+    let mut warn_lines = Vec::new();
+    if !unbaselined.is_empty() {
+        warn_lines.push(format!(
             "⚠️ **No baseline** — {} have no `main` counterpart; their failures are not compared.",
             unbaselined.join("; ")
-        )
-    });
-    (lines, unbaselined_line)
+        ));
+    }
+    if !main_only.is_empty() {
+        warn_lines.push(format!(
+            "⚠️ **Missing on PR** — {} exist only on `main`; the comparison set shrank.",
+            main_only.join("; ")
+        ));
+    }
+    (lines, warn_lines)
 }
 
 fn suite_row(s: &SuiteStats) -> SuiteRow {
@@ -370,7 +399,7 @@ fn suite_row(s: &SuiteStats) -> SuiteRow {
     SuiteRow {
         suite: s.suite_cell(),
         failures: s.failures_cell(),
-        size: s.size.cell(true),
+        size: s.size_cell(),
         gas: s.gas_cell(),
         report: s.report_cell(),
     }
