@@ -21,8 +21,8 @@ pub(crate) fn toolchain_name(compiler_name: &str, codegen: &str) -> String {
 
 ///
 /// Emits the merged benchmark JSON next to the XLSX so the workflow's summary
-/// step can render the PR comment from the native data model. Pretty-printed
-/// to match the converter's own JSON output for the solx-tester suite.
+/// step can render the PR comment from the native data model, in the
+/// converter's own JSON output format.
 ///
 pub(crate) fn write_benchmark_json(
     benchmark: &solx_benchmark_converter::Benchmark,
@@ -30,7 +30,8 @@ pub(crate) fn write_benchmark_json(
     file_name: &str,
 ) -> anyhow::Result<()> {
     let path = base_path.join(file_name);
-    std::fs::write(path.as_path(), serde_json::to_string_pretty(benchmark)?)
+    let json = solx_benchmark_converter::OutputJson::from(benchmark);
+    std::fs::write(path.as_path(), json.content)
         .map_err(|error| anyhow::anyhow!("Benchmark file {path:?} writing: {error}"))
 }
 

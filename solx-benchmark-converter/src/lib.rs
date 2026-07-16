@@ -26,6 +26,7 @@ pub use crate::input::testing_time::TestingTimeReport;
 pub use crate::output::Output;
 pub use crate::output::comparison::Comparison as OutputComparison;
 pub use crate::output::format::Format as OutputFormat;
+pub use crate::output::json::Json as OutputJson;
 pub use crate::output::summary::SuiteOutcome;
 pub use crate::output::summary::SummarySuite;
 pub use crate::output::summary::ToolchainMatrix;
