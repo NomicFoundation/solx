@@ -12,9 +12,9 @@ use std::path::PathBuf;
 use clap::Parser;
 
 use solx_benchmark_converter::Benchmark;
+use solx_benchmark_converter::SuiteKind;
 use solx_benchmark_converter::SuiteOutcome;
 use solx_benchmark_converter::SummarySuite;
-use solx_benchmark_converter::ToolchainMatrix;
 
 use self::arguments::Arguments;
 
@@ -26,13 +26,10 @@ use self::arguments::Arguments;
 /// a failed row rather than aborting the summary for the healthy suites.
 ///
 fn load_suite(
-    label: &str,
-    report_file: &str,
+    kind: SuiteKind,
     path: Option<PathBuf>,
     report_url: Option<String>,
     outcome: Option<String>,
-    gas_is_gate: bool,
-    matrix: ToolchainMatrix,
 ) -> Option<SummarySuite> {
     let outcome = SuiteOutcome::from_step_outcome(outcome.as_deref());
     let benchmark = match (outcome, path) {
@@ -42,20 +39,21 @@ fn load_suite(
             Ok(benchmark) => Some(benchmark),
             Err(error) => {
                 eprintln!(
-                    "Warning: {label} benchmark {path:?} is unusable ({error}); rendering the suite as errored."
+                    "Warning: {} benchmark {path:?} is unusable ({error}); rendering the suite as errored.",
+                    kind.label()
                 );
                 None
             }
         },
     };
     Some(SummarySuite {
-        label: label.to_owned(),
-        report_file: report_file.to_owned(),
+        label: kind.label().to_owned(),
+        report_file: kind.report_file().to_owned(),
         benchmark,
         // A skipped upload step passes its URL through as an empty string.
         report_url: report_url.filter(|url| !url.is_empty()),
-        gas_is_gate,
-        matrix,
+        gas_is_gate: kind.gas_is_gate(),
+        matrix: kind.matrix(),
         outcome,
     })
 }
@@ -65,31 +63,22 @@ fn main() -> anyhow::Result<()> {
 
     let suites: Vec<SummarySuite> = [
         load_suite(
-            "solx-tester",
-            "solx-tester-report.xlsx",
+            SuiteKind::Tester,
             arguments.tester,
             arguments.tester_url,
             arguments.tester_outcome,
-            true,
-            ToolchainMatrix::Tester,
         ),
         load_suite(
-            "Foundry",
-            "foundry-report.xlsx",
+            SuiteKind::Foundry,
             arguments.foundry,
             arguments.foundry_url,
             arguments.foundry_outcome,
-            false,
-            ToolchainMatrix::Project,
         ),
         load_suite(
-            "Hardhat",
-            "hardhat-report.xlsx",
+            SuiteKind::Hardhat,
             arguments.hardhat,
             arguments.hardhat_url,
             arguments.hardhat_outcome,
-            false,
-            ToolchainMatrix::Project,
         ),
     ]
     .into_iter()

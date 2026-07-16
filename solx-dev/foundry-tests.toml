@@ -6,7 +6,11 @@
 #
 # Compilers:
 #   [compilers.<id>]
-#   name = "00.solc"              # Display name in reports (hyphens become newlines)
+#   name = "00.solc"              # Display name in reports (hyphens become newlines).
+#                                 # Also interpreted by the PR-summary toolchain tables
+#                                 # (solx-benchmark-converter output/summary/toolchain.rs):
+#                                 # renaming a compiler here without updating them renders
+#                                 # every summary with a loud harness error.
 #   path = "./path/to/compiler"   # Path to compiler executable
 #   description = "..."           # Compiler description
 #   solidity_version = "0.8.30"   # Override Solidity version (optional)

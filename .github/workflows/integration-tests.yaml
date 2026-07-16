@@ -270,6 +270,9 @@ jobs:
       # The XLSX comparison needs both sides; the summary JSON is written from
       # whatever exists, so a failed main-side baseline still yields PR data
       # (rendered as "no baseline") instead of a bogus "suite errored".
+      # The jq toolchain names and the *-benchmark.json paths here are
+      # interpreted by the summary crate (toolchain.rs tables, SuiteKind) —
+      # renames must update both sides or every summary shows a harness error.
       # continue-on-error: a converter failure must not skip the Foundry and
       # Hardhat suites below (the summary would silently omit them as
       # "skipped"); the fail gate reports the converter outcome explicitly.

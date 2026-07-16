@@ -529,7 +529,11 @@ pub fn test(
     })?;
     let base_path = crate::utils::absolute_path(output_directory)?;
 
-    crate::test::write_benchmark_json(&benchmark, base_path.as_path(), "foundry-benchmark.json")?;
+    crate::test::write_benchmark_json(
+        &benchmark,
+        base_path.as_path(),
+        solx_benchmark_converter::SuiteKind::Foundry.benchmark_file(),
+    )?;
 
     let output: solx_benchmark_converter::Output = (
         benchmark,

@@ -59,6 +59,65 @@ impl SuiteOutcome {
 }
 
 ///
+/// The suites the workflow feeds in — the one place owning each suite's
+/// label, file names, gas gating, and toolchain matrix, so the binary, the
+/// harness writers, and the tests cannot drift apart (a gas-gated Project
+/// suite is unrepresentable).
+///
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SuiteKind {
+    /// solx-tester: deterministic REVM gas, tester naming matrix.
+    Tester,
+    /// Foundry projects: fuzz-noisy gas, project naming matrix.
+    Foundry,
+    /// Hardhat projects: fuzz-noisy gas, project naming matrix.
+    Hardhat,
+}
+
+impl SuiteKind {
+    /// The human-readable suite name shown in the table.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Tester => "solx-tester",
+            Self::Foundry => "Foundry",
+            Self::Hardhat => "Hardhat",
+        }
+    }
+
+    /// The XLSX report file name inside the uploaded artifact.
+    pub fn report_file(self) -> &'static str {
+        match self {
+            Self::Tester => "solx-tester-report.xlsx",
+            Self::Foundry => "foundry-report.xlsx",
+            Self::Hardhat => "hardhat-report.xlsx",
+        }
+    }
+
+    /// The merged benchmark JSON file name the summary step reads; the
+    /// workflow spells these paths in `integration-tests.yaml`.
+    pub fn benchmark_file(self) -> &'static str {
+        match self {
+            Self::Tester => "solx-tester-benchmark.json",
+            Self::Foundry => "foundry-benchmark.json",
+            Self::Hardhat => "hardhat-benchmark.json",
+        }
+    }
+
+    /// Whether the suite's gas is deterministic and gates correctness.
+    pub fn gas_is_gate(self) -> bool {
+        matches!(self, Self::Tester)
+    }
+
+    /// Which toolchain naming matrix the suite's mode strings follow.
+    pub fn matrix(self) -> ToolchainMatrix {
+        match self {
+            Self::Tester => ToolchainMatrix::Tester,
+            Self::Foundry | Self::Hardhat => ToolchainMatrix::Project,
+        }
+    }
+}
+
+///
 /// One suite (solx-tester / Foundry / Hardhat) fed into the summary.
 ///
 pub struct SummarySuite {
@@ -171,12 +230,12 @@ mod tests {
         }
     }
 
-    /// The same suite-to-matrix mapping the summary binary applies.
+    /// The binary's own suite mapping — tests must not carry a second copy.
     fn matrix_for(label: &str) -> ToolchainMatrix {
-        if label == "solx-tester" {
-            ToolchainMatrix::Tester
+        if label == SuiteKind::Tester.label() {
+            SuiteKind::Tester.matrix()
         } else {
-            ToolchainMatrix::Project
+            SuiteKind::Foundry.matrix()
         }
     }
 
