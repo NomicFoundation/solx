@@ -220,6 +220,53 @@ mod tests {
     }
 
     #[test]
+    fn one_sided_size_never_flips_the_output_verdict() {
+        // The PR builds a contract main could not: nothing common changed,
+        // so the headline stays green and the one-sided pair is stated apart.
+        let tests = vec![
+            contract_test(
+                "p",
+                "C1",
+                &[
+                    ("02.solx-main-legacy", 1_000, 0),
+                    ("03.solx-legacy", 1_000, 0),
+                ],
+            ),
+            contract_test(
+                "p",
+                "C2",
+                &[("02.solx-main-legacy", 0, 0), ("03.solx-legacy", 22_104, 0)],
+            ),
+        ];
+        let out = render(&[suite("Foundry", false, tests)]);
+        assert!(out.contains("✅ **Output-preserving**"), "{out}");
+        assert!(out.contains("✅ 0 of 1, ⚪ 1 one-sided"), "{out}");
+    }
+
+    #[test]
+    fn main_orphan_runs_are_surfaced_and_not_counted_as_pre_existing() {
+        // Main still runs a failing mode the PR side lost: its 7 failures
+        // must not inflate "pre-existing", and the shrunken comparison set
+        // must be called out instead of silently passing.
+        let tests = vec![failure_test(
+            "flaky-project",
+            &[
+                ("02.solx-main-legacy", 0, 2),
+                ("03.solx-legacy", 0, 2),
+                ("02.solx-main-viaIR", 0, 7),
+            ],
+        )];
+        let out = render(&[suite("Foundry", false, tests)]);
+        assert!(
+            out.contains(
+                "⚠️ **Missing on PR** — Foundry: 1 runs (7 failures) exist only on `main`"
+            ),
+            "{out}"
+        );
+        assert!(out.contains("✅ 0 (2 pre-existing)"), "{out}");
+    }
+
+    #[test]
     fn one_sided_gas_is_not_averaged_into_jitter() {
         // Gas going 0 → 50,000 has no percentage; it must be stated apart,
         // not understated by an empty-median "<0.1%".

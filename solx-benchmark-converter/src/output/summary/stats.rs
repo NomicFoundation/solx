@@ -149,11 +149,19 @@ pub(crate) struct SuiteStats {
     /// unbaselined rather than counted as regressions against zero.
     pub(crate) unbaselined_runs: usize,
     pub(crate) unbaselined_failures: usize,
+    /// Main runs with no PR counterpart — a comparison set that silently
+    /// shrank (a crash or skip on the PR side) must be surfaced, not
+    /// dropped by the PR-keyed pairing.
+    pub(crate) main_orphan_runs: usize,
+    pub(crate) main_orphan_failures: usize,
     /// Mode strings matching no declared toolchain name — always surfaced as
     /// a harness error, whether or not PR runs are present.
     pub(crate) unrecognized_modes: BTreeSet<String>,
 
     pub(crate) size: DiffCounter,
+    /// Size pairs where exactly one side produced a value — excluded from
+    /// the diff count (nothing to compare) and stated apart in the cell.
+    pub(crate) size_one_sided: u64,
     pub(crate) gas: DiffCounter,
     /// Relative gas differences seen on a non-gating suite, in percent. The
     /// median is reported — a max would routinely be a huge but meaningless
@@ -224,8 +232,6 @@ impl SuiteStats {
                         pr_runs.insert(key, run);
                     }
                     Role::Main => {
-                        stats.baseline_build_failures += run.build_failures;
-                        stats.baseline_test_failures += run.test_failures;
                         main_runs.insert(key, run);
                     }
                     Role::Latest | Role::Solc => stats.has_baselines = true,
@@ -295,6 +301,11 @@ impl SuiteStats {
                     continue;
                 };
                 stats.paired_runs += 1;
+                // Pre-existing counts cover only the main runs actually
+                // compared — a failing run that vanished from the PR side
+                // must not inflate them (it surfaces as main-only below).
+                stats.baseline_build_failures += main.build_failures;
+                stats.baseline_test_failures += main.test_failures;
                 let mode = humanize_mode(key);
 
                 for (kind, main_v, pr_v) in [
@@ -324,7 +335,13 @@ impl SuiteStats {
                         main.average_runtime_size(),
                     ),
                 ] {
-                    if stats.size.observe(pr_v, main_v) {
+                    // A size on only one side has nothing to compare against:
+                    // stated apart, never counted as an output diff — a
+                    // contract that builds on one toolchain only must not
+                    // flip the "Output changed" headline.
+                    if (pr_v == 0) != (main_v == 0) {
+                        stats.size_one_sided += 1;
+                    } else if stats.size.observe(pr_v, main_v) {
                         stats.top_size_movers.push(
                             row_label,
                             format!("{mode}, {kind}").as_str(),
@@ -345,6 +362,13 @@ impl SuiteStats {
                     } else {
                         stats.gas_diffs_without_main += 1;
                     }
+                }
+            }
+
+            for (key, main) in main_runs.iter() {
+                if !pr_runs.contains_key(key) {
+                    stats.main_orphan_runs += 1;
+                    stats.main_orphan_failures += main.build_failures + main.test_failures;
                 }
             }
         }
