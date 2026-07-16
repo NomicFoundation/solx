@@ -7,9 +7,9 @@ name: Cross-OS Tests
 #
 # Rationale: the suite caught two real platform-only bugs in one week — the
 # #524 worker-pool hang on macOS (fixed before merge) and the rustc 1.96.1
-# enum-niche miscompile (#547) — both invisible on Linux. Windows had never
-# executed solx-tester before this workflow's spike (74,605 cases green,
-# ~16 min, run 29426196846).
+# enum-niche miscompile (#547, fixed by the 1.97.1 bump in #556) — both
+# invisible on Linux. Windows had never executed solx-tester before this
+# workflow's spike (74,605 cases green, ~16 min, run 29426196846).
 #
 # The build-toolchain action keeps the toolchain params identical to
 # test.yaml's legs, so LLVM/solc come from the finished-install caches
@@ -53,8 +53,15 @@ jobs:
           - runner: windows-2025
             target: x86_64-pc-windows-gnu
             watchdog-seconds: '4500'
+          # No 1.97.1-era full-suite timing exists for the free Intel minis
+          # (pre-fix the suite exceeded 75 min without finishing), so this
+          # leg's watchdog and timeout are a probe budget, not a 2x margin —
+          # tighten both once real runs establish a baseline.
+          - runner: macos-15-intel
+            watchdog-seconds: '6600'
+            timeout-minutes: 240
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 150
+    timeout-minutes: ${{ matrix.timeout-minutes || 150 }}
     env:
       CARGO_INCREMENTAL: "0"
       RUST_BACKTRACE: full
