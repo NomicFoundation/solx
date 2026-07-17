@@ -196,6 +196,12 @@ impl<'context> Type<'context> {
         unsafe { ffi::solxBytesLikeTypeWidth(self.inner.to_raw()) }
     }
 
+    /// Whether this is a scalar value type: integer, enum, function reference, address-like, or
+    /// bytes-like.
+    pub fn is_scalar(self) -> bool {
+        unsafe { ffi::solxIsScalarType(self.inner.to_raw()) }
+    }
+
     /// The integer attribute of `value` at this type, built via the arbitrary-width FFI constructor
     /// for values wider than `i64`.
     pub fn integer_attribute(self, value: &BigInt) -> Attribute<'context> {

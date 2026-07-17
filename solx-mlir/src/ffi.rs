@@ -164,6 +164,10 @@ unsafe extern "C" {
     /// Returns the byte width of a bytes-like type.
     pub fn solxBytesLikeTypeWidth(ty: mlir_sys::MlirType) -> u32;
 
+    /// Whether the type is a scalar value type: integer, enum, function reference,
+    /// address-like, or bytes-like.
+    pub fn solxIsScalarType(ty: mlir_sys::MlirType) -> bool;
+
     /// Returns the element type of a non-mapping reference type. For
     /// struct types, `struct_field_idx` selects the member.
     pub fn mlirSolGetEltType(ty: mlir_sys::MlirType, struct_field_idx: u64) -> mlir_sys::MlirType;

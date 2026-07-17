@@ -17,6 +17,15 @@
 // CHECK:     %[[N:.*]] = sol.string_lit "no" -> !sol.string<Memory>
 // CHECK:     sol.store %[[N]], %[[STR_SLOT]] : !sol.string<Memory>, !sol.ptr<!sol.string<Memory>, Stack>
 
+// CHECK: sol.func @{{.*ternary_statement.*}}
+// CHECK:   sol.if %{{.*}} {
+// CHECK:     sol.call @{{.*effect_a.*}}()
+// CHECK:     sol.yield
+// CHECK:   } else {
+// CHECK:     sol.call @{{.*effect_b.*}}()
+// CHECK:     sol.yield
+// CHECK:   }
+
 contract C {
     function ternary_scalar(bool c, uint256 a, uint256 b) public pure returns (uint256) {
         return c ? a : b;
@@ -24,5 +33,13 @@ contract C {
 
     function ternary_string(bool c) public pure returns (string memory) {
         return c ? "yes" : "no";
+    }
+
+    function effect_a() internal pure {}
+
+    function effect_b() internal pure {}
+
+    function ternary_statement(bool c) public pure {
+        c ? effect_a() : effect_b();
     }
 }

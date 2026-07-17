@@ -21,6 +21,22 @@
 // CHECK:   sol.bytes_cast %{{.*}} : ui32 to !sol.fixedbytes<4>
 // CHECK:   sol.return %{{.*}}, %{{.*}} : !sol.fixedbytes<4>, ui256
 
+// CHECK: sol.func @{{.*via_call.*}}
+// CHECK: %[[R:[0-9]+]]:2 = sol.call @{{.*two_constants.*}}() : () -> (ui256, ui256)
+// CHECK: sol.return %[[R]]#0, %[[R]]#1 : ui256, ui256
+
+// CHECK: sol.func @{{.*via_conditional.*}}
+// CHECK: sol.if
+// CHECK: sol.return %{{.*}}, %{{.*}} : ui256, ui256
+
+// CHECK: sol.func @{{.*via_conditional_call.*}}
+// CHECK: sol.if
+// CHECK: sol.return %{{.*}}, %{{.*}} : ui256, ui256
+
+// CHECK: sol.func @{{.*via_nested_conditional.*}}
+// CHECK: sol.if
+// CHECK: sol.return %{{.*}}, %{{.*}} : ui256, ui256
+
 contract C {
     function single_element_tuple() public pure returns (bytes4) {
         return ("wxyz");
@@ -40,5 +56,21 @@ contract C {
 
     function string_and_variable(uint256 x) public pure returns (bytes4, uint256) {
         return ("abcd", x);
+    }
+
+    function via_call() public pure returns (uint256, uint256) {
+        return two_constants();
+    }
+
+    function via_conditional(bool c) public pure returns (uint256, uint256) {
+        return c ? (1, 2) : (3, 4);
+    }
+
+    function via_conditional_call(bool c) public pure returns (uint256, uint256) {
+        return c ? two_constants() : two_constants();
+    }
+
+    function via_nested_conditional(bool a, bool b) public pure returns (uint256, uint256) {
+        return a ? (1, 2) : b ? (3, 4) : (5, 6);
     }
 }

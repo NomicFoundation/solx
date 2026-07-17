@@ -166,6 +166,9 @@ sol_ops! {
     Place::copy_from(self, value: value) {
         CopyOperation.src(value).dst(self)
     }
+    Place::delete(self) {
+        DeleteOperation.reference(self)
+    }
     Place::gep(self, index: value, element_type: ty) -> place {
         GepOperation.base_addr(self).idx(index).addr(gep_of(element_type))
     }

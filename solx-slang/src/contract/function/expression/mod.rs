@@ -53,9 +53,13 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             Expression::InequalityExpression(inner) => self.inequality(inner),
             Expression::AndExpression(inner) => self.and(inner),
             Expression::OrExpression(inner) => self.or(inner),
-            Expression::PrefixExpression(inner) => self.prefix(inner),
+            Expression::PrefixExpression(inner) => self
+                .prefix(inner)
+                .expect("a prefix expression in value position yields a value"),
             Expression::PostfixExpression(inner) => self.postfix(inner),
-            Expression::AssignmentExpression(inner) => self.assignment(inner),
+            Expression::AssignmentExpression(inner) => self
+                .assignment(inner)
+                .expect("an assignment in value position yields its assigned value"),
             Expression::ConditionalExpression(inner) => self.conditional(inner),
             Expression::TupleExpression(inner) => self.tuple(inner),
             Expression::ArrayExpression(inner) => self.array(inner),
@@ -88,21 +92,46 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         match node {
             Expression::TupleExpression(inner) => self.tuple_values(inner),
             Expression::FunctionCallExpression(inner) => Call::emit(inner, self),
+            Expression::ConditionalExpression(inner) => self.conditional_values(inner),
             _ => vec![self.expression(node)],
         }
     }
 
-    /// Resolves an assignable expression to the place it denotes together with its element MLIR
-    /// type, serving both the read path and the assignment lvalue path.
+    /// Resolves an assignable expression, its parentheses peeled, to the place it denotes together
+    /// with its element MLIR type, serving both the read path and the assignment lvalue path. A
+    /// parenthesized place is a single-element tuple, peeled here; a multi-element tuple denotes
+    /// several places, resolved by `expression_places`.
     pub fn expression_place(&mut self, node: &Expression) -> (Place<'context>, MlirType<'context>) {
         match node {
             Expression::Identifier(inner) => self.identifier_place(inner),
             Expression::MemberAccessExpression(inner) => self.member_access_place(inner),
             Expression::IndexAccessExpression(inner) => self.index_access_place(inner),
+            Expression::TupleExpression(inner) if inner.items().len() == 1 => {
+                let operand = inner
+                    .items()
+                    .iter()
+                    .next()
+                    .and_then(|item| item.expression())
+                    .expect("a parenthesized place wraps a single operand");
+                self.expression_place(&operand)
+            }
             _ => unimplemented!(
                 "expression is not an assignable place: {:?}",
                 std::mem::discriminant(node)
             ),
+        }
+    }
+
+    /// Resolves an expression in multi-place position: a tuple yields its elements' places, nested
+    /// and parenthesized tuples flattening in and a blank element denoting none; any other
+    /// expression its single place. The place-side sibling of `expression_values`.
+    pub fn expression_places(
+        &mut self,
+        node: &Expression,
+    ) -> Vec<Option<(Place<'context>, MlirType<'context>)>> {
+        match node {
+            Expression::TupleExpression(inner) => self.tuple_places(inner),
+            _ => vec![Some(self.expression_place(node))],
         }
     }
 
@@ -112,6 +141,16 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             Expression::FunctionCallExpression(call) => {
                 Call::emit(call, self);
             }
+            Expression::PrefixExpression(inner) => {
+                self.prefix(inner);
+            }
+            Expression::AssignmentExpression(inner) => {
+                self.assignment(inner);
+            }
+            Expression::ConditionalExpression(inner) => {
+                self.conditional_effect(inner);
+            }
+            Expression::TupleExpression(inner) => self.tuple_effect(inner),
             _ => {
                 self.expression(node);
             }
@@ -158,5 +197,43 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             self.coerced(left, result_type),
             self.coerced(right, result_type),
         )
+    }
+
+    /// Lowers a multi-value expression to values coerced to `targets`, folding a string-literal tuple
+    /// element to its bytes-like constant the way `coerced` does for a scalar. A tuple coerces each
+    /// element expression; a lone target folds the whole expression; any other expression
+    /// materialises its results and coerces them. A `None` target passes its value through, for a
+    /// blank destructuring slot.
+    pub fn coerced_values(
+        &mut self,
+        node: &Expression,
+        targets: &[Option<MlirType<'context>>],
+    ) -> Vec<Value<'context>> {
+        match node {
+            Expression::TupleExpression(tuple) => tuple
+                .items()
+                .iter()
+                .enumerate()
+                .map(|(index, item)| {
+                    let element = item.expression().expect("slang validates tuple elements");
+                    match targets[index] {
+                        Some(target) => self.coerced(&element, target),
+                        None => self.expression(&element),
+                    }
+                })
+                .collect(),
+            _ => match targets {
+                [Some(target)] => vec![self.coerced(node, *target)],
+                _ => self
+                    .expression_values(node)
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, value)| match targets[index] {
+                        Some(target) => value.coerce(target, self),
+                        None => value,
+                    })
+                    .collect(),
+            },
+        }
     }
 }
