@@ -75,12 +75,8 @@ impl TryFrom<&[String]> for Libraries {
             let path = path_and_address
                 .next()
                 .ok_or_else(|| anyhow::anyhow!("Library #{index} path is missing."))?;
-            let mut file_and_contract = path.split(':');
-            let file = file_and_contract
-                .next()
-                .ok_or_else(|| anyhow::anyhow!("Library `{path}` file name is missing."))?;
-            let contract = file_and_contract
-                .next()
+            let (file, contract) = path
+                .rsplit_once(':')
                 .ok_or_else(|| anyhow::anyhow!("Library `{path}` contract name is missing."))?;
             let address = path_and_address
                 .next()
@@ -91,5 +87,30 @@ impl TryFrom<&[String]> for Libraries {
                 .insert(contract.to_owned(), address.to_owned());
         }
         Ok(Self { inner: libraries })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Libraries;
+
+    /// A Windows drive separator must remain part of the source path instead of being mistaken for
+    /// the separator before the contract name.
+    #[test]
+    fn parses_library_with_windows_absolute_path() -> anyhow::Result<()> {
+        let address = "0x1234567890abcdef1234567890abcdef12345678";
+        let arguments = [format!(r"C:\contracts\Math.sol:Math={address}")];
+
+        let libraries = Libraries::try_from(arguments.as_slice())?;
+
+        assert_eq!(
+            libraries
+                .as_inner()
+                .get(r"C:\contracts\Math.sol")
+                .and_then(|contracts| contracts.get("Math"))
+                .map(String::as_str),
+            Some(address)
+        );
+        Ok(())
     }
 }
