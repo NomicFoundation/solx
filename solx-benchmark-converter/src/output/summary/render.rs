@@ -20,14 +20,14 @@ use crate::utils::percent;
 use crate::utils::relative_percent;
 use crate::utils::signed_commas;
 
-use super::SuiteOutcome;
-use super::compile_aggregate::CompileAggregate;
-use super::diff_counter::DiffCounter;
-use super::failure_verdict::FailureVerdict;
-use super::health_issue::HealthIssue;
-use super::output_verdict::OutputVerdict;
-use super::suite_stats::SuiteStats;
-use super::toolchain::Role;
+use crate::output::summary::SuiteOutcome;
+use crate::output::summary::compile_aggregate::CompileAggregate;
+use crate::output::summary::diff_counter::DiffCounter;
+use crate::output::summary::failure_verdict::FailureVerdict;
+use crate::output::summary::health_issue::HealthIssue;
+use crate::output::summary::output_verdict::OutputVerdict;
+use crate::output::summary::suite_stats::SuiteStats;
+use crate::output::summary::toolchain::Role;
 
 /// A compile-time move on one project large enough to surface individually.
 const COMPILE_TIME_PROJECT_THRESHOLD_PERCENT: f64 = 15.0;
@@ -237,7 +237,7 @@ impl SummaryTemplate {
 ///
 /// Renders the full summary comment for the given per-suite statistics.
 ///
-pub(crate) fn render_summary(stats: &[SuiteStats]) -> String {
+pub fn render_summary(stats: &[SuiteStats]) -> String {
     SummaryTemplate::from_stats(stats)
         .render()
         .expect("template rendering writes to a String")

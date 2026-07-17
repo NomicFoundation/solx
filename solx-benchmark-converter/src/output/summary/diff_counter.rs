@@ -6,13 +6,13 @@
 /// Counts PR-vs-main comparison pairs and the differing subset.
 ///
 #[derive(Default)]
-pub(crate) struct DiffCounter {
+pub struct DiffCounter {
     /// Pairs where at least one side produced a value.
-    pub(crate) cells: u64,
+    pub cells: u64,
     /// Pairs whose sides differ.
-    pub(crate) diffs: u64,
+    pub diffs: u64,
     /// Signed PR-minus-main total over the differing pairs.
-    pub(crate) delta: i128,
+    pub delta: i128,
 }
 
 impl DiffCounter {
@@ -20,7 +20,7 @@ impl DiffCounter {
     /// Records one pair, ignoring pairs where neither side produced a value.
     /// Returns whether the recorded pair differs.
     ///
-    pub(crate) fn observe(&mut self, pr: u64, main: u64) -> bool {
+    pub fn observe(&mut self, pr: u64, main: u64) -> bool {
         if pr == 0 && main == 0 {
             return false;
         }
@@ -34,12 +34,12 @@ impl DiffCounter {
     }
 
     /// Whether any pair was recorded — false renders as "not collected".
-    pub(crate) fn collected(&self) -> bool {
+    pub fn collected(&self) -> bool {
         self.cells > 0
     }
 
     /// Folds another counter in, for cross-suite aggregate verdicts.
-    pub(crate) fn absorb(&mut self, other: &Self) {
+    pub fn absorb(&mut self, other: &Self) {
         self.cells += other.cells;
         self.diffs += other.diffs;
         self.delta += other.delta;
@@ -47,7 +47,7 @@ impl DiffCounter {
 
     /// A counter with the given tallies, for the output-verdict tests.
     #[cfg(test)]
-    pub(crate) fn counted(cells: u64, diffs: u64, delta: i128) -> Self {
+    pub fn counted(cells: u64, diffs: u64, delta: i128) -> Self {
         Self {
             cells,
             diffs,
@@ -58,7 +58,7 @@ impl DiffCounter {
 
 #[cfg(test)]
 mod tests {
-    use super::DiffCounter;
+    use crate::output::summary::diff_counter::DiffCounter;
 
     #[test]
     fn diff_counter_skips_uncollected_pairs_and_sums_deltas() {

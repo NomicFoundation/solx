@@ -2,14 +2,14 @@
 //! Whether any suite failed more than its `main` baseline.
 //!
 
-use super::suite_failures::SuiteFailures;
-use super::suite_stats::SuiteStats;
+use crate::output::summary::suite_failures::SuiteFailures;
+use crate::output::summary::suite_stats::SuiteStats;
 
 ///
 /// Whether any suite failed more than its `main` baseline.
 ///
 #[derive(Debug, PartialEq)]
-pub(crate) enum FailureVerdict {
+pub enum FailureVerdict {
     /// No suite paired a PR run with a `main` counterpart — never a green
     /// checkmark over zero comparisons.
     NoData,
@@ -26,7 +26,7 @@ impl FailureVerdict {
     /// something — errored, empty, and unclassifiable suites carry no
     /// PR-vs-main pairs and must not feed a green line.
     ///
-    pub(crate) fn from_stats(stats: &[SuiteStats]) -> Self {
+    pub fn from_stats(stats: &[SuiteStats]) -> Self {
         let compared: Vec<&SuiteStats> = stats
             .iter()
             .filter(|s| s.available && !s.classification_failed())
@@ -60,7 +60,7 @@ impl FailureVerdict {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::output::summary::failure_verdict::*;
 
     #[test]
     fn clean_failures_carry_the_pre_existing_counts() {

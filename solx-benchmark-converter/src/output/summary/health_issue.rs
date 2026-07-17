@@ -3,15 +3,15 @@
 //! while the data underneath it is missing or unreadable.
 //!
 
-use super::SuiteOutcome;
-use super::suite_stats::SuiteStats;
+use crate::output::summary::SuiteOutcome;
+use crate::output::summary::suite_stats::SuiteStats;
 
 ///
 /// A degradation of the harness itself — the comment must never look green
 /// while the data underneath it is missing or unreadable.
 ///
 #[derive(Debug, PartialEq)]
-pub(crate) enum HealthIssue {
+pub enum HealthIssue {
     /// The suite ran but produced no usable report.
     SuiteErrored { label: String },
     /// The suite's step failed after its report was written — the data is
@@ -46,7 +46,7 @@ impl HealthIssue {
     /// Every harness-degradation signal, in rendering order: errored suites,
     /// unrecognized naming, then unbaselined runs.
     ///
-    pub(crate) fn from_stats(stats: &[SuiteStats]) -> Vec<Self> {
+    pub fn from_stats(stats: &[SuiteStats]) -> Vec<Self> {
         let mut issues = Vec::new();
         for s in stats
             .iter()
@@ -112,7 +112,7 @@ impl HealthIssue {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::output::summary::health_issue::*;
 
     #[test]
     fn health_issues_cover_every_degradation() {

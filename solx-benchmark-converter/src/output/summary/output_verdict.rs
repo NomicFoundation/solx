@@ -3,10 +3,10 @@
 //! comparisons plus the gas comparisons of gating suites.
 //!
 
-use super::diff_counter::DiffCounter;
-use super::gas_change::GasChange;
-use super::size_change::SizeChange;
-use super::suite_stats::SuiteStats;
+use crate::output::summary::diff_counter::DiffCounter;
+use crate::output::summary::gas_change::GasChange;
+use crate::output::summary::size_change::SizeChange;
+use crate::output::summary::suite_stats::SuiteStats;
 
 ///
 /// Whether the PR preserved compiler output, judged over every suite's size
@@ -14,7 +14,7 @@ use super::suite_stats::SuiteStats;
 /// (fuzz-noisy Foundry/Hardhat runs) never influences this verdict.
 ///
 #[derive(Debug, PartialEq)]
-pub(crate) enum OutputVerdict {
+pub enum OutputVerdict {
     /// No size or gated-gas comparison paired a PR value with a `main` one,
     /// whether nothing was collected or everything collected was one-sided —
     /// never a green checkmark over data that was never compared.
@@ -37,7 +37,7 @@ impl OutputVerdict {
     ///
     /// The output-invariance verdict over all suites.
     ///
-    pub(crate) fn from_stats(stats: &[SuiteStats]) -> Self {
+    pub fn from_stats(stats: &[SuiteStats]) -> Self {
         let mut size = DiffCounter::default();
         let mut gas = DiffCounter::default();
         let mut gas_labels = Vec::new();
@@ -79,7 +79,7 @@ impl OutputVerdict {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::output::summary::output_verdict::*;
     use crate::output::summary::suite_stats::SuiteStats;
 
     #[test]

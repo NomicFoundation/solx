@@ -164,7 +164,7 @@ pub fn resolve_paths(paths: Vec<PathBuf>) -> anyhow::Result<Vec<PathBuf>> {
 mod tests {
     use std::path::PathBuf;
 
-    use super::resolve_paths;
+    use crate::input::resolve_paths;
 
     /// A unique writable directory per test; tests must not share contents.
     fn scratch_dir(test: &str) -> PathBuf {

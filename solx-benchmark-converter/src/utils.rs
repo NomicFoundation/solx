@@ -80,11 +80,11 @@ pub fn median(pcts: &[f64]) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::agreeing;
-    use super::commas;
-    use super::count_noun;
-    use super::median;
-    use super::signed_commas;
+    use crate::utils::agreeing;
+    use crate::utils::commas;
+    use crate::utils::count_noun;
+    use crate::utils::median;
+    use crate::utils::signed_commas;
 
     #[test]
     fn commas_group_thousands() {

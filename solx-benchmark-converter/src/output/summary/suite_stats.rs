@@ -11,97 +11,97 @@ use std::collections::BTreeSet;
 
 use crate::utils::relative_percent;
 
-use super::SuiteOutcome;
-use super::SummarySuite;
-use super::compile_aggregate::CompileAggregate;
-use super::diff_counter::DiffCounter;
-use super::failure_regression::FailureRegression;
-use super::failure_regressions::FailureRegressions;
-use super::paired_bytes::PairedBytes;
-use super::toolchain::Role;
-use super::toolchain::humanize_mode;
-use super::toolchain::pipeline_of;
-use super::top_movers::TopMovers;
+use crate::output::summary::SuiteOutcome;
+use crate::output::summary::SummarySuite;
+use crate::output::summary::compile_aggregate::CompileAggregate;
+use crate::output::summary::diff_counter::DiffCounter;
+use crate::output::summary::failure_regression::FailureRegression;
+use crate::output::summary::failure_regressions::FailureRegressions;
+use crate::output::summary::paired_bytes::PairedBytes;
+use crate::output::summary::toolchain::Role;
+use crate::output::summary::toolchain::humanize_mode;
+use crate::output::summary::toolchain::pipeline_of;
+use crate::output::summary::top_movers::TopMovers;
 
 ///
 /// Everything the renderer needs about one suite, computed in a single pass.
 ///
 #[derive(Default)]
-pub(crate) struct SuiteStats {
-    pub(crate) label: String,
-    pub(crate) report_file: String,
-    pub(crate) report_url: Option<String>,
-    pub(crate) gas_is_gate: bool,
+pub struct SuiteStats {
+    pub label: String,
+    pub report_file: String,
+    pub report_url: Option<String>,
+    pub gas_is_gate: bool,
     /// False when the suite was expected but produced no report.
-    pub(crate) available: bool,
+    pub available: bool,
     /// How the suite's workflow step ended.
-    pub(crate) outcome: SuiteOutcome,
-    pub(crate) project_count: usize,
+    pub outcome: SuiteOutcome,
+    pub project_count: usize,
     /// Total runs seen, and how many classified as the PR toolchain — data
     /// with zero PR runs means the toolchain naming drifted from classify().
-    pub(crate) total_runs: usize,
-    pub(crate) pr_runs_seen: usize,
+    pub total_runs: usize,
+    pub pr_runs_seen: usize,
     /// PR runs that found a `main` counterpart — the failure verdict only
     /// means something when at least one suite compared something.
-    pub(crate) paired_runs: usize,
+    pub paired_runs: usize,
     /// PR runs with no main counterpart, and the failures recorded on them.
     /// They have nothing to compare against, so they are surfaced as
     /// unbaselined rather than counted as regressions against zero.
-    pub(crate) unbaselined_runs: usize,
-    pub(crate) unbaselined_failures: usize,
+    pub unbaselined_runs: usize,
+    pub unbaselined_failures: usize,
     /// Main runs with no PR counterpart — a comparison set that silently
     /// shrank (a crash or skip on the PR side) must be surfaced, not
     /// dropped by the PR-keyed pairing.
-    pub(crate) main_orphan_runs: usize,
-    pub(crate) main_orphan_failures: usize,
+    pub main_orphan_runs: usize,
+    pub main_orphan_failures: usize,
     /// Mode strings matching no declared toolchain name — always surfaced as
     /// a harness error, whether or not PR runs are present.
-    pub(crate) unrecognized_modes: BTreeSet<String>,
+    pub unrecognized_modes: BTreeSet<String>,
     /// Recognized runs whose mode carries no recognized pipeline token —
     /// their per-pipeline data is excluded and the drift surfaced loudly.
-    pub(crate) unrecognized_pipelines: BTreeSet<String>,
+    pub unrecognized_pipelines: BTreeSet<String>,
 
-    pub(crate) size: DiffCounter,
+    pub size: DiffCounter,
     /// Size pairs the PR emitted and `main` did not: no baseline exists, so
     /// they are excluded from the diff count and stated apart in the cell.
     /// The mirror — `main` emitted bytecode the PR lost — is a regression, and
     /// counts as a differing pair rather than landing here.
-    pub(crate) size_one_sided: u64,
-    pub(crate) gas: DiffCounter,
+    pub size_one_sided: u64,
+    pub gas: DiffCounter,
     /// Relative gas differences seen on a non-gating suite, in percent. The
     /// median is reported — a max would routinely be a huge but meaningless
     /// CREATE-deploy outlier.
-    pub(crate) gas_jitter_percents: Vec<f64>,
+    pub gas_jitter_percents: Vec<f64>,
     /// Non-gated differing pairs only one side measured, in either direction:
     /// the percentage between a measurement and its absence is meaningless, so
     /// they are reported next to the jitter median rather than folded into it
     /// as a fabricated sample.
-    pub(crate) gas_one_sided: u64,
+    pub gas_one_sided: u64,
 
     /// Failures on the PR runs in excess of their main counterparts.
-    pub(crate) new_build_failures: usize,
-    pub(crate) new_test_failures: usize,
+    pub new_build_failures: usize,
+    pub new_test_failures: usize,
     /// Failures already present on the paired main runs — a failing run that
     /// vanished from the PR side reports as main-only, never as pre-existing.
-    pub(crate) baseline_build_failures: usize,
-    pub(crate) baseline_test_failures: usize,
+    pub baseline_build_failures: usize,
+    pub baseline_test_failures: usize,
     /// The rows behind `new_*_failures`, for the inline listing.
-    pub(crate) failure_regressions: FailureRegressions,
+    pub failure_regressions: FailureRegressions,
 
     /// Compile-time aggregates keyed by pipeline (legacy / viaIR).
-    pub(crate) compile: BTreeMap<String, CompileAggregate>,
+    pub compile: BTreeMap<String, CompileAggregate>,
     /// PR and baseline bytecode totals per (baseline role, pipeline), summed
     /// only over contracts both toolchains emitted — a toolchain that failed
     /// some builds is excluded from the comparison, not counted as 0.
-    pub(crate) baseline_pairs: BTreeMap<(Role, String), PairedBytes>,
-    pub(crate) has_baselines: bool,
+    pub baseline_pairs: BTreeMap<(Role, String), PairedBytes>,
+    pub has_baselines: bool,
 
-    pub(crate) top_size_movers: TopMovers,
-    pub(crate) top_gas_movers: TopMovers,
+    pub top_size_movers: TopMovers,
+    pub top_gas_movers: TopMovers,
 }
 
 impl SuiteStats {
-    pub(crate) fn from_suite(suite: &SummarySuite) -> Self {
+    pub fn from_suite(suite: &SummarySuite) -> Self {
         let mut stats = SuiteStats {
             label: suite.kind.label().to_owned(),
             report_file: suite.kind.report_file().to_owned(),
@@ -295,30 +295,30 @@ impl SuiteStats {
         stats
     }
 
-    pub(crate) fn new_failures(&self) -> usize {
+    pub fn new_failures(&self) -> usize {
         self.new_build_failures + self.new_test_failures
     }
 
-    pub(crate) fn baseline_failures(&self) -> usize {
+    pub fn baseline_failures(&self) -> usize {
         self.baseline_build_failures + self.baseline_test_failures
     }
 
     /// The benchmark had runs but none classified as the PR toolchain — the
     /// naming convention drifted from the declared tables; better a loud
     /// error than a green comment over empty data.
-    pub(crate) fn classification_failed(&self) -> bool {
+    pub fn classification_failed(&self) -> bool {
         self.available && self.total_runs > 0 && self.pr_runs_seen == 0
     }
 
     /// The report parsed but contains no runs at all — a suite that tested
     /// nothing must not render as a clean pass.
-    pub(crate) fn is_empty_report(&self) -> bool {
+    pub fn is_empty_report(&self) -> bool {
         self.available && self.total_runs == 0
     }
 
     /// An available suite carrying only the given label, for the verdict tests.
     #[cfg(test)]
-    pub(crate) fn available(label: &str) -> Self {
+    pub fn available(label: &str) -> Self {
         Self {
             label: label.to_owned(),
             available: true,

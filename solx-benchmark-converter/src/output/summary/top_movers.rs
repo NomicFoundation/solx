@@ -2,16 +2,16 @@
 //! Movements collected for the inline "largest changes" listings.
 //!
 
-use super::movement::Movement;
+use crate::output::summary::movement::Movement;
 
 ///
 /// Movements collected for the inline "largest changes" listings.
 ///
 #[derive(Default)]
-pub(crate) struct TopMovers(Vec<Movement>);
+pub struct TopMovers(Vec<Movement>);
 
 impl TopMovers {
-    pub(crate) fn push(&mut self, label: &str, mode: &str, main: u64, pr: u64) {
+    pub fn push(&mut self, label: &str, mode: &str, main: u64, pr: u64) {
         self.0.push(Movement {
             label: label.to_owned(),
             mode: mode.to_owned(),
@@ -22,7 +22,7 @@ impl TopMovers {
 
     /// The movements ordered by descending magnitude, so the renderer lists
     /// the biggest first and counts the rest as "+N more".
-    pub(crate) fn ranked(&self) -> Vec<&Movement> {
+    pub fn ranked(&self) -> Vec<&Movement> {
         let mut movers: Vec<&Movement> = self.0.iter().collect();
         movers.sort_by_key(|movement| {
             std::cmp::Reverse((movement.pr as i128 - movement.main as i128).unsigned_abs())
@@ -30,14 +30,14 @@ impl TopMovers {
         movers
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::TopMovers;
+    use crate::output::summary::top_movers::TopMovers;
 
     #[test]
     fn movers_rank_by_magnitude_regardless_of_direction() {

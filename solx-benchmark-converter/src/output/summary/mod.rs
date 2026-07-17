@@ -16,22 +16,22 @@
 //! `UPDATE_SUMMARY_FIXTURES=1 cargo test -p solx-benchmark-converter`.
 //!
 
-mod compile_aggregate;
-mod diff_counter;
-mod failure_regression;
-mod failure_regressions;
-mod failure_verdict;
-mod gas_change;
-mod health_issue;
-mod movement;
-mod output_verdict;
-mod paired_bytes;
-mod render;
-mod size_change;
-mod suite_failures;
-mod suite_stats;
-mod toolchain;
-mod top_movers;
+pub mod compile_aggregate;
+pub mod diff_counter;
+pub mod failure_regression;
+pub mod failure_regressions;
+pub mod failure_verdict;
+pub mod gas_change;
+pub mod health_issue;
+pub mod movement;
+pub mod output_verdict;
+pub mod paired_bytes;
+pub mod render;
+pub mod size_change;
+pub mod suite_failures;
+pub mod suite_stats;
+pub mod toolchain;
+pub mod top_movers;
 
 use std::path::PathBuf;
 
@@ -201,13 +201,13 @@ impl Summary {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::benchmark::test::Test;
     use crate::benchmark::test::input::Input as TestInput;
     use crate::benchmark::test::metadata::Metadata;
     use crate::benchmark::test::run::Run;
     use crate::benchmark::test::run::RunFailures;
     use crate::benchmark::test::selector::Selector;
+    use crate::output::summary::*;
 
     fn render(suites: Vec<SummarySuite>) -> String {
         Summary::new(suites).render()

@@ -305,8 +305,8 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
 
 #[cfg(test)]
 mod tests {
-    use super::Sheet;
-    use super::Xlsx;
+    use crate::output::xlsx::Sheet;
+    use crate::output::xlsx::Xlsx;
 
     #[test]
     fn every_sheet_indexes_its_own_worksheet() {
