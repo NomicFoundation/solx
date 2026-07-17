@@ -191,14 +191,16 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
                         run.average_testing_time(),
                     )?;
                 }
-                xlsx.build_failures_worksheet.record(
-                    mode,
-                    toolchain_id,
-                    project,
-                    None,
-                    None,
-                    run.build_failures_count() as u64,
-                )?;
+                if let Some(build_failures) = run.build_failures_count() {
+                    xlsx.build_failures_worksheet.record(
+                        mode,
+                        toolchain_id,
+                        project,
+                        None,
+                        None,
+                        build_failures as u64,
+                    )?;
+                }
                 if let Some(test_failures) = run.test_failures_count() {
                     xlsx.test_failures_worksheet.record(
                         mode,

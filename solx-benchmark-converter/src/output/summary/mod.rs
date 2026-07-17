@@ -155,6 +155,7 @@ mod tests {
     use crate::benchmark::test::Test;
     use crate::benchmark::test::metadata::Metadata;
     use crate::benchmark::test::run::Run;
+    use crate::benchmark::test::run::RunFailures;
     use crate::benchmark::test::selector::Selector;
 
     fn contract_test(project: &str, contract: &str, runs: &[(&str, u64, u64)]) -> (String, Test) {
@@ -173,17 +174,16 @@ mod tests {
         (selector.to_string(), test)
     }
 
-    fn failure_test(project: &str, runs: &[(&str, usize, Option<usize>)]) -> (String, Test) {
+    fn failure_test(project: &str, runs: &[(&str, RunFailures)]) -> (String, Test) {
         let selector = Selector {
             project: project.to_owned(),
             case: None,
             input: None,
         };
         let mut test = Test::new(Metadata::new(selector.clone(), vec![]));
-        for (mode, build_failures, test_failures) in runs {
+        for (mode, failures) in runs {
             let run = Run {
-                build_failures: *build_failures,
-                test_failures: *test_failures,
+                failures: Some(*failures),
                 ..Default::default()
             };
             test.runs.insert((*mode).to_owned(), run);
@@ -389,8 +389,8 @@ mod tests {
             vec![failure_test(
                 "p",
                 &[
-                    ("02.solx-main-legacy", 0, Some(1)),
-                    ("03.solx-legacy", 0, Some(1)),
+                    ("02.solx-main-legacy", RunFailures::Test(1)),
+                    ("03.solx-legacy", RunFailures::Test(1)),
                 ],
             )],
         );
@@ -434,9 +434,9 @@ mod tests {
         let tests = vec![failure_test(
             "flaky-project",
             &[
-                ("02.solx-main-legacy", 0, Some(2)),
-                ("03.solx-legacy", 0, Some(2)),
-                ("02.solx-main-viaIR", 0, Some(7)),
+                ("02.solx-main-legacy", RunFailures::Test(2)),
+                ("03.solx-legacy", RunFailures::Test(2)),
+                ("02.solx-main-viaIR", RunFailures::Test(7)),
             ],
         )];
         let out = render(&[suite("Foundry", false, tests)]);
@@ -457,8 +457,8 @@ mod tests {
         let tests = vec![failure_test(
             "p",
             &[
-                ("02.solx-main-legacy", 2, None),
-                ("03.solx-legacy", 0, Some(3)),
+                ("02.solx-main-legacy", RunFailures::Build(2)),
+                ("03.solx-legacy", RunFailures::Test(3)),
             ],
         )];
         let out = render(&[suite("Foundry", false, tests)]);
@@ -581,8 +581,8 @@ mod tests {
                 failure_test(
                     "solady",
                     &[
-                        ("02.solx-main-legacy", 0, Some(3)),
-                        ("03.solx-legacy", 0, Some(3)),
+                        ("02.solx-main-legacy", RunFailures::Test(3)),
+                        ("03.solx-legacy", RunFailures::Test(3)),
                     ],
                 ),
                 compile_test(
@@ -614,8 +614,8 @@ mod tests {
                 failure_test(
                     "ethers-project",
                     &[
-                        ("02.solx-main-legacy", 0, Some(2)),
-                        ("03.solx-legacy", 0, Some(2)),
+                        ("02.solx-main-legacy", RunFailures::Test(2)),
+                        ("03.solx-legacy", RunFailures::Test(2)),
                     ],
                 ),
                 compile_test(
@@ -690,36 +690,36 @@ mod tests {
                 failure_test(
                     "uniswap-v4",
                     &[
-                        ("02.solx-main-legacy", 0, Some(5)),
-                        ("03.solx-legacy", 1, Some(7)),
+                        ("02.solx-main-legacy", RunFailures::Test(5)),
+                        ("03.solx-legacy", RunFailures::Build(1)),
                     ],
                 ),
                 failure_test(
                     "solady",
                     &[
-                        ("02.solx-main-viaIR", 2, None),
-                        ("03.solx-viaIR", 0, Some(3)),
+                        ("02.solx-main-viaIR", RunFailures::Build(2)),
+                        ("03.solx-viaIR", RunFailures::Test(3)),
                     ],
                 ),
                 failure_test(
                     "op",
                     &[
-                        ("02.solx-main-legacy", 0, Some(4)),
-                        ("03.solx-legacy", 0, Some(4)),
+                        ("02.solx-main-legacy", RunFailures::Test(4)),
+                        ("03.solx-legacy", RunFailures::Test(4)),
                     ],
                 ),
                 failure_test(
                     "aave",
                     &[
-                        ("02.solx-main-legacy", 0, Some(0)),
-                        ("03.solx-legacy", 1, Some(2)),
+                        ("02.solx-main-legacy", RunFailures::Test(0)),
+                        ("03.solx-legacy", RunFailures::Build(1)),
                     ],
                 ),
                 failure_test(
                     "morpho",
                     &[
-                        ("02.solx-main-viaIR", 0, Some(1)),
-                        ("03.solx-viaIR", 0, Some(2)),
+                        ("02.solx-main-viaIR", RunFailures::Test(1)),
+                        ("03.solx-viaIR", RunFailures::Test(2)),
                     ],
                 ),
             ],
@@ -751,8 +751,8 @@ mod tests {
             vec![failure_test(
                 "hh-project",
                 &[
-                    ("03.solx-legacy", 0, Some(5)),
-                    ("04.mason-legacy", 0, Some(0)),
+                    ("03.solx-legacy", RunFailures::Test(5)),
+                    ("04.mason-legacy", RunFailures::Test(0)),
                 ],
             )],
         );

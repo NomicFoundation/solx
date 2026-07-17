@@ -19,6 +19,7 @@ use crate::input::testing_time::TestingTimeReport;
 use self::test::Test;
 use self::test::input::Input as TestInput;
 use self::test::metadata::Metadata as TestMetadata;
+use self::test::run::RunFailures;
 use self::test::selector::Selector as TestSelector;
 
 ///
@@ -75,7 +76,7 @@ impl Benchmark {
         let project = input.project;
         match input.data {
             Report::Native(report) => {
-                self.extend_with_native_report(toolchain, project, report);
+                self.extend_with_native_report(toolchain, project, report)?;
             }
             Report::FoundryGas(report) => {
                 self.extend_with_foundry_gas_report(toolchain, project, report)?;
@@ -107,7 +108,7 @@ impl Benchmark {
         toolchain: String,
         project: String,
         mut report: Benchmark,
-    ) {
+    ) -> anyhow::Result<()> {
         report.tests.retain(|name, _| {
             name.starts_with("solx-solidity") || name.starts_with("tests/solidity")
         });
@@ -132,9 +133,15 @@ impl Benchmark {
                 } else {
                     format!("{toolchain}-{mode}")
                 };
-                existing_test.runs.entry(mode_key).or_default().extend(&run);
+                existing_test
+                    .runs
+                    .entry(mode_key)
+                    .or_default()
+                    .extend(&run)?;
             }
         }
+
+        Ok(())
     }
 
     ///
@@ -292,7 +299,7 @@ impl Benchmark {
             .entry(name)
             .or_insert_with(|| Test::new(TestMetadata::new(selector, vec![])));
         let run = test.runs.entry(toolchain.clone()).or_default();
-        run.build_failures = build_failures.0;
+        run.failures = Some(RunFailures::Build(build_failures.0));
 
         Ok(())
     }
@@ -318,7 +325,7 @@ impl Benchmark {
             .entry(name)
             .or_insert_with(|| Test::new(TestMetadata::new(selector, vec![])));
         let run = test.runs.entry(toolchain.clone()).or_default();
-        run.test_failures = Some(test_failures.0);
+        run.failures = Some(RunFailures::Test(test_failures.0));
 
         Ok(())
     }

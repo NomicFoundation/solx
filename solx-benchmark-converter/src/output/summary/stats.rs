@@ -324,13 +324,13 @@ impl SuiteStats {
                     continue;
                 };
                 stats.paired_runs += 1;
-                stats.baseline_build_failures += main.build_failures;
-                stats.baseline_test_failures += main.test_failures.unwrap_or_default();
+                stats.baseline_build_failures += main.build_failures_count().unwrap_or_default();
+                stats.baseline_test_failures += main.test_failures_count().unwrap_or_default();
                 let mode = humanize_mode(key);
 
                 for (is_build, main_v, pr_v) in [
-                    (true, Some(main.build_failures), Some(pr.build_failures)),
-                    (false, main.test_failures, pr.test_failures),
+                    (true, main.build_failures_count(), pr.build_failures_count()),
+                    (false, main.test_failures_count(), pr.test_failures_count()),
                 ] {
                     let (Some(main_v), Some(pr_v)) = (main_v, pr_v) else {
                         continue;
