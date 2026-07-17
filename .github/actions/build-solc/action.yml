@@ -32,7 +32,7 @@ runs:
       run: |
         SHA=$(git -C solx-solidity rev-parse HEAD)
         SCRIPT_HASH=$(find solx-dev/src/solc -type f -print0 | sort -z | xargs -0 cat | sha256sum | cut -d' ' -f1)
-        KEY="v1-solc-${{ runner.os }}-${{ runner.arch }}"
+        KEY="v2-solc-${{ runner.os }}-${{ runner.arch }}"
         [ '${{ inputs.cmake-build-type }}' != 'Release' ] && KEY="${KEY}-${{ inputs.cmake-build-type }}"
         [ '${{ inputs.enable-mlir }}' = 'true' ] && KEY="${KEY}-mlir"
         KEY="${KEY}-boost${{ inputs.boost-version }}-${SHA}-script${SCRIPT_HASH:0:8}"
@@ -89,6 +89,16 @@ runs:
         max-size: "10G"
         verbose: 2
         save: ${{ github.event_name != 'pull_request' }}
+
+    # commit_hash.txt must sit in the solx-solidity root (not the checkout root):
+    # it is buildinfo.cmake's escape hatch that skips the dirty-tree check, which
+    # on Windows stamps the version `.mod` (autocrlf keeps two CRLF fixtures
+    # perpetually "modified").
+    - name: Pin solc commit hash
+      if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      working-directory: ${{ inputs.working-dir }}
+      run: git rev-parse HEAD > commit_hash.txt
 
     - name: Build solc
       if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
