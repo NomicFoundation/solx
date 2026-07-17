@@ -16,9 +16,16 @@
 //! `UPDATE_SUMMARY_FIXTURES=1 cargo test -p solx-benchmark-converter`.
 //!
 
+mod compile_aggregate;
+mod diff_counter;
+mod failure_regression;
+mod failure_regressions;
+mod movement;
+mod paired_bytes;
 mod render;
-mod stats;
+mod suite_stats;
 mod toolchain;
+mod top_movers;
 mod verdict;
 
 use std::path::PathBuf;
@@ -26,7 +33,7 @@ use std::path::PathBuf;
 use crate::benchmark::Benchmark;
 
 use self::render::render_summary;
-use self::stats::SuiteStats;
+use self::suite_stats::SuiteStats;
 
 pub use self::toolchain::ToolchainMatrix;
 

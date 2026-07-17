@@ -1,5 +1,5 @@
 //!
-//! Per-suite statistics behind the integration summary.
+//! Everything the renderer needs about one suite, computed in a single pass.
 //!
 //! One pass over a suite's benchmark pairs every PR run with its `main`
 //! counterpart and reduces the pairs to numbers. Nothing here produces
@@ -13,146 +13,15 @@ use crate::utils::relative_percent;
 
 use super::SuiteOutcome;
 use super::SummarySuite;
+use super::compile_aggregate::CompileAggregate;
+use super::diff_counter::DiffCounter;
+use super::failure_regression::FailureRegression;
+use super::failure_regressions::FailureRegressions;
+use super::paired_bytes::PairedBytes;
 use super::toolchain::Role;
 use super::toolchain::humanize_mode;
 use super::toolchain::pipeline_of;
-
-///
-/// Counts PR-vs-main comparison pairs and the differing subset.
-///
-#[derive(Default)]
-pub(crate) struct DiffCounter {
-    /// Pairs where at least one side produced a value.
-    pub(crate) cells: u64,
-    /// Pairs whose sides differ.
-    pub(crate) diffs: u64,
-    /// Signed PR-minus-main total over the differing pairs.
-    pub(crate) delta: i128,
-}
-
-impl DiffCounter {
-    ///
-    /// Records one pair, ignoring pairs where neither side produced a value.
-    /// Returns whether the recorded pair differs.
-    ///
-    pub(crate) fn observe(&mut self, pr: u64, main: u64) -> bool {
-        if pr == 0 && main == 0 {
-            return false;
-        }
-        self.cells += 1;
-        if pr == main {
-            return false;
-        }
-        self.diffs += 1;
-        self.delta += pr as i128 - main as i128;
-        true
-    }
-
-    /// Whether any pair was recorded — false renders as "not collected".
-    pub(crate) fn collected(&self) -> bool {
-        self.cells > 0
-    }
-
-    /// Folds another counter in, for cross-suite aggregate verdicts.
-    pub(crate) fn absorb(&mut self, other: &Self) {
-        self.cells += other.cells;
-        self.diffs += other.diffs;
-        self.delta += other.delta;
-    }
-}
-
-///
-/// One row's movement between the main and PR toolchains.
-///
-pub(crate) struct Movement {
-    pub(crate) label: String,
-    pub(crate) mode: String,
-    pub(crate) main: u64,
-    pub(crate) pr: u64,
-}
-
-///
-/// Movements collected for the inline "largest changes" listings.
-///
-#[derive(Default)]
-pub(crate) struct TopMovers(Vec<Movement>);
-
-impl TopMovers {
-    pub(crate) fn push(&mut self, label: &str, mode: &str, main: u64, pr: u64) {
-        self.0.push(Movement {
-            label: label.to_owned(),
-            mode: mode.to_owned(),
-            main,
-            pr,
-        });
-    }
-
-    /// The movements ordered by descending magnitude, so the renderer lists
-    /// the biggest first and counts the rest as "+N more".
-    pub(crate) fn ranked(&self) -> Vec<&Movement> {
-        let mut movers: Vec<&Movement> = self.0.iter().collect();
-        movers.sort_by_key(|movement| {
-            std::cmp::Reverse((movement.pr as i128 - movement.main as i128).unsigned_abs())
-        });
-        movers
-    }
-
-    pub(crate) fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-}
-
-///
-/// Bytecode totals summed over contracts that both the PR and the baseline
-/// toolchain emitted.
-///
-#[derive(Default)]
-pub(crate) struct PairedBytes {
-    pub(crate) pr: u64,
-    pub(crate) baseline: u64,
-}
-
-///
-/// Compile-time totals for one pipeline.
-///
-#[derive(Default)]
-pub(crate) struct CompileAggregate {
-    pub(crate) pr_total_ms: u64,
-    pub(crate) main_total_ms: u64,
-    /// Per-project percentage change, PR vs main.
-    pub(crate) per_project: Vec<(String, f64)>,
-}
-
-///
-/// One row whose PR run failed more than its main counterpart.
-///
-pub(crate) struct FailureRegression {
-    pub(crate) label: String,
-    pub(crate) mode: String,
-    pub(crate) kind: &'static str,
-    pub(crate) main: usize,
-    pub(crate) pr: usize,
-}
-
-///
-/// Regressions collected for the inline "new failures" listing.
-///
-#[derive(Default)]
-pub(crate) struct FailureRegressions(Vec<FailureRegression>);
-
-impl FailureRegressions {
-    pub(crate) fn push(&mut self, regression: FailureRegression) {
-        self.0.push(regression);
-    }
-
-    /// The regressions ordered by descending magnitude, so the renderer lists
-    /// the worst first and counts the rest as "+N more".
-    pub(crate) fn ranked(&self) -> Vec<&FailureRegression> {
-        let mut regressions: Vec<&FailureRegression> = self.0.iter().collect();
-        regressions.sort_by_key(|regression| std::cmp::Reverse(regression.pr - regression.main));
-        regressions
-    }
-}
+use super::top_movers::TopMovers;
 
 ///
 /// Everything the renderer needs about one suite, computed in a single pass.
@@ -311,8 +180,6 @@ impl SuiteStats {
                 }
             }
 
-            // Aggregate and median derive from the same PR∩main pairs; a
-            // one-sided pipeline is excluded but keeps its table column.
             for pipeline in pr_compile.keys().chain(main_compile.keys()) {
                 stats.compile.entry(pipeline.clone()).or_default();
             }
@@ -447,61 +314,5 @@ impl SuiteStats {
     /// nothing must not render as a clean pass.
     pub(crate) fn is_empty_report(&self) -> bool {
         self.available && self.total_runs == 0
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::DiffCounter;
-    use super::FailureRegression;
-    use super::FailureRegressions;
-    use super::TopMovers;
-
-    #[test]
-    fn diff_counter_skips_uncollected_pairs_and_sums_deltas() {
-        let mut counter = DiffCounter::default();
-        assert!(!counter.observe(0, 0));
-        assert!(!counter.collected());
-        assert!(!counter.observe(100, 100));
-        assert!(counter.observe(90, 100));
-        assert!(counter.observe(115, 100));
-        assert!(counter.collected());
-        assert_eq!(counter.cells, 3);
-        assert_eq!(counter.diffs, 2);
-        assert_eq!(counter.delta, 5);
-    }
-
-    #[test]
-    fn failure_regressions_rank_by_magnitude() {
-        let mut regressions = FailureRegressions::default();
-        for (label, main, pr) in [("small", 1, 2), ("worst", 0, 9), ("middle", 2, 5)] {
-            regressions.push(FailureRegression {
-                label: label.to_owned(),
-                mode: "legacy".to_owned(),
-                kind: "test",
-                main,
-                pr,
-            });
-        }
-        let labels: Vec<&str> = regressions
-            .ranked()
-            .iter()
-            .map(|regression| regression.label.as_str())
-            .collect();
-        assert_eq!(labels, ["worst", "middle", "small"]);
-    }
-
-    #[test]
-    fn movers_rank_by_magnitude_regardless_of_direction() {
-        let mut movers = TopMovers::default();
-        movers.push("small", "legacy", 100, 103);
-        movers.push("shrunk", "legacy", 100, 80);
-        movers.push("grown", "legacy", 100, 110);
-        let ranked = movers.ranked();
-        let labels: Vec<&str> = ranked
-            .iter()
-            .map(|movement| movement.label.as_str())
-            .collect();
-        assert_eq!(labels, ["shrunk", "grown", "small"]);
     }
 }
