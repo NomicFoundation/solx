@@ -38,13 +38,23 @@ jobs:
 
   coverage:
     needs: [label-check, cooldown-check]
-    runs-on: solx-linux-amd64-self-hosted
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       pull-requests: write
       packages: read
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
+      # Host tooling bind-mounts for the free-disk-space-linux action, needed
+      # when a solx-llvm bump forces a cold LLVM build before cache-warmup has
+      # run for that SHA. Keep in sync with the matching lists in test.yaml
+      # and cache-warmup.yaml.
+      volumes:
+        - /usr/share/dotnet:/mnt/free-disk-space/dotnet
+        - /usr/local/lib/android:/mnt/free-disk-space/android
+        - /opt/ghc:/mnt/free-disk-space/ghc
+        - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
+        - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
     env:
       BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
       SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
@@ -57,6 +67,9 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           submodules: true
+
+      - name: Free disk space (Linux)
+        uses: ./.github/actions/free-disk-space-linux
 
       - name: Checkout submodules
         uses: ./.github/actions/checkout-submodules
