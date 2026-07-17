@@ -318,16 +318,6 @@ impl SuiteStats {
         self.available && self.total_runs == 0
     }
 
-    /// An available suite carrying only the given label, for the verdict tests.
-    #[cfg(test)]
-    pub fn available(label: &str) -> Self {
-        Self {
-            label: label.to_owned(),
-            available: true,
-            ..Default::default()
-        }
-    }
-
     /// Jitter medians below this render as "<0.1%": the floor under which the
     /// one-decimal display precision would round to a bare 0.0%.
     const JITTER_MEDIAN_FLOOR_PERCENT: f64 = 0.05;
