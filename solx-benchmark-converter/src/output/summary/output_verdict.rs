@@ -7,6 +7,10 @@ use crate::output::summary::diff_counter::DiffCounter;
 use crate::output::summary::gas_change::GasChange;
 use crate::output::summary::size_change::SizeChange;
 use crate::output::summary::suite_stats::SuiteStats;
+use crate::utils::agreeing;
+use crate::utils::commas;
+use crate::utils::count_noun;
+use crate::utils::signed_commas;
 
 ///
 /// Whether the PR preserved compiler output, judged over every suite's size
@@ -73,6 +77,62 @@ impl OutputVerdict {
                 cells: gas.cells,
                 label: gas_label,
             }),
+        }
+    }
+
+    /// The output-invariance verdict line.
+    pub fn line(self) -> String {
+        match self {
+            Self::NoData => {
+                "⚪ **No output data** — no size or gated-gas comparison had a `main` counterpart \
+                 to compare against."
+                    .to_owned()
+            }
+            Self::Preserving {
+                size_cells,
+                gated_gas_cells,
+                gas_label,
+            } => {
+                let mut clauses = Vec::new();
+                if size_cells > 0 {
+                    clauses.push(format!(
+                        "bytecode size identical ({})",
+                        count_noun(size_cells, "comparison")
+                    ));
+                }
+                if gated_gas_cells > 0 {
+                    clauses.push(format!(
+                        "{gas_label} gas identical ({})",
+                        commas(gated_gas_cells)
+                    ));
+                }
+                format!("✅ **Output-preserving** — {}.", clauses.join(", "))
+            }
+            Self::Changed { size, gas } => {
+                let mut parts = Vec::new();
+                if let Some(size) = size {
+                    parts.push(format!(
+                        "{} of {} {} ({} B total)",
+                        commas(size.diffs),
+                        count_noun(size.cells, "size comparison"),
+                        agreeing(size.diffs, "differs", "differ"),
+                        signed_commas(size.delta_bytes)
+                    ));
+                }
+                if let Some(gas) = gas {
+                    parts.push(format!(
+                        "{} of {} {}",
+                        commas(gas.diffs),
+                        count_noun(gas.cells, format!("{} gas comparison", gas.label).as_str()),
+                        agreeing(gas.diffs, "differs", "differ")
+                    ));
+                }
+                format!(
+                    "⚠️ **Output changed** — {}. If this PR is meant to be output-preserving, \
+                     investigate before merging.",
+                    parts.join("; ")
+                )
+            }
         }
     }
 }
