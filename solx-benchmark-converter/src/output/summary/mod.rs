@@ -7,9 +7,9 @@
 //! is computed here — the single source of truth shared by every suite —
 //! instead of parsing the XLSX back offline.
 //!
-//! `toolchain` interprets mode strings (role and pairing), `stats` reduces
-//! each suite's benchmark to numbers, `verdict` turns the numbers into typed
-//! decisions, and `render` turns decisions and numbers into markdown.
+//! `SuiteStats` reduces each suite's benchmark to numbers, the verdict types
+//! (`OutputVerdict`, `FailureVerdict`, `CompileView`) turn those numbers into
+//! typed decisions, and `SummaryTemplate` renders the decisions as markdown.
 //!
 //! Golden tests pin full rendered comments under `output/summary/fixtures/`;
 //! after an intended output change, regenerate them with
@@ -80,107 +80,108 @@ mod tests {
     use crate::suite_outcome::SuiteOutcome;
     use crate::summary_suite::SummarySuite;
 
-    fn render(suites: Vec<SummarySuite>) -> String {
-        Summary::new(suites).render()
-    }
-
-    fn contract_test(project: &str, contract: &str, runs: &[(&str, u64, u64)]) -> (String, Test) {
-        let selector = Selector {
-            project: project.to_owned(),
-            case: Some(contract.to_owned()),
-            input: None,
-        };
-        let mut test = Test::new(Metadata::new(selector.clone(), vec![]));
-        for (mode, deploy_size, gas) in runs {
-            let mut run = Run::default();
-            run.size.push(*deploy_size);
-            run.gas.push(*gas);
-            test.runs.insert((*mode).to_owned(), run);
-        }
-        (selector.to_string(), test)
-    }
-
-    fn failure_test(project: &str, runs: &[(&str, RunFailures)]) -> (String, Test) {
-        let selector = Selector {
-            project: project.to_owned(),
-            case: None,
-            input: None,
-        };
-        let mut test = Test::new(Metadata::new(selector.clone(), vec![]));
-        for (mode, failures) in runs {
-            let run = Run {
-                failures: Some(*failures),
-                ..Default::default()
+    impl Test {
+        fn contract(project: &str, contract: &str, runs: &[(&str, u64, u64)]) -> (String, Self) {
+            let selector = Selector {
+                project: project.to_owned(),
+                case: Some(contract.to_owned()),
+                input: None,
             };
-            test.runs.insert((*mode).to_owned(), run);
+            let mut test = Self::new(Metadata::new(selector.clone(), vec![]));
+            for (mode, deploy_size, gas) in runs {
+                let mut run = Run::default();
+                run.size.push(*deploy_size);
+                run.gas.push(*gas);
+                test.runs.insert((*mode).to_owned(), run);
+            }
+            (selector.to_string(), test)
         }
-        (selector.to_string(), test)
+
+        fn failure(project: &str, runs: &[(&str, RunFailures)]) -> (String, Self) {
+            let selector = Selector {
+                project: project.to_owned(),
+                case: None,
+                input: None,
+            };
+            let mut test = Self::new(Metadata::new(selector.clone(), vec![]));
+            for (mode, failures) in runs {
+                let run = Run {
+                    failures: Some(*failures),
+                    ..Default::default()
+                };
+                test.runs.insert((*mode).to_owned(), run);
+            }
+            (selector.to_string(), test)
+        }
+
+        /// One input of a case, as the tester's native report emits them: a
+        /// deploy and a call per function all share the case and differ only by
+        /// input.
+        fn input(case: &str, input: TestInput, runs: &[(&str, u64)]) -> (String, Self) {
+            let selector = Selector {
+                project: "solx-tester".to_owned(),
+                case: Some(case.to_owned()),
+                input: Some(input),
+            };
+            let mut test = Self::new(Metadata::new(selector.clone(), vec![]));
+            for (mode, gas) in runs {
+                let mut run = Run::default();
+                run.gas.push(*gas);
+                test.runs.insert((*mode).to_owned(), run);
+            }
+            (selector.to_string(), test)
+        }
+
+        fn compile(project: &str, runs: &[(&str, u64)]) -> (String, Self) {
+            let selector = Selector {
+                project: project.to_owned(),
+                case: None,
+                input: None,
+            };
+            let mut test = Self::new(Metadata::new(selector.clone(), vec![]));
+            for (mode, ms) in runs {
+                let mut run = Run::default();
+                run.compilation_time.push(*ms);
+                test.runs.insert((*mode).to_owned(), run);
+            }
+            (selector.to_string(), test)
+        }
     }
 
-    /// One input of a case, as the tester's native report emits them: a deploy
-    /// and a call per function all share the case and differ only by input.
-    fn input_test(case: &str, input: TestInput, runs: &[(&str, u64)]) -> (String, Test) {
-        let selector = Selector {
-            project: "solx-tester".to_owned(),
-            case: Some(case.to_owned()),
-            input: Some(input),
-        };
-        let mut test = Test::new(Metadata::new(selector.clone(), vec![]));
-        for (mode, gas) in runs {
-            let mut run = Run::default();
-            run.gas.push(*gas);
-            test.runs.insert((*mode).to_owned(), run);
-        }
-        (selector.to_string(), test)
-    }
-
-    fn compile_test(project: &str, runs: &[(&str, u64)]) -> (String, Test) {
-        let selector = Selector {
-            project: project.to_owned(),
-            case: None,
-            input: None,
-        };
-        let mut test = Test::new(Metadata::new(selector.clone(), vec![]));
-        for (mode, ms) in runs {
-            let mut run = Run::default();
-            run.compilation_time.push(*ms);
-            test.runs.insert((*mode).to_owned(), run);
-        }
-        (selector.to_string(), test)
-    }
-
-    /// Merges the given tests by selector, like the real report ingestion
-    /// does — a project's failure and compile-time entries share one key.
-    fn suite(kind: SuiteKind, tests: Vec<(String, Test)>) -> SummarySuite {
-        let mut benchmark = Benchmark::default();
-        for (name, test) in tests {
-            let entry = benchmark
-                .tests
-                .entry(name)
-                .or_insert_with(|| Test::new(test.metadata.clone()));
-            for (mode, run) in test.runs {
-                entry
-                    .runs
-                    .entry(mode)
-                    .or_default()
-                    .extend(&run)
-                    .expect("run merging");
+    impl SummarySuite {
+        /// Merges the given tests by selector, like the real report ingestion
+        /// does — a project's failure and compile-time entries share one key.
+        fn merged(kind: SuiteKind, tests: Vec<(String, Test)>) -> Self {
+            let mut benchmark = Benchmark::default();
+            for (name, test) in tests {
+                let entry = benchmark
+                    .tests
+                    .entry(name)
+                    .or_insert_with(|| Test::new(test.metadata.clone()));
+                for (mode, run) in test.runs {
+                    entry
+                        .runs
+                        .entry(mode)
+                        .or_default()
+                        .extend(&run)
+                        .expect("run merging");
+                }
+            }
+            Self {
+                kind,
+                benchmark: Some(benchmark),
+                report_url: None,
+                outcome: SuiteOutcome::Success,
             }
         }
-        SummarySuite {
-            kind,
-            benchmark: Some(benchmark),
-            report_url: None,
-            outcome: SuiteOutcome::Success,
-        }
-    }
 
-    fn unavailable(kind: SuiteKind) -> SummarySuite {
-        SummarySuite {
-            kind,
-            benchmark: None,
-            report_url: None,
-            outcome: SuiteOutcome::Success,
+        fn unavailable(kind: SuiteKind) -> Self {
+            Self {
+                kind,
+                benchmark: None,
+                report_url: None,
+                outcome: SuiteOutcome::Success,
+            }
         }
     }
 
@@ -189,7 +190,7 @@ mod tests {
         // C2 is built by the PR but not by solc — it must not skew the
         // comparison as an imaginary zero-size solc contract.
         let tests = vec![
-            contract_test(
+            Test::contract(
                 "p",
                 "C1",
                 &[
@@ -198,7 +199,7 @@ mod tests {
                     ("03.solx-legacy", 1057, 0),
                 ],
             ),
-            contract_test(
+            Test::contract(
                 "p",
                 "C2",
                 &[
@@ -207,7 +208,7 @@ mod tests {
                 ],
             ),
         ];
-        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
+        let out = Summary::new(vec![SummarySuite::merged(SuiteKind::Foundry, tests)]).render();
         assert!(out.contains("contracts built by both only"), "{out}");
         assert!(out.contains("| Foundry | legacy | +5.7% | — |"), "{out}");
     }
@@ -217,13 +218,13 @@ mod tests {
         // Project b builds only on the PR side — it must be excluded from
         // the aggregate, not skew it as a one-sided +9000 ms.
         let tests = vec![
-            compile_test(
+            Test::compile(
                 "a",
                 &[("02.solx-main-legacy", 1_000), ("03.solx-legacy", 1_030)],
             ),
-            compile_test("b", &[("03.solx-legacy", 9_000)]),
+            Test::compile("b", &[("03.solx-legacy", 9_000)]),
         ];
-        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
+        let out = Summary::new(vec![SummarySuite::merged(SuiteKind::Foundry, tests)]).render();
         assert!(
             out.contains("| Foundry · 2 proj | +3.0% / +3.0% |"),
             "{out}"
@@ -235,13 +236,13 @@ mod tests {
         // viaIR compiles on the PR side only: no aggregate exists, but the
         // column must appear with an empty cell instead of vanishing.
         let tests = vec![
-            compile_test(
+            Test::compile(
                 "a",
                 &[("02.solx-main-legacy", 1_000), ("03.solx-legacy", 1_020)],
             ),
-            compile_test("b", &[("03.solx-viaIR", 9_000)]),
+            Test::compile("b", &[("03.solx-viaIR", 9_000)]),
         ];
-        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
+        let out = Summary::new(vec![SummarySuite::merged(SuiteKind::Foundry, tests)]).render();
         assert!(
             out.contains("| Suite | legacy (agg / median) | viaIR (agg / median) |"),
             "{out}"
@@ -259,8 +260,8 @@ mod tests {
         // table is all dashes, so "within noise" would be a reassurance drawn
         // from zero comparisons; worse, dropping the data entirely would make
         // the section vanish and claim nothing at all.
-        let tests = vec![compile_test("a", &[("03.solx-legacy", 9_000)])];
-        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
+        let tests = vec![Test::compile("a", &[("03.solx-legacy", 9_000)])];
+        let out = Summary::new(vec![SummarySuite::merged(SuiteKind::Foundry, tests)]).render();
         assert!(out.contains("| Foundry | — |"), "{out}");
         assert!(out.contains("_No paired compile-time data"), "{out}");
         assert!(!out.contains("Within noise"), "{out}");
@@ -268,11 +269,11 @@ mod tests {
 
     #[test]
     fn compile_improvements_are_not_sirened() {
-        let tests = vec![compile_test(
+        let tests = vec![Test::compile(
             "a",
             &[("02.solx-main-legacy", 1_000), ("03.solx-legacy", 700)],
         )];
-        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
+        let out = Summary::new(vec![SummarySuite::merged(SuiteKind::Foundry, tests)]).render();
         assert!(out.contains("| **-30.0%** / -30.0% |"), "{out}");
         assert!(
             out.contains("**Project outliers (≥15%):** `a` legacy **-30.0%**"),
@@ -285,9 +286,9 @@ mod tests {
     fn unknown_codegen_token_is_a_loud_harness_error() {
         // A new tester codegen letter must not silently group data under a
         // bogus solc-version pipeline column.
-        let tester = suite(
+        let tester = SummarySuite::merged(
             SuiteKind::Tester,
-            vec![compile_test(
+            vec![Test::compile(
                 "solx-tester",
                 &[
                     ("00.solx-main-solx-L-M3B3-0.8.34", 1_000),
@@ -295,7 +296,7 @@ mod tests {
                 ],
             )],
         );
-        let out = render(vec![tester]);
+        let out = Summary::new(vec![tester]).render();
         assert!(
             out.contains("❌ **Harness error** — solx-tester: no recognized pipeline token in:"),
             "{out}"
@@ -312,11 +313,11 @@ mod tests {
             .map(|index| format!("01.solx-solx-L-M3B3-0.8.3{index}"))
             .collect();
         let runs: Vec<(&str, u64)> = modes.iter().map(|mode| (mode.as_str(), 1_000)).collect();
-        let tester = suite(
+        let tester = SummarySuite::merged(
             SuiteKind::Tester,
-            vec![compile_test("solx-tester", runs.as_slice())],
+            vec![Test::compile("solx-tester", runs.as_slice())],
         );
-        let out = render(vec![tester]);
+        let out = Summary::new(vec![tester]).render();
         assert!(
             out.contains(
                 "❌ **Harness error** — solx-tester: no recognized pipeline token in: \
@@ -330,9 +331,9 @@ mod tests {
 
     #[test]
     fn skipped_suite_renders_an_explicit_row() {
-        let tester = suite(
+        let tester = SummarySuite::merged(
             SuiteKind::Tester,
-            vec![contract_test(
+            vec![Test::contract(
                 "solx-tester",
                 "simple/default.sol",
                 &[
@@ -341,9 +342,9 @@ mod tests {
                 ],
             )],
         );
-        let mut foundry = unavailable(SuiteKind::Foundry);
+        let mut foundry = SummarySuite::unavailable(SuiteKind::Foundry);
         foundry.outcome = SuiteOutcome::Skipped;
-        let out = render(vec![tester, foundry]);
+        let out = Summary::new(vec![tester, foundry]).render();
         assert!(
             out.contains("| Foundry | ⚪ did not run | — | — | — |"),
             "{out}"
@@ -353,9 +354,9 @@ mod tests {
 
     #[test]
     fn failed_step_with_data_is_qualified() {
-        let mut foundry = suite(
+        let mut foundry = SummarySuite::merged(
             SuiteKind::Foundry,
-            vec![failure_test(
+            vec![Test::failure(
                 "p",
                 &[
                     ("02.solx-main-legacy", RunFailures::Test(1)),
@@ -364,7 +365,7 @@ mod tests {
             )],
         );
         foundry.outcome = SuiteOutcome::Failure;
-        let out = render(vec![foundry]);
+        let out = Summary::new(vec![foundry]).render();
         assert!(
             out.contains("⚠️ **Suite step failed** — Foundry exited nonzero"),
             "{out}"
@@ -376,7 +377,7 @@ mod tests {
         // The PR builds a contract main could not: nothing common changed,
         // so the headline stays green and the one-sided pair is stated apart.
         let tests = vec![
-            contract_test(
+            Test::contract(
                 "p",
                 "C1",
                 &[
@@ -384,13 +385,13 @@ mod tests {
                     ("03.solx-legacy", 1_000, 0),
                 ],
             ),
-            contract_test(
+            Test::contract(
                 "p",
                 "C2",
                 &[("02.solx-main-legacy", 0, 0), ("03.solx-legacy", 22_104, 0)],
             ),
         ];
-        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
+        let out = Summary::new(vec![SummarySuite::merged(SuiteKind::Foundry, tests)]).render();
         assert!(out.contains("✅ **Output-preserving**"), "{out}");
         assert!(out.contains("✅ 0 of 1, ⚪ 1 one-sided"), "{out}");
     }
@@ -401,7 +402,7 @@ mod tests {
         // Losing 22 KB of compiler output is a regression, not a pair with no
         // baseline to compare against.
         let tests = vec![
-            contract_test(
+            Test::contract(
                 "p",
                 "C1",
                 &[
@@ -409,13 +410,13 @@ mod tests {
                     ("03.solx-legacy", 1_000, 0),
                 ],
             ),
-            contract_test(
+            Test::contract(
                 "p",
                 "C2",
                 &[("02.solx-main-legacy", 22_104, 0), ("03.solx-legacy", 0, 0)],
             ),
         ];
-        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
+        let out = Summary::new(vec![SummarySuite::merged(SuiteKind::Foundry, tests)]).render();
         assert!(out.contains("⚠️ **Output changed**"), "{out}");
         assert!(!out.contains("one-sided"), "{out}");
     }
@@ -425,7 +426,7 @@ mod tests {
         // The verb tracks how many differ, not the total compared: one contract
         // changing among three reads "1 of 3 … differs", never "differ".
         let tests = vec![
-            contract_test(
+            Test::contract(
                 "p",
                 "C1",
                 &[
@@ -433,7 +434,7 @@ mod tests {
                     ("03.solx-legacy", 1_050, 0),
                 ],
             ),
-            contract_test(
+            Test::contract(
                 "p",
                 "C2",
                 &[
@@ -441,7 +442,7 @@ mod tests {
                     ("03.solx-legacy", 2_000, 0),
                 ],
             ),
-            contract_test(
+            Test::contract(
                 "p",
                 "C3",
                 &[
@@ -450,7 +451,7 @@ mod tests {
                 ],
             ),
         ];
-        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
+        let out = Summary::new(vec![SummarySuite::merged(SuiteKind::Foundry, tests)]).render();
         assert!(out.contains("1 of 3 size comparisons differs"), "{out}");
     }
 
@@ -459,7 +460,7 @@ mod tests {
         // Main still runs a failing mode the PR side lost: its 7 failures
         // must not inflate "pre-existing", and the shrunken comparison set
         // must be called out instead of silently passing.
-        let tests = vec![failure_test(
+        let tests = vec![Test::failure(
             "flaky-project",
             &[
                 ("02.solx-main-legacy", RunFailures::Test(2)),
@@ -467,7 +468,7 @@ mod tests {
                 ("02.solx-main-viaIR", RunFailures::Test(7)),
             ],
         )];
-        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
+        let out = Summary::new(vec![SummarySuite::merged(SuiteKind::Foundry, tests)]).render();
         assert!(
             out.contains(
                 "⚠️ **Missing on PR** — Foundry: 1 run (7 failures) exists only on `main`"
@@ -482,14 +483,14 @@ mod tests {
         // A toolchain whose build failed has no test entry: the runner pushes
         // its build failures and skips the test report entirely. That absence
         // must not read as a clean baseline the PR regressed against.
-        let tests = vec![failure_test(
+        let tests = vec![Test::failure(
             "p",
             &[
                 ("02.solx-main-legacy", RunFailures::Build(2)),
                 ("03.solx-legacy", RunFailures::Test(3)),
             ],
         )];
-        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
+        let out = Summary::new(vec![SummarySuite::merged(SuiteKind::Foundry, tests)]).render();
         assert!(!out.contains("test failures 0 → 3"), "{out}");
         assert!(!out.contains("+3 test"), "{out}");
         assert!(out.contains("✅ **No new failures**"), "{out}");
@@ -502,7 +503,7 @@ mod tests {
         // cannot tell which one regressed. Deploy stays unmarked — the Foundry
         // reports name their deployer after the contract it already carries.
         let tests = vec![
-            input_test(
+            Test::input(
                 "delete_struct.sol",
                 TestInput::Deployer {
                     contract_identifier: "C".to_owned(),
@@ -512,7 +513,7 @@ mod tests {
                     ("01.solx-solx-E-M3B3-0.8.34", 85_902),
                 ],
             ),
-            input_test(
+            Test::input(
                 "delete_struct.sol",
                 TestInput::Runtime {
                     input_index: 1,
@@ -524,7 +525,7 @@ mod tests {
                 ],
             ),
         ];
-        let out = render(vec![suite(SuiteKind::Tester, tests)]);
+        let out = Summary::new(vec![SummarySuite::merged(SuiteKind::Tester, tests)]).render();
         assert!(
             out.contains("`delete_struct.sol` [EVMLA M3B3 0.8.34]"),
             "{out}"
@@ -551,8 +552,8 @@ mod tests {
                 ("03.solx-legacy", 100, 0),
             ],
         ] {
-            let tests = vec![contract_test("p", "C", runs.as_slice())];
-            let out = render(vec![suite(SuiteKind::Foundry, tests)]);
+            let tests = vec![Test::contract("p", "C", runs.as_slice())];
+            let out = Summary::new(vec![SummarySuite::merged(SuiteKind::Foundry, tests)]).render();
             assert!(out.contains("⚪ 1 one-sided (not gated)"), "{out}");
             assert!(!out.contains("jitter"), "{out}");
         }
@@ -560,7 +561,7 @@ mod tests {
 
     #[test]
     fn empty_report_is_a_loud_health_issue() {
-        let out = render(vec![suite(SuiteKind::Foundry, vec![])]);
+        let out = Summary::new(vec![SummarySuite::merged(SuiteKind::Foundry, vec![])]).render();
         assert!(
             out.contains("❌ **Suite empty** — Foundry's report contains no runs."),
             "{out}"
@@ -599,10 +600,10 @@ mod tests {
     fn fixture_standard_output_preserving() {
         // The workflow wraps the tester benchmark in a single "solx-tester"
         // project before conversion, so its row never shows a project count.
-        let mut tester = suite(
+        let mut tester = SummarySuite::merged(
             SuiteKind::Tester,
             vec![
-                contract_test(
+                Test::contract(
                     "solx-tester",
                     "test/libsolidity/semanticTests/structs/delete_struct.sol",
                     &[
@@ -612,7 +613,7 @@ mod tests {
                         ("01.solx-solx-Y-M3B3-0.8.34", 198, 85_412),
                     ],
                 ),
-                contract_test(
+                Test::contract(
                     "solx-tester",
                     "simple/default.sol",
                     &[
@@ -624,10 +625,10 @@ mod tests {
         );
         tester.report_url = Some("https://example.com/artifacts/tester".to_owned());
 
-        let mut foundry = suite(
+        let mut foundry = SummarySuite::merged(
             SuiteKind::Foundry,
             vec![
-                contract_test(
+                Test::contract(
                     "uniswap-v4",
                     "src/PoolManager.sol:PoolManager",
                     &[
@@ -637,7 +638,7 @@ mod tests {
                         ("03.solx-viaIR", 21_876, 809_112),
                     ],
                 ),
-                contract_test(
+                Test::contract(
                     "solady",
                     "src/tokens/ERC20.sol:ERC20",
                     &[
@@ -647,14 +648,14 @@ mod tests {
                         ("03.solx-viaIR", 9_268, 410_006),
                     ],
                 ),
-                failure_test(
+                Test::failure(
                     "solady",
                     &[
                         ("02.solx-main-legacy", RunFailures::Test(3)),
                         ("03.solx-legacy", RunFailures::Test(3)),
                     ],
                 ),
-                compile_test(
+                Test::compile(
                     "uniswap-v4",
                     &[
                         ("02.solx-main-legacy", 48_210),
@@ -663,7 +664,7 @@ mod tests {
                         ("03.solx-viaIR", 60_800),
                     ],
                 ),
-                compile_test(
+                Test::compile(
                     "solady",
                     &[
                         ("02.solx-main-legacy", 96_410),
@@ -676,17 +677,17 @@ mod tests {
         );
         foundry.report_url = Some("https://example.com/artifacts/foundry".to_owned());
 
-        let mut hardhat = suite(
+        let mut hardhat = SummarySuite::merged(
             SuiteKind::Hardhat,
             vec![
-                failure_test(
+                Test::failure(
                     "ethers-project",
                     &[
                         ("02.solx-main-legacy", RunFailures::Test(2)),
                         ("03.solx-legacy", RunFailures::Test(2)),
                     ],
                 ),
-                compile_test(
+                Test::compile(
                     "ethers-project",
                     &[
                         ("02.solx-main-legacy", 15_020),
@@ -699,7 +700,7 @@ mod tests {
         );
         hardhat.report_url = Some("https://example.com/artifacts/hardhat".to_owned());
 
-        let out = render(vec![tester, foundry, hardhat]);
+        let out = Summary::new(vec![tester, foundry, hardhat]).render();
         assert_matches_fixture("standard-output-preserving", &out);
     }
 
@@ -707,9 +708,9 @@ mod tests {
     /// and the "+N more" truncation past `MAX_LISTED`.
     #[test]
     fn fixture_output_changed() {
-        let tester = suite(
+        let tester = SummarySuite::merged(
             SuiteKind::Tester,
-            vec![contract_test(
+            vec![Test::contract(
                 "solx-solidity",
                 "test/libsolidity/semanticTests/structs/delete_struct.sol",
                 &[
@@ -721,7 +722,7 @@ mod tests {
 
         let mut foundry_tests = Vec::new();
         for index in 0..7u64 {
-            foundry_tests.push(contract_test(
+            foundry_tests.push(Test::contract(
                 "solady",
                 format!("src/C{index}.sol:C{index}").as_str(),
                 &[
@@ -740,9 +741,9 @@ mod tests {
                 .runtime_size
                 .push(runtime_size);
         }
-        let foundry = suite(SuiteKind::Foundry, foundry_tests);
+        let foundry = SummarySuite::merged(SuiteKind::Foundry, foundry_tests);
 
-        let out = render(vec![tester, foundry]);
+        let out = Summary::new(vec![tester, foundry]).render();
         assert_matches_fixture("output-changed", &out);
     }
 
@@ -752,38 +753,38 @@ mod tests {
     /// its PR counterpart nothing to regress against.
     #[test]
     fn fixture_new_failures() {
-        let foundry = suite(
+        let foundry = SummarySuite::merged(
             SuiteKind::Foundry,
             vec![
-                failure_test(
+                Test::failure(
                     "uniswap-v4",
                     &[
                         ("02.solx-main-legacy", RunFailures::Test(5)),
                         ("03.solx-legacy", RunFailures::Build(1)),
                     ],
                 ),
-                failure_test(
+                Test::failure(
                     "solady",
                     &[
                         ("02.solx-main-viaIR", RunFailures::Build(2)),
                         ("03.solx-viaIR", RunFailures::Test(3)),
                     ],
                 ),
-                failure_test(
+                Test::failure(
                     "op",
                     &[
                         ("02.solx-main-legacy", RunFailures::Test(4)),
                         ("03.solx-legacy", RunFailures::Test(4)),
                     ],
                 ),
-                failure_test(
+                Test::failure(
                     "aave",
                     &[
                         ("02.solx-main-legacy", RunFailures::Test(0)),
                         ("03.solx-legacy", RunFailures::Build(1)),
                     ],
                 ),
-                failure_test(
+                Test::failure(
                     "morpho",
                     &[
                         ("02.solx-main-viaIR", RunFailures::Test(1)),
@@ -792,7 +793,7 @@ mod tests {
                 ),
             ],
         );
-        let out = render(vec![foundry]);
+        let out = Summary::new(vec![foundry]).render();
         assert_matches_fixture("new-failures", &out);
     }
 
@@ -801,9 +802,9 @@ mod tests {
     /// and runs without a `main` baseline.
     #[test]
     fn fixture_degraded_harness() {
-        let foundry = suite(
+        let foundry = SummarySuite::merged(
             SuiteKind::Foundry,
-            vec![contract_test(
+            vec![Test::contract(
                 "p",
                 "C",
                 &[
@@ -812,9 +813,9 @@ mod tests {
                 ],
             )],
         );
-        let hardhat = suite(
+        let hardhat = SummarySuite::merged(
             SuiteKind::Hardhat,
-            vec![failure_test(
+            vec![Test::failure(
                 "hh-project",
                 &[
                     ("03.solx-legacy", RunFailures::Test(5)),
@@ -824,9 +825,9 @@ mod tests {
         );
         // The errored suite keeps its report link: the XLSX can outlive a
         // benchmark-JSON write failure.
-        let mut tester = unavailable(SuiteKind::Tester);
+        let mut tester = SummarySuite::unavailable(SuiteKind::Tester);
         tester.report_url = Some("https://example.com/artifacts/tester".to_owned());
-        let out = render(vec![tester, foundry, hardhat]);
+        let out = Summary::new(vec![tester, foundry, hardhat]).render();
         assert_matches_fixture("degraded-harness", &out);
     }
 
@@ -834,9 +835,9 @@ mod tests {
     /// compile-time project outliers to truncate past `MAX_LISTED`.
     #[test]
     fn fixture_full_matrix() {
-        let tester = suite(
+        let tester = SummarySuite::merged(
             SuiteKind::Tester,
-            vec![contract_test(
+            vec![Test::contract(
                 "solx-tester",
                 "simple/default.sol",
                 &[
@@ -846,7 +847,7 @@ mod tests {
             )],
         );
         let mut foundry_tests = vec![
-            contract_test(
+            Test::contract(
                 "op",
                 "src/L2Bridge.sol:L2Bridge",
                 &[
@@ -860,17 +861,17 @@ mod tests {
                     ("03.solx-viaIR", 918, 0),
                 ],
             ),
-            compile_test(
+            Test::compile(
                 "op",
                 &[("02.solx-main-legacy", 10_000), ("03.solx-legacy", 13_100)],
             ),
-            compile_test(
+            Test::compile(
                 "base",
                 &[("02.solx-main-legacy", 20_000), ("03.solx-legacy", 20_150)],
             ),
         ];
         for index in 0..5u64 {
-            foundry_tests.push(compile_test(
+            foundry_tests.push(Test::compile(
                 format!("proj-{index}").as_str(),
                 &[
                     ("02.solx-main-legacy", 10_000),
@@ -878,8 +879,8 @@ mod tests {
                 ],
             ));
         }
-        let foundry = suite(SuiteKind::Foundry, foundry_tests);
-        let out = render(vec![tester, foundry]);
+        let foundry = SummarySuite::merged(SuiteKind::Foundry, foundry_tests);
+        let out = Summary::new(vec![tester, foundry]).render();
         assert_matches_fixture("full-matrix", &out);
     }
 
@@ -887,10 +888,10 @@ mod tests {
     /// suite whose collected gas is identical everywhere.
     #[test]
     fn fixture_gas_jitter() {
-        let foundry = suite(
+        let foundry = SummarySuite::merged(
             SuiteKind::Foundry,
             vec![
-                contract_test(
+                Test::contract(
                     "solady",
                     "src/A.sol:A",
                     &[
@@ -898,7 +899,7 @@ mod tests {
                         ("03.solx-legacy", 100, 1_000_200),
                     ],
                 ),
-                contract_test(
+                Test::contract(
                     "solady",
                     "src/B.sol:B",
                     &[
@@ -908,9 +909,9 @@ mod tests {
                 ),
             ],
         );
-        let hardhat = suite(
+        let hardhat = SummarySuite::merged(
             SuiteKind::Hardhat,
-            vec![contract_test(
+            vec![Test::contract(
                 "hh-project",
                 "contracts/C.sol:C",
                 &[
@@ -919,7 +920,7 @@ mod tests {
                 ],
             )],
         );
-        let out = render(vec![foundry, hardhat]);
+        let out = Summary::new(vec![foundry, hardhat]).render();
         assert_matches_fixture("gas-jitter", &out);
     }
 }
