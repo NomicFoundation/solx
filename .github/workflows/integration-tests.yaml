@@ -372,7 +372,12 @@ jobs:
           TESTER_URL: ${{ steps.solx-tester-report.outputs.artifact-url }}
           FOUNDRY_URL: ${{ steps.foundry-report.outputs.artifact-url }}
           HARDHAT_URL: ${{ steps.hardhat-report.outputs.artifact-url }}
-          TESTER_OUTCOME: ${{ steps.solx_tester_bench_pr.outcome }}
+          # The benchmark step narrows to one optimizer mode; correctness runs
+          # the full matrix in solx_tester_tests. Reading only the benchmark
+          # renders a green suite while the fail gate reddens the job on the
+          # correctness step. Skipped stays skipped: without the benchmark step
+          # there is no JSON to hand the summary below.
+          TESTER_OUTCOME: ${{ steps.solx_tester_bench_pr.outcome == 'skipped' && 'skipped' || (steps.solx_tester_tests.outcome == 'failure' && 'failure' || steps.solx_tester_bench_pr.outcome) }}
           FOUNDRY_OUTCOME: ${{ steps.foundry_tests.outcome }}
           HARDHAT_OUTCOME: ${{ steps.hardhat_tests.outcome }}
         run: |
