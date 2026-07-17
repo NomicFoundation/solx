@@ -2,6 +2,11 @@ name: Code coverage
 
 on:
   pull_request:
+  # Main runs upload the Codecov base for PR deltas and save the cargo cache
+  # that PR runs restore (rust-cache save-if only fires on refs/heads/main).
+  push:
+    branches:
+      - main
 
 concurrency:
   group: ${{ github.repository_id }}-${{ github.workflow }}-${{ github.ref }}
@@ -70,6 +75,13 @@ jobs:
         uses: ./.github/actions/setup-sfw
         with:
           optional: 'true'
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          prefix-key: coverage-v1
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
@@ -253,6 +265,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Post PR coverage summary
+        if: github.event_name == 'pull_request'
         uses: mshick/add-pr-comment@ec328af66588ab8f77cdeb2c264f14aba45bbf59 # v3.12
         with:
           message-id: 'coverage-summary'
