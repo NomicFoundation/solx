@@ -138,12 +138,15 @@ jobs:
           echo "After cleanup:" && df -h .
 
       - name: Cache cargo artifacts
-        if: ${{ !matrix.image }}
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           prefix-key: slang-tests-v2
+          # `cargo test-slang` writes to target-slang, not target (.cargo/config.toml alias)
+          workspaces: ". -> target-slang"
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # Label-gated workflow that never runs on main: branch-scoped saves
+          # are the only way this cache can populate.
+          save-if: 'true'
 
       - name: Run slang tests
         uses: ./.github/actions/rust-unit-tests
