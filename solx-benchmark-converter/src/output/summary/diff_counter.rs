@@ -44,6 +44,16 @@ impl DiffCounter {
         self.diffs += other.diffs;
         self.delta += other.delta;
     }
+
+    /// A counter with the given tallies, for the output-verdict tests.
+    #[cfg(test)]
+    pub(crate) fn counted(cells: u64, diffs: u64, delta: i128) -> Self {
+        Self {
+            cells,
+            diffs,
+            delta,
+        }
+    }
 }
 
 #[cfg(test)]

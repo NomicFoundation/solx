@@ -23,11 +23,11 @@ use crate::utils::signed_commas;
 use super::SuiteOutcome;
 use super::compile_aggregate::CompileAggregate;
 use super::diff_counter::DiffCounter;
+use super::failure_verdict::FailureVerdict;
+use super::health_issue::HealthIssue;
+use super::output_verdict::OutputVerdict;
 use super::suite_stats::SuiteStats;
 use super::toolchain::Role;
-use super::verdict::FailureVerdict;
-use super::verdict::HealthIssue;
-use super::verdict::OutputVerdict;
 
 /// A compile-time move on one project large enough to surface individually.
 const COMPILE_TIME_PROJECT_THRESHOLD_PERCENT: f64 = 15.0;
