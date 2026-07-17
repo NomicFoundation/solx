@@ -155,6 +155,9 @@ unsafe extern "C" {
 
     // ---- Sol type inference ----
 
+    /// Whether the type is a `sol::AddressType`, regardless of payability.
+    pub fn solxIsAddressType(ty: mlir_sys::MlirType) -> bool;
+
     /// Returns the element type of a non-mapping reference type. For
     /// struct types, `struct_field_idx` selects the member.
     pub fn mlirSolGetEltType(ty: mlir_sys::MlirType, struct_field_idx: u64) -> mlir_sys::MlirType;

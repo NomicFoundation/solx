@@ -35,6 +35,9 @@ pub struct Function<'context> {
 }
 
 impl<'context> Function<'context> {
+    /// The `mlir_name` of a synthesized parameterless constructor.
+    pub const CONSTRUCTOR_NAME: &'static str = "@constructor()";
+
     /// Records a function's mangled name and interned signature.
     pub fn new(
         mlir_name: String,
@@ -46,6 +49,11 @@ impl<'context> Function<'context> {
             parameter_types,
             return_types,
         }
+    }
+
+    /// The signature of a synthesized parameterless constructor.
+    pub fn constructor() -> Self {
+        Self::new(Self::CONSTRUCTOR_NAME.to_owned(), Vec::new(), Vec::new())
     }
 
     /// Emits this function's `sol.func` definition with an entry block whose arguments carry the

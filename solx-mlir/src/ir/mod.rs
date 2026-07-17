@@ -94,9 +94,9 @@ sol_ops! {
         MulModOperation.x(x).y(y).r#mod(modulus)
     }
 
-    Value::encode(inputs: values, selector: optional_value, packed: bool) -> value {
-        EncodeOperation.ins(many(inputs)).res(memory()).selector(optional_value(selector)).packed(flag(packed))
-    }
+    Value::encode | encode_packed (inputs: values, selector: optional_value) -> value {
+        EncodeOperation.ins(many(inputs)).res(memory()).selector(optional_value(selector))
+    } flagged .packed;
     Value::decode(payload: value, result_type: ty) -> value {
         DecodeOperation.addr(payload).outs(single(result_type))
     }
@@ -176,15 +176,15 @@ sol_ops! {
     Block::emit(self, signature: optional_str, indexed: values, non_indexed: values) {
         EmitOperation.args(concat(indexed, non_indexed)).indexed_args_count(count_attr(indexed)).signature(optional_str(signature))
     }
-    Block::require(self, condition: value, arguments: values, message: optional_str, custom: bool) {
-        RequireOperation.cond(condition).args(many(arguments)).msg(optional_str(message)).call(flag(custom))
-    }
+    Block::require | require_custom (self, condition: value, arguments: values, message: optional_str) {
+        RequireOperation.cond(condition).args(many(arguments)).msg(optional_str(message))
+    } flagged .call;
     Block::assert(self, condition: value) {
         AssertOperation.cond(condition)
     }
-    Block::revert(self, signature: str, arguments: values, custom: bool) {
-        RevertOperation.signature(str_attr(signature)).args(many(arguments)).call(flag(custom))
-    }
+    Block::revert | revert_custom (self, signature: str, arguments: values) {
+        RevertOperation.signature(str_attr(signature)).args(many(arguments))
+    } flagged .call;
     Block::r#return(self, operands: values) {
         ReturnOperation.operands(many(operands))
     }
@@ -200,8 +200,11 @@ sol_ops! {
     Block::condition(self, condition: value) {
         ConditionOperation.condition(condition)
     }
-    Block::branch(self, condition: value, with_else: bool) {
-        IfOperation.cond(condition); then_region; else_region if with_else
+    Block::branch(self, condition: value) {
+        IfOperation.cond(condition); then_region ; empty else_region
+    }
+    Block::branch_with_else(self, condition: value) {
+        IfOperation.cond(condition); then_region, else_region
     }
     Block::for_loop(self) {
         ForOperation; cond, body, step

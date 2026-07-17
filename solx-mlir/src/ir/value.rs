@@ -2,10 +2,8 @@
 //! An MLIR value in the Sol dialect, and the conversions it undergoes.
 //!
 
-use melior::ir::Attribute;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
-use melior::ir::attribute::IntegerAttribute;
 use num::BigInt;
 
 use crate::CmpPredicate;
@@ -23,35 +21,26 @@ pub struct Value<'context> {
 }
 
 impl<'context> Value<'context> {
-    /// Materialises a `sol.constant` from an arbitrary-width [`BigInt`], selecting the dialect by target
-    /// type: an address is built at `ui160` and cast; a boolean folds to `0`/`1`; every other integer
-    /// takes the big-integer attribute.
+    /// Materialises a `sol.constant` from an arbitrary-width [`BigInt`] at the type a constant can be
+    /// emitted at — `ui160` for an address, the target type itself otherwise — and converts it to the
+    /// target.
     pub fn constant_from_bigint(
         value: &BigInt,
         result_type: Type<'context>,
         context: &Context<'context>,
     ) -> Self {
-        if result_type == Type::address(context.melior, false) {
-            let integer = Self::constant_from_bigint(
-                value,
-                Type::unsigned(context.melior, solx_utils::BIT_LENGTH_ETH_ADDRESS),
-                context,
-            );
-            return integer.address_cast(result_type, context);
-        }
-        let attribute: Attribute<'context> = if result_type.is_integer()
-            && result_type.integer_bit_width() == solx_utils::BIT_LENGTH_BOOLEAN as u32
-        {
-            IntegerAttribute::new(result_type.into_mlir(), i64::from(value != &BigInt::ZERO)).into()
+        let r#type = if result_type.is_address() {
+            Type::unsigned(context.melior, solx_utils::BIT_LENGTH_ETH_ADDRESS)
         } else {
-            result_type.big_integer_attribute(value)
+            result_type
         };
         Self::from(mlir_op!(
             context,
             ConstantOperation
-                .value(attribute)
-                .result(result_type.into_mlir())
+                .value(r#type.integer_attribute(value))
+                .result(r#type.into_mlir())
         ))
+        .convert(result_type, context)
     }
 
     /// Materialises the additive identity `0` of `result_type`.
@@ -66,25 +55,24 @@ impl<'context> Value<'context> {
 
     /// Materialises an `i1` boolean constant.
     pub fn boolean(value: bool, context: &Context<'context>) -> Self {
-        Self::constant_from_bigint(
-            &BigInt::from(u8::from(value)),
-            Type::signless(context.melior, solx_utils::BIT_LENGTH_BOOLEAN),
-            context,
-        )
+        Self::constant(i64::from(value), Type::boolean(context.melior), context)
     }
 
-    /// Coerces to `target_type` per Solidity conversion semantics; a no-op at the target type.
-    ///
-    /// A boolean target compares against zero rather than bit-truncating; an address target
-    /// truncates integers to ui160 before `sol.address_cast`; every other target is a `sol.cast`.
+    /// Coerces to `target_type` under Solidity's implicit conversions with a `sol.cast`; a no-op at
+    /// the target type.
     pub fn coerce(self, target_type: Type<'context>, context: &Context<'context>) -> Self {
         if self.r#type() == target_type {
             return self;
         }
-        if target_type == Type::signless(context.melior, solx_utils::BIT_LENGTH_BOOLEAN) {
-            return self.is_nonzero(context);
-        }
-        if target_type == Type::address(context.melior, false) {
+        self.cast(target_type, context)
+    }
+
+    /// Converts to `target_type` under an explicit `T(x)` cast the binder has admitted. An address
+    /// target truncates an integer operand to `ui160` before `sol.address_cast` — the conversion
+    /// Solidity forbids implicitly, hence its home here rather than in `coerce`; every other target
+    /// shares `coerce`'s dispatch.
+    pub fn convert(self, target_type: Type<'context>, context: &Context<'context>) -> Self {
+        if target_type.is_address() {
             let truncated = if self.r#type().is_integer() {
                 let ui160 = Type::unsigned(context.melior, solx_utils::BIT_LENGTH_ETH_ADDRESS);
                 self.cast(ui160, context)
@@ -93,21 +81,26 @@ impl<'context> Value<'context> {
             };
             return truncated.address_cast(target_type, context);
         }
-        self.cast(target_type, context)
+        self.coerce(target_type, context)
     }
 
-    /// Compares against `other` under `predicate`, first coercing both operands to a common integer
-    /// type: their shared type when equal, otherwise the 256-bit field.
+    /// Compares against `other` under `predicate`, the operands first reconciled to a common type:
+    /// their shared type when equal, otherwise the wider operand's integer type, preserving its
+    /// signedness.
     pub fn compare_coerced(
         self,
         other: Self,
         predicate: CmpPredicate,
         context: &Context<'context>,
     ) -> Self {
-        let common_type = if self.r#type() == other.r#type() {
-            self.r#type()
+        let lhs_type = self.r#type();
+        let rhs_type = other.r#type();
+        let common_type = if lhs_type == rhs_type {
+            lhs_type
+        } else if lhs_type.integer_bit_width() >= rhs_type.integer_bit_width() {
+            lhs_type
         } else {
-            Type::unsigned(context.melior, solx_utils::BIT_LENGTH_FIELD)
+            rhs_type
         };
         let left = self.coerce(common_type, context);
         let right = other.coerce(common_type, context);

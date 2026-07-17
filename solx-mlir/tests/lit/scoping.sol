@@ -5,10 +5,6 @@
 // CHECK:   sol.alloca : !sol.ptr<ui256, Stack>
 // CHECK:   sol.alloca : !sol.ptr<ui256, Stack>
 
-// `default_return`: function declares `uint256 x = 42;` and falls off the
-// end. solc stages the trailing zero through a return-slot alloca/store/
-// load triple; solx returns the constant zero directly. The original test
-// pinned `sol.return` loosely — pin the actual zero return on both sides.
 // CHECK: sol.func @{{.*default_return.*}}
 // CHECK:   sol.constant 42
 // CHECK:   %[[X_PTR:.*]] = sol.alloca : !sol.ptr<ui256, Stack>

@@ -45,6 +45,24 @@ pub struct Contract {
 
 impl Contract {
     ///
+    /// Wraps an MLIR pipeline output together with its ABI method identifiers.
+    ///
+    #[cfg(feature = "mlir")]
+    pub fn new_mlir(
+        mlir: solx_mlir::MlirOutput,
+        method_identifiers: std::collections::BTreeMap<String, String>,
+    ) -> Self {
+        Self {
+            mlir: Some(mlir),
+            evm: Some(EVM {
+                method_identifiers: Some(method_identifiers),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    ///
     /// Checks if all fields are unset or empty.
     ///
     pub fn is_empty(&self) -> bool {

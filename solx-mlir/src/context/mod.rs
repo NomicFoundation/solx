@@ -6,7 +6,6 @@ pub mod contract;
 pub mod environment;
 pub mod function;
 
-use std::collections::HashMap;
 use std::sync::Once;
 
 use melior::dialect::DialectRegistry;
@@ -19,13 +18,10 @@ use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationLike;
 use melior::ir::operation::OperationMutLike;
 use melior::pass::PassManager;
-use slang_solidity_v2::ast::NodeId;
 
 use crate::Block;
 use crate::Type;
 use crate::llvm_module::RawLlvmModule;
-
-use self::function::Function;
 
 /// Accumulated MLIR state threaded through the AST visitors.
 ///
@@ -36,8 +32,6 @@ pub struct Context<'context> {
     pub melior: &'context melior::Context,
     /// The MLIR module being built.
     pub module: Module<'context>,
-    /// Resolution metadata keyed by the AST definition id of each function.
-    pub function_signatures: HashMap<NodeId, Function<'context>>,
     /// The MLIR type of the contract currently being emitted, used to type
     /// `this` expressions. Frontends set this before emitting function bodies.
     pub current_contract_type: Option<Type<'context>>,
@@ -128,7 +122,6 @@ impl<'context> Context<'context> {
         Self {
             melior,
             module,
-            function_signatures: HashMap::new(),
             current_contract_type: None,
             current_block: None,
         }
@@ -139,49 +132,6 @@ impl<'context> Context<'context> {
         // TODO: stop generating unknown locations; every op should carry a real source
         // location derived from the AST going forward.
         Location::unknown(self.melior)
-    }
-
-    /// Registers a function signature keyed by its AST definition id.
-    pub fn register_function_signature(
-        &mut self,
-        definition_node_id: NodeId,
-        mlir_name: String,
-        parameter_types: Vec<Type<'context>>,
-        return_types: Vec<Type<'context>>,
-    ) {
-        let previous = self.function_signatures.insert(
-            definition_node_id,
-            Function::new(mlir_name, parameter_types, return_types),
-        );
-        debug_assert!(
-            previous.is_none(),
-            "duplicate function signature registration for definition {definition_node_id:?}",
-        );
-    }
-
-    /// Resolves a function by its AST definition id.
-    ///
-    /// Returns the mangled MLIR name, declared parameter types, and return
-    /// types.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the definition was not registered.
-    pub fn resolve_function(
-        &self,
-        definition_node_id: NodeId,
-    ) -> anyhow::Result<(&str, &[Type<'context>], &[Type<'context>])> {
-        let function = self
-            .function_signatures
-            .get(&definition_node_id)
-            .ok_or_else(|| {
-                anyhow::anyhow!("undefined function for definition {definition_node_id:?}")
-            })?;
-        Ok((
-            function.mlir_name.as_str(),
-            &function.parameter_types,
-            &function.return_types,
-        ))
     }
 
     /// The block the insertion cursor points at, which the function-body emitters position before
