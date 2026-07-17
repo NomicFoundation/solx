@@ -28,7 +28,6 @@ pub mod listing_section;
 pub mod movement;
 pub mod output_verdict;
 pub mod paired_bytes;
-pub mod role;
 pub mod size_change;
 pub mod suite_failures;
 pub mod suite_row;
@@ -206,11 +205,11 @@ impl Summary {
 
 #[cfg(test)]
 mod tests {
+    use crate::benchmark::run_failures::RunFailures;
     use crate::benchmark::test::Test;
     use crate::benchmark::test::input::Input as TestInput;
     use crate::benchmark::test::metadata::Metadata;
     use crate::benchmark::test::run::Run;
-    use crate::benchmark::run_failures::RunFailures;
     use crate::benchmark::test::selector::Selector;
     use crate::output::summary::*;
 
