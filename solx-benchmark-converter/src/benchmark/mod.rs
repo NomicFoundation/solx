@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::input::Input;
-use crate::input::Report;
+use crate::input::report::Report;
 use crate::input::build_failures::BuildFailuresReport;
 use crate::input::compilation_time::CompilationTimeReport;
 use crate::input::foundry_gas::FoundryGasReport;

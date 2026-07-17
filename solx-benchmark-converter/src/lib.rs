@@ -16,7 +16,7 @@ pub use crate::benchmark::test::input::Input as BenchmarkTestInput;
 pub use crate::benchmark::test::metadata::Metadata as BenchmarkTestMetadata;
 pub use crate::benchmark::test::selector::Selector as BenchmarkTestSelector;
 pub use crate::input::Input;
-pub use crate::input::Report as InputReport;
+pub use crate::input::report::Report as InputReport;
 pub use crate::input::build_failures::BuildFailuresReport;
 pub use crate::input::compilation_time::CompilationTimeReport;
 pub use crate::input::error::Error as InputReportError;
