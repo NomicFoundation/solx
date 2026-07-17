@@ -10,22 +10,7 @@
 //! misclassified baseline.
 //!
 
-///
-/// The role a toolchain plays in the comparison.
-///
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Role {
-    /// The current commit under test.
-    Pr,
-    /// The `main`-branch build the PR is compared against.
-    Main,
-    /// The latest released solx, a full-matrix baseline.
-    Latest,
-    /// Upstream solc, a full-matrix baseline.
-    Solc,
-    /// Unrecognized naming — surfaced as a harness error, never dropped.
-    Other,
-}
+use crate::output::summary::role::Role;
 
 ///
 /// Which comparison matrix a suite's benchmark comes from — the two harnesses
@@ -73,52 +58,50 @@ impl ToolchainMatrix {
             None => (Role::Other, mode.to_owned()),
         }
     }
-}
 
-/// The compilation pipeline a mode belongs to: the project suites'
-/// `legacy`/`viaIR` token or the tester's codegen token (spelled out — the
-/// trailing token there is the solc version). `None` for unrecognized
-/// tokens, surfaced as a harness error upstream — a silent fallback would
-/// group a new codegen's data under a bogus column.
-pub fn pipeline_of(mode: &str) -> Option<String> {
-    for token in mode.split('-') {
-        if matches!(token, "legacy" | "viaIR") {
-            return Some(token.to_owned());
+    /// The compilation pipeline a mode belongs to: the project suites'
+    /// `legacy`/`viaIR` token or the tester's codegen token (spelled out — the
+    /// trailing token there is the solc version). `None` for unrecognized
+    /// tokens, surfaced as a harness error upstream — a silent fallback would
+    /// group a new codegen's data under a bogus column.
+    pub fn pipeline_of(mode: &str) -> Option<String> {
+        for token in mode.split('-') {
+            if matches!(token, "legacy" | "viaIR") {
+                return Some(token.to_owned());
+            }
+            if let Some(codegen) = Self::codegen_name(token) {
+                return Some(codegen.to_owned());
+            }
         }
-        if let Some(codegen) = codegen_name(token) {
-            return Some(codegen.to_owned());
+        None
+    }
+
+    /// The spelled-out name of a tester codegen token.
+    fn codegen_name(token: &str) -> Option<&'static str> {
+        match token {
+            "E" => Some("EVMLA"),
+            "Y" => Some("Yul"),
+            _ => None,
         }
     }
-    None
-}
 
-/// The spelled-out name of a tester codegen token.
-fn codegen_name(token: &str) -> Option<&'static str> {
-    match token {
-        "E" => Some("EVMLA"),
-        "Y" => Some("Yul"),
-        _ => None,
+    ///
+    /// A pairing key rendered for humans: the redundant `solx` token dropped
+    /// and the codegen shorthands spelled out (`E` → EVMLA, `Y` → Yul).
+    ///
+    pub fn humanize_mode(key: &str) -> String {
+        key.split('-')
+            .filter(|token| *token != "solx" && !token.is_empty())
+            .map(|token| Self::codegen_name(token).unwrap_or(token))
+            .collect::<Vec<&str>>()
+            .join(" ")
     }
-}
-
-///
-/// A pairing key rendered for humans: the redundant `solx` token dropped and
-/// the codegen shorthands spelled out (`E` → EVMLA, `Y` → Yul).
-///
-pub fn humanize_mode(key: &str) -> String {
-    key.split('-')
-        .filter(|token| *token != "solx" && !token.is_empty())
-        .map(|token| codegen_name(token).unwrap_or(token))
-        .collect::<Vec<&str>>()
-        .join(" ")
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::output::summary::toolchain::Role;
-    use crate::output::summary::toolchain::ToolchainMatrix;
-    use crate::output::summary::toolchain::humanize_mode;
-    use crate::output::summary::toolchain::pipeline_of;
+    use crate::output::summary::role::Role;
+    use crate::output::summary::toolchain_matrix::ToolchainMatrix;
 
     #[test]
     fn classify_covers_every_toolchain_naming() {
@@ -195,27 +178,42 @@ mod tests {
 
     #[test]
     fn pipeline_is_derived_from_recognized_tokens() {
-        assert_eq!(pipeline_of("02.solx-main-viaIR").as_deref(), Some("viaIR"));
-        assert_eq!(pipeline_of("03.solx-legacy").as_deref(), Some("legacy"));
+        assert_eq!(
+            ToolchainMatrix::pipeline_of("02.solx-main-viaIR").as_deref(),
+            Some("viaIR")
+        );
+        assert_eq!(
+            ToolchainMatrix::pipeline_of("03.solx-legacy").as_deref(),
+            Some("legacy")
+        );
         // Tester modes: the codegen is the pipeline, not the trailing
         // solc version.
         assert_eq!(
-            pipeline_of("01.solx-solx-E-M3B3-0.8.34").as_deref(),
+            ToolchainMatrix::pipeline_of("01.solx-solx-E-M3B3-0.8.34").as_deref(),
             Some("EVMLA")
         );
         assert_eq!(
-            pipeline_of("00.solx-main-solx-Y-M3B3-0.8.34").as_deref(),
+            ToolchainMatrix::pipeline_of("00.solx-main-solx-Y-M3B3-0.8.34").as_deref(),
             Some("Yul")
         );
         // A new codegen letter is a loud None, never a bogus version column.
-        assert_eq!(pipeline_of("01.solx-solx-L-M3B3-0.8.34"), None);
+        assert_eq!(
+            ToolchainMatrix::pipeline_of("01.solx-solx-L-M3B3-0.8.34"),
+            None
+        );
     }
 
     #[test]
     fn humanized_keys_spell_out_codegens() {
-        assert_eq!(humanize_mode("solx-E-M3B3-0.8.34"), "EVMLA M3B3 0.8.34");
-        assert_eq!(humanize_mode("solx-Y-M3B3-0.8.34"), "Yul M3B3 0.8.34");
-        assert_eq!(humanize_mode("legacy"), "legacy");
-        assert_eq!(humanize_mode(""), "");
+        assert_eq!(
+            ToolchainMatrix::humanize_mode("solx-E-M3B3-0.8.34"),
+            "EVMLA M3B3 0.8.34"
+        );
+        assert_eq!(
+            ToolchainMatrix::humanize_mode("solx-Y-M3B3-0.8.34"),
+            "Yul M3B3 0.8.34"
+        );
+        assert_eq!(ToolchainMatrix::humanize_mode("legacy"), "legacy");
+        assert_eq!(ToolchainMatrix::humanize_mode(""), "");
     }
 }

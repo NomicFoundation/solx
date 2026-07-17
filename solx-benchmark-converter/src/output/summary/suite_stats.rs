@@ -16,11 +16,10 @@ use crate::output::summary::diff_counter::DiffCounter;
 use crate::output::summary::failure_regression::FailureRegression;
 use crate::output::summary::failure_regressions::FailureRegressions;
 use crate::output::summary::paired_bytes::PairedBytes;
+use crate::output::summary::role::Role;
 use crate::output::summary::suite_failures::SuiteFailures;
 use crate::output::summary::suite_row::SuiteRow;
-use crate::output::summary::toolchain::Role;
-use crate::output::summary::toolchain::humanize_mode;
-use crate::output::summary::toolchain::pipeline_of;
+use crate::output::summary::toolchain_matrix::ToolchainMatrix;
 use crate::output::summary::top_movers::TopMovers;
 use crate::utils::commas;
 use crate::utils::median;
@@ -154,7 +153,7 @@ impl SuiteStats {
                     }
                 }
 
-                let pipeline = match pipeline_of(mode) {
+                let pipeline = match ToolchainMatrix::pipeline_of(mode) {
                     Some(pipeline) => pipeline,
                     None => {
                         if role != Role::Other {
@@ -223,7 +222,7 @@ impl SuiteStats {
                 stats.paired_runs += 1;
                 stats.baseline_build_failures += main.build_failures_count().unwrap_or_default();
                 stats.baseline_test_failures += main.test_failures_count().unwrap_or_default();
-                let mode = humanize_mode(key);
+                let mode = ToolchainMatrix::humanize_mode(key);
 
                 for (is_build, main_v, pr_v) in [
                     (true, main.build_failures_count(), pr.build_failures_count()),
