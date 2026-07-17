@@ -21,6 +21,8 @@ mod stats;
 mod toolchain;
 mod verdict;
 
+use std::path::PathBuf;
+
 use crate::benchmark::Benchmark;
 
 use self::render::render_summary;
@@ -104,6 +106,42 @@ impl SuiteKind {
             Self::Foundry | Self::Hardhat => ToolchainMatrix::Project,
         }
     }
+
+    ///
+    /// Loads this suite for the summary, or `None` when it was not part of the
+    /// invocation (no benchmark and not skipped). A skipped outcome renders a
+    /// "did not run" row; a benchmark path that will not parse renders the
+    /// suite as errored rather than aborting the summary for the healthy ones.
+    /// A skipped upload step passes its URL through as an empty string, which
+    /// is treated as no URL.
+    ///
+    pub fn load(
+        self,
+        path: Option<PathBuf>,
+        report_url: Option<String>,
+        outcome: SuiteOutcome,
+    ) -> Option<SummarySuite> {
+        let benchmark = match (outcome, path) {
+            (SuiteOutcome::Skipped, _) => None,
+            (_, None) => return None,
+            (_, Some(path)) => match Benchmark::try_from(path.as_path()) {
+                Ok(benchmark) => Some(benchmark),
+                Err(error) => {
+                    eprintln!(
+                        "Warning: {} benchmark is unusable ({error}); rendering the suite as errored.",
+                        self.label()
+                    );
+                    None
+                }
+            },
+        };
+        Some(SummarySuite {
+            kind: self,
+            benchmark,
+            report_url: report_url.filter(|url| !url.is_empty()),
+            outcome,
+        })
+    }
 }
 
 ///
@@ -125,11 +163,28 @@ pub struct SummarySuite {
 }
 
 ///
-/// Renders the full PR summary comment for the given suites.
+/// The suites a single PR summary comment is rendered from.
 ///
-pub fn render(suites: &[SummarySuite]) -> String {
-    let stats: Vec<SuiteStats> = suites.iter().map(SuiteStats::from_suite).collect();
-    render_summary(&stats)
+pub struct Summary {
+    suites: Vec<SummarySuite>,
+}
+
+impl Summary {
+    /// Collects the suites the workflow fed in.
+    pub fn new(suites: Vec<SummarySuite>) -> Self {
+        Self { suites }
+    }
+
+    /// Renders the full PR summary comment.
+    pub fn render(&self) -> String {
+        let stats: Vec<SuiteStats> = self.suites.iter().map(SuiteStats::from_suite).collect();
+        render_summary(&stats)
+    }
+
+    /// Whether no suite was fed in — nothing to summarize.
+    pub fn is_empty(&self) -> bool {
+        self.suites.is_empty()
+    }
 }
 
 #[cfg(test)]
@@ -141,6 +196,10 @@ mod tests {
     use crate::benchmark::test::run::Run;
     use crate::benchmark::test::run::RunFailures;
     use crate::benchmark::test::selector::Selector;
+
+    fn render(suites: Vec<SummarySuite>) -> String {
+        Summary::new(suites).render()
+    }
 
     fn contract_test(project: &str, contract: &str, runs: &[(&str, u64, u64)]) -> (String, Test) {
         let selector = Selector {
@@ -265,7 +324,7 @@ mod tests {
                 ],
             ),
         ];
-        let out = render(&[suite(SuiteKind::Foundry, tests)]);
+        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
         assert!(out.contains("contracts built by both only"), "{out}");
         assert!(out.contains("| Foundry | legacy | +5.7% | — |"), "{out}");
     }
@@ -281,7 +340,7 @@ mod tests {
             ),
             compile_test("b", &[("03.solx-legacy", 9_000)]),
         ];
-        let out = render(&[suite(SuiteKind::Foundry, tests)]);
+        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
         assert!(
             out.contains("| Foundry · 2 proj | +3.0% / +3.0% |"),
             "{out}"
@@ -299,7 +358,7 @@ mod tests {
             ),
             compile_test("b", &[("03.solx-viaIR", 9_000)]),
         ];
-        let out = render(&[suite(SuiteKind::Foundry, tests)]);
+        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
         assert!(
             out.contains("| Suite | legacy (agg / median) | viaIR (agg / median) |"),
             "{out}"
@@ -318,7 +377,7 @@ mod tests {
         // from zero comparisons; worse, dropping the data entirely would make
         // the section vanish and claim nothing at all.
         let tests = vec![compile_test("a", &[("03.solx-legacy", 9_000)])];
-        let out = render(&[suite(SuiteKind::Foundry, tests)]);
+        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
         assert!(out.contains("| Foundry | — |"), "{out}");
         assert!(out.contains("_No paired compile-time data"), "{out}");
         assert!(!out.contains("Within noise"), "{out}");
@@ -330,7 +389,7 @@ mod tests {
             "a",
             &[("02.solx-main-legacy", 1_000), ("03.solx-legacy", 700)],
         )];
-        let out = render(&[suite(SuiteKind::Foundry, tests)]);
+        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
         assert!(out.contains("| **-30.0%** / -30.0% |"), "{out}");
         assert!(
             out.contains("**Project outliers (≥15%):** `a` legacy **-30.0%**"),
@@ -353,7 +412,7 @@ mod tests {
                 ],
             )],
         );
-        let out = render(&[tester]);
+        let out = render(vec![tester]);
         assert!(
             out.contains("❌ **Harness error** — solx-tester: no recognized pipeline token in:"),
             "{out}"
@@ -374,7 +433,7 @@ mod tests {
             SuiteKind::Tester,
             vec![compile_test("solx-tester", runs.as_slice())],
         );
-        let out = render(&[tester]);
+        let out = render(vec![tester]);
         assert!(
             out.contains(
                 "❌ **Harness error** — solx-tester: no recognized pipeline token in: \
@@ -401,7 +460,7 @@ mod tests {
         );
         let mut foundry = unavailable(SuiteKind::Foundry);
         foundry.outcome = SuiteOutcome::Skipped;
-        let out = render(&[tester, foundry]);
+        let out = render(vec![tester, foundry]);
         assert!(
             out.contains("| Foundry | ⚪ did not run | — | — | — |"),
             "{out}"
@@ -422,7 +481,7 @@ mod tests {
             )],
         );
         foundry.outcome = SuiteOutcome::Failure;
-        let out = render(&[foundry]);
+        let out = render(vec![foundry]);
         assert!(
             out.contains("⚠️ **Suite step failed** — Foundry exited nonzero"),
             "{out}"
@@ -448,7 +507,7 @@ mod tests {
                 &[("02.solx-main-legacy", 0, 0), ("03.solx-legacy", 22_104, 0)],
             ),
         ];
-        let out = render(&[suite(SuiteKind::Foundry, tests)]);
+        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
         assert!(out.contains("✅ **Output-preserving**"), "{out}");
         assert!(out.contains("✅ 0 of 1, ⚪ 1 one-sided"), "{out}");
     }
@@ -473,7 +532,7 @@ mod tests {
                 &[("02.solx-main-legacy", 22_104, 0), ("03.solx-legacy", 0, 0)],
             ),
         ];
-        let out = render(&[suite(SuiteKind::Foundry, tests)]);
+        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
         assert!(out.contains("⚠️ **Output changed**"), "{out}");
         assert!(!out.contains("one-sided"), "{out}");
     }
@@ -508,7 +567,7 @@ mod tests {
                 ],
             ),
         ];
-        let out = render(&[suite(SuiteKind::Foundry, tests)]);
+        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
         assert!(out.contains("1 of 3 size comparisons differs"), "{out}");
     }
 
@@ -525,7 +584,7 @@ mod tests {
                 ("02.solx-main-viaIR", RunFailures::Test(7)),
             ],
         )];
-        let out = render(&[suite(SuiteKind::Foundry, tests)]);
+        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
         assert!(
             out.contains(
                 "⚠️ **Missing on PR** — Foundry: 1 run (7 failures) exists only on `main`"
@@ -547,7 +606,7 @@ mod tests {
                 ("03.solx-legacy", RunFailures::Test(3)),
             ],
         )];
-        let out = render(&[suite(SuiteKind::Foundry, tests)]);
+        let out = render(vec![suite(SuiteKind::Foundry, tests)]);
         assert!(!out.contains("test failures 0 → 3"), "{out}");
         assert!(!out.contains("+3 test"), "{out}");
         assert!(out.contains("✅ **No new failures**"), "{out}");
@@ -582,7 +641,7 @@ mod tests {
                 ],
             ),
         ];
-        let out = render(&[suite(SuiteKind::Tester, tests)]);
+        let out = render(vec![suite(SuiteKind::Tester, tests)]);
         assert!(
             out.contains("`delete_struct.sol` [EVMLA M3B3 0.8.34]"),
             "{out}"
@@ -610,7 +669,7 @@ mod tests {
             ],
         ] {
             let tests = vec![contract_test("p", "C", runs.as_slice())];
-            let out = render(&[suite(SuiteKind::Foundry, tests)]);
+            let out = render(vec![suite(SuiteKind::Foundry, tests)]);
             assert!(out.contains("⚪ 1 one-sided (not gated)"), "{out}");
             assert!(!out.contains("jitter"), "{out}");
         }
@@ -618,7 +677,7 @@ mod tests {
 
     #[test]
     fn empty_report_is_a_loud_health_issue() {
-        let out = render(&[suite(SuiteKind::Foundry, vec![])]);
+        let out = render(vec![suite(SuiteKind::Foundry, vec![])]);
         assert!(
             out.contains("❌ **Suite empty** — Foundry's report contains no runs."),
             "{out}"
@@ -757,7 +816,7 @@ mod tests {
         );
         hardhat.report_url = Some("https://example.com/artifacts/hardhat".to_owned());
 
-        let out = render(&[tester, foundry, hardhat]);
+        let out = render(vec![tester, foundry, hardhat]);
         assert_matches_fixture("standard-output-preserving", &out);
     }
 
@@ -800,7 +859,7 @@ mod tests {
         }
         let foundry = suite(SuiteKind::Foundry, foundry_tests);
 
-        let out = render(&[tester, foundry]);
+        let out = render(vec![tester, foundry]);
         assert_matches_fixture("output-changed", &out);
     }
 
@@ -850,7 +909,7 @@ mod tests {
                 ),
             ],
         );
-        let out = render(&[foundry]);
+        let out = render(vec![foundry]);
         assert_matches_fixture("new-failures", &out);
     }
 
@@ -884,7 +943,7 @@ mod tests {
         // benchmark-JSON write failure.
         let mut tester = unavailable(SuiteKind::Tester);
         tester.report_url = Some("https://example.com/artifacts/tester".to_owned());
-        let out = render(&[tester, foundry, hardhat]);
+        let out = render(vec![tester, foundry, hardhat]);
         assert_matches_fixture("degraded-harness", &out);
     }
 
@@ -937,7 +996,7 @@ mod tests {
             ));
         }
         let foundry = suite(SuiteKind::Foundry, foundry_tests);
-        let out = render(&[tester, foundry]);
+        let out = render(vec![tester, foundry]);
         assert_matches_fixture("full-matrix", &out);
     }
 
@@ -977,7 +1036,7 @@ mod tests {
                 ],
             )],
         );
-        let out = render(&[foundry, hardhat]);
+        let out = render(vec![foundry, hardhat]);
         assert_matches_fixture("gas-jitter", &out);
     }
 }

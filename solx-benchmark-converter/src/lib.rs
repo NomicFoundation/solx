@@ -31,6 +31,6 @@ pub use crate::output::format::Format as OutputFormat;
 pub use crate::output::json::Json as OutputJson;
 pub use crate::output::summary::SuiteKind;
 pub use crate::output::summary::SuiteOutcome;
+pub use crate::output::summary::Summary;
 pub use crate::output::summary::SummarySuite;
 pub use crate::output::summary::ToolchainMatrix;
-pub use crate::output::summary::render as render_summary;
