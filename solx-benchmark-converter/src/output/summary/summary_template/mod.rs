@@ -9,6 +9,8 @@
 //! that formats a value is Rust.
 //!
 
+pub mod listing_section;
+
 use std::collections::BTreeSet;
 
 use askama::Template;
@@ -16,7 +18,6 @@ use askama::Template;
 use crate::output::summary::compile_view::CompileView;
 use crate::output::summary::failure_verdict::FailureVerdict;
 use crate::output::summary::health_issue::HealthIssue;
-use crate::output::summary::listing_section::ListingSection;
 use crate::output::summary::output_verdict::OutputVerdict;
 use crate::output::summary::suite_row::SuiteRow;
 use crate::output::summary::suite_stats::SuiteStats;
@@ -26,6 +27,8 @@ use crate::utils::agreeing;
 use crate::utils::count_noun;
 use crate::utils::percent;
 use crate::utils::relative_percent;
+
+use self::listing_section::ListingSection;
 
 ///
 /// The full summary comment.

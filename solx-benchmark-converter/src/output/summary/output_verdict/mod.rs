@@ -3,14 +3,18 @@
 //! comparisons plus the gas comparisons of gating suites.
 //!
 
+pub mod gas_change;
+pub mod size_change;
+
 use crate::output::summary::diff_counter::DiffCounter;
-use crate::output::summary::gas_change::GasChange;
-use crate::output::summary::size_change::SizeChange;
 use crate::output::summary::suite_stats::SuiteStats;
 use crate::utils::agreeing;
 use crate::utils::commas;
 use crate::utils::count_noun;
 use crate::utils::signed_commas;
+
+use self::gas_change::GasChange;
+use self::size_change::SizeChange;
 
 ///
 /// Whether the PR preserved compiler output, judged over every suite's size
