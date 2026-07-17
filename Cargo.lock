@@ -4328,7 +4328,7 @@ dependencies = [
 
 [[package]]
 name = "solx"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -4353,7 +4353,7 @@ dependencies = [
 
 [[package]]
 name = "solx-benchmark-converter"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "clap",
@@ -4366,7 +4366,7 @@ dependencies = [
 
 [[package]]
 name = "solx-codegen-evm"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "indexmap 2.14.0",
@@ -4381,7 +4381,7 @@ dependencies = [
 
 [[package]]
 name = "solx-compiler-downloader"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "colored",
@@ -4392,7 +4392,7 @@ dependencies = [
 
 [[package]]
 name = "solx-core"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "ciborium",
@@ -4418,7 +4418,7 @@ dependencies = [
 
 [[package]]
 name = "solx-dev"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "clap",
@@ -4441,7 +4441,7 @@ dependencies = [
 
 [[package]]
 name = "solx-evm-assembly"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "ciborium",
@@ -4460,7 +4460,7 @@ dependencies = [
 
 [[package]]
 name = "solx-mlir"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "cc",
@@ -4477,7 +4477,7 @@ dependencies = [
 
 [[package]]
 name = "solx-slang"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "num-bigint 0.5.1",
@@ -4495,7 +4495,7 @@ dependencies = [
 
 [[package]]
 name = "solx-solc-test-adapter"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -4511,7 +4511,7 @@ dependencies = [
 
 [[package]]
 name = "solx-standard-json"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "boolinator",
@@ -4528,7 +4528,7 @@ dependencies = [
 
 [[package]]
 name = "solx-tester"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "clap",
@@ -4562,7 +4562,7 @@ dependencies = [
 
 [[package]]
 name = "solx-utils"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "base58",
@@ -4580,7 +4580,7 @@ dependencies = [
 
 [[package]]
 name = "solx-yul"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "inkwell",

@@ -73,23 +73,25 @@ Output:
 ```text
 ======= Simple.sol:Simple =======
 Deploy LLVM EVM assembly:
-        .text
         .file   "Simple.sol:Simple"
-main:
-.func_begin0:
-        JUMPDEST
-        PUSH1 128
-        PUSH1 64
+        .text
+        .globl  __entry                         ; -- Begin function __entry
+__entry:                                ; @__entry
+; %bb.0:                                ; %entry
+        CALLVALUE
+        PUSH4           @.BB0_2
+        JUMPI
 ...
 
 Runtime LLVM EVM assembly:
-        .text
         .file   "Simple.sol:Simple.runtime"
-main:
-.func_begin0:
-        JUMPDEST
-        PUSH1 128
-        PUSH1 64
+        .text
+        .globl  __entry                         ; -- Begin function __entry
+__entry:                                ; @__entry
+; %bb.0:                                ; %entry
+        CALLVALUE
+        PUSH4           @.BB0_2
+        JUMPI
 ...
 ```
 
@@ -99,7 +101,7 @@ main:
 
 Emits the contract metadata. The metadata is a JSON object that contains information about the contract, such as its name, source code hash, the list of dependencies, compiler versions, and so on.
 
-The **solx** metadata format is compatible with the [Solidity metadata format](https://docs.soliditylang.org/en/latest/metadata.html#contract-metadata). This means that the metadata output can be used with other tools that support Solidity metadata. Extra **solx** data is inserted into **solc** metadata with this JSON object:
+The **solx** metadata format is compatible with the [Solidity metadata format](https://docs.soliditylang.org/en/latest/metadata.html#contract-metadata). This means that the metadata output can be used with other tools that support Solidity metadata. The metadata that is hashed into [the CBOR trailer of the bytecode](#--metadata-hash) additionally carries extra **solx** data inserted into the **solc** metadata with this JSON object:
 
 ```javascript
 {
@@ -116,7 +118,7 @@ The **solx** metadata format is compatible with the [Solidity metadata format](h
     // Optional: only set for Solidity and Yul contracts.
     "solc_version": "0.8.34",
     // Mandatory: current version of solx.
-    "solx_version": "0.1.4"
+    "solx_version": "0.1.5"
   }
 }
 ```
@@ -132,7 +134,7 @@ Output:
 ```text
 ======= Simple.sol:Simple =======
 Metadata:
-{"compiler":{"version":"0.8.34+commit.e2cbf92c"},"language":"Solidity","output":{"abi":[{"inputs":[],"name":"first","outputs":[{"internalType":"uint64","name":"","type":"uint64"}],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"second","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"pure","type":"function"}],"devdoc":{"kind":"dev","methods":{},"version":1},"userdoc":{"kind":"user","methods":{},"version":1}},"settings":{"compilationTarget":{"Simple.sol":"Simple"},"evmVersion":"osaka","libraries":{},"metadata":{"bytecodeHash":"ipfs"},"optimizer":{"enabled":false,"runs":200},"remappings":[]},"solx":{"llvm_options":[],"optimizer_settings":{"is_debug_logging_enabled":false,"is_fallback_to_size_enabled":false,"is_verify_each_enabled":false,"level_back_end":"Aggressive","level_middle_end":"Aggressive","level_middle_end_size":"Zero"},"solc_version":"0.8.34","solx_version":"0.1.4"},"sources":{"Simple.sol":{"keccak256":"0x402fe0b38cc9d81e8c9f6d07854cca27fbb307f06d8a129998026907a10c7ca1","license":"MIT","urls":["bzz-raw://04714cab56c1f931e3cc1ddae4c7ff0c8832d0849e23966c6326028f6783d45a","dweb:/ipfs/QmehmUFKCtytG8WcWQ676KvqwURfkVYK89VHZEvSzyLc2Z"]}},"version":1}
+{"compiler":{"version":"0.8.34+commit.79519a9b"},"language":"Solidity","output":{"abi":[{"inputs":[],"name":"first","outputs":[{"internalType":"uint64","name":"","type":"uint64"}],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"second","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"pure","type":"function"}],"devdoc":{"kind":"dev","methods":{},"version":1},"userdoc":{"kind":"user","methods":{},"version":1}},"settings":{"compilationTarget":{"Simple.sol":"Simple"},"evmVersion":"osaka","libraries":{},"metadata":{"bytecodeHash":"ipfs"},"optimizer":{"enabled":false,"runs":200},"remappings":[]},"sources":{"Simple.sol":{"keccak256":"0x402fe0b38cc9d81e8c9f6d07854cca27fbb307f06d8a129998026907a10c7ca1","license":"MIT","urls":["bzz-raw://04714cab56c1f931e3cc1ddae4c7ff0c8832d0849e23966c6326028f6783d45a","dweb:/ipfs/QmehmUFKCtytG8WcWQ676KvqwURfkVYK89VHZEvSzyLc2Z"]}},"version":1}
 ```
 
 
@@ -148,9 +150,9 @@ solx 'Simple.sol' --ast-json
 Output:
 
 ```text
-======= Simple.sol:Simple =======
+======= Simple.sol =======
 JSON AST:
-{"absolutePath":".../Simple.sol","exportedSymbols":{"Simple":[24]},"id":25,"license":"MIT","nodeType":"SourceUnit","nodes":[ ... ],"src":"32:288:0"}
+{"absolutePath":"Simple.sol","exportedSymbols":{"Simple":[24]},"id":25,"license":"MIT","nodeType":"SourceUnit","nodes":[ ... ],"src":"32:288:0"}
 ```
 
 > Since **solx** communicates with **solc** only via standard JSON under the hood, the full JSON AST is emitted instead of the compact one.
@@ -225,7 +227,7 @@ Output:
 ```text
 ======= Simple.sol:Simple =======
 Contract Transient Storage Layout:
-{"storage":[{"astId":3,"contract":"Simple.sol:Simple","label":"field_1","offset":0,"slot":"0","type":"t_uint256"},{"astId":5,"contract":"Simple.sol:Simple","label":"field_2","offset":0,"slot":"1","type":"t_uint256"},{"astId":7,"contract":"Simple.sol:Simple","label":"field_3","offset":0,"slot":"2","type":"t_uint256"}],"types":{"t_uint256":{"encoding":"inplace","label":"uint256","numberOfBytes":"32"}}}
+{"storage":[],"types":null}
 ```
 
 
@@ -243,7 +245,7 @@ Output:
 ```text
 ======= Simple.sol:Simple =======
 User Documentation:
-{"kind":"user","methods":{ ... },"version":1}
+{"kind":"user","methods":{},"version":1}
 ```
 
 
@@ -261,7 +263,7 @@ Output:
 ```text
 ======= Simple.sol:Simple =======
 Developer Documentation:
-{"kind":"dev","methods":{ ... },"version":1}
+{"kind":"dev","methods":{},"version":1}
 ```
 
 
@@ -305,21 +307,18 @@ Output:
 ```text
 ======= Simple.sol:Simple =======
 IR:
+
 /// @use-src 0:"Simple.sol"
 object "Simple_24" {
     code {
-        {
-            ...
-        }
+        ...
     }
     /// @use-src 0:"Simple.sol"
     object "Simple_24_deployed" {
         code {
-            {
-                ...
-            }
+            ...
         }
-        data ".metadata" hex"a26469706673582212206c34df79f8cc8ba870a350940cb8623c60d4f6f9c356e2185b812187d9ae55ee64736f6c63430008220033"
+        data ".metadata" hex"a264697066735822122079ca4620ae16ea2714d740f9b6965b44fc2ec4f860ff2f53840fb596f5baf9d264736f6c63430008220033"
     }
 }
 ```
@@ -357,7 +356,7 @@ Output:
 ```text
 ======= Simple.sol:Simple =======
 Debug info of the runtime part:
-7f454c46010201ff
+7f454c46010201ff...
 ```
 
 
@@ -378,9 +377,9 @@ ls './build/'
 Output:
 
 ```text
-Compiler run successful.
+Compiler run successful. Artifact(s) can be found in directory "./build/".
 Simple_sol_Simple.evmla
-Simple_sol_Simple.runtime.evmla
+Simple_sol_Simple_runtime.evmla
 ```
 
 Usage with stdout:
@@ -418,9 +417,9 @@ ls './build/'
 Output:
 
 ```text
-Compiler run successful.
+Compiler run successful. Artifact(s) can be found in directory "./build/".
 Simple_sol_Simple.ethir
-Simple_sol_Simple.runtime.ethir
+Simple_sol_Simple_runtime.ethir
 ```
 
 Usage with stdout:
@@ -436,7 +435,8 @@ Output:
 Binary:
 ...
 Deploy Ethereal IR:
-function main(0, 0, 0, 0, 0) -> 0, 0, 0, 0 {
+function __entry {
+    stack_usage: 4
 ...
 ```
 
@@ -458,11 +458,11 @@ ls './build/'
 Output:
 
 ```text
-Compiler run successful.
+Compiler run successful. Artifact(s) can be found in directory "./build/".
 Simple_sol_Simple.optimized.ll
-Simple_sol_Simple.runtime.optimized.ll
-Simple_sol_Simple.runtime.unoptimized.ll
 Simple_sol_Simple.unoptimized.ll
+Simple_sol_Simple_runtime.optimized.ll
+Simple_sol_Simple_runtime.unoptimized.ll
 ```
 
 Usage with stdout:
@@ -499,9 +499,9 @@ Output:
 
 ```text
 Benchmarks:
-solc_Solidity_Standard_JSON: 6ms
+solc_Solidity_Standard_JSON: 1ms
 solx_Solidity_IR_Analysis: 0ms
-solx_Compilation: 75ms
+solx_Compilation: 8ms
 
 ======= Simple.sol:Simple =======
 Benchmarks:
@@ -510,7 +510,7 @@ Benchmarks:
     Simple.sol:Simple:deploy/OptimizeVerify/M3B3/SpillArea(0): 1ms
     Simple.sol:Simple:runtime/EVMAssemblyToLLVMIR/M3B3/SpillArea(0): 0ms
     Simple.sol:Simple.runtime:runtime/InitVerify/M3B3/SpillArea(0): 0ms
-    Simple.sol:Simple.runtime:runtime/OptimizeVerify/M3B3/SpillArea(0): 5ms
+    Simple.sol:Simple.runtime:runtime/OptimizeVerify/M3B3/SpillArea(0): 1ms
 ```
 
 
@@ -570,13 +570,13 @@ ls './build/'
 Output:
 
 ```text
-Compiler run successful. Artifact(s) can be found in directory "build".
+Compiler run successful. Artifact(s) can be found in directory "./build/".
 Simple_sol_Simple.asm
 Simple_sol_Simple.bin
-Simple_sol_Simple.runtime.asm
 Simple_sol_Simple_llvm.asm
 Simple_sol_Simple_llvm.asm-runtime
 Simple_sol_Simple_meta.json
+Simple_sol_Simple_runtime.asm
 ```
 
 
@@ -733,8 +733,7 @@ Output with `ipfs`:
 ```text
 ======= Simple.sol:Simple =======
 Binary:
-34601557630000008480630000001a6080396080f35b5f5ffdfe34600b5760...
-a2646970667358221220579682b419e25ecc4524604eb5f3a8dbe3b15621ca21cc8ada8dcf6196a512df64736f6c637816736f6c783a302e312e343b736f6c633a302e382e33340047
+34601557630000008480630000001a6080396080f35b5f5ffdfe34600b57600336116016575b5f5ffd5b5060016031565b5f3560e01c633df4ddf48114600f57635a8ac02d03600b5760025b60805260206080f3fea2646970667358221220bec8fa0149a786c5810200ef5a436a154cff832af68ace5beeabcbb82166cb9264736f6c637816736f6c783a302e312e353b736f6c633a302e382e33340047
 ```
 
 The byte array starting with `a2` at the end of the bytecode is a CBOR-encoded compiler version data and an optional metadata hash.
@@ -746,12 +745,12 @@ JSON representation of the CBOR payload:
 ```javascript
 {
     // Optional: included if `--metadata-hash` is set to `ipfs`.
-    "ipfs": "1220579682b419e25ecc4524604eb5f3a8dbe3b15621ca21cc8ada8dcf6196a512df",
+    "ipfs": "1220bec8fa0149a786c5810200ef5a436a154cff832af68ace5beeabcbb82166cb92",
 
     // Required: consists of semicolon-separated pairs of colon-separated compiler names and versions.
     // `solx:<version>` is always included.
     // `solc:<version>` is only included for Solidity and Yul contracts, but not included for LLVM IR ones.
-    "solc": "solx:0.1.4;solc:0.8.34"
+    "solc": "solx:0.1.5;solc:0.8.34"
 }
 ```
 
@@ -949,19 +948,19 @@ ls './debug/'
 Output:
 
 ```text
-Simple_sol_Simple.evmla
-Simple_sol_Simple.ethir
-Simple_sol_Simple.unoptimized.ll
-Simple_sol_Simple.optimized.ll
 Simple_sol_Simple.asm
-Simple_sol_Simple.runtime.evmla
-Simple_sol_Simple.runtime.ethir
-Simple_sol_Simple.runtime.unoptimized.ll
-Simple_sol_Simple.runtime.optimized.ll
-Simple_sol_Simple.runtime.asm
+Simple_sol_Simple.ethir
+Simple_sol_Simple.evmla
+Simple_sol_Simple.optimized.ll
+Simple_sol_Simple.unoptimized.ll
+Simple_sol_Simple_runtime.asm
+Simple_sol_Simple_runtime.ethir
+Simple_sol_Simple_runtime.evmla
+Simple_sol_Simple_runtime.optimized.ll
+Simple_sol_Simple_runtime.unoptimized.ll
 ```
 
-The output file name is constructed as follows: `<ContractPath>_<ContractName>.<Modifiers>.<Extension>`.
+The output file name is constructed as follows: `<ContractPath>_<ContractName>[_runtime].<Modifiers>.<Extension>`.
 
 Additionally, it is possible to dump the standard JSON input file with the `SOLX_STANDARD_JSON_DEBUG` environment variable:
 
