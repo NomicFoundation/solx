@@ -14,7 +14,7 @@ use self::arguments::Arguments;
 fn main() -> anyhow::Result<()> {
     let arguments = Arguments::try_parse()?;
 
-    let input_paths = solx_benchmark_converter::Input::resolve_paths(arguments.input_paths)?;
+    let input_paths = solx_benchmark_converter::resolve_input_paths(arguments.input_paths)?;
     let mut inputs = Vec::with_capacity(input_paths.len());
     for path in input_paths.into_iter() {
         match solx_benchmark_converter::Input::try_from(path.as_path()) {

@@ -11,9 +11,9 @@ use solx_benchmark_converter::SuiteOutcome;
 ///
 /// Generates the single PR summary comment from the per-suite benchmark JSONs.
 ///
-/// Each suite is optional: a suite whose flag is not passed is omitted from
-/// the comment, while a flag pointing to a missing or unreadable file renders
-/// that suite as errored.
+/// Every suite reports its step outcome; a skipped one renders as an explicit
+/// "did not run" row. Its benchmark JSON is optional: absent, the suite is
+/// omitted; present but unreadable, the suite renders as errored.
 ///
 #[derive(Debug, Parser)]
 #[command(arg_required_else_help = true)]
