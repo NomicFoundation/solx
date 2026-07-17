@@ -3,4 +3,4 @@
 # rendered line, failing the golden fixtures and CRLF-polluting real comments.
 # The fixtures get the same pin so the comparison is LF on both sides.
 solx-benchmark-converter/templates/*.md text eol=lf
-solx-benchmark-converter/src/output/summary/fixtures/*.md text eol=lf
+solx-benchmark-converter/src/tests/fixtures/*.md text eol=lf

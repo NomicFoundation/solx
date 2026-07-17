@@ -18,7 +18,7 @@ use self::worksheet::Worksheet;
 ///
 pub struct Xlsx {
     /// The worksheets, indexed by `Sheet`.
-    worksheets: Vec<Worksheet>,
+    pub worksheets: Vec<Worksheet>,
 
     /// Toolchain identifiers.
     pub toolchains: Vec<String>,
@@ -48,7 +48,7 @@ impl Xlsx {
     ///
     /// The worksheet a sheet names.
     ///
-    fn sheet(&mut self, sheet: Sheet) -> &mut Worksheet {
+    pub fn sheet(&mut self, sheet: Sheet) -> &mut Worksheet {
         &mut self.worksheets[sheet as usize]
     }
 
@@ -238,25 +238,5 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
         }
 
         Ok(xlsx)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::output::xlsx::Sheet;
-    use crate::output::xlsx::Xlsx;
-
-    #[test]
-    fn every_sheet_indexes_its_own_worksheet() {
-        // `sheet as usize` indexes the worksheets `new` filled in `ALL` order:
-        // a variant added mid-enum but appended to `ALL` would silently write
-        // every later sheet's data to the wrong tab.
-        let mut xlsx = Xlsx::new().expect("workbook creation");
-        assert_eq!(xlsx.worksheets.len(), Sheet::ALL.len());
-        for (index, sheet) in Sheet::ALL.into_iter().enumerate() {
-            assert_eq!(sheet as usize, index, "{sheet:?}");
-            let (name, headers) = sheet.spec();
-            assert_eq!(xlsx.sheet(sheet).headers, headers, "{name}");
-        }
     }
 }

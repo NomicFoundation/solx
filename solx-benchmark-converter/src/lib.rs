@@ -15,6 +15,9 @@ pub(crate) mod summary_suite;
 pub(crate) mod toolchain_matrix;
 pub(crate) mod utils;
 
+#[cfg(test)]
+mod tests;
+
 pub use crate::benchmark::Benchmark;
 pub use crate::benchmark::test::Test as BenchmarkTest;
 pub use crate::benchmark::test::input::Input as BenchmarkTestInput;
