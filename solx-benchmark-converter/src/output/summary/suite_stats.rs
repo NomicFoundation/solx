@@ -9,8 +9,6 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use crate::utils::relative_percent;
-
 use crate::output::summary::SuiteOutcome;
 use crate::output::summary::SummarySuite;
 use crate::output::summary::compile_aggregate::CompileAggregate;
@@ -18,10 +16,15 @@ use crate::output::summary::diff_counter::DiffCounter;
 use crate::output::summary::failure_regression::FailureRegression;
 use crate::output::summary::failure_regressions::FailureRegressions;
 use crate::output::summary::paired_bytes::PairedBytes;
+use crate::output::summary::suite_failures::SuiteFailures;
+use crate::output::summary::suite_row::SuiteRow;
 use crate::output::summary::toolchain::Role;
 use crate::output::summary::toolchain::humanize_mode;
 use crate::output::summary::toolchain::pipeline_of;
 use crate::output::summary::top_movers::TopMovers;
+use crate::utils::commas;
+use crate::utils::median;
+use crate::utils::relative_percent;
 
 ///
 /// Everything the renderer needs about one suite, computed in a single pass.
@@ -323,6 +326,117 @@ impl SuiteStats {
             label: label.to_owned(),
             available: true,
             ..Default::default()
+        }
+    }
+
+    /// Jitter medians below this render as "<0.1%": the floor under which the
+    /// one-decimal display precision would round to a bare 0.0%.
+    const JITTER_MEDIAN_FLOOR_PERCENT: f64 = 0.05;
+
+    /// The suite's row in the results table. A suite with no comparable data
+    /// dashes its measurement columns rather than rendering a zero.
+    pub fn row(&self) -> SuiteRow {
+        let dashed = |failures: &str| SuiteRow {
+            suite: self.label.clone(),
+            failures: failures.to_owned(),
+            size: "—".to_owned(),
+            gas: "—".to_owned(),
+            report: self.report_cell(),
+        };
+        if self.outcome == SuiteOutcome::Skipped {
+            return dashed("⚪ did not run");
+        }
+        if !self.available {
+            return dashed("❌ no report — suite errored");
+        }
+        if self.is_empty_report() {
+            return dashed("❌ empty report");
+        }
+        if self.classification_failed() {
+            return dashed("❌ unrecognized toolchain naming");
+        }
+        SuiteRow {
+            suite: self.suite_cell(),
+            failures: self.failures_cell(),
+            size: self.size_cell(),
+            gas: self.gas_cell(),
+            report: self.report_cell(),
+        }
+    }
+
+    fn failures_cell(&self) -> String {
+        let unbaselined = match self.unbaselined_failures {
+            0 => String::new(),
+            n => format!(", ⚪ {} unbaselined", commas(n as u64)),
+        };
+        if self.paired_runs == 0 {
+            return format!("⚪ not compared{unbaselined}");
+        }
+        let pre = match self.baseline_failures() {
+            0 => String::new(),
+            n => format!(" ({} pre-existing)", commas(n as u64)),
+        };
+        if self.new_failures() == 0 {
+            format!("✅ 0{pre}{unbaselined}")
+        } else {
+            format!(
+                "❌ {}{pre}{unbaselined}",
+                SuiteFailures::kinds(self.new_build_failures, self.new_test_failures)
+            )
+        }
+    }
+
+    fn gas_cell(&self) -> String {
+        if !self.gas.collected() {
+            return "⚪ not collected".to_owned();
+        }
+        if !self.gas_is_gate {
+            let mut parts = Vec::new();
+            if !self.gas_jitter_percents.is_empty() {
+                let med = match median(&self.gas_jitter_percents) {
+                    Some(med) if med >= Self::JITTER_MEDIAN_FLOOR_PERCENT => format!("{med:.1}%"),
+                    _ => "<0.1%".to_owned(),
+                };
+                parts.push(format!(
+                    "jitter {} of {}, median {med}",
+                    commas(self.gas_jitter_percents.len() as u64),
+                    commas(self.gas.cells)
+                ));
+            }
+            if self.gas_one_sided > 0 {
+                parts.push(format!("{} one-sided", commas(self.gas_one_sided)));
+            }
+            if parts.is_empty() {
+                return "⚪ no jitter (not gated)".to_owned();
+            }
+            return format!("⚪ {} (not gated)", parts.join("; "));
+        }
+        self.gas.cell(false)
+    }
+
+    fn size_cell(&self) -> String {
+        if self.size_one_sided > 0 {
+            let one_sided = format!("⚪ {} one-sided", commas(self.size_one_sided));
+            if !self.size.collected() {
+                return one_sided;
+            }
+            return format!("{}, {one_sided}", self.size.cell(true));
+        }
+        self.size.cell(true)
+    }
+
+    pub fn suite_cell(&self) -> String {
+        if self.project_count > 1 {
+            format!("{} · {} proj", self.label, self.project_count)
+        } else {
+            self.label.clone()
+        }
+    }
+
+    fn report_cell(&self) -> String {
+        match self.report_url.as_deref() {
+            Some(url) => format!("[{} ↓]({url})", self.report_file),
+            None => "—".to_owned(),
         }
     }
 }

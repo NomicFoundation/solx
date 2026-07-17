@@ -4,6 +4,8 @@
 
 use crate::output::summary::suite_failures::SuiteFailures;
 use crate::output::summary::suite_stats::SuiteStats;
+use crate::utils::agreeing;
+use crate::utils::commas;
 
 ///
 /// Whether any suite failed more than its `main` baseline.
@@ -53,6 +55,47 @@ impl FailureVerdict {
                         new_test: s.new_test_failures,
                     })
                     .collect(),
+            }
+        }
+    }
+
+    /// The failure-regression verdict line.
+    pub fn line(self) -> String {
+        match self {
+            Self::NoData => {
+                "⚪ **No failure data** — no PR run had a `main` counterpart to compare against."
+                    .to_owned()
+            }
+            Self::Clean { pre_existing } if pre_existing.is_empty() => {
+                "✅ **No new failures**.".to_owned()
+            }
+            Self::Clean { pre_existing } => {
+                let pre: Vec<String> = pre_existing
+                    .iter()
+                    .map(|(label, count)| format!("{label}'s {}", commas(*count as u64)))
+                    .collect();
+                format!(
+                    "✅ **No new failures** — {} {} already present on `main`.",
+                    pre.join(" / "),
+                    agreeing(
+                        pre_existing.iter().map(|(_, count)| *count as u64).sum(),
+                        "failure",
+                        "failures"
+                    )
+                )
+            }
+            Self::Regressed { suites } => {
+                let parts: Vec<String> = suites
+                    .iter()
+                    .map(|suite| {
+                        format!(
+                            "{}: {}",
+                            suite.label,
+                            SuiteFailures::kinds(suite.new_build, suite.new_test)
+                        )
+                    })
+                    .collect();
+                format!("❌ **New failures** — {}.", parts.join("; "))
             }
         }
     }

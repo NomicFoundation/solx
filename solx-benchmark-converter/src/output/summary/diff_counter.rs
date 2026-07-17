@@ -2,6 +2,9 @@
 //! Counts PR-vs-main comparison pairs and the differing subset.
 //!
 
+use crate::utils::commas;
+use crate::utils::signed_commas;
+
 ///
 /// Counts PR-vs-main comparison pairs and the differing subset.
 ///
@@ -43,6 +46,23 @@ impl DiffCounter {
         self.cells += other.cells;
         self.diffs += other.diffs;
         self.delta += other.delta;
+    }
+
+    /// One comparison column's table cell; the byte delta rides along for
+    /// size cells.
+    pub fn cell(&self, delta_suffix: bool) -> String {
+        if !self.collected() {
+            return "⚪ not collected".to_owned();
+        }
+        if self.diffs == 0 {
+            return format!("✅ 0 of {}", commas(self.cells));
+        }
+        let delta = if delta_suffix {
+            format!(" ({} B)", signed_commas(self.delta))
+        } else {
+            String::new()
+        };
+        format!("⚠️ {} of {}{delta}", commas(self.diffs), commas(self.cells))
     }
 
     /// A counter with the given tallies, for the output-verdict tests.

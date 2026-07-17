@@ -17,28 +17,32 @@
 //!
 
 pub mod compile_aggregate;
+pub mod compile_view;
 pub mod diff_counter;
 pub mod failure_regression;
 pub mod failure_regressions;
 pub mod failure_verdict;
 pub mod gas_change;
 pub mod health_issue;
+pub mod listing_section;
 pub mod movement;
 pub mod output_verdict;
 pub mod paired_bytes;
-pub mod render;
 pub mod size_change;
 pub mod suite_failures;
+pub mod suite_row;
 pub mod suite_stats;
+pub mod summary_template;
 pub mod toolchain;
 pub mod top_movers;
+pub mod truncated;
 
 use std::path::PathBuf;
 
 use crate::benchmark::Benchmark;
 
-use self::render::render_summary;
 use self::suite_stats::SuiteStats;
+use self::summary_template::SummaryTemplate;
 
 pub use self::toolchain::ToolchainMatrix;
 
@@ -190,7 +194,7 @@ impl Summary {
     /// Renders the full PR summary comment.
     pub fn render(&self) -> String {
         let stats: Vec<SuiteStats> = self.suites.iter().map(SuiteStats::from_suite).collect();
-        render_summary(&stats)
+        SummaryTemplate::rendered(&stats)
     }
 
     /// Whether no suite was fed in — nothing to summarize.
