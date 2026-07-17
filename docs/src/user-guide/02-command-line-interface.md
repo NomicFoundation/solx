@@ -593,9 +593,17 @@ Usage:
 solx 'Simple.sol' --bin --output-dir './build/' --overwrite
 ```
 
-If the `--overwrite` option is not specified and the output files already exist, **solx** will print an error message and exit:
+If the `--overwrite` option is not specified and the output files already exist, **solx** refuses to overwrite them and exits with an error:
+
+```bash
+solx 'Simple.sol' --bin --output-dir './build/'
+solx 'Simple.sol' --bin --output-dir './build/'
+```
+
+Output:
 
 ```text
+Compiler run successful. Artifact(s) can be found in directory "./build/".
 Error: Refusing to overwrite an existing file "./build/Simple_sol_Simple.bin" (use --overwrite to force).
 ```
 
@@ -877,7 +885,7 @@ Output:
 ```text
 ======= Simple.yul =======
 Binary:
-5b60806040525f341415601c5763...
+63000000298063000000105f395ff3fe602a5f5260205ff3fea164736f6c637816736f6c783a302e312e353b736f6c633a302e382e3334001e
 ```
 
 
@@ -902,7 +910,7 @@ Output:
 ```text
 ======= Simple.ll =======
 Binary:
-5b60806040525f341415601c5763...
+5b630000004f8063000000115f395ff3fe34600b57600336116016575b5f5ffd5b5060016031565b5f3560e01c633df4ddf48114600f57635a8ac02d03600b5760025b60805260206080f3fea164736f6c63780a736f6c783a302e312e350012
 ```
 
 

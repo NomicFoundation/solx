@@ -27,6 +27,8 @@ mod debug_info;
 mod debug_info_runtime;
 #[cfg(feature = "solc")]
 mod devdoc;
+#[cfg(feature = "solc")]
+mod docs_examples;
 mod emit_llvm_ir;
 #[cfg(feature = "mlir")]
 mod emit_mlir;
