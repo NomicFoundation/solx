@@ -3,8 +3,8 @@
 //! while the data underneath it is missing or unreadable.
 //!
 
-use crate::output::summary::SuiteOutcome;
 use crate::output::summary::suite_stats::SuiteStats;
+use crate::suite_outcome::SuiteOutcome;
 
 ///
 /// A degradation of the harness itself — the comment must never look green

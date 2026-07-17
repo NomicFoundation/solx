@@ -9,8 +9,6 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use crate::output::summary::SuiteOutcome;
-use crate::output::summary::SummarySuite;
 use crate::output::summary::compile_aggregate::CompileAggregate;
 use crate::output::summary::diff_counter::DiffCounter;
 use crate::output::summary::failure_regression::FailureRegression;
@@ -18,9 +16,11 @@ use crate::output::summary::failure_regressions::FailureRegressions;
 use crate::output::summary::paired_bytes::PairedBytes;
 use crate::output::summary::suite_failures::SuiteFailures;
 use crate::output::summary::suite_row::SuiteRow;
-use crate::output::summary::toolchain_matrix::ToolchainMatrix;
 use crate::output::summary::top_movers::TopMovers;
 use crate::role::Role;
+use crate::suite_outcome::SuiteOutcome;
+use crate::summary_suite::SummarySuite;
+use crate::toolchain_matrix::ToolchainMatrix;
 use crate::utils::commas;
 use crate::utils::median;
 use crate::utils::relative_percent;

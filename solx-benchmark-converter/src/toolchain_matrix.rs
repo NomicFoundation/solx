@@ -100,8 +100,8 @@ impl ToolchainMatrix {
 
 #[cfg(test)]
 mod tests {
-    use crate::output::summary::toolchain_matrix::ToolchainMatrix;
     use crate::role::Role;
+    use crate::toolchain_matrix::ToolchainMatrix;
 
     #[test]
     fn classify_covers_every_toolchain_naming() {
