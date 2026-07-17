@@ -2,11 +2,11 @@
 //! The full summary comment: every string the markdown template interpolates,
 //! precomputed from the per-suite statistics.
 //!
-//! The comment's shape — section order, headers, table pipes, bullet and
-//! blank-line discipline — lives in `templates/summary.md`; everything the
-//! template interpolates is a string precomputed here. The boundary rule: the
-//! template may test presence (`if let`, `is_empty`), never magnitude; anything
-//! that formats a value is Rust.
+//! The comment's shape lives in `templates/summary.md`: section order, headers,
+//! table pipes, bullet and blank-line discipline; everything the template
+//! interpolates is a string precomputed here. The boundary rule: the template
+//! may test presence (`if let`, `is_empty`), never magnitude; anything that
+//! formats a value is Rust.
 //!
 
 pub mod compile_view;
@@ -23,10 +23,6 @@ use askama::Template;
 use crate::output::summary::suite_row::SuiteRow;
 use crate::output::summary::suite_stats::SuiteStats;
 use crate::role::Role;
-use crate::utils::agreeing;
-use crate::utils::count_noun;
-use crate::utils::percent;
-use crate::utils::relative_percent;
 
 use self::compile_view::CompileView;
 use self::failure_verdict::FailureVerdict;
@@ -148,28 +144,28 @@ impl SummaryTemplate {
             warn_lines.push(format!(
                 "⚠️ **No baseline** — {} {} no `main` counterpart; {} {} not compared.",
                 unbaselined.join("; "),
-                agreeing(unbaselined_runs as u64, "has", "have"),
-                agreeing(unbaselined_runs as u64, "its", "their"),
-                agreeing(unbaselined_failures as u64, "failure is", "failures are")
+                crate::utils::agreeing(unbaselined_runs as u64, "has", "have"),
+                crate::utils::agreeing(unbaselined_runs as u64, "its", "their"),
+                crate::utils::agreeing(unbaselined_failures as u64, "failure is", "failures are")
             ));
         }
         if !main_only.is_empty() {
             warn_lines.push(format!(
                 "⚠️ **Missing on PR** — {} {} only on `main`; the comparison set shrank.",
                 main_only.join("; "),
-                agreeing(main_only_runs as u64, "exists", "exist")
+                crate::utils::agreeing(main_only_runs as u64, "exists", "exist")
             ));
         }
         (lines, warn_lines)
     }
 
-    /// One suite's share of an unpaired-runs warning line — the same wording
+    /// One suite's share of an unpaired-runs warning line, the same wording
     /// for the no-baseline and main-only directions.
     fn unpaired_runs_part(label: &str, runs: usize, failures: usize) -> String {
         format!(
             "{label}: {} ({})",
-            count_noun(runs as u64, "run"),
-            count_noun(failures as u64, "failure")
+            crate::utils::count_noun(runs as u64, "run"),
+            crate::utils::count_noun(failures as u64, "failure")
         )
     }
 
@@ -219,8 +215,8 @@ impl SummaryTemplate {
                 let vs = |role: Role| -> String {
                     s.baseline_pairs
                         .get(&(role, pipeline.clone()))
-                        .and_then(|pair| relative_percent(pair.pr, pair.baseline))
-                        .map(percent)
+                        .and_then(|pair| crate::utils::relative_percent(pair.pr, pair.baseline))
+                        .map(crate::utils::percent)
                         .unwrap_or_else(|| "—".to_owned())
                 };
                 rows.push(vec![

@@ -14,7 +14,7 @@ pub mod testing_time;
 use std::path::Path;
 use std::path::PathBuf;
 
-use self::error::Error as InputError;
+use self::error::Error;
 use self::report::Report;
 
 ///
@@ -51,8 +51,12 @@ impl Input {
 
     ///
     /// Resolves the converter's input paths: a single directory expands to every
-    /// JSON file underneath it; explicit file paths pass through unchanged — the
+    /// JSON file underneath it; explicit file paths pass through unchanged. The
     /// workflow's no-baseline fallback passes exactly one file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the constructed glob pattern is invalid, or if no input paths are provided.
     ///
     pub fn resolve_paths(paths: Vec<PathBuf>) -> anyhow::Result<Vec<PathBuf>> {
         if paths.len() == 1 && paths[0].is_dir() {
@@ -69,23 +73,22 @@ impl Input {
 }
 
 impl TryFrom<&Path> for Input {
-    type Error = InputError;
+    type Error = Error;
 
     fn try_from(path: &Path) -> Result<Self, Self::Error> {
-        let text = std::fs::read_to_string(path).map_err(|error| InputError::Reading {
+        let text = std::fs::read_to_string(path).map_err(|error| Error::Reading {
             error,
             path: path.to_path_buf(),
         })?;
         if text.is_empty() {
-            return Err(InputError::EmptyFile {
+            return Err(Error::EmptyFile {
                 path: path.to_path_buf(),
             });
         }
-        let json: Self =
-            serde_json::from_str(text.as_str()).map_err(|error| InputError::Parsing {
-                error,
-                path: path.to_path_buf(),
-            })?;
+        let json: Self = serde_json::from_str(text.as_str()).map_err(|error| Error::Parsing {
+            error,
+            path: path.to_path_buf(),
+        })?;
         Ok(json)
     }
 }

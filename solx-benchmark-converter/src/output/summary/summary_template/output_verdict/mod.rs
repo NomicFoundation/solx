@@ -8,23 +8,20 @@ pub mod size_change;
 
 use crate::output::summary::diff_counter::DiffCounter;
 use crate::output::summary::suite_stats::SuiteStats;
-use crate::utils::agreeing;
-use crate::utils::commas;
-use crate::utils::count_noun;
-use crate::utils::signed_commas;
+use crate::utils;
 
 use self::gas_change::GasChange;
 use self::size_change::SizeChange;
 
 ///
 /// Whether the PR preserved compiler output, judged over every suite's size
-/// comparisons plus the gas comparisons of gating suites. Non-gated gas
-/// (fuzz-noisy Foundry/Hardhat runs) never influences this verdict.
+/// comparisons plus the gas comparisons of gating suites. Non-gated gas, from
+/// fuzz-noisy Foundry/Hardhat runs, never influences this verdict.
 ///
 #[derive(Debug, PartialEq)]
 pub enum OutputVerdict {
     /// No size or gated-gas comparison paired a PR value with a `main` one,
-    /// whether nothing was collected or everything collected was one-sided —
+    /// whether nothing was collected or everything collected was one-sided:
     /// never a green checkmark over data that was never compared.
     NoData,
     /// Every collected comparison is identical.
@@ -101,13 +98,13 @@ impl OutputVerdict {
                 if size_cells > 0 {
                     clauses.push(format!(
                         "bytecode size identical ({})",
-                        count_noun(size_cells, "comparison")
+                        utils::count_noun(size_cells, "comparison")
                     ));
                 }
                 if gated_gas_cells > 0 {
                     clauses.push(format!(
                         "{gas_label} gas identical ({})",
-                        commas(gated_gas_cells)
+                        utils::commas(gated_gas_cells)
                     ));
                 }
                 format!("✅ **Output-preserving** — {}.", clauses.join(", "))
@@ -117,18 +114,21 @@ impl OutputVerdict {
                 if let Some(size) = size {
                     parts.push(format!(
                         "{} of {} {} ({} B total)",
-                        commas(size.diffs),
-                        count_noun(size.cells, "size comparison"),
-                        agreeing(size.diffs, "differs", "differ"),
-                        signed_commas(size.delta_bytes)
+                        utils::commas(size.diffs),
+                        utils::count_noun(size.cells, "size comparison"),
+                        utils::agreeing(size.diffs, "differs", "differ"),
+                        utils::signed_commas(size.delta_bytes)
                     ));
                 }
                 if let Some(gas) = gas {
                     parts.push(format!(
                         "{} of {} {}",
-                        commas(gas.diffs),
-                        count_noun(gas.cells, format!("{} gas comparison", gas.label).as_str()),
-                        agreeing(gas.diffs, "differs", "differ")
+                        utils::commas(gas.diffs),
+                        utils::count_noun(
+                            gas.cells,
+                            format!("{} gas comparison", gas.label).as_str()
+                        ),
+                        utils::agreeing(gas.diffs, "differs", "differ")
                     ));
                 }
                 format!(

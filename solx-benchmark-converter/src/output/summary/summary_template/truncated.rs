@@ -13,8 +13,8 @@ pub struct Truncated<'a, T> {
 }
 
 impl<'a, T> Truncated<'a, T> {
-    /// Cap on individually-listed items (outliers, movers, new failures)
-    /// before the listing folds the rest into a "+N more" pointer.
+    /// Cap on individually-listed items, such as outliers, movers, and new
+    /// failures, before the listing folds the rest into a "+N more" pointer.
     pub const MAX_LISTED: usize = 5;
 
     /// Caps a listing at `MAX_LISTED`, keeping the leading items and counting

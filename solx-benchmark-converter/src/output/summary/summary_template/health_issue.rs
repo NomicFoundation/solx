@@ -1,5 +1,5 @@
 //!
-//! A degradation of the harness itself — the comment must never look green
+//! A degradation of the harness itself: the comment must never look green
 //! while the data underneath it is missing or unreadable.
 //!
 
@@ -7,25 +7,25 @@ use crate::output::summary::suite_stats::SuiteStats;
 use crate::suite_outcome::SuiteOutcome;
 
 ///
-/// A degradation of the harness itself — the comment must never look green
+/// A degradation of the harness itself: the comment must never look green
 /// while the data underneath it is missing or unreadable.
 ///
 #[derive(Debug, PartialEq)]
 pub enum HealthIssue {
     /// The suite ran but produced no usable report.
     SuiteErrored { label: String },
-    /// The suite's step failed after its report was written — the data is
+    /// The suite's step failed after its report was written, the data is
     /// real but possibly incomplete, so the green cells need a caveat.
     StepFailed { label: String },
-    /// The report parsed but recorded no runs — the suite tested nothing.
+    /// The report parsed but recorded no runs: the suite tested nothing.
     EmptySuite { label: String },
     /// The suite's benchmark data matched no recognized toolchain naming.
     UnrecognizedToolchains { label: String },
     /// Individual runs matching no declared toolchain name, in a suite whose
-    /// PR data is otherwise present — e.g. a renamed or foreign baseline.
+    /// PR data is otherwise present, such as a renamed or foreign baseline.
     UnrecognizedRuns { label: String, modes: Vec<String> },
-    /// Recognized runs whose mode carries no recognized pipeline token —
-    /// e.g. a new codegen letter the tables don't know yet.
+    /// Recognized runs whose mode carries no recognized pipeline token, such
+    /// as a new codegen letter the tables don't know yet.
     UnrecognizedPipelines { label: String, modes: Vec<String> },
     /// PR runs with no `main` counterpart; their failures are not compared.
     Unbaselined {
@@ -33,7 +33,7 @@ pub enum HealthIssue {
         runs: usize,
         failures: usize,
     },
-    /// Main runs with no PR counterpart — the comparison set shrank.
+    /// Main runs with no PR counterpart, the comparison set shrank.
     MainOnly {
         label: String,
         runs: usize,

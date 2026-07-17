@@ -2,11 +2,13 @@
 //! Tests for benchmark input path resolution.
 //!
 
+use tempfile::TempDir;
+
 use crate::input::Input;
 
 #[test]
 fn a_single_file_is_an_input_not_a_directory() {
-    let dir = tempfile::TempDir::new().expect("scratch directory");
+    let dir = TempDir::new().expect("scratch directory");
     let file = dir.path().join("candidate.json");
     std::fs::write(file.as_path(), "{}").expect("file writing");
     assert_eq!(
@@ -17,7 +19,7 @@ fn a_single_file_is_an_input_not_a_directory() {
 
 #[test]
 fn a_single_directory_expands_to_its_json_files() {
-    let dir = tempfile::TempDir::new().expect("scratch directory");
+    let dir = TempDir::new().expect("scratch directory");
     std::fs::create_dir_all(dir.path().join("nested")).expect("nested directory creation");
     for name in ["a.json", "nested/b.json", "ignored.txt"] {
         std::fs::write(dir.path().join(name), "{}").expect("file writing");

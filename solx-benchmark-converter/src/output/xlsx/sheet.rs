@@ -29,7 +29,7 @@ pub enum Sheet {
 }
 
 impl Sheet {
-    /// Every sheet, in workbook order — which is declaration order, since the
+    /// Every sheet, in workbook order, which is declaration order, since the
     /// variant's discriminant indexes its worksheet.
     pub const ALL: [Self; 8] = [
         Self::BuildFailures,

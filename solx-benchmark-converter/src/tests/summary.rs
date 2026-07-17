@@ -84,7 +84,7 @@ impl Test {
 
 impl SummarySuite {
     /// Merges the given tests by selector, like the real report ingestion
-    /// does — a project's failure and compile-time entries share one key.
+    /// does: a project's failure and compile-time entries share one key.
     fn merged(kind: SuiteKind, tests: Vec<(String, Test)>) -> Self {
         let mut benchmark = Benchmark::default();
         for (name, test) in tests {
@@ -148,7 +148,7 @@ impl Summary {
 
 #[test]
 fn baselines_compare_common_contracts_only() {
-    // C2 is built by the PR but not by solc — it must not skew the
+    // C2 is built by the PR but not by solc. It must not skew the
     // comparison as an imaginary zero-size solc contract.
     let tests = vec![
         Test::contract(
@@ -176,7 +176,7 @@ fn baselines_compare_common_contracts_only() {
 
 #[test]
 fn compile_aggregate_pairs_pr_and_main() {
-    // Project b builds only on the PR side — it must be excluded from
+    // Project b builds only on the PR side. It must be excluded from
     // the aggregate, not skew it as a one-sided +9000 ms.
     let tests = vec![
         Test::compile(
@@ -216,7 +216,7 @@ fn one_sided_compile_pipeline_keeps_its_column() {
 
 #[test]
 fn compile_time_without_a_baseline_makes_no_claim() {
-    // Every pipeline ran on the PR side only — reachable whenever the
+    // Every pipeline ran on the PR side only, reachable whenever the
     // main-side build fails, since its step is continue-on-error. The
     // table is all dashes, so "within noise" would be a reassurance drawn
     // from zero comparisons; worse, dropping the data entirely would make
@@ -268,7 +268,7 @@ fn unknown_codegen_token_is_a_loud_harness_error() {
 #[test]
 fn unrecognized_pipeline_modes_are_listed_but_bounded() {
     // A new codegen letter makes every mode in the suite unrecognized, and
-    // a real tester run carries hundreds — the harness-error line must name
+    // a real tester run carries hundreds. The harness-error line must name
     // a few and count the rest, never dump the lot into the comment.
     let modes: Vec<String> = (0..7)
         .map(|index| format!("01.solx-solx-L-M3B3-0.8.3{index}"))
@@ -385,7 +385,7 @@ fn bytecode_the_pr_stopped_emitting_is_not_excused_as_one_sided() {
 #[test]
 fn a_single_differing_comparison_among_many_agrees_in_the_singular() {
     // The verb tracks how many differ, not the total compared: one contract
-    // changing among three reads "1 of 3 … differs", never "differ".
+    // changing among three reads "1 of 3 ... differs", never "differ".
     let tests = vec![
         Test::contract(
             "p",
@@ -459,7 +459,7 @@ fn tests_that_never_ran_are_not_a_measured_zero() {
 fn gas_movers_name_the_input_they_measured() {
     // A deploy and a call of the same case are two rows sharing one label:
     // without the input, both bullets read identically and the reviewer
-    // cannot tell which one regressed. Deploy stays unmarked — the Foundry
+    // cannot tell which one regressed. Deploy stays unmarked: the Foundry
     // reports name their deployer after the contract it already carries.
     let tests = vec![
         Test::input(
@@ -498,8 +498,8 @@ fn gas_movers_name_the_input_they_measured() {
 #[test]
 fn one_sided_gas_is_not_averaged_into_jitter() {
     // Gas between a measurement and its absence has no meaningful
-    // percentage, in either direction: 0 → 50,000 must not be understated
-    // by an empty-median "<0.1%", and 50,000 → 0 must not enter the jitter
+    // percentage, in either direction: 0 -> 50,000 must not be understated
+    // by an empty-median "<0.1%", and 50,000 -> 0 must not enter the jitter
     // population as a fabricated 100% sample.
     for runs in [
         [
@@ -682,7 +682,7 @@ fn fixture_output_changed() {
 }
 
 /// Build and test regressions: the red verdict and the inline listing of
-/// regressed projects, including the shapes a build failure produces — no
+/// regressed projects, including the shapes a build failure produces: no
 /// test count on the failed side, and a `main` build failure that leaves
 /// its PR counterpart nothing to regress against.
 #[test]

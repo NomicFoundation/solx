@@ -54,11 +54,11 @@ fn classify_covers_every_toolchain_naming() {
 #[test]
 fn renamed_toolchains_match_nothing() {
     for (mode, matrix) in [
-        // A renamed PR compiler — never misread as any role.
+        // A renamed PR compiler, never misread as any role.
         ("03.mason-legacy", ToolchainMatrix::Project),
-        // A foreign compiler with a `main` token — not the baseline.
+        // A foreign compiler with a `main` token, not the baseline.
         ("02.mason-main-legacy", ToolchainMatrix::Project),
-        // A renamed released-solx baseline — must not fall through to the
+        // A renamed released-solx baseline, must not fall through to the
         // PR role and double the full-matrix totals.
         ("01.solx-released-legacy", ToolchainMatrix::Project),
         // A declared name extended without a token boundary.

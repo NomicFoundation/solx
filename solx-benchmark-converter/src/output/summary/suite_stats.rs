@@ -3,12 +3,13 @@
 //!
 //! One pass over a suite's benchmark pairs every PR run with its `main`
 //! counterpart and reduces the pairs to numbers. Nothing here produces
-//! markdown — how the numbers read is the rendering layer's decision.
+//! markdown. How the numbers read is the rendering layer's decision.
 //!
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use crate::benchmark::test::run::Run;
 use crate::output::summary::compile_aggregate::CompileAggregate;
 use crate::output::summary::diff_counter::DiffCounter;
 use crate::output::summary::failure_regressions::FailureRegression;
@@ -21,9 +22,6 @@ use crate::role::Role;
 use crate::suite_outcome::SuiteOutcome;
 use crate::summary_suite::SummarySuite;
 use crate::toolchain_matrix::ToolchainMatrix;
-use crate::utils::commas;
-use crate::utils::median;
-use crate::utils::relative_percent;
 
 ///
 /// Everything the renderer needs about one suite, computed in a single pass.
@@ -39,11 +37,11 @@ pub struct SuiteStats {
     /// How the suite's workflow step ended.
     pub outcome: SuiteOutcome,
     pub project_count: usize,
-    /// Total runs seen, and how many classified as the PR toolchain — data
+    /// Total runs seen, and how many classified as the PR toolchain. Data
     /// with zero PR runs means the toolchain naming drifted from classify().
     pub total_runs: usize,
     pub pr_runs_seen: usize,
-    /// PR runs that found a `main` counterpart — the failure verdict only
+    /// PR runs that found a `main` counterpart. The failure verdict only
     /// means something when at least one suite compared something.
     pub paired_runs: usize,
     /// PR runs with no main counterpart, and the failures recorded on them.
@@ -51,27 +49,27 @@ pub struct SuiteStats {
     /// unbaselined rather than counted as regressions against zero.
     pub unbaselined_runs: usize,
     pub unbaselined_failures: usize,
-    /// Main runs with no PR counterpart — a comparison set that silently
-    /// shrank (a crash or skip on the PR side) must be surfaced, not
+    /// Main runs with no PR counterpart. A comparison set that silently
+    /// shrank from a crash or skip on the PR side must be surfaced, not
     /// dropped by the PR-keyed pairing.
     pub main_orphan_runs: usize,
     pub main_orphan_failures: usize,
-    /// Mode strings matching no declared toolchain name — always surfaced as
+    /// Mode strings matching no declared toolchain name, always surfaced as
     /// a harness error, whether or not PR runs are present.
     pub unrecognized_modes: BTreeSet<String>,
-    /// Recognized runs whose mode carries no recognized pipeline token —
-    /// their per-pipeline data is excluded and the drift surfaced loudly.
+    /// Recognized runs whose mode carries no recognized pipeline token.
+    /// Their per-pipeline data is excluded and the drift surfaced loudly.
     pub unrecognized_pipelines: BTreeSet<String>,
 
     pub size: DiffCounter,
     /// Size pairs the PR emitted and `main` did not: no baseline exists, so
     /// they are excluded from the diff count and stated apart in the cell.
-    /// The mirror — `main` emitted bytecode the PR lost — is a regression, and
+    /// The mirror, `main` emitted bytecode the PR lost, is a regression and
     /// counts as a differing pair rather than landing here.
     pub size_one_sided: u64,
     pub gas: DiffCounter,
     /// Relative gas differences seen on a non-gating suite, in percent. The
-    /// median is reported — a max would routinely be a huge but meaningless
+    /// median is reported. A max would routinely be a huge but meaningless
     /// CREATE-deploy outlier.
     pub gas_jitter_percents: Vec<f64>,
     /// Non-gated differing pairs only one side measured, in either direction:
@@ -83,17 +81,17 @@ pub struct SuiteStats {
     /// Failures on the PR runs in excess of their main counterparts.
     pub new_build_failures: usize,
     pub new_test_failures: usize,
-    /// Failures already present on the paired main runs — a failing run that
+    /// Failures already present on the paired main runs. A failing run that
     /// vanished from the PR side reports as main-only, never as pre-existing.
     pub baseline_build_failures: usize,
     pub baseline_test_failures: usize,
     /// The rows behind `new_*_failures`, for the inline listing.
     pub failure_regressions: FailureRegressions,
 
-    /// Compile-time aggregates keyed by pipeline (legacy / viaIR).
+    /// Compile-time aggregates keyed by pipeline: legacy or viaIR.
     pub compile: BTreeMap<String, CompileAggregate>,
-    /// PR and baseline bytecode totals per (baseline role, pipeline), summed
-    /// only over contracts both toolchains emitted — a toolchain that failed
+    /// PR and baseline bytecode totals per baseline role and pipeline, summed
+    /// only over contracts both toolchains emitted. A toolchain that failed
     /// some builds is excluded from the comparison, not counted as 0.
     pub baseline_pairs: BTreeMap<(Role, String), PairedBytes>,
     pub has_baselines: bool,
@@ -104,14 +102,14 @@ pub struct SuiteStats {
 
 impl SuiteStats {
     pub fn from_suite(suite: &SummarySuite) -> Self {
-        let mut stats = SuiteStats {
+        let mut stats = Self {
             label: suite.kind.label().to_owned(),
             report_file: suite.kind.report_file().to_owned(),
             report_url: suite.report_url.clone(),
             gas_is_gate: suite.kind.gas_is_gate(),
             available: suite.benchmark.is_some(),
             outcome: suite.outcome,
-            ..Default::default()
+            ..Self::default()
         };
         let Some(benchmark) = suite.benchmark.as_ref() else {
             return stats;
@@ -130,9 +128,8 @@ impl SuiteStats {
                 _ => row.to_owned(),
             };
 
-            let mut pr_runs: BTreeMap<String, &crate::benchmark::test::run::Run> = BTreeMap::new();
-            let mut main_runs: BTreeMap<String, &crate::benchmark::test::run::Run> =
-                BTreeMap::new();
+            let mut pr_runs: BTreeMap<String, &Run> = BTreeMap::new();
+            let mut main_runs: BTreeMap<String, &Run> = BTreeMap::new();
             let mut by_role_pipeline: BTreeMap<(Role, String), u64> = BTreeMap::new();
             let mut pr_compile: BTreeMap<String, u64> = BTreeMap::new();
             let mut main_compile: BTreeMap<String, u64> = BTreeMap::new();
@@ -192,7 +189,7 @@ impl SuiteStats {
                 let entry = stats.compile.entry(pipeline.clone()).or_default();
                 entry.pr_total_ms += pr_ms;
                 entry.main_total_ms += main_ms;
-                if let Some(pct) = relative_percent(pr_ms, main_ms) {
+                if let Some(pct) = crate::utils::relative_percent(pr_ms, main_ms) {
                     entry
                         .per_project
                         .push((test.metadata.selector.project.clone(), pct));
@@ -279,7 +276,7 @@ impl SuiteStats {
                         );
                     } else if (pr_gas == 0) != (main_gas == 0) {
                         stats.gas_one_sided += 1;
-                    } else if let Some(pct) = relative_percent(pr_gas, main_gas) {
+                    } else if let Some(pct) = crate::utils::relative_percent(pr_gas, main_gas) {
                         stats.gas_jitter_percents.push(pct.abs());
                     }
                 }
@@ -305,14 +302,14 @@ impl SuiteStats {
         self.baseline_build_failures + self.baseline_test_failures
     }
 
-    /// The benchmark had runs but none classified as the PR toolchain — the
+    /// The benchmark had runs but none classified as the PR toolchain. The
     /// naming convention drifted from the declared tables; better a loud
     /// error than a green comment over empty data.
     pub fn classification_failed(&self) -> bool {
         self.available && self.total_runs > 0 && self.pr_runs_seen == 0
     }
 
-    /// The report parsed but contains no runs at all — a suite that tested
+    /// The report parsed but contains no runs at all. A suite that tested
     /// nothing must not render as a clean pass.
     pub fn is_empty_report(&self) -> bool {
         self.available && self.total_runs == 0
@@ -353,17 +350,25 @@ impl SuiteStats {
         }
     }
 
+    pub fn suite_cell(&self) -> String {
+        if self.project_count > 1 {
+            format!("{} · {} proj", self.label, self.project_count)
+        } else {
+            self.label.clone()
+        }
+    }
+
     fn failures_cell(&self) -> String {
         let unbaselined = match self.unbaselined_failures {
             0 => String::new(),
-            n => format!(", ⚪ {} unbaselined", commas(n as u64)),
+            n => format!(", ⚪ {} unbaselined", crate::utils::commas(n as u64)),
         };
         if self.paired_runs == 0 {
             return format!("⚪ not compared{unbaselined}");
         }
         let pre = match self.baseline_failures() {
             0 => String::new(),
-            n => format!(" ({} pre-existing)", commas(n as u64)),
+            n => format!(" ({} pre-existing)", crate::utils::commas(n as u64)),
         };
         if self.new_failures() == 0 {
             format!("✅ 0{pre}{unbaselined}")
@@ -382,18 +387,21 @@ impl SuiteStats {
         if !self.gas_is_gate {
             let mut parts = Vec::new();
             if !self.gas_jitter_percents.is_empty() {
-                let med = match median(&self.gas_jitter_percents) {
+                let med = match crate::utils::median(&self.gas_jitter_percents) {
                     Some(med) if med >= Self::JITTER_MEDIAN_FLOOR_PERCENT => format!("{med:.1}%"),
                     _ => "<0.1%".to_owned(),
                 };
                 parts.push(format!(
                     "jitter {} of {}, median {med}",
-                    commas(self.gas_jitter_percents.len() as u64),
-                    commas(self.gas.cells)
+                    crate::utils::commas(self.gas_jitter_percents.len() as u64),
+                    crate::utils::commas(self.gas.cells)
                 ));
             }
             if self.gas_one_sided > 0 {
-                parts.push(format!("{} one-sided", commas(self.gas_one_sided)));
+                parts.push(format!(
+                    "{} one-sided",
+                    crate::utils::commas(self.gas_one_sided)
+                ));
             }
             if parts.is_empty() {
                 return "⚪ no jitter (not gated)".to_owned();
@@ -405,21 +413,13 @@ impl SuiteStats {
 
     fn size_cell(&self) -> String {
         if self.size_one_sided > 0 {
-            let one_sided = format!("⚪ {} one-sided", commas(self.size_one_sided));
+            let one_sided = format!("⚪ {} one-sided", crate::utils::commas(self.size_one_sided));
             if !self.size.collected() {
                 return one_sided;
             }
             return format!("{}, {one_sided}", self.size.cell(true));
         }
         self.size.cell(true)
-    }
-
-    pub fn suite_cell(&self) -> String {
-        if self.project_count > 1 {
-            format!("{} · {} proj", self.label, self.project_count)
-        } else {
-            self.label.clone()
-        }
     }
 
     fn report_cell(&self) -> String {

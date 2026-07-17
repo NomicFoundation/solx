@@ -4,7 +4,7 @@
 //! The benchmark data identifies runs only by mode strings like
 //! `02.solx-main-legacy` or `01.solx-solx-E-M3B3-0.8.34`; everything the
 //! summary knows about which run is the PR, which is the `main` baseline, and
-//! how they pair up is derived here — and nowhere else. Roles come from the
+//! how they pair up is derived here and nowhere else. Roles come from the
 //! declared per-matrix toolchain tables below, so a renamed toolchain matches
 //! nothing and renders as a loud harness error instead of a silently
 //! misclassified baseline.
@@ -13,7 +13,7 @@
 use crate::role::Role;
 
 ///
-/// Which comparison matrix a suite's benchmark comes from — the two harnesses
+/// Which comparison matrix a suite's benchmark comes from. The two harnesses
 /// name their toolchains differently.
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,19 +25,6 @@ pub enum ToolchainMatrix {
 }
 
 impl ToolchainMatrix {
-    /// The declared toolchain names, exactly as CI assigns them.
-    fn toolchains(self) -> &'static [(&'static str, Role)] {
-        match self {
-            Self::Tester => &[("00.solx-main", Role::Main), ("01.solx", Role::Pr)],
-            Self::Project => &[
-                ("00.solc", Role::Solc),
-                ("01.solx-latest", Role::Latest),
-                ("02.solx-main", Role::Main),
-                ("03.solx", Role::Pr),
-            ],
-        }
-    }
-
     ///
     /// Classifies a run's mode string into a role and its pairing key.
     ///
@@ -60,10 +47,10 @@ impl ToolchainMatrix {
     }
 
     /// The compilation pipeline a mode belongs to: the project suites'
-    /// `legacy`/`viaIR` token or the tester's codegen token (spelled out — the
-    /// trailing token there is the solc version). `None` for unrecognized
-    /// tokens, surfaced as a harness error upstream — a silent fallback would
-    /// group a new codegen's data under a bogus column.
+    /// `legacy`/`viaIR` token or the tester's codegen token spelled out. The
+    /// trailing token there is the solc version. `None` for unrecognized
+    /// tokens, surfaced as a harness error upstream, since a silent fallback
+    /// would group a new codegen's data under a bogus column.
     pub fn pipeline_of(mode: &str) -> Option<String> {
         for token in mode.split('-') {
             if matches!(token, "legacy" | "viaIR") {
@@ -76,18 +63,9 @@ impl ToolchainMatrix {
         None
     }
 
-    /// The spelled-out name of a tester codegen token.
-    fn codegen_name(token: &str) -> Option<&'static str> {
-        match token {
-            "E" => Some("EVMLA"),
-            "Y" => Some("Yul"),
-            _ => None,
-        }
-    }
-
     ///
     /// A pairing key rendered for humans: the redundant `solx` token dropped
-    /// and the codegen shorthands spelled out (`E` → EVMLA, `Y` → Yul).
+    /// and the codegen shorthands spelled out.
     ///
     pub fn humanize_mode(key: &str) -> String {
         key.split('-')
@@ -95,5 +73,27 @@ impl ToolchainMatrix {
             .map(|token| Self::codegen_name(token).unwrap_or(token))
             .collect::<Vec<&str>>()
             .join(" ")
+    }
+
+    /// The declared toolchain names, exactly as CI assigns them.
+    fn toolchains(self) -> &'static [(&'static str, Role)] {
+        match self {
+            Self::Tester => &[("00.solx-main", Role::Main), ("01.solx", Role::Pr)],
+            Self::Project => &[
+                ("00.solc", Role::Solc),
+                ("01.solx-latest", Role::Latest),
+                ("02.solx-main", Role::Main),
+                ("03.solx", Role::Pr),
+            ],
+        }
+    }
+
+    /// The spelled-out name of a tester codegen token.
+    fn codegen_name(token: &str) -> Option<&'static str> {
+        match token {
+            "E" => Some("EVMLA"),
+            "Y" => Some("Yul"),
+            _ => None,
+        }
     }
 }

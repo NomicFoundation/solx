@@ -6,6 +6,8 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
+use solx_benchmark_converter::OutputFormat;
+
 ///
 /// The benchmark analyzer arguments.
 ///
@@ -20,8 +22,8 @@ pub struct Arguments {
     pub input_paths: Vec<PathBuf>,
 
     /// Benchmark output format: `json` or `xlsx`.
-    #[arg(long = "output-format", alias = "benchmark-format", default_value_t = solx_benchmark_converter::OutputFormat::Xlsx)]
-    pub output_format: solx_benchmark_converter::OutputFormat,
+    #[arg(long = "output-format", alias = "benchmark-format", default_value_t = OutputFormat::Xlsx)]
+    pub output_format: OutputFormat,
 
     /// Output files.
     #[arg(long)]

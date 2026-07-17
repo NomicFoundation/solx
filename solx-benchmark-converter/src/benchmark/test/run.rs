@@ -1,5 +1,5 @@
 //!
-//! A run of a test with fixed compiler options (mode).
+//! A run of a test under one fixed compiler mode.
 //!
 
 use serde::Deserialize;
@@ -38,6 +38,10 @@ impl Run {
     ///
     /// Extends the run with another run, averaging the values.
     ///
+    /// # Errors
+    ///
+    /// Returns an error if a build failure is merged with a test result.
+    ///
     pub fn extend(&mut self, other: &Self) -> anyhow::Result<()> {
         self.size.extend_from_slice(other.size.as_slice());
         self.runtime_size
@@ -61,17 +65,6 @@ impl Run {
             ),
         };
         Ok(())
-    }
-
-    ///
-    /// Averages a series of samples, treating an empty series as zero.
-    ///
-    fn average(values: &[u64]) -> u64 {
-        values
-            .iter()
-            .sum::<u64>()
-            .checked_div(values.len() as u64)
-            .unwrap_or_default()
     }
 
     ///
@@ -111,7 +104,7 @@ impl Run {
 
     ///
     /// Build failures count, or `None` where the run reported no failures at
-    /// all — nothing was measured, which is not a clean build.
+    /// all. Nothing was measured, which is not a clean build.
     ///
     pub fn build_failures_count(&self) -> Option<usize> {
         self.failures.map(RunFailures::build_failures)
@@ -130,5 +123,16 @@ impl Run {
     ///
     pub fn failures_count(&self) -> usize {
         self.failures.map(RunFailures::count).unwrap_or_default()
+    }
+
+    ///
+    /// Averages a series of samples, treating an empty series as zero.
+    ///
+    fn average(values: &[u64]) -> u64 {
+        values
+            .iter()
+            .sum::<u64>()
+            .checked_div(values.len() as u64)
+            .unwrap_or_default()
     }
 }

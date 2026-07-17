@@ -2,9 +2,6 @@
 //! Compile-time totals for one pipeline.
 //!
 
-use crate::utils::median;
-use crate::utils::percent;
-
 ///
 /// Compile-time totals for one pipeline.
 ///
@@ -22,18 +19,21 @@ impl CompileAggregate {
 
     /// One aggregate/median compile cell, and whether it crossed the suite
     /// threshold. Both directions defeat "within noise", but only a slowdown
-    /// gets the siren — a large improvement is signal, not an alarm.
+    /// gets the siren. A large improvement is signal, not an alarm.
     pub fn cell(&self, pct: f64) -> (String, bool) {
         let (aggregate, flagged) = if pct >= Self::SUITE_THRESHOLD_PERCENT {
-            (format!("⚠️ **{}**", percent(pct)), true)
+            (format!("⚠️ **{}**", crate::utils::percent(pct)), true)
         } else if pct <= -Self::SUITE_THRESHOLD_PERCENT {
-            (format!("**{}**", percent(pct)), true)
+            (format!("**{}**", crate::utils::percent(pct)), true)
         } else {
-            (percent(pct), false)
+            (crate::utils::percent(pct), false)
         };
         let project_pcts: Vec<f64> = self.per_project.iter().map(|(_, pct)| *pct).collect();
-        match median(project_pcts.as_slice()) {
-            Some(med) => (format!("{aggregate} / {}", percent(med)), flagged),
+        match crate::utils::median(project_pcts.as_slice()) {
+            Some(med) => (
+                format!("{aggregate} / {}", crate::utils::percent(med)),
+                flagged,
+            ),
             None => (aggregate, flagged),
         }
     }

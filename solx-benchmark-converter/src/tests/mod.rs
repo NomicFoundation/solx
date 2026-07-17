@@ -24,7 +24,7 @@ impl SuiteStats {
         Self {
             label: label.to_owned(),
             available: true,
-            ..Default::default()
+            ..Self::default()
         }
     }
 }

@@ -2,6 +2,8 @@
 //! Movements collected for the inline "largest changes" listings.
 //!
 
+use std::cmp::Reverse;
+
 ///
 /// Movements collected for the inline "largest changes" listings.
 ///
@@ -23,7 +25,7 @@ impl TopMovers {
     pub fn ranked(&self) -> Vec<&Movement> {
         let mut movers: Vec<&Movement> = self.0.iter().collect();
         movers.sort_by_key(|movement| {
-            std::cmp::Reverse((movement.pr as i128 - movement.main as i128).unsigned_abs())
+            Reverse((movement.pr as i128 - movement.main as i128).unsigned_abs())
         });
         movers
     }

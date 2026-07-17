@@ -2,9 +2,9 @@
 //! Markdown summary of an integration-test benchmark comparison.
 //!
 //! Renders the one-comment PR summary the integration workflow posts: the
-//! correctness verdict (bytecode size everywhere + solx-tester gas), new
-//! failures vs main, and a threshold-gated compile-time tripwire. The verdict
-//! is computed here — the single source of truth shared by every suite —
+//! correctness verdict covering bytecode size everywhere and solx-tester gas,
+//! new failures vs main, and a threshold-gated compile-time tripwire. The
+//! verdict is computed here, the single source of truth shared by every suite,
 //! instead of parsing the XLSX back offline.
 //!
 //! `SuiteStats` reduces each suite's benchmark to numbers, the verdict types
@@ -50,7 +50,7 @@ impl Summary {
         SummaryTemplate::rendered(&stats)
     }
 
-    /// Whether no suite was fed in — nothing to summarize.
+    /// Whether no suite was fed in, so there is nothing to summarize.
     pub fn is_empty(&self) -> bool {
         self.suites.is_empty()
     }

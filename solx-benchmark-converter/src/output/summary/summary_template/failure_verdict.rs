@@ -12,7 +12,7 @@ use crate::utils::commas;
 ///
 #[derive(Debug, PartialEq)]
 pub enum FailureVerdict {
-    /// No suite paired a PR run with a `main` counterpart — never a green
+    /// No suite paired a PR run with a `main` counterpart, never a green
     /// checkmark over zero comparisons.
     NoData,
     /// No suite regressed; failures already present on `main` are carried
@@ -25,7 +25,7 @@ pub enum FailureVerdict {
 impl FailureVerdict {
     ///
     /// The failure-regression verdict, over the suites that actually compared
-    /// something — errored, empty, and unclassifiable suites carry no
+    /// something. Errored, empty, and unclassifiable suites carry no
     /// PR-vs-main pairs and must not feed a green line.
     ///
     pub fn from_stats(stats: &[SuiteStats]) -> Self {

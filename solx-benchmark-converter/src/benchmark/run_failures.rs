@@ -32,7 +32,7 @@ impl RunFailures {
 
     ///
     /// Test failures count, or `None` where the build failed and the tests
-    /// never ran — an absence that is not a measured zero.
+    /// never ran, an absence that is not a measured zero.
     ///
     pub fn test_failures(self) -> Option<usize> {
         match self {

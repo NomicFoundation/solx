@@ -15,6 +15,6 @@ pub enum Role {
     Latest,
     /// Upstream solc, a full-matrix baseline.
     Solc,
-    /// Unrecognized naming — surfaced as a harness error, never dropped.
+    /// Unrecognized naming, surfaced as a harness error, never dropped.
     Other,
 }
