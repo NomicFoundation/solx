@@ -21,9 +21,9 @@ use crate::utils::relative_percent;
 use crate::utils::signed_commas;
 
 use super::SuiteOutcome;
-use super::stats::CompileAggregate;
-use super::stats::DiffCounter;
-use super::stats::SuiteStats;
+use super::compile_aggregate::CompileAggregate;
+use super::diff_counter::DiffCounter;
+use super::suite_stats::SuiteStats;
 use super::toolchain::Role;
 use super::verdict::FailureVerdict;
 use super::verdict::HealthIssue;

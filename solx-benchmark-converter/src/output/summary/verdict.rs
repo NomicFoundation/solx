@@ -7,8 +7,8 @@
 //!
 
 use super::SuiteOutcome;
-use super::stats::DiffCounter;
-use super::stats::SuiteStats;
+use super::diff_counter::DiffCounter;
+use super::suite_stats::SuiteStats;
 
 ///
 /// Whether the PR preserved compiler output, judged over every suite's size
@@ -269,7 +269,7 @@ impl HealthIssue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::output::summary::stats::DiffCounter;
+    use crate::output::summary::diff_counter::DiffCounter;
 
     fn counted(cells: u64, diffs: u64, delta: i128) -> DiffCounter {
         DiffCounter {
