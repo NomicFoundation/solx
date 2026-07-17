@@ -16,8 +16,7 @@ pub struct Arguments {
     #[arg(short, long)]
     pub quiet: bool,
 
-    /// Input files.
-    /// If only one path is provided, it is treated as a directory with JSON files.
+    /// Input files. A single directory argument expands to every JSON file underneath it.
     pub input_paths: Vec<PathBuf>,
 
     /// Benchmark output format: `json`, `csv`, or `json-lnt`.

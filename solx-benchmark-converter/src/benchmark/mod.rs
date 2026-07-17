@@ -5,7 +5,7 @@
 pub mod test;
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::input::Input;
 use crate::input::Report;
@@ -374,11 +374,11 @@ impl Benchmark {
     }
 }
 
-impl TryFrom<PathBuf> for Benchmark {
+impl TryFrom<&Path> for Benchmark {
     type Error = anyhow::Error;
 
-    fn try_from(path: PathBuf) -> Result<Self, Self::Error> {
-        let text = std::fs::read_to_string(path.as_path())
+    fn try_from(path: &Path) -> Result<Self, Self::Error> {
+        let text = std::fs::read_to_string(path)
             .map_err(|error| anyhow::anyhow!("Benchmark file {path:?} reading: {error}"))?;
         let json: Self = serde_json::from_str(text.as_str())
             .map_err(|error| anyhow::anyhow!("Benchmark file {path:?} parsing: {error}"))?;
