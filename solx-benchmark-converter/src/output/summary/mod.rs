@@ -35,7 +35,8 @@ pub use self::toolchain::ToolchainMatrix;
 ///
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
 pub enum SuiteOutcome {
-    /// The step ran to completion.
+    /// The step ran to completion. The default only ever fills a `SuiteStats`
+    /// field that `from_suite` always overrides; no rendered outcome reads it.
     #[default]
     Success,
     /// The step ran but exited nonzero — any report it wrote may be partial.
@@ -229,7 +230,7 @@ mod tests {
             kind,
             benchmark: Some(benchmark),
             report_url: None,
-            outcome: SuiteOutcome::default(),
+            outcome: SuiteOutcome::Success,
         }
     }
 
@@ -238,7 +239,7 @@ mod tests {
             kind,
             benchmark: None,
             report_url: None,
-            outcome: SuiteOutcome::default(),
+            outcome: SuiteOutcome::Success,
         }
     }
 
@@ -323,7 +324,6 @@ mod tests {
         assert!(out.contains("_No paired compile-time data"), "{out}");
         assert!(!out.contains("Within noise"), "{out}");
     }
-
 
     #[test]
     fn compile_improvements_are_not_sirened() {
@@ -947,5 +947,4 @@ mod tests {
         let out = render(&[foundry, hardhat]);
         assert_matches_fixture("gas-jitter", &out);
     }
-
 }
