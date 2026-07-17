@@ -33,29 +33,18 @@ pub use self::toolchain::ToolchainMatrix;
 /// suite that never ran from one that errored, and qualify data written by
 /// a step that then failed.
 ///
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
 pub enum SuiteOutcome {
     /// The step ran to completion.
     #[default]
     Success,
     /// The step ran but exited nonzero — any report it wrote may be partial.
+    /// A cancelled step says the same about its data, and names itself so in
+    /// the GitHub Actions vocabulary the workflow passes through.
+    #[value(alias = "cancelled")]
     Failure,
     /// The step never ran (an earlier hard failure); not the suite's fault.
     Skipped,
-}
-
-impl SuiteOutcome {
-    ///
-    /// Parses a GitHub Actions step outcome; anything unrecognized is
-    /// conservatively a failure.
-    ///
-    pub fn from_step_outcome(outcome: Option<&str>) -> Self {
-        match outcome {
-            None | Some("success") => Self::Success,
-            Some("skipped") => Self::Skipped,
-            Some(_) => Self::Failure,
-        }
-    }
 }
 
 ///
@@ -121,22 +110,16 @@ impl SuiteKind {
 /// One suite (solx-tester / Foundry / Hardhat) fed into the summary.
 ///
 pub struct SummarySuite {
-    /// Human-readable suite name shown in the table.
-    pub label: String,
-    /// File name of the XLSX report inside the uploaded artifact, shown as
-    /// link text and referenced by "+N more" pointers.
-    pub report_file: String,
+    /// Which suite this is. Its label, report file, gas gating, and toolchain
+    /// matrix all follow from the kind rather than being restated here, so a
+    /// suite cannot contradict its own identity.
+    pub kind: SuiteKind,
     /// The merged benchmark holding every toolchain's runs. `None` when the
     /// suite was expected but produced no report (it errored before writing) —
     /// rendered as an explicit failed row rather than silently dropped.
     pub benchmark: Option<Benchmark>,
     /// Artifact download URL for the XLSX report, if uploaded.
     pub report_url: Option<String>,
-    /// Whether this suite's gas is deterministic and therefore gates
-    /// correctness (true only for solx-tester's fixed REVM harness).
-    pub gas_is_gate: bool,
-    /// Which toolchain naming matrix the benchmark's mode strings follow.
-    pub matrix: ToolchainMatrix,
     /// How the suite's workflow step ended.
     pub outcome: SuiteOutcome,
 }
@@ -153,6 +136,7 @@ pub fn render(suites: &[SummarySuite]) -> String {
 mod tests {
     use super::*;
     use crate::benchmark::test::Test;
+    use crate::benchmark::test::input::Input as TestInput;
     use crate::benchmark::test::metadata::Metadata;
     use crate::benchmark::test::run::Run;
     use crate::benchmark::test::run::RunFailures;
@@ -191,6 +175,23 @@ mod tests {
         (selector.to_string(), test)
     }
 
+    /// One input of a case, as the tester's native report emits them: a deploy
+    /// and a call per function all share the case and differ only by input.
+    fn input_test(case: &str, input: TestInput, runs: &[(&str, u64)]) -> (String, Test) {
+        let selector = Selector {
+            project: "solx-tester".to_owned(),
+            case: Some(case.to_owned()),
+            input: Some(input),
+        };
+        let mut test = Test::new(Metadata::new(selector.clone(), vec![]));
+        for (mode, gas) in runs {
+            let mut run = Run::default();
+            run.gas.push(*gas);
+            test.runs.insert((*mode).to_owned(), run);
+        }
+        (selector.to_string(), test)
+    }
+
     fn compile_test(project: &str, runs: &[(&str, u64)]) -> (String, Test) {
         let selector = Selector {
             project: project.to_owned(),
@@ -208,7 +209,7 @@ mod tests {
 
     /// Merges the given tests by selector, like the real report ingestion
     /// does — a project's failure and compile-time entries share one key.
-    fn suite(label: &str, gas_is_gate: bool, tests: Vec<(String, Test)>) -> SummarySuite {
+    fn suite(kind: SuiteKind, tests: Vec<(String, Test)>) -> SummarySuite {
         let mut benchmark = Benchmark::default();
         for (name, test) in tests {
             let entry = benchmark
@@ -216,37 +217,27 @@ mod tests {
                 .entry(name)
                 .or_insert_with(|| Test::new(test.metadata.clone()));
             for (mode, run) in test.runs {
-                entry.runs.entry(mode).or_default().extend(&run);
+                entry
+                    .runs
+                    .entry(mode)
+                    .or_default()
+                    .extend(&run)
+                    .expect("run merging");
             }
         }
         SummarySuite {
-            label: label.to_owned(),
-            report_file: format!("{}-report.xlsx", label.to_lowercase()),
+            kind,
             benchmark: Some(benchmark),
             report_url: None,
-            gas_is_gate,
-            matrix: matrix_for(label),
             outcome: SuiteOutcome::default(),
         }
     }
 
-    /// The binary's own suite mapping — tests must not carry a second copy.
-    fn matrix_for(label: &str) -> ToolchainMatrix {
-        if label == SuiteKind::Tester.label() {
-            SuiteKind::Tester.matrix()
-        } else {
-            SuiteKind::Foundry.matrix()
-        }
-    }
-
-    fn unavailable(label: &str) -> SummarySuite {
+    fn unavailable(kind: SuiteKind) -> SummarySuite {
         SummarySuite {
-            label: label.to_owned(),
-            report_file: format!("{}-report.xlsx", label.to_lowercase()),
+            kind,
             benchmark: None,
             report_url: None,
-            gas_is_gate: false,
-            matrix: matrix_for(label),
             outcome: SuiteOutcome::default(),
         }
     }
@@ -274,7 +265,7 @@ mod tests {
                 ],
             ),
         ];
-        let out = render(&[suite("Foundry", false, tests)]);
+        let out = render(&[suite(SuiteKind::Foundry, tests)]);
         assert!(out.contains("contracts built by both only"), "{out}");
         assert!(out.contains("| Foundry | legacy | +5.7% | — |"), "{out}");
     }
@@ -290,7 +281,7 @@ mod tests {
             ),
             compile_test("b", &[("03.solx-legacy", 9_000)]),
         ];
-        let out = render(&[suite("Foundry", false, tests)]);
+        let out = render(&[suite(SuiteKind::Foundry, tests)]);
         assert!(
             out.contains("| Foundry · 2 proj | +3.0% / +3.0% |"),
             "{out}"
@@ -308,7 +299,7 @@ mod tests {
             ),
             compile_test("b", &[("03.solx-viaIR", 9_000)]),
         ];
-        let out = render(&[suite("Foundry", false, tests)]);
+        let out = render(&[suite(SuiteKind::Foundry, tests)]);
         assert!(
             out.contains("| Suite | legacy (agg / median) | viaIR (agg / median) |"),
             "{out}"
@@ -320,12 +311,27 @@ mod tests {
     }
 
     #[test]
+    fn compile_time_without_a_baseline_makes_no_claim() {
+        // Every pipeline ran on the PR side only — reachable whenever the
+        // main-side build fails, since its step is continue-on-error. The
+        // table is all dashes, so "within noise" would be a reassurance drawn
+        // from zero comparisons; worse, dropping the data entirely would make
+        // the section vanish and claim nothing at all.
+        let tests = vec![compile_test("a", &[("03.solx-legacy", 9_000)])];
+        let out = render(&[suite(SuiteKind::Foundry, tests)]);
+        assert!(out.contains("| Foundry | — |"), "{out}");
+        assert!(out.contains("_No paired compile-time data"), "{out}");
+        assert!(!out.contains("Within noise"), "{out}");
+    }
+
+
+    #[test]
     fn compile_improvements_are_not_sirened() {
         let tests = vec![compile_test(
             "a",
             &[("02.solx-main-legacy", 1_000), ("03.solx-legacy", 700)],
         )];
-        let out = render(&[suite("Foundry", false, tests)]);
+        let out = render(&[suite(SuiteKind::Foundry, tests)]);
         assert!(out.contains("| **-30.0%** / -30.0% |"), "{out}");
         assert!(
             out.contains("**Project outliers (≥15%):** `a` legacy **-30.0%**"),
@@ -339,8 +345,7 @@ mod tests {
         // A new tester codegen letter must not silently group data under a
         // bogus solc-version pipeline column.
         let tester = suite(
-            "solx-tester",
-            true,
+            SuiteKind::Tester,
             vec![compile_test(
                 "solx-tester",
                 &[
@@ -358,10 +363,34 @@ mod tests {
     }
 
     #[test]
+    fn unrecognized_pipeline_modes_are_listed_but_bounded() {
+        // A new codegen letter makes every mode in the suite unrecognized, and
+        // a real tester run carries hundreds — the harness-error line must name
+        // a few and count the rest, never dump the lot into the comment.
+        let modes: Vec<String> = (0..7)
+            .map(|index| format!("01.solx-solx-L-M3B3-0.8.3{index}"))
+            .collect();
+        let runs: Vec<(&str, u64)> = modes.iter().map(|mode| (mode.as_str(), 1_000)).collect();
+        let tester = suite(
+            SuiteKind::Tester,
+            vec![compile_test("solx-tester", runs.as_slice())],
+        );
+        let out = render(&[tester]);
+        assert!(
+            out.contains(
+                "❌ **Harness error** — solx-tester: no recognized pipeline token in: \
+                 `01.solx-solx-L-M3B3-0.8.30`, `01.solx-solx-L-M3B3-0.8.31`, \
+                 `01.solx-solx-L-M3B3-0.8.32`, `01.solx-solx-L-M3B3-0.8.33`, \
+                 `01.solx-solx-L-M3B3-0.8.34` (+2 more)."
+            ),
+            "{out}"
+        );
+    }
+
+    #[test]
     fn skipped_suite_renders_an_explicit_row() {
         let tester = suite(
-            "solx-tester",
-            true,
+            SuiteKind::Tester,
             vec![contract_test(
                 "solx-tester",
                 "simple/default.sol",
@@ -371,7 +400,7 @@ mod tests {
                 ],
             )],
         );
-        let mut foundry = unavailable("Foundry");
+        let mut foundry = unavailable(SuiteKind::Foundry);
         foundry.outcome = SuiteOutcome::Skipped;
         let out = render(&[tester, foundry]);
         assert!(
@@ -384,8 +413,7 @@ mod tests {
     #[test]
     fn failed_step_with_data_is_qualified() {
         let mut foundry = suite(
-            "Foundry",
-            false,
+            SuiteKind::Foundry,
             vec![failure_test(
                 "p",
                 &[
@@ -421,9 +449,34 @@ mod tests {
                 &[("02.solx-main-legacy", 0, 0), ("03.solx-legacy", 22_104, 0)],
             ),
         ];
-        let out = render(&[suite("Foundry", false, tests)]);
+        let out = render(&[suite(SuiteKind::Foundry, tests)]);
         assert!(out.contains("✅ **Output-preserving**"), "{out}");
         assert!(out.contains("✅ 0 of 1, ⚪ 1 one-sided"), "{out}");
+    }
+
+    #[test]
+    fn bytecode_the_pr_stopped_emitting_is_not_excused_as_one_sided() {
+        // The mirror of the above: `main` built C2 and the PR emits nothing.
+        // Losing 22 KB of compiler output is a regression, not a pair with no
+        // baseline to compare against.
+        let tests = vec![
+            contract_test(
+                "p",
+                "C1",
+                &[
+                    ("02.solx-main-legacy", 1_000, 0),
+                    ("03.solx-legacy", 1_000, 0),
+                ],
+            ),
+            contract_test(
+                "p",
+                "C2",
+                &[("02.solx-main-legacy", 22_104, 0), ("03.solx-legacy", 0, 0)],
+            ),
+        ];
+        let out = render(&[suite(SuiteKind::Foundry, tests)]);
+        assert!(out.contains("⚠️ **Output changed**"), "{out}");
+        assert!(!out.contains("one-sided"), "{out}");
     }
 
     #[test]
@@ -439,10 +492,10 @@ mod tests {
                 ("02.solx-main-viaIR", RunFailures::Test(7)),
             ],
         )];
-        let out = render(&[suite("Foundry", false, tests)]);
+        let out = render(&[suite(SuiteKind::Foundry, tests)]);
         assert!(
             out.contains(
-                "⚠️ **Missing on PR** — Foundry: 1 runs (7 failures) exist only on `main`"
+                "⚠️ **Missing on PR** — Foundry: 1 run (7 failures) exists only on `main`"
             ),
             "{out}"
         );
@@ -461,31 +514,78 @@ mod tests {
                 ("03.solx-legacy", RunFailures::Test(3)),
             ],
         )];
-        let out = render(&[suite("Foundry", false, tests)]);
+        let out = render(&[suite(SuiteKind::Foundry, tests)]);
         assert!(!out.contains("test failures 0 → 3"), "{out}");
         assert!(!out.contains("+3 test"), "{out}");
         assert!(out.contains("✅ **No new failures**"), "{out}");
     }
 
     #[test]
+    fn gas_movers_name_the_input_they_measured() {
+        // A deploy and a call of the same case are two rows sharing one label:
+        // without the input, both bullets read identically and the reviewer
+        // cannot tell which one regressed. Deploy stays unmarked — the Foundry
+        // reports name their deployer after the contract it already carries.
+        let tests = vec![
+            input_test(
+                "delete_struct.sol",
+                TestInput::Deployer {
+                    contract_identifier: "C".to_owned(),
+                },
+                &[
+                    ("00.solx-main-solx-E-M3B3-0.8.34", 85_899),
+                    ("01.solx-solx-E-M3B3-0.8.34", 85_902),
+                ],
+            ),
+            input_test(
+                "delete_struct.sol",
+                TestInput::Runtime {
+                    input_index: 1,
+                    name: "transfer(address)".to_owned(),
+                },
+                &[
+                    ("00.solx-main-solx-E-M3B3-0.8.34", 12_000),
+                    ("01.solx-solx-E-M3B3-0.8.34", 12_400),
+                ],
+            ),
+        ];
+        let out = render(&[suite(SuiteKind::Tester, tests)]);
+        assert!(
+            out.contains("`delete_struct.sol` [EVMLA M3B3 0.8.34]"),
+            "{out}"
+        );
+        assert!(
+            out.contains("`delete_struct.sol[transfer(address):1]` [EVMLA M3B3 0.8.34]"),
+            "{out}"
+        );
+    }
+
+    #[test]
     fn one_sided_gas_is_not_averaged_into_jitter() {
-        // Gas going 0 → 50,000 has no percentage; it must be stated apart,
-        // not understated by an empty-median "<0.1%".
-        let tests = vec![contract_test(
-            "p",
-            "C",
-            &[
+        // Gas between a measurement and its absence has no meaningful
+        // percentage, in either direction: 0 → 50,000 must not be understated
+        // by an empty-median "<0.1%", and 50,000 → 0 must not enter the jitter
+        // population as a fabricated 100% sample.
+        for runs in [
+            [
                 ("02.solx-main-legacy", 100, 0),
                 ("03.solx-legacy", 100, 50_000),
             ],
-        )];
-        let out = render(&[suite("Foundry", false, tests)]);
-        assert!(out.contains("⚪ 1 without `main` gas (not gated)"), "{out}");
+            [
+                ("02.solx-main-legacy", 100, 50_000),
+                ("03.solx-legacy", 100, 0),
+            ],
+        ] {
+            let tests = vec![contract_test("p", "C", runs.as_slice())];
+            let out = render(&[suite(SuiteKind::Foundry, tests)]);
+            assert!(out.contains("⚪ 1 one-sided (not gated)"), "{out}");
+            assert!(!out.contains("jitter"), "{out}");
+        }
     }
 
     #[test]
     fn empty_report_is_a_loud_health_issue() {
-        let out = render(&[suite("Foundry", false, vec![])]);
+        let out = render(&[suite(SuiteKind::Foundry, vec![])]);
         assert!(
             out.contains("❌ **Suite empty** — Foundry's report contains no runs."),
             "{out}"
@@ -501,8 +601,6 @@ mod tests {
             .join("src/output/summary/fixtures")
             .join(format!("{name}.md"));
         if std::env::var_os("UPDATE_SUMMARY_FIXTURES").is_some() {
-            std::fs::create_dir_all(path.parent().expect("fixture directory"))
-                .expect("fixture directory creation");
             std::fs::write(path.as_path(), rendered).expect("fixture writing");
             return;
         }
@@ -512,8 +610,6 @@ mod tests {
                  UPDATE_SUMMARY_FIXTURES=1 cargo test -p solx-benchmark-converter"
             )
         });
-        // Belt-and-braces for checkouts predating the .gitattributes LF pin.
-        let expected = expected.replace("\r\n", "\n");
         assert_eq!(
             rendered, expected,
             "Rendered summary diverges from fixture {name:?}; if the change is \
@@ -529,8 +625,7 @@ mod tests {
         // The workflow wraps the tester benchmark in a single "solx-tester"
         // project before conversion, so its row never shows a project count.
         let mut tester = suite(
-            "solx-tester",
-            true,
+            SuiteKind::Tester,
             vec![
                 contract_test(
                     "solx-tester",
@@ -555,8 +650,7 @@ mod tests {
         tester.report_url = Some("https://example.com/artifacts/tester".to_owned());
 
         let mut foundry = suite(
-            "Foundry",
-            false,
+            SuiteKind::Foundry,
             vec![
                 contract_test(
                     "uniswap-v4",
@@ -608,8 +702,7 @@ mod tests {
         foundry.report_url = Some("https://example.com/artifacts/foundry".to_owned());
 
         let mut hardhat = suite(
-            "Hardhat",
-            false,
+            SuiteKind::Hardhat,
             vec![
                 failure_test(
                     "ethers-project",
@@ -640,8 +733,7 @@ mod tests {
     #[test]
     fn fixture_output_changed() {
         let tester = suite(
-            "solx-tester",
-            true,
+            SuiteKind::Tester,
             vec![contract_test(
                 "solx-solidity",
                 "test/libsolidity/semanticTests/structs/delete_struct.sol",
@@ -673,19 +765,20 @@ mod tests {
                 .runtime_size
                 .push(runtime_size);
         }
-        let foundry = suite("Foundry", false, foundry_tests);
+        let foundry = suite(SuiteKind::Foundry, foundry_tests);
 
         let out = render(&[tester, foundry]);
         assert_matches_fixture("output-changed", &out);
     }
 
-    /// Build and test regressions: the red verdict, the inline listing of
-    /// regressed projects, and its "+N more" truncation past `MAX_LISTED`.
+    /// Build and test regressions: the red verdict and the inline listing of
+    /// regressed projects, including the shapes a build failure produces — no
+    /// test count on the failed side, and a `main` build failure that leaves
+    /// its PR counterpart nothing to regress against.
     #[test]
     fn fixture_new_failures() {
         let foundry = suite(
-            "Foundry",
-            false,
+            SuiteKind::Foundry,
             vec![
                 failure_test(
                     "uniswap-v4",
@@ -734,8 +827,7 @@ mod tests {
     #[test]
     fn fixture_degraded_harness() {
         let foundry = suite(
-            "Foundry",
-            false,
+            SuiteKind::Foundry,
             vec![contract_test(
                 "p",
                 "C",
@@ -746,8 +838,7 @@ mod tests {
             )],
         );
         let hardhat = suite(
-            "Hardhat",
-            false,
+            SuiteKind::Hardhat,
             vec![failure_test(
                 "hh-project",
                 &[
@@ -758,7 +849,7 @@ mod tests {
         );
         // The errored suite keeps its report link: the XLSX can outlive a
         // benchmark-JSON write failure.
-        let mut tester = unavailable("solx-tester");
+        let mut tester = unavailable(SuiteKind::Tester);
         tester.report_url = Some("https://example.com/artifacts/tester".to_owned());
         let out = render(&[tester, foundry, hardhat]);
         assert_matches_fixture("degraded-harness", &out);
@@ -769,8 +860,7 @@ mod tests {
     #[test]
     fn fixture_full_matrix() {
         let tester = suite(
-            "solx-tester",
-            true,
+            SuiteKind::Tester,
             vec![contract_test(
                 "solx-tester",
                 "simple/default.sol",
@@ -813,7 +903,7 @@ mod tests {
                 ],
             ));
         }
-        let foundry = suite("Foundry", false, foundry_tests);
+        let foundry = suite(SuiteKind::Foundry, foundry_tests);
         let out = render(&[tester, foundry]);
         assert_matches_fixture("full-matrix", &out);
     }
@@ -823,8 +913,7 @@ mod tests {
     #[test]
     fn fixture_gas_jitter() {
         let foundry = suite(
-            "Foundry",
-            false,
+            SuiteKind::Foundry,
             vec![
                 contract_test(
                     "solady",
@@ -845,8 +934,7 @@ mod tests {
             ],
         );
         let hardhat = suite(
-            "Hardhat",
-            false,
+            SuiteKind::Hardhat,
             vec![contract_test(
                 "hh-project",
                 "contracts/C.sol:C",
@@ -859,4 +947,5 @@ mod tests {
         let out = render(&[foundry, hardhat]);
         assert_matches_fixture("gas-jitter", &out);
     }
+
 }

@@ -52,26 +52,26 @@ impl ToolchainMatrix {
             ],
         }
     }
-}
 
-///
-/// Classifies a run's mode string into a role and its pairing key.
-///
-/// The longest declared toolchain name matching up to a token boundary wins;
-/// the pairing key is the remainder, so a PR run pairs with its main
-/// counterpart. A mode matching no declared name is `Other`.
-///
-pub(crate) fn classify(mode: &str, matrix: ToolchainMatrix) -> (Role, String) {
-    let matched = matrix
-        .toolchains()
-        .iter()
-        .filter(|(name, _)| {
-            mode == *name || (mode.starts_with(name) && mode.as_bytes()[name.len()] == b'-')
-        })
-        .max_by_key(|(name, _)| name.len());
-    match matched {
-        Some((name, role)) => (*role, mode[name.len()..].trim_start_matches('-').to_owned()),
-        None => (Role::Other, mode.to_owned()),
+    ///
+    /// Classifies a run's mode string into a role and its pairing key.
+    ///
+    /// The longest declared toolchain name matching up to a token boundary
+    /// wins; the pairing key is the remainder, so a PR run pairs with its main
+    /// counterpart. A mode matching no declared name is `Other`.
+    ///
+    pub(crate) fn classify(self, mode: &str) -> (Role, String) {
+        let matched = self
+            .toolchains()
+            .iter()
+            .filter(|(name, _)| {
+                mode == *name || (mode.starts_with(name) && mode.as_bytes()[name.len()] == b'-')
+            })
+            .max_by_key(|(name, _)| name.len());
+        match matched {
+            Some((name, role)) => (*role, mode[name.len()..].trim_start_matches('-').to_owned()),
+            None => (Role::Other, mode.to_owned()),
+        }
     }
 }
 
@@ -106,23 +106,17 @@ fn codegen_name(token: &str) -> Option<&'static str> {
 /// the codegen shorthands spelled out (`E` → EVMLA, `Y` → Yul).
 ///
 pub(crate) fn humanize_mode(key: &str) -> String {
-    let tokens: Vec<&str> = key
-        .split('-')
+    key.split('-')
         .filter(|token| *token != "solx" && !token.is_empty())
         .map(|token| codegen_name(token).unwrap_or(token))
-        .collect();
-    if tokens.is_empty() {
-        key.to_owned()
-    } else {
-        tokens.join(" ")
-    }
+        .collect::<Vec<&str>>()
+        .join(" ")
 }
 
 #[cfg(test)]
 mod tests {
     use super::Role;
     use super::ToolchainMatrix;
-    use super::classify;
     use super::humanize_mode;
     use super::pipeline_of;
 
@@ -168,7 +162,7 @@ mod tests {
                 "0.8.34-legacy",
             ),
         ] {
-            assert_eq!(classify(mode, matrix), (role, key.to_owned()), "{mode}");
+            assert_eq!(matrix.classify(mode), (role, key.to_owned()), "{mode}");
         }
     }
 
@@ -186,7 +180,7 @@ mod tests {
             ("03.solxfoo-legacy", ToolchainMatrix::Project),
             ("00.solx-main2-solx-E-M3B3-0.8.34", ToolchainMatrix::Tester),
         ] {
-            let (role, key) = classify(mode, matrix);
+            let (role, key) = matrix.classify(mode);
             assert_eq!(role, Role::Other, "{mode}");
             assert_eq!(key, mode, "{mode}");
         }
@@ -194,8 +188,8 @@ mod tests {
 
     #[test]
     fn pr_and_main_runs_share_a_pairing_key() {
-        let (_, pr_key) = classify("01.solx-solx-Y-M3B3-0.8.34", ToolchainMatrix::Tester);
-        let (_, main_key) = classify("00.solx-main-solx-Y-M3B3-0.8.34", ToolchainMatrix::Tester);
+        let (_, pr_key) = ToolchainMatrix::Tester.classify("01.solx-solx-Y-M3B3-0.8.34");
+        let (_, main_key) = ToolchainMatrix::Tester.classify("00.solx-main-solx-Y-M3B3-0.8.34");
         assert_eq!(pr_key, main_key);
     }
 

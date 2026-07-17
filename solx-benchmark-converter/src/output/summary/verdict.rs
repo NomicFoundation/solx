@@ -1,9 +1,9 @@
 //!
 //! The decision layer of the integration summary.
 //!
-//! Pure functions reduce the per-suite statistics to the typed verdicts
-//! behind the comment's headline lines. Turning a verdict into prose is the
-//! rendering layer's concern; nothing here formats beyond carrying labels.
+//! Each verdict is constructed from the per-suite statistics behind the
+//! comment's headline lines. Turning a verdict into prose is the rendering
+//! layer's concern; nothing here formats beyond carrying labels.
 //!
 
 use super::SuiteOutcome;
@@ -17,8 +17,9 @@ use super::stats::SuiteStats;
 ///
 #[derive(Debug, PartialEq)]
 pub(crate) enum OutputVerdict {
-    /// No size or gated-gas comparisons were collected — never a green
-    /// checkmark over empty data.
+    /// No size or gated-gas comparison paired a PR value with a `main` one,
+    /// whether nothing was collected or everything collected was one-sided —
+    /// never a green checkmark over data that was never compared.
     NoData,
     /// Every collected comparison is identical.
     Preserving {
@@ -114,149 +115,155 @@ pub(crate) enum HealthIssue {
     },
 }
 
-///
-/// The output-invariance verdict over all suites.
-///
-pub(crate) fn output_verdict(stats: &[SuiteStats]) -> OutputVerdict {
-    let mut size = DiffCounter::default();
-    let mut gas = DiffCounter::default();
-    let mut gas_labels = Vec::new();
-    for s in stats {
-        size.absorb(&s.size);
-        if s.gas_is_gate {
-            gas.absorb(&s.gas);
-            if s.gas.collected() {
-                gas_labels.push(s.label.as_str());
+impl OutputVerdict {
+    ///
+    /// The output-invariance verdict over all suites.
+    ///
+    pub(crate) fn from_stats(stats: &[SuiteStats]) -> Self {
+        let mut size = DiffCounter::default();
+        let mut gas = DiffCounter::default();
+        let mut gas_labels = Vec::new();
+        for s in stats {
+            size.absorb(&s.size);
+            if s.gas_is_gate {
+                gas.absorb(&s.gas);
+                if s.gas.collected() {
+                    gas_labels.push(s.label.as_str());
+                }
+            }
+        }
+        let gas_label = gas_labels.join(" / ");
+
+        if size.diffs == 0 && gas.diffs == 0 {
+            if size.cells == 0 && gas.cells == 0 {
+                return Self::NoData;
+            }
+            return Self::Preserving {
+                size_cells: size.cells,
+                gated_gas_cells: gas.cells,
+                gas_label,
+            };
+        }
+        Self::Changed {
+            size: (size.diffs > 0).then_some(SizeChange {
+                diffs: size.diffs,
+                cells: size.cells,
+                delta_bytes: size.delta,
+            }),
+            gas: (gas.diffs > 0).then_some(GasChange {
+                diffs: gas.diffs,
+                cells: gas.cells,
+                label: gas_label,
+            }),
+        }
+    }
+}
+
+impl FailureVerdict {
+    ///
+    /// The failure-regression verdict, over the suites that actually compared
+    /// something — errored, empty, and unclassifiable suites carry no
+    /// PR-vs-main pairs and must not feed a green line.
+    ///
+    pub(crate) fn from_stats(stats: &[SuiteStats]) -> Self {
+        let compared: Vec<&SuiteStats> = stats
+            .iter()
+            .filter(|s| s.available && !s.classification_failed())
+            .collect();
+        if compared.iter().all(|s| s.paired_runs == 0) {
+            return Self::NoData;
+        }
+        if compared.iter().all(|s| s.new_failures() == 0) {
+            Self::Clean {
+                pre_existing: compared
+                    .iter()
+                    .filter(|s| s.baseline_failures() > 0)
+                    .map(|s| (s.label.clone(), s.baseline_failures()))
+                    .collect(),
+            }
+        } else {
+            Self::Regressed {
+                suites: compared
+                    .iter()
+                    .filter(|s| s.new_failures() > 0)
+                    .map(|s| SuiteFailures {
+                        label: s.label.clone(),
+                        new_build: s.new_build_failures,
+                        new_test: s.new_test_failures,
+                    })
+                    .collect(),
             }
         }
     }
-    let gas_label = gas_labels.join(" / ");
-
-    if size.diffs == 0 && gas.diffs == 0 {
-        if size.cells == 0 && gas.cells == 0 {
-            return OutputVerdict::NoData;
-        }
-        return OutputVerdict::Preserving {
-            size_cells: size.cells,
-            gated_gas_cells: gas.cells,
-            gas_label,
-        };
-    }
-    OutputVerdict::Changed {
-        size: (size.diffs > 0).then_some(SizeChange {
-            diffs: size.diffs,
-            cells: size.cells,
-            delta_bytes: size.delta,
-        }),
-        gas: (gas.diffs > 0).then_some(GasChange {
-            diffs: gas.diffs,
-            cells: gas.cells,
-            label: gas_label,
-        }),
-    }
 }
 
-///
-/// The failure-regression verdict, over the suites that actually compared
-/// something — errored, empty, and unclassifiable suites carry no PR-vs-main
-/// pairs and must not feed a green line.
-///
-pub(crate) fn failure_verdict(stats: &[SuiteStats]) -> FailureVerdict {
-    let compared: Vec<&SuiteStats> = stats
-        .iter()
-        .filter(|s| s.available && !s.classification_failed())
-        .collect();
-    if compared.iter().all(|s| s.paired_runs == 0) {
-        return FailureVerdict::NoData;
-    }
-    if compared.iter().all(|s| s.new_failures() == 0) {
-        FailureVerdict::Clean {
-            pre_existing: compared
-                .iter()
-                .filter(|s| s.baseline_failures() > 0)
-                .map(|s| (s.label.clone(), s.baseline_failures()))
-                .collect(),
+impl HealthIssue {
+    ///
+    /// Every harness-degradation signal, in rendering order: errored suites,
+    /// unrecognized naming, then unbaselined runs.
+    ///
+    pub(crate) fn from_stats(stats: &[SuiteStats]) -> Vec<Self> {
+        let mut issues = Vec::new();
+        for s in stats
+            .iter()
+            .filter(|s| !s.available && s.outcome != SuiteOutcome::Skipped)
+        {
+            issues.push(Self::SuiteErrored {
+                label: s.label.clone(),
+            });
         }
-    } else {
-        FailureVerdict::Regressed {
-            suites: compared
-                .iter()
-                .filter(|s| s.new_failures() > 0)
-                .map(|s| SuiteFailures {
-                    label: s.label.clone(),
-                    new_build: s.new_build_failures,
-                    new_test: s.new_test_failures,
-                })
-                .collect(),
+        for s in stats
+            .iter()
+            .filter(|s| s.available && s.outcome == SuiteOutcome::Failure)
+        {
+            issues.push(Self::StepFailed {
+                label: s.label.clone(),
+            });
         }
+        for s in stats.iter().filter(|s| s.is_empty_report()) {
+            issues.push(Self::EmptySuite {
+                label: s.label.clone(),
+            });
+        }
+        for s in stats.iter().filter(|s| s.classification_failed()) {
+            issues.push(Self::UnrecognizedToolchains {
+                label: s.label.clone(),
+            });
+        }
+        for s in stats
+            .iter()
+            .filter(|s| !s.classification_failed() && !s.unrecognized_modes.is_empty())
+        {
+            issues.push(Self::UnrecognizedRuns {
+                label: s.label.clone(),
+                modes: s.unrecognized_modes.iter().cloned().collect(),
+            });
+        }
+        for s in stats
+            .iter()
+            .filter(|s| !s.unrecognized_pipelines.is_empty())
+        {
+            issues.push(Self::UnrecognizedPipelines {
+                label: s.label.clone(),
+                modes: s.unrecognized_pipelines.iter().cloned().collect(),
+            });
+        }
+        for s in stats.iter().filter(|s| s.unbaselined_runs > 0) {
+            issues.push(Self::Unbaselined {
+                label: s.label.clone(),
+                runs: s.unbaselined_runs,
+                failures: s.unbaselined_failures,
+            });
+        }
+        for s in stats.iter().filter(|s| s.main_orphan_runs > 0) {
+            issues.push(Self::MainOnly {
+                label: s.label.clone(),
+                runs: s.main_orphan_runs,
+                failures: s.main_orphan_failures,
+            });
+        }
+        issues
     }
-}
-
-///
-/// Every harness-degradation signal, in rendering order: errored suites,
-/// unrecognized naming, then unbaselined runs.
-///
-pub(crate) fn health_issues(stats: &[SuiteStats]) -> Vec<HealthIssue> {
-    let mut issues = Vec::new();
-    for s in stats
-        .iter()
-        .filter(|s| !s.available && s.outcome != SuiteOutcome::Skipped)
-    {
-        issues.push(HealthIssue::SuiteErrored {
-            label: s.label.clone(),
-        });
-    }
-    for s in stats
-        .iter()
-        .filter(|s| s.available && s.outcome == SuiteOutcome::Failure)
-    {
-        issues.push(HealthIssue::StepFailed {
-            label: s.label.clone(),
-        });
-    }
-    for s in stats.iter().filter(|s| s.is_empty_report()) {
-        issues.push(HealthIssue::EmptySuite {
-            label: s.label.clone(),
-        });
-    }
-    for s in stats.iter().filter(|s| s.classification_failed()) {
-        issues.push(HealthIssue::UnrecognizedToolchains {
-            label: s.label.clone(),
-        });
-    }
-    for s in stats
-        .iter()
-        .filter(|s| !s.classification_failed() && !s.unrecognized_modes.is_empty())
-    {
-        issues.push(HealthIssue::UnrecognizedRuns {
-            label: s.label.clone(),
-            modes: s.unrecognized_modes.iter().cloned().collect(),
-        });
-    }
-    for s in stats
-        .iter()
-        .filter(|s| !s.unrecognized_pipelines.is_empty())
-    {
-        issues.push(HealthIssue::UnrecognizedPipelines {
-            label: s.label.clone(),
-            modes: s.unrecognized_pipelines.iter().cloned().collect(),
-        });
-    }
-    for s in stats.iter().filter(|s| s.unbaselined_runs > 0) {
-        issues.push(HealthIssue::Unbaselined {
-            label: s.label.clone(),
-            runs: s.unbaselined_runs,
-            failures: s.unbaselined_failures,
-        });
-    }
-    for s in stats.iter().filter(|s| s.main_orphan_runs > 0) {
-        issues.push(HealthIssue::MainOnly {
-            label: s.label.clone(),
-            runs: s.main_orphan_runs,
-            failures: s.main_orphan_failures,
-        });
-    }
-    issues
 }
 
 #[cfg(test)]
@@ -282,9 +289,9 @@ mod tests {
 
     #[test]
     fn no_data_over_empty_comparisons() {
-        assert_eq!(output_verdict(&[]), OutputVerdict::NoData);
+        assert_eq!(OutputVerdict::from_stats(&[]), OutputVerdict::NoData);
         assert_eq!(
-            output_verdict(&[available("Foundry")]),
+            OutputVerdict::from_stats(&[available("Foundry")]),
             OutputVerdict::NoData
         );
     }
@@ -298,7 +305,7 @@ mod tests {
             ..available("Foundry")
         };
         assert_eq!(
-            output_verdict(&[foundry]),
+            OutputVerdict::from_stats(&[foundry]),
             OutputVerdict::Preserving {
                 size_cells: 4,
                 gated_gas_cells: 0,
@@ -316,7 +323,7 @@ mod tests {
             ..available("solx-tester")
         };
         assert_eq!(
-            output_verdict(&[tester]),
+            OutputVerdict::from_stats(&[tester]),
             OutputVerdict::Changed {
                 size: Some(SizeChange {
                     diffs: 2,
@@ -340,7 +347,7 @@ mod tests {
             gas: counted(9, 1, 3),
             ..available("solx-tester")
         };
-        let OutputVerdict::Changed { size, gas } = output_verdict(&[tester]) else {
+        let OutputVerdict::Changed { size, gas } = OutputVerdict::from_stats(&[tester]) else {
             panic!("expected Changed");
         };
         assert_eq!(size, None);
@@ -355,7 +362,7 @@ mod tests {
             ..available("Foundry")
         };
         assert_eq!(
-            failure_verdict(&[foundry, available("Hardhat")]),
+            FailureVerdict::from_stats(&[foundry, available("Hardhat")]),
             FailureVerdict::Clean {
                 pre_existing: vec![("Foundry".to_owned(), 5)],
             }
@@ -372,7 +379,7 @@ mod tests {
             ..available("Foundry")
         };
         assert_eq!(
-            failure_verdict(&[foundry, available("Hardhat")]),
+            FailureVerdict::from_stats(&[foundry, available("Hardhat")]),
             FailureVerdict::Regressed {
                 suites: vec![SuiteFailures {
                     label: "Foundry".to_owned(),
@@ -403,7 +410,7 @@ mod tests {
             ..available("Hardhat")
         };
         assert_eq!(
-            failure_verdict(&[errored, drifted, unbaselined]),
+            FailureVerdict::from_stats(&[errored, drifted, unbaselined]),
             FailureVerdict::NoData
         );
     }
@@ -455,7 +462,7 @@ mod tests {
             ..available("Foundry 4")
         };
         assert_eq!(
-            health_issues(&[
+            HealthIssue::from_stats(&[
                 errored,
                 drifted,
                 unbaselined,

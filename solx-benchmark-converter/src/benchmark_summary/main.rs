@@ -29,17 +29,16 @@ fn load_suite(
     kind: SuiteKind,
     path: Option<PathBuf>,
     report_url: Option<String>,
-    outcome: Option<String>,
+    outcome: SuiteOutcome,
 ) -> Option<SummarySuite> {
-    let outcome = SuiteOutcome::from_step_outcome(outcome.as_deref());
     let benchmark = match (outcome, path) {
         (SuiteOutcome::Skipped, _) => None,
         (_, None) => return None,
-        (_, Some(path)) => match Benchmark::try_from(path.clone()) {
+        (_, Some(path)) => match Benchmark::try_from(path.as_path()) {
             Ok(benchmark) => Some(benchmark),
             Err(error) => {
                 eprintln!(
-                    "Warning: {} benchmark {path:?} is unusable ({error}); rendering the suite as errored.",
+                    "Warning: {} benchmark is unusable ({error}); rendering the suite as errored.",
                     kind.label()
                 );
                 None
@@ -47,13 +46,10 @@ fn load_suite(
         },
     };
     Some(SummarySuite {
-        label: kind.label().to_owned(),
-        report_file: kind.report_file().to_owned(),
+        kind,
         benchmark,
         // A skipped upload step passes its URL through as an empty string.
         report_url: report_url.filter(|url| !url.is_empty()),
-        gas_is_gate: kind.gas_is_gate(),
-        matrix: kind.matrix(),
         outcome,
     })
 }

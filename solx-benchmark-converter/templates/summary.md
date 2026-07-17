@@ -29,7 +29,7 @@
 |---|{% for pipeline in compile.pipelines %}---|{% endfor %}
 {% for row in compile.rows %}| {{ row|join(" | ") }} |
 {% endfor -%}
-{% if let Some(line) = compile.within_noise_line %}
+{% if let Some(line) = compile.conclusion_line %}
 {{ line }}
 {% endif -%}
 {% if let Some(line) = compile.outliers_line %}

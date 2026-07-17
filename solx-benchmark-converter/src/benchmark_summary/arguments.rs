@@ -6,6 +6,8 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
+use solx_benchmark_converter::SuiteOutcome;
+
 ///
 /// Generates the single PR summary comment from the per-suite benchmark JSONs.
 ///
@@ -14,7 +16,7 @@ use clap::Parser;
 /// that suite as errored.
 ///
 #[derive(Debug, Parser)]
-#[command(about, long_about = None, arg_required_else_help = true)]
+#[command(arg_required_else_help = true)]
 pub struct Arguments {
     /// Merged solx-tester benchmark JSON (gas is deterministic here → gated).
     #[arg(long)]
@@ -22,10 +24,10 @@ pub struct Arguments {
     /// Artifact download URL for the solx-tester XLSX report.
     #[arg(long)]
     pub tester_url: Option<String>,
-    /// The solx-tester step outcome (success/failure/skipped); a skipped
-    /// suite renders as an explicit "did not run" row.
+    /// The solx-tester step outcome; a skipped suite renders as an explicit
+    /// "did not run" row.
     #[arg(long)]
-    pub tester_outcome: Option<String>,
+    pub tester_outcome: SuiteOutcome,
 
     /// Merged Foundry benchmark JSON (gas is fuzz-noisy → excluded from gate).
     #[arg(long)]
@@ -33,9 +35,9 @@ pub struct Arguments {
     /// Artifact download URL for the Foundry XLSX report.
     #[arg(long)]
     pub foundry_url: Option<String>,
-    /// The Foundry step outcome (success/failure/skipped).
+    /// The Foundry step outcome.
     #[arg(long)]
-    pub foundry_outcome: Option<String>,
+    pub foundry_outcome: SuiteOutcome,
 
     /// Merged Hardhat benchmark JSON (gas is fuzz-noisy → excluded from gate).
     #[arg(long)]
@@ -43,9 +45,9 @@ pub struct Arguments {
     /// Artifact download URL for the Hardhat XLSX report.
     #[arg(long)]
     pub hardhat_url: Option<String>,
-    /// The Hardhat step outcome (success/failure/skipped).
+    /// The Hardhat step outcome.
     #[arg(long)]
-    pub hardhat_outcome: Option<String>,
+    pub hardhat_outcome: SuiteOutcome,
 
     /// Output markdown file.
     #[arg(long)]
