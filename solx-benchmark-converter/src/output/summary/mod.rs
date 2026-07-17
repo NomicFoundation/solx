@@ -185,6 +185,33 @@ mod tests {
         }
     }
 
+    impl Summary {
+        /// Renders this summary and compares it against its golden fixture. Set
+        /// `UPDATE_SUMMARY_FIXTURES=1` to regenerate after an intended change.
+        fn assert_matches_fixture(&self, name: &str) {
+            let rendered = self.render();
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src/output/summary/fixtures")
+                .join(format!("{name}.md"));
+            if std::env::var_os("UPDATE_SUMMARY_FIXTURES").is_some() {
+                std::fs::write(path.as_path(), rendered).expect("fixture writing");
+                return;
+            }
+            let expected = std::fs::read_to_string(path.as_path()).unwrap_or_else(|error| {
+                panic!(
+                    "Fixture {path:?} unreadable ({error}); regenerate with \
+                     UPDATE_SUMMARY_FIXTURES=1 cargo test -p solx-benchmark-converter"
+                )
+            });
+            assert_eq!(
+                rendered, expected,
+                "Rendered summary diverges from fixture {name:?}; if the change is \
+                 intended, regenerate with UPDATE_SUMMARY_FIXTURES=1 cargo test -p \
+                 solx-benchmark-converter"
+            );
+        }
+    }
+
     #[test]
     fn baselines_compare_common_contracts_only() {
         // C2 is built by the PR but not by solc — it must not skew the
@@ -570,30 +597,6 @@ mod tests {
         assert!(!out.contains("✅ **No new failures**"), "{out}");
     }
 
-    /// Compares a rendered comment against its golden fixture. Set
-    /// `UPDATE_SUMMARY_FIXTURES=1` to regenerate after an intended change.
-    fn assert_matches_fixture(name: &str, rendered: &str) {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("src/output/summary/fixtures")
-            .join(format!("{name}.md"));
-        if std::env::var_os("UPDATE_SUMMARY_FIXTURES").is_some() {
-            std::fs::write(path.as_path(), rendered).expect("fixture writing");
-            return;
-        }
-        let expected = std::fs::read_to_string(path.as_path()).unwrap_or_else(|error| {
-            panic!(
-                "Fixture {path:?} unreadable ({error}); regenerate with \
-                 UPDATE_SUMMARY_FIXTURES=1 cargo test -p solx-benchmark-converter"
-            )
-        });
-        assert_eq!(
-            rendered, expected,
-            "Rendered summary diverges from fixture {name:?}; if the change is \
-             intended, regenerate with UPDATE_SUMMARY_FIXTURES=1 cargo test -p \
-             solx-benchmark-converter"
-        );
-    }
-
     /// The everyday green run: three suites, pre-existing failures, Foundry
     /// gas jitter, compile time within noise.
     #[test]
@@ -700,8 +703,8 @@ mod tests {
         );
         hardhat.report_url = Some("https://example.com/artifacts/hardhat".to_owned());
 
-        let out = Summary::new(vec![tester, foundry, hardhat]).render();
-        assert_matches_fixture("standard-output-preserving", &out);
+        Summary::new(vec![tester, foundry, hardhat])
+            .assert_matches_fixture("standard-output-preserving");
     }
 
     /// Size and gated-gas differences: the warning verdict, inline movers,
@@ -743,8 +746,7 @@ mod tests {
         }
         let foundry = SummarySuite::merged(SuiteKind::Foundry, foundry_tests);
 
-        let out = Summary::new(vec![tester, foundry]).render();
-        assert_matches_fixture("output-changed", &out);
+        Summary::new(vec![tester, foundry]).assert_matches_fixture("output-changed");
     }
 
     /// Build and test regressions: the red verdict and the inline listing of
@@ -793,8 +795,7 @@ mod tests {
                 ),
             ],
         );
-        let out = Summary::new(vec![foundry]).render();
-        assert_matches_fixture("new-failures", &out);
+        Summary::new(vec![foundry]).assert_matches_fixture("new-failures");
     }
 
     /// Every harness-degradation signal at once: an errored suite, toolchain
@@ -827,8 +828,7 @@ mod tests {
         // benchmark-JSON write failure.
         let mut tester = SummarySuite::unavailable(SuiteKind::Tester);
         tester.report_url = Some("https://example.com/artifacts/tester".to_owned());
-        let out = Summary::new(vec![tester, foundry, hardhat]).render();
-        assert_matches_fixture("degraded-harness", &out);
+        Summary::new(vec![tester, foundry, hardhat]).assert_matches_fixture("degraded-harness");
     }
 
     /// The full-matrix run: solc and released-solx baselines plus enough
@@ -880,8 +880,7 @@ mod tests {
             ));
         }
         let foundry = SummarySuite::merged(SuiteKind::Foundry, foundry_tests);
-        let out = Summary::new(vec![tester, foundry]).render();
-        assert_matches_fixture("full-matrix", &out);
+        Summary::new(vec![tester, foundry]).assert_matches_fixture("full-matrix");
     }
 
     /// The ungated gas shapes: a jitter median below the display floor and a
@@ -920,7 +919,6 @@ mod tests {
                 ],
             )],
         );
-        let out = Summary::new(vec![foundry, hardhat]).render();
-        assert_matches_fixture("gas-jitter", &out);
+        Summary::new(vec![foundry, hardhat]).assert_matches_fixture("gas-jitter");
     }
 }

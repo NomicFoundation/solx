@@ -419,38 +419,37 @@ mod tests {
     use crate::benchmark::TestMetadata;
     use crate::benchmark::TestSelector;
 
-    fn insert_test(benchmark: &mut Benchmark, project: &str, contract: &str, function: &str) {
-        let selector = TestSelector {
-            project: project.to_owned(),
-            case: Some(contract.to_owned()),
-            input: Some(TestInput::Runtime {
-                input_index: 0,
-                name: function.to_owned(),
-            }),
-        };
-        benchmark.tests.insert(
-            selector.to_string(),
-            Test::new(TestMetadata::new(selector, vec![])),
-        );
+    impl Benchmark {
+        fn insert_test(&mut self, project: &str, contract: &str, function: &str) {
+            let selector = TestSelector {
+                project: project.to_owned(),
+                case: Some(contract.to_owned()),
+                input: Some(TestInput::Runtime {
+                    input_index: 0,
+                    name: function.to_owned(),
+                }),
+            };
+            self.tests.insert(
+                selector.to_string(),
+                Test::new(TestMetadata::new(selector, vec![])),
+            );
+        }
     }
 
     #[test]
     fn remove_blacklisted_drops_only_listed_rows() {
         let mut benchmark = Benchmark::default();
-        insert_test(
-            &mut benchmark,
+        benchmark.insert_test(
             "solady",
             "src/accounts/ERC6551Proxy.sol:ERC6551Proxy",
             "fallback()",
         );
-        insert_test(
-            &mut benchmark,
+        benchmark.insert_test(
             "solady",
             "src/accounts/ERC6551Proxy.sol:ERC6551Proxy",
             "someFunction()",
         );
-        insert_test(
-            &mut benchmark,
+        benchmark.insert_test(
             "other-project",
             "src/accounts/ERC6551Proxy.sol:ERC6551Proxy",
             "fallback()",
