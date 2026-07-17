@@ -20,13 +20,18 @@ mod compile_aggregate;
 mod diff_counter;
 mod failure_regression;
 mod failure_regressions;
+mod failure_verdict;
+mod gas_change;
+mod health_issue;
 mod movement;
+mod output_verdict;
 mod paired_bytes;
 mod render;
+mod size_change;
+mod suite_failures;
 mod suite_stats;
 mod toolchain;
 mod top_movers;
-mod verdict;
 
 use std::path::PathBuf;
 

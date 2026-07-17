@@ -315,4 +315,14 @@ impl SuiteStats {
     pub(crate) fn is_empty_report(&self) -> bool {
         self.available && self.total_runs == 0
     }
+
+    /// An available suite carrying only the given label, for the verdict tests.
+    #[cfg(test)]
+    pub(crate) fn available(label: &str) -> Self {
+        Self {
+            label: label.to_owned(),
+            available: true,
+            ..Default::default()
+        }
+    }
 }
