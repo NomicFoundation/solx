@@ -112,7 +112,7 @@ impl HealthIssue {
 
 #[cfg(test)]
 mod tests {
-    use crate::output::summary::health_issue::*;
+    use crate::output::summary::summary_template::health_issue::*;
 
     #[test]
     fn health_issues_cover_every_degradation() {

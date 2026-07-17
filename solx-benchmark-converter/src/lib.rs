@@ -3,7 +3,6 @@
 //!
 
 #![allow(clippy::large_enum_variant)]
-#![allow(clippy::let_and_return)]
 
 pub(crate) mod benchmark;
 pub(crate) mod comparison;

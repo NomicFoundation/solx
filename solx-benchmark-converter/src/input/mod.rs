@@ -14,8 +14,8 @@ pub mod testing_time;
 use std::path::Path;
 use std::path::PathBuf;
 
-use crate::input::error::Error as InputError;
-use crate::input::report::Report;
+use self::error::Error as InputError;
+use self::report::Report;
 
 ///
 /// Benchmark input format.
