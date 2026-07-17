@@ -2,6 +2,7 @@
 //! The benchmark representation.
 //!
 
+pub mod run_failures;
 pub mod test;
 
 use std::collections::BTreeMap;
@@ -24,7 +25,7 @@ use crate::output::summary::SuiteKind;
 use self::test::Test;
 use self::test::input::Input as TestInput;
 use self::test::metadata::Metadata as TestMetadata;
-use self::test::run::RunFailures;
+use crate::benchmark::run_failures::RunFailures;
 use self::test::selector::Selector as TestSelector;
 
 ///
