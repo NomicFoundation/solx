@@ -28,12 +28,13 @@ pub mod listing_section;
 pub mod movement;
 pub mod output_verdict;
 pub mod paired_bytes;
+pub mod role;
 pub mod size_change;
 pub mod suite_failures;
 pub mod suite_row;
 pub mod suite_stats;
 pub mod summary_template;
-pub mod toolchain;
+pub mod toolchain_matrix;
 pub mod top_movers;
 pub mod truncated;
 
@@ -44,7 +45,7 @@ use crate::benchmark::Benchmark;
 use self::suite_stats::SuiteStats;
 use self::summary_template::SummaryTemplate;
 
-pub use self::toolchain::ToolchainMatrix;
+pub use self::toolchain_matrix::ToolchainMatrix;
 
 ///
 /// How the suite's workflow step ended — the comment must distinguish a
