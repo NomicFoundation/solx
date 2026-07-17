@@ -8,7 +8,7 @@
 /// toolchain emitted.
 ///
 #[derive(Default)]
-pub(crate) struct PairedBytes {
-    pub(crate) pr: u64,
-    pub(crate) baseline: u64,
+pub struct PairedBytes {
+    pub pr: u64,
+    pub baseline: u64,
 }

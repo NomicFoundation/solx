@@ -383,7 +383,7 @@ impl Worksheet {
 
 #[cfg(test)]
 mod tests {
-    use super::Worksheet;
+    use crate::output::xlsx::worksheet::Worksheet;
 
     #[test]
     fn column_identifier_survives_the_z_boundary() {

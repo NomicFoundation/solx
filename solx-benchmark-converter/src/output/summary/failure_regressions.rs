@@ -2,22 +2,22 @@
 //! Regressions collected for the inline "new failures" listing.
 //!
 
-use super::failure_regression::FailureRegression;
+use crate::output::summary::failure_regression::FailureRegression;
 
 ///
 /// Regressions collected for the inline "new failures" listing.
 ///
 #[derive(Default)]
-pub(crate) struct FailureRegressions(Vec<FailureRegression>);
+pub struct FailureRegressions(Vec<FailureRegression>);
 
 impl FailureRegressions {
-    pub(crate) fn push(&mut self, regression: FailureRegression) {
+    pub fn push(&mut self, regression: FailureRegression) {
         self.0.push(regression);
     }
 
     /// The regressions ordered by descending magnitude, so the renderer lists
     /// the worst first and counts the rest as "+N more".
-    pub(crate) fn ranked(&self) -> Vec<&FailureRegression> {
+    pub fn ranked(&self) -> Vec<&FailureRegression> {
         let mut regressions: Vec<&FailureRegression> = self.0.iter().collect();
         regressions.sort_by_key(|regression| std::cmp::Reverse(regression.pr - regression.main));
         regressions
@@ -26,8 +26,8 @@ impl FailureRegressions {
 
 #[cfg(test)]
 mod tests {
-    use super::FailureRegression;
-    use super::FailureRegressions;
+    use crate::output::summary::failure_regressions::FailureRegression;
+    use crate::output::summary::failure_regressions::FailureRegressions;
 
     #[test]
     fn failure_regressions_rank_by_magnitude() {

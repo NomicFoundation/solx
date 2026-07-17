@@ -2,7 +2,7 @@
 //! The benchmark analyzer binary.
 //!
 
-pub(crate) mod arguments;
+pub mod arguments;
 
 use clap::Parser;
 

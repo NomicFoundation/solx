@@ -5,7 +5,7 @@
 //! workflow and emits the single markdown comment it posts to the PR.
 //!
 
-pub(crate) mod arguments;
+pub mod arguments;
 
 use clap::Parser;
 

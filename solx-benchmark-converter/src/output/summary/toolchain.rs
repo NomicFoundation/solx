@@ -14,7 +14,7 @@
 /// The role a toolchain plays in the comparison.
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum Role {
+pub enum Role {
     /// The current commit under test.
     Pr,
     /// The `main`-branch build the PR is compared against.
@@ -60,7 +60,7 @@ impl ToolchainMatrix {
     /// wins; the pairing key is the remainder, so a PR run pairs with its main
     /// counterpart. A mode matching no declared name is `Other`.
     ///
-    pub(crate) fn classify(self, mode: &str) -> (Role, String) {
+    pub fn classify(self, mode: &str) -> (Role, String) {
         let matched = self
             .toolchains()
             .iter()
@@ -80,7 +80,7 @@ impl ToolchainMatrix {
 /// trailing token there is the solc version). `None` for unrecognized
 /// tokens, surfaced as a harness error upstream — a silent fallback would
 /// group a new codegen's data under a bogus column.
-pub(crate) fn pipeline_of(mode: &str) -> Option<String> {
+pub fn pipeline_of(mode: &str) -> Option<String> {
     for token in mode.split('-') {
         if matches!(token, "legacy" | "viaIR") {
             return Some(token.to_owned());
@@ -105,7 +105,7 @@ fn codegen_name(token: &str) -> Option<&'static str> {
 /// A pairing key rendered for humans: the redundant `solx` token dropped and
 /// the codegen shorthands spelled out (`E` → EVMLA, `Y` → Yul).
 ///
-pub(crate) fn humanize_mode(key: &str) -> String {
+pub fn humanize_mode(key: &str) -> String {
     key.split('-')
         .filter(|token| *token != "solx" && !token.is_empty())
         .map(|token| codegen_name(token).unwrap_or(token))
@@ -115,10 +115,10 @@ pub(crate) fn humanize_mode(key: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::Role;
-    use super::ToolchainMatrix;
-    use super::humanize_mode;
-    use super::pipeline_of;
+    use crate::output::summary::toolchain::Role;
+    use crate::output::summary::toolchain::ToolchainMatrix;
+    use crate::output::summary::toolchain::humanize_mode;
+    use crate::output::summary::toolchain::pipeline_of;
 
     #[test]
     fn classify_covers_every_toolchain_naming() {

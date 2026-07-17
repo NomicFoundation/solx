@@ -5,9 +5,9 @@
 ///
 /// One row's movement between the main and PR toolchains.
 ///
-pub(crate) struct Movement {
-    pub(crate) label: String,
-    pub(crate) mode: String,
-    pub(crate) main: u64,
-    pub(crate) pr: u64,
+pub struct Movement {
+    pub label: String,
+    pub mode: String,
+    pub main: u64,
+    pub pr: u64,
 }

@@ -6,8 +6,8 @@
 /// The gated-gas half of a `Changed` output verdict.
 ///
 #[derive(Debug, PartialEq)]
-pub(crate) struct GasChange {
-    pub(crate) diffs: u64,
-    pub(crate) cells: u64,
-    pub(crate) label: String,
+pub struct GasChange {
+    pub diffs: u64,
+    pub cells: u64,
+    pub label: String,
 }

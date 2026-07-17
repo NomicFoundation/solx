@@ -412,11 +412,11 @@ impl TryFrom<&Path> for Benchmark {
 
 #[cfg(test)]
 mod tests {
-    use super::Benchmark;
-    use super::Test;
-    use super::TestInput;
-    use super::TestMetadata;
-    use super::TestSelector;
+    use crate::benchmark::Benchmark;
+    use crate::benchmark::Test;
+    use crate::benchmark::TestInput;
+    use crate::benchmark::TestMetadata;
+    use crate::benchmark::TestSelector;
 
     fn insert_test(benchmark: &mut Benchmark, project: &str, contract: &str, function: &str) {
         let selector = TestSelector {
