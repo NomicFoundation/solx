@@ -9,10 +9,11 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use crate::utils::relative_percent;
+
 use super::SuiteOutcome;
 use super::SummarySuite;
 use super::toolchain::Role;
-use super::toolchain::classify;
 use super::toolchain::humanize_mode;
 use super::toolchain::pipeline_of;
 
@@ -134,6 +135,26 @@ pub(crate) struct FailureRegression {
 }
 
 ///
+/// Regressions collected for the inline "new failures" listing.
+///
+#[derive(Default)]
+pub(crate) struct FailureRegressions(Vec<FailureRegression>);
+
+impl FailureRegressions {
+    pub(crate) fn push(&mut self, regression: FailureRegression) {
+        self.0.push(regression);
+    }
+
+    /// The regressions ordered by descending magnitude, so the renderer lists
+    /// the worst first and counts the rest as "+N more".
+    pub(crate) fn ranked(&self) -> Vec<&FailureRegression> {
+        let mut regressions: Vec<&FailureRegression> = self.0.iter().collect();
+        regressions.sort_by_key(|regression| std::cmp::Reverse(regression.pr - regression.main));
+        regressions
+    }
+}
+
+///
 /// Everything the renderer needs about one suite, computed in a single pass.
 ///
 #[derive(Default)]
@@ -172,18 +193,21 @@ pub(crate) struct SuiteStats {
     pub(crate) unrecognized_pipelines: BTreeSet<String>,
 
     pub(crate) size: DiffCounter,
-    /// Size pairs where exactly one side produced a value — excluded from
-    /// the diff count (nothing to compare) and stated apart in the cell.
+    /// Size pairs the PR emitted and `main` did not: no baseline exists, so
+    /// they are excluded from the diff count and stated apart in the cell.
+    /// The mirror — `main` emitted bytecode the PR lost — is a regression, and
+    /// counts as a differing pair rather than landing here.
     pub(crate) size_one_sided: u64,
     pub(crate) gas: DiffCounter,
     /// Relative gas differences seen on a non-gating suite, in percent. The
     /// median is reported — a max would routinely be a huge but meaningless
     /// CREATE-deploy outlier.
     pub(crate) gas_jitter_percents: Vec<f64>,
-    /// Non-gated differing pairs whose `main` side recorded no gas: no
-    /// percentage exists, so they are reported next to the jitter median
-    /// rather than silently understated by it.
-    pub(crate) gas_diffs_without_main: u64,
+    /// Non-gated differing pairs only one side measured, in either direction:
+    /// the percentage between a measurement and its absence is meaningless, so
+    /// they are reported next to the jitter median rather than folded into it
+    /// as a fabricated sample.
+    pub(crate) gas_one_sided: u64,
 
     /// Failures on the PR runs in excess of their main counterparts.
     pub(crate) new_build_failures: usize,
@@ -193,7 +217,7 @@ pub(crate) struct SuiteStats {
     pub(crate) baseline_build_failures: usize,
     pub(crate) baseline_test_failures: usize,
     /// The rows behind `new_*_failures`, for the inline listing.
-    pub(crate) failure_regressions: Vec<FailureRegression>,
+    pub(crate) failure_regressions: FailureRegressions,
 
     /// Compile-time aggregates keyed by pipeline (legacy / viaIR).
     pub(crate) compile: BTreeMap<String, CompileAggregate>,
@@ -210,10 +234,10 @@ pub(crate) struct SuiteStats {
 impl SuiteStats {
     pub(crate) fn from_suite(suite: &SummarySuite) -> Self {
         let mut stats = SuiteStats {
-            label: suite.label.clone(),
-            report_file: suite.report_file.clone(),
+            label: suite.kind.label().to_owned(),
+            report_file: suite.kind.report_file().to_owned(),
             report_url: suite.report_url.clone(),
-            gas_is_gate: suite.gas_is_gate,
+            gas_is_gate: suite.kind.gas_is_gate(),
             available: suite.benchmark.is_some(),
             outcome: suite.outcome,
             ..Default::default()
@@ -222,14 +246,17 @@ impl SuiteStats {
             return stats;
         };
 
-        let mut projects = std::collections::BTreeSet::new();
+        let mut projects = BTreeSet::new();
         for test in benchmark.tests.values() {
-            projects.insert(test.metadata.selector.project.clone());
-            let contract = test.metadata.selector.case.as_deref().unwrap_or("");
-            let row_label = if contract.is_empty() {
-                test.metadata.selector.project.as_str()
-            } else {
-                contract
+            let selector = &test.metadata.selector;
+            projects.insert(selector.project.clone());
+            let row = selector
+                .case
+                .as_deref()
+                .unwrap_or(selector.project.as_str());
+            let row_label = match selector.input.as_ref() {
+                Some(input) if !input.is_deploy() => format!("{row}[{input}]"),
+                _ => row.to_owned(),
             };
 
             let mut pr_runs: BTreeMap<String, &crate::benchmark::test::run::Run> = BTreeMap::new();
@@ -240,7 +267,7 @@ impl SuiteStats {
             let mut main_compile: BTreeMap<String, u64> = BTreeMap::new();
             for (mode, run) in test.runs.iter() {
                 stats.total_runs += 1;
-                let (role, key) = classify(mode, suite.matrix);
+                let (role, key) = suite.kind.matrix().classify(mode);
                 match role {
                     Role::Pr => {
                         stats.pr_runs_seen += 1;
@@ -343,7 +370,7 @@ impl SuiteStats {
                         };
                         *counter += pr_v - main_v;
                         stats.failure_regressions.push(FailureRegression {
-                            label: row_label.to_owned(),
+                            label: row_label.clone(),
                             mode: mode.clone(),
                             kind: if is_build { "build" } else { "test" },
                             main: main_v,
@@ -360,11 +387,11 @@ impl SuiteStats {
                         main.average_runtime_size(),
                     ),
                 ] {
-                    if (pr_v == 0) != (main_v == 0) {
+                    if main_v == 0 && pr_v != 0 {
                         stats.size_one_sided += 1;
                     } else if stats.size.observe(pr_v, main_v) {
                         stats.top_size_movers.push(
-                            row_label,
+                            row_label.as_str(),
                             format!("{mode}, {kind}").as_str(),
                             main_v,
                             pr_v,
@@ -374,14 +401,17 @@ impl SuiteStats {
 
                 let (pr_gas, main_gas) = (pr.average_gas(), main.average_gas());
                 if stats.gas.observe(pr_gas, main_gas) {
-                    if suite.gas_is_gate {
-                        stats
-                            .top_gas_movers
-                            .push(row_label, mode.as_str(), main_gas, pr_gas);
+                    if suite.kind.gas_is_gate() {
+                        stats.top_gas_movers.push(
+                            row_label.as_str(),
+                            mode.as_str(),
+                            main_gas,
+                            pr_gas,
+                        );
+                    } else if (pr_gas == 0) != (main_gas == 0) {
+                        stats.gas_one_sided += 1;
                     } else if let Some(pct) = relative_percent(pr_gas, main_gas) {
                         stats.gas_jitter_percents.push(pct.abs());
-                    } else {
-                        stats.gas_diffs_without_main += 1;
                     }
                 }
             }
@@ -420,43 +450,12 @@ impl SuiteStats {
     }
 }
 
-/// The relative PR-vs-base percentage, `None` on a zero base — every
-/// percentage in the summary comes from here, so zero-base handling cannot
-/// drift between columns.
-pub(crate) fn relative_percent(pr: u64, base: u64) -> Option<f64> {
-    (base != 0).then(|| (pr as f64 - base as f64) / base as f64 * 100.0)
-}
-
-/// The median of the given percentages, if any were collected. Even-length
-/// input averages the two middle elements — at n=2 the upper-middle would be
-/// the maximum, not a median.
-pub(crate) fn median(pcts: &[f64]) -> Option<f64> {
-    if pcts.is_empty() {
-        return None;
-    }
-    let mut pcts = pcts.to_vec();
-    pcts.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let mid = pcts.len() / 2;
-    Some(if pcts.len().is_multiple_of(2) {
-        (pcts[mid - 1] + pcts[mid]) / 2.0
-    } else {
-        pcts[mid]
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::DiffCounter;
+    use super::FailureRegression;
+    use super::FailureRegressions;
     use super::TopMovers;
-    use super::median;
-
-    #[test]
-    fn median_averages_the_two_middles_for_even_input() {
-        assert_eq!(median(&[]), None);
-        assert_eq!(median(&[3.0]), Some(3.0));
-        assert_eq!(median(&[1.0, 3.0]), Some(2.0));
-        assert_eq!(median(&[1.0, 2.0, 30.0]), Some(2.0));
-    }
 
     #[test]
     fn diff_counter_skips_uncollected_pairs_and_sums_deltas() {
@@ -470,6 +469,26 @@ mod tests {
         assert_eq!(counter.cells, 3);
         assert_eq!(counter.diffs, 2);
         assert_eq!(counter.delta, 5);
+    }
+
+    #[test]
+    fn failure_regressions_rank_by_magnitude() {
+        let mut regressions = FailureRegressions::default();
+        for (label, main, pr) in [("small", 1, 2), ("worst", 0, 9), ("middle", 2, 5)] {
+            regressions.push(FailureRegression {
+                label: label.to_owned(),
+                mode: "legacy".to_owned(),
+                kind: "test",
+                main,
+                pr,
+            });
+        }
+        let labels: Vec<&str> = regressions
+            .ranked()
+            .iter()
+            .map(|regression| regression.label.as_str())
+            .collect();
+        assert_eq!(labels, ["worst", "middle", "small"]);
     }
 
     #[test]
