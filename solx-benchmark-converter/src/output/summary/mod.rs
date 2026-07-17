@@ -173,7 +173,7 @@ mod tests {
         (selector.to_string(), test)
     }
 
-    fn failure_test(project: &str, runs: &[(&str, usize, usize)]) -> (String, Test) {
+    fn failure_test(project: &str, runs: &[(&str, usize, Option<usize>)]) -> (String, Test) {
         let selector = Selector {
             project: project.to_owned(),
             case: None,
@@ -388,7 +388,10 @@ mod tests {
             false,
             vec![failure_test(
                 "p",
-                &[("02.solx-main-legacy", 0, 1), ("03.solx-legacy", 0, 1)],
+                &[
+                    ("02.solx-main-legacy", 0, Some(1)),
+                    ("03.solx-legacy", 0, Some(1)),
+                ],
             )],
         );
         foundry.outcome = SuiteOutcome::Failure;
@@ -431,9 +434,9 @@ mod tests {
         let tests = vec![failure_test(
             "flaky-project",
             &[
-                ("02.solx-main-legacy", 0, 2),
-                ("03.solx-legacy", 0, 2),
-                ("02.solx-main-viaIR", 0, 7),
+                ("02.solx-main-legacy", 0, Some(2)),
+                ("03.solx-legacy", 0, Some(2)),
+                ("02.solx-main-viaIR", 0, Some(7)),
             ],
         )];
         let out = render(&[suite("Foundry", false, tests)]);
@@ -444,6 +447,24 @@ mod tests {
             "{out}"
         );
         assert!(out.contains("✅ 0 (2 pre-existing)"), "{out}");
+    }
+
+    #[test]
+    fn tests_that_never_ran_are_not_a_measured_zero() {
+        // A toolchain whose build failed has no test entry: the runner pushes
+        // its build failures and skips the test report entirely. That absence
+        // must not read as a clean baseline the PR regressed against.
+        let tests = vec![failure_test(
+            "p",
+            &[
+                ("02.solx-main-legacy", 2, None),
+                ("03.solx-legacy", 0, Some(3)),
+            ],
+        )];
+        let out = render(&[suite("Foundry", false, tests)]);
+        assert!(!out.contains("test failures 0 → 3"), "{out}");
+        assert!(!out.contains("+3 test"), "{out}");
+        assert!(out.contains("✅ **No new failures**"), "{out}");
     }
 
     #[test]
@@ -559,7 +580,10 @@ mod tests {
                 ),
                 failure_test(
                     "solady",
-                    &[("02.solx-main-legacy", 0, 3), ("03.solx-legacy", 0, 3)],
+                    &[
+                        ("02.solx-main-legacy", 0, Some(3)),
+                        ("03.solx-legacy", 0, Some(3)),
+                    ],
                 ),
                 compile_test(
                     "uniswap-v4",
@@ -589,7 +613,10 @@ mod tests {
             vec![
                 failure_test(
                     "ethers-project",
-                    &[("02.solx-main-legacy", 0, 2), ("03.solx-legacy", 0, 2)],
+                    &[
+                        ("02.solx-main-legacy", 0, Some(2)),
+                        ("03.solx-legacy", 0, Some(2)),
+                    ],
                 ),
                 compile_test(
                     "ethers-project",
@@ -662,23 +689,38 @@ mod tests {
             vec![
                 failure_test(
                     "uniswap-v4",
-                    &[("02.solx-main-legacy", 0, 5), ("03.solx-legacy", 1, 7)],
+                    &[
+                        ("02.solx-main-legacy", 0, Some(5)),
+                        ("03.solx-legacy", 1, Some(7)),
+                    ],
                 ),
                 failure_test(
                     "solady",
-                    &[("02.solx-main-viaIR", 2, 0), ("03.solx-viaIR", 2, 3)],
+                    &[
+                        ("02.solx-main-viaIR", 2, None),
+                        ("03.solx-viaIR", 0, Some(3)),
+                    ],
                 ),
                 failure_test(
                     "op",
-                    &[("02.solx-main-legacy", 0, 4), ("03.solx-legacy", 0, 4)],
+                    &[
+                        ("02.solx-main-legacy", 0, Some(4)),
+                        ("03.solx-legacy", 0, Some(4)),
+                    ],
                 ),
                 failure_test(
                     "aave",
-                    &[("02.solx-main-legacy", 0, 0), ("03.solx-legacy", 1, 2)],
+                    &[
+                        ("02.solx-main-legacy", 0, Some(0)),
+                        ("03.solx-legacy", 1, Some(2)),
+                    ],
                 ),
                 failure_test(
                     "morpho",
-                    &[("02.solx-main-viaIR", 0, 1), ("03.solx-viaIR", 0, 2)],
+                    &[
+                        ("02.solx-main-viaIR", 0, Some(1)),
+                        ("03.solx-viaIR", 0, Some(2)),
+                    ],
                 ),
             ],
         );
@@ -708,7 +750,10 @@ mod tests {
             false,
             vec![failure_test(
                 "hh-project",
-                &[("03.solx-legacy", 0, 5), ("04.mason-legacy", 0, 0)],
+                &[
+                    ("03.solx-legacy", 0, Some(5)),
+                    ("04.mason-legacy", 0, Some(0)),
+                ],
             )],
         );
         // The errored suite keeps its report link: the XLSX can outlive a

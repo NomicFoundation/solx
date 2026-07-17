@@ -199,14 +199,16 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
                     None,
                     run.build_failures_count() as u64,
                 )?;
-                xlsx.test_failures_worksheet.record(
-                    mode,
-                    toolchain_id,
-                    project,
-                    None,
-                    None,
-                    run.test_failures_count() as u64,
-                )?;
+                if let Some(test_failures) = run.test_failures_count() {
+                    xlsx.test_failures_worksheet.record(
+                        mode,
+                        toolchain_id,
+                        project,
+                        None,
+                        None,
+                        test_failures as u64,
+                    )?;
+                }
 
                 if contract.is_none() && function.is_none() {
                     continue;
