@@ -1,6 +1,6 @@
 ### 🧪 Integration tests — standard · PR vs `main`
 
-⚪ **No output data** — no size or gated-gas comparisons were collected.
+⚪ **No output data** — no size or gated-gas comparison had a `main` counterpart to compare against.
 ❌ **New failures** — Foundry: +2 build, +1 test.
 
 | Suite | New failures | Size Δ | Gas Δ | Report |

@@ -1,6 +1,6 @@
 ### 🧪 Integration tests — standard · PR vs `main`
 
-⚠️ **Output changed** — 8 of 9 size comparisons differ (+139 B total); 1 of 1 solx-tester gas comparisons differ. If this PR is meant to be output-preserving, investigate before merging.
+⚠️ **Output changed** — 8 of 9 size comparisons differ (+139 B total); 1 of 1 solx-tester gas comparison differs. If this PR is meant to be output-preserving, investigate before merging.
 ✅ **No new failures**.
 
 | Suite | New failures | Size Δ | Gas Δ | Report |
@@ -19,4 +19,4 @@
 - `src/C5.sol:C5` [legacy, deploy] 1,500 → 1,515 B (+1.0%)
 - `src/C4.sol:C4` [legacy, deploy] 1,400 → 1,414 B (+1.0%)
 - `src/C3.sol:C3` [legacy, deploy] 1,300 → 1,313 B (+1.0%)
-- +3 more — full list in foundry-report.xlsx
+- +3 more — see foundry-report.xlsx
