@@ -4,3 +4,8 @@
 # The fixtures get the same pin so the comparison is LF on both sides.
 solx-benchmark-converter/templates/*.md text eol=lf
 solx-benchmark-converter/src/tests/fixtures/*.md text eol=lf
+
+# The CLI-guide fixtures are hashed in documented compiler output (the
+# metadata example embeds Simple.sol's keccak256), so CRLF checkouts on
+# Windows must not rewrite their line endings.
+docs/src/user-guide/02-command-line-interface.in/** text eol=lf

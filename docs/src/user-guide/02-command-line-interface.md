@@ -61,7 +61,7 @@ $ solx 'Simple.sol' --asm
 
 ======= Simple.sol:Simple =======
 Deploy LLVM EVM assembly:
-	.file	"Simple.sol:Simple"
+	.file	"Simple[..]"
 	.text
 	.globl	__entry                         ; -- Begin function __entry
 __entry:                                ; @__entry
@@ -72,7 +72,7 @@ __entry:                                ; @__entry
 ...
 
 Runtime LLVM EVM assembly:
-	.file	"Simple.sol:Simple.runtime"
+	.file	"Simple[..]runtime"
 	.text
 	.globl	__entry                         ; -- Begin function __entry
 __entry:                                ; @__entry
@@ -118,7 +118,7 @@ $ solx 'Simple.sol' --metadata
 
 ======= Simple.sol:Simple =======
 Metadata:
-{"compiler":{"version":"0.8.34+commit.79519a9b"},"language":"Solidity","output":{"abi":[{"inputs":[],"name":"first","outputs":[{"internalType":"uint64","name":"","type":"uint64"}],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"second","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"pure","type":"function"}],"devdoc":{"kind":"dev","methods":{},"version":1},"userdoc":{"kind":"user","methods":{},"version":1}},"settings":{"compilationTarget":{"Simple.sol":"Simple"},"evmVersion":"osaka","libraries":{},"metadata":{"bytecodeHash":"ipfs"},"optimizer":{"enabled":false,"runs":200},"remappings":[]},"sources":{"Simple.sol":{"keccak256":"0x402fe0b38cc9d81e8c9f6d07854cca27fbb307f06d8a129998026907a10c7ca1","license":"MIT","urls":["bzz-raw://04714cab56c1f931e3cc1ddae4c7ff0c8832d0849e23966c6326028f6783d45a","dweb:/ipfs/QmehmUFKCtytG8WcWQ676KvqwURfkVYK89VHZEvSzyLc2Z"]}},"version":1}
+{"compiler":{"version":"0.8.34+commit.79519a9b[..]"},"language":"Solidity","output":{"abi":[{"inputs":[],"name":"first","outputs":[{"internalType":"uint64","name":"","type":"uint64"}],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"second","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"pure","type":"function"}],"devdoc":{"kind":"dev","methods":{},"version":1},"userdoc":{"kind":"user","methods":{},"version":1}},"settings":{"compilationTarget":{"Simple.sol":"Simple"},"evmVersion":"osaka","libraries":{},"metadata":{"bytecodeHash":"ipfs"},"optimizer":{"enabled":false,"runs":200},"remappings":[]},"sources":{"Simple.sol":{"keccak256":"0x402fe0b38cc9d81e8c9f6d07854cca27fbb307f06d8a129998026907a10c7ca1","license":"MIT","urls":["bzz-raw://04714cab56c1f931e3cc1ddae4c7ff0c8832d0849e23966c6326028f6783d45a","dweb:/ipfs/QmehmUFKCtytG8WcWQ676KvqwURfkVYK89VHZEvSzyLc2Z"]}},"version":1}
 
 ```
 
@@ -277,7 +277,7 @@ object "Simple_24" {
 ...
         }
 
-        data ".metadata" hex"a264697066735822122079ca4620ae16ea2714d740f9b6965b44fc2ec4f860ff2f53840fb596f5baf9d264736f6c63430008220033"
+        data ".metadata" hex"a2646970667358221220[..]64736f6c63430008220033"
     }
 
 }
@@ -660,7 +660,7 @@ $ solx 'Simple.sol' --bin --metadata-hash 'ipfs'
 
 ======= Simple.sol:Simple =======
 Binary:
-34601557630000008480630000001a6080396080f35b5f5ffdfe34600b57600336116016575b5f5ffd5b5060016031565b5f3560e01c633df4ddf48114600f57635a8ac02d03600b5760025b60805260206080f3fea2646970667358221220bec8fa0149a786c5810200ef5a436a154cff832af68ace5beeabcbb82166cb9264736f6c637816736f6c783a302e312e353b736f6c633a302e382e33340047
+34601557630000008480630000001a6080396080f35b5f5ffdfe34600b57600336116016575b5f5ffd5b5060016031565b5f3560e01c633df4ddf48114600f57635a8ac02d03600b5760025b60805260206080f3fea2646970667358221220[..]64736f6c637816736f6c783a302e312e353b736f6c633a302e382e33340047
 
 ```
 
