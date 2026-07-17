@@ -161,12 +161,13 @@ struct Truncated<'a, T> {
 }
 
 impl<'a, T> Truncated<'a, T> {
-    /// Caps an already-ranked listing — the caller ranks first, so the items
-    /// the cap drops are always the least interesting ones.
-    fn new(ranked: &'a [T]) -> Self {
+    /// Caps a listing at `MAX_LISTED`, keeping the leading items and counting
+    /// the rest as overflow. Callers that want the surviving items to be the
+    /// most significant rank the slice before passing it.
+    fn new(items: &'a [T]) -> Self {
         Self {
-            shown: &ranked[..ranked.len().min(MAX_LISTED)],
-            extra: ranked.len().saturating_sub(MAX_LISTED),
+            shown: &items[..items.len().min(MAX_LISTED)],
+            extra: items.len().saturating_sub(MAX_LISTED),
         }
     }
 
@@ -278,7 +279,7 @@ impl OutputVerdict {
                         "{} of {} {} ({} B total)",
                         commas(size.diffs),
                         count_noun(size.cells, "size comparison"),
-                        agreeing(size.cells, "differs", "differ"),
+                        agreeing(size.diffs, "differs", "differ"),
                         signed_commas(size.delta_bytes)
                     ));
                 }
@@ -287,7 +288,7 @@ impl OutputVerdict {
                         "{} of {} {}",
                         commas(gas.diffs),
                         count_noun(gas.cells, format!("{} gas comparison", gas.label).as_str()),
-                        agreeing(gas.cells, "differs", "differ")
+                        agreeing(gas.diffs, "differs", "differ")
                     ));
                 }
                 format!(

@@ -31,17 +31,16 @@ pub use self::toolchain::ToolchainMatrix;
 ///
 /// How the suite's workflow step ended — the comment must distinguish a
 /// suite that never ran from one that errored, and qualify data written by
-/// a step that then failed.
+/// a step that then failed. The `Default` exists only so `SuiteStats` can
+/// derive one; `from_suite` always sets the real outcome over it.
 ///
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
 pub enum SuiteOutcome {
-    /// The step ran to completion. The default only ever fills a `SuiteStats`
-    /// field that `from_suite` always overrides; no rendered outcome reads it.
+    /// The step ran to completion.
     #[default]
     Success,
-    /// The step ran but exited nonzero — any report it wrote may be partial.
-    /// A cancelled step says the same about its data, and names itself so in
-    /// the GitHub Actions vocabulary the workflow passes through.
+    /// The step ran but exited nonzero, or was cancelled; any report it wrote
+    /// may be partial.
     #[value(alias = "cancelled")]
     Failure,
     /// The step never ran (an earlier hard failure); not the suite's fault.
@@ -477,6 +476,40 @@ mod tests {
         let out = render(&[suite(SuiteKind::Foundry, tests)]);
         assert!(out.contains("⚠️ **Output changed**"), "{out}");
         assert!(!out.contains("one-sided"), "{out}");
+    }
+
+    #[test]
+    fn a_single_differing_comparison_among_many_agrees_in_the_singular() {
+        // The verb tracks how many differ, not the total compared: one contract
+        // changing among three reads "1 of 3 … differs", never "differ".
+        let tests = vec![
+            contract_test(
+                "p",
+                "C1",
+                &[
+                    ("02.solx-main-legacy", 1_000, 0),
+                    ("03.solx-legacy", 1_050, 0),
+                ],
+            ),
+            contract_test(
+                "p",
+                "C2",
+                &[
+                    ("02.solx-main-legacy", 2_000, 0),
+                    ("03.solx-legacy", 2_000, 0),
+                ],
+            ),
+            contract_test(
+                "p",
+                "C3",
+                &[
+                    ("02.solx-main-legacy", 3_000, 0),
+                    ("03.solx-legacy", 3_000, 0),
+                ],
+            ),
+        ];
+        let out = render(&[suite(SuiteKind::Foundry, tests)]);
+        assert!(out.contains("1 of 3 size comparisons differs"), "{out}");
     }
 
     #[test]
