@@ -358,16 +358,15 @@ jobs:
       # an explicit "did not run" row (a partial run must never look complete),
       # a suite that ran but exited nonzero gets its data qualified, and a
       # suite that ran but produced no JSON renders as "errored".
-      # When every suite was skipped there is nothing to summarize: the step
-      # skips rather than adding a second red step on top of the real failure,
-      # and the previous summary comment is left in place. Same when the
-      # converter build failed — the binary does not exist to run.
+      # The step skips when the converter build failed — the binary does not
+      # exist to run — leaving the previous summary comment in place rather
+      # than stacking a second red step on top of the real failure.
       # No continue-on-error: losing the summary must fail the job visibly.
       # !cancelled(), not always(): a run cancelled mid-suite (concurrency
       # auto-cancel on push) must not overwrite the last real summary with a
       # bogus "suite errored" row.
       - name: Generate integration summary
-        if: ${{ !cancelled() && steps.build_converter.outcome == 'success' && (steps.solx_tester_bench_pr.outcome != 'skipped' || steps.foundry_tests.outcome != 'skipped' || steps.hardhat_tests.outcome != 'skipped') }}
+        if: ${{ !cancelled() && steps.build_converter.outcome == 'success' }}
         env:
           TESTER_URL: ${{ steps.solx-tester-report.outputs.artifact-url }}
           FOUNDRY_URL: ${{ steps.foundry-report.outputs.artifact-url }}
