@@ -11,7 +11,7 @@ use std::collections::BTreeSet;
 
 use crate::output::summary::compile_aggregate::CompileAggregate;
 use crate::output::summary::diff_counter::DiffCounter;
-use crate::output::summary::failure_regression::FailureRegression;
+use crate::output::summary::failure_regressions::FailureRegression;
 use crate::output::summary::failure_regressions::FailureRegressions;
 use crate::output::summary::paired_bytes::PairedBytes;
 use crate::output::summary::suite_failures::SuiteFailures;

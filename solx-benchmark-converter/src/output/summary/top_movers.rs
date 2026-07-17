@@ -2,8 +2,6 @@
 //! Movements collected for the inline "largest changes" listings.
 //!
 
-use crate::output::summary::movement::Movement;
-
 ///
 /// Movements collected for the inline "largest changes" listings.
 ///
@@ -33,6 +31,16 @@ impl TopMovers {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+}
+
+///
+/// One row's movement between the main and PR toolchains.
+///
+pub struct Movement {
+    pub label: String,
+    pub mode: String,
+    pub main: u64,
+    pub pr: u64,
 }
 
 #[cfg(test)]
