@@ -12,25 +12,69 @@ use crate::output::comparison::Comparison;
 use self::worksheet::Worksheet;
 
 ///
+/// A worksheet of the benchmark workbook, and the only enumeration of them:
+/// the variants are the workbook's sheet order, and creation, totals, diffs,
+/// and finalization all derive from `ALL`. Adding a sheet is one variant and
+/// one `spec` arm; the compiler finds every other site.
+///
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sheet {
+    /// Build failures per project.
+    BuildFailures,
+    /// Test failures per project.
+    TestFailures,
+    /// Runtime fee measurements.
+    RuntimeFee,
+    /// Deployment fee measurements.
+    DeployFee,
+    /// Runtime bytecode size measurements.
+    RuntimeSize,
+    /// Deploy bytecode size measurements.
+    DeploySize,
+    /// Compilation time measurements.
+    CompilationTime,
+    /// Testing time measurements.
+    TestingTime,
+}
+
+impl Sheet {
+    /// Every sheet, in workbook order — which is declaration order, since the
+    /// variant's discriminant indexes its worksheet.
+    const ALL: [Self; 8] = [
+        Self::BuildFailures,
+        Self::TestFailures,
+        Self::RuntimeFee,
+        Self::DeployFee,
+        Self::RuntimeSize,
+        Self::DeploySize,
+        Self::CompilationTime,
+        Self::TestingTime,
+    ];
+
+    /// The sheet's tab name and the headers preceding its value columns.
+    fn spec(self) -> (&'static str, Vec<(&'static str, usize)>) {
+        let project = ("Project", 15);
+        let contract = ("Contract", 60);
+        let function = ("Function", 40);
+        match self {
+            Self::BuildFailures => ("Build Failures", vec![project]),
+            Self::TestFailures => ("Test Failures", vec![project]),
+            Self::RuntimeFee => ("Runtime Gas", vec![project, contract, function]),
+            Self::DeployFee => ("Deploy Gas", vec![project, contract]),
+            Self::RuntimeSize => ("Runtime Size", vec![project, contract]),
+            Self::DeploySize => ("Deploy Size", vec![project, contract]),
+            Self::CompilationTime => ("Compilation Time", vec![project]),
+            Self::TestingTime => ("Testing Time", vec![project]),
+        }
+    }
+}
+
+///
 /// XLSX output format for benchmark data.
 ///
 pub struct Xlsx {
-    /// Worksheet for build failures report.
-    pub build_failures_worksheet: Worksheet,
-    /// Worksheet for test failures report.
-    pub test_failures_worksheet: Worksheet,
-    /// Worksheet for runtime fee measurements.
-    pub runtime_fee_worksheet: Worksheet,
-    /// Worksheet for deployment fee measurements.
-    pub deploy_fee_worksheet: Worksheet,
-    /// Worksheet for runtime bytecode size measurements.
-    pub runtime_size_worksheet: Worksheet,
-    /// Worksheet for deploy bytecode size measurements.
-    pub deploy_size_worksheet: Worksheet,
-    /// Worksheet for compilation time measurements.
-    pub compilation_time_worksheet: Worksheet,
-    /// Worksheet for testing time measurements.
-    pub testing_time_worksheet: Worksheet,
+    /// The worksheets, indexed by `Sheet`.
+    worksheets: Vec<Worksheet>,
 
     /// Toolchain identifiers.
     pub toolchains: Vec<String>,
@@ -43,38 +87,25 @@ impl Xlsx {
     /// Creates a new XLSX workbook.
     ///
     pub fn new() -> anyhow::Result<Self> {
-        let project_header = ("Project", 15);
-        let contract_header = ("Contract", 60);
-        let function_header = ("Function", 40);
-
-        let build_failures_worksheet = Worksheet::new("Build Failures", vec![project_header])?;
-        let test_failures_worksheet = Worksheet::new("Test Failures", vec![project_header])?;
-        let runtime_fee_worksheet = Worksheet::new(
-            "Runtime Gas",
-            vec![project_header, contract_header, function_header],
-        )?;
-        let deploy_fee_worksheet =
-            Worksheet::new("Deploy Gas", vec![project_header, contract_header])?;
-        let runtime_size_worksheet =
-            Worksheet::new("Runtime Size", vec![project_header, contract_header])?;
-        let deploy_size_worksheet =
-            Worksheet::new("Deploy Size", vec![project_header, contract_header])?;
-        let compilation_time_worksheet = Worksheet::new("Compilation Time", vec![project_header])?;
-        let testing_time_worksheet = Worksheet::new("Testing Time", vec![project_header])?;
+        let mut worksheets = Vec::with_capacity(Sheet::ALL.len());
+        for sheet in Sheet::ALL {
+            let (name, headers) = sheet.spec();
+            worksheets.push(Worksheet::new(name, headers)?);
+        }
 
         Ok(Self {
-            build_failures_worksheet,
-            test_failures_worksheet,
-            runtime_fee_worksheet,
-            deploy_fee_worksheet,
-            runtime_size_worksheet,
-            deploy_size_worksheet,
-            compilation_time_worksheet,
-            testing_time_worksheet,
+            worksheets,
 
             toolchains: Vec::with_capacity(8),
             toolchain_ids: HashMap::with_capacity(8),
         })
+    }
+
+    ///
+    /// The worksheet a sheet names.
+    ///
+    fn sheet(&mut self, sheet: Sheet) -> &mut Worksheet {
+        &mut self.worksheets[sheet as usize]
     }
 
     ///
@@ -93,23 +124,6 @@ impl Xlsx {
     }
 
     ///
-    /// Every worksheet, in workbook order — the one enumeration shared by
-    /// totals, diffs, and finalization.
-    ///
-    fn worksheets_mut(&mut self) -> [&mut Worksheet; 8] {
-        [
-            &mut self.build_failures_worksheet,
-            &mut self.test_failures_worksheet,
-            &mut self.runtime_fee_worksheet,
-            &mut self.deploy_fee_worksheet,
-            &mut self.runtime_size_worksheet,
-            &mut self.deploy_size_worksheet,
-            &mut self.compilation_time_worksheet,
-            &mut self.testing_time_worksheet,
-        ]
-    }
-
-    ///
     /// Returns the final workbook with all non-empty worksheets.
     ///
     /// Worksheets without data rows are dropped: some suites legitimately
@@ -119,20 +133,12 @@ impl Xlsx {
     /// as-is, since XLSX requires at least one worksheet.
     ///
     pub fn finalize(self) -> rust_xlsxwriter::Workbook {
-        let worksheets = [
-            self.build_failures_worksheet,
-            self.test_failures_worksheet,
-            self.runtime_fee_worksheet,
-            self.deploy_fee_worksheet,
-            self.runtime_size_worksheet,
-            self.deploy_size_worksheet,
-            self.compilation_time_worksheet,
-            self.testing_time_worksheet,
-        ];
-
         let mut workbook = rust_xlsxwriter::Workbook::new();
-        let all_empty = worksheets.iter().all(|worksheet| worksheet.rows.is_empty());
-        for worksheet in worksheets {
+        let all_empty = self
+            .worksheets
+            .iter()
+            .all(|worksheet| worksheet.rows.is_empty());
+        for worksheet in self.worksheets {
             if all_empty || !worksheet.rows.is_empty() {
                 workbook.push_worksheet(worksheet.into_inner());
             }
@@ -172,7 +178,7 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
                 let project = project.as_str();
 
                 if !run.compilation_time.is_empty() {
-                    xlsx.compilation_time_worksheet.record(
+                    xlsx.sheet(Sheet::CompilationTime).record(
                         mode,
                         toolchain_id,
                         project,
@@ -182,7 +188,7 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
                     )?;
                 }
                 if !run.testing_time.is_empty() {
-                    xlsx.testing_time_worksheet.record(
+                    xlsx.sheet(Sheet::TestingTime).record(
                         mode,
                         toolchain_id,
                         project,
@@ -192,7 +198,7 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
                     )?;
                 }
                 if let Some(build_failures) = run.build_failures_count() {
-                    xlsx.build_failures_worksheet.record(
+                    xlsx.sheet(Sheet::BuildFailures).record(
                         mode,
                         toolchain_id,
                         project,
@@ -202,7 +208,7 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
                     )?;
                 }
                 if let Some(test_failures) = run.test_failures_count() {
-                    xlsx.test_failures_worksheet.record(
+                    xlsx.sheet(Sheet::TestFailures).record(
                         mode,
                         toolchain_id,
                         project,
@@ -217,7 +223,7 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
                 }
                 if is_deployer {
                     if test.non_zero_gas_values > 0 {
-                        xlsx.deploy_fee_worksheet.record(
+                        xlsx.sheet(Sheet::DeployFee).record(
                             mode,
                             toolchain_id,
                             project,
@@ -227,7 +233,7 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
                         )?;
                     }
                 } else {
-                    xlsx.runtime_fee_worksheet.record(
+                    xlsx.sheet(Sheet::RuntimeFee).record(
                         mode,
                         toolchain_id,
                         project,
@@ -237,7 +243,7 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
                     )?;
                 }
                 if !run.size.is_empty() {
-                    xlsx.deploy_size_worksheet.record(
+                    xlsx.sheet(Sheet::DeploySize).record(
                         mode,
                         toolchain_id,
                         project,
@@ -247,7 +253,7 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
                     )?;
                 }
                 if !run.runtime_size.is_empty() {
-                    xlsx.runtime_size_worksheet.record(
+                    xlsx.sheet(Sheet::RuntimeSize).record(
                         mode,
                         toolchain_id,
                         project,
@@ -260,7 +266,7 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
         }
 
         let toolchain_count = xlsx.toolchain_ids.len();
-        for worksheet in xlsx.worksheets_mut() {
+        for worksheet in xlsx.worksheets.iter_mut() {
             worksheet.set_totals(toolchain_count)?;
         }
 
@@ -281,7 +287,7 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
         for (index, (left_id, left_name, right_id, right_name)) in
             comparison_mapping.into_iter().enumerate()
         {
-            for worksheet in xlsx.worksheets_mut() {
+            for worksheet in xlsx.worksheets.iter_mut() {
                 worksheet.set_diffs(
                     left_id,
                     left_name.as_str(),
@@ -294,5 +300,25 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
         }
 
         Ok(xlsx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Sheet;
+    use super::Xlsx;
+
+    #[test]
+    fn every_sheet_indexes_its_own_worksheet() {
+        // `sheet as usize` indexes the worksheets `new` filled in `ALL` order:
+        // a variant added mid-enum but appended to `ALL` would silently write
+        // every later sheet's data to the wrong tab.
+        let mut xlsx = Xlsx::new().expect("workbook creation");
+        assert_eq!(xlsx.worksheets.len(), Sheet::ALL.len());
+        for (index, sheet) in Sheet::ALL.into_iter().enumerate() {
+            assert_eq!(sheet as usize, index, "{sheet:?}");
+            let (name, headers) = sheet.spec();
+            assert_eq!(xlsx.sheet(sheet).headers, headers, "{name}");
+        }
     }
 }
