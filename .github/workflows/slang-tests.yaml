@@ -4,6 +4,9 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
   merge_group:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -18,9 +21,10 @@ jobs:
 
   label-check:
     if: >-
-      (github.event.action == 'labeled' && github.event.label.name == 'ci:slang'
+      github.event_name == 'push'
+      || ((github.event.action == 'labeled' && github.event.label.name == 'ci:slang'
       || github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'ci:slang'))
-      && !github.event.pull_request.head.repo.fork
+      && !github.event.pull_request.head.repo.fork)
     runs-on: ubuntu-24.04
     steps:
       - run: 'true'
@@ -144,9 +148,7 @@ jobs:
           # `cargo test-slang` writes to target-slang, not target (.cargo/config.toml alias)
           workspaces: ". -> target-slang"
           cache-on-failure: true
-          # Label-gated workflow that never runs on main: branch-scoped saves
-          # are the only way this cache can populate.
-          save-if: 'true'
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run slang tests
         uses: ./.github/actions/rust-unit-tests
