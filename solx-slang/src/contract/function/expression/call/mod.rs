@@ -197,11 +197,12 @@ impl Call {
                     }
                     None => (Vec::new(), None, false),
                 };
-                (if custom {
+                let require = if custom {
                     solx_mlir::Block::require_custom
                 } else {
                     solx_mlir::Block::require
-                })(
+                };
+                require(
                     scope.current_block(),
                     condition,
                     &values,
@@ -212,10 +213,9 @@ impl Call {
             }
             BuiltIn::Revert => {
                 let signature: String = match arguments.iter().next() {
-                    None => String::new(),
                     Some(Expression::StringExpression(string_expression)) => {
                         let message = String::from_utf8(string_expression.value())
-                            .expect("slang validates string literals are UTF-8");
+                            .expect("slang validates string lals are UTF-8");
                         if message.is_empty() {
                             unimplemented!(
                                 "revert with an empty reason is not yet supported; use revert() for a no-data revert"
@@ -223,7 +223,8 @@ impl Call {
                         }
                         message
                     }
-                    Some(_) => unreachable!("revert message is a string literal"),
+                    Some(_) => unreachable!("revert message is a string lal"),
+                    None => String::new(),
                 };
                 scope.current_block().revert(&signature, &[], scope);
                 None
