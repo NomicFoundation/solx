@@ -20,7 +20,7 @@ use crate::input::testing_time::TestingTimeReport;
 use crate::output::Output;
 use crate::output::format::Format;
 use crate::output::json::Json;
-use crate::output::summary::SuiteKind;
+use crate::suite_kind::SuiteKind;
 
 use self::test::Test;
 use self::test::input::Input as TestInput;
