@@ -318,7 +318,7 @@ impl Benchmark {
             .entry(name)
             .or_insert_with(|| Test::new(TestMetadata::new(selector, vec![])));
         let run = test.runs.entry(toolchain.clone()).or_default();
-        run.test_failures = test_failures.0;
+        run.test_failures = Some(test_failures.0);
 
         Ok(())
     }

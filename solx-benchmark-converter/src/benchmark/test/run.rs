@@ -28,9 +28,10 @@ pub struct Run {
     /// Build failures count.
     #[serde(default)]
     pub build_failures: usize,
-    /// Test failures count.
+    /// Test failures count. `None` where the tests never ran: a toolchain
+    /// whose build failed has no test entry, which is not a measured zero.
     #[serde(default)]
-    pub test_failures: usize,
+    pub test_failures: Option<usize>,
 }
 
 impl Run {
@@ -48,7 +49,11 @@ impl Run {
         self.testing_time
             .extend_from_slice(other.testing_time.as_slice());
         self.build_failures += other.build_failures;
-        self.test_failures += other.test_failures;
+        self.test_failures = match (self.test_failures, other.test_failures) {
+            (Some(left), Some(right)) => Some(left + right),
+            (Some(count), None) | (None, Some(count)) => Some(count),
+            (None, None) => None,
+        };
     }
 
     ///
@@ -114,9 +119,16 @@ impl Run {
     }
 
     ///
-    /// Test failures count.
+    /// Test failures count, or `None` where the tests never ran.
     ///
-    pub fn test_failures_count(&self) -> usize {
+    pub fn test_failures_count(&self) -> Option<usize> {
         self.test_failures
+    }
+
+    ///
+    /// Build and test failures count. Tests that never ran contribute nothing.
+    ///
+    pub fn failures_count(&self) -> usize {
+        self.build_failures + self.test_failures.unwrap_or_default()
     }
 }

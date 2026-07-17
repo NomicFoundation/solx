@@ -320,18 +320,21 @@ impl SuiteStats {
             for (key, pr) in pr_runs.iter() {
                 let Some(main) = main_runs.get(key) else {
                     stats.unbaselined_runs += 1;
-                    stats.unbaselined_failures += pr.build_failures + pr.test_failures;
+                    stats.unbaselined_failures += pr.failures_count();
                     continue;
                 };
                 stats.paired_runs += 1;
                 stats.baseline_build_failures += main.build_failures;
-                stats.baseline_test_failures += main.test_failures;
+                stats.baseline_test_failures += main.test_failures.unwrap_or_default();
                 let mode = humanize_mode(key);
 
                 for (is_build, main_v, pr_v) in [
-                    (true, main.build_failures, pr.build_failures),
+                    (true, Some(main.build_failures), Some(pr.build_failures)),
                     (false, main.test_failures, pr.test_failures),
                 ] {
+                    let (Some(main_v), Some(pr_v)) = (main_v, pr_v) else {
+                        continue;
+                    };
                     if pr_v > main_v {
                         let counter = if is_build {
                             &mut stats.new_build_failures
@@ -386,7 +389,7 @@ impl SuiteStats {
             for (key, main) in main_runs.iter() {
                 if !pr_runs.contains_key(key) {
                     stats.main_orphan_runs += 1;
-                    stats.main_orphan_failures += main.build_failures + main.test_failures;
+                    stats.main_orphan_failures += main.failures_count();
                 }
             }
         }
