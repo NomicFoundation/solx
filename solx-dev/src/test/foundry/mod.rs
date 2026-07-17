@@ -521,11 +521,10 @@ pub fn test(
             )
         })
         .collect();
-    crate::test::write_reports(
-        benchmark,
+    benchmark.write_reports(
         comparisons,
-        output_directory,
         solx_benchmark_converter::SuiteKind::Foundry,
+        output_directory.as_path(),
     )?;
 
     // usize::MAX marks a zero-error build that emitted no bytecode.

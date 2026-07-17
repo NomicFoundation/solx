@@ -404,11 +404,10 @@ pub fn test(
             )
         })
         .collect();
-    crate::test::write_reports(
-        benchmark,
+    benchmark.write_reports(
         comparisons,
-        output_directory,
         solx_benchmark_converter::SuiteKind::Hardhat,
+        output_directory.as_path(),
     )?;
 
     let mut errors = Vec::new();

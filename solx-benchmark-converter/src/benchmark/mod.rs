@@ -15,6 +15,11 @@ use crate::input::foundry_gas::FoundryGasReport;
 use crate::input::foundry_size::FoundrySizeReport;
 use crate::input::test_failures::TestFailuresReport;
 use crate::input::testing_time::TestingTimeReport;
+use crate::output::Output;
+use crate::output::comparison::Comparison;
+use crate::output::format::Format;
+use crate::output::json::Json;
+use crate::output::summary::SuiteKind;
 
 use self::test::Test;
 use self::test::input::Input as TestInput;
@@ -371,6 +376,25 @@ impl Benchmark {
                         && function == Some(*function_b)
                 })
         });
+    }
+
+    ///
+    /// Writes this benchmark's JSON and XLSX reports for the given suite into
+    /// the directory: the JSON feeds the summary comment, the XLSX is the
+    /// uploaded artifact. The suite kind supplies the file names.
+    ///
+    pub fn write_reports(
+        self,
+        comparisons: Vec<Comparison>,
+        kind: SuiteKind,
+        output_directory: &Path,
+    ) -> anyhow::Result<()> {
+        std::fs::create_dir_all(output_directory)?;
+        Output::from(Json::from(&self))
+            .write_to_file(output_directory.join(kind.benchmark_file()))?;
+        let report: Output = (self, comparisons, Format::Xlsx).try_into()?;
+        report.write_to_file(output_directory.join(kind.report_file()))?;
+        Ok(())
     }
 }
 

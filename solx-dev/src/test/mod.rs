@@ -2,7 +2,6 @@
 //! `solx` test tools.
 //!
 
-use colored::Colorize;
 use itertools::Itertools;
 
 pub mod foundry;
@@ -18,46 +17,6 @@ pub(crate) const CODEGENS: [&str; 2] = ["legacy", "viaIR"];
 ///
 pub(crate) fn toolchain_name(compiler_name: &str, codegen: &str) -> String {
     format!("{compiler_name}-{codegen}")
-}
-
-///
-/// Writes a suite's benchmark JSON and XLSX report into the output directory
-/// — one emission tail shared by the Foundry and Hardhat runners so the two
-/// cannot drift.
-///
-pub(crate) fn write_reports(
-    benchmark: solx_benchmark_converter::Benchmark,
-    comparisons: Vec<solx_benchmark_converter::OutputComparison>,
-    output_directory: std::path::PathBuf,
-    kind: solx_benchmark_converter::SuiteKind,
-) -> anyhow::Result<()> {
-    std::fs::create_dir_all(output_directory.as_path()).map_err(|error| {
-        anyhow::anyhow!(
-            "{} {} output reports directory {output_directory:?}: {error}",
-            "Creating".bright_green().bold(),
-            kind.label(),
-        )
-    })?;
-    let base_path = crate::utils::absolute_path(output_directory)?;
-
-    solx_benchmark_converter::Output::from(solx_benchmark_converter::OutputJson::from(&benchmark))
-        .write_to_file(base_path.join(kind.benchmark_file()))?;
-
-    let output: solx_benchmark_converter::Output = (
-        benchmark,
-        comparisons,
-        solx_benchmark_converter::OutputFormat::Xlsx,
-    )
-        .try_into()?;
-    let mut output_path = base_path;
-    output_path.push(kind.report_file());
-    eprintln!(
-        "{} the spreadsheet report to {}",
-        solx_utils::cargo_status_ok("Writing"),
-        output_path.to_string_lossy().bright_white().bold()
-    );
-    output.write_to_file(output_path)?;
-    Ok(())
 }
 
 ///
