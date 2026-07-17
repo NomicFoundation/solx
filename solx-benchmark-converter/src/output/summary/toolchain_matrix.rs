@@ -10,7 +10,7 @@
 //! misclassified baseline.
 //!
 
-use crate::output::summary::role::Role;
+use crate::role::Role;
 
 ///
 /// Which comparison matrix a suite's benchmark comes from — the two harnesses
@@ -100,8 +100,8 @@ impl ToolchainMatrix {
 
 #[cfg(test)]
 mod tests {
-    use crate::output::summary::role::Role;
     use crate::output::summary::toolchain_matrix::ToolchainMatrix;
+    use crate::role::Role;
 
     #[test]
     fn classify_covers_every_toolchain_naming() {

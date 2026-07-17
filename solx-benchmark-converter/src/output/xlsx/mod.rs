@@ -8,7 +8,7 @@ pub mod worksheet;
 use std::collections::HashMap;
 
 use crate::benchmark::Benchmark;
-use crate::output::comparison::Comparison;
+use crate::comparison::Comparison;
 use crate::output::xlsx::sheet::Sheet;
 
 use self::worksheet::Worksheet;

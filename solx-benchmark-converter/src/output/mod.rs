@@ -2,7 +2,6 @@
 //! Benchmark analyzer output.
 //!
 
-pub mod comparison;
 pub mod format;
 pub mod json;
 pub mod summary;
@@ -11,7 +10,7 @@ pub mod xlsx;
 use std::path::PathBuf;
 
 use crate::benchmark::Benchmark;
-use crate::output::comparison::Comparison;
+use crate::comparison::Comparison;
 use crate::output::format::Format;
 use crate::output::json::Json;
 use crate::output::xlsx::Xlsx;
