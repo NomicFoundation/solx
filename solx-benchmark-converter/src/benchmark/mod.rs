@@ -38,10 +38,10 @@ pub struct Benchmark {
 }
 
 impl Benchmark {
-    /// Tests whose measurements are known-meaningless noise (proxy fallbacks
-    /// and brutalized multicalls whose gas depends on the delegated payload),
+    /// Tests whose measurements are known-meaningless noise: proxy fallbacks
+    /// and brutalized multicalls whose gas depends on the delegated payload,
     /// as `(project, contract, function)`. Filtered out of the benchmark
-    /// itself so every report — spreadsheet and PR summary alike — agrees on
+    /// itself so every report, spreadsheet and PR summary alike, agrees on
     /// the data set.
     const BLACKLIST: [(&str, &str, &str); 3] = [
         (
@@ -64,8 +64,12 @@ impl Benchmark {
     ///
     /// Creates a benchmark from multiple inputs.
     ///
+    /// # Errors
+    ///
+    /// Returns an error if extending the benchmark with any input fails.
+    ///
     pub fn from_inputs<I: IntoIterator<Item = Input>>(inputs: I) -> anyhow::Result<Self> {
-        let mut benchmark = Benchmark::default();
+        let mut benchmark = Self::default();
         for input in inputs {
             benchmark.extend(input)?;
         }
@@ -76,6 +80,10 @@ impl Benchmark {
 
     ///
     /// Extend the benchmark data with a generic report.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if merging the report into the benchmark fails.
     ///
     pub fn extend(&mut self, input: Input) -> anyhow::Result<()> {
         let toolchain = input.toolchain;
@@ -108,6 +116,10 @@ impl Benchmark {
 
     ///
     /// Extend the benchmark data with a native benchmark report.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if merging a run's measurements fails.
     ///
     pub fn extend_with_native_report(
         &mut self,
@@ -151,6 +163,10 @@ impl Benchmark {
 
     ///
     /// Extend the benchmark data with a Foundry gas report.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the Foundry gas report cannot be merged into the benchmark.
     ///
     pub fn extend_with_foundry_gas_report(
         &mut self,
@@ -203,6 +219,10 @@ impl Benchmark {
     ///
     /// Extend the benchmark data with a Foundry size report.
     ///
+    /// # Errors
+    ///
+    /// Returns an error if the Foundry size report cannot be merged into the benchmark.
+    ///
     pub fn extend_with_foundry_size_report(
         &mut self,
         toolchain: String,
@@ -234,6 +254,10 @@ impl Benchmark {
     ///
     /// Extend the benchmark data with a compilation time report.
     ///
+    /// # Errors
+    ///
+    /// Returns an error if the compilation time report cannot be merged into the benchmark.
+    ///
     pub fn extend_with_compilation_time_report(
         &mut self,
         toolchain: String,
@@ -259,6 +283,10 @@ impl Benchmark {
 
     ///
     /// Extend the benchmark data with a testing time report.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the testing time report cannot be merged into the benchmark.
     ///
     pub fn extend_with_testing_time_report(
         &mut self,
@@ -286,6 +314,10 @@ impl Benchmark {
     ///
     /// Extend the benchmark data with a build failures report.
     ///
+    /// # Errors
+    ///
+    /// Returns an error if the build failures report cannot be merged into the benchmark.
+    ///
     pub fn extend_with_build_failures_report(
         &mut self,
         toolchain: String,
@@ -311,6 +343,10 @@ impl Benchmark {
 
     ///
     /// Extend the benchmark data with a test failures report.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the test failures report cannot be merged into the benchmark.
     ///
     pub fn extend_with_test_failures_report(
         &mut self,
@@ -382,6 +418,11 @@ impl Benchmark {
     /// Writes this benchmark's JSON and XLSX reports for the given suite into
     /// the directory: the JSON feeds the summary comment, the XLSX is the
     /// uploaded artifact. The suite kind supplies the file names.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the output directory cannot be created or a report
+    /// file cannot be written.
     ///
     pub fn write_reports(
         self,

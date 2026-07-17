@@ -2,9 +2,6 @@
 //! Counts PR-vs-main comparison pairs and the differing subset.
 //!
 
-use crate::utils::commas;
-use crate::utils::signed_commas;
-
 ///
 /// Counts PR-vs-main comparison pairs and the differing subset.
 ///
@@ -36,7 +33,7 @@ impl DiffCounter {
         true
     }
 
-    /// Whether any pair was recorded — false renders as "not collected".
+    /// Whether any pair was recorded. A false result renders as "not collected".
     pub fn collected(&self) -> bool {
         self.cells > 0
     }
@@ -55,13 +52,17 @@ impl DiffCounter {
             return "⚪ not collected".to_owned();
         }
         if self.diffs == 0 {
-            return format!("✅ 0 of {}", commas(self.cells));
+            return format!("✅ 0 of {}", crate::utils::commas(self.cells));
         }
         let delta = if delta_suffix {
-            format!(" ({} B)", signed_commas(self.delta))
+            format!(" ({} B)", crate::utils::signed_commas(self.delta))
         } else {
             String::new()
         };
-        format!("⚠️ {} of {}{delta}", commas(self.diffs), commas(self.cells))
+        format!(
+            "⚠️ {} of {}{delta}",
+            crate::utils::commas(self.diffs),
+            crate::utils::commas(self.cells)
+        )
     }
 }

@@ -2,6 +2,10 @@
 //! Output benchmark format.
 //!
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result;
+
 use clap::ValueEnum;
 
 ///
@@ -16,11 +20,11 @@ pub enum Format {
     Xlsx,
 }
 
-impl std::fmt::Display for Format {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Format {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            Format::Json => write!(f, "json"),
-            Format::Xlsx => write!(f, "xlsx"),
+            Self::Json => write!(f, "json"),
+            Self::Xlsx => write!(f, "xlsx"),
         }
     }
 }

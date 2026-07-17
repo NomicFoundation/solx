@@ -4,23 +4,23 @@
 
 use crate::benchmark::Benchmark;
 use crate::benchmark::test::Test;
-use crate::benchmark::test::input::Input as TestInput;
-use crate::benchmark::test::metadata::Metadata as TestMetadata;
-use crate::benchmark::test::selector::Selector as TestSelector;
+use crate::benchmark::test::input::Input;
+use crate::benchmark::test::metadata::Metadata;
+use crate::benchmark::test::selector::Selector;
 
 impl Benchmark {
     fn insert_test(&mut self, project: &str, contract: &str, function: &str) {
-        let selector = TestSelector {
+        let selector = Selector {
             project: project.to_owned(),
             case: Some(contract.to_owned()),
-            input: Some(TestInput::Runtime {
+            input: Some(Input::Runtime {
                 input_index: 0,
                 name: function.to_owned(),
             }),
         };
         self.tests.insert(
             selector.to_string(),
-            Test::new(TestMetadata::new(selector, vec![])),
+            Test::new(Metadata::new(selector, vec![])),
         );
     }
 }

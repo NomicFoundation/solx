@@ -2,6 +2,8 @@
 //! Regressions collected for the inline "new failures" listing.
 //!
 
+use std::cmp::Reverse;
+
 ///
 /// Regressions collected for the inline "new failures" listing.
 ///
@@ -17,7 +19,7 @@ impl FailureRegressions {
     /// the worst first and counts the rest as "+N more".
     pub fn ranked(&self) -> Vec<&FailureRegression> {
         let mut regressions: Vec<&FailureRegression> = self.0.iter().collect();
-        regressions.sort_by_key(|regression| std::cmp::Reverse(regression.pr - regression.main));
+        regressions.sort_by_key(|regression| Reverse(regression.pr - regression.main));
         regressions
     }
 }

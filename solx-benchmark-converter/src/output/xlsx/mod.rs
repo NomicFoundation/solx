@@ -7,10 +7,12 @@ pub mod worksheet;
 
 use std::collections::HashMap;
 
-use self::sheet::Sheet;
+use rust_xlsxwriter::Workbook;
+
 use crate::benchmark::Benchmark;
 use crate::comparison::Comparison;
 
+use self::sheet::Sheet;
 use self::worksheet::Worksheet;
 
 ///
@@ -29,6 +31,10 @@ pub struct Xlsx {
 impl Xlsx {
     ///
     /// Creates a new XLSX workbook.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a worksheet fails to initialize.
     ///
     pub fn new() -> anyhow::Result<Self> {
         let mut worksheets = Vec::with_capacity(Sheet::ALL.len());
@@ -71,13 +77,13 @@ impl Xlsx {
     /// Returns the final workbook with all non-empty worksheets.
     ///
     /// Worksheets without data rows are dropped: some suites legitimately
-    /// never produce certain measurements (e.g. Hardhat collects no gas or
-    /// size), and an empty sheet with dangling comparison columns reads as
-    /// broken data rather than absent data. An all-empty workbook is kept
-    /// as-is, since XLSX requires at least one worksheet.
+    /// never produce certain measurements, for example Hardhat collects no
+    /// gas or size, and an empty sheet with dangling comparison columns
+    /// reads as broken data rather than absent data. An all-empty workbook
+    /// is kept as-is, since XLSX requires at least one worksheet.
     ///
-    pub fn finalize(self) -> rust_xlsxwriter::Workbook {
-        let mut workbook = rust_xlsxwriter::Workbook::new();
+    pub fn finalize(self) -> Workbook {
+        let mut workbook = Workbook::new();
         let all_empty = self
             .worksheets
             .iter()

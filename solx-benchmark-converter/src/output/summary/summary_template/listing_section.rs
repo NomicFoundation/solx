@@ -19,7 +19,7 @@ pub struct ListingSection {
 }
 
 impl ListingSection {
-    /// The listings behind an "Output changed" verdict, inline — a bytecode
+    /// The listings behind an "Output changed" verdict, inline. A bytecode
     /// size change means semantics possibly changed, so it is never folded
     /// away.
     pub fn from_stats(stats: &[SuiteStats]) -> Vec<Self> {

@@ -4,12 +4,17 @@
 
 use std::collections::HashMap;
 
+use rust_xlsxwriter::Format;
+use rust_xlsxwriter::FormatAlign;
+use rust_xlsxwriter::FormatBorder;
+use rust_xlsxwriter::Worksheet as XlsxWorksheet;
+
 ///
 /// XLSX worksheet for benchmark data.
 ///
 pub struct Worksheet {
     /// The inner worksheet.
-    pub worksheet: rust_xlsxwriter::Worksheet,
+    pub worksheet: XlsxWorksheet,
     /// Test indexes in the worksheet.
     pub rows: HashMap<String, u32>,
     /// Header names and their column widths.
@@ -26,8 +31,12 @@ impl Worksheet {
     ///
     /// Creates a new worksheet with the given name.
     ///
+    /// # Errors
+    ///
+    /// Returns an error if setting the worksheet name or writing a header cell fails.
+    ///
     pub fn new(name: &str, headers: Vec<(&'static str, usize)>) -> anyhow::Result<Self> {
-        let mut worksheet = rust_xlsxwriter::Worksheet::new();
+        let mut worksheet = XlsxWorksheet::new();
         worksheet.set_name(name)?;
 
         for (header_index, (header_name, column_width)) in headers.iter().enumerate() {
@@ -49,6 +58,10 @@ impl Worksheet {
 
     ///
     /// Adds a new column for a toolchain.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if setting the column width or writing the header cell fails.
     ///
     pub fn add_toolchain_column(
         &mut self,
@@ -73,6 +86,10 @@ impl Worksheet {
 
     ///
     /// Adds a new row for a test and writes a value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if writing a row header or value cell fails.
     ///
     pub fn write_test_value(
         &mut self,
@@ -128,6 +145,10 @@ impl Worksheet {
     /// Writes one measurement cell, allocating the toolchain column on
     /// demand.
     ///
+    /// # Errors
+    ///
+    /// Returns an error if allocating the toolchain column or writing the value fails.
+    ///
     pub fn record(
         &mut self,
         toolchain_name: &str,
@@ -143,6 +164,10 @@ impl Worksheet {
 
     ///
     /// Sets totals for each column in the worksheet.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error on an unexpected total row index or if writing a cell or formula fails.
     ///
     pub fn set_totals(&mut self, column_count: usize) -> anyhow::Result<()> {
         if self.rows.is_empty() {
@@ -218,6 +243,10 @@ impl Worksheet {
     ///
     /// Sets diffs for the first two data columns in the worksheet.
     ///
+    /// # Errors
+    ///
+    /// Returns an error if writing the comparison header, column width, or a formula cell fails.
+    ///
     pub fn set_diffs(
         &mut self,
         toolchain_id_1: u16,
@@ -266,90 +295,90 @@ impl Worksheet {
     ///
     /// Finalizes the worksheet and returns its inner object.
     ///
-    pub fn into_inner(self) -> rust_xlsxwriter::Worksheet {
+    pub fn into_inner(self) -> XlsxWorksheet {
         self.worksheet
     }
 
     ///
     /// Returns the eponymous cell format.
     ///
-    fn worksheet_caption_format() -> rust_xlsxwriter::Format {
-        rust_xlsxwriter::Format::new()
+    fn worksheet_caption_format() -> Format {
+        Format::new()
             .set_bold()
             .set_font_size(16)
             .set_font_color("#FFFFFF")
             .set_background_color("#4C6EF5")
-            .set_align(rust_xlsxwriter::FormatAlign::Center)
-            .set_align(rust_xlsxwriter::FormatAlign::VerticalCenter)
-            .set_border(rust_xlsxwriter::FormatBorder::None)
+            .set_align(FormatAlign::Center)
+            .set_align(FormatAlign::VerticalCenter)
+            .set_border(FormatBorder::None)
     }
 
     ///
     /// Returns the eponymous cell format.
     ///
-    fn column_header_format() -> rust_xlsxwriter::Format {
-        rust_xlsxwriter::Format::new()
+    fn column_header_format() -> Format {
+        Format::new()
             .set_bold()
             .set_font_size(12)
             .set_font_color("#1E1E1E")
             .set_background_color("#EEF3FF")
-            .set_align(rust_xlsxwriter::FormatAlign::Center)
-            .set_align(rust_xlsxwriter::FormatAlign::Top)
-            .set_border(rust_xlsxwriter::FormatBorder::None)
+            .set_align(FormatAlign::Center)
+            .set_align(FormatAlign::Top)
+            .set_border(FormatBorder::None)
     }
 
     ///
     /// Returns the eponymous cell format.
     ///
-    fn column_comparison_header_format() -> rust_xlsxwriter::Format {
-        rust_xlsxwriter::Format::new()
+    fn column_comparison_header_format() -> Format {
+        Format::new()
             .set_bold()
             .set_font_size(11)
             .set_font_color("#1E1E1E")
             .set_background_color("#EEF3FF")
-            .set_align(rust_xlsxwriter::FormatAlign::Center)
-            .set_align(rust_xlsxwriter::FormatAlign::VerticalCenter)
-            .set_border(rust_xlsxwriter::FormatBorder::None)
+            .set_align(FormatAlign::Center)
+            .set_align(FormatAlign::VerticalCenter)
+            .set_border(FormatBorder::None)
     }
 
     ///
     /// Returns the eponymous cell format.
     ///
-    fn row_header_format() -> rust_xlsxwriter::Format {
-        rust_xlsxwriter::Format::new()
+    fn row_header_format() -> Format {
+        Format::new()
             .set_font_size(12)
             .set_font_color("#1E1E1E")
             .set_background_color("#DDE6FF")
-            .set_align(rust_xlsxwriter::FormatAlign::Left)
-            .set_border(rust_xlsxwriter::FormatBorder::None)
+            .set_align(FormatAlign::Left)
+            .set_border(FormatBorder::None)
     }
 
     ///
     /// Returns the eponymous cell format.
     ///
-    fn row_header_summary_format() -> rust_xlsxwriter::Format {
+    fn row_header_summary_format() -> Format {
         Self::row_header_format()
             .set_font_size(16)
             .set_bold()
-            .set_align(rust_xlsxwriter::FormatAlign::Right)
+            .set_align(FormatAlign::Right)
     }
 
     ///
     /// Returns the eponymous cell format.
     ///
-    fn value_format() -> rust_xlsxwriter::Format {
-        rust_xlsxwriter::Format::new()
+    fn value_format() -> Format {
+        Format::new()
             .set_font_size(12)
             .set_font_color("#000000")
             .set_background_color("#FFFFFF")
-            .set_align(rust_xlsxwriter::FormatAlign::Right)
-            .set_border(rust_xlsxwriter::FormatBorder::None)
+            .set_align(FormatAlign::Right)
+            .set_border(FormatBorder::None)
     }
 
     ///
     /// Returns the eponymous cell format.
     ///
-    fn percent_format() -> rust_xlsxwriter::Format {
+    fn percent_format() -> Format {
         Self::value_format().set_num_format("0.000%")
     }
 }

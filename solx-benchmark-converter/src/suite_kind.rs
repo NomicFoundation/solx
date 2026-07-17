@@ -10,10 +10,10 @@ use crate::summary_suite::SummarySuite;
 use crate::toolchain_matrix::ToolchainMatrix;
 
 ///
-/// The suites the workflow feeds in — the one place owning each suite's
+/// The suites the workflow feeds in, the one place owning each suite's
 /// label, file names, gas gating, and toolchain matrix, so the binary, the
-/// harness writers, and the tests cannot drift apart (a gas-gated Project
-/// suite is unrepresentable).
+/// harness writers, and the tests cannot drift apart: a gas-gated Project
+/// suite is unrepresentable.
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SuiteKind {
@@ -69,11 +69,11 @@ impl SuiteKind {
 
     ///
     /// Loads this suite for the summary, or `None` when it was not part of the
-    /// invocation (no benchmark and not skipped). A skipped outcome renders a
-    /// "did not run" row; a benchmark path that will not parse renders the
-    /// suite as errored rather than aborting the summary for the healthy ones.
-    /// A skipped upload step passes its URL through as an empty string, which
-    /// is treated as no URL.
+    /// invocation, having no benchmark and not being skipped. A skipped outcome
+    /// renders a "did not run" row; a benchmark path that will not parse renders
+    /// the suite as errored rather than aborting the summary for the healthy
+    /// ones. A skipped upload step passes its URL through as an empty string,
+    /// which is treated as no URL.
     ///
     pub fn load(
         self,

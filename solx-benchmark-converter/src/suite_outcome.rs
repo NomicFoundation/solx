@@ -2,13 +2,15 @@
 //! How the suite's workflow step ended.
 //!
 
+use clap::ValueEnum;
+
 ///
-/// How the suite's workflow step ended — the comment must distinguish a
-/// suite that never ran from one that errored, and qualify data written by
-/// a step that then failed. The `Default` exists only so `SuiteStats` can
-/// derive one; `from_suite` always sets the real outcome over it.
+/// How the suite's workflow step ended, distinguishing a suite that never ran
+/// from one that errored, and qualifying data written by a step that then
+/// failed. The `Default` exists only so `SuiteStats` can derive one;
+/// `from_suite` always sets the real outcome over it.
 ///
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
 pub enum SuiteOutcome {
     /// The step ran to completion.
     #[default]
@@ -17,6 +19,6 @@ pub enum SuiteOutcome {
     /// may be partial.
     #[value(alias = "cancelled")]
     Failure,
-    /// The step never ran (an earlier hard failure); not the suite's fault.
+    /// The step never ran after an earlier hard failure; not the suite's fault.
     Skipped,
 }

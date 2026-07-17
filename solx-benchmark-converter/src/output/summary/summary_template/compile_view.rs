@@ -7,8 +7,6 @@ use std::collections::BTreeSet;
 use crate::output::summary::compile_aggregate::CompileAggregate;
 use crate::output::summary::suite_stats::SuiteStats;
 use crate::output::summary::summary_template::truncated::Truncated;
-use crate::utils::percent;
-use crate::utils::relative_percent;
 
 ///
 /// The compile-time table and its threshold verdict lines; the columns are
@@ -49,7 +47,8 @@ impl CompileView {
             let mut row = vec![s.suite_cell()];
             for pipeline in pipelines.iter() {
                 let paired = s.compile.get(pipeline).and_then(|agg| {
-                    relative_percent(agg.pr_total_ms, agg.main_total_ms).map(|pct| (agg, pct))
+                    crate::utils::relative_percent(agg.pr_total_ms, agg.main_total_ms)
+                        .map(|pct| (agg, pct))
                 });
                 row.push(match paired {
                     Some((agg, pct)) => {
@@ -107,7 +106,9 @@ impl CompileView {
         let shown: Vec<String> = truncated
             .shown
             .iter()
-            .map(|(project, pipeline, pct)| format!("`{project}` {pipeline} **{}**", percent(*pct)))
+            .map(|(project, pipeline, pct)| {
+                format!("`{project}` {pipeline} **{}**", crate::utils::percent(*pct))
+            })
             .collect();
         format!(
             "{siren}**Project outliers (≥{}%):** {}{}",

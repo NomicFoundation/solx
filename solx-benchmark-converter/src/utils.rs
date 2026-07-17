@@ -51,7 +51,7 @@ pub fn agreeing<'a>(n: u64, singular: &'a str, plural: &'a str) -> &'a str {
 }
 
 ///
-/// The relative PR-vs-base percentage, `None` on a zero base — every
+/// The relative PR-vs-base percentage, `None` on a zero base. Every
 /// percentage in the summary comes from here, so zero-base handling cannot
 /// drift between columns.
 ///
@@ -61,7 +61,7 @@ pub fn relative_percent(pr: u64, base: u64) -> Option<f64> {
 
 ///
 /// The median of the given percentages, if any were collected. Even-length
-/// input averages the two middle elements — at n=2 the upper-middle would be
+/// input averages the two middle elements: at n=2 the upper-middle would be
 /// the maximum, not a median.
 ///
 pub fn median(pcts: &[f64]) -> Option<f64> {

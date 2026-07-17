@@ -18,7 +18,7 @@ use solx_benchmark_converter::SuiteOutcome;
 #[derive(Debug, Parser)]
 #[command(arg_required_else_help = true)]
 pub struct Arguments {
-    /// Merged solx-tester benchmark JSON (gas is deterministic here → gated).
+    /// Merged solx-tester benchmark JSON; gas is deterministic here, so it is gated.
     #[arg(long)]
     pub tester: Option<PathBuf>,
     /// Artifact download URL for the solx-tester XLSX report.
@@ -29,7 +29,7 @@ pub struct Arguments {
     #[arg(long)]
     pub tester_outcome: SuiteOutcome,
 
-    /// Merged Foundry benchmark JSON (gas is fuzz-noisy → excluded from gate).
+    /// Merged Foundry benchmark JSON; gas is fuzz-noisy, so excluded from gate.
     #[arg(long)]
     pub foundry: Option<PathBuf>,
     /// Artifact download URL for the Foundry XLSX report.
@@ -39,7 +39,7 @@ pub struct Arguments {
     #[arg(long)]
     pub foundry_outcome: SuiteOutcome,
 
-    /// Merged Hardhat benchmark JSON (gas is fuzz-noisy → excluded from gate).
+    /// Merged Hardhat benchmark JSON; gas is fuzz-noisy, so excluded from gate.
     #[arg(long)]
     pub hardhat: Option<PathBuf>,
     /// Artifact download URL for the Hardhat XLSX report.
