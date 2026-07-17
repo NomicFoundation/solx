@@ -22,11 +22,11 @@ use crate::output::format::Format;
 use crate::output::json::Json;
 use crate::suite_kind::SuiteKind;
 
+use self::run_failures::RunFailures;
 use self::test::Test;
 use self::test::input::Input as TestInput;
 use self::test::metadata::Metadata as TestMetadata;
 use self::test::selector::Selector as TestSelector;
-use crate::benchmark::run_failures::RunFailures;
 
 ///
 /// The benchmark representation.
@@ -133,7 +133,6 @@ impl Benchmark {
                 .or_insert_with(|| Test::new(TestMetadata::new(selector, vec![])));
 
             for (mode, run) in test.runs.into_iter() {
-                // Prefix with toolchain if not already present
                 let mode_key = if mode.starts_with(&toolchain) {
                     mode
                 } else {

@@ -103,7 +103,7 @@ impl FailureVerdict {
 
 #[cfg(test)]
 mod tests {
-    use crate::output::summary::failure_verdict::*;
+    use crate::output::summary::summary_template::failure_verdict::*;
 
     #[test]
     fn clean_failures_carry_the_pre_existing_counts() {

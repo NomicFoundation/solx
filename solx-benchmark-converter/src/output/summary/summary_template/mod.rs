@@ -9,26 +9,31 @@
 //! that formats a value is Rust.
 //!
 
+pub mod compile_view;
+pub mod failure_verdict;
+pub mod health_issue;
 pub mod listing_section;
+pub mod output_verdict;
+pub mod truncated;
 
 use std::collections::BTreeSet;
 
 use askama::Template;
 
-use crate::output::summary::compile_view::CompileView;
-use crate::output::summary::failure_verdict::FailureVerdict;
-use crate::output::summary::health_issue::HealthIssue;
-use crate::output::summary::output_verdict::OutputVerdict;
 use crate::output::summary::suite_row::SuiteRow;
 use crate::output::summary::suite_stats::SuiteStats;
-use crate::output::summary::truncated::Truncated;
 use crate::role::Role;
 use crate::utils::agreeing;
 use crate::utils::count_noun;
 use crate::utils::percent;
 use crate::utils::relative_percent;
 
+use self::compile_view::CompileView;
+use self::failure_verdict::FailureVerdict;
+use self::health_issue::HealthIssue;
 use self::listing_section::ListingSection;
+use self::output_verdict::OutputVerdict;
+use self::truncated::Truncated;
 
 ///
 /// The full summary comment.
@@ -80,6 +85,7 @@ impl SummaryTemplate {
         let mut lines = Vec::new();
         let mut unbaselined = Vec::new();
         let mut unbaselined_runs = 0;
+        let mut unbaselined_failures = 0;
         let mut main_only = Vec::new();
         let mut main_only_runs = 0;
         for issue in HealthIssue::from_stats(stats) {
@@ -124,6 +130,7 @@ impl SummaryTemplate {
                     failures,
                 } => {
                     unbaselined_runs += runs;
+                    unbaselined_failures += failures;
                     unbaselined.push(Self::unpaired_runs_part(&label, runs, failures));
                 }
                 HealthIssue::MainOnly {
@@ -139,10 +146,11 @@ impl SummaryTemplate {
         let mut warn_lines = Vec::new();
         if !unbaselined.is_empty() {
             warn_lines.push(format!(
-                "⚠️ **No baseline** — {} {} no `main` counterpart; {} failures are not compared.",
+                "⚠️ **No baseline** — {} {} no `main` counterpart; {} {} not compared.",
                 unbaselined.join("; "),
                 agreeing(unbaselined_runs as u64, "has", "have"),
-                agreeing(unbaselined_runs as u64, "its", "their")
+                agreeing(unbaselined_runs as u64, "its", "their"),
+                agreeing(unbaselined_failures as u64, "failure is", "failures are")
             ));
         }
         if !main_only.is_empty() {

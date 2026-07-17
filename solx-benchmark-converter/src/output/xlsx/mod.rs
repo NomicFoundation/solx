@@ -7,9 +7,9 @@ pub mod worksheet;
 
 use std::collections::HashMap;
 
+use self::sheet::Sheet;
 use crate::benchmark::Benchmark;
 use crate::comparison::Comparison;
-use crate::output::xlsx::sheet::Sheet;
 
 use self::worksheet::Worksheet;
 
@@ -40,8 +40,8 @@ impl Xlsx {
         Ok(Self {
             worksheets,
 
-            toolchains: Vec::with_capacity(8),
-            toolchain_ids: HashMap::with_capacity(8),
+            toolchains: Vec::new(),
+            toolchain_ids: HashMap::new(),
         })
     }
 
@@ -100,13 +100,7 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
         let mut xlsx = Self::new()?;
 
         for test in benchmark.tests.into_values() {
-            let is_deployer = test
-                .metadata
-                .selector
-                .input
-                .as_ref()
-                .map(|input| input.is_deploy())
-                .unwrap_or_default();
+            let is_deployer = test.is_deploy();
             let project = test.metadata.selector.project;
             let contract = test.metadata.selector.case.as_deref();
             let function = test

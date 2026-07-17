@@ -9,11 +9,11 @@ pub mod xlsx;
 
 use std::path::PathBuf;
 
+use self::format::Format;
+use self::json::Json;
+use self::xlsx::Xlsx;
 use crate::benchmark::Benchmark;
 use crate::comparison::Comparison;
-use crate::output::format::Format;
-use crate::output::json::Json;
-use crate::output::xlsx::Xlsx;
 
 ///
 /// Result of comparing two benchmarks.

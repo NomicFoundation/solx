@@ -64,58 +64,49 @@ impl Run {
     }
 
     ///
+    /// Averages a series of samples, treating an empty series as zero.
+    ///
+    fn average(values: &[u64]) -> u64 {
+        values
+            .iter()
+            .sum::<u64>()
+            .checked_div(values.len() as u64)
+            .unwrap_or_default()
+    }
+
+    ///
     /// Average contract size.
     ///
     pub fn average_size(&self) -> u64 {
-        if self.size.is_empty() {
-            return 0;
-        }
-
-        self.size.iter().sum::<u64>() / (self.size.len() as u64)
+        Self::average(&self.size)
     }
 
     ///
     /// Average runtime code size.
     ///
     pub fn average_runtime_size(&self) -> u64 {
-        if self.runtime_size.is_empty() {
-            return 0;
-        }
-
-        self.runtime_size.iter().sum::<u64>() / (self.runtime_size.len() as u64)
+        Self::average(&self.runtime_size)
     }
 
     ///
     /// Average amount of EVM gas.
     ///
     pub fn average_gas(&self) -> u64 {
-        if self.gas.is_empty() {
-            return 0;
-        }
-
-        self.gas.iter().sum::<u64>() / (self.gas.len() as u64)
+        Self::average(&self.gas)
     }
 
     ///
     /// Average compilation time in milliseconds.
     ///
     pub fn average_compilation_time(&self) -> u64 {
-        if self.compilation_time.is_empty() {
-            return 0;
-        }
-
-        self.compilation_time.iter().sum::<u64>() / (self.compilation_time.len() as u64)
+        Self::average(&self.compilation_time)
     }
 
     ///
     /// Average testing time in milliseconds.
     ///
     pub fn average_testing_time(&self) -> u64 {
-        if self.testing_time.is_empty() {
-            return 0;
-        }
-
-        self.testing_time.iter().sum::<u64>() / (self.testing_time.len() as u64)
+        Self::average(&self.testing_time)
     }
 
     ///

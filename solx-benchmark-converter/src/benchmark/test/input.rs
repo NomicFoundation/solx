@@ -48,14 +48,6 @@ impl Input {
         matches!(self, Self::Deployer { .. })
     }
 
-    /// Returns `true` if the input is [`Fallback`].
-    ///
-    /// [`Fallback`]: Input::Fallback
-    #[must_use]
-    pub fn is_fallback(&self) -> bool {
-        matches!(self, Self::Fallback { .. })
-    }
-
     ///
     /// Returns the runtime function name if it is applicable.
     ///

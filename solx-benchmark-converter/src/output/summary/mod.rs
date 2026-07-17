@@ -17,21 +17,16 @@
 //!
 
 pub mod compile_aggregate;
-pub mod compile_view;
 pub mod diff_counter;
 pub mod failure_regression;
 pub mod failure_regressions;
-pub mod failure_verdict;
-pub mod health_issue;
 pub mod movement;
-pub mod output_verdict;
 pub mod paired_bytes;
 pub mod suite_failures;
 pub mod suite_row;
 pub mod suite_stats;
 pub mod summary_template;
 pub mod top_movers;
-pub mod truncated;
 
 use crate::summary_suite::SummarySuite;
 

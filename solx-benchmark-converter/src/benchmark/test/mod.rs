@@ -54,7 +54,6 @@ impl Test {
             .selector
             .input
             .as_ref()
-            .map(|input| input.is_deploy())
-            .unwrap_or_default()
+            .is_some_and(|input| input.is_deploy())
     }
 }

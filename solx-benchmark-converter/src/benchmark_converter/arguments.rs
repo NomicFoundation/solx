@@ -19,7 +19,7 @@ pub struct Arguments {
     /// Input files. A single directory argument expands to every JSON file underneath it.
     pub input_paths: Vec<PathBuf>,
 
-    /// Benchmark output format: `json`, `csv`, or `json-lnt`.
+    /// Benchmark output format: `json` or `xlsx`.
     #[arg(long = "output-format", alias = "benchmark-format", default_value_t = solx_benchmark_converter::OutputFormat::Xlsx)]
     pub output_format: solx_benchmark_converter::OutputFormat,
 

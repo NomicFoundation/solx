@@ -4,7 +4,7 @@
 //!
 
 use crate::output::summary::suite_stats::SuiteStats;
-use crate::output::summary::truncated::Truncated;
+use crate::output::summary::summary_template::truncated::Truncated;
 use crate::utils::commas;
 use crate::utils::percent;
 use crate::utils::relative_percent;

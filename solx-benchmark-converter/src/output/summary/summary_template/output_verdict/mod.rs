@@ -143,8 +143,8 @@ impl OutputVerdict {
 
 #[cfg(test)]
 mod tests {
-    use crate::output::summary::output_verdict::*;
     use crate::output::summary::suite_stats::SuiteStats;
+    use crate::output::summary::summary_template::output_verdict::*;
 
     #[test]
     fn no_data_over_empty_comparisons() {
