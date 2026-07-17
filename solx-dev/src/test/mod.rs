@@ -2,6 +2,7 @@
 //! `solx` test tools.
 //!
 
+use colored::Colorize;
 use itertools::Itertools;
 
 pub mod foundry;
@@ -30,8 +31,6 @@ pub(crate) fn write_reports(
     output_directory: std::path::PathBuf,
     kind: solx_benchmark_converter::SuiteKind,
 ) -> anyhow::Result<()> {
-    use colored::Colorize;
-
     std::fs::create_dir_all(output_directory.as_path()).map_err(|error| {
         anyhow::anyhow!(
             "{} {} output reports directory {output_directory:?}: {error}",
@@ -41,7 +40,8 @@ pub(crate) fn write_reports(
     })?;
     let base_path = crate::utils::absolute_path(output_directory)?;
 
-    write_benchmark_json(&benchmark, base_path.as_path(), kind.benchmark_file())?;
+    solx_benchmark_converter::Output::from(solx_benchmark_converter::OutputJson::from(&benchmark))
+        .write_to_file(base_path.join(kind.benchmark_file()))?;
 
     let output: solx_benchmark_converter::Output = (
         benchmark,
@@ -58,22 +58,6 @@ pub(crate) fn write_reports(
     );
     output.write_to_file(output_path)?;
     Ok(())
-}
-
-///
-/// Emits the merged benchmark JSON next to the XLSX so the workflow's summary
-/// step can render the PR comment from the native data model, in the
-/// converter's own JSON output format.
-///
-pub(crate) fn write_benchmark_json(
-    benchmark: &solx_benchmark_converter::Benchmark,
-    base_path: &std::path::Path,
-    file_name: &str,
-) -> anyhow::Result<()> {
-    let path = base_path.join(file_name);
-    let json = solx_benchmark_converter::OutputJson::from(benchmark);
-    std::fs::write(path.as_path(), json.content)
-        .map_err(|error| anyhow::anyhow!("Benchmark file {path:?} writing: {error}"))
 }
 
 ///
