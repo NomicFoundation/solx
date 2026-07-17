@@ -18,9 +18,7 @@
 
 pub mod compile_aggregate;
 pub mod diff_counter;
-pub mod failure_regression;
 pub mod failure_regressions;
-pub mod movement;
 pub mod paired_bytes;
 pub mod suite_failures;
 pub mod suite_row;

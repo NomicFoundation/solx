@@ -2,8 +2,6 @@
 //! Regressions collected for the inline "new failures" listing.
 //!
 
-use crate::output::summary::failure_regression::FailureRegression;
-
 ///
 /// Regressions collected for the inline "new failures" listing.
 ///
@@ -22,6 +20,17 @@ impl FailureRegressions {
         regressions.sort_by_key(|regression| std::cmp::Reverse(regression.pr - regression.main));
         regressions
     }
+}
+
+///
+/// One row whose PR run failed more than its main counterpart.
+///
+pub struct FailureRegression {
+    pub label: String,
+    pub mode: String,
+    pub kind: &'static str,
+    pub main: usize,
+    pub pr: usize,
 }
 
 #[cfg(test)]
