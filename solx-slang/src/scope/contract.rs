@@ -11,7 +11,7 @@ use slang_solidity_v2::ast::StateVariableDefinition;
 
 use solx_mlir::Block;
 use solx_mlir::Context;
-use solx_mlir::Type;
+use solx_mlir::Type as MlirType;
 
 use crate::contract::storage_slot::StorageSlot;
 use crate::scope::function::FunctionScope;
@@ -52,7 +52,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
     pub fn function(
         &mut self,
         entry: Block<'context>,
-        return_types: Vec<Type<'context>>,
+        return_types: Vec<MlirType<'context>>,
         emit: impl FnOnce(&mut FunctionScope<'_, '_, 'context>),
     ) {
         let enclosing = self.source_unit.mlir.current_block.replace(entry);

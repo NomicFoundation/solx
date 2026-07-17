@@ -31,14 +31,12 @@ pub enum Call {
     StructConstruction(StructDefinition),
     /// A one-argument elementary or user-defined-value-type conversion.
     TypeConversion,
-    /// A built-in resolved to its [`BuiltIn`] variant: invoked by bare identifier (`require`,
-    /// `keccak256`), or through member access when the result type comes from the call itself
-    /// (`abi.decode`).
+    /// A built-in invoked by bare identifier (`require`, `keccak256`).
     Builtin(BuiltIn),
-    /// A member-access callee (`address.balance`, `abi.encode`). The built-in is resolved at
-    /// emission, so a member resolving to no built-in or to one not lowered yet is rejected in one
-    /// place rather than at both classification and emission.
-    MemberBuiltin(MemberAccessExpression),
+    /// A member-access callee (`address.send`, `abi.encode`, `abi.decode`). The member is resolved
+    /// at emission, so a member resolving to no built-in or to one not lowered yet is rejected in
+    /// one place rather than at both classification and emission.
+    Member(MemberAccessExpression),
     /// A direct call to a named function.
     Function(FunctionDefinition),
 }
@@ -61,10 +59,10 @@ impl Call {
                 Self::struct_construction(&struct_definition, node, arguments, scope)
             }
             Self::TypeConversion => Self::type_conversion(node, arguments, scope),
-            Self::Builtin(built_in) => Self::builtin(built_in, node, arguments, scope)
+            Self::Builtin(built_in) => Self::builtin(built_in, arguments, scope)
                 .into_iter()
                 .collect(),
-            Self::MemberBuiltin(access) => Self::member_builtin(&access, arguments, scope)
+            Self::Member(access) => Self::member(&access, node, arguments, scope)
                 .into_iter()
                 .collect(),
             Self::Function(function_definition) => {
@@ -105,12 +103,7 @@ impl Call {
                 };
                 Self::Function(function_definition)
             }
-            Expression::MemberAccessExpression(access) => {
-                match access.member().resolve_to_built_in() {
-                    Some(BuiltIn::AbiDecode) => Self::Builtin(BuiltIn::AbiDecode),
-                    _ => Self::MemberBuiltin(access),
-                }
-            }
+            Expression::MemberAccessExpression(access) => Self::Member(access),
             callee => unimplemented!(
                 "unsupported callee expression: {:?}",
                 std::mem::discriminant(&callee)
@@ -157,15 +150,12 @@ impl Call {
         vec![scope.expression(&operand).convert(target_type, scope)]
     }
 
-    /// Statement-style built-ins (`assert`, `require`, `revert`) produce no value. `abi.decode`
-    /// takes its result type from `call` rather than from its operands, which is why the full call
-    /// expression is passed alongside the arguments.
+    /// Statement-style built-ins (`assert`, `require`, `revert`) produce no value.
     ///
     /// A literal `require` message lowers to the string form of `sol.require`; a non-literal message
     /// evaluates at runtime and is ABI-encoded under the `Error(string)` selector via its call form.
     fn builtin<'context>(
         built_in: BuiltIn,
-        call: &FunctionCallExpression,
         arguments: &PositionalArguments,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Option<Value<'context>> {
@@ -265,23 +255,6 @@ impl Call {
                 let values = scope.positional_arguments(arguments);
                 Some(Value::mulmod(values[0], values[1], values[2], scope))
             }
-            BuiltIn::AbiDecode => {
-                let payload_expression = arguments
-                    .iter()
-                    .next()
-                    .expect("slang validates the payload argument");
-                let return_slang_type = call
-                    .get_type()
-                    .expect("abi.decode call is typed by the binder");
-                if matches!(return_slang_type, Type::Tuple(_)) {
-                    unimplemented!("abi.decode returning multiple values is not yet supported");
-                }
-                Some(Value::decode(
-                    scope.expression(&payload_expression),
-                    scope.resolve_type(&return_slang_type, None),
-                    scope,
-                ))
-            }
             _ => unimplemented!("built-in {built_in:?} is not yet supported in call position"),
         }
     }
@@ -289,10 +262,12 @@ impl Call {
     /// Resolves the member to its built-in and lowers it: the array mutators lower to `sol.pop` and
     /// `sol.push`, where the no-argument `arr.push()` yields the new element's slot reference while
     /// `arr.push(x)` stores the coerced value into that slot and, like `arr.pop()` and `transfer`,
-    /// produces no value. A member resolving to no built-in, or to one not lowered yet, is the sole
-    /// unsupported-member-call site.
-    fn member_builtin<'context>(
+    /// produces no value. `abi.decode` takes its result type from `call` rather than from its
+    /// operands, which is why the full call expression is passed alongside the arguments. A member
+    /// resolving to no built-in, or to one not lowered yet, is the sole unsupported-member-call site.
+    fn member<'context>(
         access: &MemberAccessExpression,
+        call: &FunctionCallExpression,
         arguments: &PositionalArguments,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Option<Value<'context>> {
@@ -352,6 +327,23 @@ impl Call {
                     .map(|argument| scope.expression(&argument))
                     .collect::<Vec<_>>();
                 Some(Value::encode(&values, Some(selector), scope))
+            }
+            Some(BuiltIn::AbiDecode) => {
+                let payload_expression = arguments
+                    .iter()
+                    .next()
+                    .expect("slang validates the payload argument");
+                let return_slang_type = call
+                    .get_type()
+                    .expect("abi.decode call is typed by the binder");
+                if matches!(return_slang_type, Type::Tuple(_)) {
+                    unimplemented!("abi.decode returning multiple values is not yet supported");
+                }
+                Some(Value::decode(
+                    scope.expression(&payload_expression),
+                    scope.resolve_type(&return_slang_type, None),
+                    scope,
+                ))
             }
             Some(BuiltIn::ArrayPop) => {
                 scope.expression(&access.operand()).pop(scope);

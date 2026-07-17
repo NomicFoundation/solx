@@ -11,7 +11,7 @@ use slang_solidity_v2::ast::StateVariableDefinition;
 use solx_mlir::Block;
 use solx_mlir::Context;
 use solx_mlir::Function;
-use solx_mlir::Type;
+use solx_mlir::Type as MlirType;
 
 use crate::contract::storage_slot::StorageSlot;
 use crate::scope::contract::ContractScope;
@@ -39,7 +39,7 @@ impl<'context> SourceUnitScope<'context> {
     /// the MLIR context for its duration.
     pub fn contract(
         &mut self,
-        contract_type: Type<'context>,
+        contract_type: MlirType<'context>,
         body: Block<'context>,
         state_variables: Vec<StateVariableDefinition>,
         storage_layout: HashMap<NodeId, StorageSlot>,

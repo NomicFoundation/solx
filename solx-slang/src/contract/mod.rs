@@ -16,7 +16,7 @@ use slang_solidity_v2::ast::FunctionKind;
 use solx_mlir::Block;
 use solx_mlir::Contract;
 use solx_mlir::Function;
-use solx_mlir::Type;
+use solx_mlir::Type as MlirType;
 
 use crate::contract::storage_slot::StorageSlot;
 use crate::scope::source_unit::SourceUnitScope;
@@ -84,7 +84,7 @@ impl<'context> SourceUnitScope<'context> {
             Block::from(self.module.body()),
         );
         self.contract(
-            Type::contract(self.melior, &contract_name, node.is_payable()),
+            MlirType::contract(self.melior, &contract_name, node.is_payable()),
             sol_contract.body,
             state_variables,
             storage_layout,

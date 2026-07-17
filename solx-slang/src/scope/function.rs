@@ -6,13 +6,13 @@
 
 use std::ops::Deref;
 
-use slang_solidity_v2::ast::Type as SlangType;
+use slang_solidity_v2::ast::Type;
 
 use solx_mlir::Block;
 use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::Place;
-use solx_mlir::Type;
+use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
 
 use crate::scope::contract::ContractScope;
@@ -25,7 +25,7 @@ pub struct FunctionScope<'contract, 'source_unit, 'context> {
     /// The lexically scoped variable bindings.
     pub environment: Environment<'context>,
     /// The declared return types a `return` coerces to.
-    pub return_types: Vec<Type<'context>>,
+    pub return_types: Vec<MlirType<'context>>,
     /// Whether arithmetic reverts on overflow at the current position.
     pub checked: bool,
 }
@@ -34,7 +34,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// Opens a function scope within `contract` with the given declared return types.
     pub fn new(
         contract: &'contract mut ContractScope<'source_unit, 'context>,
-        return_types: Vec<Type<'context>>,
+        return_types: Vec<MlirType<'context>>,
     ) -> Self {
         Self {
             contract,
@@ -50,7 +50,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     pub fn define_local(
         &mut self,
         name: String,
-        element_type: Type<'context>,
+        element_type: MlirType<'context>,
         initializer: impl FnOnce(&mut Self) -> Value<'context>,
     ) -> Place<'context> {
         let pointer = Place::stack(element_type, self);
@@ -106,7 +106,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     pub fn branch_value(
         &mut self,
         condition: Value<'context>,
-        result_type: Type<'context>,
+        result_type: MlirType<'context>,
         initializer: impl FnOnce(&mut Self) -> Option<Value<'context>>,
         then: impl FnOnce(&mut Self) -> Option<Value<'context>>,
         r#else: impl FnOnce(&mut Self) -> Option<Value<'context>>,
@@ -132,24 +132,24 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// Resolves a Slang semantic type through the source unit scope.
     pub fn resolve_type(
         &self,
-        node: &SlangType,
+        node: &Type,
         inherited_location: Option<solx_utils::DataLocation>,
-    ) -> Type<'context> {
+    ) -> MlirType<'context> {
         self.contract.source_unit.resolve(node, inherited_location)
     }
 
     /// The binder's typing of a node, resolved through the source unit scope.
-    pub fn typing(&self, slang_type: Option<SlangType>) -> Type<'context> {
+    pub fn typing(&self, slang_type: Option<Type>) -> MlirType<'context> {
         self.contract.source_unit.typing(slang_type)
     }
 
     /// The MLIR pointer type for a value of this Slang type through the source unit scope.
     pub fn pointer_type(
         &self,
-        node: &SlangType,
-        element_type: Type<'context>,
+        node: &Type,
+        element_type: MlirType<'context>,
         base_location: solx_utils::DataLocation,
-    ) -> Type<'context> {
+    ) -> MlirType<'context> {
         self.contract
             .source_unit
             .pointer(node, element_type, base_location)

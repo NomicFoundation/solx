@@ -7,7 +7,7 @@
 use slang_solidity_v2::ast::AndExpression;
 use slang_solidity_v2::ast::OrExpression;
 
-use solx_mlir::Type;
+use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
 
 use crate::scope::function::FunctionScope;
@@ -19,7 +19,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         let condition = self.expression(&node.left_operand()).is_nonzero(self);
         self.branch_value(
             condition,
-            Type::boolean(self.melior),
+            MlirType::boolean(self.melior),
             |scope| Some(Value::boolean(false, scope)),
             |scope| Some(scope.expression(&node.right_operand()).is_nonzero(scope)),
             |_scope| None,
@@ -33,7 +33,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         let condition = self.expression(&node.left_operand()).is_nonzero(self);
         self.branch_value(
             condition,
-            Type::boolean(self.melior),
+            MlirType::boolean(self.melior),
             |_scope| Some(condition),
             |_scope| None,
             |scope| Some(scope.expression(&node.right_operand()).is_nonzero(scope)),

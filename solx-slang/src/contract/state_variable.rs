@@ -7,7 +7,7 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::StateVariableDefinition;
 
 use solx_mlir::Place;
-use solx_mlir::Type;
+use solx_mlir::Type as MlirType;
 use solx_utils::DataLocation;
 
 use crate::scope::function::FunctionScope;
@@ -55,7 +55,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         &mut self,
         state_variable: &StateVariableDefinition,
         slot_name: &str,
-    ) -> (Place<'context>, Type<'context>) {
+    ) -> (Place<'context>, MlirType<'context>) {
         let declared_type = state_variable
             .get_type()
             .expect("binder types every state variable");

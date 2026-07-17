@@ -6,7 +6,7 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Identifier;
 
 use solx_mlir::Place;
-use solx_mlir::Type;
+use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
 
 use crate::scope::function::FunctionScope;
@@ -23,7 +23,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// A state variable resolves to its storage slot, a local variable or parameter to its stack
     /// pointer.
-    pub fn identifier_place(&mut self, node: &Identifier) -> (Place<'context>, Type<'context>) {
+    pub fn identifier_place(&mut self, node: &Identifier) -> (Place<'context>, MlirType<'context>) {
         match node.resolve_to_definition() {
             Some(Definition::StateVariable(state_variable)) => {
                 let slot_name = self

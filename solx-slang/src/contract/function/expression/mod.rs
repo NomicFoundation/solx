@@ -19,10 +19,10 @@ pub mod tuple;
 pub mod unary;
 
 use slang_solidity_v2::ast::Expression;
-use slang_solidity_v2::ast::Type as SlangType;
+use slang_solidity_v2::ast::Type;
 
 use solx_mlir::Place;
-use solx_mlir::Type;
+use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
 
 use crate::scope::function::FunctionScope;
@@ -94,7 +94,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// Resolves an assignable expression to the place it denotes together with its element MLIR
     /// type, serving both the read path and the assignment lvalue path.
-    pub fn expression_place(&mut self, node: &Expression) -> (Place<'context>, Type<'context>) {
+    pub fn expression_place(&mut self, node: &Expression) -> (Place<'context>, MlirType<'context>) {
         match node {
             Expression::Identifier(inner) => self.identifier_place(inner),
             Expression::MemberAccessExpression(inner) => self.member_access_place(inner),
@@ -121,7 +121,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// Evaluates both operands of a binary expression and coerces them to the binder's result type.
     pub fn coerced_operands(
         &mut self,
-        slang_type: Option<SlangType>,
+        slang_type: Option<Type>,
         left: &Expression,
         right: &Expression,
     ) -> (Value<'context>, Value<'context>) {
