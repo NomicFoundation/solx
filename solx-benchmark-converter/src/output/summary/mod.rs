@@ -210,7 +210,7 @@ mod tests {
     use crate::benchmark::test::input::Input as TestInput;
     use crate::benchmark::test::metadata::Metadata;
     use crate::benchmark::test::run::Run;
-    use crate::benchmark::test::run::RunFailures;
+    use crate::benchmark::run_failures::RunFailures;
     use crate::benchmark::test::selector::Selector;
     use crate::output::summary::*;
 
