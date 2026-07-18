@@ -244,15 +244,15 @@ pub struct Arguments {
     #[arg(long, help_heading = "Debug Options")]
     pub llvm_debug_logging: bool,
 
-    /// Run this process as a persistent worker compiling contracts fed via `stdin`.
+    /// Run this process recursively and provide JSON input to compile a single contract.
     /// Only for usage from within the compiler.
     #[arg(long, hide = true)]
     pub recursive_process: bool,
 }
 
 impl Arguments {
-    /// Expected argument count for `--recursive-process` (binary name + flag).
-    const RECURSIVE_PROCESS_MAX_ARGS: usize = 2;
+    /// Expected argument count for `--recursive-process` (binary name + flag + value).
+    const RECURSIVE_PROCESS_MAX_ARGS: usize = 3;
 
     /// Expected argument count for `--version` (binary name + flag).
     const VERSION_MAX_ARGS: usize = 2;

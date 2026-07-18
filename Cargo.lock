@@ -1413,7 +1413,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ab67060fc6b8ef687992d439ca0fa36e7ed17e9a0b16b25b601e8757df720de"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -2266,7 +2266,7 @@ dependencies = [
 [[package]]
 name = "inkwell"
 version = "0.7.1"
-source = "git+https://github.com/NomicFoundation/inkwell?rev=c2ac839f8f2b67246c9676fe29e7935e95e460fb#c2ac839f8f2b67246c9676fe29e7935e95e460fb"
+source = "git+https://github.com/NomicFoundation/inkwell?rev=4f9f86e15f43dc8555b8b51d4dda01e60f756f22#4f9f86e15f43dc8555b8b51d4dda01e60f756f22"
 dependencies = [
  "inkwell_internals",
  "libc",
@@ -2279,7 +2279,7 @@ dependencies = [
 [[package]]
 name = "inkwell_internals"
 version = "0.12.0"
-source = "git+https://github.com/NomicFoundation/inkwell?rev=c2ac839f8f2b67246c9676fe29e7935e95e460fb#c2ac839f8f2b67246c9676fe29e7935e95e460fb"
+source = "git+https://github.com/NomicFoundation/inkwell?rev=4f9f86e15f43dc8555b8b51d4dda01e60f756f22#4f9f86e15f43dc8555b8b51d4dda01e60f756f22"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2512,7 +2512,7 @@ checksum = "6373607a59f0be73a39b6fe456b8192fcc3585f602af20751600e974dd455e77"
 [[package]]
 name = "llvm-sys"
 version = "211.0.0"
-source = "git+https://github.com/NomicFoundation/llvm-sys.rs?rev=1aef1b289d307fdd9561e159fcc3953a34f77840#1aef1b289d307fdd9561e159fcc3953a34f77840"
+source = "git+https://github.com/NomicFoundation/llvm-sys.rs?branch=main#afdfa3146ca4dcc4f9bf023fb5caa3fe14f5d908"
 dependencies = [
  "anyhow",
  "cc",

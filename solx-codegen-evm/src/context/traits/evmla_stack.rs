@@ -46,12 +46,13 @@ pub trait IEVMLAStack<'ctx>: IContext<'ctx> + Sized {
         for position in 0..depth {
             if let ShadowSlot::Memory(index) =
                 self.evmla().expect("Always exists").shadow_peek(position)
-                && index != position
             {
-                let value = self.evmla_stack_read(position)?;
-                self.evmla_mut()
-                    .expect("Always exists")
-                    .shadow_write(position, value);
+                if index != position {
+                    let value = self.evmla_stack_read(position)?;
+                    self.evmla_mut()
+                        .expect("Always exists")
+                        .shadow_write(position, value);
+                }
             }
         }
         for position in 0..depth {

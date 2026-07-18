@@ -16,10 +16,8 @@ use rayon::iter::ParallelIterator;
 use crate::build::Build as EVMBuild;
 use crate::build::contract::Contract as EVMContractBuild;
 use crate::error::Error;
-use crate::process::job::Job as EVMProcessJob;
+use crate::process::input::Input as EVMProcessInput;
 use crate::process::output::Output as EVMProcessOutput;
-use crate::process::pool::Pool as EVMProcessPool;
-use crate::process::session::Session as EVMProcessSession;
 
 use self::contract::Contract;
 use self::contract::ir::IR as ContractIR;
@@ -517,24 +515,7 @@ impl Project {
         llvm_options: Vec<String>,
         output_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<EVMBuild> {
-        let Self {
-            language,
-            solc_version,
-            contracts,
-            ast_jsons,
-            libraries: _,
-            debug_info,
-        } = self;
-        let pool = EVMProcessPool::new(EVMProcessSession::new(
-            language,
-            solc_version.clone(),
-            evm_version,
-            output_selection.clone(),
-            llvm_options.clone(),
-            output_config,
-        ))?;
-
-        let mut contracts: Vec<(String, Contract)> = contracts.into_iter().collect();
+        let mut contracts: Vec<(String, Contract)> = self.contracts.into_iter().collect();
         contracts.sort_unstable_by(|(_, left), (_, right)| {
             right
                 .estimated_compilation_cost()
@@ -567,7 +548,7 @@ impl Project {
                         let runtime_code: ContractYul =
                             *deploy_code.runtime_code.take().expect("Always exists");
 
-                        deploy_debug_info = debug_info.as_ref().and_then(|debug_info| {
+                        deploy_debug_info = self.debug_info.as_ref().and_then(|debug_info| {
                             output_selection
                                 .check_selection(
                                     path.as_str(),
@@ -581,7 +562,7 @@ impl Project {
                                     )
                                 })
                         });
-                        runtime_debug_info = debug_info.as_ref().and_then(|debug_info| {
+                        runtime_debug_info = self.debug_info.as_ref().and_then(|debug_info| {
                             output_selection
                                 .check_selection(
                                     path.as_str(),
@@ -602,7 +583,7 @@ impl Project {
                         let runtime_code: ContractEVMLegacyAssembly =
                             *deploy_code.runtime_code.take().expect("Always exists");
 
-                        deploy_debug_info = debug_info.as_ref().and_then(|debug_info| {
+                        deploy_debug_info = self.debug_info.as_ref().and_then(|debug_info| {
                             output_selection
                                 .check_selection(
                                     path.as_str(),
@@ -616,7 +597,7 @@ impl Project {
                                     )
                                 })
                         });
-                        runtime_debug_info = debug_info.as_ref().and_then(|debug_info| {
+                        runtime_debug_info = self.debug_info.as_ref().and_then(|debug_info| {
                             output_selection
                                 .check_selection(
                                     path.as_str(),
@@ -680,24 +661,30 @@ impl Project {
                 let (runtime_object_result, metadata) = {
                     let metadata_bytes = Self::cbor_metadata(
                         metadata.as_deref(),
-                        solc_version.as_ref(),
+                        self.solc_version.as_ref(),
                         &optimizer_settings,
                         llvm_options.as_slice(),
                         metadata_hash_type,
                         append_cbor,
                     );
 
-                    let mut job = EVMProcessJob::new(
+                    let mut input = EVMProcessInput::new(
+                        self.language,
+                        self.solc_version.clone(),
                         contract_name.clone(),
                         runtime_code_ir,
                         solx_utils::CodeSegment::Runtime,
+                        evm_version,
                         runtime_debug_info,
+                        output_selection.to_owned(),
                         None,
                         metadata_bytes,
                         optimizer_settings.clone(),
+                        llvm_options.clone(),
+                        output_config.clone(),
                     );
 
-                    let result = Self::run_multi_pass_pipeline(&pool, &mut job);
+                    let result = Self::run_multi_pass_pipeline(&contract_name, &mut input);
                     (result, metadata)
                 };
 
@@ -706,17 +693,23 @@ impl Project {
                     .ok()
                     .and_then(|output| output.object.immutables.to_owned());
                 let deploy_object_result: crate::Result<EVMProcessOutput> = {
-                    let mut job = EVMProcessJob::new(
+                    let mut input = EVMProcessInput::new(
+                        self.language,
+                        self.solc_version.clone(),
                         contract_name.clone(),
                         deploy_code_ir,
                         solx_utils::CodeSegment::Deploy,
+                        evm_version,
                         deploy_debug_info,
+                        output_selection.to_owned(),
                         immutables,
                         None,
                         optimizer_settings.clone(),
+                        llvm_options.clone(),
+                        output_config.clone(),
                     );
 
-                    Self::run_multi_pass_pipeline(&pool, &mut job)
+                    Self::run_multi_pass_pipeline(&contract_name, &mut input)
                 };
 
                 let build = EVMContractBuild::new(
@@ -741,7 +734,7 @@ impl Project {
             })
             .collect::<BTreeMap<String, EVMContractBuild>>();
 
-        Ok(EVMBuild::new(results, ast_jsons, messages))
+        Ok(EVMBuild::new(results, self.ast_jsons, messages))
     }
 
     ///
@@ -813,13 +806,15 @@ impl Project {
     /// and turning on the size fallback to overcome the EVM bytecode size limit.
     ///
     fn run_multi_pass_pipeline(
-        pool: &EVMProcessPool,
-        job: &mut EVMProcessJob,
+        contract_name: &solx_utils::ContractName,
+        input: &mut EVMProcessInput,
     ) -> crate::Result<EVMProcessOutput> {
+        let mut result: crate::Result<EVMProcessOutput>;
         let mut pass_count = 0;
         loop {
+            result = crate::process::call(contract_name, input);
             pass_count += 1;
-            match pool.execute(job) {
+            match result {
                 Err(Error::StackTooDeep(stack_too_deep)) => {
                     assert!(
                         pass_count <= 2,
@@ -827,13 +822,17 @@ impl Project {
                     );
 
                     if stack_too_deep.is_size_fallback {
-                        job.optimizer_settings.switch_to_size_fallback();
+                        input.optimizer_settings.switch_to_size_fallback();
                     }
-                    job.optimizer_settings
+                    input
+                        .optimizer_settings
                         .set_spill_area_size(stack_too_deep.spill_area_size);
+
+                    continue;
                 }
-                result => break result,
+                _ => break,
             }
         }
+        result
     }
 }
