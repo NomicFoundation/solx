@@ -161,7 +161,6 @@ impl Selector {
                 | Self::BytecodeLLVMIR
                 | Self::BytecodeLLVMAssembly
                 | Self::BytecodeLinkReferences
-                | Self::BytecodeOpcodes
                 | Self::BytecodeSourceMap
                 | Self::BytecodeDebugInfo
                 | Self::BytecodeFunctionDebugData
@@ -173,7 +172,6 @@ impl Selector {
                 | Self::RuntimeBytecodeLLVMIRUnoptimized
                 | Self::RuntimeBytecodeLLVMIR
                 | Self::RuntimeBytecodeLLVMAssembly
-                | Self::RuntimeBytecodeOpcodes
                 | Self::RuntimeBytecodeSourceMap
                 | Self::RuntimeBytecodeDebugInfo
                 | Self::RuntimeBytecodeFunctionDebugData

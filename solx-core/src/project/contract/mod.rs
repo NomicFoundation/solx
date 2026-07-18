@@ -116,6 +116,18 @@ impl Contract {
     }
 
     ///
+    /// Returns the contract identifier, which is:
+    /// - the Yul object identifier for Yul
+    /// - the full contract path for all other IR types
+    ///
+    pub fn identifier(&self) -> &str {
+        match self.ir.as_ref() {
+            Some(IR::Yul(yul)) => yul.object.identifier.as_str(),
+            _ => self.name.full_path.as_str(),
+        }
+    }
+
+    ///
     /// Compiles the specified contract to EVM, returning its build artifacts.
     ///
     pub fn compile_to_evm(
@@ -125,6 +137,7 @@ impl Contract {
         contract_ir: IR,
         code_segment: solx_utils::CodeSegment,
         evm_version: Option<solx_utils::EVMVersion>,
+        identifier_paths: BTreeMap<String, String>,
         debug_info: Option<solx_utils::DebugInfo>,
         output_selection: solx_standard_json::InputSelection,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
@@ -205,6 +218,7 @@ impl Contract {
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
+                context.set_yul_data(solx_codegen_evm::ContextYulData::new(identifier_paths));
                 let run_yul_lowering = profiler.start_evm_translation_unit(
                     contract_name.full_path.as_str(),
                     code_segment,
@@ -517,8 +531,10 @@ impl Contract {
                 // embeds in `evm.datasize` / `evm.dataoffset` metadata, but
                 // collide if two contracts share a name across files. Fuse
                 // with the `<full_path>` convention used by EVMLA/LLVMIR via
-                // post-pass metadata substitution so the link symbols hash to
-                // the disambiguated full paths.
+                // post-pass metadata substitution or by honoring the existing
+                // `ContextYulData::resolve_path` mapping in `data_size` /
+                // `data_offset` emission so the link symbols hash to the
+                // disambiguated full paths.
                 let bare_name = contract_name
                     .name
                     .as_deref()

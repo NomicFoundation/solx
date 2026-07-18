@@ -970,7 +970,7 @@ impl Contract {
                 solx_standard_json::InputSelector::EVMLegacyAssembly,
             )
         }) {
-            evm.legacy_assembly = Some(value.into());
+            evm.legacy_assembly = Some(value);
         }
         if output_selection.check_selection(
             self.name.path.as_str(),
