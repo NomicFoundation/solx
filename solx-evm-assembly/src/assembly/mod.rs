@@ -171,11 +171,11 @@ impl Assembly {
 
         for (path, file) in contracts.iter() {
             for (name, deploy_code_assembly) in file.iter() {
-                let deploy_code_path = format!("{path}:{name}");
+                let deploy_code_path = solx_utils::ContractName::full_path(path, name);
                 let deploy_code_hash = deploy_code_assembly.hash();
 
                 let runtime_code_path =
-                    format!("{path}:{name}.{}", solx_utils::CodeSegment::Runtime);
+                    format!("{deploy_code_path}.{}", solx_utils::CodeSegment::Runtime);
                 let runtime_code_assembly = deploy_code_assembly.runtime_code()?;
                 let runtime_code_hash = runtime_code_assembly.hash();
 
@@ -187,8 +187,10 @@ impl Assembly {
         let mut assemblies = BTreeMap::new();
         for (path, file) in contracts.into_iter() {
             for (name, assembly) in file.into_iter() {
-                let full_path = format!("{path}:{name}");
-                assemblies.insert(full_path, assembly);
+                assemblies.insert(
+                    solx_utils::ContractName::full_path(path.as_str(), name.as_str()),
+                    assembly,
+                );
             }
         }
         assemblies
