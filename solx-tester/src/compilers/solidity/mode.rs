@@ -11,6 +11,8 @@ use solx_solc_test_adapter::Params;
 use crate::compilers::mode::Mode as ModeWrapper;
 use crate::compilers::mode::imode::IMode;
 use crate::compilers::mode::llvm_options::LLVMOptions;
+#[cfg(feature = "slang-ast")]
+use crate::compilers::solidity::slang_ast::SlangAst;
 
 ///
 /// Unified Solidity mode for all toolchains.
@@ -76,35 +78,12 @@ impl Mode {
 
     ///
     /// Checks if the mode is compatible with the source code pragmas. Under the Slang frontend,
-    /// tests pinned to `pragma abicoder v1` are incompatible: Slang parses the pragma as an inert
-    /// node and always encodes with v2 semantics.
+    /// tests pinned to `pragma abicoder v1` are incompatible.
     ///
     pub fn check_pragmas(&self, sources: &[(String, String)]) -> bool {
         #[cfg(feature = "slang-ast")]
-        {
-            let mut v1_pinned = false;
-            let mut v2_declared = false;
-            for line in sources
-                .iter()
-                .flat_map(|(_, source_code)| source_code.lines())
-            {
-                let mut split = line.split_whitespace();
-                match (
-                    split.next(),
-                    split.next(),
-                    split.next().map(|version| version.trim_end_matches(';')),
-                ) {
-                    (Some("pragma"), Some("abicoder"), Some("v1")) => v1_pinned = true,
-                    (Some("pragma"), Some("abicoder"), Some("v2"))
-                    | (Some("pragma"), Some("experimental"), Some("ABIEncoderV2")) => {
-                        v2_declared = true;
-                    }
-                    _ => {}
-                }
-            }
-            if v1_pinned && !v2_declared {
-                return false;
-            }
+        if SlangAst::parse(sources).is_abi_encoder_v1_pinned() {
+            return false;
         }
 
         // Strip pre-release for pragma matching since semver pre-release versions

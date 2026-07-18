@@ -8,10 +8,11 @@ use std::collections::HashMap;
 use solx_standard_json::InputLanguage;
 use solx_standard_json::Output;
 use solx_standard_json::OutputError;
-#[cfg(feature = "slang-ast")]
-use solx_standard_json::output::contract::Contract;
 use solx_standard_json::output::source::Source;
 use solx_utils::ContractName;
+
+#[cfg(feature = "slang-ast")]
+use crate::compilers::solidity::slang_ast::SlangAst;
 
 ///
 /// Extracts method identifiers from all contracts in the output.
@@ -66,21 +67,14 @@ pub fn get_last_contract(
                     continue;
                 };
                 match last_contract_name(source) {
-                    Ok(name) => {
-                        return Ok(ContractName::full_path(path, name.as_str()));
-                    }
+                    Ok(name) => return Ok(ContractName::full_path(path, name.as_str())),
                     Err(_error) => continue,
                 }
             }
 
             #[cfg(feature = "slang-ast")]
-            for (path, _source) in sources.iter().rev() {
-                if let Some(contracts) = output.contracts.get(path)
-                    && let Some(source) = output_sources.get(path)
-                    && let Some(name) = last_slang_object_name(source, contracts)
-                {
-                    return Ok(ContractName::full_path(path, name.as_str()));
-                }
+            if let Some(full_path) = SlangAst::parse(sources).last_deployable(&output.contracts) {
+                return Ok(full_path);
             }
 
             anyhow::bail!("The last contract not found in the output")
@@ -178,32 +172,4 @@ fn last_contract_name(source: &Source) -> anyhow::Result<String> {
         )
         .next_back()
         .ok_or_else(|| anyhow::anyhow!("The last contract not found in the AST"))
-}
-
-///
-/// Returns the name of the last deployable object in the Slang AST that was compiled: a contract,
-/// library, or interface. The Slang AST gives each its own node type, unlike the solc AST where
-/// all three are `ContractDefinition`s distinguished by `contractKind`.
-///
-#[cfg(feature = "slang-ast")]
-fn last_slang_object_name(
-    source: &Source,
-    contracts: &BTreeMap<String, Contract>,
-) -> Option<String> {
-    source
-        .ast
-        .as_ref()?
-        .get("members")?
-        .as_array()?
-        .iter()
-        .rev()
-        .filter(|member| {
-            matches!(
-                member["type"].as_str(),
-                Some("ContractDefinition" | "LibraryDefinition" | "InterfaceDefinition")
-            )
-        })
-        .filter_map(|member| member["name"]["text"].as_str())
-        .find(|name| contracts.contains_key(*name))
-        .map(str::to_owned)
 }

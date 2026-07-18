@@ -4,6 +4,8 @@
 
 use std::collections::BTreeMap;
 
+use crate::ContractName;
+
 ///
 /// The unified representation of Solidity libraries.
 ///
@@ -24,7 +26,7 @@ impl Libraries {
         let mut linker_symbols = BTreeMap::new();
         for (file, contracts) in self.inner.iter() {
             for (name, address) in contracts.iter() {
-                let path = format!("{file}:{name}");
+                let path = ContractName::full_path(file, name);
 
                 let address_stripped = address.strip_prefix("0x").unwrap_or(address.as_str());
                 let address_vec = hex::decode(address_stripped).map_err(|error| {
