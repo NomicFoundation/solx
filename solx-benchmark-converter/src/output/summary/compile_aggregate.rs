@@ -7,7 +7,9 @@
 ///
 #[derive(Default)]
 pub struct CompileAggregate {
+    /// The PR's summed compile time, in milliseconds.
     pub pr_total_ms: u64,
+    /// `main`'s summed compile time, in milliseconds.
     pub main_total_ms: u64,
     /// Per-project percentage change, PR vs main.
     pub per_project: Vec<(String, f64)>,

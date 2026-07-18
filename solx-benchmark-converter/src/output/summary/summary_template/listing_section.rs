@@ -11,7 +11,9 @@ use crate::output::summary::summary_template::truncated::Truncated;
 /// pointer is its last bullet.
 ///
 pub struct ListingSection {
+    /// The bold heading introducing the listing.
     pub heading: String,
+    /// The rendered bullets, the last a "+N more" pointer when truncated.
     pub bullets: Vec<String>,
 }
 

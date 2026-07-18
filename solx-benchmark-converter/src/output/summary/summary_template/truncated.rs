@@ -8,7 +8,9 @@
 /// listings cannot drift into several spellings of one rule.
 ///
 pub struct Truncated<'a, T> {
+    /// The items surviving the cap, in the order the caller ranked them.
     pub shown: &'a [T],
+    /// How many items the cap left out.
     pub extra: usize,
 }
 

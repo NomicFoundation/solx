@@ -9,6 +9,8 @@
 ///
 #[derive(Default)]
 pub struct PairedBytes {
+    /// The PR toolchain's summed bytecode.
     pub pr: u64,
+    /// The baseline toolchain's summed bytecode.
     pub baseline: u64,
 }

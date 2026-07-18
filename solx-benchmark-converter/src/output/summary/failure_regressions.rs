@@ -12,6 +12,22 @@ use crate::output::summary::failure_kind::FailureKind;
 #[derive(Default)]
 pub struct FailureRegressions(Vec<FailureRegression>);
 
+///
+/// One row whose PR run failed more than its main counterpart.
+///
+pub struct FailureRegression {
+    /// The row label: the project or case that regressed.
+    pub label: String,
+    /// The humanized toolchain the regression was measured on.
+    pub mode: String,
+    /// Whether the excess failures are build or test failures.
+    pub kind: FailureKind,
+    /// The `main` counterpart's failure count.
+    pub main: usize,
+    /// The PR run's failure count.
+    pub pr: usize,
+}
+
 impl FailureRegressions {
     /// Records a regression for the inline listing.
     pub fn push(&mut self, regression: FailureRegression) {
@@ -25,15 +41,4 @@ impl FailureRegressions {
         regressions.sort_by_key(|regression| Reverse(regression.pr - regression.main));
         regressions
     }
-}
-
-///
-/// One row whose PR run failed more than its main counterpart.
-///
-pub struct FailureRegression {
-    pub label: String,
-    pub mode: String,
-    pub kind: FailureKind,
-    pub main: usize,
-    pub pr: usize,
 }

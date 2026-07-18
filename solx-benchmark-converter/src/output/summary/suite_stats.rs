@@ -30,18 +30,24 @@ use crate::toolchain_matrix::ToolchainMatrix;
 ///
 #[derive(Default)]
 pub struct SuiteStats {
+    /// The suite's display name.
     pub label: String,
+    /// The suite's downloadable report filename.
     pub report_file: String,
+    /// The uploaded report's URL, absent when no artifact was produced.
     pub report_url: Option<String>,
+    /// Whether gas differences on this suite gate the verdict.
     pub gas_is_gate: bool,
     /// False when the suite was expected but produced no report.
     pub available: bool,
     /// How the suite's workflow step ended.
     pub outcome: SuiteOutcome,
+    /// The distinct projects the suite covered.
     pub project_count: usize,
     /// Total runs seen, and how many classified as the PR toolchain. Data
     /// with zero PR runs means the toolchain naming drifted from classify().
     pub total_runs: usize,
+    /// Runs classified as the PR toolchain.
     pub pr_runs_seen: usize,
     /// PR runs that found a `main` counterpart. The failure verdict only
     /// means something when at least one suite compared something.
@@ -50,11 +56,13 @@ pub struct SuiteStats {
     /// They have nothing to compare against, so they are surfaced as
     /// unbaselined rather than counted as regressions against zero.
     pub unbaselined_runs: usize,
+    /// Failures recorded on the unbaselined PR runs.
     pub unbaselined_failures: usize,
     /// Main runs with no PR counterpart. A comparison set that silently
     /// shrank from a crash or skip on the PR side must be surfaced, not
     /// dropped by the PR-keyed pairing.
     pub main_orphan_runs: usize,
+    /// Failures recorded on the main-only runs.
     pub main_orphan_failures: usize,
     /// Mode strings matching no declared toolchain name, always surfaced as
     /// a harness error, whether or not PR runs are present.
@@ -63,12 +71,14 @@ pub struct SuiteStats {
     /// Their per-pipeline data is excluded and the drift surfaced loudly.
     pub unrecognized_pipelines: BTreeSet<String>,
 
+    /// Bytecode-size comparisons between the PR and `main`.
     pub size: DiffCounter,
     /// Size pairs the PR emitted and `main` did not: no baseline exists, so
     /// they are excluded from the diff count and stated apart in the cell.
     /// The mirror, `main` emitted bytecode the PR lost, is a regression and
     /// counts as a differing pair rather than landing here.
     pub size_one_sided: u64,
+    /// Gas comparisons between the PR and `main`.
     pub gas: DiffCounter,
     /// Relative gas differences seen on a non-gating suite, in percent. The
     /// median is reported. A max would routinely be a huge but meaningless
@@ -82,10 +92,12 @@ pub struct SuiteStats {
 
     /// Failures on the PR runs in excess of their main counterparts.
     pub new_build_failures: usize,
+    /// Test failures on the PR runs in excess of their main counterparts.
     pub new_test_failures: usize,
     /// Failures already present on the paired main runs. A failing run that
     /// vanished from the PR side reports as main-only, never as pre-existing.
     pub baseline_build_failures: usize,
+    /// Test failures already present on the paired main runs.
     pub baseline_test_failures: usize,
     /// The rows behind `new_*_failures`, for the inline listing.
     pub failure_regressions: FailureRegressions,
@@ -96,9 +108,12 @@ pub struct SuiteStats {
     /// only over contracts both toolchains emitted. A toolchain that failed
     /// some builds is excluded from the comparison, not counted as 0.
     pub baseline_pairs: BTreeMap<(Role, Pipeline), PairedBytes>,
+    /// Whether any released-solx or solc baseline pairing exists.
     pub has_baselines: bool,
 
+    /// The largest bytecode-size movers, for the inline listing.
     pub top_size_movers: TopMovers,
+    /// The largest gas movers, for the inline listing.
     pub top_gas_movers: TopMovers,
 }
 

@@ -14,9 +14,13 @@ use crate::pipeline::Pipeline;
 /// data-driven, so the header repeats per pipeline.
 ///
 pub struct CompileView {
+    /// The pipeline columns the table repeats its header over.
     pub pipelines: Vec<Pipeline>,
+    /// The rendered rows, one per suite, cells in `pipelines` order.
     pub rows: Vec<Vec<String>>,
+    /// The within-noise or no-data conclusion line, when one applies.
     pub conclusion_line: Option<String>,
+    /// The project-outlier line, when any project crossed the threshold.
     pub outliers_line: Option<String>,
 }
 

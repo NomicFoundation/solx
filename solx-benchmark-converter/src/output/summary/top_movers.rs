@@ -10,6 +10,20 @@ use std::cmp::Reverse;
 #[derive(Default)]
 pub struct TopMovers(Vec<Movement>);
 
+///
+/// One row's movement between the main and PR toolchains.
+///
+pub struct Movement {
+    /// The row label: the project or case that moved.
+    pub label: String,
+    /// The humanized toolchain the movement was measured on.
+    pub mode: String,
+    /// The `main` baseline value.
+    pub main: u64,
+    /// The PR value.
+    pub pr: u64,
+}
+
 impl TopMovers {
     /// Records a movement for the inline listing.
     pub fn push(&mut self, label: &str, mode: &str, main: u64, pr: u64) {
@@ -35,14 +49,4 @@ impl TopMovers {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-}
-
-///
-/// One row's movement between the main and PR toolchains.
-///
-pub struct Movement {
-    pub label: String,
-    pub mode: String,
-    pub main: u64,
-    pub pr: u64,
 }

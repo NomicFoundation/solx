@@ -38,15 +38,25 @@ use self::truncated::Truncated;
 #[derive(Template)]
 #[template(path = "summary.md", escape = "none")]
 pub struct SummaryTemplate {
+    /// Whether the run carries released-solx and solc baselines.
     pub full_matrix: bool,
+    /// The bytecode-and-gas invariance headline.
     pub output_line: String,
+    /// The failure-regression headline.
     pub failures_line: String,
+    /// The harness-health lines, one per degraded suite.
     pub health_lines: Vec<String>,
+    /// The no-baseline and missing-on-PR warning lines.
     pub warn_lines: Vec<String>,
+    /// The results-table rows, one per suite.
     pub suite_rows: Vec<SuiteRow>,
+    /// The inline bullets behind a "New failures" verdict.
     pub new_failure_bullets: Vec<String>,
+    /// The inline "largest changes" listings behind an "Output changed" verdict.
     pub mover_sections: Vec<ListingSection>,
+    /// The compile-time table, when any suite collected compile times.
     pub compile: Option<CompileView>,
+    /// The PR-vs-baseline bytecode-size rows.
     pub baseline_rows: Vec<Vec<String>>,
 }
 

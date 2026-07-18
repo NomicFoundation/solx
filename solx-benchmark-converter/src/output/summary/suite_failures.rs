@@ -7,8 +7,11 @@
 ///
 #[derive(Debug, PartialEq)]
 pub struct SuiteFailures {
+    /// The suite label.
     pub label: String,
+    /// New build failures in excess of `main`.
     pub new_build: usize,
+    /// New test failures in excess of `main`.
     pub new_test: usize,
 }
 
