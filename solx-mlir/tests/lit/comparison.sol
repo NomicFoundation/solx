@@ -16,6 +16,11 @@
 // CHECK: sol.func @{{.*eq_address.*}}
 // CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : !sol.address
 
+// CHECK: sol.func @{{.*eq_string_literal.*}}
+// CHECK:   sol.constant 1633837924 : ui32
+// CHECK:   sol.bytes_cast %{{.*}} : ui32 to !sol.fixedbytes<4>
+// CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : !sol.fixedbytes<4>
+
 // CHECK: sol.func @{{.*ne.*}}
 // CHECK:   sol.cmp ne, %{{.*}}, %{{.*}} : ui256
 
@@ -86,6 +91,10 @@ contract C {
 
     function eq_address(address a, address b) public pure returns (bool) {
         return a == b;
+    }
+
+    function eq_string_literal(bytes4 x) public pure returns (bool) {
+        return x == "abcd";
     }
 
     function ne(uint256 a, uint256 b) public pure returns (bool) {

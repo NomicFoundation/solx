@@ -5,6 +5,7 @@
 use slang_solidity_v2::ast::BreakStatement;
 use slang_solidity_v2::ast::ContinueStatement;
 use slang_solidity_v2::ast::DoWhileStatement;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::ForStatement;
 use slang_solidity_v2::ast::ForStatementCondition;
 use slang_solidity_v2::ast::ForStatementInitialization;
@@ -96,12 +97,26 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             self.current_block().r#return(&[], self);
             return;
         };
-        let values: Vec<_> = self
-            .expression_values(&expression)
-            .iter()
-            .zip(&self.return_types)
-            .map(|(value, &return_type)| value.coerce(return_type, self))
-            .collect();
+        let values = match &expression {
+            Expression::TupleExpression(tuple) => tuple
+                .items()
+                .iter()
+                .enumerate()
+                .map(|(index, item)| {
+                    let element = item.expression().expect("slang validates tuple elements");
+                    self.coerced(&element, self.return_types[index])
+                })
+                .collect(),
+            _ => match self.return_types.as_slice() {
+                &[return_type] => vec![self.coerced(&expression, return_type)],
+                _ => self
+                    .expression_values(&expression)
+                    .iter()
+                    .zip(&self.return_types)
+                    .map(|(value, &return_type)| value.coerce(return_type, self))
+                    .collect(),
+            },
+        };
         self.current_block().r#return(&values, self);
     }
 }

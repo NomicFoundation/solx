@@ -5,6 +5,7 @@
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
 use num::BigInt;
+use num::bigint::Sign;
 
 use crate::CmpPredicate;
 use crate::Context;
@@ -58,31 +59,59 @@ impl<'context> Value<'context> {
         Self::constant(i64::from(value), Type::boolean(context.melior), context)
     }
 
-    /// Coerces to `target_type` under Solidity's implicit conversions; a no-op at the target type. A
-    /// bytes-like target reinterprets via `sol.bytes_cast`; every other target is a `sol.cast`.
+    /// Materialises the `bytesN` constant of a string or hex literal: `bytes` left-aligned in
+    /// `target_type`'s width, right-zero-padded, built as the unsigned integer of that width and
+    /// reinterpreted with `sol.bytes_cast`.
+    pub fn left_aligned_bytes(
+        mut bytes: Vec<u8>,
+        target_type: Type<'context>,
+        context: &Context<'context>,
+    ) -> Self {
+        bytes.resize(target_type.bytes_like_width() as usize, 0);
+        let integer = Self::constant_from_bigint(
+            &BigInt::from_bytes_be(Sign::Plus, &bytes),
+            Type::unsigned(context.melior, bytes.len() * solx_utils::BIT_LENGTH_BYTE),
+            context,
+        );
+        integer.bytes_cast(target_type, context)
+    }
+
+    /// Coerces to `target_type` under Solidity's implicit conversions.
     pub fn coerce(self, target_type: Type<'context>, context: &Context<'context>) -> Self {
         if self.r#type() == target_type {
             return self;
         }
-        if target_type.is_bytes_like() {
+        if self.r#type().is_bytes_like() {
             return self.bytes_cast(target_type, context);
+        }
+        if target_type.is_bytes_like() {
+            let integer_type = Type::unsigned(
+                context.melior,
+                target_type.bytes_like_width() as usize * solx_utils::BIT_LENGTH_BYTE,
+            );
+            return self
+                .cast(integer_type, context)
+                .bytes_cast(target_type, context);
         }
         self.cast(target_type, context)
     }
 
-    /// Converts to `target_type` under an explicit `T(x)` cast the binder has admitted. An address
-    /// target truncates an integer operand to `ui160` before `sol.address_cast` — the conversion
-    /// Solidity forbids implicitly, hence its home here rather than in `coerce`; every other target
-    /// shares `coerce`'s dispatch.
-    pub fn convert(self, target_type: Type<'context>, context: &Context<'context>) -> Self {
+    /// Converts to `target_type` under an explicit `T(x)` cast.
+    pub fn convert(mut self, target_type: Type<'context>, context: &Context<'context>) -> Self {
+        if self.r#type() == target_type {
+            return self;
+        }
+        if self.r#type().is_address() {
+            return self.address_cast(target_type, context);
+        }
         if target_type.is_address() {
-            let truncated = if self.r#type().is_integer() {
-                let ui160 = Type::unsigned(context.melior, solx_utils::BIT_LENGTH_ETH_ADDRESS);
-                self.cast(ui160, context)
-            } else {
-                self
-            };
-            return truncated.address_cast(target_type, context);
+            if self.r#type().is_integer() {
+                self = self.cast(
+                    Type::unsigned(context.melior, solx_utils::BIT_LENGTH_ETH_ADDRESS),
+                    context,
+                );
+            }
+            return self.address_cast(target_type, context);
         }
         self.coerce(target_type, context)
     }
