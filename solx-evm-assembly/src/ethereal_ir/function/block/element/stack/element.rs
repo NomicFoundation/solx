@@ -8,7 +8,7 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Element {
     /// The runtime value.
-    Value(&'static str),
+    Value(String),
     /// The compile-time value.
     Constant(num::BigUint),
     /// The compile-time destination tag.
@@ -25,7 +25,7 @@ impl Element {
     ///
     /// A shortcut constructor.
     ///
-    pub fn value(identifier: &'static str) -> Self {
+    pub fn value(identifier: String) -> Self {
         Self::Value(identifier)
     }
 }

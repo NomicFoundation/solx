@@ -94,18 +94,6 @@ impl Assembly {
     }
 
     ///
-    /// Replaces the nested runtime code with a path reference, dropping its instructions.
-    ///
-    /// The deploy translation unit never enters the runtime blocks, so shipping the runtime
-    /// instructions inside the deploy input is dead weight.
-    ///
-    pub fn strip_runtime_code(&mut self, path: String) {
-        if let Some(data) = self.data.as_mut() {
-            data.insert("0".to_owned(), Data::Path(path));
-        }
-    }
-
-    ///
     /// Get the list of EVM dependencies.
     ///
     pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
@@ -324,6 +312,7 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
     }
 
     fn into_llvm(self, context: &mut solx_codegen_evm::Context) -> anyhow::Result<()> {
+        // Use module name which already includes the code segment (e.g., "contract.runtime")
         let contract_path = context
             .module()
             .get_name()
@@ -331,6 +320,7 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
             .expect("Always valid")
             .to_owned();
 
+        // Get optimizer settings for file naming (same as LLVM IR dumps)
         let is_size_fallback = context.optimizer().settings().is_fallback_to_size_enabled();
         let spill_area = context
             .optimizer()
@@ -338,56 +328,82 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
             .spill_area_size()
             .map(|size| (solx_codegen_evm::SOLC_USER_MEMORY_OFFSET, size));
 
-        let output_evmla = context
-            .output_config()
-            .map_or(context.capture_evmla(), |output_config| {
-                output_config.output_evmla
-            });
-        let output_ethir = context
-            .output_config()
-            .map_or(context.capture_ethir(), |output_config| {
-                output_config.output_ethir
-            });
-
-        if output_evmla {
+        let (code_segment, blocks) = if let Ok(runtime_code) = self.runtime_code() {
             let evmla_string = self.to_string();
-            match context.output_config() {
-                Some(output_config) => output_config.dump_evmla(
+            if let Some(output_config) = context.output_config() {
+                output_config.dump_evmla(
                     contract_path.as_str(),
                     evmla_string.as_str(),
                     is_size_fallback,
                     spill_area,
-                )?,
-                None => context.set_captured_evmla(evmla_string),
+                )?;
+            } else {
+                // Capture for standard JSON output when not writing to files
+                context.set_captured_evmla(evmla_string);
             }
-        }
 
-        let code_segment = context.code_segment().expect("Code segment must be set");
-        let blocks = EtherealIR::get_blocks(
-            code_segment,
-            self.code
-                .as_deref()
-                .ok_or_else(|| anyhow::anyhow!("Code instructions not found"))?,
-        )?;
+            let deploy_code_blocks = EtherealIR::get_blocks(
+                context.evmla().expect("Always exists").version.to_owned(),
+                solx_utils::CodeSegment::Deploy,
+                self.code
+                    .as_deref()
+                    .ok_or_else(|| anyhow::anyhow!("Deploy code instructions not found"))?,
+            )?;
+
+            let runtime_code_instructions = runtime_code
+                .code
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("Runtime code instructions not found"))?;
+            let runtime_code_blocks = EtherealIR::get_blocks(
+                context.evmla().expect("Always exists").version.to_owned(),
+                solx_utils::CodeSegment::Runtime,
+                runtime_code_instructions.as_slice(),
+            )?;
+
+            let mut blocks = deploy_code_blocks;
+            blocks.extend(runtime_code_blocks);
+            (solx_utils::CodeSegment::Deploy, blocks)
+        } else {
+            let evmla_string = self.to_string();
+            if let Some(output_config) = context.output_config() {
+                output_config.dump_evmla(
+                    contract_path.as_str(),
+                    evmla_string.as_str(),
+                    is_size_fallback,
+                    spill_area,
+                )?;
+            } else {
+                // Capture for standard JSON output when not writing to files
+                context.set_captured_evmla(evmla_string);
+            }
+
+            let blocks = EtherealIR::get_blocks(
+                context.evmla().expect("Always exists").version.to_owned(),
+                solx_utils::CodeSegment::Runtime,
+                self.code
+                    .as_deref()
+                    .ok_or_else(|| anyhow::anyhow!("Deploy code instructions not found"))?,
+            )?;
+            (solx_utils::CodeSegment::Runtime, blocks)
+        };
 
         let ethereal_ir = EtherealIR::new(
             context.evmla().expect("Always exists").version.to_owned(),
             self.extra_metadata.unwrap_or_default(),
-            code_segment,
+            Some(code_segment),
             blocks,
-            output_ethir,
         )?;
-        if output_ethir {
-            let ethir_string = ethereal_ir.to_string();
-            match context.output_config() {
-                Some(output_config) => output_config.dump_ethir(
-                    contract_path.as_str(),
-                    ethir_string.as_str(),
-                    is_size_fallback,
-                    spill_area,
-                )?,
-                None => context.set_captured_ethir(ethir_string),
-            }
+        let ethir_string = ethereal_ir.to_string();
+        if let Some(output_config) = context.output_config() {
+            output_config.dump_ethir(
+                contract_path.as_str(),
+                ethir_string.as_str(),
+                is_size_fallback,
+                spill_area,
+            )?;
+        } else {
+            // Capture for standard JSON output when not writing to files
+            context.set_captured_ethir(ethir_string);
         }
 
         let mut entry = solx_codegen_evm::EntryFunction::new(ethereal_ir);

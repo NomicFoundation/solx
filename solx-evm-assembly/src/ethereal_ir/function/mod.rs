@@ -8,6 +8,8 @@ pub mod r#type;
 pub mod visited_element;
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
@@ -19,8 +21,6 @@ use num::Num;
 use num::One;
 use num::ToPrimitive;
 use num::Zero;
-use rustc_hash::FxHashMap;
-use rustc_hash::FxHashSet;
 
 use solx_codegen_evm::IContext;
 use solx_codegen_evm::IEVMLAFunction;
@@ -49,15 +49,15 @@ pub struct Function {
     /// The function name.
     pub name: String,
     /// The optional code segment. Only used for the EVM target.
-    pub code_segment: solx_utils::CodeSegment,
+    pub code_segment: Option<solx_utils::CodeSegment>,
     /// The separately labelled blocks.
     pub blocks: BTreeMap<solx_codegen_evm::BlockKey, Vec<Block>>,
+    /// Index of initial stack hashes per block key for O(1) duplicate detection.
+    block_hash_index: HashMap<solx_codegen_evm::BlockKey, HashSet<u64>>,
     /// The function type.
     pub r#type: Type,
     /// The function stack size.
     pub stack_size: usize,
-    /// Whether per-element stack snapshots are captured for Ethereal IR text output.
-    pub capture_stacks: bool,
 }
 
 impl Function {
@@ -66,9 +66,8 @@ impl Function {
     ///
     pub fn new(
         solc_version: semver::Version,
-        code_segment: solx_utils::CodeSegment,
+        code_segment: Option<solx_utils::CodeSegment>,
         r#type: Type,
-        capture_stacks: bool,
     ) -> Self {
         let name = match r#type {
             Type::Entry => solx_codegen_evm::ENTRY_FUNCTION_NAME.to_string(),
@@ -84,9 +83,9 @@ impl Function {
             name,
             code_segment,
             blocks: BTreeMap::new(),
+            block_hash_index: HashMap::new(),
             r#type,
             stack_size: 0,
-            capture_stacks,
         }
     }
 
@@ -95,27 +94,37 @@ impl Function {
     ///
     pub fn traverse(
         &mut self,
-        blocks: &FxHashMap<solx_codegen_evm::BlockKey, Block>,
+        blocks: &HashMap<solx_codegen_evm::BlockKey, Block>,
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
-        visited_functions: &mut FxHashSet<solx_codegen_evm::BlockKey>,
+        visited_functions: &mut HashSet<VisitedElement>,
     ) -> anyhow::Result<()> {
-        let mut visited_blocks = FxHashMap::default();
+        let mut visited_blocks = HashSet::new();
+
+        let code_segments = match self.code_segment {
+            Some(code_segment) => vec![code_segment],
+            None => vec![
+                solx_utils::CodeSegment::Deploy,
+                solx_utils::CodeSegment::Runtime,
+            ],
+        };
 
         match self.r#type {
             Type::Entry => {
-                self.consume_block(
-                    blocks,
-                    functions,
-                    extra_metadata,
-                    visited_functions,
-                    &mut visited_blocks,
-                    QueueElement::new(
-                        solx_codegen_evm::BlockKey::new(self.code_segment, 0u64),
-                        None,
-                        Stack::default(),
-                    ),
-                )?;
+                for code_segment in code_segments {
+                    self.consume_block(
+                        blocks,
+                        functions,
+                        extra_metadata,
+                        visited_functions,
+                        &mut visited_blocks,
+                        QueueElement::new(
+                            solx_codegen_evm::BlockKey::new(code_segment, 0u64),
+                            None,
+                            Stack::new(),
+                        ),
+                    )?;
+                }
             }
             Type::Defined {
                 ref block_key,
@@ -125,9 +134,12 @@ impl Function {
             } => {
                 let mut stack = Stack::with_capacity(1 + input_size);
                 stack.push(Element::ReturnAddress(output_size));
-                stack
-                    .elements
-                    .extend(std::iter::repeat_n(Element::value("ARGUMENT"), input_size));
+                stack.append(&mut Stack::new_with_elements(vec![
+                    Element::value(
+                        "ARGUMENT".to_owned()
+                    );
+                    input_size
+                ]));
 
                 self.consume_block(
                     blocks,
@@ -150,31 +162,16 @@ impl Function {
     ///
     fn consume_block(
         &mut self,
-        blocks: &FxHashMap<solx_codegen_evm::BlockKey, Block>,
+        blocks: &HashMap<solx_codegen_evm::BlockKey, Block>,
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
-        visited_functions: &mut FxHashSet<solx_codegen_evm::BlockKey>,
-        visited_blocks: &mut FxHashMap<VisitedElement, usize>,
+        visited_functions: &mut HashSet<VisitedElement>,
+        visited_blocks: &mut HashSet<VisitedElement>,
         mut queue_element: QueueElement,
     ) -> anyhow::Result<()> {
         let version = self.solc_version.to_owned();
-        let capture_stacks = self.capture_stacks;
 
         let mut queue = vec![];
-
-        let initial_stack_hash = queue_element.stack.hash();
-        let visited_element =
-            VisitedElement::new(queue_element.block_key.clone(), initial_stack_hash);
-        if let Some(&instance) = visited_blocks.get(&visited_element) {
-            if let Some(predecessor) = queue_element.predecessor.take() {
-                self.blocks
-                    .get_mut(&queue_element.block_key)
-                    .and_then(|instances| instances.get_mut(instance))
-                    .expect("Always exists")
-                    .insert_predecessor(predecessor.0, predecessor.1);
-            }
-            return Ok(());
-        }
 
         let mut block = blocks
             .get(&queue_element.block_key)
@@ -182,13 +179,19 @@ impl Function {
             .ok_or_else(|| {
                 anyhow::anyhow!("Undeclared destination block {}", queue_element.block_key)
             })?;
-        block.initial_stack_hash = initial_stack_hash;
-        block.stack = std::mem::take(&mut queue_element.stack);
+        block.initial_stack = queue_element.stack.clone();
         let block = self.insert_block(block);
-        visited_blocks.insert(visited_element, block.instance.expect("Always exists"));
+        block.stack = block.initial_stack.clone();
         if let Some(predecessor) = queue_element.predecessor.take() {
             block.insert_predecessor(predecessor.0, predecessor.1);
         }
+
+        let visited_element =
+            VisitedElement::new(queue_element.block_key.clone(), queue_element.stack.hash());
+        if visited_blocks.contains(&visited_element) {
+            return Ok(());
+        }
+        visited_blocks.insert(visited_element);
 
         let mut block_size = 0;
         for block_element in block.elements.iter_mut() {
@@ -204,17 +207,13 @@ impl Function {
                 &mut block.stack,
                 block_element,
                 &version,
-                capture_stacks,
                 &mut queue,
                 &mut queue_element,
             )
             .is_err()
             {
                 block_element.instruction = Instruction::invalid(&block_element.instruction);
-                block_element.stack_size = block.stack.len();
-                if capture_stacks {
-                    block_element.stack = block.stack.clone();
-                }
+                block_element.stack = block.stack.clone();
                 break;
             }
         }
@@ -241,16 +240,15 @@ impl Function {
     /// the invalid part is truncated after terminating with an `INVALID` instruction.
     ///
     fn handle_instruction(
-        blocks: &FxHashMap<solx_codegen_evm::BlockKey, Block>,
+        blocks: &HashMap<solx_codegen_evm::BlockKey, Block>,
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
-        visited_functions: &mut FxHashSet<solx_codegen_evm::BlockKey>,
+        visited_functions: &mut HashSet<VisitedElement>,
         code_segment: solx_utils::CodeSegment,
         instance: usize,
         block_stack: &mut Stack,
         block_element: &mut BlockElement,
         version: &semver::Version,
-        capture_stacks: bool,
         queue: &mut Vec<QueueElement>,
         queue_element: &mut QueueElement,
     ) -> anyhow::Result<()> {
@@ -289,13 +287,7 @@ impl Function {
                     Element::ReturnAddress(output_size) => {
                         block_element.instruction =
                             Instruction::r#return(1 + output_size, instruction);
-                        Self::update_io_data(
-                            block_stack,
-                            block_element,
-                            1 + output_size,
-                            vec![],
-                            capture_stacks,
-                        )?;
+                        Self::update_io_data(block_stack, block_element, 1 + output_size, vec![])?;
                         return Ok(());
                     }
                     element => {
@@ -320,7 +312,6 @@ impl Function {
                         block_stack,
                         block_element,
                         version,
-                        capture_stacks,
                     )?
                 } else {
                     (block_key, vec![])
@@ -331,7 +322,7 @@ impl Function {
                     Some(QueueElement::new(
                         next_block_key,
                         queue_element.predecessor.clone(),
-                        Stack::default(),
+                        Stack::new(),
                     )),
                 )
             }
@@ -369,7 +360,7 @@ impl Function {
                     Some(QueueElement::new(
                         block_key,
                         queue_element.predecessor.clone(),
-                        Stack::default(),
+                        Stack::new(),
                     )),
                 )
             }
@@ -391,7 +382,7 @@ impl Function {
                     Some(QueueElement::new(
                         block_key,
                         queue_element.predecessor.clone(),
-                        Stack::default(),
+                        Stack::new(),
                     )),
                 )
             }
@@ -680,7 +671,10 @@ impl Function {
             instruction @ Instruction {
                 name: InstructionName::PUSHDEPLOYADDRESS,
                 ..
-            } => (vec![StackElement::value(instruction.name.mnemonic())], None),
+            } => (
+                vec![StackElement::value(instruction.name.to_string())],
+                None,
+            ),
 
             instruction @ Instruction {
                 name: InstructionName::ADD,
@@ -696,8 +690,8 @@ impl Function {
                             {
                                 Element::Tag(result)
                             }
-                            Some(_) => Element::value(instruction.name.mnemonic()),
-                            None => Element::value(instruction.name.mnemonic()),
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
                         }
                     }
                     (Element::Tag(tag), Element::Constant(constant)) => {
@@ -710,8 +704,8 @@ impl Function {
                             {
                                 Element::Tag(result)
                             }
-                            Some(_) => Element::value(instruction.name.mnemonic()),
-                            None => Element::value(instruction.name.mnemonic()),
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
                         }
                     }
                     (Element::Constant(constant), Element::Tag(tag)) => {
@@ -724,17 +718,17 @@ impl Function {
                             {
                                 Element::Tag(result)
                             }
-                            Some(_) => Element::value(instruction.name.mnemonic()),
-                            None => Element::value(instruction.name.mnemonic()),
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
                         }
                     }
                     (Element::Constant(operand_1), Element::Constant(operand_2)) => {
                         match operand_1.checked_add(operand_2) {
                             Some(result) => Element::Constant(result),
-                            None => Element::value(instruction.name.mnemonic()),
+                            None => Element::value(instruction.name.to_string()),
                         }
                     }
-                    _ => Element::value(instruction.name.mnemonic()),
+                    _ => Element::value(instruction.name.to_string()),
                 };
 
                 (vec![result], None)
@@ -753,8 +747,8 @@ impl Function {
                             {
                                 Element::Tag(result)
                             }
-                            Some(_) => Element::value(instruction.name.mnemonic()),
-                            None => Element::value(instruction.name.mnemonic()),
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
                         }
                     }
                     (Element::Tag(tag), Element::Constant(constant)) => {
@@ -767,8 +761,8 @@ impl Function {
                             {
                                 Element::Tag(result)
                             }
-                            Some(_) => Element::value(instruction.name.mnemonic()),
-                            None => Element::value(instruction.name.mnemonic()),
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
                         }
                     }
                     (Element::Constant(constant), Element::Tag(tag)) => {
@@ -781,17 +775,17 @@ impl Function {
                             {
                                 Element::Tag(result)
                             }
-                            Some(_) => Element::value(instruction.name.mnemonic()),
-                            None => Element::value(instruction.name.mnemonic()),
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
                         }
                     }
                     (Element::Constant(operand_1), Element::Constant(operand_2)) => {
                         match operand_1.checked_sub(operand_2) {
                             Some(result) => Element::Constant(result),
-                            None => Element::value(instruction.name.mnemonic()),
+                            None => Element::value(instruction.name.to_string()),
                         }
                     }
-                    _ => Element::value(instruction.name.mnemonic()),
+                    _ => Element::value(instruction.name.to_string()),
                 };
 
                 (vec![result], None)
@@ -810,8 +804,8 @@ impl Function {
                             {
                                 Element::Tag(result)
                             }
-                            Some(_) => Element::value(instruction.name.mnemonic()),
-                            None => Element::value(instruction.name.mnemonic()),
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
                         }
                     }
                     (Element::Tag(tag), Element::Constant(constant)) => {
@@ -824,8 +818,8 @@ impl Function {
                             {
                                 Element::Tag(result)
                             }
-                            Some(_) => Element::value(instruction.name.mnemonic()),
-                            None => Element::value(instruction.name.mnemonic()),
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
                         }
                     }
                     (Element::Constant(constant), Element::Tag(tag)) => {
@@ -838,17 +832,17 @@ impl Function {
                             {
                                 Element::Tag(result)
                             }
-                            Some(_) => Element::value(instruction.name.mnemonic()),
-                            None => Element::value(instruction.name.mnemonic()),
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
                         }
                     }
                     (Element::Constant(operand_1), Element::Constant(operand_2)) => {
                         match operand_1.checked_mul(operand_2) {
                             Some(result) => Element::Constant(result),
-                            None => Element::value(instruction.name.mnemonic()),
+                            None => Element::value(instruction.name.to_string()),
                         }
                     }
-                    _ => Element::value(instruction.name.mnemonic()),
+                    _ => Element::value(instruction.name.to_string()),
                 };
 
                 (vec![result], None)
@@ -870,8 +864,8 @@ impl Function {
                                 {
                                     Element::Tag(result)
                                 }
-                                Some(_) => Element::value(instruction.name.mnemonic()),
-                                None => Element::value(instruction.name.mnemonic()),
+                                Some(_) => Element::value(instruction.name.to_string()),
+                                None => Element::value(instruction.name.to_string()),
                             }
                         }
                     }
@@ -889,8 +883,8 @@ impl Function {
                                 {
                                     Element::Tag(result)
                                 }
-                                Some(_) => Element::value(instruction.name.mnemonic()),
-                                None => Element::value(instruction.name.mnemonic()),
+                                Some(_) => Element::value(instruction.name.to_string()),
+                                None => Element::value(instruction.name.to_string()),
                             }
                         }
                     }
@@ -907,8 +901,8 @@ impl Function {
                                 {
                                     Element::Tag(result)
                                 }
-                                Some(_) => Element::value(instruction.name.mnemonic()),
-                                None => Element::value(instruction.name.mnemonic()),
+                                Some(_) => Element::value(instruction.name.to_string()),
+                                None => Element::value(instruction.name.to_string()),
                             }
                         }
                     }
@@ -918,11 +912,11 @@ impl Function {
                         } else {
                             match operand_1.checked_div(operand_2) {
                                 Some(result) => Element::Constant(result),
-                                None => Element::value(instruction.name.mnemonic()),
+                                None => Element::value(instruction.name.to_string()),
                             }
                         }
                     }
-                    _ => Element::value(instruction.name.mnemonic()),
+                    _ => Element::value(instruction.name.to_string()),
                 };
 
                 (vec![result], None)
@@ -942,7 +936,7 @@ impl Function {
                             if Self::is_tag_value_valid(blocks, code_segment, &result) {
                                 Element::Tag(result)
                             } else {
-                                Element::value(instruction.name.mnemonic())
+                                Element::value(instruction.name.to_string())
                             }
                         }
                     }
@@ -957,7 +951,7 @@ impl Function {
                             if Self::is_tag_value_valid(blocks, code_segment, &result) {
                                 Element::Tag(result)
                             } else {
-                                Element::value(instruction.name.mnemonic())
+                                Element::value(instruction.name.to_string())
                             }
                         }
                     }
@@ -971,10 +965,10 @@ impl Function {
                                     if Self::is_tag_value_valid(blocks, code_segment, &result) {
                                         Element::Tag(result)
                                     } else {
-                                        Element::value(instruction.name.mnemonic())
+                                        Element::value(instruction.name.to_string())
                                     }
                                 }
-                                None => Element::value(instruction.name.mnemonic()),
+                                None => Element::value(instruction.name.to_string()),
                             }
                         }
                     }
@@ -985,7 +979,7 @@ impl Function {
                             Element::Constant(operand_1 % operand_2)
                         }
                     }
-                    _ => Element::value(instruction.name.mnemonic()),
+                    _ => Element::value(instruction.name.to_string()),
                 };
 
                 (vec![result], None)
@@ -1006,8 +1000,8 @@ impl Function {
                             {
                                 Element::Tag(result)
                             }
-                            Some(_) => Element::value(instruction.name.mnemonic()),
-                            None => Element::value(instruction.name.mnemonic()),
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
                         }
                     }
                     (Element::Constant(constant), Element::Constant(offset)) => {
@@ -1015,7 +1009,7 @@ impl Function {
                         let offset = offset.to_u64().expect("Always valid");
                         Element::Constant(constant << offset)
                     }
-                    _ => Element::value(instruction.name.mnemonic()),
+                    _ => Element::value(instruction.name.to_string()),
                 };
 
                 (vec![result], None)
@@ -1034,7 +1028,7 @@ impl Function {
                         if Self::is_tag_value_valid(blocks, code_segment, &result) {
                             Element::Tag(result)
                         } else {
-                            Element::value(instruction.name.mnemonic())
+                            Element::value(instruction.name.to_string())
                         }
                     }
                     (Element::Constant(constant), Element::Constant(offset)) => {
@@ -1042,7 +1036,7 @@ impl Function {
                         let offset = offset.to_u64().expect("Always valid");
                         Element::Constant(constant >> offset)
                     }
-                    _ => Element::value(instruction.name.mnemonic()),
+                    _ => Element::value(instruction.name.to_string()),
                 };
 
                 (vec![result], None)
@@ -1059,7 +1053,7 @@ impl Function {
                         if Self::is_tag_value_valid(blocks, code_segment, &result) {
                             Element::Tag(result)
                         } else {
-                            Element::value(instruction.name.mnemonic())
+                            Element::value(instruction.name.to_string())
                         }
                     }
                     (Element::Tag(tag), Element::Constant(constant)) => {
@@ -1068,10 +1062,10 @@ impl Function {
                             if Self::is_tag_value_valid(blocks, code_segment, &result) {
                                 Element::Tag(result)
                             } else {
-                                Element::value(instruction.name.mnemonic())
+                                Element::value(instruction.name.to_string())
                             }
                         } else {
-                            Element::value(instruction.name.mnemonic())
+                            Element::value(instruction.name.to_string())
                         }
                     }
                     (Element::Constant(constant), Element::Tag(tag)) => {
@@ -1080,16 +1074,16 @@ impl Function {
                             if Self::is_tag_value_valid(blocks, code_segment, &result) {
                                 Element::Tag(result)
                             } else {
-                                Element::value(instruction.name.mnemonic())
+                                Element::value(instruction.name.to_string())
                             }
                         } else {
-                            Element::value(instruction.name.mnemonic())
+                            Element::value(instruction.name.to_string())
                         }
                     }
                     (Element::Constant(operand_1), Element::Constant(operand_2)) => {
                         Element::Constant(operand_1 | operand_2)
                     }
-                    _ => Element::value(instruction.name.mnemonic()),
+                    _ => Element::value(instruction.name.to_string()),
                 };
 
                 (vec![result], None)
@@ -1106,7 +1100,7 @@ impl Function {
                         if Self::is_tag_value_valid(blocks, code_segment, &result) {
                             Element::Tag(result)
                         } else {
-                            Element::value(instruction.name.mnemonic())
+                            Element::value(instruction.name.to_string())
                         }
                     }
                     (Element::Tag(tag), Element::Constant(constant)) => {
@@ -1115,10 +1109,10 @@ impl Function {
                             if Self::is_tag_value_valid(blocks, code_segment, &result) {
                                 Element::Tag(result)
                             } else {
-                                Element::value(instruction.name.mnemonic())
+                                Element::value(instruction.name.to_string())
                             }
                         } else {
-                            Element::value(instruction.name.mnemonic())
+                            Element::value(instruction.name.to_string())
                         }
                     }
                     (Element::Constant(constant), Element::Tag(tag)) => {
@@ -1127,16 +1121,16 @@ impl Function {
                             if Self::is_tag_value_valid(blocks, code_segment, &result) {
                                 Element::Tag(result)
                             } else {
-                                Element::value(instruction.name.mnemonic())
+                                Element::value(instruction.name.to_string())
                             }
                         } else {
-                            Element::value(instruction.name.mnemonic())
+                            Element::value(instruction.name.to_string())
                         }
                     }
                     (Element::Constant(operand_1), Element::Constant(operand_2)) => {
                         Element::Constant(operand_1 ^ operand_2)
                     }
-                    _ => Element::value(instruction.name.mnemonic()),
+                    _ => Element::value(instruction.name.to_string()),
                 };
 
                 (vec![result], None)
@@ -1153,7 +1147,7 @@ impl Function {
                         if Self::is_tag_value_valid(blocks, code_segment, &result) {
                             Element::Tag(result)
                         } else {
-                            Element::value(instruction.name.mnemonic())
+                            Element::value(instruction.name.to_string())
                         }
                     }
                     (Element::Tag(tag), Element::Constant(constant)) => {
@@ -1162,10 +1156,10 @@ impl Function {
                             if Self::is_tag_value_valid(blocks, code_segment, &result) {
                                 Element::Tag(result)
                             } else {
-                                Element::value(instruction.name.mnemonic())
+                                Element::value(instruction.name.to_string())
                             }
                         } else {
-                            Element::value(instruction.name.mnemonic())
+                            Element::value(instruction.name.to_string())
                         }
                     }
                     (Element::Constant(constant), Element::Tag(tag)) => {
@@ -1174,16 +1168,16 @@ impl Function {
                             if Self::is_tag_value_valid(blocks, code_segment, &result) {
                                 Element::Tag(result)
                             } else {
-                                Element::value(instruction.name.mnemonic())
+                                Element::value(instruction.name.to_string())
                             }
                         } else {
-                            Element::value(instruction.name.mnemonic())
+                            Element::value(instruction.name.to_string())
                         }
                     }
                     (Element::Constant(operand_1), Element::Constant(operand_2)) => {
                         Element::Constant(operand_1 & operand_2)
                     }
-                    _ => Element::value(instruction.name.mnemonic()),
+                    _ => Element::value(instruction.name.to_string()),
                 };
 
                 (vec![result], None)
@@ -1199,7 +1193,7 @@ impl Function {
                     (Element::Tag(operand_1), Element::Tag(operand_2)) => {
                         Element::Constant(num::BigUint::from(u64::from(operand_1 < operand_2)))
                     }
-                    _ => Element::value(instruction.name.mnemonic()),
+                    _ => Element::value(instruction.name.to_string()),
                 };
 
                 (vec![result], None)
@@ -1214,7 +1208,7 @@ impl Function {
                     (Element::Tag(operand_1), Element::Tag(operand_2)) => {
                         Element::Constant(num::BigUint::from(u64::from(operand_1 > operand_2)))
                     }
-                    _ => Element::value(instruction.name.mnemonic()),
+                    _ => Element::value(instruction.name.to_string()),
                 };
 
                 (vec![result], None)
@@ -1229,7 +1223,7 @@ impl Function {
                     (Element::Tag(operand_1), Element::Tag(operand_2)) => {
                         Element::Constant(num::BigUint::from(u64::from(operand_1 == operand_2)))
                     }
-                    _ => Element::value(instruction.name.mnemonic()),
+                    _ => Element::value(instruction.name.to_string()),
                 };
 
                 (vec![result], None)
@@ -1249,14 +1243,14 @@ impl Function {
                     } else {
                         num::BigUint::zero()
                     }),
-                    _ => Element::value(instruction.name.mnemonic()),
+                    _ => Element::value(instruction.name.to_string()),
                 };
 
                 (vec![result], None)
             }
 
             instruction => (
-                vec![Element::value(instruction.name.mnemonic()); instruction.output_size()],
+                vec![Element::value(instruction.name.to_string()); instruction.output_size()],
                 None,
             ),
         };
@@ -1266,20 +1260,10 @@ impl Function {
             block_element,
             block_element.instruction.input_size(version),
             stack_output,
-            capture_stacks,
         )?;
 
-        // Keep this set in sync with the `stack_hash.expect()` readers in `block::element`:
-        // those arms panic if their instruction is not captured here.
-        if matches!(
-            block_element.instruction.name,
-            InstructionName::Tag | InstructionName::JUMP | InstructionName::JUMPI
-        ) {
-            block_element.stack_hash = Some(block_stack.hash());
-        }
-
         if let Some(mut queue_element) = queue_element {
-            queue_element.stack = block_stack.clone();
+            block_element.stack.clone_into(&mut queue_element.stack);
             queue.push(queue_element);
         }
 
@@ -1294,7 +1278,6 @@ impl Function {
         block_element: &mut BlockElement,
         input_size: usize,
         output_data: Vec<Element>,
-        capture_stacks: bool,
     ) -> anyhow::Result<()> {
         if block_stack.len() < input_size {
             anyhow::bail!("Stack underflow");
@@ -1305,16 +1288,9 @@ impl Function {
                 .drain(block_stack.len() - input_size..)
                 .collect(),
         );
-        block_element.stack_output_size = output_data.len();
-        block_stack.elements.extend(output_data);
-        block_element.stack_size = block_stack.len();
-        if capture_stacks {
-            block_element.stack_output = Stack::new_with_elements(
-                block_stack.elements[block_stack.len() - block_element.stack_output_size..]
-                    .to_vec(),
-            );
-            block_element.stack = block_stack.clone();
-        }
+        block_element.stack_output = Stack::new_with_elements(output_data);
+        block_stack.extend_from(&block_element.stack_output);
+        block_element.stack = block_stack.clone();
         Ok(())
     }
 
@@ -1323,17 +1299,18 @@ impl Function {
     ///
     fn handle_function_call(
         function: &ExtraMetadataDefinedFunction,
-        blocks: &FxHashMap<solx_codegen_evm::BlockKey, Block>,
+        blocks: &HashMap<solx_codegen_evm::BlockKey, Block>,
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
-        visited_functions: &mut FxHashSet<solx_codegen_evm::BlockKey>,
+        visited_functions: &mut HashSet<VisitedElement>,
         block_key: solx_codegen_evm::BlockKey,
         block_stack: &mut Stack,
         block_element: &mut BlockElement,
         version: &semver::Version,
-        capture_stacks: bool,
     ) -> anyhow::Result<(solx_codegen_evm::BlockKey, Vec<Element>)> {
         let return_address_offset = block_stack.elements.len() - 2 - function.input_size;
+        let input_arguments_offset = return_address_offset + 1;
+        let callee_tag_offset = input_arguments_offset + function.input_size;
 
         let return_address = match block_stack.elements[return_address_offset] {
             Element::Tag(ref return_address) => {
@@ -1341,11 +1318,18 @@ impl Function {
             }
             ref element => anyhow::bail!("Expected the function return address, found {element}"),
         };
+        let mut stack = Stack::with_capacity(1 + function.input_size);
+        stack.push(StackElement::ReturnAddress(1 + function.output_size));
+        stack.append(&mut Stack::new_with_elements(
+            block_stack.elements[input_arguments_offset..callee_tag_offset].to_owned(),
+        ));
+        let stack_hash = stack.hash();
 
-        if !visited_functions.contains(&block_key) {
+        let visited_element = VisitedElement::new(block_key.clone(), stack_hash);
+        if !visited_functions.contains(&visited_element) {
             let mut function = Self::new(
                 version.to_owned(),
-                block_key.code_segment,
+                Some(block_key.code_segment),
                 Type::new_defined(
                     function.name.to_owned(),
                     function.ast_id,
@@ -1353,20 +1337,17 @@ impl Function {
                     function.input_size,
                     function.output_size,
                 ),
-                capture_stacks,
             );
-            visited_functions.insert(block_key.clone());
+            visited_functions.insert(visited_element);
             function.traverse(blocks, functions, extra_metadata, visited_functions)?;
             functions.insert(block_key.clone(), function);
         }
 
-        let stack_output = vec![Element::value("RETURN_VALUE"); function.output_size];
-        let return_size = block_stack.len() - function.input_size - 2;
-        let mut return_stack = Stack::with_capacity(return_size + function.output_size);
-        return_stack
-            .elements
-            .extend_from_slice(&block_stack.elements[..return_size]);
-        return_stack.elements.extend(stack_output.iter().cloned());
+        let stack_output = vec![Element::value("RETURN_VALUE".to_owned()); function.output_size];
+        let mut return_stack = Stack::new_with_elements(
+            block_stack.elements[..block_stack.len() - function.input_size - 2].to_owned(),
+        );
+        return_stack.append(&mut Stack::new_with_elements(stack_output.clone()));
         let return_stack_hash = return_stack.hash();
 
         block_element.instruction = Instruction::call(
@@ -1386,17 +1367,32 @@ impl Function {
     /// Pushes a block into the function.
     ///
     fn insert_block(&mut self, mut block: Block) -> &mut Block {
-        let instances = self.blocks.entry(block.key.clone()).or_default();
-        block.instance = Some(instances.len());
-        instances.push(block);
-        instances.last_mut().expect("Always exists")
+        let key = block.key.clone();
+        let stack_hash = block.initial_stack.hash();
+
+        let hash_set = self.block_hash_index.entry(key.clone()).or_default();
+        if hash_set.insert(stack_hash) {
+            if let Some(entry) = self.blocks.get_mut(&key) {
+                block.instance = Some(entry.len());
+                entry.push(block);
+            } else {
+                block.instance = Some(0);
+                self.blocks.insert(key.clone(), vec![block]);
+            }
+        }
+
+        self.blocks
+            .get_mut(&key)
+            .expect("Always exists")
+            .last_mut()
+            .expect("Always exists")
     }
 
     ///
     /// Checks whether the tag value references an existing block in the given code segment.
     ///
     fn is_tag_value_valid(
-        blocks: &FxHashMap<solx_codegen_evm::BlockKey, Block>,
+        blocks: &HashMap<solx_codegen_evm::BlockKey, Block>,
         code_segment: solx_utils::CodeSegment,
         tag: &u64,
     ) -> bool {
@@ -1413,9 +1409,9 @@ impl Function {
         for (_tag, blocks) in self.blocks.iter() {
             for block in blocks.iter() {
                 for block_element in block.elements.iter() {
-                    let total_length = block_element.stack_size
+                    let total_length = block_element.stack.elements.len()
                         + block_element.stack_input.len()
-                        + block_element.stack_output_size;
+                        + block_element.stack_output.len();
                     if total_length > self.stack_size {
                         self.stack_size = total_length;
                     }
@@ -1468,8 +1464,9 @@ impl solx_codegen_evm::WriteLLVM for Function {
         for (key, blocks) in self.blocks.iter() {
             for (index, block) in blocks.iter().enumerate() {
                 let inner = context.append_basic_block(format!("block_{key}/{index}").as_str());
-                let evmla_data =
-                    solx_codegen_evm::FunctionBlockEVMLAData::new(block.initial_stack_hash);
+                let mut stack_hashes = vec![block.initial_stack.hash()];
+                stack_hashes.extend_from_slice(block.extra_hashes.as_slice());
+                let evmla_data = solx_codegen_evm::FunctionBlockEVMLAData::new(stack_hashes);
                 let mut block = solx_codegen_evm::FunctionBlock::new(inner);
                 block.set_evmla_data(evmla_data);
                 context
@@ -1527,8 +1524,7 @@ impl solx_codegen_evm::WriteLLVM for Function {
                     .blocks
                     .get(block_key)
                     .expect("Always exists")
-                    .values()
-                    .next()
+                    .first()
                     .expect("Always exists")
                     .inner();
                 context.build_unconditional_branch(initial_block)?;
@@ -1544,7 +1540,7 @@ impl solx_codegen_evm::WriteLLVM for Function {
                 .get(&key)
                 .cloned()
                 .ok_or_else(|| anyhow::anyhow!("Undeclared function block {key}"))?
-                .into_values()
+                .into_iter()
                 .map(|block| block.inner())
                 .zip(blocks)
             {

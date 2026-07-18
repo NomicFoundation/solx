@@ -280,24 +280,18 @@ impl Contract {
             }
             (IR::EVMLegacyAssembly(mut code), code_segment) => {
                 let (
-                    selector_evmla,
-                    selector_ethir,
                     selector_debug_info,
                     selector_llvm_ir_unoptimized,
                     selector_llvm_ir,
                     selector_llvm_assembly,
                 ) = match code_segment {
                     solx_utils::CodeSegment::Deploy => (
-                        solx_standard_json::InputSelector::BytecodeEVMLA,
-                        solx_standard_json::InputSelector::BytecodeEthIR,
                         solx_standard_json::InputSelector::BytecodeDebugInfo,
                         solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
                         solx_standard_json::InputSelector::BytecodeLLVMIR,
                         solx_standard_json::InputSelector::BytecodeLLVMAssembly,
                     ),
                     solx_utils::CodeSegment::Runtime => (
-                        solx_standard_json::InputSelector::RuntimeBytecodeEVMLA,
-                        solx_standard_json::InputSelector::RuntimeBytecodeEthIR,
                         solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
                         solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
                         solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
@@ -359,16 +353,6 @@ impl Contract {
                     crate::process::evm_stack_error_handler,
                 );
                 context.set_evmla_data(evmla_data);
-                context.set_capture_evmla(output_selection.check_selection(
-                    contract_name.path.as_str(),
-                    contract_name.name.as_deref(),
-                    selector_evmla,
-                ));
-                context.set_capture_ethir(output_selection.check_selection(
-                    contract_name.path.as_str(),
-                    contract_name.name.as_deref(),
-                    selector_ethir,
-                ));
                 let run_evm_assembly_lowering = profiler.start_evm_translation_unit(
                     contract_name.full_path.as_str(),
                     code_segment,

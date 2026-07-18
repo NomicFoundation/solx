@@ -49,7 +49,6 @@ impl EVMLegacyAssembly {
 
         let mut deploy_code_dependencies = solx_codegen_evm::Dependencies::new(full_path);
         assembly.accumulate_evm_dependencies(&mut deploy_code_dependencies);
-        assembly.strip_runtime_code(runtime_code_identifier);
 
         Ok(Self {
             assembly,

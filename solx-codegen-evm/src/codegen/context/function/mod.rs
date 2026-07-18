@@ -332,10 +332,36 @@ impl<'ctx> Function<'ctx> {
 
 impl<'ctx> IEVMLAFunction<'ctx> for Function<'ctx> {
     fn find_block(&self, key: &BlockKey, stack_hash: &u64) -> anyhow::Result<Block<'ctx>> {
-        self.evmla()
+        let evmla_data = self.evmla();
+
+        if evmla_data
             .blocks
             .get(key)
-            .and_then(|blocks| blocks.get(stack_hash))
+            .ok_or_else(|| anyhow::anyhow!("Undeclared function block {key}"))?
+            .len()
+            == 1
+        {
+            return evmla_data
+                .blocks
+                .get(key)
+                .ok_or_else(|| anyhow::anyhow!("Undeclared function block {key}"))?
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("Undeclared function block {key}"));
+        }
+
+        evmla_data
+            .blocks
+            .get(key)
+            .ok_or_else(|| anyhow::anyhow!("Undeclared function block {key}"))?
+            .iter()
+            .find(|block| {
+                block
+                    .evm()
+                    .stack_hashes
+                    .iter()
+                    .any(|hash| hash == stack_hash)
+            })
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("Undeclared function block {key}"))
     }

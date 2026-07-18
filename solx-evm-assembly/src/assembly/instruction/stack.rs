@@ -18,7 +18,10 @@ where
 {
     let result = context
         .field_type()
-        .const_int_from_string(value.as_str(), inkwell::types::StringRadix::Hexadecimal)
+        .const_int_from_string(
+            value.to_ascii_uppercase().as_str(),
+            inkwell::types::StringRadix::Hexadecimal,
+        )
         .ok_or_else(|| anyhow::anyhow!("Invalid hexadecimal PUSH value: {value}"))?
         .as_basic_value_enum();
     Ok(result)
@@ -48,6 +51,7 @@ pub fn dup<'ctx, C>(
     context: &mut C,
     offset: usize,
     height: usize,
+    original: &mut Option<String>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     C: solx_codegen_evm::IContext<'ctx>,
@@ -60,6 +64,8 @@ where
         solx_codegen_evm::Pointer::new_stack_field(context, element.to_llvm().into_pointer_value()),
         format!("dup{offset}").as_str(),
     )?;
+
+    element.original.clone_into(original);
 
     Ok(value)
 }
@@ -93,6 +99,19 @@ where
     );
     let swap_value =
         context.build_load(swap_pointer, format!("swap{offset}_swap_value").as_str())?;
+
+    if let Some(original) = swap_element.original {
+        context
+            .evmla_mut()
+            .expect("Always exists")
+            .set_original(height - 1, original.to_owned());
+    }
+    if let Some(original) = top_element.original {
+        context
+            .evmla_mut()
+            .expect("Always exists")
+            .set_original(height - offset - 1, original.to_owned());
+    }
 
     context.build_store(top_pointer, swap_value)?;
     context.build_store(swap_pointer, top_value)?;

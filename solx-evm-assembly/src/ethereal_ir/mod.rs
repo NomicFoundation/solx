@@ -5,9 +5,8 @@
 pub mod function;
 
 use std::collections::BTreeMap;
-
-use rustc_hash::FxHashMap;
-use rustc_hash::FxHashSet;
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 use solx_codegen_evm::IContext;
 
@@ -39,24 +38,22 @@ pub struct EtherealIR {
 }
 
 impl EtherealIR {
+    /// The blocks hashmap initial capacity.
+    pub const BLOCKS_HASHMAP_DEFAULT_CAPACITY: usize = 64;
+
     ///
     /// Assembles a sequence of functions from the sequence of instructions.
     ///
     pub fn new(
         solc_version: semver::Version,
         extra_metadata: ExtraMetadata,
-        code_segment: solx_utils::CodeSegment,
-        blocks: FxHashMap<solx_codegen_evm::BlockKey, Block>,
-        capture_stacks: bool,
+        code_segment: Option<solx_utils::CodeSegment>,
+        blocks: HashMap<solx_codegen_evm::BlockKey, Block>,
     ) -> anyhow::Result<Self> {
-        let mut entry_function = Function::new(
-            solc_version,
-            code_segment,
-            FunctionType::new_entry(),
-            capture_stacks,
-        );
+        let mut entry_function =
+            Function::new(solc_version, code_segment, FunctionType::new_entry());
         let mut defined_functions = BTreeMap::new();
-        let mut visited_functions = FxHashSet::default();
+        let mut visited_functions = HashSet::new();
         entry_function.traverse(
             &blocks,
             &mut defined_functions,
@@ -74,15 +71,19 @@ impl EtherealIR {
     /// Gets blocks for the specified type of the contract code.
     ///
     pub fn get_blocks(
+        solc_version: semver::Version,
         code_segment: solx_utils::CodeSegment,
         instructions: &[Instruction],
-    ) -> anyhow::Result<FxHashMap<solx_codegen_evm::BlockKey, Block>> {
-        let mut blocks = FxHashMap::default();
+    ) -> anyhow::Result<HashMap<solx_codegen_evm::BlockKey, Block>> {
+        let mut blocks = HashMap::with_capacity(Self::BLOCKS_HASHMAP_DEFAULT_CAPACITY);
         let mut offset = 0;
 
         while offset < instructions.len() {
-            let (block, size) =
-                Block::try_from_instructions(code_segment, &instructions[offset..])?;
+            let (block, size) = Block::try_from_instructions(
+                solc_version.clone(),
+                code_segment,
+                &instructions[offset..],
+            )?;
             blocks.insert(
                 solx_codegen_evm::BlockKey::new(code_segment, block.key.tag),
                 block,
