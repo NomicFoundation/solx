@@ -121,7 +121,7 @@ impl MatterLabsTest {
         } else {
             let mut sources = HashMap::new();
             let mut paths = HashSet::with_capacity(metadata.contracts.len());
-            for (_, path_string) in metadata.contracts.iter_mut() {
+            for path_string in metadata.contracts.values_mut() {
                 let mut file_path = path.clone();
                 file_path.pop();
                 let mut path_string_split = path_string.split(':');

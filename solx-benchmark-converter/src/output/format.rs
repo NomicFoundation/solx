@@ -2,6 +2,10 @@
 //! Output benchmark format.
 //!
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result;
+
 use clap::ValueEnum;
 
 ///
@@ -16,30 +20,11 @@ pub enum Format {
     Xlsx,
 }
 
-impl std::str::FromStr for Format {
-    type Err = anyhow::Error;
-
-    fn from_str(string: &str) -> Result<Self, Self::Err> {
-        match string.to_lowercase().as_str() {
-            "json" => Ok(Self::Json),
-            "xlsx" => Ok(Self::Xlsx),
-            string => anyhow::bail!(
-                "Unknown benchmark format `{string}`. Supported formats: {}",
-                vec![Self::Json, Self::Xlsx]
-                    .into_iter()
-                    .map(|element| element.to_string().to_lowercase())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            ),
-        }
-    }
-}
-
-impl std::fmt::Display for Format {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Format {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            Format::Json => write!(f, "json"),
-            Format::Xlsx => write!(f, "xlsx"),
+            Self::Json => write!(f, "json"),
+            Self::Xlsx => write!(f, "xlsx"),
         }
     }
 }

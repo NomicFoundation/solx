@@ -264,17 +264,42 @@ jobs:
             --benchmark=candidate-benchmark.json
 
       - name: Build benchmark converter
-        run: ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-benchmark-converter
+        id: build_converter
+        run: ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-benchmark-converter --bin solx-benchmark-summary
 
+      # The XLSX comparison needs both sides; the summary JSON is written from
+      # whatever exists, so a failed main-side baseline still yields PR data
+      # (rendered as "no baseline") instead of a bogus "suite errored".
+      # The jq toolchain names and the *-benchmark.json paths here are
+      # interpreted by the summary crate (toolchain_matrix.rs tables, SuiteKind) —
+      # renames must update both sides or every summary shows a harness error.
+      # continue-on-error: a converter failure must not skip the Foundry and
+      # Hardhat suites below (the summary would silently omit them as
+      # "skipped"); the fail gate reports the converter outcome explicitly.
       - name: Run benchmark converter
-        if: hashFiles('reference-benchmark.json') != '' && hashFiles('candidate-benchmark.json') != ''
+        id: benchmark_converter
+        continue-on-error: true
+        if: hashFiles('candidate-benchmark.json') != ''
         run: |
-          cat reference-benchmark.json \
-            | jq '{data: ., project: "solx-tester", toolchain: "00.solx-main"}' > reference.json
-          cat candidate-benchmark.json \
-            | jq '{data: ., project: "solx-tester", toolchain: "01.solx"}' > candidate.json
+          jq '{data: ., project: "solx-tester", toolchain: "01.solx"}' \
+            candidate-benchmark.json > candidate.json
+          inputs=(candidate.json)
+          # The reference side is best-effort: a truncated or invalid baseline
+          # (its bench step is continue-on-error) must not lose the healthy
+          # candidate data, so its jq runs guarded and the summary JSON is
+          # written before the two-sided XLSX conversion.
+          if [ -s reference-benchmark.json ] && \
+             jq '{data: ., project: "solx-tester", toolchain: "00.solx-main"}' \
+               reference-benchmark.json > reference.json; then
+            inputs=(reference.json candidate.json)
+          fi
           ./target/release/solx-benchmark-converter \
-            --output-path solx-tester-report.xlsx reference.json candidate.json
+            --output-format json \
+            --output-path solx-tester-benchmark.json "${inputs[@]}"
+          if [ ${#inputs[@]} -eq 2 ]; then
+            ./target/release/solx-benchmark-converter \
+              --output-path solx-tester-report.xlsx "${inputs[@]}"
+          fi
 
       - name: Upload solx-tester report
         if: always() && hashFiles('solx-tester-report.xlsx') != ''
@@ -283,16 +308,6 @@ jobs:
         with:
           name: solx-tester-report
           path: solx-tester-report.xlsx
-
-      - name: Post solx-tester report comment
-        if: always() && steps.solx-tester-report.outcome == 'success'
-        uses: mshick/add-pr-comment@ec328af66588ab8f77cdeb2c264f14aba45bbf59 # v3.12
-        with:
-          message-id: 'solx-tester-report'
-          message: |
-            📊 **solx Tester Report**
-
-            ➡️ [**Download**](${{ steps.solx-tester-report.outputs.artifact-url }})
 
       - name: Install Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
@@ -326,16 +341,6 @@ jobs:
           name: hardhat-report
           path: ./temp-hardhat-reports/hardhat-report.xlsx
 
-      - name: Post Hardhat report comment
-        if: always() && steps.hardhat-report.outcome == 'success'
-        uses: mshick/add-pr-comment@ec328af66588ab8f77cdeb2c264f14aba45bbf59 # v3.12
-        with:
-          message-id: 'hardhat-report'
-          message: |
-            📊 **Hardhat Projects Report**
-
-            ➡️ [**Download**](${{ steps.hardhat-report.outputs.artifact-url }})
-
       - name: Run Foundry tests
         id: foundry_tests
         continue-on-error: true
@@ -349,30 +354,75 @@ jobs:
           name: foundry-report
           path: ./temp-foundry-reports/foundry-report.xlsx
 
-      - name: Post Foundry report comment
-        if: always() && steps.foundry-report.outcome == 'success'
+      # Every suite's step outcome is passed through: a skipped suite renders
+      # an explicit "did not run" row (a partial run must never look complete),
+      # a suite that ran but exited nonzero gets its data qualified, and a
+      # suite that ran but produced no JSON renders as "errored".
+      # The step skips when the converter build failed — the binary does not
+      # exist to run — leaving the previous summary comment in place rather
+      # than stacking a second red step on top of the real failure.
+      # No continue-on-error: losing the summary must fail the job visibly.
+      # !cancelled(), not always(): a run cancelled mid-suite (concurrency
+      # auto-cancel on push) must not overwrite the last real summary with a
+      # bogus "suite errored" row.
+      - name: Generate integration summary
+        if: ${{ !cancelled() && steps.build_converter.outcome == 'success' }}
+        env:
+          TESTER_URL: ${{ steps.solx-tester-report.outputs.artifact-url }}
+          FOUNDRY_URL: ${{ steps.foundry-report.outputs.artifact-url }}
+          HARDHAT_URL: ${{ steps.hardhat-report.outputs.artifact-url }}
+          # The benchmark step narrows to one optimizer mode; correctness runs
+          # the full matrix in solx_tester_tests. Reading only the benchmark
+          # renders a green suite while the fail gate reddens the job on the
+          # correctness step. Skipped stays skipped: without the benchmark step
+          # there is no JSON to hand the summary below.
+          TESTER_OUTCOME: ${{ steps.solx_tester_bench_pr.outcome == 'skipped' && 'skipped' || (steps.solx_tester_tests.outcome == 'failure' && 'failure' || steps.solx_tester_bench_pr.outcome) }}
+          FOUNDRY_OUTCOME: ${{ steps.foundry_tests.outcome }}
+          HARDHAT_OUTCOME: ${{ steps.hardhat_tests.outcome }}
+        run: |
+          args=(--tester-outcome "$TESTER_OUTCOME")
+          args+=(--foundry-outcome "$FOUNDRY_OUTCOME")
+          args+=(--hardhat-outcome "$HARDHAT_OUTCOME")
+          if [ "$TESTER_OUTCOME" != "skipped" ]; then
+            args+=(--tester solx-tester-benchmark.json --tester-url "$TESTER_URL")
+          fi
+          if [ "$FOUNDRY_OUTCOME" != "skipped" ]; then
+            args+=(--foundry temp-foundry-reports/foundry-benchmark.json --foundry-url "$FOUNDRY_URL")
+          fi
+          if [ "$HARDHAT_OUTCOME" != "skipped" ]; then
+            args+=(--hardhat temp-hardhat-reports/hardhat-benchmark.json --hardhat-url "$HARDHAT_URL")
+          fi
+          ./target/release/solx-benchmark-summary \
+            --output-path integration-summary.md "${args[@]}"
+          cat integration-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post integration summary comment
+        if: ${{ !cancelled() && hashFiles('integration-summary.md') != '' }}
         uses: mshick/add-pr-comment@ec328af66588ab8f77cdeb2c264f14aba45bbf59 # v3.12
         with:
-          message-id: 'foundry-report'
-          message: |
-            📊 **Foundry Projects Report**
+          message-id: 'integration-test-summary'
+          message-path: integration-summary.md
 
-            ➡️ [**Download**](${{ steps.foundry-report.outputs.artifact-url }})
-
+      # "failure", not != "success": a step skipped by an earlier hard
+      # failure already reddens the job there — blaming the skipped suite
+      # here would misattribute it.
       - name: Fail workflow if tests or benchmarks failed
         if: always()
         run: |
           failures=()
-          if [ "${{ steps.solx_tester_tests.outcome }}" != "success" ]; then
+          if [ "${{ steps.solx_tester_tests.outcome }}" = "failure" ]; then
             failures+=("solx-tester tests")
           fi
-          if [ "${{ steps.solx_tester_bench_pr.outcome }}" != "success" ]; then
+          if [ "${{ steps.solx_tester_bench_pr.outcome }}" = "failure" ]; then
             failures+=("solx-tester benchmarks (PR)")
           fi
-          if [ "${{ steps.hardhat_tests.outcome }}" != "success" ]; then
+          if [ "${{ steps.benchmark_converter.outcome }}" = "failure" ]; then
+            failures+=("benchmark converter")
+          fi
+          if [ "${{ steps.hardhat_tests.outcome }}" = "failure" ]; then
             failures+=("hardhat tests")
           fi
-          if [ "${{ steps.foundry_tests.outcome }}" != "success" ]; then
+          if [ "${{ steps.foundry_tests.outcome }}" = "failure" ]; then
             failures+=("foundry tests")
           fi
           if [ ${#failures[@]} -ne 0 ]; then

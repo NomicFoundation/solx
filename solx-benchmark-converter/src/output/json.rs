@@ -13,9 +13,15 @@ pub struct Json {
     pub content: String,
 }
 
+impl From<&Benchmark> for Json {
+    fn from(benchmark: &Benchmark) -> Self {
+        let content = serde_json::to_string_pretty(benchmark).expect("Always valid");
+        Self { content }
+    }
+}
+
 impl From<Benchmark> for Json {
     fn from(benchmark: Benchmark) -> Self {
-        let content = serde_json::to_string_pretty(&benchmark).expect("Always valid");
-        Self { content }
+        Self::from(&benchmark)
     }
 }

@@ -2,7 +2,10 @@
 //! Benchmark input format.
 //!
 
+use std::io::Error as IoError;
 use std::path::PathBuf;
+
+use serde_json::Error as JsonError;
 
 ///
 /// Input report reading error.
@@ -13,7 +16,7 @@ pub enum Error {
     #[error("Reading input file {path:?}: {error}")]
     Reading {
         /// The underlying IO error.
-        error: std::io::Error,
+        error: IoError,
         /// The path to the input file.
         path: PathBuf,
     },
@@ -21,7 +24,7 @@ pub enum Error {
     #[error("Parsing input file {path:?}: {error}")]
     Parsing {
         /// The underlying JSON parsing error.
-        error: serde_json::Error,
+        error: JsonError,
         /// The path to the input file.
         path: PathBuf,
     },

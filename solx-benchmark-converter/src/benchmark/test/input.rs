@@ -1,13 +1,13 @@
-//!
 //! Identifier for the test input. Describes the input type and position but not the actual contents.
-//!
+
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
 
 use serde::Deserialize;
 use serde::Serialize;
 
-///
 /// Identifier for the test input. Describes the input type and position but not the actual contents.
-///
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Input {
     /// The contract deploy, regardless of target.
@@ -48,17 +48,7 @@ impl Input {
         matches!(self, Self::Deployer { .. })
     }
 
-    /// Returns `true` if the input is [`Fallback`].
-    ///
-    /// [`Fallback`]: Input::Fallback
-    #[must_use]
-    pub fn is_fallback(&self) -> bool {
-        matches!(self, Self::Fallback { .. })
-    }
-
-    ///
     /// Returns the runtime function name if it is applicable.
-    ///
     pub fn runtime_name(&self) -> Option<&str> {
         match self {
             Self::Runtime { name, .. } => Some(name.as_str()),
@@ -67,22 +57,22 @@ impl Input {
     }
 }
 
-impl std::fmt::Display for Input {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Input {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            Input::Deployer {
+            Self::Deployer {
                 contract_identifier,
             } => f.write_fmt(format_args!("#deployer:{contract_identifier}")),
-            Input::Runtime { input_index, name } => {
+            Self::Runtime { input_index, name } => {
                 f.write_fmt(format_args!("{name}:{input_index}"))
             }
-            Input::StorageEmpty { input_index } => {
+            Self::StorageEmpty { input_index } => {
                 f.write_fmt(format_args!("#storage_empty_check:{input_index}"))
             }
-            Input::Balance { input_index } => {
+            Self::Balance { input_index } => {
                 f.write_fmt(format_args!("#balance_check:{input_index}"))
             }
-            Input::Fallback { input_index } => f.write_fmt(format_args!("#fallback:{input_index}")),
+            Self::Fallback { input_index } => f.write_fmt(format_args!("#fallback:{input_index}")),
         }
     }
 }

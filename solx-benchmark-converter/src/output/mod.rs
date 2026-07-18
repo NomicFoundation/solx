@@ -2,18 +2,21 @@
 //! Benchmark analyzer output.
 //!
 
-pub mod comparison;
 pub mod format;
 pub mod json;
+pub mod summary;
 pub mod xlsx;
 
 use std::path::PathBuf;
 
+use rust_xlsxwriter::Workbook;
+
 use crate::benchmark::Benchmark;
-use crate::output::comparison::Comparison;
-use crate::output::format::Format;
-use crate::output::json::Json;
-use crate::output::xlsx::Xlsx;
+use crate::comparison::Comparison;
+
+use self::format::Format;
+use self::json::Json;
+use self::xlsx::Xlsx;
 
 ///
 /// Result of comparing two benchmarks.
@@ -22,20 +25,24 @@ pub enum Output {
     /// Benchmark JSON output.
     Json(String),
     /// Benchmark Excel/XLSX output.
-    Xlsx(rust_xlsxwriter::Workbook),
+    Xlsx(Workbook),
 }
 
 impl Output {
     ///
     /// Writes the benchmark results to a file using a provided serializer.
     ///
+    /// # Errors
+    ///
+    /// Returns an error if writing the output to the file fails.
+    ///
     pub fn write_to_file(self, path: PathBuf) -> anyhow::Result<()> {
         match self {
-            Output::Json(content) => {
+            Self::Json(content) => {
                 std::fs::write(path.as_path(), content)
                     .map_err(|error| anyhow::anyhow!("Benchmark file {path:?} writing: {error}"))?;
             }
-            Output::Xlsx(mut workbook) => {
+            Self::Xlsx(mut workbook) => {
                 workbook
                     .save(path.as_path())
                     .map_err(|error| anyhow::anyhow!("Benchmark file {path:?} writing: {error}"))?;
@@ -60,12 +67,12 @@ impl TryFrom<(Benchmark, Vec<Comparison>, Format)> for Output {
 
 impl From<Json> for Output {
     fn from(value: Json) -> Self {
-        Output::Json(value.content)
+        Self::Json(value.content)
     }
 }
 
 impl From<Xlsx> for Output {
     fn from(value: Xlsx) -> Self {
-        Output::Xlsx(value.finalize())
+        Self::Xlsx(value.finalize())
     }
 }

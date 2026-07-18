@@ -25,7 +25,7 @@ pub struct Test {
     /// Metadata for this test.
     #[serde(default)]
     pub metadata: Metadata,
-    /// Runs keyed by mode string (e.g., "solx-Y-M3B3-0.8.34" or "solc-E-0.8.34").
+    /// Runs keyed by mode string, for example "solx-Y-M3B3-0.8.34" or "solc-E-0.8.34".
     #[serde(default)]
     pub runs: BTreeMap<String, Run>,
 
@@ -54,7 +54,6 @@ impl Test {
             .selector
             .input
             .as_ref()
-            .map(|input| input.is_deploy())
-            .unwrap_or_default()
+            .is_some_and(|input| input.is_deploy())
     }
 }

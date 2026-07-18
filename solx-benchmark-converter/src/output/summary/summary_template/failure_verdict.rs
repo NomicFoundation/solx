@@ -1,0 +1,101 @@
+//!
+//! Whether any suite failed more than its `main` baseline.
+//!
+
+use crate::output::summary::suite_failures::SuiteFailures;
+use crate::output::summary::suite_stats::SuiteStats;
+
+///
+/// Whether any suite failed more than its `main` baseline.
+///
+#[derive(Debug, PartialEq)]
+pub enum FailureVerdict {
+    /// No suite paired a PR run with a `main` counterpart, never a green
+    /// checkmark over zero comparisons.
+    NoData,
+    /// No suite regressed; failures already present on `main` are carried
+    /// per suite label so the verdict can say so.
+    Clean { pre_existing: Vec<(String, usize)> },
+    /// At least one suite regressed.
+    Regressed { suites: Vec<SuiteFailures> },
+}
+
+impl FailureVerdict {
+    ///
+    /// The failure-regression verdict, over the suites that actually compared
+    /// something. Errored, empty, and unclassifiable suites carry no
+    /// PR-vs-main pairs and must not feed a green line.
+    ///
+    pub fn from_stats(stats: &[SuiteStats]) -> Self {
+        let compared: Vec<&SuiteStats> = stats
+            .iter()
+            .filter(|suite| suite.available && !suite.classification_failed())
+            .collect();
+        if compared.iter().all(|suite| suite.paired_runs == 0) {
+            return Self::NoData;
+        }
+        if compared.iter().all(|suite| suite.new_failures() == 0) {
+            Self::Clean {
+                pre_existing: compared
+                    .iter()
+                    .filter(|suite| suite.baseline_failures() > 0)
+                    .map(|suite| (suite.label.clone(), suite.baseline_failures()))
+                    .collect(),
+            }
+        } else {
+            Self::Regressed {
+                suites: compared
+                    .iter()
+                    .filter(|suite| suite.new_failures() > 0)
+                    .map(|suite| SuiteFailures {
+                        label: suite.label.clone(),
+                        new_build: suite.new_build_failures,
+                        new_test: suite.new_test_failures,
+                    })
+                    .collect(),
+            }
+        }
+    }
+
+    /// The failure-regression verdict line.
+    pub fn line(self) -> String {
+        match self {
+            Self::NoData => {
+                "⚪ **No failure data** — no PR run had a `main` counterpart to compare against."
+                    .to_owned()
+            }
+            Self::Clean { pre_existing } if pre_existing.is_empty() => {
+                "✅ **No new failures**.".to_owned()
+            }
+            Self::Clean { pre_existing } => format!(
+                "✅ **No new failures** — {} {} already present on `main`.",
+                pre_existing
+                    .iter()
+                    .map(|(label, count)| format!(
+                        "{label}'s {}",
+                        crate::utils::commas(*count as u64)
+                    ))
+                    .collect::<Vec<String>>()
+                    .join(" / "),
+                crate::utils::agreeing(
+                    pre_existing.iter().map(|(_, count)| *count as u64).sum(),
+                    "failure",
+                    "failures"
+                )
+            ),
+            Self::Regressed { suites } => {
+                let parts: Vec<String> = suites
+                    .iter()
+                    .map(|suite| {
+                        format!(
+                            "{}: {}",
+                            suite.label,
+                            SuiteFailures::kinds(suite.new_build, suite.new_test)
+                        )
+                    })
+                    .collect();
+                format!("❌ **New failures** — {}.", parts.join("; "))
+            }
+        }
+    }
+}

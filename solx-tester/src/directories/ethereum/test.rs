@@ -187,7 +187,7 @@ impl EthereumTest {
                         mode: Some(mode.clone()),
                         selector: self.selector.clone(),
                     },
-                    anyhow::anyhow!("The Ethereum test `{}` sources are empty", &self.selector),
+                    anyhow::anyhow!("The Ethereum test `{}` sources are empty", self.selector),
                 );
                 None
             }

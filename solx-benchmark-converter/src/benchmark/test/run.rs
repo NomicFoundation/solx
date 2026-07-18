@@ -1,9 +1,11 @@
 //!
-//! A run of a test with fixed compiler options (mode).
+//! A run of a test under one fixed compiler mode.
 //!
 
 use serde::Deserialize;
 use serde::Serialize;
+
+use crate::benchmark::run_failures::RunFailures;
 
 ///
 /// Run of a test with specific compiler options.
@@ -25,19 +27,22 @@ pub struct Run {
     /// Testing time in milliseconds.
     #[serde(default)]
     pub testing_time: Vec<u64>,
-    /// Build failures count.
+    /// What the project-level run did. `None` where the run carries no
+    /// failure report at all: contract-level runs and the tester's native
+    /// reports never produce one.
     #[serde(default)]
-    pub build_failures: usize,
-    /// Test failures count.
-    #[serde(default)]
-    pub test_failures: usize,
+    pub failures: Option<RunFailures>,
 }
 
 impl Run {
     ///
     /// Extends the run with another run, averaging the values.
     ///
-    pub fn extend(&mut self, other: &Self) {
+    /// # Errors
+    ///
+    /// Returns an error if a build failure is merged with a test result.
+    ///
+    pub fn extend(&mut self, other: &Self) -> anyhow::Result<()> {
         self.size.extend_from_slice(other.size.as_slice());
         self.runtime_size
             .extend_from_slice(other.runtime_size.as_slice());
@@ -47,76 +52,87 @@ impl Run {
             .extend_from_slice(other.compilation_time.as_slice());
         self.testing_time
             .extend_from_slice(other.testing_time.as_slice());
-        self.build_failures += other.build_failures;
-        self.test_failures += other.test_failures;
+        self.failures = match (self.failures, other.failures) {
+            (None, failures) | (failures, None) => failures,
+            (Some(RunFailures::Build(left)), Some(RunFailures::Build(right))) => {
+                Some(RunFailures::Build(left + right))
+            }
+            (Some(RunFailures::Test(left)), Some(RunFailures::Test(right))) => {
+                Some(RunFailures::Test(left + right))
+            }
+            (Some(left), Some(right)) => anyhow::bail!(
+                "Run merges a build failure with a test result: {left:?} and {right:?}"
+            ),
+        };
+        Ok(())
     }
 
     ///
     /// Average contract size.
     ///
     pub fn average_size(&self) -> u64 {
-        if self.size.is_empty() {
-            return 0;
-        }
-
-        self.size.iter().sum::<u64>() / (self.size.len() as u64)
+        Self::average(&self.size)
     }
 
     ///
     /// Average runtime code size.
     ///
     pub fn average_runtime_size(&self) -> u64 {
-        if self.runtime_size.is_empty() {
-            return 0;
-        }
-
-        self.runtime_size.iter().sum::<u64>() / (self.runtime_size.len() as u64)
+        Self::average(&self.runtime_size)
     }
 
     ///
     /// Average amount of EVM gas.
     ///
     pub fn average_gas(&self) -> u64 {
-        if self.gas.is_empty() {
-            return 0;
-        }
-
-        self.gas.iter().sum::<u64>() / (self.gas.len() as u64)
+        Self::average(&self.gas)
     }
 
     ///
     /// Average compilation time in milliseconds.
     ///
     pub fn average_compilation_time(&self) -> u64 {
-        if self.compilation_time.is_empty() {
-            return 0;
-        }
-
-        self.compilation_time.iter().sum::<u64>() / (self.compilation_time.len() as u64)
+        Self::average(&self.compilation_time)
     }
 
     ///
     /// Average testing time in milliseconds.
     ///
     pub fn average_testing_time(&self) -> u64 {
-        if self.testing_time.is_empty() {
-            return 0;
-        }
-
-        self.testing_time.iter().sum::<u64>() / (self.testing_time.len() as u64)
+        Self::average(&self.testing_time)
     }
 
     ///
-    /// Build failures count.
+    /// Build failures count, or `None` where the run reported no failures at
+    /// all. Nothing was measured, which is not a clean build.
     ///
-    pub fn build_failures_count(&self) -> usize {
-        self.build_failures
+    pub fn build_failures_count(&self) -> Option<usize> {
+        self.failures.map(RunFailures::build_failures)
     }
 
     ///
-    /// Test failures count.
+    /// Test failures count, or `None` where the tests never ran.
     ///
-    pub fn test_failures_count(&self) -> usize {
-        self.test_failures
+    pub fn test_failures_count(&self) -> Option<usize> {
+        self.failures.and_then(RunFailures::test_failures)
+    }
+
+    ///
+    /// Every failure the run observed. A run that reported none contributes
+    /// nothing.
+    ///
+    pub fn failures_count(&self) -> usize {
+        self.failures.map(RunFailures::count).unwrap_or_default()
+    }
+
+    ///
+    /// Averages a series of samples, treating an empty series as zero.
+    ///
+    fn average(values: &[u64]) -> u64 {
+        values
+            .iter()
+            .sum::<u64>()
+            .checked_div(values.len() as u64)
+            .unwrap_or_default()
     }
 }

@@ -2,9 +2,15 @@
 //! The benchmark analyzer binary.
 //!
 
-pub(crate) mod arguments;
+pub mod arguments;
 
 use clap::Parser;
+
+use solx_benchmark_converter::Benchmark;
+use solx_benchmark_converter::Input;
+use solx_benchmark_converter::InputReportError;
+use solx_benchmark_converter::Output;
+use solx_benchmark_converter::ToolchainMatrix;
 
 use self::arguments::Arguments;
 
@@ -14,28 +20,12 @@ use self::arguments::Arguments;
 fn main() -> anyhow::Result<()> {
     let arguments = Arguments::try_parse()?;
 
-    let mut benchmark = solx_benchmark_converter::Benchmark::default();
-    let input_paths = if arguments.input_paths.len() == 1 {
-        if !arguments.input_paths[0].is_dir() {
-            anyhow::bail!(
-                "Expected a directory with JSON files, but got a file: {:?}",
-                arguments.input_paths[0]
-            );
-        }
-        let resolution_pattern =
-            format!("{}/**/*.json", arguments.input_paths[0].to_string_lossy());
-        glob::glob(resolution_pattern.as_str())?
-            .filter_map(Result::ok)
-            .collect()
-    } else if arguments.input_paths.is_empty() {
-        anyhow::bail!("No input files provided. Use `--input-paths` to specify input files.");
-    } else {
-        arguments.input_paths
-    };
+    let input_paths = Input::resolve_paths(arguments.input_paths)?;
+    let mut inputs = Vec::with_capacity(input_paths.len());
     for path in input_paths.into_iter() {
-        match solx_benchmark_converter::Input::try_from(path.as_path()) {
-            Ok(input) => benchmark.extend(input)?,
-            Err(solx_benchmark_converter::InputReportError::EmptyFile { path }) => {
+        match Input::try_from(path.as_path()) {
+            Ok(input) => inputs.push(input),
+            Err(InputReportError::EmptyFile { path }) => {
                 if !arguments.quiet {
                     eprintln!("Warning: Input file {path:?} is empty and will be skipped.");
                 }
@@ -44,11 +34,10 @@ fn main() -> anyhow::Result<()> {
             Err(error) => Err(error)?,
         }
     }
-    benchmark.remove_zero_deploy_gas();
+    let benchmark = Benchmark::from_inputs(inputs)?;
 
-    let comparisons = Vec::new();
-    let output: solx_benchmark_converter::Output =
-        (benchmark, comparisons, arguments.output_format).try_into()?;
+    let comparisons = ToolchainMatrix::Tester.comparisons(&benchmark.toolchains());
+    let output: Output = (benchmark, comparisons, arguments.output_format).try_into()?;
     output.write_to_file(arguments.output_path)?;
 
     Ok(())

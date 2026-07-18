@@ -7,20 +7,15 @@ pub mod compilation_time;
 pub mod error;
 pub mod foundry_gas;
 pub mod foundry_size;
+pub mod report;
 pub mod test_failures;
 pub mod testing_time;
 
 use std::path::Path;
+use std::path::PathBuf;
 
-use crate::benchmark::Benchmark;
-
-use self::build_failures::BuildFailuresReport;
-use self::compilation_time::CompilationTimeReport;
-use self::error::Error as InputError;
-use self::foundry_gas::FoundryGasReport;
-use self::foundry_size::FoundrySizeReport;
-use self::test_failures::TestFailuresReport;
-use self::testing_time::TestingTimeReport;
+use self::error::Error;
+use self::report::Report;
 
 ///
 /// Benchmark input format.
@@ -53,90 +48,47 @@ impl Input {
             toolchain: toolchain.into(),
         }
     }
-}
 
-///
-/// Enum representing various benchmark formats from tooling.
-///
-#[derive(Debug, serde::Deserialize)]
-#[serde(untagged)]
-pub enum Report {
-    /// Benchmark converter's native benchmark report format.
-    Native(Benchmark),
-    /// Foundry gas report.
-    FoundryGas(FoundryGasReport),
-    /// Foundry size report.
-    FoundrySize(FoundrySizeReport),
-    /// Compilation time report.
-    CompilationTime(CompilationTimeReport),
-    /// Testing time report.
-    TestingTime(TestingTimeReport),
-    /// Build failures report.
-    BuildFailures(BuildFailuresReport),
-    /// Test failures report.
-    TestFailures(TestFailuresReport),
-}
-
-impl From<Benchmark> for Report {
-    fn from(report: Benchmark) -> Self {
-        Self::Native(report)
-    }
-}
-
-impl From<FoundryGasReport> for Report {
-    fn from(report: FoundryGasReport) -> Self {
-        Self::FoundryGas(report)
-    }
-}
-
-impl From<FoundrySizeReport> for Report {
-    fn from(report: FoundrySizeReport) -> Self {
-        Self::FoundrySize(report)
-    }
-}
-
-impl From<CompilationTimeReport> for Report {
-    fn from(report: CompilationTimeReport) -> Self {
-        Self::CompilationTime(report)
-    }
-}
-
-impl From<TestingTimeReport> for Report {
-    fn from(report: TestingTimeReport) -> Self {
-        Self::TestingTime(report)
-    }
-}
-
-impl From<BuildFailuresReport> for Report {
-    fn from(report: BuildFailuresReport) -> Self {
-        Self::BuildFailures(report)
-    }
-}
-
-impl From<TestFailuresReport> for Report {
-    fn from(report: TestFailuresReport) -> Self {
-        Self::TestFailures(report)
+    ///
+    /// Resolves the converter's input paths: a single directory expands to every
+    /// JSON file underneath it; explicit file paths pass through unchanged. The
+    /// workflow's no-baseline fallback passes exactly one file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the constructed glob pattern is invalid, or if no input paths are provided.
+    ///
+    pub fn resolve_paths(paths: Vec<PathBuf>) -> anyhow::Result<Vec<PathBuf>> {
+        if paths.len() == 1 && paths[0].is_dir() {
+            let resolution_pattern = format!("{}/**/*.json", paths[0].to_string_lossy());
+            return Ok(glob::glob(resolution_pattern.as_str())?
+                .filter_map(Result::ok)
+                .collect());
+        }
+        if paths.is_empty() {
+            anyhow::bail!("No input files provided. Use `--input-paths` to specify input files.");
+        }
+        Ok(paths)
     }
 }
 
 impl TryFrom<&Path> for Input {
-    type Error = InputError;
+    type Error = Error;
 
     fn try_from(path: &Path) -> Result<Self, Self::Error> {
-        let text = std::fs::read_to_string(path).map_err(|error| InputError::Reading {
+        let text = std::fs::read_to_string(path).map_err(|error| Error::Reading {
             error,
             path: path.to_path_buf(),
         })?;
         if text.is_empty() {
-            return Err(InputError::EmptyFile {
+            return Err(Error::EmptyFile {
                 path: path.to_path_buf(),
             });
         }
-        let json: Self =
-            serde_json::from_str(text.as_str()).map_err(|error| InputError::Parsing {
-                error,
-                path: path.to_path_buf(),
-            })?;
+        let json: Self = serde_json::from_str(text.as_str()).map_err(|error| Error::Parsing {
+            error,
+            path: path.to_path_buf(),
+        })?;
         Ok(json)
     }
 }

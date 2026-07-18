@@ -2,35 +2,25 @@
 //! XLSX output format for benchmark data.
 //!
 
+pub mod sheet;
 pub mod worksheet;
 
 use std::collections::HashMap;
 
-use crate::benchmark::Benchmark;
-use crate::output::comparison::Comparison;
+use rust_xlsxwriter::Workbook;
 
+use crate::benchmark::Benchmark;
+use crate::comparison::Comparison;
+
+use self::sheet::Sheet;
 use self::worksheet::Worksheet;
 
 ///
 /// XLSX output format for benchmark data.
 ///
 pub struct Xlsx {
-    /// Worksheet for build failures report.
-    pub build_failures_worksheet: Worksheet,
-    /// Worksheet for test failures report.
-    pub test_failures_worksheet: Worksheet,
-    /// Worksheet for runtime fee measurements.
-    pub runtime_fee_worksheet: Worksheet,
-    /// Worksheet for deployment fee measurements.
-    pub deploy_fee_worksheet: Worksheet,
-    /// Worksheet for runtime bytecode size measurements.
-    pub runtime_size_worksheet: Worksheet,
-    /// Worksheet for deploy bytecode size measurements.
-    pub deploy_size_worksheet: Worksheet,
-    /// Worksheet for compilation time measurements.
-    pub compilation_time_worksheet: Worksheet,
-    /// Worksheet for testing time measurements.
-    pub testing_time_worksheet: Worksheet,
+    /// The worksheets, indexed by `Sheet`.
+    pub worksheets: Vec<Worksheet>,
 
     /// Toolchain identifiers.
     pub toolchains: Vec<String>,
@@ -42,39 +32,30 @@ impl Xlsx {
     ///
     /// Creates a new XLSX workbook.
     ///
+    /// # Errors
+    ///
+    /// Returns an error if a worksheet fails to initialize.
+    ///
     pub fn new() -> anyhow::Result<Self> {
-        let project_header = ("Project", 15);
-        let contract_header = ("Contract", 60);
-        let function_header = ("Function", 40);
-
-        let build_failures_worksheet = Worksheet::new("Build Failures", vec![project_header])?;
-        let test_failures_worksheet = Worksheet::new("Test Failures", vec![project_header])?;
-        let runtime_fee_worksheet = Worksheet::new(
-            "Runtime Gas",
-            vec![project_header, contract_header, function_header],
-        )?;
-        let deploy_fee_worksheet =
-            Worksheet::new("Deploy Gas", vec![project_header, contract_header])?;
-        let runtime_size_worksheet =
-            Worksheet::new("Runtime Size", vec![project_header, contract_header])?;
-        let deploy_size_worksheet =
-            Worksheet::new("Deploy Size", vec![project_header, contract_header])?;
-        let compilation_time_worksheet = Worksheet::new("Compilation Time", vec![project_header])?;
-        let testing_time_worksheet = Worksheet::new("Testing Time", vec![project_header])?;
+        let mut worksheets = Vec::with_capacity(Sheet::ALL.len());
+        for sheet in Sheet::ALL {
+            let (name, headers) = sheet.spec();
+            worksheets.push(Worksheet::new(name, headers)?);
+        }
 
         Ok(Self {
-            build_failures_worksheet,
-            test_failures_worksheet,
-            runtime_fee_worksheet,
-            deploy_fee_worksheet,
-            runtime_size_worksheet,
-            deploy_size_worksheet,
-            compilation_time_worksheet,
-            testing_time_worksheet,
+            worksheets,
 
-            toolchains: Vec::with_capacity(8),
-            toolchain_ids: HashMap::with_capacity(8),
+            toolchains: Vec::new(),
+            toolchain_ids: HashMap::new(),
         })
+    }
+
+    ///
+    /// The worksheet a sheet names.
+    ///
+    pub fn sheet(&mut self, sheet: Sheet) -> &mut Worksheet {
+        &mut self.worksheets[sheet as usize]
     }
 
     ///
@@ -96,26 +77,18 @@ impl Xlsx {
     /// Returns the final workbook with all non-empty worksheets.
     ///
     /// Worksheets without data rows are dropped: some suites legitimately
-    /// never produce certain measurements (e.g. Hardhat collects no gas or
-    /// size), and an empty sheet with dangling comparison columns reads as
-    /// broken data rather than absent data. An all-empty workbook is kept
-    /// as-is, since XLSX requires at least one worksheet.
+    /// never produce certain measurements, for example Hardhat collects no
+    /// gas or size, and an empty sheet with dangling comparison columns
+    /// reads as broken data rather than absent data. An all-empty workbook
+    /// is kept as-is, since XLSX requires at least one worksheet.
     ///
-    pub fn finalize(self) -> rust_xlsxwriter::Workbook {
-        let worksheets = [
-            self.build_failures_worksheet,
-            self.test_failures_worksheet,
-            self.runtime_fee_worksheet,
-            self.deploy_fee_worksheet,
-            self.runtime_size_worksheet,
-            self.deploy_size_worksheet,
-            self.compilation_time_worksheet,
-            self.testing_time_worksheet,
-        ];
-
-        let mut workbook = rust_xlsxwriter::Workbook::new();
-        let all_empty = worksheets.iter().all(|worksheet| worksheet.rows.is_empty());
-        for worksheet in worksheets {
+    pub fn finalize(self) -> Workbook {
+        let mut workbook = Workbook::new();
+        let all_empty = self
+            .worksheets
+            .iter()
+            .all(|worksheet| worksheet.rows.is_empty());
+        for worksheet in self.worksheets {
             if all_empty || !worksheet.rows.is_empty() {
                 workbook.push_worksheet(worksheet.into_inner());
             }
@@ -132,14 +105,8 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
     ) -> Result<Self, Self::Error> {
         let mut xlsx = Self::new()?;
 
-        'outer: for test in benchmark.tests.into_values() {
-            let is_deployer = test
-                .metadata
-                .selector
-                .input
-                .as_ref()
-                .map(|input| input.is_deploy())
-                .unwrap_or_default();
+        for test in benchmark.tests.into_values() {
+            let is_deployer = test.is_deploy();
             let project = test.metadata.selector.project;
             let contract = test.metadata.selector.case.as_deref();
             let function = test
@@ -149,173 +116,128 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
                 .as_ref()
                 .and_then(|input| input.runtime_name());
 
-            let blacklist = vec![
-                (
-                    "aave-v3",
-                    "lib/solidity-utils/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy",
-                    "fallback()",
-                ),
-                (
-                    "solady",
-                    "test/utils/mocks/MockMulticallable.sol:MockMulticallable",
-                    "multicallBrutalized(bytes[])",
-                ),
-                (
-                    "solady",
-                    "src/accounts/ERC6551Proxy.sol:ERC6551Proxy",
-                    "fallback()",
-                ),
-            ];
-            for (project_b, contract_b, function_b) in blacklist.into_iter() {
-                if project.as_str() == project_b
-                    && contract == Some(contract_b)
-                    && function == Some(function_b)
-                {
-                    continue 'outer;
-                }
-            }
-
             for (mode_name, run) in test.runs.into_iter() {
                 let toolchain_id = xlsx.get_toolchain_id(mode_name.as_str());
+                let mode = mode_name.as_str();
+                let project = project.as_str();
 
                 if !run.compilation_time.is_empty() {
-                    xlsx.compilation_time_worksheet
-                        .add_toolchain_column(mode_name.as_str(), toolchain_id)?;
-                    xlsx.compilation_time_worksheet.write_test_value(
-                        project.as_str(),
-                        None,
-                        None,
+                    xlsx.sheet(Sheet::CompilationTime).record(
+                        mode,
                         toolchain_id,
+                        project,
+                        None,
+                        None,
                         run.average_compilation_time(),
                     )?;
                 }
                 if !run.testing_time.is_empty() {
-                    xlsx.testing_time_worksheet
-                        .add_toolchain_column(mode_name.as_str(), toolchain_id)?;
-                    xlsx.testing_time_worksheet.write_test_value(
-                        project.as_str(),
-                        None,
-                        None,
+                    xlsx.sheet(Sheet::TestingTime).record(
+                        mode,
                         toolchain_id,
+                        project,
+                        None,
+                        None,
                         run.average_testing_time(),
                     )?;
                 }
-                xlsx.build_failures_worksheet
-                    .add_toolchain_column(mode_name.as_str(), toolchain_id)?;
-                xlsx.build_failures_worksheet.write_test_value(
-                    project.as_str(),
-                    None,
-                    None,
-                    toolchain_id,
-                    run.build_failures_count() as u64,
-                )?;
-                xlsx.test_failures_worksheet
-                    .add_toolchain_column(mode_name.as_str(), toolchain_id)?;
-                xlsx.test_failures_worksheet.write_test_value(
-                    project.as_str(),
-                    None,
-                    None,
-                    toolchain_id,
-                    run.test_failures_count() as u64,
-                )?;
+                if let Some(build_failures) = run.build_failures_count() {
+                    xlsx.sheet(Sheet::BuildFailures).record(
+                        mode,
+                        toolchain_id,
+                        project,
+                        None,
+                        None,
+                        build_failures as u64,
+                    )?;
+                }
+                if let Some(test_failures) = run.test_failures_count() {
+                    xlsx.sheet(Sheet::TestFailures).record(
+                        mode,
+                        toolchain_id,
+                        project,
+                        None,
+                        None,
+                        test_failures as u64,
+                    )?;
+                }
 
                 if contract.is_none() && function.is_none() {
                     continue;
                 }
                 if is_deployer {
                     if test.non_zero_gas_values > 0 {
-                        xlsx.deploy_fee_worksheet
-                            .add_toolchain_column(mode_name.as_str(), toolchain_id)?;
-                        xlsx.deploy_fee_worksheet.write_test_value(
-                            project.as_str(),
+                        xlsx.sheet(Sheet::DeployFee).record(
+                            mode,
+                            toolchain_id,
+                            project,
                             contract,
                             None,
-                            toolchain_id,
                             run.average_gas(),
                         )?;
                     }
                 } else {
-                    xlsx.runtime_fee_worksheet
-                        .add_toolchain_column(mode_name.as_str(), toolchain_id)?;
-                    xlsx.runtime_fee_worksheet.write_test_value(
-                        project.as_str(),
+                    xlsx.sheet(Sheet::RuntimeFee).record(
+                        mode,
+                        toolchain_id,
+                        project,
                         contract,
                         function,
-                        toolchain_id,
                         run.average_gas(),
                     )?;
                 }
                 if !run.size.is_empty() {
-                    xlsx.deploy_size_worksheet
-                        .add_toolchain_column(mode_name.as_str(), toolchain_id)?;
-                    xlsx.deploy_size_worksheet.write_test_value(
-                        project.as_str(),
+                    xlsx.sheet(Sheet::DeploySize).record(
+                        mode,
+                        toolchain_id,
+                        project,
                         contract,
                         None,
-                        toolchain_id,
                         run.average_size(),
                     )?;
                 }
                 if !run.runtime_size.is_empty() {
-                    xlsx.runtime_size_worksheet
-                        .add_toolchain_column(mode_name.as_str(), toolchain_id)?;
-                    xlsx.runtime_size_worksheet.write_test_value(
-                        project.as_str(),
+                    xlsx.sheet(Sheet::RuntimeSize).record(
+                        mode,
+                        toolchain_id,
+                        project,
                         contract,
                         None,
-                        toolchain_id,
                         run.average_runtime_size(),
                     )?;
                 }
             }
         }
 
-        xlsx.build_failures_worksheet
-            .set_totals(xlsx.toolchain_ids.len())?;
-        xlsx.test_failures_worksheet
-            .set_totals(xlsx.toolchain_ids.len())?;
-        xlsx.runtime_fee_worksheet
-            .set_totals(xlsx.toolchain_ids.len())?;
-        xlsx.deploy_fee_worksheet
-            .set_totals(xlsx.toolchain_ids.len())?;
-        xlsx.runtime_size_worksheet
-            .set_totals(xlsx.toolchain_ids.len())?;
-        xlsx.deploy_size_worksheet
-            .set_totals(xlsx.toolchain_ids.len())?;
-        xlsx.compilation_time_worksheet
-            .set_totals(xlsx.toolchain_ids.len())?;
-        xlsx.testing_time_worksheet
-            .set_totals(xlsx.toolchain_ids.len())?;
+        let toolchain_count = xlsx.toolchain_ids.len();
+        for worksheet in xlsx.worksheets.iter_mut() {
+            worksheet.set_totals(toolchain_count)?;
+        }
 
-        let comparison_mapping: Vec<(u16, u16)> = comparisons
+        let comparison_mapping: Vec<(u16, String, u16, String)> = comparisons
             .iter()
             .filter_map(|comparison| {
-                let left_id = xlsx.toolchain_ids.get(comparison.left.as_str())?;
-                let right_id = xlsx.toolchain_ids.get(comparison.right.as_str())?;
-                Some((*left_id, *right_id))
+                let left_id = *xlsx.toolchain_ids.get(comparison.left.as_str())?;
+                let right_id = *xlsx.toolchain_ids.get(comparison.right.as_str())?;
+                Some((
+                    left_id,
+                    xlsx.toolchains[left_id as usize].clone(),
+                    right_id,
+                    xlsx.toolchains[right_id as usize].clone(),
+                ))
             })
             .collect();
 
-        for (index, (toolchain_id_1, toolchain_id_2)) in comparison_mapping.into_iter().enumerate()
+        for (index, (left_id, left_name, right_id, right_name)) in
+            comparison_mapping.into_iter().enumerate()
         {
-            for worksheet in [
-                &mut xlsx.build_failures_worksheet,
-                &mut xlsx.test_failures_worksheet,
-                &mut xlsx.runtime_fee_worksheet,
-                &mut xlsx.deploy_fee_worksheet,
-                &mut xlsx.runtime_size_worksheet,
-                &mut xlsx.deploy_size_worksheet,
-                &mut xlsx.compilation_time_worksheet,
-                &mut xlsx.testing_time_worksheet,
-            ]
-            .into_iter()
-            {
+            for worksheet in xlsx.worksheets.iter_mut() {
                 worksheet.set_diffs(
-                    toolchain_id_1,
-                    xlsx.toolchains[toolchain_id_1 as usize].as_str(),
-                    toolchain_id_2,
-                    xlsx.toolchains[toolchain_id_2 as usize].as_str(),
-                    xlsx.toolchain_ids.len() as u16,
+                    left_id,
+                    left_name.as_str(),
+                    right_id,
+                    right_name.as_str(),
+                    toolchain_count as u16,
                     index as u16,
                 )?;
             }
