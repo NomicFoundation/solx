@@ -6,6 +6,8 @@ use std::collections::BTreeMap;
 
 use boolinator::Boolinator;
 
+use crate::input::source::Source as StandardJsonInputSource;
+
 ///
 /// The `solc --standard-json` output source.
 ///
@@ -32,26 +34,31 @@ impl Source {
     ///
     /// Returns the list of messages for some specific parts of the AST.
     ///
-    pub fn get_ast_nodes<K, V, F>(getter: &F, path: &str, ast: &serde_json::Value) -> BTreeMap<K, V>
+    pub fn get_ast_nodes<K, V, F>(
+        getter: &F,
+        path: &str,
+        ast: &serde_json::Value,
+        sources: &BTreeMap<String, StandardJsonInputSource>,
+    ) -> BTreeMap<K, V>
     where
         K: std::cmp::Ord,
         V: solx_utils::IDebugInfoAstNode<Key = K>,
-        F: Fn(&str, &serde_json::Value) -> Option<V>,
+        F: Fn(&str, &serde_json::Value, &BTreeMap<String, StandardJsonInputSource>) -> Option<V>,
     {
         let mut ast_nodes = BTreeMap::new();
-        if let Some(ast_node) = getter(path, ast) {
+        if let Some(ast_node) = getter(path, ast, sources) {
             ast_nodes.insert(ast_node.index_id(), ast_node);
         }
 
         match ast {
             serde_json::Value::Array(array) => {
                 for element in array.iter() {
-                    ast_nodes.extend(Self::get_ast_nodes(getter, path, element));
+                    ast_nodes.extend(Self::get_ast_nodes(getter, path, element, sources));
                 }
             }
             serde_json::Value::Object(object) => {
                 for (_key, value) in object.iter() {
-                    ast_nodes.extend(Self::get_ast_nodes(getter, path, value));
+                    ast_nodes.extend(Self::get_ast_nodes(getter, path, value, sources));
                 }
             }
             _ => {}
@@ -66,7 +73,7 @@ impl Source {
     pub fn contract_definition(
         path: &str,
         ast: &serde_json::Value,
-        line_index: &solx_utils::DebugInfoLineIndex<'_>,
+        sources: &BTreeMap<String, StandardJsonInputSource>,
     ) -> Option<solx_utils::DebugInfoContractDefinition> {
         let ast = ast.as_object()?;
 
@@ -79,8 +86,15 @@ impl Source {
             solx_utils::DebugInfoSolcLocationOrdering::Ast,
         )
         .ok()?;
-        let mapped_location =
-            line_index.mapped_location(path.to_owned(), solc_location.start, solc_location.end);
+        let source_code = sources
+            .get(path)
+            .and_then(|source| source.content.as_deref());
+        let mapped_location = solx_utils::DebugInfoMappedLocation::from_solc_location(
+            path.to_owned(),
+            solc_location.start,
+            solc_location.end,
+            source_code,
+        );
 
         Some(solx_utils::DebugInfoContractDefinition::new(
             ast_id,
@@ -96,7 +110,7 @@ impl Source {
     pub fn function_definition(
         path: &str,
         ast: &serde_json::Value,
-        line_index: &solx_utils::DebugInfoLineIndex<'_>,
+        sources: &BTreeMap<String, StandardJsonInputSource>,
     ) -> Option<solx_utils::DebugInfoFunctionDefinition> {
         let ast = ast.as_object()?;
 
@@ -113,8 +127,15 @@ impl Source {
             solx_utils::DebugInfoSolcLocationOrdering::Ast,
         )
         .ok()?;
-        let mapped_location =
-            line_index.mapped_location(path.to_owned(), solc_location.start, solc_location.end);
+        let source_code = sources
+            .get(path)
+            .and_then(|source| source.content.as_deref());
+        let mapped_location = solx_utils::DebugInfoMappedLocation::from_solc_location(
+            path.to_owned(),
+            solc_location.start,
+            solc_location.end,
+            source_code,
+        );
 
         Some(solx_utils::DebugInfoFunctionDefinition::new(
             ast_id,
@@ -130,7 +151,7 @@ impl Source {
     pub fn ast_node(
         path: &str,
         ast: &serde_json::Value,
-        line_index: &solx_utils::DebugInfoLineIndex<'_>,
+        sources: &BTreeMap<String, StandardJsonInputSource>,
     ) -> Option<solx_utils::DebugInfoAstNode> {
         let ast = ast.as_object()?;
 
@@ -140,8 +161,15 @@ impl Source {
             solx_utils::DebugInfoSolcLocationOrdering::Ast,
         )
         .ok()?;
-        let mapped_location =
-            line_index.mapped_location(path.to_owned(), solc_location.start, solc_location.end);
+        let source_code = sources
+            .get(path)
+            .and_then(|source| source.content.as_deref());
+        let mapped_location = solx_utils::DebugInfoMappedLocation::from_solc_location(
+            path.to_owned(),
+            solc_location.start,
+            solc_location.end,
+            source_code,
+        );
 
         Some(solx_utils::DebugInfoAstNode::new(
             ast_id,

@@ -81,7 +81,6 @@ impl ISolidityData for SolidityData {
 
         debug_info
             .ast_nodes
-            .get(&solc_location.source_id)?
             .get(&start)
             .map(|ast_node| &ast_node.mapped_location)
     }

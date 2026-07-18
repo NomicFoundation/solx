@@ -59,68 +59,61 @@ impl Selection {
     /// Checks if the output element of the specified contract is selected.
     ///
     pub fn check_selection(&self, path: &str, name: Option<&str>, selector: Selector) -> bool {
-        [Self::WILDCARD, path].into_iter().any(|file_key| {
-            let Some(file) = self.inner.get(file_key) else {
-                return false;
-            };
-            if matches!(selector, Selector::AST | Selector::Benchmarks) {
-                return [Self::ANY_CONTRACT, path].into_iter().any(|contract_key| {
-                    file.get(contract_key)
-                        .is_some_and(|any| any.contains(&Selector::Any) || any.contains(&selector))
-                });
+        if let Some(file) = self.inner.get(Self::WILDCARD).or(self.inner.get(path)) {
+            if let (Some(any), selector @ Selector::AST | selector @ Selector::Benchmarks) =
+                (file.get(Self::ANY_CONTRACT).or(file.get(path)), selector)
+            {
+                return any.contains(&Selector::Any) || any.contains(&selector);
             }
-            [Some(Self::WILDCARD), name]
-                .into_iter()
-                .flatten()
-                .any(|contract_key| {
-                    let Some(contract) = file.get(contract_key) else {
-                        return false;
-                    };
-                    match selector {
-                        Selector::MethodIdentifiers
-                        | Selector::EVMLegacyAssembly
-                        | Selector::GasEstimates
-                            if contract.contains(&Selector::EVM) =>
-                        {
-                            true
-                        }
-                        Selector::BytecodeObject
-                        | Selector::BytecodeLLVMAssembly
-                        | Selector::BytecodeOpcodes
-                        | Selector::BytecodeLinkReferences
-                        | Selector::BytecodeSourceMap
-                        | Selector::BytecodeDebugInfo
-                        | Selector::BytecodeFunctionDebugData
-                        | Selector::BytecodeGeneratedSources
-                            if contract.contains(&Selector::Bytecode)
-                                || contract.contains(&Selector::EVM) =>
-                        {
-                            true
-                        }
-                        Selector::RuntimeBytecodeObject
-                        | Selector::RuntimeBytecodeLLVMAssembly
-                        | Selector::RuntimeBytecodeOpcodes
-                        | Selector::RuntimeBytecodeLinkReferences
-                        | Selector::RuntimeBytecodeImmutableReferences
-                        | Selector::RuntimeBytecodeSourceMap
-                        | Selector::RuntimeBytecodeDebugInfo
-                        | Selector::RuntimeBytecodeFunctionDebugData
-                        | Selector::RuntimeBytecodeGeneratedSources
-                            if contract.contains(&Selector::RuntimeBytecode)
-                                || contract.contains(&Selector::EVM) =>
-                        {
-                            true
-                        }
-                        selector
-                            if contract.contains(&Selector::Any)
-                                || contract.contains(&selector) =>
-                        {
-                            true
-                        }
-                        _ => false,
+            if let Some(contract) = file
+                .get(Self::WILDCARD)
+                .or(name.and_then(|name| file.get(name)))
+            {
+                match selector {
+                    Selector::MethodIdentifiers
+                    | Selector::EVMLegacyAssembly
+                    | Selector::GasEstimates
+                        if contract.contains(&Selector::EVM) =>
+                    {
+                        return true;
                     }
-                })
-        })
+                    Selector::BytecodeObject
+                    | Selector::BytecodeLLVMAssembly
+                    | Selector::BytecodeOpcodes
+                    | Selector::BytecodeLinkReferences
+                    | Selector::BytecodeSourceMap
+                    | Selector::BytecodeDebugInfo
+                    | Selector::BytecodeFunctionDebugData
+                    | Selector::BytecodeGeneratedSources
+                        if contract.contains(&Selector::Bytecode)
+                            || contract.contains(&Selector::EVM) =>
+                    {
+                        return true;
+                    }
+                    Selector::RuntimeBytecodeObject
+                    | Selector::RuntimeBytecodeLLVMAssembly
+                    | Selector::RuntimeBytecodeOpcodes
+                    | Selector::RuntimeBytecodeLinkReferences
+                    | Selector::RuntimeBytecodeImmutableReferences
+                    | Selector::RuntimeBytecodeSourceMap
+                    | Selector::RuntimeBytecodeDebugInfo
+                    | Selector::RuntimeBytecodeFunctionDebugData
+                    | Selector::RuntimeBytecodeGeneratedSources
+                        if contract.contains(&Selector::RuntimeBytecode)
+                            || contract.contains(&Selector::EVM) =>
+                    {
+                        return true;
+                    }
+                    selector
+                        if contract.contains(&Selector::Any) || contract.contains(&selector) =>
+                    {
+                        return true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        false
     }
 
     ///
@@ -144,21 +137,6 @@ impl Selection {
                 }
             }
         }
-    }
-
-    ///
-    /// Requests the specified contract selector for every file via the `*` wildcard, so that `solc`
-    /// also emits it for dependencies located in files absent from the output selection. Needed
-    /// because dependency resolution hashes the assembly of every referenced contract, including
-    /// contracts instantiated from files a per-file selection does not list.
-    ///
-    pub fn set_selector_for_all_files(&mut self, selector: Selector) {
-        self.inner
-            .entry(Self::WILDCARD.to_owned())
-            .or_default()
-            .entry(Self::WILDCARD.to_owned())
-            .or_default()
-            .insert(selector);
     }
 
     ///
@@ -192,12 +170,12 @@ impl Selection {
     pub fn is_bytecode_set_for_any(&self) -> bool {
         for file in self.inner.values() {
             for contract in file.values() {
-                if contract.contains(&Selector::Any)
-                    || contract.contains(&Selector::EVM)
+                if contract.contains(&Selector::EVM)
                     || contract.contains(&Selector::Bytecode)
                     || contract.contains(&Selector::BytecodeObject)
                     || contract.contains(&Selector::RuntimeBytecode)
                     || contract.contains(&Selector::RuntimeBytecodeObject)
+                    || contract.contains(&Selector::Any)
                 {
                     return true;
                 }
@@ -209,38 +187,11 @@ impl Selection {
     ///
     /// Checks if the debug info is requested for at least one contract.
     ///
-    /// Used to reject debug info requests for non-Solidity input, so umbrella selectors
-    /// such as `evm.bytecode` do not count: they must remain valid for all languages.
-    ///
     pub fn is_debug_info_set_for_any(&self) -> bool {
         for file in self.inner.values() {
             for contract in file.values() {
                 if contract.contains(&Selector::EVM)
                     || contract.contains(&Selector::BytecodeDebugInfo)
-                    || contract.contains(&Selector::RuntimeBytecodeDebugInfo)
-                {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
-    ///
-    /// Checks if the debug info will be emitted for at least one contract.
-    ///
-    /// Unlike [`Self::is_debug_info_set_for_any`], this also counts every umbrella selector
-    /// under which `check_selection` emits debug info: the `*` wildcard and the `evm` /
-    /// `evm.bytecode` / `evm.deployedBytecode` groups.
-    ///
-    pub fn is_debug_info_emitted_for_any(&self) -> bool {
-        for file in self.inner.values() {
-            for contract in file.values() {
-                if contract.contains(&Selector::Any)
-                    || contract.contains(&Selector::EVM)
-                    || contract.contains(&Selector::Bytecode)
-                    || contract.contains(&Selector::BytecodeDebugInfo)
-                    || contract.contains(&Selector::RuntimeBytecode)
                     || contract.contains(&Selector::RuntimeBytecodeDebugInfo)
                 {
                     return true;

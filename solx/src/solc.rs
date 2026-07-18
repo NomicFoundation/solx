@@ -95,7 +95,7 @@ impl solx_core::Frontend for Solc {
         input_json
             .settings
             .output_selection
-            .set_selector_for_all_files(input_json.settings.via_ir.into());
+            .set_selector(input_json.settings.via_ir.into());
 
         let original_optimizer = input_json.settings.optimizer.to_owned();
         input_json.settings.optimizer.mode = None;

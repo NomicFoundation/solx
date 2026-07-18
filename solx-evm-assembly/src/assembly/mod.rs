@@ -6,7 +6,6 @@ pub mod data;
 pub mod instruction;
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 
 use std::sync::OnceLock;
 
@@ -127,21 +126,6 @@ impl Assembly {
                 }
             }
         }
-    }
-
-    ///
-    /// Returns the source IDs referenced by the assembly instructions.
-    ///
-    pub fn source_ids(&self) -> BTreeSet<usize> {
-        let mut source_ids = BTreeSet::new();
-        if let Some(code) = self.code.as_ref() {
-            for instruction in code.iter() {
-                if let Some(source) = instruction.source.filter(|&source| source >= 0) {
-                    source_ids.insert(source as usize);
-                }
-            }
-        }
-        source_ids
     }
 
     ///

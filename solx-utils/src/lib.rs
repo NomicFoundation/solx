@@ -37,7 +37,6 @@ pub use self::debug_info::IDebugInfoAstNode;
 pub use self::debug_info::ast_node::AstNode as DebugInfoAstNode;
 pub use self::debug_info::contract_definition::ContractDefinition as DebugInfoContractDefinition;
 pub use self::debug_info::function_definition::FunctionDefinition as DebugInfoFunctionDefinition;
-pub use self::debug_info::line_index::LineIndex as DebugInfoLineIndex;
 pub use self::debug_info::mapped_location::MappedLocation as DebugInfoMappedLocation;
 pub use self::debug_info::solc_location::SolcLocation as DebugInfoSolcLocation;
 pub use self::debug_info::solc_location::ordering::Ordering as DebugInfoSolcLocationOrdering;
