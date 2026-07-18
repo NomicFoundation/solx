@@ -45,10 +45,7 @@ impl Stack {
         let mut hasher = XxHash3_64::default();
         for element in self.elements.iter() {
             match element {
-                Element::Tag(tag) => {
-                    hasher.write_u8(1);
-                    hasher.write(&tag.to_le_bytes());
-                }
+                Element::Tag(tag) => hasher.write(&tag.to_le_bytes()),
                 _ => hasher.write_u8(0),
             }
         }
