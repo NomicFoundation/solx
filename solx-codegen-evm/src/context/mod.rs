@@ -89,15 +89,6 @@ pub trait IContext<'ctx> {
     fn create_debug_info_location(&self) -> Option<inkwell::debug_info::DILocation<'ctx>>;
 
     ///
-    /// Sets the current debug info location on the instruction when debug info is enabled.
-    ///
-    fn set_instruction_debug_location(&self, instruction: inkwell::values::InstructionValue<'ctx>) {
-        if self.debug_info().is_some() {
-            instruction.set_debug_location(self.create_debug_info_location());
-        }
-    }
-
-    ///
     /// Returns the output config reference.
     ///
     fn output_config(&self) -> Option<&OutputConfig>;
@@ -208,7 +199,7 @@ pub trait IContext<'ctx> {
             instruction
                 .set_alignment(solx_utils::BYTE_LENGTH_FIELD as u32)
                 .map_err(|error| anyhow::anyhow!(error))?;
-            self.set_instruction_debug_location(instruction);
+            instruction.set_debug_location(self.create_debug_info_location());
         }
 
         Ok(Pointer::new(r#type, Self::AddressSpace::stack(), pointer))
@@ -238,7 +229,7 @@ pub trait IContext<'ctx> {
             instruction
                 .set_alignment(alignment as u32)
                 .map_err(|error| anyhow::anyhow!(error))?;
-            self.set_instruction_debug_location(instruction);
+            instruction.set_debug_location(self.create_debug_info_location());
         }
 
         Ok(value)
@@ -268,7 +259,7 @@ pub trait IContext<'ctx> {
         instruction
             .set_alignment(alignment as u32)
             .map_err(|error| anyhow::anyhow!(error))?;
-        self.set_instruction_debug_location(instruction);
+        instruction.set_debug_location(self.create_debug_info_location());
 
         Ok(())
     }
@@ -292,7 +283,7 @@ pub trait IContext<'ctx> {
         };
 
         if let Some(instruction) = value.as_instruction() {
-            self.set_instruction_debug_location(instruction);
+            instruction.set_debug_location(self.create_debug_info_location());
         }
 
         Ok(Pointer::new(element_type, pointer.address_space, value))
@@ -318,7 +309,7 @@ pub trait IContext<'ctx> {
     {
         let value = operator(self.builder(), left, right, name)?;
         if let Some(instruction) = value.as_instruction() {
-            self.set_instruction_debug_location(instruction);
+            instruction.set_debug_location(self.create_debug_info_location());
         }
         Ok(value)
     }
@@ -337,7 +328,7 @@ pub trait IContext<'ctx> {
             .builder()
             .build_right_shift(left, right, sign_extend, name)?;
         if let Some(instruction) = value.as_instruction() {
-            self.set_instruction_debug_location(instruction);
+            instruction.set_debug_location(self.create_debug_info_location());
         }
         Ok(value)
     }
@@ -362,7 +353,7 @@ pub trait IContext<'ctx> {
     {
         let truncated_value = operator(self.builder(), value, target_type, name)?;
         if let Some(instruction) = truncated_value.as_instruction() {
-            self.set_instruction_debug_location(instruction);
+            instruction.set_debug_location(self.create_debug_info_location());
         }
         Ok(truncated_value)
     }
@@ -378,7 +369,7 @@ pub trait IContext<'ctx> {
     ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>> {
         let extracted_value = self.builder().build_extract_value(value, index, name)?;
         if let Some(instruction) = extracted_value.as_instruction_value() {
-            self.set_instruction_debug_location(instruction);
+            instruction.set_debug_location(self.create_debug_info_location());
         }
         Ok(extracted_value)
     }
@@ -394,7 +385,7 @@ pub trait IContext<'ctx> {
     ) -> anyhow::Result<inkwell::values::PointerValue<'ctx>> {
         let pointer_value = self.builder().build_int_to_ptr(value, target_type, name)?;
         if let Some(instruction) = pointer_value.as_instruction() {
-            self.set_instruction_debug_location(instruction);
+            instruction.set_debug_location(self.create_debug_info_location());
         }
         Ok(pointer_value)
     }
@@ -413,7 +404,7 @@ pub trait IContext<'ctx> {
             .builder()
             .build_int_compare(predicate, left, right, name)?;
         if let Some(instruction) = value.as_instruction() {
-            self.set_instruction_debug_location(instruction);
+            instruction.set_debug_location(self.create_debug_info_location());
         }
         Ok(value)
     }
@@ -436,7 +427,7 @@ pub trait IContext<'ctx> {
         let instruction_value = self
             .builder()
             .build_conditional_branch(comparison, then_block, else_block)?;
-        self.set_instruction_debug_location(instruction_value);
+        instruction_value.set_debug_location(self.create_debug_info_location());
 
         Ok(())
     }
@@ -457,7 +448,7 @@ pub trait IContext<'ctx> {
         let instruction_value = self
             .builder()
             .build_unconditional_branch(destination_block)?;
-        self.set_instruction_debug_location(instruction_value);
+        instruction_value.set_debug_location(self.create_debug_info_location());
 
         Ok(())
     }
@@ -477,7 +468,7 @@ pub trait IContext<'ctx> {
         let instruction_value = self
             .builder()
             .build_switch(value, default_block, branches)?;
-        self.set_instruction_debug_location(instruction_value);
+        instruction_value.set_debug_location(self.create_debug_info_location());
         Ok(())
     }
 
@@ -543,7 +534,8 @@ pub trait IContext<'ctx> {
             inkwell::values::ValueKind::Instruction(inner) => Some(inner),
         };
         if let Some(instruction_value) = instruction_value {
-            self.set_instruction_debug_location(instruction_value);
+            let debug_location = self.create_debug_info_location();
+            instruction_value.set_debug_location(debug_location);
         }
 
         call_site_value.set_alignment_attribute(inkwell::attributes::AttributeLoc::Param(0), 1);
@@ -562,7 +554,7 @@ pub trait IContext<'ctx> {
         }
 
         let instruction_value = self.builder().build_return(value)?;
-        self.set_instruction_debug_location(instruction_value);
+        instruction_value.set_debug_location(self.create_debug_info_location());
         Ok(())
     }
 
@@ -577,7 +569,7 @@ pub trait IContext<'ctx> {
         }
 
         let instruction_value = self.builder().build_unreachable()?;
-        self.set_instruction_debug_location(instruction_value);
+        instruction_value.set_debug_location(self.create_debug_info_location());
         Ok(())
     }
 
