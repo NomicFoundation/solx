@@ -41,7 +41,7 @@ impl StorageEmpty {
         for cache_account in vm.ctx_db().cache.accounts.values() {
             let plain_account = cache_account.clone().account;
             if let Some(plain_account) = plain_account {
-                for (_, value) in plain_account.storage.iter() {
+                for value in plain_account.storage.values() {
                     if !value.is_zero() {
                         is_empty = false;
                     }

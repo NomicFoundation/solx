@@ -1411,7 +1411,7 @@ impl Function {
     /// Finalizes the function data.
     ///
     fn finalize(&mut self) {
-        for (_tag, blocks) in self.blocks.iter() {
+        for blocks in self.blocks.values() {
             for block in blocks.iter() {
                 for block_element in block.elements.iter() {
                     let concurrent_length = block_element.stack_size.max(
@@ -1597,7 +1597,7 @@ impl std::fmt::Display for Function {
             ),
         }?;
         writeln!(f, "    stack_usage: {}", self.stack_size)?;
-        for (_key, blocks) in self.blocks.iter() {
+        for blocks in self.blocks.values() {
             for block in blocks.iter() {
                 write!(f, "{block}")?;
             }

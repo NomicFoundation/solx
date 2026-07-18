@@ -98,7 +98,7 @@ impl solx_codegen_evm::WriteLLVM for EtherealIR {
     fn declare(&mut self, context: &mut solx_codegen_evm::Context) -> anyhow::Result<()> {
         self.entry_function.declare(context)?;
 
-        for (_key, function) in self.defined_functions.iter_mut() {
+        for function in self.defined_functions.values_mut() {
             function.declare(context)?;
         }
 
@@ -122,7 +122,7 @@ impl std::fmt::Display for EtherealIR {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{}", self.entry_function)?;
 
-        for (_key, function) in self.defined_functions.iter() {
+        for function in self.defined_functions.values() {
             writeln!(f, "{function}")?;
         }
 
