@@ -430,7 +430,12 @@ impl Benchmark {
         kind: SuiteKind,
         output_directory: &Path,
     ) -> anyhow::Result<()> {
-        std::fs::create_dir_all(output_directory)?;
+        std::fs::create_dir_all(output_directory).map_err(|error| {
+            anyhow::anyhow!(
+                "{} output directory {output_directory:?} creation: {error}",
+                kind.label()
+            )
+        })?;
         Output::from(Json::from(&self))
             .write_to_file(output_directory.join(kind.benchmark_file()))?;
         let report: Output = (self, comparisons, Format::Xlsx).try_into()?;
