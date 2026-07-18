@@ -2,6 +2,8 @@
 //! Tests for toolchain naming semantics.
 //!
 
+use std::collections::BTreeSet;
+
 use crate::role::Role;
 use crate::toolchain_matrix::ToolchainMatrix;
 
@@ -117,4 +119,44 @@ fn humanized_keys_spell_out_codegens() {
     );
     assert_eq!(ToolchainMatrix::humanize_mode("legacy"), "legacy");
     assert_eq!(ToolchainMatrix::humanize_mode(""), "");
+}
+
+#[test]
+fn comparisons_pair_each_pr_run_with_its_baseline() {
+    let toolchains: BTreeSet<String> = [
+        "00.solx-main-solx-E-M3B3-0.8.34",
+        "01.solx-solx-E-M3B3-0.8.34",
+        "00.solx-main-solx-Y-M3B3-0.8.34",
+        "01.solx-solx-Y-M3B3-0.8.34",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
+    let pairs: Vec<(String, String)> = ToolchainMatrix::Tester
+        .comparisons(&toolchains)
+        .into_iter()
+        .map(|comparison| (comparison.left, comparison.right))
+        .collect();
+    assert_eq!(
+        pairs,
+        [
+            (
+                "01.solx-solx-E-M3B3-0.8.34".to_owned(),
+                "00.solx-main-solx-E-M3B3-0.8.34".to_owned()
+            ),
+            (
+                "01.solx-solx-Y-M3B3-0.8.34".to_owned(),
+                "00.solx-main-solx-Y-M3B3-0.8.34".to_owned()
+            ),
+        ]
+    );
+}
+
+#[test]
+fn comparisons_need_a_pr_run_to_pair_against() {
+    let toolchains: BTreeSet<String> = ["00.solx-main-solx-E-M3B3-0.8.34"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    assert!(ToolchainMatrix::Tester.comparisons(&toolchains).is_empty());
 }

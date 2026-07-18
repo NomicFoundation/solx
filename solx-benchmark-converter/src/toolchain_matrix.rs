@@ -10,6 +10,10 @@
 //! misclassified baseline.
 //!
 
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+
+use crate::comparison::Comparison;
 use crate::role::Role;
 
 ///
@@ -44,6 +48,36 @@ impl ToolchainMatrix {
             Some((name, role)) => (*role, mode[name.len()..].trim_start_matches('-').to_owned()),
             None => (Role::Other, mode.to_owned()),
         }
+    }
+
+    ///
+    /// The PR-vs-baseline diff comparisons over a set of toolchain columns: the
+    /// PR run of each pairing key paired with every baseline run sharing that
+    /// key. For the tester matrix that is the `main` baseline; the report
+    /// renders each pair as a `(PR - baseline) / baseline` column.
+    ///
+    pub fn comparisons(self, toolchains: &BTreeSet<String>) -> Vec<Comparison> {
+        let mut groups: BTreeMap<String, Vec<(Role, String)>> = BTreeMap::new();
+        for toolchain in toolchains {
+            let (role, key) = self.classify(toolchain);
+            groups
+                .entry(key)
+                .or_default()
+                .push((role, toolchain.clone()));
+        }
+
+        let mut comparisons = Vec::new();
+        for group in groups.into_values() {
+            let Some(pr) = group.iter().find(|(role, _)| *role == Role::Pr) else {
+                continue;
+            };
+            for (role, baseline) in &group {
+                if !matches!(role, Role::Pr | Role::Other) {
+                    comparisons.push(Comparison::new(pr.1.clone(), baseline.clone()));
+                }
+            }
+        }
+        comparisons
     }
 
     /// The compilation pipeline a mode belongs to: the project suites'

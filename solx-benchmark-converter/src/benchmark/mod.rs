@@ -6,6 +6,7 @@ pub mod run_failures;
 pub mod test;
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use crate::comparison::Comparison;
@@ -412,6 +413,17 @@ impl Benchmark {
                         && function == Some(*function_b)
                 })
         });
+    }
+
+    ///
+    /// The distinct toolchain columns the benchmark carries: the run-mode keys
+    /// across every test, which are the diff comparisons' left/right names.
+    ///
+    pub fn toolchains(&self) -> BTreeSet<String> {
+        self.tests
+            .values()
+            .flat_map(|test| test.runs.keys().cloned())
+            .collect()
     }
 
     ///
