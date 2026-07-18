@@ -18,6 +18,7 @@
 
 pub mod compile_aggregate;
 pub mod diff_counter;
+pub mod failure_kind;
 pub mod failure_regressions;
 pub mod paired_bytes;
 pub mod suite_failures;
@@ -35,7 +36,8 @@ use self::summary_template::SummaryTemplate;
 /// The suites a single PR summary comment is rendered from.
 ///
 pub struct Summary {
-    suites: Vec<SummarySuite>,
+    /// The per-suite benchmarks the comment summarizes.
+    pub suites: Vec<SummarySuite>,
 }
 
 impl Summary {

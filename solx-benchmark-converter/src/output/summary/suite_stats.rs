@@ -12,12 +12,14 @@ use std::collections::BTreeSet;
 use crate::benchmark::test::run::Run;
 use crate::output::summary::compile_aggregate::CompileAggregate;
 use crate::output::summary::diff_counter::DiffCounter;
+use crate::output::summary::failure_kind::FailureKind;
 use crate::output::summary::failure_regressions::FailureRegression;
 use crate::output::summary::failure_regressions::FailureRegressions;
 use crate::output::summary::paired_bytes::PairedBytes;
 use crate::output::summary::suite_failures::SuiteFailures;
 use crate::output::summary::suite_row::SuiteRow;
 use crate::output::summary::top_movers::TopMovers;
+use crate::pipeline::Pipeline;
 use crate::role::Role;
 use crate::suite_outcome::SuiteOutcome;
 use crate::summary_suite::SummarySuite;
@@ -89,11 +91,11 @@ pub struct SuiteStats {
     pub failure_regressions: FailureRegressions,
 
     /// Compile-time aggregates keyed by pipeline: legacy or viaIR.
-    pub compile: BTreeMap<String, CompileAggregate>,
+    pub compile: BTreeMap<Pipeline, CompileAggregate>,
     /// PR and baseline bytecode totals per baseline role and pipeline, summed
     /// only over contracts both toolchains emitted. A toolchain that failed
     /// some builds is excluded from the comparison, not counted as 0.
-    pub baseline_pairs: BTreeMap<(Role, String), PairedBytes>,
+    pub baseline_pairs: BTreeMap<(Role, Pipeline), PairedBytes>,
     pub has_baselines: bool,
 
     pub top_size_movers: TopMovers,
@@ -101,6 +103,12 @@ pub struct SuiteStats {
 }
 
 impl SuiteStats {
+    /// Jitter medians below this render as "<0.1%": the floor under which the
+    /// one-decimal display precision would round to a bare 0.0%.
+    const JITTER_MEDIAN_FLOOR_PERCENT: f64 = 0.05;
+
+    /// Reduces one suite's benchmark to the numbers the renderer needs, pairing
+    /// each PR run with its `main` counterpart in a single pass.
     pub fn from_suite(suite: &SummarySuite) -> Self {
         let mut stats = Self {
             label: suite.kind.label().to_owned(),
@@ -130,9 +138,9 @@ impl SuiteStats {
 
             let mut pr_runs: BTreeMap<String, &Run> = BTreeMap::new();
             let mut main_runs: BTreeMap<String, &Run> = BTreeMap::new();
-            let mut by_role_pipeline: BTreeMap<(Role, String), u64> = BTreeMap::new();
-            let mut pr_compile: BTreeMap<String, u64> = BTreeMap::new();
-            let mut main_compile: BTreeMap<String, u64> = BTreeMap::new();
+            let mut by_role_pipeline: BTreeMap<(Role, Pipeline), u64> = BTreeMap::new();
+            let mut pr_compile: BTreeMap<Pipeline, u64> = BTreeMap::new();
+            let mut main_compile: BTreeMap<Pipeline, u64> = BTreeMap::new();
             for (mode, run) in test.runs.iter() {
                 stats.total_runs += 1;
                 let (role, key) = suite.kind.matrix().classify(mode);
@@ -160,12 +168,10 @@ impl SuiteStats {
                     }
                 };
 
-                if matches!(role, Role::Pr | Role::Main | Role::Latest | Role::Solc) {
+                if matches!(role, Role::Pr | Role::Latest | Role::Solc) {
                     let bytes = run.average_size() + run.average_runtime_size();
                     if bytes != 0 {
-                        *by_role_pipeline
-                            .entry((role, pipeline.clone()))
-                            .or_default() += bytes;
+                        *by_role_pipeline.entry((role, pipeline)).or_default() += bytes;
                     }
                 }
 
@@ -180,13 +186,13 @@ impl SuiteStats {
             }
 
             for pipeline in pr_compile.keys().chain(main_compile.keys()) {
-                stats.compile.entry(pipeline.clone()).or_default();
+                stats.compile.entry(*pipeline).or_default();
             }
             for (pipeline, &pr_ms) in pr_compile.iter() {
                 let Some(&main_ms) = main_compile.get(pipeline) else {
                     continue;
                 };
-                let entry = stats.compile.entry(pipeline.clone()).or_default();
+                let entry = stats.compile.entry(*pipeline).or_default();
                 entry.pr_total_ms += pr_ms;
                 entry.main_total_ms += main_ms;
                 if let Some(pct) = crate::utils::relative_percent(pr_ms, main_ms) {
@@ -200,11 +206,8 @@ impl SuiteStats {
                 if !matches!(role, Role::Solc | Role::Latest) {
                     continue;
                 }
-                if let Some(&pr_bytes) = by_role_pipeline.get(&(Role::Pr, pipeline.clone())) {
-                    let entry = stats
-                        .baseline_pairs
-                        .entry((*role, pipeline.clone()))
-                        .or_default();
+                if let Some(&pr_bytes) = by_role_pipeline.get(&(Role::Pr, *pipeline)) {
+                    let entry = stats.baseline_pairs.entry((*role, *pipeline)).or_default();
                     entry.pr += pr_bytes;
                     entry.baseline += base_bytes;
                 }
@@ -238,7 +241,11 @@ impl SuiteStats {
                         stats.failure_regressions.push(FailureRegression {
                             label: row_label.clone(),
                             mode: mode.clone(),
-                            kind: if is_build { "build" } else { "test" },
+                            kind: if is_build {
+                                FailureKind::Build
+                            } else {
+                                FailureKind::Test
+                            },
                             main: main_v,
                             pr: pr_v,
                         });
@@ -294,10 +301,13 @@ impl SuiteStats {
         stats
     }
 
+    /// PR failures in excess of `main`, build and test together.
     pub fn new_failures(&self) -> usize {
         self.new_build_failures + self.new_test_failures
     }
 
+    /// Failures already present on the paired `main` runs, build and test
+    /// together.
     pub fn baseline_failures(&self) -> usize {
         self.baseline_build_failures + self.baseline_test_failures
     }
@@ -314,10 +324,6 @@ impl SuiteStats {
     pub fn is_empty_report(&self) -> bool {
         self.available && self.total_runs == 0
     }
-
-    /// Jitter medians below this render as "<0.1%": the floor under which the
-    /// one-decimal display precision would round to a bare 0.0%.
-    const JITTER_MEDIAN_FLOOR_PERCENT: f64 = 0.05;
 
     /// The suite's row in the results table. A suite with no comparable data
     /// dashes its measurement columns rather than rendering a zero.
@@ -350,6 +356,8 @@ impl SuiteStats {
         }
     }
 
+    /// The suite's name cell, annotated with the project count when it spans
+    /// more than one.
     pub fn suite_cell(&self) -> String {
         if self.project_count > 1 {
             format!("{} · {} proj", self.label, self.project_count)
@@ -358,6 +366,8 @@ impl SuiteStats {
         }
     }
 
+    /// The failures column: the new-vs-`main` verdict, with pre-existing and
+    /// unbaselined counts folded in.
     fn failures_cell(&self) -> String {
         let unbaselined = match self.unbaselined_failures {
             0 => String::new(),
@@ -380,6 +390,8 @@ impl SuiteStats {
         }
     }
 
+    /// The gas column: the gate verdict, or the jitter median and one-sided
+    /// count on a non-gated suite.
     fn gas_cell(&self) -> String {
         if !self.gas.collected() {
             return "⚪ not collected".to_owned();
@@ -387,12 +399,14 @@ impl SuiteStats {
         if !self.gas_is_gate {
             let mut parts = Vec::new();
             if !self.gas_jitter_percents.is_empty() {
-                let med = match crate::utils::median(&self.gas_jitter_percents) {
-                    Some(med) if med >= Self::JITTER_MEDIAN_FLOOR_PERCENT => format!("{med:.1}%"),
+                let median_display = match crate::utils::median(&self.gas_jitter_percents) {
+                    Some(median) if median >= Self::JITTER_MEDIAN_FLOOR_PERCENT => {
+                        format!("{median:.1}%")
+                    }
                     _ => "<0.1%".to_owned(),
                 };
                 parts.push(format!(
-                    "jitter {} of {}, median {med}",
+                    "jitter {} of {}, median {median_display}",
                     crate::utils::commas(self.gas_jitter_percents.len() as u64),
                     crate::utils::commas(self.gas.cells)
                 ));
@@ -411,6 +425,7 @@ impl SuiteStats {
         self.gas.cell(false)
     }
 
+    /// The size column, stating any one-sided pairs apart from the diff count.
     fn size_cell(&self) -> String {
         if self.size_one_sided > 0 {
             let one_sided = format!("⚪ {} one-sided", crate::utils::commas(self.size_one_sided));
@@ -422,6 +437,8 @@ impl SuiteStats {
         self.size.cell(true)
     }
 
+    /// The report column: a download link to the suite's XLSX, or a dash when
+    /// none was produced.
     fn report_cell(&self) -> String {
         match self.report_url.as_deref() {
             Some(url) => format!("[{} ↓]({url})", self.report_file),

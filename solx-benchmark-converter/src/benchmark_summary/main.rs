@@ -15,6 +15,9 @@ use solx_benchmark_converter::SummarySuite;
 
 use self::arguments::Arguments;
 
+///
+/// The application entry point.
+///
 fn main() -> anyhow::Result<()> {
     let arguments = Arguments::try_parse()?;
 

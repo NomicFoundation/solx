@@ -4,8 +4,6 @@
 
 use crate::output::summary::suite_failures::SuiteFailures;
 use crate::output::summary::suite_stats::SuiteStats;
-use crate::utils::agreeing;
-use crate::utils::commas;
 
 ///
 /// Whether any suite failed more than its `main` baseline.
@@ -31,28 +29,28 @@ impl FailureVerdict {
     pub fn from_stats(stats: &[SuiteStats]) -> Self {
         let compared: Vec<&SuiteStats> = stats
             .iter()
-            .filter(|s| s.available && !s.classification_failed())
+            .filter(|suite| suite.available && !suite.classification_failed())
             .collect();
-        if compared.iter().all(|s| s.paired_runs == 0) {
+        if compared.iter().all(|suite| suite.paired_runs == 0) {
             return Self::NoData;
         }
-        if compared.iter().all(|s| s.new_failures() == 0) {
+        if compared.iter().all(|suite| suite.new_failures() == 0) {
             Self::Clean {
                 pre_existing: compared
                     .iter()
-                    .filter(|s| s.baseline_failures() > 0)
-                    .map(|s| (s.label.clone(), s.baseline_failures()))
+                    .filter(|suite| suite.baseline_failures() > 0)
+                    .map(|suite| (suite.label.clone(), suite.baseline_failures()))
                     .collect(),
             }
         } else {
             Self::Regressed {
                 suites: compared
                     .iter()
-                    .filter(|s| s.new_failures() > 0)
-                    .map(|s| SuiteFailures {
-                        label: s.label.clone(),
-                        new_build: s.new_build_failures,
-                        new_test: s.new_test_failures,
+                    .filter(|suite| suite.new_failures() > 0)
+                    .map(|suite| SuiteFailures {
+                        label: suite.label.clone(),
+                        new_build: suite.new_build_failures,
+                        new_test: suite.new_test_failures,
                     })
                     .collect(),
             }
@@ -69,21 +67,22 @@ impl FailureVerdict {
             Self::Clean { pre_existing } if pre_existing.is_empty() => {
                 "✅ **No new failures**.".to_owned()
             }
-            Self::Clean { pre_existing } => {
-                let pre: Vec<String> = pre_existing
+            Self::Clean { pre_existing } => format!(
+                "✅ **No new failures** — {} {} already present on `main`.",
+                pre_existing
                     .iter()
-                    .map(|(label, count)| format!("{label}'s {}", commas(*count as u64)))
-                    .collect();
-                format!(
-                    "✅ **No new failures** — {} {} already present on `main`.",
-                    pre.join(" / "),
-                    agreeing(
-                        pre_existing.iter().map(|(_, count)| *count as u64).sum(),
-                        "failure",
-                        "failures"
-                    )
+                    .map(|(label, count)| format!(
+                        "{label}'s {}",
+                        crate::utils::commas(*count as u64)
+                    ))
+                    .collect::<Vec<String>>()
+                    .join(" / "),
+                crate::utils::agreeing(
+                    pre_existing.iter().map(|(_, count)| *count as u64).sum(),
+                    "failure",
+                    "failures"
                 )
-            }
+            ),
             Self::Regressed { suites } => {
                 let parts: Vec<String> = suites
                     .iter()

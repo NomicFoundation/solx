@@ -5,15 +5,15 @@
 ///
 /// Formats a percentage with a sign and one decimal.
 ///
-pub fn percent(pct: f64) -> String {
-    format!("{pct:+.1}%")
+pub fn percent(percentage: f64) -> String {
+    format!("{percentage:+.1}%")
 }
 
 ///
 /// Formats an integer with thousands separators.
 ///
-pub fn commas(n: impl Into<u128>) -> String {
-    let digits = n.into().to_string();
+pub fn commas(number: impl Into<u128>) -> String {
+    let digits = number.into().to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3);
     let bytes = digits.as_bytes();
     for (index, byte) in bytes.iter().enumerate() {
@@ -28,26 +28,30 @@ pub fn commas(n: impl Into<u128>) -> String {
 ///
 /// Formats a signed total with an explicit sign and thousands separators.
 ///
-pub fn signed_commas(n: i128) -> String {
+pub fn signed_commas(total: i128) -> String {
     format!(
         "{}{}",
-        if n.is_negative() { "-" } else { "+" },
-        commas(n.unsigned_abs())
+        if total.is_negative() { "-" } else { "+" },
+        commas(total.unsigned_abs())
     )
 }
 
 ///
 /// A count with the noun it quantifies, agreeing in number.
 ///
-pub fn count_noun(n: u64, noun: &str) -> String {
-    format!("{} {noun}{}", commas(n), if n == 1 { "" } else { "s" })
+pub fn count_noun(count: u64, noun: &str) -> String {
+    format!(
+        "{} {noun}{}",
+        commas(count),
+        if count == 1 { "" } else { "s" }
+    )
 }
 
 ///
 /// The verb form agreeing with a count, for the clause a `count_noun` heads.
 ///
-pub fn agreeing<'a>(n: u64, singular: &'a str, plural: &'a str) -> &'a str {
-    if n == 1 { singular } else { plural }
+pub fn agreeing<'a>(count: u64, singular: &'a str, plural: &'a str) -> &'a str {
+    if count == 1 { singular } else { plural }
 }
 
 ///
@@ -61,19 +65,19 @@ pub fn relative_percent(pr: u64, base: u64) -> Option<f64> {
 
 ///
 /// The median of the given percentages, if any were collected. Even-length
-/// input averages the two middle elements: at n=2 the upper-middle would be
-/// the maximum, not a median.
+/// input averages the two middle elements: at length two the upper-middle
+/// would be the maximum, not a median.
 ///
-pub fn median(pcts: &[f64]) -> Option<f64> {
-    if pcts.is_empty() {
+pub fn median(percentages: &[f64]) -> Option<f64> {
+    if percentages.is_empty() {
         return None;
     }
-    let mut pcts = pcts.to_vec();
-    pcts.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let mid = pcts.len() / 2;
-    Some(if pcts.len().is_multiple_of(2) {
-        (pcts[mid - 1] + pcts[mid]) / 2.0
+    let mut percentages = percentages.to_vec();
+    percentages.sort_unstable_by(f64::total_cmp);
+    let middle = percentages.len() / 2;
+    Some(if percentages.len().is_multiple_of(2) {
+        (percentages[middle - 1] + percentages[middle]) / 2.0
     } else {
-        pcts[mid]
+        percentages[middle]
     })
 }

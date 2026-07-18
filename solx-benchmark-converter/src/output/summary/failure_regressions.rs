@@ -4,6 +4,8 @@
 
 use std::cmp::Reverse;
 
+use crate::output::summary::failure_kind::FailureKind;
+
 ///
 /// Regressions collected for the inline "new failures" listing.
 ///
@@ -11,6 +13,7 @@ use std::cmp::Reverse;
 pub struct FailureRegressions(Vec<FailureRegression>);
 
 impl FailureRegressions {
+    /// Records a regression for the inline listing.
     pub fn push(&mut self, regression: FailureRegression) {
         self.0.push(regression);
     }
@@ -30,7 +33,7 @@ impl FailureRegressions {
 pub struct FailureRegression {
     pub label: String,
     pub mode: String,
-    pub kind: &'static str,
+    pub kind: FailureKind,
     pub main: usize,
     pub pr: usize,
 }

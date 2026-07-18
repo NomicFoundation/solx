@@ -5,9 +5,6 @@
 
 use crate::output::summary::suite_stats::SuiteStats;
 use crate::output::summary::summary_template::truncated::Truncated;
-use crate::utils::commas;
-use crate::utils::percent;
-use crate::utils::relative_percent;
 
 ///
 /// One bulleted listing under a bold heading, already truncated: a "+N more"
@@ -24,10 +21,10 @@ impl ListingSection {
     /// away.
     pub fn from_stats(stats: &[SuiteStats]) -> Vec<Self> {
         let mut sections = Vec::new();
-        for s in stats {
+        for suite in stats {
             for (title, unit, movers) in [
-                ("largest size changes", " B", &s.top_size_movers),
-                ("largest gas changes", "", &s.top_gas_movers),
+                ("largest size changes", " B", &suite.top_size_movers),
+                ("largest gas changes", "", &suite.top_gas_movers),
             ] {
                 if movers.is_empty() {
                     continue;
@@ -37,23 +34,25 @@ impl ListingSection {
                 let mut bullets: Vec<String> = truncated
                     .shown
                     .iter()
-                    .map(|m| {
-                        let pct = match relative_percent(m.pr, m.main) {
-                            Some(pct) => format!(" ({})", percent(pct)),
-                            None => String::new(),
-                        };
+                    .map(|movement| {
                         format!(
-                            "`{}` [{}] {} → {}{unit}{pct}",
-                            m.label,
-                            m.mode,
-                            commas(m.main),
-                            commas(m.pr)
+                            "`{}` [{}] {} → {}{unit}{}",
+                            movement.label,
+                            movement.mode,
+                            crate::utils::commas(movement.main),
+                            crate::utils::commas(movement.pr),
+                            match crate::utils::relative_percent(movement.pr, movement.main) {
+                                Some(percentage) => {
+                                    format!(" ({})", crate::utils::percent(percentage))
+                                }
+                                None => String::new(),
+                            }
                         )
                     })
                     .collect();
-                bullets.extend(truncated.more_bullet(s.report_file.as_str()));
+                bullets.extend(truncated.more_bullet(suite.report_file.as_str()));
                 sections.push(Self {
-                    heading: format!("{} — {title}", s.label),
+                    heading: format!("{} — {title}", suite.label),
                     bullets,
                 });
             }

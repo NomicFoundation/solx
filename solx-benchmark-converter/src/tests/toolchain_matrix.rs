@@ -4,6 +4,7 @@
 
 use std::collections::BTreeSet;
 
+use crate::pipeline::Pipeline;
 use crate::role::Role;
 use crate::toolchain_matrix::ToolchainMatrix;
 
@@ -83,22 +84,22 @@ fn pr_and_main_runs_share_a_pairing_key() {
 #[test]
 fn pipeline_is_derived_from_recognized_tokens() {
     assert_eq!(
-        ToolchainMatrix::pipeline_of("02.solx-main-viaIR").as_deref(),
-        Some("viaIR")
+        ToolchainMatrix::pipeline_of("02.solx-main-viaIR"),
+        Some(Pipeline::ViaIr)
     );
     assert_eq!(
-        ToolchainMatrix::pipeline_of("03.solx-legacy").as_deref(),
-        Some("legacy")
+        ToolchainMatrix::pipeline_of("03.solx-legacy"),
+        Some(Pipeline::Legacy)
     );
     // Tester modes: the codegen is the pipeline, not the trailing
     // solc version.
     assert_eq!(
-        ToolchainMatrix::pipeline_of("01.solx-solx-E-M3B3-0.8.34").as_deref(),
-        Some("EVMLA")
+        ToolchainMatrix::pipeline_of("01.solx-solx-E-M3B3-0.8.34"),
+        Some(Pipeline::Legacy)
     );
     assert_eq!(
-        ToolchainMatrix::pipeline_of("00.solx-main-solx-Y-M3B3-0.8.34").as_deref(),
-        Some("Yul")
+        ToolchainMatrix::pipeline_of("00.solx-main-solx-Y-M3B3-0.8.34"),
+        Some(Pipeline::ViaIr)
     );
     // A new codegen letter is a loud None, never a bogus version column.
     assert_eq!(

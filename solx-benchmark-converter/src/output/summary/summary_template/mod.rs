@@ -22,6 +22,7 @@ use askama::Template;
 
 use crate::output::summary::suite_row::SuiteRow;
 use crate::output::summary::suite_stats::SuiteStats;
+use crate::pipeline::Pipeline;
 use crate::role::Role;
 
 use self::compile_view::CompileView;
@@ -37,16 +38,16 @@ use self::truncated::Truncated;
 #[derive(Template)]
 #[template(path = "summary.md", escape = "none")]
 pub struct SummaryTemplate {
-    full_matrix: bool,
-    output_line: String,
-    failures_line: String,
-    health_lines: Vec<String>,
-    warn_lines: Vec<String>,
-    suite_rows: Vec<SuiteRow>,
-    new_failure_bullets: Vec<String>,
-    mover_sections: Vec<ListingSection>,
-    compile: Option<CompileView>,
-    baseline_rows: Vec<Vec<String>>,
+    pub full_matrix: bool,
+    pub output_line: String,
+    pub failures_line: String,
+    pub health_lines: Vec<String>,
+    pub warn_lines: Vec<String>,
+    pub suite_rows: Vec<SuiteRow>,
+    pub new_failure_bullets: Vec<String>,
+    pub mover_sections: Vec<ListingSection>,
+    pub compile: Option<CompileView>,
+    pub baseline_rows: Vec<Vec<String>>,
 }
 
 impl SummaryTemplate {
@@ -62,7 +63,7 @@ impl SummaryTemplate {
     fn from_stats(stats: &[SuiteStats]) -> Self {
         let (health_lines, warn_lines) = Self::health_lines(stats);
         Self {
-            full_matrix: stats.iter().any(|s| s.has_baselines),
+            full_matrix: stats.iter().any(|suite| suite.has_baselines),
             output_line: OutputVerdict::from_stats(stats).line(),
             failures_line: FailureVerdict::from_stats(stats).line(),
             health_lines,
@@ -184,13 +185,13 @@ impl SummaryTemplate {
     /// projects can be judged without opening the XLSX.
     fn new_failure_bullets(stats: &[SuiteStats]) -> Vec<String> {
         let mut bullets = Vec::new();
-        for s in stats {
-            let ranked = s.failure_regressions.ranked();
+        for suite in stats {
+            let ranked = suite.failure_regressions.ranked();
             let truncated = Truncated::new(ranked.as_slice());
             for regression in truncated.shown {
                 bullets.push(format!(
                     "{}: `{}` [{}] {} failures {} → {}",
-                    s.label,
+                    suite.label,
                     regression.label,
                     regression.mode,
                     regression.kind,
@@ -198,32 +199,38 @@ impl SummaryTemplate {
                     regression.pr
                 ));
             }
-            bullets.extend(truncated.more_bullet(s.report_file.as_str()));
+            bullets.extend(truncated.more_bullet(suite.report_file.as_str()));
         }
         bullets
     }
 
+    /// The PR-vs-baseline size rows: one row per suite and pipeline, each cell
+    /// the PR total against a released baseline.
     fn baseline_rows(stats: &[SuiteStats]) -> Vec<Vec<String>> {
         let mut rows = Vec::new();
-        for s in stats.iter().filter(|s| !s.baseline_pairs.is_empty()) {
-            let pipelines: BTreeSet<&String> = s
+        for suite in stats
+            .iter()
+            .filter(|suite| !suite.baseline_pairs.is_empty())
+        {
+            let pipelines: BTreeSet<Pipeline> = suite
                 .baseline_pairs
                 .keys()
-                .map(|(_, pipeline)| pipeline)
+                .map(|(_, pipeline)| *pipeline)
                 .collect();
             for pipeline in pipelines {
-                let vs = |role: Role| -> String {
-                    s.baseline_pairs
-                        .get(&(role, pipeline.clone()))
+                let versus = |role: Role| -> String {
+                    suite
+                        .baseline_pairs
+                        .get(&(role, pipeline))
                         .and_then(|pair| crate::utils::relative_percent(pair.pr, pair.baseline))
                         .map(crate::utils::percent)
                         .unwrap_or_else(|| "—".to_owned())
                 };
                 rows.push(vec![
-                    s.suite_cell(),
-                    pipeline.clone(),
-                    vs(Role::Solc),
-                    vs(Role::Latest),
+                    suite.suite_cell(),
+                    pipeline.to_string(),
+                    versus(Role::Solc),
+                    versus(Role::Latest),
                 ]);
             }
         }

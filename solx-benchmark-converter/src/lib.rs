@@ -8,6 +8,7 @@ pub(crate) mod benchmark;
 pub(crate) mod comparison;
 pub(crate) mod input;
 pub(crate) mod output;
+pub(crate) mod pipeline;
 pub(crate) mod role;
 pub(crate) mod suite_kind;
 pub(crate) mod suite_outcome;

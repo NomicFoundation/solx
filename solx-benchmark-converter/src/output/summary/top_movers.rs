@@ -11,6 +11,7 @@ use std::cmp::Reverse;
 pub struct TopMovers(Vec<Movement>);
 
 impl TopMovers {
+    /// Records a movement for the inline listing.
     pub fn push(&mut self, label: &str, mode: &str, main: u64, pr: u64) {
         self.0.push(Movement {
             label: label.to_owned(),
@@ -30,6 +31,7 @@ impl TopMovers {
         movers
     }
 
+    /// Whether no movement was recorded, so the listing is skipped.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }

@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use crate::comparison::Comparison;
+use crate::pipeline::Pipeline;
 use crate::role::Role;
 
 ///
@@ -80,21 +81,13 @@ impl ToolchainMatrix {
         comparisons
     }
 
-    /// The compilation pipeline a mode belongs to: the project suites'
-    /// `legacy`/`viaIR` token or the tester's codegen token spelled out. The
-    /// trailing token there is the solc version. `None` for unrecognized
-    /// tokens, surfaced as a harness error upstream, since a silent fallback
+    /// The compilation pipeline a mode belongs to, parsed from its `legacy`/
+    /// `viaIR` flag or its `E`/`Y` codegen token. `None` for a mode carrying
+    /// neither, surfaced as a harness error upstream, since a silent fallback
     /// would group a new codegen's data under a bogus column.
-    pub fn pipeline_of(mode: &str) -> Option<String> {
-        for token in mode.split('-') {
-            if matches!(token, "legacy" | "viaIR") {
-                return Some(token.to_owned());
-            }
-            if let Some(codegen) = Self::codegen_name(token) {
-                return Some(codegen.to_owned());
-            }
-        }
-        None
+    pub fn pipeline_of(mode: &str) -> Option<Pipeline> {
+        mode.split('-')
+            .find_map(|token| token.parse::<Pipeline>().ok())
     }
 
     ///
