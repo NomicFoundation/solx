@@ -79,8 +79,10 @@ jobs:
       - name: Checkout submodules
         uses: ./.github/actions/checkout-submodules
 
-      - name: Setup SFW
+      - name: Setup SFW (optional)
         uses: ./.github/actions/setup-sfw
+        with:
+          optional: 'true'
 
       - name: Prepare Windows env
         if: runner.os == 'Windows'

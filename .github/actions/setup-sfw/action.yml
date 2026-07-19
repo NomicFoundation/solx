@@ -1,23 +1,33 @@
 name: Setup Socket Firewall (SFW)
 description: >
-  Installs and configures Socket Firewall to monitor package installations.
-  On bare-metal Linux runners, installs via socketdev/action with MITM
-  proxy. Inside containers, installs the sfw CLI via npm. In both cases,
-  discovers SFW's generated CA and exports a merged bundle via
-  CARGO_HTTP_CAINFO/GIT_SSL_CAINFO/SSL_CERT_FILE so cargo, git, and
-  rustls consumers trust the MITM cert.
-  Skips on macOS/Windows where the MITM proxy is incompatible.
+  Installs Socket Firewall Free and exports SFW_PREFIX, a wrapper that callers
+  prefix onto dependency commands to run installs behind the firewall (it also
+  fixes sfw's CA handling — see the wrapper step).
+  Bare-metal Linux runners install via socketdev/action; containers, where its
+  MITM proxy doesn't work, download a pinned sfw-free binary from GitHub
+  releases. macOS/Windows are skipped entirely: their TLS stacks reject the
+  MITM cert.
+  On Linux, a failed SFW setup fails the job, so dependency installs never
+  silently run unprotected. Jobs where SFW is best-effort (a socket.dev outage
+  must not fail them) opt out with optional, which warns and leaves SFW_PREFIX
+  unset instead — callers then run unwrapped.
 
 inputs:
   mode:
     description: 'SFW mode: "firewall" blocks risky packages, "audit" only warns'
     required: false
     default: 'firewall'
+  optional:
+    description: >
+      When "true", a failed SFW setup warns and leaves SFW_PREFIX unset
+      (callers run unprotected) instead of failing the job.
+    required: false
+    default: 'false'
 
 outputs:
   available:
     description: 'Whether SFW is available for use (true/false)'
-    value: ${{ steps.set-prefix.outputs.available }}
+    value: ${{ steps.wrapper.outputs.available || 'false' }}
 
 runs:
   using: composite
@@ -36,108 +46,115 @@ runs:
         fi
 
         # Inside containers, the socketdev/action MITM proxy doesn't work,
-        # but the sfw CLI wrapper can be installed directly via npm.
+        # but the sfw-free binary can be installed directly.
         # /.dockerenv is the primary heuristic for detecting Docker containers.
         # ${container:-} is a defensive fallback (not set by GitHub Actions itself).
         if [[ -f /.dockerenv ]] || [[ -n "${container:-}" ]]; then
-          echo "method=npm" >> "$GITHUB_OUTPUT"
+          echo "method=binary" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
         echo "method=action" >> "$GITHUB_OUTPUT"
 
+    # Deliberately NOT `npm install -g sfw`: that shim downloads an unpinned
+    # "latest" sfw-free binary at runtime via unauthenticated (rate-limited)
+    # api.github.com.
+    # Failures are decided by the wrapper step below, which knows the
+    # optional input — keep this step itself from failing the job.
     - name: Install SFW (container)
-      if: steps.detect.outputs.method == 'npm'
+      if: steps.detect.outputs.method == 'binary'
+      continue-on-error: true
       shell: bash
-      run: npm install -g sfw@2.0.4
+      run: |
+        VERSION="v1.13.1"
+        case "$(uname -m)" in
+          x86_64)
+            ASSET="sfw-free-linux-x86_64"
+            SHA256="4dc46b626a7c5b81c0b54e1984ee53be5a628dbfb2f55ab14e9b04c8a134db6a"
+            ;;
+          aarch64)
+            ASSET="sfw-free-linux-arm64"
+            SHA256="f87bbbca2192fca9740f9bdb115e7cfaa22e957a8f5234d5f97fce1383aa1d66"
+            ;;
+          *)
+            echo "::error::SFW: no pinned sfw-free binary for $(uname -m)"
+            exit 1
+            ;;
+        esac
+        curl -fsSL --retry 3 -o "${RUNNER_TEMP}/sfw" \
+          "https://github.com/SocketDev/sfw-free/releases/download/${VERSION}/${ASSET}"
+        echo "${SHA256}  ${RUNNER_TEMP}/sfw" | sha256sum -c -
+        install -m 0755 "${RUNNER_TEMP}/sfw" /usr/local/bin/sfw
 
-    - name: Install SFW
+    - name: Install SFW (bare metal)
       if: steps.detect.outputs.method == 'action'
+      continue-on-error: true
       uses: socketdev/action@937f824ec476dfd164d4a4d9995751427b0be143 # v1
       with:
         mode: ${{ inputs.mode }}
 
-    # Runs for both the bare-metal (`action`) and container (`npm`) paths.
-    # In both cases the actual proxy is the sfw-free binary, which exposes
-    # its generated CA via NODE_EXTRA_CA_CERTS when it wraps a child process.
-    # Without this step, containers have no trust path for the MITM cert,
-    # so cargo git-dep clones (libgit2) fail with "unable to get local
-    # issuer certificate" whenever sfw-free intercepts github.com TLS.
-    - name: Configure cargo TLS trust for SFW
-      id: ca-cert
+    # sfw has no persistent CA file and overrides the CA env vars inside every
+    # wrap, so the union bundle must be built *inside* the wrap. Write a wrapper
+    # that does exactly that, then run it as `sfw <wrapper> <command>`: sfw injects
+    # its temp-CA env into the wrapper, which merges that root with the system
+    # bundle, re-points the CA vars at the union, and exec's the real command.
+    - name: Create SFW CA-merge wrapper
+      id: wrapper
       if: steps.detect.outputs.method != 'none'
+      env:
+        SFW_OPTIONAL: ${{ inputs.optional }}
       shell: bash
       run: |
-        # Trigger SFW cert generation (may be lazy)
-        sfw npm ping > /dev/null 2>&1 || true
-
-        # Discover SFW CA cert path via temp file to avoid
-        # stdout pollution (sfw prepends/appends banner lines)
-        cat > "${RUNNER_TEMP}/sfw-get-cert.js" << 'SCRIPT'
-        const fs = require("fs");
-        const p = process.env.NODE_EXTRA_CA_CERTS || "";
-        fs.writeFileSync(process.env.RUNNER_TEMP + "/sfw-cert-path.txt", p);
-        SCRIPT
-        sfw node "${RUNNER_TEMP}/sfw-get-cert.js" > /dev/null 2>&1 || true
-        SFW_CA=""
-        [ -f "${RUNNER_TEMP}/sfw-cert-path.txt" ] && SFW_CA=$(cat "${RUNNER_TEMP}/sfw-cert-path.txt")
-        rm -f "${RUNNER_TEMP}/sfw-get-cert.js" "${RUNNER_TEMP}/sfw-cert-path.txt"
-
-        if [ -z "$SFW_CA" ] || [ ! -f "$SFW_CA" ]; then
-          echo "::warning::SFW CA cert not found — skipping SFW to avoid opaque SSL errors"
-          echo "ca-failed=true" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-
-        echo "SFW CA cert: $SFW_CA"
-        BUNDLE="${RUNNER_TEMP}/sfw-ca-bundle.pem"
-
-        # Find system CA bundle (Linux paths only — macOS/Windows are skipped above)
-        FOUND_SYSTEM=false
-        for f in \
-          /etc/ssl/certs/ca-certificates.crt \
-          /etc/ssl/certs/ca-bundle.crt \
-          /etc/pki/tls/certs/ca-bundle.crt; do
-          if [ -f "$f" ]; then
-            cp "$f" "$BUNDLE"
-            echo "System CA bundle: $f"
-            FOUND_SYSTEM=true
-            break
+        fail() {
+          if [ "${SFW_OPTIONAL}" = "true" ]; then
+            echo "::warning::$1 — dependency installs will run UNPROTECTED."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-        done
+          echo "::error::$1 — refusing to run dependency installs unprotected. Pass optional: \"true\" if this job may run without SFW."
+          exit 1
+        }
 
-        if [ "$FOUND_SYSTEM" = false ]; then
-          echo "::warning::Could not find system CA bundle — using SFW cert only"
-          cp "$SFW_CA" "$BUNDLE"
-        else
-          # Append SFW CA cert to system bundle
-          echo "" >> "$BUNDLE"
-          cat "$SFW_CA" >> "$BUNDLE"
+        if ! command -v sfw &>/dev/null; then
+          fail "sfw not found after install"
         fi
 
-        # Export for cargo, git, and rustup (SSL_CERT_FILE is needed by rustls-native-certs)
-        echo "CARGO_HTTP_CAINFO=$BUNDLE" >> "$GITHUB_ENV"
-        echo "GIT_SSL_CAINFO=$BUNDLE" >> "$GITHUB_ENV"
-        echo "SSL_CERT_FILE=$BUNDLE" >> "$GITHUB_ENV"
-        echo "CA bundle created at $BUNDLE ($(wc -l < "$BUNDLE") lines)"
+        wrapper="${RUNNER_TEMP}/sfw-wrap"
+        cat > "${wrapper}" << 'EOF'
+        #!/usr/bin/env bash
+        # Invoked as: sfw sfw-wrap <command...>. sfw has injected SSL_CERT_FILE
+        # (and friends) pointing at a temp bundle that holds only its MITM root.
+        # Merge that root with the system roots so TLS works for both the hosts
+        # sfw MITMs (registries) and the ones it passes through (github.com etc.).
+        set -euo pipefail
+        if [ -n "${SSL_CERT_FILE:-}" ] && [ -f "${SSL_CERT_FILE}" ]; then
+          merged="$(mktemp)"
+          cat /etc/ssl/certs/ca-certificates.crt "${SSL_CERT_FILE}" > "${merged}"
+          export SSL_CERT_FILE="${merged}" CURL_CA_BUNDLE="${merged}" \
+                 CARGO_HTTP_CAINFO="${merged}" GIT_SSL_CAINFO="${merged}" \
+                 GIT_PROXY_SSL_CAINFO="${merged}" NODE_EXTRA_CA_CERTS="${merged}" \
+                 PIP_CERT="${merged}" REQUESTS_CA_BUNDLE="${merged}"
+          unset SSL_CERT_DIR
+        fi
+        exec "$@"
+        EOF
+        chmod +x "${wrapper}"
 
-    - name: Set SFW prefix
-      id: set-prefix
-      shell: bash
-      run: |
-        if [[ "${{ steps.detect.outputs.method }}" == "none" ]]; then
-          echo "available=false" >> "$GITHUB_OUTPUT"
-          exit 0
+        # Smoke-test both host classes through the proxy: index.crates.io is
+        # MITMed (server presents the per-invocation Socket CA), github.com
+        # is tunneled (server presents its real certificate).
+        if ! sfw "${wrapper}" bash -c '
+          for host in index.crates.io github.com; do
+            echo | openssl s_client -connect "$host:443" -servername "$host" \
+              -proxy "${HTTPS_PROXY#http://}" -CAfile "$SSL_CERT_FILE" \
+              -verify_return_error > /dev/null 2>&1 || exit 1
+          done'; then
+          fail "SFW smoke test failed (TLS through the proxy is broken)"
         fi
-        if [[ "${{ steps.ca-cert.outputs.ca-failed }}" == "true" ]]; then
-          echo "::notice::SFW available but CA cert missing — disabling to prevent SSL errors"
-          echo "available=false" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-        if command -v sfw &>/dev/null; then
-          echo "SFW_PREFIX=sfw" >> "$GITHUB_ENV"
-          echo "available=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "::warning::SFW command not found after install"
-          echo "available=false" >> "$GITHUB_OUTPUT"
-        fi
+
+        # Consumed UNQUOTED by callers (`${SFW_PREFIX:-} <cmd>`) so the shell splits
+        # it into two argv entries — `sfw` and the wrapper path. Quoting it breaks that;
+        # when unset (optional + failed setup) it expands to nothing and <cmd> runs unwrapped.
+        echo "SFW_PREFIX=sfw ${wrapper}" >> "$GITHUB_ENV"
+        echo "available=true" >> "$GITHUB_OUTPUT"
+        echo "SFW active: SFW_PREFIX=sfw ${wrapper}"

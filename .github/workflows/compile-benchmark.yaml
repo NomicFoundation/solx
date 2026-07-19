@@ -90,8 +90,10 @@ jobs:
         with:
           working-directory: temp-solx-main
 
-      - name: Setup SFW
+      - name: Setup SFW (optional)
         uses: ./.github/actions/setup-sfw
+        with:
+          optional: 'true'
 
       # Release build without assertions: matches the released binary's
       # configuration so the three-way comparison is apples-to-apples.

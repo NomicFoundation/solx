@@ -119,8 +119,10 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
 
-      - name: Setup SFW
+      - name: Setup SFW (optional)
         uses: ./.github/actions/setup-sfw
+        with:
+          optional: 'true'
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
@@ -239,8 +241,10 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
 
-      - name: Setup SFW
+      - name: Setup SFW (optional)
         uses: ./.github/actions/setup-sfw
+        with:
+          optional: 'true'
 
       - name: Prepare Windows env
         if: runner.os == 'Windows'

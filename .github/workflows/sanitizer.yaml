@@ -54,8 +54,10 @@ jobs:
       - name: Checkout submodules
         uses: ./.github/actions/checkout-submodules
 
-      - name: Setup SFW
+      - name: Setup SFW (optional)
         uses: ./.github/actions/setup-sfw
+        with:
+          optional: 'true'
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
