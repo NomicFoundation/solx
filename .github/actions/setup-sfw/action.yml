@@ -163,3 +163,4 @@ runs:
         # when unset (optional + failed setup) it expands to nothing and <cmd> runs unwrapped.
         echo "SFW_PREFIX=sfw ${wrapper}" >> "$GITHUB_ENV"
         echo "available=true" >> "$GITHUB_OUTPUT"
+        echo "SFW active: SFW_PREFIX=sfw ${wrapper}"
