@@ -77,8 +77,12 @@ jobs:
         if: runner.os == 'Windows'
         uses: ./.github/actions/prepare-msys
 
-      - name: Setup SFW
+      - name: Setup SFW (optional)
         uses: ./.github/actions/setup-sfw
+        with:
+          # Best-effort: a socket.dev outage must not block CI; release
+          # builds (release.yaml) keep the fail-hard default.
+          optional: 'true'
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
@@ -151,8 +155,12 @@ jobs:
         if: runner.os == 'Windows'
         uses: ./.github/actions/prepare-msys
 
-      - name: Setup SFW
+      - name: Setup SFW (optional)
         uses: ./.github/actions/setup-sfw
+        with:
+          # Best-effort: a socket.dev outage must not block CI; release
+          # builds (release.yaml) keep the fail-hard default.
+          optional: 'true'
 
       - name: Build solc
         uses: ./.github/actions/build-solc
@@ -192,8 +200,12 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
 
-      - name: Setup SFW
+      - name: Setup SFW (optional)
         uses: ./.github/actions/setup-sfw
+        with:
+          # Best-effort: a socket.dev outage must not block CI; release
+          # builds (release.yaml) keep the fail-hard default.
+          optional: 'true'
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
@@ -233,8 +245,12 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
 
-      - name: Setup SFW
+      - name: Setup SFW (optional)
         uses: ./.github/actions/setup-sfw
+        with:
+          # Best-effort: a socket.dev outage must not block CI; release
+          # builds (release.yaml) keep the fail-hard default.
+          optional: 'true'
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
@@ -275,8 +291,12 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
 
-      - name: Setup SFW
+      - name: Setup SFW (optional)
         uses: ./.github/actions/setup-sfw
+        with:
+          # Best-effort: a socket.dev outage must not block CI; release
+          # builds (release.yaml) keep the fail-hard default.
+          optional: 'true'
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
