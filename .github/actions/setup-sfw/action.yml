@@ -2,11 +2,11 @@ name: Setup Socket Firewall (SFW)
 description: >
   Installs Socket Firewall Free and exports SFW_PREFIX, a wrapper that callers
   prefix onto dependency commands to run installs behind the firewall (it also
-  fixes sfw's CA handling — see the wrapper step). Mirrors slang's setup-sfw
-  (NomicFoundation/slang#1814), plus two solx-specific parts: inside containers
-  the socketdev/action MITM proxy doesn't work, so a pinned sfw-free binary is
-  downloaded from GitHub releases instead; macOS/Windows are skipped entirely
-  because their TLS stacks reject the MITM cert.
+  fixes sfw's CA handling — see the wrapper step).
+  Bare-metal Linux runners install via socketdev/action; containers, where its
+  MITM proxy doesn't work, download a pinned sfw-free binary from GitHub
+  releases. macOS/Windows are skipped entirely: their TLS stacks reject the
+  MITM cert.
   On Linux, a failed SFW setup fails the job, so dependency installs never
   silently run unprotected. Jobs where SFW is best-effort (a socket.dev outage
   must not fail them) opt out with optional, which warns and leaves SFW_PREFIX
