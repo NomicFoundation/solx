@@ -56,11 +56,9 @@ runs:
 
         echo "method=action" >> "$GITHUB_OUTPUT"
 
-    # Deliberately NOT `npm install -g sfw`: that package is a shim that
-    # fetches the latest sfw-free binary at runtime via an unauthenticated
-    # api.github.com call — an unpinned binary and a rate-limited fetch.
-    # Release-asset downloads are not API-rate-limited, and pinning the
-    # digest means the proxy binary can't change under us.
+    # Deliberately NOT `npm install -g sfw`: that shim downloads an unpinned
+    # "latest" sfw-free binary at runtime via unauthenticated (rate-limited)
+    # api.github.com.
     # Failures are decided by the wrapper step below, which knows the
     # optional input — keep this step itself from failing the job.
     - name: Install SFW (container)
@@ -95,15 +93,11 @@ runs:
       with:
         mode: ${{ inputs.mode }}
 
-    # sfw has no persistent CA file: it generates a fresh MITM root on every
-    # invocation and points the wrapped process's CA env vars at that root
-    # alone (SSL_CERT_DIR too, hijacking OpenSSL's default lookup). Hosts the
-    # proxy tunnels instead of MITMs (e.g. cargo git-dep clones from
-    # github.com) then fail verification against the server's real
-    # certificate. So the union bundle must be built *inside* the wrap: run
-    # commands as `sfw <wrapper> <command>` — sfw injects its temp-CA env into
-    # the wrapper, which merges that root with the system bundle, re-points
-    # the CA vars at the union, and exec's the real command.
+    # sfw has no persistent CA file and overrides the CA env vars inside every
+    # wrap, so the union bundle must be built *inside* the wrap. Write a wrapper
+    # that does exactly that, then run it as `sfw <wrapper> <command>`: sfw injects
+    # its temp-CA env into the wrapper, which merges that root with the system
+    # bundle, re-points the CA vars at the union, and exec's the real command.
     - name: Create SFW CA-merge wrapper
       id: wrapper
       if: steps.detect.outputs.method != 'none'

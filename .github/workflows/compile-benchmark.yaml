@@ -93,8 +93,6 @@ jobs:
       - name: Setup SFW (optional)
         uses: ./.github/actions/setup-sfw
         with:
-          # Best-effort: a socket.dev outage must not block CI; release
-          # builds (release.yaml) keep the fail-hard default.
           optional: 'true'
 
       # Release build without assertions: matches the released binary's
