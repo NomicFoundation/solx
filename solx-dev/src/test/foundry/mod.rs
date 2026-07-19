@@ -434,6 +434,7 @@ pub fn test(
             }
             forge_test_gas_command.args(["--fuzz-runs", "0"]);
             forge_test_gas_command.args(["--fuzz-seed", "0xdeadbeef"]);
+            // Invariant campaigns ignore `--fuzz-runs`; one run mirrors its intent.
             forge_test_gas_command.env("FOUNDRY_INVARIANT_RUNS", "1");
             forge_test_gas_command.args([
                 "--evm-version",
