@@ -4,6 +4,9 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
   merge_group:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -18,9 +21,10 @@ jobs:
 
   label-check:
     if: >-
-      (github.event.action == 'labeled' && github.event.label.name == 'ci:slang'
+      github.event_name == 'push'
+      || ((github.event.action == 'labeled' && github.event.label.name == 'ci:slang'
       || github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'ci:slang'))
-      && !github.event.pull_request.head.repo.fork
+      && !github.event.pull_request.head.repo.fork)
     runs-on: ubuntu-24.04
     steps:
       - run: 'true'
@@ -138,10 +142,11 @@ jobs:
           echo "After cleanup:" && df -h .
 
       - name: Cache cargo artifacts
-        if: ${{ !matrix.image }}
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           prefix-key: slang-tests-v2
+          # `cargo test-slang` writes to target-slang, not target (.cargo/config.toml alias)
+          workspaces: ". -> target-slang"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
