@@ -140,7 +140,10 @@ jobs:
         env:
           RUSTC_BOOTSTRAP: 1
           RUSTFLAGS: '-C target-feature=+crt-static -C instrument-coverage -C link-arg=-fuse-ld=lld'
-          LLVM_PROFILE_FILE: 'unit-tests-%p-%m.profraw'
+          # %Nm without %p: the profile runtime merges profiles online into a
+          # pool of 4 files instead of leaving one profraw per process (CLI
+          # tests spawn thousands of short-lived solx subprocesses).
+          LLVM_PROFILE_FILE: 'unit-tests-%4m.profraw'
         run: ${SFW_PREFIX:-} cargo fetch --locked && ${SFW_PREFIX:-} cargo test --frozen --release --target x86_64-unknown-linux-gnu
 
       # Inkwell feature poisoning: solc path builds inkwell with LLVM linking,
@@ -152,7 +155,7 @@ jobs:
         env:
           RUSTC_BOOTSTRAP: 1
           RUSTFLAGS: '-C instrument-coverage -C link-arg=-fuse-ld=lld'
-          LLVM_PROFILE_FILE: 'slang-tests-%p-%m.profraw'
+          LLVM_PROFILE_FILE: 'slang-tests-%4m.profraw'
           CARGO_TARGET_DIR: target-slang
         run: ${SFW_PREFIX:-} cargo test-slang --frozen --release --target x86_64-unknown-linux-gnu
 
