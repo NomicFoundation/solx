@@ -21,9 +21,9 @@ inputs:
     required: false
     default: "latest"
   enable-tests:
-    description: "Disable mdbook tests"
+    description: "Run mdbook tests before deploying"
     required: false
-    default: true
+    default: "true"
   publish-branch:
     description: "Branch to publish the documentation"
     required: false
@@ -35,11 +35,11 @@ inputs:
   deploy:
     description: "Enable or disable the deployment"
     required: false
-    default: false
+    default: "false"
   create-latest-symlink:
     description: "Create a symlink to the latest version"
     required: false
-    default: false
+    default: "false"
 
 runs:
   using: composite
