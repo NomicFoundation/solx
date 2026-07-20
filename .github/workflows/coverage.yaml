@@ -65,6 +65,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           submodules: true
+          persist-credentials: false
 
       - name: Free disk space (Linux)
         uses: ./.github/actions/free-disk-space-linux
@@ -108,16 +109,18 @@ jobs:
           target: 'x86_64-unknown-linux-gnu'
 
       - name: Run integration tests
+        env:
+          SOLX_BINARY: ${{ steps.build-solx.outputs.binary-path }}
         run: |
           TMP="${PROFDATA_FILE}.tmp"
           TARGET_DIR="./target/x86_64-unknown-linux-gnu/release"
           for TEST_PATH in tests/solidity/simple/default.sol tests/solidity/complex/default; do
-            WORKDIR=$(basename ${TEST_PATH})
+            WORKDIR=$(basename "${TEST_PATH}")
             mkdir -p "${GITHUB_WORKSPACE}/${WORKDIR}"
             "${TARGET_DIR}/solx-dev" test solx-tester \
               --binary "${TARGET_DIR}/solx-tester" \
-              --solidity-compiler ${{ steps.build-solx.outputs.binary-path }} \
-              --path ${TEST_PATH} --workflow build --optimizer M3B3
+              --solidity-compiler "${SOLX_BINARY}" \
+              --path "${TEST_PATH}" --workflow build --optimizer M3B3
             mv *.profraw "${GITHUB_WORKSPACE}/${WORKDIR}/" || true
             find "${GITHUB_WORKSPACE}/${WORKDIR}" -type f -name '*.profraw' -print > profiles.lst
             if [[ -f "${PROFDATA_FILE}" ]]; then
@@ -126,7 +129,7 @@ jobs:
               llvm-profdata merge -sparse -num-threads="$(nproc)" -o "${TMP}" @profiles.lst
             fi
             mv -f "${TMP}" "${PROFDATA_FILE}"
-            rm -rf "${GITHUB_WORKSPACE}/${WORKDIR}"
+            rm -rf "${GITHUB_WORKSPACE}/${WORKDIR:?}"
           done
 
       - name: Preserve instrumented binary

@@ -57,7 +57,7 @@ runs:
         RUSTC_BOOTSTRAP: 1
         RUSTFLAGS: '-C target-feature=+crt-static'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash -ex {0}' }}
-      run: |
+      run: | # zizmor: ignore[github-env] the only GITHUB_PATH write is BINARY_DIR, built from repo-controlled inputs
         # Sanitize build environment: clear variables that could tamper with compilation.
         # RUSTC_WRAPPER / RUSTC_WORKSPACE_WRAPPER: could redirect compilation through a malicious wrapper.
         # LD_PRELOAD / LD_LIBRARY_PATH / DYLD_*: could inject code into compiler and linker processes.

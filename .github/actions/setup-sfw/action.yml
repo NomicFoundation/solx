@@ -104,7 +104,7 @@ runs:
       env:
         SFW_OPTIONAL: ${{ inputs.optional }}
       shell: bash
-      run: |
+      run: | # zizmor: ignore[github-env] the only GITHUB_ENV write is SFW_PREFIX, a static RUNNER_TEMP wrapper path
         fail() {
           if [ "${SFW_OPTIONAL}" = "true" ]; then
             echo "::warning::$1 — dependency installs will run UNPROTECTED."

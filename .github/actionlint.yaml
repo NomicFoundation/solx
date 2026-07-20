@@ -1,0 +1,5 @@
+# Self-hosted runner labels, so actionlint doesn't flag `runs-on:` as unknown.
+self-hosted-runner:
+  labels:
+    - solx-linux-amd64
+    - solx-linux-amd64-self-hosted
