@@ -400,7 +400,7 @@ jobs:
     steps:
       - name: Notify pre-deploy
         continue-on-error: true
-        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
+        uses: slackapi/slack-github-action@0d95c9a7becc1e6e297d76df9bc735c44f4cbcbc # v3.0.5
         with:
           webhook: ${{ secrets.PUBLISHING_NOTIFICATIONS_SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
@@ -474,7 +474,7 @@ jobs:
       - name: Notify deployment approved to Slack
         if: github.event_name != 'pull_request'
         continue-on-error: true
-        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
+        uses: slackapi/slack-github-action@0d95c9a7becc1e6e297d76df9bc735c44f4cbcbc # v3.0.5
         with:
           webhook: ${{ secrets.PUBLISHING_NOTIFICATIONS_SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
