@@ -1,0 +1,20 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "Probe.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract Probe {\n    uint256 public value;\n\n    modifier nonZero(uint256 newValue) {\n        if (newValue == 0) {\n            revert();\n        }\n        _;\n    }\n\n    function set(uint256 newValue) public nonZero(newValue) {\n        value = newValue;\n    }\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": true
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.deployedBytecode.debugInfo"
+        ]
+      }
+    }
+  }
+}
