@@ -2,7 +2,11 @@ name: Code coverage
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+  # Main runs upload the Codecov base for PR deltas and save the cargo cache
+  # that PR runs restore (rust-cache save-if only fires on refs/heads/main).
+  push:
+    branches:
+      - main
 
 concurrency:
   group: ${{ github.repository_id }}-${{ github.workflow }}-${{ github.ref }}
@@ -17,19 +21,9 @@ permissions:
 
 jobs:
 
-  label-check:
-    if: >-
-      (github.event.action == 'labeled' && github.event.label.name == 'ci:coverage'
-      || github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'ci:coverage'))
-      && !github.event.pull_request.head.repo.fork
-    runs-on: ubuntu-24.04
-    steps:
-      - run: 'true'
-
   cooldown-check:
     name: Cargo cooldown check
     runs-on: ubuntu-24.04
-    needs: label-check
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -37,26 +31,43 @@ jobs:
       - uses: ./.github/actions/cooldown-check
 
   coverage:
-    needs: [label-check, cooldown-check]
-    runs-on: solx-linux-amd64-self-hosted
+    # Fork PRs get a read-only GITHUB_TOKEN, which would fail the PR coverage
+    # summary comment step.
+    if: ${{ github.event_name == 'push' || !github.event.pull_request.head.repo.fork }}
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       pull-requests: write
       packages: read
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
+      # Host tooling bind-mounts for the free-disk-space-linux action, needed
+      # when a solx-llvm bump forces a cold LLVM build before cache-warmup has
+      # run for that SHA. Keep in sync with the matching lists in test.yaml
+      # and cache-warmup.yaml.
+      volumes:
+        - /usr/share/dotnet:/mnt/free-disk-space/dotnet
+        - /usr/local/lib/android:/mnt/free-disk-space/android
+        - /opt/ghc:/mnt/free-disk-space/ghc
+        - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
+        - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
     env:
       BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
       SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
       PROFDATA_FILE: solx.profdata
       LCOV_FILE: codecov.lcov
       OUTPUT_HTML_DIR: COVERAGE
-      COVERAGE_IGNORE_REGEX: '/(solx-llvm|target-llvm|solx-solidity|\.cargo|cargo/registry)/'
+      # ^/rustc/ = std sources monomorphized into our binaries; the remapped
+      # path exists on no runner, so llvm-cov show errors trying to render it.
+      COVERAGE_IGNORE_REGEX: '/(solx-llvm|target-llvm|solx-solidity|\.cargo|cargo/registry)/|^/rustc/'
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           submodules: true
+
+      - name: Free disk space (Linux)
+        uses: ./.github/actions/free-disk-space-linux
 
       - name: Checkout submodules
         uses: ./.github/actions/checkout-submodules
@@ -65,6 +76,13 @@ jobs:
         uses: ./.github/actions/setup-sfw
         with:
           optional: 'true'
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          prefix-key: coverage-v1
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
@@ -123,7 +141,10 @@ jobs:
         env:
           RUSTC_BOOTSTRAP: 1
           RUSTFLAGS: '-C target-feature=+crt-static -C instrument-coverage -C link-arg=-fuse-ld=lld'
-          LLVM_PROFILE_FILE: 'unit-tests-%p-%m.profraw'
+          # %Nm without %p: the profile runtime merges profiles online into a
+          # pool of 4 files instead of leaving one profraw per process (CLI
+          # tests spawn thousands of short-lived solx subprocesses).
+          LLVM_PROFILE_FILE: 'unit-tests-%4m.profraw'
         run: ${SFW_PREFIX:-} cargo fetch --locked && ${SFW_PREFIX:-} cargo test --frozen --release --target x86_64-unknown-linux-gnu
 
       # Inkwell feature poisoning: solc path builds inkwell with LLVM linking,
@@ -135,7 +156,7 @@ jobs:
         env:
           RUSTC_BOOTSTRAP: 1
           RUSTFLAGS: '-C instrument-coverage -C link-arg=-fuse-ld=lld'
-          LLVM_PROFILE_FILE: 'slang-tests-%p-%m.profraw'
+          LLVM_PROFILE_FILE: 'slang-tests-%4m.profraw'
           CARGO_TARGET_DIR: target-slang
         run: ${SFW_PREFIX:-} cargo test-slang --frozen --release --target x86_64-unknown-linux-gnu
 
@@ -248,6 +269,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Post PR coverage summary
+        if: github.event_name == 'pull_request'
         uses: mshick/add-pr-comment@ec328af66588ab8f77cdeb2c264f14aba45bbf59 # v3.12
         with:
           message-id: 'coverage-summary'

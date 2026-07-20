@@ -129,7 +129,6 @@ Tests live in `tests/solidity/`, `tests/yul/`, `tests/llvm-ir/`.
 - `ci:slang` — enable Slang tests
 - `ci:sanitizer` — enable address sanitizer tests
 - `ci:integration` — enable integration tests
-- `ci:coverage` — enable code coverage
 
 ## Renovate Config
 
