@@ -74,27 +74,12 @@ jobs:
         with:
           submodules: true
 
-      # This step is required to checkout submodules
-      # that are disabled in .gitmodules config
-      - name: Checkout submodules
-        uses: ./.github/actions/checkout-submodules
-
-      - name: Setup SFW (optional)
-        uses: ./.github/actions/setup-sfw
+      # solc is built separately below: the lit tests need a Release build
+      # against a synced solx-solidity, not the standard config.
+      - name: Build toolchain
+        uses: ./.github/actions/build-toolchain
         with:
-          optional: 'true'
-
-      - name: Prepare Windows env
-        if: runner.os == 'Windows'
-        uses: ./.github/actions/prepare-msys
-
-      - name: Build LLVM
-        uses: ./.github/actions/build-llvm
-        with:
-          build-type: RelWithDebInfo
-          enable-assertions: 'true'
-          enable-mlir: 'true'
-          enable-utils: 'true'
+          solc: 'false'
 
       # TODO: remove this step and the Build solc step below once the lit
       # tests stop running against solc.

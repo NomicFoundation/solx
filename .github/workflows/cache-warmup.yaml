@@ -68,27 +68,10 @@ jobs:
         if: runner.os == 'Linux' && matrix.image != ''
         uses: ./.github/actions/free-disk-space-linux
 
-      - name: Checkout submodules
-        run: |
-          git config --global --add safe.directory '*'
-          git submodule update --force --depth=1 --recursive --checkout
-
-      - name: Prepare Windows env
-        if: runner.os == 'Windows'
-        uses: ./.github/actions/prepare-msys
-
-      - name: Setup SFW (optional)
-        uses: ./.github/actions/setup-sfw
+      - name: Build toolchain
+        uses: ./.github/actions/build-toolchain
         with:
-          optional: 'true'
-
-      - name: Build LLVM
-        uses: ./.github/actions/build-llvm
-        with:
-          build-type: RelWithDebInfo
-          enable-assertions: 'true'
-          enable-mlir: 'true'
-          enable-utils: 'true'
+          solc: 'false'
 
       # When the artifact cache is warm, build-llvm skips ccache entirely,
       # so the ccache entry's LRU timer isn't refreshed. Touch it explicitly
@@ -144,26 +127,10 @@ jobs:
         if: runner.os == 'Linux' && matrix.image != ''
         uses: ./.github/actions/free-disk-space-linux
 
-      - name: Checkout submodules
-        run: |
-          git config --global --add safe.directory '*'
-          git submodule update --force --depth=1 --recursive --checkout
-
-      - name: Prepare Windows env
-        if: runner.os == 'Windows'
-        uses: ./.github/actions/prepare-msys
-
-      - name: Setup SFW (optional)
-        uses: ./.github/actions/setup-sfw
+      - name: Build toolchain
+        uses: ./.github/actions/build-toolchain
         with:
-          optional: 'true'
-
-      - name: Build solc
-        uses: ./.github/actions/build-solc
-        with:
-          cmake-build-type: RelWithDebInfo
-          boost-version: '1.83.0'
-          working-dir: 'solx-solidity'
+          llvm: 'false'
 
       - name: Touch solc ccache
         if: always()
