@@ -15,7 +15,7 @@
 #          regression tests, cargo coverage/report tools). Must stay the final
 #          stage: docker-ci-image.yaml publishes the default target.
 
-FROM ubuntu:26.04@sha256:b7f48194d4d8b763a478a621cdc81c27be222ba2206ca3ca6bc42b49685f3d9e AS base
+FROM ubuntu:26.04@sha256:3131b4cc82a783df6c9df078f86e01819a13594b865c2cad47bd1bca2b7063bb AS base
 
 LABEL org.opencontainers.image.source="https://github.com/NomicFoundation/solx"
 LABEL org.opencontainers.image.description="CI runner image for solx"
