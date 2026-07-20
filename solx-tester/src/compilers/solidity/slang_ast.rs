@@ -5,7 +5,6 @@
 use std::collections::BTreeMap;
 
 use slang_solidity_v2::ast::AbicoderVersion;
-use slang_solidity_v2::ast::ExperimentalFeature;
 use slang_solidity_v2::ast::Pragma;
 use slang_solidity_v2::ast::SourceUnitMember;
 use slang_solidity_v2::compilation::CompilationBuilder;
@@ -63,37 +62,25 @@ impl SlangAst {
     }
 
     ///
-    /// Whether the sources pin `pragma abicoder v1` without declaring v2 anywhere.
+    /// Whether any source pins `pragma abicoder v1`.
     ///
     /// Slang always encodes with v2 semantics, so a v1-pinned test is not reproducible
     /// under the Slang frontend.
     ///
     pub fn is_abi_encoder_v1_pinned(&self) -> bool {
-        let mut v1_pinned = false;
-        let mut v2_declared = false;
         for file in self.unit.files() {
             for member in file.ast().members().iter() {
                 let SourceUnitMember::PragmaDirective(directive) = member else {
                     continue;
                 };
-                match directive.pragma() {
-                    Pragma::AbicoderPragma(pragma) => match pragma.version() {
-                        AbicoderVersion::AbicoderV1Keyword(_) => v1_pinned = true,
-                        AbicoderVersion::AbicoderV2Keyword(_) => v2_declared = true,
-                    },
-                    Pragma::ExperimentalPragma(pragma) => {
-                        if matches!(
-                            pragma.feature(),
-                            ExperimentalFeature::ABIEncoderV2Keyword(_)
-                        ) {
-                            v2_declared = true;
-                        }
-                    }
-                    Pragma::VersionPragma(_) => {}
+                if let Pragma::AbicoderPragma(pragma) = directive.pragma()
+                    && matches!(pragma.version(), AbicoderVersion::AbicoderV1Keyword(_))
+                {
+                    return true;
                 }
             }
         }
-        v1_pinned && !v2_declared
+        false
     }
 
     ///
