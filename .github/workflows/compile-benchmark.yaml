@@ -50,10 +50,7 @@ jobs:
       contents: read
       pull-requests: write
       packages: read
-    # Temporary: pinned to the standard solx-linux-amd64 runner to fast-track
-    # the current batch of solx improvements. Revert to the self-hosted runner
-    # once the queue clears.
-    runs-on: solx-linux-amd64
+    runs-on: solx-linux-amd64-self-hosted
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
       options: -m 110g
@@ -180,22 +177,29 @@ jobs:
           cmake-build-type: 'Release'
           working-dir: 'temp-solx-main/solx-solidity'
 
+      # Env and target mirror .github/actions/build-rust so the pr/main
+      # binaries share the released binary's build configuration: the
+      # statically linked glibc alone is worth ~5% on this workload.
       - name: Build solx (PR)
         env:
           BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+          RUSTC_BOOTSTRAP: 1
+          RUSTFLAGS: '-C target-feature=+crt-static -C link-arg=-fuse-ld=lld'
         run: |
           ${SFW_PREFIX:-} cargo fetch --locked
-          ${SFW_PREFIX:-} cargo build --frozen --release --bin solx
+          ${SFW_PREFIX:-} cargo build --frozen --release --bin solx --target x86_64-unknown-linux-gnu
 
       - name: Build solx (main)
         working-directory: temp-solx-main
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
+          RUSTC_BOOTSTRAP: 1
+          RUSTFLAGS: '-C target-feature=+crt-static -C link-arg=-fuse-ld=lld'
         run: |
           ${SFW_PREFIX:-} cargo fetch --locked
-          ${SFW_PREFIX:-} cargo build --frozen --release --bin solx
+          ${SFW_PREFIX:-} cargo build --frozen --release --bin solx --target x86_64-unknown-linux-gnu
 
       - name: Download latest release binary
         env:
@@ -228,8 +232,8 @@ jobs:
       - name: Run benchmark
         run: |
           ./tests/benchmark/run.sh \
-            --bin pr=./target/release/solx \
-            --bin main=./temp-solx-main/target/release/solx \
+            --bin pr=./target/x86_64-unknown-linux-gnu/release/solx \
+            --bin main=./temp-solx-main/target/x86_64-unknown-linux-gnu/release/solx \
             --bin release=./solx-release \
             --runs 3 --warmup 1 \
             --out benchmark-out
