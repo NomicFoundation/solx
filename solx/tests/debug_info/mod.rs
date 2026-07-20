@@ -135,6 +135,46 @@ fn generated_code_line_zero(via_ir: bool) -> anyhow::Result<()> {
 }
 
 ///
+/// solc emits per-opcode source refs for `assembly {}` bodies; dropping them attributes the
+/// opcodes to the enclosing declaration lines instead of the assembly statements. The
+/// `revert(0, 0)` row is not asserted: the backend merges identical revert sequences and
+/// merged locations drop per the DWARF convention. EVMLA only — the via-IR pipeline does
+/// not resolve assembly refs yet.
+///
+#[test]
+fn inline_assembly_lines() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let input = fixture(crate::common::standard_json!(
+        "debug_info_inline_assembly.json"
+    ))?;
+    let source = input.sources["AsmProbe.sol"]
+        .content
+        .clone()
+        .expect("Always exists");
+
+    let output = compile_standard_json(&input)?;
+
+    let row_counts = debug_line_row_counts(
+        deployed_debug_info(&output, "AsmProbe.sol", "AsmProbe")?.as_slice(),
+    )?;
+
+    for needle in [
+        "if gt(newValue, 100)",
+        "sstore(1, newValue)",
+        "value = newValue;",
+    ] {
+        let line = line_of(&source, needle);
+        assert!(
+            row_counts.contains_key(&line),
+            "`{needle}` (line {line}) is missing from the line table: {row_counts:?}",
+        );
+    }
+
+    Ok(())
+}
+
+///
 /// Debug info must never influence codegen: compiling with and without `debugInfo` in
 /// `outputSelection` must produce byte-identical bytecode. Both compilations are derived
 /// from the same input and differ only in the output selection, so the invariance holds
