@@ -25,6 +25,20 @@ pub enum DataLocation {
     Transient = 5,
 }
 
+impl From<u32> for DataLocation {
+    fn from(discriminant: u32) -> Self {
+        match discriminant {
+            0 => Self::Storage,
+            1 => Self::CallData,
+            2 => Self::Memory,
+            3 => Self::Stack,
+            4 => Self::Immutable,
+            5 => Self::Transient,
+            other => unreachable!("no DataLocation with discriminant {other}"),
+        }
+    }
+}
+
 impl From<AddressSpace> for DataLocation {
     fn from(space: AddressSpace) -> Self {
         match space {

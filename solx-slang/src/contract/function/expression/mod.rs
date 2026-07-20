@@ -106,6 +106,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             Expression::Identifier(inner) => self.identifier_place(inner),
             Expression::MemberAccessExpression(inner) => self.member_access_place(inner),
             Expression::IndexAccessExpression(inner) => self.index_access_place(inner),
+            Expression::FunctionCallExpression(inner) => self.function_call_place(inner),
             Expression::TupleExpression(inner) if inner.items().len() == 1 => {
                 let operand = inner
                     .items()

@@ -34,9 +34,6 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             })
             .collect();
         for (state_variable, slot_name, initializer) in initializers {
-            if matches!(initializer, Expression::ArrayExpression(_)) {
-                unimplemented!("array-literal state variable initializers are not yet supported");
-            }
             let (storage_ref, element_type) =
                 self.state_variable_place(&state_variable, &slot_name);
             if storage_ref.r#type() == element_type {

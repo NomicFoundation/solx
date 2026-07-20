@@ -26,6 +26,7 @@ sol_ops! {
     Value::array_literal(elements: values, array_type: ty) -> value {
         ArrayLitOperation.ins(many(elements)).addr(array_type)
     }
+
     Value::cast(self, target_type: ty) -> value nop_if_same(target_type) {
         CastOperation.inp(self).out(target_type)
     }
@@ -35,18 +36,26 @@ sol_ops! {
     Value::address_cast(self, target_type: ty) -> value {
         AddressCastOperation.inp(self).out(target_type)
     }
+    Value::dyn_bytes_to_fixedbytes(self, target_type: ty) -> value {
+        DynBytesToFixedBytesOperation.inp(self).out(target_type)
+    }
+    Value::data_loc_cast(self, target_type: ty) -> value {
+        DataLocCastOperation.inp(self).out(target_type)
+    }
+
     Value::fixed_bytes_index(self, index: value) -> value {
         FixedBytesIndexOperation.value(self).index(index).result(fixed_bytes(1))
-    }
-    Value::push(self, slot_type: ty) -> value {
-        PushOperation.inp(self).addr(slot_type)
-    }
-    Value::pop(self) {
-        PopOperation.inp(self)
     }
     Value::length(self) -> value {
         LengthOperation.inp(self).len(field())
     }
+    Value::slice(self, start: value, end: value) -> value {
+        SliceOperation.arr(self).start(start).end(end).res(self_ty)
+    }
+    Value::concat(operands: values) -> value {
+        ConcatOperation.args(many(operands)).result(memory())
+    }
+
     Value::compare(self, other: value, predicate: predicate) -> value {
         CmpOperation.predicate(predicate_attr(predicate)).lhs(self).rhs(other).result(boolean())
     }
@@ -151,12 +160,19 @@ sol_ops! {
     Place::stack(pointee: ty) -> place {
         AllocaOperation.alloc_type(ty_attr(ptr(pointee, stack))).addr(ptr(pointee, stack))
     }
-    Place::malloc(pointee: ty) -> place {
+    Place::malloc | malloc_zeroed (pointee: ty) -> place {
         MallocOperation.addr(pointee)
+    } flagged .zero_init;
+    Place::default_storage(place_type: ty) -> place {
+        DefaultStorageOperation.result(place_type)
+    }
+    Place::default_calldata(place_type: ty) -> place {
+        DefaultCallDataOperation.result(place_type)
     }
     Place::addr_of(symbol: str, place_type: ty) -> place {
         AddrOfOperation.var(symbol_attr(symbol)).addr(place_type)
     }
+
     Place::load(self, result_type: ty) -> value nop_if_same(result_type) {
         LoadOperation.addr(self).out(result_type)
     }
@@ -166,9 +182,20 @@ sol_ops! {
     Place::copy_from(self, value: value) {
         CopyOperation.src(value).dst(self)
     }
+
+    Place::push(self, slot_type: ty) -> value {
+        PushOperation.inp(self).addr(slot_type)
+    }
+    Place::push_string(self, value: value) {
+        PushStringOperation.addr(self).value(value)
+    }
+    Place::pop(self) {
+        PopOperation.inp(self)
+    }
     Place::delete(self) {
         DeleteOperation.reference(self)
     }
+
     Place::gep(self, index: value, element_type: ty) -> place {
         GepOperation.base_addr(self).idx(index).addr(gep_of(element_type))
     }

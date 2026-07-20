@@ -70,13 +70,8 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                         .map(|(index, parameter)| {
                             let identifier = parameter.name()?;
                             let return_type = scope.return_types[index];
-                            if !return_type.is_scalar() {
-                                unimplemented!(
-                                    "default-initialization for non-scalar named return: {return_type}"
-                                );
-                            }
                             Some(scope.define_local(identifier.name(), return_type, |scope| {
-                                Value::zero(return_type, scope)
+                                Value::default_initialized(return_type, scope)
                             }))
                         })
                         .collect()
@@ -96,7 +91,11 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                     .zip(&return_pointers)
                     .map(|(&return_type, return_pointer)| match return_pointer {
                         Some(pointer) => pointer.load(return_type, scope),
-                        None => Value::zero(return_type, scope),
+                        None => {
+                            let pointer = Place::stack(return_type, scope);
+                            pointer.store(Value::default_initialized(return_type, scope), scope);
+                            pointer.load(return_type, scope)
+                        }
                     })
                     .collect();
                 scope.current_block().r#return(&values, scope);

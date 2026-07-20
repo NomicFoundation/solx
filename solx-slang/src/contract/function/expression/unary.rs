@@ -85,14 +85,14 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     }
 
     /// Emits `delete <lvalue>`, a value-less reset. A reference-typed storage aggregate, which is its
-    /// own address, recursively clears through `sol.delete`; every other place, a scalar slot, struct
-    /// field, mapping entry, or local, stores its element type's zero, which is `delete` for a scalar.
+    /// own address, recursively clears through `sol.delete`; every other place — a scalar slot, struct
+    /// field, mapping entry, local, or memory aggregate — stores its element type's default.
     fn delete(&mut self, operand: &Expression) {
         let (place, element_type) = self.expression_place(operand);
         if place.r#type() == element_type {
             place.delete(self);
         } else {
-            place.store(Value::zero(element_type, self), self);
+            place.store(Value::default_initialized(element_type, self), self);
         }
     }
 }

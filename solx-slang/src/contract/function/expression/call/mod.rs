@@ -346,7 +346,7 @@ impl Call {
                 ))
             }
             Some(BuiltIn::ArrayPop) => {
-                scope.expression(&access.operand()).pop(scope);
+                scope.expression_place(&access.operand()).0.pop(scope);
                 None
             }
             Some(BuiltIn::ArrayPush) => {
@@ -355,26 +355,33 @@ impl Call {
                     .get_type()
                     .expect("base of array push has a resolved type");
                 let value_argument = arguments.iter().next();
-                if value_argument.is_some() && matches!(&base_slang_type, Type::Bytes(_)) {
-                    unimplemented!(
-                        "bytes.push(x) lowers to sol.push_string, which is not yet wired"
+                let (place, _) = scope.expression_place(&base);
+
+                if let Type::Bytes(_) = &base_slang_type
+                    && let Some(value_argument) = &value_argument
+                {
+                    let appended = scope.coerced(
+                        value_argument,
+                        MlirType::fixed_bytes(scope.melior, solx_utils::BYTE_LENGTH_BYTE as u32),
                     );
+                    place.push_string(appended, scope);
+                    return None;
                 }
+
                 let (element_type, slang_location) = match &base_slang_type {
                     Type::Array(array_type) => (
                         scope.resolve_type(&array_type.element_type(), None),
                         array_type.location(),
                     ),
-                    Type::Bytes(bytes_type) => (
-                        MlirType::fixed_bytes(scope.melior, solx_utils::BYTE_LENGTH_BYTE as u32),
-                        bytes_type.location(),
-                    ),
+                    Type::Bytes(bytes_type) => {
+                        (MlirType::byte(scope.melior), bytes_type.location())
+                    }
                     other => unreachable!(
                         "Solidity's .push is a member of dynamic arrays and bytes only; got {:?}",
                         std::mem::discriminant(other)
                     ),
                 };
-                let new_slot = scope.expression(&base).push(
+                let new_slot = place.push(
                     MlirType::pointer(
                         scope.melior,
                         element_type,
@@ -382,11 +389,15 @@ impl Call {
                     ),
                     scope,
                 );
+
                 let Some(value_argument) = value_argument else {
                     return Some(new_slot);
                 };
                 Place::from(new_slot).store(scope.coerced(&value_argument, element_type), scope);
                 None
+            }
+            Some(BuiltIn::BytesConcat | BuiltIn::StringConcat) => {
+                Some(Value::concat(&scope.positional_arguments(arguments), scope))
             }
             _ => unimplemented!("unsupported member call: {}", access.member().name()),
         }
@@ -415,5 +426,20 @@ impl Call {
             scope,
         )
         .expect("sol.call yields its declared results")
+    }
+}
+
+impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
+    /// `arr.push()` is the sole call assignable in place position; the slot it grows is the value the
+    /// push emits, and the element type is the call's own.
+    pub fn function_call_place(
+        &mut self,
+        node: &FunctionCallExpression,
+    ) -> (Place<'context>, MlirType<'context>) {
+        let slot = Call::emit(node, self)
+            .into_iter()
+            .next()
+            .expect("an array push in place position yields the new element's slot");
+        (Place::from(slot), self.typing(node.get_type()))
     }
 }
