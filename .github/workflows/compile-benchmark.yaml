@@ -50,10 +50,7 @@ jobs:
       contents: read
       pull-requests: write
       packages: read
-    # Temporary: pinned to the standard solx-linux-amd64 runner to fast-track
-    # the current batch of solx improvements. Revert to the self-hosted runner
-    # once the queue clears.
-    runs-on: solx-linux-amd64
+    runs-on: solx-linux-amd64-self-hosted
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
       options: -m 110g
