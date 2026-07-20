@@ -34,7 +34,6 @@ jobs:
     # Fork PRs get a read-only GITHUB_TOKEN, which would fail the PR coverage
     # summary comment step.
     if: ${{ !github.event.pull_request.head.repo.fork }}
-    needs: cooldown-check
     runs-on: ubuntu-24.04
     permissions:
       contents: read
