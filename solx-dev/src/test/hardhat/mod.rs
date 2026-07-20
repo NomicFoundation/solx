@@ -185,27 +185,22 @@ pub fn test(
             16,
         )?;
 
+        crate::utils::commit_checkout(
+            &project_directory_str,
+            format!(
+                "{} the post-setup state of Hardhat project {}",
+                solx_utils::cargo_status_ok("Committing"),
+                project_name.bright_white().bold()
+            )
+            .as_str(),
+        )?;
+
         let config_file_name = if project_directory.join("hardhat.config.ts").exists() {
             Some("hardhat.config.ts")
         } else if project_directory.join("hardhat.config.js").exists() {
             Some("hardhat.config.js")
         } else {
             None
-        };
-        // The config sed consumes the committed literal version, so each
-        // toolchain needs the pristine file back before applying its own.
-        let config_file_snapshot = match config_file_name {
-            Some(config_file_name) => {
-                let config_file_path = project_directory.join(config_file_name);
-                Some(
-                    std::fs::read_to_string(config_file_path.as_path()).map_err(|error| {
-                        anyhow::anyhow!(
-                            "Reading Hardhat configuration file {config_file_path:?}: {error}"
-                        )
-                    })?,
-                )
-            }
-            None => None,
         };
 
         for ((identifier, compiler), codegen) in config
@@ -219,25 +214,30 @@ pub fn test(
                 .as_deref()
                 .unwrap_or(solidity_version.as_str());
 
+            // The reset also forces Hardhat to recompile: its cache cannot
+            // tell two solx binaries reporting the same base solc version
+            // apart, and would otherwise reuse the previous toolchain's
+            // artifacts.
+            crate::utils::reset_checkout(
+                &project_directory_str,
+                format!(
+                    "{} Hardhat project {} to its post-setup state",
+                    solx_utils::cargo_status_ok("Resetting"),
+                    project_name.bright_white().bold()
+                )
+                .as_str(),
+            )?;
+
             eprintln!(
                 "{} pragmas in Hardhat project {}",
                 solx_utils::cargo_status_ok("Fixing"),
                 project_name.bright_white().bold()
             );
-            for solidity_file in
-                glob::glob(format!("{}/**/*.sol", project_directory.to_string_lossy()).as_str())
-                    .expect("Always valid")
-                    .filter_map(Result::ok)
-            {
+            // Tracked files only: dependencies under node_modules keep their
+            // own pragmas.
+            for solidity_file in crate::utils::git_tracked_files(&project_directory_str, "*.sol")? {
+                let solidity_file = project_directory.join(solidity_file);
                 if !solidity_file.is_file() {
-                    continue;
-                }
-                // Dependencies keep their own pragmas, as they did when the
-                // install followed the sed in every fresh clone.
-                if solidity_file
-                    .components()
-                    .any(|component| component.as_os_str() == "node_modules")
-                {
                     continue;
                 }
                 crate::utils::sed_file(
@@ -249,25 +249,17 @@ pub fn test(
                 )?;
             }
 
-            if let (Some(config_file_name), Some(config_file_snapshot)) =
-                (config_file_name, config_file_snapshot.as_deref())
-            {
+            if let Some(config_file_name) = config_file_name {
                 eprintln!(
                     "{} the configuration file {} of Hardhat project {}",
                     solx_utils::cargo_status_ok("Fixing"),
                     config_file_name.bright_white().bold(),
                     project_name.bright_white().bold(),
                 );
-                let config_file_path = project_directory.join(config_file_name);
-                std::fs::write(config_file_path.as_path(), config_file_snapshot).map_err(
-                    |error| {
-                        anyhow::anyhow!(
-                            "Restoring Hardhat configuration file {config_file_path:?}: {error}"
-                        )
-                    },
-                )?;
+                // Targets the committed literal version, which the checkout
+                // reset restored.
                 crate::utils::sed_file(
-                    config_file_path.as_path(),
+                    project_directory.join(config_file_name).as_path(),
                     &[
                         format!(r#"s/version:\s*["']0.8.30["']/version: "{solidity_version}"/g"#)
                             .as_str(),
@@ -283,17 +275,6 @@ pub fn test(
             let compiler_path_str = compiler_shim.compiler_path.to_string_lossy();
             let toolchain_name = crate::test::toolchain_name(compiler.name.as_str(), codegen);
             compiler_shim.reset()?;
-
-            // Hardhat cannot tell two solx binaries reporting the same base solc
-            // version apart, so its cache must go before every compilation.
-            for stale_directory in ["cache", "artifacts"] {
-                let stale_path = project_directory.join(stale_directory);
-                if stale_path.exists() {
-                    std::fs::remove_dir_all(stale_path.as_path()).map_err(|error| {
-                        anyhow::anyhow!("Removing Hardhat directory {stale_path:?}: {error}")
-                    })?;
-                }
-            }
 
             let mut npm_compile_command = Command::new("npm");
             npm_compile_command.current_dir(&*project_directory_str);
@@ -351,14 +332,10 @@ pub fn test(
             for (key, value) in project.env.iter() {
                 npm_test_command.env(key, value);
             }
+            // The checkout reset removed any report left by the previous
+            // toolchain, which would silently stand in for a test run that
+            // failed to produce one.
             let npm_test_report_path = project_directory.join("junit-report.json");
-            // A report left by the previous toolchain would silently stand in
-            // for a test run that failed to produce one.
-            if npm_test_report_path.exists() {
-                std::fs::remove_file(npm_test_report_path.as_path()).map_err(|error| {
-                    anyhow::anyhow!("Removing stale test report {npm_test_report_path:?}: {error}")
-                })?;
-            }
             let npm_test_report_path_str = npm_test_report_path.to_string_lossy();
             npm_test_command.env("JUNIT_REPORT", &*npm_test_report_path_str);
             if toolchain_name.contains("solx") {

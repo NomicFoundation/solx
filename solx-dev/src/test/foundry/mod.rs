@@ -74,7 +74,7 @@ pub fn test(
         );
     }
 
-    for (project_name, project) in config
+    let projects: Vec<_> = config
         .projects
         .into_iter()
         .filter(|(project_name, project)| {
@@ -84,7 +84,39 @@ pub fn test(
                         .iter()
                         .any(|element| project_name.contains(element)))
         })
+        .collect();
+
+    if projects
+        .iter()
+        .any(|(_project_name, project)| project.requires_yarn)
     {
+        crate::utils::exists("npm")?;
+
+        let build_system = "yarn";
+        let yarn_version = config.build_systems.get(build_system).ok_or_else(|| {
+            anyhow::anyhow!("Foundry test configuration missing `build_systems.{build_system}`")
+        })?;
+        let npm_spec = format!("{build_system}@{yarn_version}");
+        let mut npm_install_yarn = Command::new("npm");
+        npm_install_yarn.arg("install");
+        npm_install_yarn.args(["--loglevel", "error"]);
+        npm_install_yarn.arg("--force");
+        npm_install_yarn.arg("--yes");
+        npm_install_yarn.arg("--global");
+        npm_install_yarn.arg(&npm_spec);
+        crate::utils::command_with_retries(
+            &mut npm_install_yarn,
+            format!(
+                "{} build system {} for Foundry projects",
+                solx_utils::cargo_status_ok("Installing"),
+                build_system.bright_yellow().bold()
+            )
+            .as_str(),
+            16,
+        )?;
+    }
+
+    for (project_name, project) in projects {
         attempted_projects.push(project_name.clone());
         let mut project_directory = crate::utils::absolute_path(projects_directory.as_path())?;
         project_directory.push(project_name.as_str());
@@ -104,32 +136,7 @@ pub fn test(
         )?;
 
         if project.requires_yarn {
-            crate::utils::exists("npm")?;
-
-            let build_system = "yarn";
-            let yarn_version = config.build_systems.get(build_system).ok_or_else(|| {
-                anyhow::anyhow!("Foundry test configuration missing `build_systems.{build_system}`")
-            })?;
-            let npm_spec = format!("{build_system}@{yarn_version}");
-            let mut npm_install_yarn = Command::new("npm");
-            npm_install_yarn.current_dir(project_directory.as_path());
-            npm_install_yarn.arg("install");
-            npm_install_yarn.args(["--loglevel", "error"]);
-            npm_install_yarn.arg("--force");
-            npm_install_yarn.arg("--yes");
-            npm_install_yarn.arg("--global");
-            npm_install_yarn.arg(&npm_spec);
-            crate::utils::command_with_retries(
-                &mut npm_install_yarn,
-                format!(
-                    "{} build system {} for Foundry project {project_name}",
-                    solx_utils::cargo_status_ok("Installing"),
-                    build_system.bright_yellow().bold()
-                )
-                .as_str(),
-                16,
-            )?;
-            let mut yarn_install_command = Command::new(build_system);
+            let mut yarn_install_command = Command::new("yarn");
             yarn_install_command.args(["--cwd", &*project_directory_str]);
             yarn_install_command.arg("install");
             yarn_install_command.arg("--silent");
@@ -160,6 +167,16 @@ pub fn test(
             .as_str(),
         )?;
 
+        crate::utils::commit_checkout(
+            &project_directory_str,
+            format!(
+                "{} the post-setup state of Foundry project {}",
+                solx_utils::cargo_status_ok("Committing"),
+                project_name.bright_white().bold()
+            )
+            .as_str(),
+        )?;
+
         for ((identifier, compiler), codegen) in config
             .compilers
             .iter()
@@ -171,25 +188,26 @@ pub fn test(
                 .as_deref()
                 .unwrap_or(solidity_version.as_str());
 
+            crate::utils::reset_checkout(
+                &project_directory_str,
+                format!(
+                    "{} Foundry project {} to its post-setup state",
+                    solx_utils::cargo_status_ok("Resetting"),
+                    project_name.bright_white().bold()
+                )
+                .as_str(),
+            )?;
+
             eprintln!(
                 "{} pragmas in Foundry project {}",
                 solx_utils::cargo_status_ok("Fixing"),
                 project_name.bright_white().bold()
             );
-            for solidity_file in
-                glob::glob(format!("{}/**/*.sol", project_directory.to_string_lossy()).as_str())
-                    .expect("Always valid")
-                    .filter_map(Result::ok)
-            {
+            // Tracked files only: dependencies under node_modules keep their
+            // own pragmas.
+            for solidity_file in crate::utils::git_tracked_files(&project_directory_str, "*.sol")? {
+                let solidity_file = project_directory.join(solidity_file);
                 if !solidity_file.is_file() {
-                    continue;
-                }
-                // Dependencies keep their own pragmas, as they did when the
-                // install followed the sed in every fresh clone.
-                if solidity_file
-                    .components()
-                    .any(|component| component.as_os_str() == "node_modules")
-                {
                     continue;
                 }
                 crate::utils::sed_file(
@@ -201,8 +219,6 @@ pub fn test(
                 )?;
             }
 
-            // These patterns match their own output, so re-running them re-pins
-            // the version for each compiler without resetting the checkout.
             crate::utils::sed_file(
                 project_directory.join(config_file_name).as_path(),
                 &[
