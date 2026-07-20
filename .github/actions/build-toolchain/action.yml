@@ -1,0 +1,67 @@
+name: Build toolchain
+description: >-
+  Shared CI prologue for the standard toolchain configuration: submodule
+  checkout, Socket Firewall, platform prep (MSYS2 on Windows, disk cleanup
+  on macOS), then the LLVM and solc builds. The build parameters below
+  define the standard-config cache keys shared by test.yaml,
+  slang-tests.yaml, and cache-warmup.yaml — changing them here re-keys all
+  of those workflows together. Workflows needing a different LLVM
+  configuration (sanitizer, coverage, integration, release) call
+  build-llvm/build-solc directly and pair with their own cache-warmup job.
+
+inputs:
+  llvm:
+    description: Whether to build LLVM
+    required: false
+    default: 'true'
+  solc:
+    description: Whether to build solc
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout submodules
+      uses: ./.github/actions/checkout-submodules
+
+    - name: Setup SFW (optional)
+      uses: ./.github/actions/setup-sfw
+      with:
+        optional: 'true'
+
+    - name: Prepare Windows env
+      if: runner.os == 'Windows'
+      uses: ./.github/actions/prepare-msys
+
+    - name: Free disk space (macOS)
+      if: runner.os == 'macOS'
+      uses: ./.github/actions/free-disk-space-macos
+
+    - name: Build LLVM
+      if: inputs.llvm == 'true'
+      uses: ./.github/actions/build-llvm
+      with:
+        build-type: RelWithDebInfo
+        enable-assertions: 'true'
+        enable-mlir: 'true'
+        enable-utils: 'true'
+
+    # Fresh llvm-sys objects under MSYS2 GCC 16 cannot link against the
+    # static libstdc++.a that solx-dev bundles into the LLVM tree; dropping
+    # it resolves -lstdc++ to the shared libstdc++.dll.a instead (#550, fix
+    # option 2). Test builds link libstdc++ shared; release binaries keep
+    # static linking (release.yaml builds LLVM itself and does not use this
+    # action). Runs after build-llvm's mid-action cache save, so the shared
+    # cached tree keeps the archive.
+    - name: Drop bundled static libstdc++ (Windows)
+      if: runner.os == 'Windows' && inputs.llvm == 'true'
+      shell: bash
+      run: rm -v target-llvm/target-final/lib/libstdc++.a
+
+    - name: Build solc
+      if: inputs.solc == 'true'
+      uses: ./.github/actions/build-solc
+      with:
+        cmake-build-type: RelWithDebInfo
+        working-dir: 'solx-solidity'
