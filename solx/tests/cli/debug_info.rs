@@ -210,6 +210,63 @@ fn generated_code_line_zero(via_ir: bool) -> anyhow::Result<()> {
 }
 
 ///
+/// Debug info must never influence codegen: compiling with and without `debugInfo` in
+/// `outputSelection` must produce byte-identical bytecode.
+///
+#[test_case(false ; "evmla")]
+#[test_case(true ; "yul")]
+fn bytecode_invariant_to_debug_info_selection(via_ir: bool) -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let fixture_path = crate::common::standard_json!("debug_info_generated_code.json");
+    let fixture: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(fixture_path)?)?;
+
+    let input_directory = TempDir::with_prefix("solx_debug_info_invariance")?;
+    let compile = |with_debug_info: bool| -> anyhow::Result<(String, String)> {
+        let mut selection = vec!["evm.bytecode.object", "evm.deployedBytecode.object"];
+        if with_debug_info {
+            selection.push("evm.bytecode.debugInfo");
+            selection.push("evm.deployedBytecode.debugInfo");
+        }
+        let mut input = fixture.clone();
+        input["settings"]["viaIR"] = serde_json::Value::Bool(via_ir);
+        input["settings"]["outputSelection"]["*"]["*"] = serde_json::json!(selection);
+        let input_path = input_directory
+            .path()
+            .join(format!("input_{with_debug_info}.json"));
+        std::fs::write(&input_path, serde_json::to_string(&input)?)?;
+
+        let args = &[
+            "--standard-json",
+            input_path.to_str().expect("Always valid"),
+        ];
+        let result = crate::cli::execute_solx(args)?.success();
+        let output: serde_json::Value =
+            serde_json::from_slice(result.get_output().stdout.as_slice())?;
+        let evm = &output["contracts"]["Probe.sol"]["Probe"]["evm"];
+        Ok((
+            evm["bytecode"]["object"]
+                .as_str()
+                .expect("Always exists")
+                .to_owned(),
+            evm["deployedBytecode"]["object"]
+                .as_str()
+                .expect("Always exists")
+                .to_owned(),
+        ))
+    };
+
+    let with_debug_info = compile(true)?;
+    let without_debug_info = compile(false)?;
+    assert_eq!(
+        with_debug_info, without_debug_info,
+        "bytecode must not depend on the debugInfo output selection"
+    );
+
+    Ok(())
+}
+
+///
 /// Counts the DWARF `.debug_line` program rows per line number. Rows without a source
 /// association (DWARF line 0) are keyed as `0`.
 ///
