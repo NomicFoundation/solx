@@ -11,8 +11,9 @@ use crate::debug_info::solc_location::SolcLocation;
 ///
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AstNode {
-    /// AST ID.
-    pub ast_id: usize,
+    /// AST ID. `None` for Yul nodes inside `InlineAssembly`, which solc
+    /// emits without an `id`.
+    pub ast_id: Option<usize>,
     /// solc-style location.
     pub solc_location: SolcLocation,
     /// Line-number-style location.
@@ -24,7 +25,7 @@ impl AstNode {
     /// A shortcut constructor.
     ///
     pub fn new(
-        ast_id: usize,
+        ast_id: Option<usize>,
         solc_location: SolcLocation,
         mapped_location: MappedLocation,
     ) -> Self {

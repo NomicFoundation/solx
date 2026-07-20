@@ -134,7 +134,15 @@ impl Source {
     ) -> Option<solx_utils::DebugInfoAstNode> {
         let ast = ast.as_object()?;
 
-        let ast_id = ast.get("id")?.as_u64()? as usize;
+        // Yul nodes (inside `InlineAssembly.AST`) carry no `id`, but their
+        // `src` points into the Solidity source like any other node's.
+        let ast_id = match ast.get("id") {
+            Some(id) => Some(id.as_u64()? as usize),
+            None => {
+                (ast.get("nodeType")?.as_str()?.starts_with("Yul")).as_option()?;
+                None
+            }
+        };
         let solc_location = solx_utils::DebugInfoSolcLocation::parse(
             ast.get("src")?.as_str()?,
             solx_utils::DebugInfoSolcLocationOrdering::Ast,

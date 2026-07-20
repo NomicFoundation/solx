@@ -94,9 +94,9 @@ impl ISolidityData for SolidityData {
             .ast_nodes
             .get(&solc_location.source_id)?
             .get(&start)?;
-        if debug_info
-            .function_definitions
-            .contains_key(&ast_node.ast_id)
+        if ast_node
+            .ast_id
+            .is_some_and(|ast_id| debug_info.function_definitions.contains_key(&ast_id))
         {
             return None;
         }
