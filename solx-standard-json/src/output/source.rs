@@ -158,3 +158,48 @@ impl Source {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Source;
+
+    fn ast_node(ast: serde_json::Value) -> Option<solx_utils::DebugInfoAstNode> {
+        let source_code = "contract C {}\n";
+        let line_index = solx_utils::DebugInfoLineIndex::new(source_code);
+        Source::ast_node("Test.sol", &ast, &line_index)
+    }
+
+    /// Yul nodes inside `InlineAssembly.AST` carry no `id`; rejecting them drops the
+    /// per-opcode source refs that solc emits for `assembly {}` bodies.
+    #[test]
+    fn resolves_yul_node_without_id() {
+        let node = ast_node(serde_json::json!({
+            "nodeType": "YulFunctionCall",
+            "src": "0:8:0",
+        }))
+        .expect("Yul nodes without an `id` must resolve");
+        assert_eq!(node.ast_id, None);
+    }
+
+    #[test]
+    fn resolves_solidity_node_with_id() {
+        let node = ast_node(serde_json::json!({
+            "nodeType": "ExpressionStatement",
+            "id": 7,
+            "src": "0:8:0",
+        }))
+        .expect("Solidity nodes with an `id` must resolve");
+        assert_eq!(node.ast_id, Some(7));
+    }
+
+    #[test]
+    fn rejects_solidity_node_without_id() {
+        assert!(
+            ast_node(serde_json::json!({
+                "nodeType": "ExpressionStatement",
+                "src": "0:8:0",
+            }))
+            .is_none()
+        );
+    }
+}
