@@ -79,11 +79,29 @@ impl ISolidityData for SolidityData {
         let solc_location = self.get_debug_info_solc_location()?;
         let start = usize::try_from(solc_location.start).ok()?;
 
-        debug_info
+        // Code attributed to a whole contract or function definition
+        // (dispatch, shared ABI/revert helpers) has no meaningful statement
+        // line; report no location so such instructions get DWARF line 0
+        // instead of a declaration line.
+        if debug_info.contract_definitions.values().any(|definition| {
+            definition.solc_location.source_id == solc_location.source_id
+                && definition.solc_location.start == solc_location.start
+        }) {
+            return None;
+        }
+
+        let ast_node = debug_info
             .ast_nodes
             .get(&solc_location.source_id)?
-            .get(&start)
-            .map(|ast_node| &ast_node.mapped_location)
+            .get(&start)?;
+        if debug_info
+            .function_definitions
+            .contains_key(&ast_node.ast_id)
+        {
+            return None;
+        }
+
+        Some(&ast_node.mapped_location)
     }
 
     fn debug_info(&self) -> Option<&solx_utils::DebugInfo> {
