@@ -177,9 +177,10 @@ fn bytecode_invariant_to_debug_info_selection(via_ir: bool) -> anyhow::Result<()
         ))
     };
 
+    let with_debug_info = bytecode_with(debug_info_selectors)?;
+    let without_debug_info = bytecode_with(bytecode_selectors)?;
     assert_eq!(
-        bytecode_with(debug_info_selectors)?,
-        bytecode_with(bytecode_selectors)?,
+        with_debug_info, without_debug_info,
         "bytecode must not depend on the debugInfo output selection"
     );
 
@@ -190,7 +191,7 @@ fn bytecode_invariant_to_debug_info_selection(via_ir: bool) -> anyhow::Result<()
 /// Reads a standard JSON fixture into the typed input.
 ///
 fn fixture(path: &str) -> anyhow::Result<solx_standard_json::Input> {
-    Ok(serde_json::from_str(&std::fs::read_to_string(path)?)?)
+    solx_standard_json::Input::try_from(Some(std::path::Path::new(path)))
 }
 
 ///
