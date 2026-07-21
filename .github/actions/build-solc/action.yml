@@ -90,15 +90,21 @@ runs:
         verbose: 2
         save: ${{ github.event_name != 'pull_request' }}
 
-    # commit_hash.txt must sit in the solx-solidity root (not the checkout root):
-    # it is buildinfo.cmake's escape hatch that skips the dirty-tree check, which
-    # on Windows stamps the version `.mod` (autocrlf keeps two CRLF fixtures
-    # perpetually "modified").
-    - name: Pin solc commit hash
-      if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
-      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+    # The Windows checkout is smudged to CRLF by Git for Windows (system
+    # core.autocrlf=true), but buildinfo.cmake's dirty-tree check runs under
+    # MSYS2's git (autocrlf unset), which would see every text file as
+    # modified and stamp the solc version `.mod`. Both gits read the
+    # submodule's repo-local config, so aligning it lets the check run and
+    # pass honestly — a genuinely patched tree still gets stamped. The nested
+    # deps submodules need the same setting or they surface as modified
+    # content in the parent diff.
+    - name: Align solc eol config with the checkout (Windows)
+      if: runner.os == 'Windows' && steps.solc-artifact-cache.outputs.cache-hit != 'true'
+      shell: bash
       working-directory: ${{ inputs.working-dir }}
-      run: git rev-parse HEAD > commit_hash.txt
+      run: |
+        git config core.autocrlf true
+        git submodule foreach --recursive git config core.autocrlf true
 
     - name: Build solc
       if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
