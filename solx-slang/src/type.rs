@@ -97,7 +97,9 @@ impl<'context> SourceUnitScope<'context> {
                 );
                 MlirType::array(
                     self.melior,
-                    ArraySize::Fixed(fixed_array_type.size() as u64),
+                    ArraySize::Fixed(
+                        u64::try_from(fixed_array_type.size()).expect("fixed array size fits u64"),
+                    ),
                     element_type,
                     location,
                 )

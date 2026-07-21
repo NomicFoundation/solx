@@ -58,8 +58,8 @@
 // CHECK: sol.func @{{.*signed_mod.*}}
 // CHECK:   sol.mod %{{.*}}, %{{.*}} : si256
 
-// CHECK: sol.func @{{.*signed_shr.*}}
-// CHECK:   sol.shr %{{.*}}, %{{.*}} : si256
+// CHECK: sol.func @{{.*signed_exp.*}}
+// CHECK:   sol.cexp %{{.*}}, %{{.*}} : si256, ui8 -> si256
 
 contract C {
     function checked_add(uint256 a, uint256 b) public pure returns (uint256) {
@@ -140,7 +140,7 @@ contract C {
         return a % b;
     }
 
-    function signed_shr(int256 a, uint256 b) public pure returns (int256) {
-        return a >> b;
+    function signed_exp(int256 a, uint8 b) public pure returns (int256) {
+        return a ** b;
     }
 }

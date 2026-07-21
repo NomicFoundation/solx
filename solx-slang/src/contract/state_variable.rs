@@ -39,11 +39,10 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             }
             let (storage_ref, element_type) =
                 self.state_variable_place(&state_variable, &slot_name);
-            let value = self.expression(&initializer);
             if storage_ref.r#type() == element_type {
-                storage_ref.copy_from(value, self);
+                storage_ref.copy_from(self.expression(&initializer), self);
             } else {
-                storage_ref.store(value.coerce(element_type, self), self);
+                storage_ref.store(self.coerced(&initializer, element_type), self);
             }
         }
     }

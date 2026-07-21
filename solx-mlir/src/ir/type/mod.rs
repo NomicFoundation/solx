@@ -176,6 +176,17 @@ impl<'context> Type<'context> {
         unsafe { ffi::solxIsAddressType(self.inner.to_raw()) }
     }
 
+    /// Whether this is a bytes-like type: `sol::FixedBytesType` or `sol::ByteType`.
+    pub fn is_bytes_like(self) -> bool {
+        unsafe { ffi::solxIsBytesLikeType(self.inner.to_raw()) }
+    }
+
+    /// The byte width of this bytes-like type; the classification is the caller's, via
+    /// `is_bytes_like`.
+    pub fn bytes_like_width(self) -> u32 {
+        unsafe { ffi::solxBytesLikeTypeWidth(self.inner.to_raw()) }
+    }
+
     /// The integer attribute of `value` at this type, built via the arbitrary-width FFI constructor
     /// for values wider than `i64`.
     pub fn integer_attribute(self, value: &BigInt) -> Attribute<'context> {

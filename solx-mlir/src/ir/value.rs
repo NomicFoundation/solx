@@ -58,11 +58,14 @@ impl<'context> Value<'context> {
         Self::constant(i64::from(value), Type::boolean(context.melior), context)
     }
 
-    /// Coerces to `target_type` under Solidity's implicit conversions with a `sol.cast`; a no-op at
-    /// the target type.
+    /// Coerces to `target_type` under Solidity's implicit conversions; a no-op at the target type. A
+    /// bytes-like target reinterprets via `sol.bytes_cast`; every other target is a `sol.cast`.
     pub fn coerce(self, target_type: Type<'context>, context: &Context<'context>) -> Self {
         if self.r#type() == target_type {
             return self;
+        }
+        if target_type.is_bytes_like() {
+            return self.bytes_cast(target_type, context);
         }
         self.cast(target_type, context)
     }
@@ -82,29 +85,6 @@ impl<'context> Value<'context> {
             return truncated.address_cast(target_type, context);
         }
         self.coerce(target_type, context)
-    }
-
-    /// Compares against `other` under `predicate`, the operands first reconciled to a common type:
-    /// their shared type when equal, otherwise the wider operand's integer type, preserving its
-    /// signedness.
-    pub fn compare_coerced(
-        self,
-        other: Self,
-        predicate: CmpPredicate,
-        context: &Context<'context>,
-    ) -> Self {
-        let lhs_type = self.r#type();
-        let rhs_type = other.r#type();
-        let common_type = if lhs_type == rhs_type {
-            lhs_type
-        } else if lhs_type.integer_bit_width() >= rhs_type.integer_bit_width() {
-            lhs_type
-        } else {
-            rhs_type
-        };
-        let left = self.coerce(common_type, context);
-        let right = other.coerce(common_type, context);
-        left.compare(right, predicate, context)
     }
 
     /// The `i1` truthiness of `self` via `sol.cmp ne 0`; a no-op when `self` is already `i1`.

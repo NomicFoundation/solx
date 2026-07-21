@@ -34,10 +34,11 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         }
     }
 
-    /// `a ** b`, both operands coerced to the binder's result type.
+    /// `a ** b`, the base coerced to the binder's result type and the exponent kept at its own type.
     pub fn exponentiation(&mut self, node: &ExponentiationExpression) -> Value<'context> {
-        let (lhs, rhs) =
-            self.coerced_operands(node.get_type(), &node.left_operand(), &node.right_operand());
-        lhs.exponentiate(rhs, self.checked, self)
+        let result_type = self.typing(node.get_type());
+        let base = self.coerced(&node.left_operand(), result_type);
+        let exponent = self.expression(&node.right_operand());
+        base.exponentiate(exponent, self.checked, self)
     }
 }
