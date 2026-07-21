@@ -13,6 +13,7 @@ use crate::debug_info::solc_location::SolcLocation;
 pub struct AstNode {
     /// AST ID. `None` for Yul nodes inside `InlineAssembly`, which solc
     /// emits without an `id`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ast_id: Option<usize>,
     /// solc-style location.
     pub solc_location: SolcLocation,
