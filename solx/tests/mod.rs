@@ -6,3 +6,5 @@
 
 mod cli;
 mod common;
+#[cfg(feature = "solc")]
+mod debug_info;
