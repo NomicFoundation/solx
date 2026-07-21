@@ -1,5 +1,5 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck --check-prefixes=CHECK,CHECK-SOLX %s
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck --check-prefixes=CHECK,CHECK-SOLC %s
 
 // CHECK: sol.func @{{.*add_assign.*}}
 // CHECK:   sol.store %arg0, %[[XPTR:.*]] :
@@ -81,6 +81,26 @@
 // CHECK:   sol.shr %[[OLD]], %[[RHS]]
 // CHECK:   sol.store %{{.*}}, %[[XPTR]]
 
+// CHECK: sol.func @{{.*shl_assign_mixed.*}}
+// CHECK:   sol.store %arg0, %[[XPTR:.*]] :
+// CHECK:   sol.store %arg1, %[[YPTR:.*]] :
+// CHECK:   %[[RHS:.*]] = sol.load %[[YPTR]]
+// CHECK:   %[[OLD:.*]] = sol.load %[[XPTR]]
+// CHECK-SOLX:   sol.shl %[[OLD]], %[[RHS]] : ui256, ui8
+// CHECK-SOLC:   %[[SHL_AMOUNT:.*]] = sol.cast %[[RHS]] : ui8 to ui256
+// CHECK-SOLC:   sol.shl %[[OLD]], %[[SHL_AMOUNT]] : ui256, ui256
+// CHECK:   sol.store %{{.*}}, %[[XPTR]]
+
+// CHECK: sol.func @{{.*shr_assign_mixed.*}}
+// CHECK:   sol.store %arg0, %[[XPTR:.*]] :
+// CHECK:   sol.store %arg1, %[[YPTR:.*]] :
+// CHECK:   %[[RHS:.*]] = sol.load %[[YPTR]]
+// CHECK:   %[[OLD:.*]] = sol.load %[[XPTR]]
+// CHECK-SOLX:   sol.shr %[[OLD]], %[[RHS]] : ui256, ui8
+// CHECK-SOLC:   %[[SHR_AMOUNT:.*]] = sol.cast %[[RHS]] : ui8 to ui256
+// CHECK-SOLC:   sol.shr %[[OLD]], %[[SHR_AMOUNT]] : ui256, ui256
+// CHECK:   sol.store %{{.*}}, %[[XPTR]]
+
 contract C {
     function add_assign(uint256 x, uint256 y) public pure returns (uint256) {
         x += y;
@@ -128,6 +148,16 @@ contract C {
     }
 
     function shr_assign(uint256 x, uint256 y) public pure returns (uint256) {
+        x >>= y;
+        return x;
+    }
+
+    function shl_assign_mixed(uint256 x, uint8 y) public pure returns (uint256) {
+        x <<= y;
+        return x;
+    }
+
+    function shr_assign_mixed(uint256 x, uint8 y) public pure returns (uint256) {
         x >>= y;
         return x;
     }
