@@ -1,0 +1,20 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "AsmProbe.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract AsmProbe {\n    uint256 public value;\n\n    function set(uint256 newValue) public {\n        assembly {\n            if gt(newValue, 100) {\n                revert(0, 0)\n            }\n            sstore(1, newValue)\n        }\n        value = newValue;\n    }\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": true
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.deployedBytecode.debugInfo"
+        ]
+      }
+    }
+  }
+}
