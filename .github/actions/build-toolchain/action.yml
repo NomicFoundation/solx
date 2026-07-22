@@ -59,6 +59,20 @@ runs:
       shell: bash
       run: rm -v target-llvm/target-final/lib/libstdc++.a
 
+    # Consequence of the shared libstdc++ above: rustc loads proc-macros with
+    # the default Windows DLL search order, where the application dir —
+    # rustc's sysroot bin/ — beats PATH. The windows-gnu dist ships a stale
+    # libwinpthread-1.dll there (imported by nothing in bin/; rust-lld has
+    # its own copy under rustlib/), lacking the mingw-w64 v14 64-bit-time
+    # symbols that GCC 16's shared libstdc++-6.dll needs, so loading any
+    # C++-linking proc-macro (melior-macro via tblgen) fails with E0463.
+    # Drop it so the dependency resolves to MSYS2's copy via PATH. -f: the
+    # step self-noops (and can be deleted) once rust ships mingw-w64 >= v14.
+    - name: Drop rustc's stale libwinpthread (Windows)
+      if: runner.os == 'Windows' && inputs.llvm == 'true'
+      shell: bash
+      run: rm -fv "$(rustc --print sysroot)/bin/libwinpthread-1.dll"
+
     - name: Build solc
       if: inputs.solc == 'true'
       uses: ./.github/actions/build-solc
