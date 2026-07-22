@@ -141,4 +141,8 @@ uint32_t solxBytesLikeTypeWidth(MlirType ty) {
     return mlir::sol::getNumBytes(unwrap(ty));
 }
 
+bool solxIsScalarType(MlirType ty) {
+    return mlir::sol::isScalar(unwrap(ty));
+}
+
 } /* extern "C" */

@@ -70,9 +70,9 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                         .map(|(index, parameter)| {
                             let identifier = parameter.name()?;
                             let return_type = scope.return_types[index];
-                            if !return_type.is_integer() {
+                            if !return_type.is_scalar() {
                                 unimplemented!(
-                                    "zero-initialization for non-integer named return: {return_type}"
+                                    "default-initialization for non-scalar named return: {return_type}"
                                 );
                             }
                             Some(scope.define_local(identifier.name(), return_type, |scope| {

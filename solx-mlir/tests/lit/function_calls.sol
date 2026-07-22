@@ -23,6 +23,10 @@
 // CHECK:   sol.cast %{{.*}} : ui8 to ui256
 // CHECK:   sol.call @{{.*add.*}}
 
+// CHECK: sol.func @{{.*tuple_statement.*}}
+// CHECK:   sol.call @{{.*add.*}}
+// CHECK:   sol.call @{{.*double.*}}
+
 contract C {
     function add(uint256 a, uint256 b) public pure returns (uint256) {
         return a + b;
@@ -44,5 +48,9 @@ contract C {
 
     function widening_argument(uint8 a, uint8 b) public pure returns (uint256) {
         return add(a, b);
+    }
+
+    function tuple_statement(uint256 x) public pure {
+        (add(x, x), double(x));
     }
 }

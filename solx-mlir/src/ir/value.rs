@@ -5,6 +5,8 @@
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
 use num::BigInt;
+use num::One;
+use num::Zero;
 use num::bigint::Sign;
 
 use crate::CmpPredicate;
@@ -23,8 +25,8 @@ pub struct Value<'context> {
 
 impl<'context> Value<'context> {
     /// Materialises a `sol.constant` from an arbitrary-width [`BigInt`] at the type a constant can be
-    /// emitted at — `ui160` for an address, the target type itself otherwise — and converts it to the
-    /// target.
+    /// emitted at, then converts it to the target: `ui160` for an address, the width-matched unsigned
+    /// integer for a bytes-like target, the target type itself otherwise.
     pub fn constant_from_bigint(
         value: &BigInt,
         result_type: Type<'context>,
@@ -32,6 +34,9 @@ impl<'context> Value<'context> {
     ) -> Self {
         let r#type = if result_type.is_address() {
             Type::unsigned(context.melior, solx_utils::BIT_LENGTH_ETH_ADDRESS)
+        } else if result_type.is_bytes_like() {
+            let bits = result_type.bytes_like_width() as usize * solx_utils::BIT_LENGTH_BYTE;
+            Type::unsigned(context.melior, bits)
         } else {
             result_type
         };
@@ -44,14 +49,14 @@ impl<'context> Value<'context> {
         .convert(result_type, context)
     }
 
-    /// Materialises the additive identity `0` of `result_type`.
+    /// Materialises the zero of `result_type`, the default value a Solidity value type carries.
     pub fn zero(result_type: Type<'context>, context: &Context<'context>) -> Self {
-        Self::constant(0, result_type, context)
+        Self::constant_from_bigint(&BigInt::zero(), result_type, context)
     }
 
     /// Materialises the multiplicative identity `1` of `result_type`.
     pub fn one(result_type: Type<'context>, context: &Context<'context>) -> Self {
-        Self::constant(1, result_type, context)
+        Self::constant_from_bigint(&BigInt::one(), result_type, context)
     }
 
     /// Materialises an `i1` boolean constant.

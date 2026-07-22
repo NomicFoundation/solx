@@ -1,36 +1,47 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @{{.*default_init.*}}
-// CHECK:   %[[PTR:.*]] = sol.alloca : !sol.ptr<ui256, Stack>
-// CHECK:   %[[ZERO:.*]] = sol.constant 0 : ui256
-// CHECK:   sol.store %[[ZERO]], %[[PTR]] : ui256, !sol.ptr<ui256, Stack>
-// CHECK:   %[[VAL:.*]] = sol.load %[[PTR]] : !sol.ptr<ui256, Stack>, ui256
-// CHECK:   sol.return %[[VAL]] : ui256
+// CHECK: sol.func @{{.*default_uint.*}}
+// CHECK:   sol.constant 0 : ui256
 
-// CHECK: sol.func @{{.*explicit_init.*}}
-// CHECK:   %[[PTR:.*]] = sol.alloca : !sol.ptr<ui256, Stack>
-// CHECK:   sol.store %{{.*}}, %[[PTR]] : ui256, !sol.ptr<ui256, Stack>
-// CHECK:   %[[VAL:.*]] = sol.load %[[PTR]] : !sol.ptr<ui256, Stack>, ui256
-// CHECK:   sol.return %[[VAL]] : ui256
+// CHECK: sol.func @{{.*default_address.*}}
+// CHECK:   sol.address_cast %{{.*}} : ui160 to !sol.address
+
+// CHECK: sol.func @{{.*default_bytes.*}}
+// CHECK:   sol.bytes_cast %{{.*}} : ui256 to !sol.fixedbytes<32>
+
+// CHECK: sol.func @{{.*default_bool.*}}
+// CHECK:   sol.constant false
+
+// CHECK: sol.func @{{.*explicit_initialize.*}}
+// CHECK:   sol.constant 42
 
 // CHECK: sol.func @{{.*reassign.*}}
-// CHECK:   %[[PTR:.*]] = sol.alloca : !sol.ptr<ui256, Stack>
-// CHECK:   sol.store %arg0, %[[PTR]]
-// CHECK:   %[[V1:.*]] = sol.load %[[PTR]]
-// CHECK:   sol.store %{{.*}}, %[[PTR]]
-// CHECK:   %[[V2:.*]] = sol.load %[[PTR]]
-// CHECK:   sol.store %{{.*}}, %[[PTR]]
-// CHECK:   %[[RET:.*]] = sol.load %[[PTR]]
-// CHECK:   sol.return %[[RET]]
+// CHECK:   sol.cadd
+// CHECK:   sol.cmul
 
 contract C {
-    function default_init() public pure returns (uint256) {
+    function default_uint() public pure returns (uint256) {
         uint256 x;
         return x;
     }
 
-    function explicit_init() public pure returns (uint256) {
+    function default_address() public pure returns (address) {
+        address a;
+        return a;
+    }
+
+    function default_bytes() public pure returns (bytes32) {
+        bytes32 b;
+        return b;
+    }
+
+    function default_bool() public pure returns (bool) {
+        bool f;
+        return f;
+    }
+
+    function explicit_initialize() public pure returns (uint256) {
         uint256 x = 42;
         return x;
     }
