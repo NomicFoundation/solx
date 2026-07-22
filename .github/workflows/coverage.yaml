@@ -292,5 +292,10 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: 'llvm/codecov.lcov'
+          # Upload only the lcov above; don't walk the tree or run the gcov
+          # plugin over the thousands of solx-llvm test fixtures.
+          disable_search: true
+          plugins: noop
           slug: ${{ github.repository }}
-          fail_ci_if_error: false
+          # Surface upload failures instead of silently going green.
+          fail_ci_if_error: true
