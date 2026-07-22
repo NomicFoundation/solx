@@ -47,6 +47,15 @@ impl<'context> Type<'context> {
         Self::new(MlirType::from(IntegerType::signed(context, bits as u32)))
     }
 
+    /// The integer type of `bits`, `si<bits>` or `ui<bits>` as `is_signed` selects.
+    pub fn integer(context: &'context melior::Context, bits: usize, is_signed: bool) -> Self {
+        if is_signed {
+            Self::signed(context, bits)
+        } else {
+            Self::unsigned(context, bits)
+        }
+    }
+
     /// The boolean type: a signless `i1`.
     pub fn boolean(context: &'context melior::Context) -> Self {
         Self::new(MlirType::from(IntegerType::new(

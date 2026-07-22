@@ -118,22 +118,31 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         }
     }
 
-    /// Emits an expression and coerces its value to `target_type`.
+    /// Emits an expression and coerces its value to `target_type`. A string literal reaching a
+    /// bytes-like target folds to that constant directly, since a materialized `sol.string_lit`
+    /// value cannot be reinterpreted.
     pub fn coerced(
         &mut self,
         expression: &Expression,
         target_type: MlirType<'context>,
     ) -> Value<'context> {
+        if let Expression::StringExpression(literal) = expression
+            && target_type.is_bytes_like()
+        {
+            return Value::left_aligned_bytes(literal.value(), target_type, self);
+        }
         self.expression(expression).coerce(target_type, self)
     }
 
-    /// Emits an expression and converts its value to `target_type` through an explicit `T(x)` cast,
-    /// the explicit sibling of `coerced`.
+    /// Emits an expression and converts its value to `target_type` through an explicit `T(x)` cast.
     pub fn converted(
         &mut self,
         expression: &Expression,
         target_type: MlirType<'context>,
     ) -> Value<'context> {
+        if let Expression::StringExpression(_) = expression {
+            return self.coerced(expression, target_type);
+        }
         self.expression(expression).convert(target_type, self)
     }
 

@@ -24,14 +24,16 @@ impl<'context> SourceUnitScope<'context> {
         inherited_location: Option<solx_utils::DataLocation>,
     ) -> MlirType<'context> {
         match node {
-            Type::Integer(integer_type) => {
-                let bits = integer_type.bits() as usize;
-                if integer_type.is_signed() {
-                    MlirType::signed(self.melior, bits)
-                } else {
-                    MlirType::unsigned(self.melior, bits)
-                }
-            }
+            Type::Integer(integer_type) => MlirType::integer(
+                self.melior,
+                integer_type.bits() as usize,
+                integer_type.is_signed(),
+            ),
+            Type::FixedPointNumber(fixed_point_type) => MlirType::integer(
+                self.melior,
+                fixed_point_type.bits() as usize,
+                fixed_point_type.is_signed(),
+            ),
             Type::Boolean(_) => MlirType::boolean(self.melior),
             Type::Address(_) => MlirType::address(self.melior, false),
             Type::Literal(literal_type) => match literal_type.kind() {
@@ -46,11 +48,7 @@ impl<'context> SourceUnitScope<'context> {
                         .expect("a literal's bit count fits the address width")
                         .next_multiple_of(solx_utils::BIT_LENGTH_BYTE)
                         .max(solx_utils::BIT_LENGTH_BYTE);
-                    if value.is_negative() {
-                        MlirType::signed(self.melior, bits)
-                    } else {
-                        MlirType::unsigned(self.melior, bits)
-                    }
+                    MlirType::integer(self.melior, bits, value.is_negative())
                 }
                 LiteralKind::HexInteger { bytes, .. } => {
                     let bits = bytes as usize * solx_utils::BIT_LENGTH_BYTE;

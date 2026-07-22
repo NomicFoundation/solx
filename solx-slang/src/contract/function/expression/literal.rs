@@ -10,6 +10,11 @@ use solx_mlir::Value;
 use crate::scope::function::FunctionScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
+    /// The `true`/`false` keyword literals.
+    pub fn boolean_literal(&mut self, value: bool) -> Value<'context> {
+        Value::boolean(value, self)
+    }
+
     /// A decimal or hexadecimal integer literal, folded to a constant of the binder's type. The two
     /// literal kinds share this lowering; the enum is matched only to reach the concrete node whose
     /// `integer_value` and `get_type` read different terminals.
@@ -28,16 +33,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         )
     }
 
-    /// The `true`/`false` keyword literals.
-    pub fn boolean_literal(&mut self, value: bool) -> Value<'context> {
-        Value::boolean(value, self)
-    }
-
     /// A string literal, lowered to its Sol dialect string value.
     pub fn string_literal(&mut self, node: &StringExpression) -> Value<'context> {
-        Value::string_literal(
-            &String::from_utf8(node.value()).expect("slang validates string literals are UTF-8"),
-            self,
-        )
+        Value::string_literal(&node.value(), self)
     }
 }

@@ -11,6 +11,18 @@
 // CHECK:   sol.call @{{.*double.*}}
 // CHECK:   sol.call @{{.*add.*}}
 
+// CHECK: sol.func @{{.*literal_argument.*}}
+// CHECK:   sol.constant 1633837924 : ui32
+// CHECK:   sol.bytes_cast %{{.*}} : ui32 to !sol.fixedbytes<4>
+// CHECK:   sol.call @{{.*literal_receiver.*}}
+
+// CHECK: sol.func @{{.*widening_argument.*}}
+// CHECK:   sol.load %{{.*}}
+// CHECK:   sol.cast %{{.*}} : ui8 to ui256
+// CHECK:   sol.load %{{.*}}
+// CHECK:   sol.cast %{{.*}} : ui8 to ui256
+// CHECK:   sol.call @{{.*add.*}}
+
 contract C {
     function add(uint256 a, uint256 b) public pure returns (uint256) {
         return a + b;
@@ -22,5 +34,15 @@ contract C {
 
     function chain(uint256 x) public pure returns (uint256) {
         return add(double(x), x);
+    }
+
+    function literal_receiver(bytes4 selector) internal pure {}
+
+    function literal_argument() public pure {
+        literal_receiver("abcd");
+    }
+
+    function widening_argument(uint8 a, uint8 b) public pure returns (uint256) {
+        return add(a, b);
     }
 }

@@ -177,7 +177,7 @@ impl<'slice, T, const N: usize> IntoOds<&'slice [T]> for &'slice [T; N] {
 /// `self`, or a closed keyword. Keywords are call-shaped, so a bare identifier is always a parameter:
 /// result types `field()` / `address()` / `boolean()` / `memory()` / `calldata()` / `fixed_bytes(N)`
 /// / `ptr(pointee, stack)`; the receiver-derived `self` / `self_ty` / `gep_of(elem)`; attributes
-/// `int_attr` / `str_attr` / `symbol_attr` / `predicate_attr` / `ty_attr` / `count_attr`; variadic
+/// `int_attr` / `str_attr` / `bytes_attr` / `symbol_attr` / `predicate_attr` / `ty_attr` / `count_attr`; variadic
 /// operands `single` / `many` / `concat`; conditional setters `optional_str` / `optional_value`; the
 /// always-set unit flag `unit_flag`. The operation slot may be `checked(CheckedOp, UncheckedOp)`,
 /// which threads a `checked: bool` selector.
@@ -195,11 +195,12 @@ impl<'slice, T, const N: usize> IntoOds<&'slice [T]> for &'slice [T; N] {
 macro_rules! sol_ops {
     () => {};
 
-    (@ty value) => { $crate::Value<'context> };
-    (@ty ty) => { $crate::Type<'context> };
-    (@ty str) => { &str };
     (@ty i64) => { i64 };
+    (@ty str) => { &str };
+    (@ty bytes) => { &[u8] };
+    (@ty value) => { $crate::Value<'context> };
     (@ty values) => { &[$crate::Value<'context>] };
+    (@ty ty) => { $crate::Type<'context> };
     (@ty predicate) => { $crate::CmpPredicate };
     (@ty optional_str) => { ::core::option::Option<&str> };
     (@ty optional_value) => { ::core::option::Option<$crate::Value<'context>> };
@@ -238,6 +239,9 @@ macro_rules! sol_ops {
     };
     (@arg [$context:ident] [$receiver:tt] str_attr($text:ident)) => {
         ::melior::ir::attribute::StringAttribute::new($context.melior, $text)
+    };
+    (@arg [$context:ident] [$receiver:tt] bytes_attr($bytes:ident)) => {
+        ::melior::ir::attribute::StringAttribute::from_bytes($context.melior, $bytes)
     };
     (@arg [$context:ident] [$receiver:tt] symbol_attr($name:ident)) => {
         ::melior::ir::attribute::FlatSymbolRefAttribute::new($context.melior, $name)

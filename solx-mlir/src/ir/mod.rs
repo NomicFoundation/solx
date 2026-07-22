@@ -20,8 +20,8 @@ sol_ops! {
     Value::constant(value: i64, result_type: ty) -> value {
         ConstantOperation.value(int_attr(value, result_type)).result(result_type)
     }
-    Value::string_literal(text: str) -> value {
-        StringLitOperation.value(str_attr(text)).addr(memory())
+    Value::string_literal(text: bytes) -> value {
+        StringLitOperation.value(bytes_attr(text)).addr(memory())
     }
     Value::array_literal(elements: values, array_type: ty) -> value {
         ArrayLitOperation.ins(many(elements)).addr(array_type)

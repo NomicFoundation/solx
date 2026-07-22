@@ -399,15 +399,14 @@ impl Call {
         arguments: &PositionalArguments,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Vec<Value<'context>> {
-        let argument_values = scope.positional_arguments(arguments);
         let signature = scope
             .contract
             .source_unit
             .function_signature(function_definition.node_id());
-        let coerced: Vec<Value<'context>> = argument_values
+        let coerced: Vec<Value<'context>> = arguments
             .iter()
             .zip(&signature.parameter_types)
-            .map(|(value, &parameter_type)| value.coerce(parameter_type, scope))
+            .map(|(argument, &parameter_type)| scope.coerced(&argument, parameter_type))
             .collect();
         Function::call(
             &signature.mlir_name,

@@ -786,7 +786,7 @@ dependencies = [
  "bitflags",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.10.5",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -2595,7 +2595,7 @@ checksum = "7ebb8d8732c6a6df3d8f032a82911cfc747e00efb95cc46e8d0acd5b5b88570c"
 [[package]]
 name = "melior"
 version = "0.26.9"
-source = "git+https://github.com/NomicFoundation/melior?rev=193e8252ca5d2774555b3e2f29ec8b97f28f5d38#193e8252ca5d2774555b3e2f29ec8b97f28f5d38"
+source = "git+https://github.com/NomicFoundation/melior?rev=52fa2611004e9553803de8dd5e6d44bb327af2da#52fa2611004e9553803de8dd5e6d44bb327af2da"
 dependencies = [
  "melior-macro",
  "mlir-sys",
@@ -2604,7 +2604,7 @@ dependencies = [
 [[package]]
 name = "melior-macro"
 version = "0.19.5"
-source = "git+https://github.com/NomicFoundation/melior?rev=193e8252ca5d2774555b3e2f29ec8b97f28f5d38#193e8252ca5d2774555b3e2f29ec8b97f28f5d38"
+source = "git+https://github.com/NomicFoundation/melior?rev=52fa2611004e9553803de8dd5e6d44bb327af2da#52fa2611004e9553803de8dd5e6d44bb327af2da"
 dependencies = [
  "comrak",
  "convert_case 0.11.0",
