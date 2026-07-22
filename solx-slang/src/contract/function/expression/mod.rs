@@ -199,40 +199,36 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         )
     }
 
-    /// Lowers a multi-value expression to values coerced to `targets`, folding a string-literal tuple
-    /// element to its bytes-like constant the way `coerced` does for a scalar. A tuple coerces each
-    /// element expression; a lone target folds the whole expression; any other expression
-    /// materialises its results and coerces them. A `None` target passes its value through, for a
-    /// blank destructuring slot.
+    /// Lowers a multi-value expression to values coerced to `targets`, a nested tuple flattening into
+    /// the same list as `tuple_values` and a string-literal element folding to its bytes-like constant
+    /// as `coerced` does. A call or conditional coerces each result it yields; a `None` target passes
+    /// its value through, for a blank destructuring slot.
     pub fn coerced_values(
         &mut self,
         node: &Expression,
         targets: &[Option<MlirType<'context>>],
     ) -> Vec<Value<'context>> {
         match node {
-            Expression::TupleExpression(tuple) => tuple
-                .items()
-                .iter()
-                .enumerate()
-                .map(|(index, item)| {
+            Expression::TupleExpression(tuple) => {
+                let mut values = Vec::with_capacity(targets.len());
+                for item in tuple.items().iter() {
                     let element = item.expression().expect("slang validates tuple elements");
-                    match targets[index] {
-                        Some(target) => self.coerced(&element, target),
-                        None => self.expression(&element),
-                    }
+                    values.extend(self.coerced_values(&element, &targets[values.len()..]));
+                }
+                values
+            }
+            Expression::FunctionCallExpression(_) | Expression::ConditionalExpression(_) => self
+                .expression_values(node)
+                .into_iter()
+                .zip(targets)
+                .map(|(value, target)| match target {
+                    Some(target) => value.coerce(*target, self),
+                    None => value,
                 })
                 .collect(),
-            _ => match targets {
-                [Some(target)] => vec![self.coerced(node, *target)],
-                _ => self
-                    .expression_values(node)
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, value)| match targets[index] {
-                        Some(target) => value.coerce(target, self),
-                        None => value,
-                    })
-                    .collect(),
+            _ => match targets[0] {
+                Some(target) => vec![self.coerced(node, target)],
+                None => vec![self.expression(node)],
             },
         }
     }

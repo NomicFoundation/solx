@@ -18,7 +18,16 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     pub fn assignment(&mut self, node: &AssignmentExpression) -> Option<Value<'context>> {
         let places = self.expression_places(&node.left_operand());
         if places.len() > 1 {
-            let values = self.expression_values(&node.right_operand());
+            let targets: Vec<_> = places
+                .iter()
+                .map(|&element| {
+                    let Some((place, element_type)) = element else {
+                        return None;
+                    };
+                    (place.r#type() != element_type).then_some(element_type)
+                })
+                .collect();
+            let values = self.coerced_values(&node.right_operand(), &targets);
             for (place, value) in places.into_iter().zip(values) {
                 let Some((place, element_type)) = place else {
                     continue;
@@ -26,7 +35,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 if place.r#type() == element_type {
                     place.copy_from(value, self);
                 } else {
-                    place.store(value.coerce(element_type, self), self);
+                    place.store(value, self);
                 }
             }
             return None;
