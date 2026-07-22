@@ -431,7 +431,7 @@ impl Call {
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// `arr.push()` is the sole call assignable in place position; the slot it grows is the value the
-    /// push emits, and the element type is the call's own.
+    /// push emits, and its element type is that slot's pointee.
     pub fn function_call_place(
         &mut self,
         node: &FunctionCallExpression,
@@ -440,6 +440,6 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             .into_iter()
             .next()
             .expect("an array push in place position yields the new element's slot");
-        (Place::from(slot), self.typing(node.get_type()))
+        (Place::from(slot), slot.r#type().element_type(0))
     }
 }
