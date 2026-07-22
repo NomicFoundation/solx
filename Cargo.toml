@@ -42,7 +42,7 @@ authors = [
     "Nomic Foundation <alex@nomic.foundation>",
 ]
 edition = "2024"
-version = "0.1.5"
+version = "0.1.6"
 
 [workspace.dependencies]
 # Error handling
