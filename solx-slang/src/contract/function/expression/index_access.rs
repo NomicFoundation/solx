@@ -15,6 +15,9 @@ use crate::scope::function::FunctionScope;
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// `b[i]` on fixed bytes indexes the word directly; everything else loads from its place.
     pub fn index_access(&mut self, node: &IndexAccessExpression) -> Value<'context> {
+        if node.is_slice() {
+            return self.index_slice(node);
+        }
         let base_type = node
             .operand()
             .get_type()
@@ -37,10 +40,6 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         &mut self,
         node: &IndexAccessExpression,
     ) -> (Place<'context>, MlirType<'context>) {
-        if node.end().is_some() {
-            unimplemented!("range index (a[i:j]) is not yet supported");
-        }
-
         let base = node.operand();
         let base_type = base
             .get_type()
@@ -78,5 +77,23 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 )
             }
         }
+    }
+
+    /// `a[start:end]` on a calldata array or `bytes`, defaulting an omitted `start` to zero and an
+    /// omitted `end` to the length.
+    fn index_slice(&mut self, node: &IndexAccessExpression) -> Value<'context> {
+        let base = self.expression(&node.operand());
+        let start = match node.start() {
+            Some(start) => self.expression(&start),
+            None => Value::zero(
+                MlirType::unsigned(self.melior, solx_utils::BIT_LENGTH_FIELD),
+                self,
+            ),
+        };
+        let end = match node.end() {
+            Some(end) => self.expression(&end),
+            None => base.length(self),
+        };
+        base.slice(start, end, self)
     }
 }

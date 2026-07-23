@@ -30,8 +30,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     }
 
     /// A single-typed variable declaration. An explicit initializer is evaluated before the slot is
-    /// allocated, matching solc's order; an absent one default-initializes the freshly allocated
-    /// slot, which every scalar value type zero-fills.
+    /// allocated, matching solc's order; an absent one default-initializes the slot to the type's
+    /// default value.
     pub fn single_typed_declaration(&mut self, node: &SingleTypedDeclaration) {
         let declared_type = self.typing(node.declaration().get_type());
         match node.value() {
@@ -41,12 +41,11 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                     value
                 });
             }
-            None if declared_type.is_scalar() => {
+            None => {
                 self.define_local(node.declaration().name().name(), declared_type, |scope| {
-                    Value::zero(declared_type, scope)
+                    Value::default_initialized(declared_type, scope)
                 });
             }
-            None => unimplemented!("default-initialization for non-scalar type {declared_type}"),
         }
     }
 

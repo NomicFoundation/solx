@@ -31,7 +31,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             ),
         };
         let condition = self.expression(&node.operand()).is_nonzero(self);
-        let slots: Vec<Place<'context>> = element_types
+        let places: Vec<Place<'context>> = element_types
             .iter()
             .map(|&element_type| Place::stack(element_type, self))
             .collect();
@@ -41,19 +41,19 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             (else_block, node.false_expression()),
         ] {
             self.region(block, |scope| {
-                for ((slot, &element_type), value) in slots
+                for ((place, &element_type), value) in places
                     .iter()
                     .zip(&element_types)
                     .zip(scope.expression_values(&branch))
                 {
-                    slot.store(value.coerce(element_type, scope), scope);
+                    place.store(value.coerce(element_type, scope), scope);
                 }
             });
         }
-        slots
+        places
             .iter()
             .zip(&element_types)
-            .map(|(slot, &element_type)| slot.load(element_type, self))
+            .map(|(place, &element_type)| place.load(element_type, self))
             .collect()
     }
 

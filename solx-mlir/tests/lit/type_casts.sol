@@ -25,6 +25,18 @@
 // CHECK: sol.func @{{.*narrow_bytes.*}}
 // CHECK:   sol.bytes_cast %{{.*}} : !sol.fixedbytes<32> to !sol.fixedbytes<16>
 
+// CHECK: sol.func @{{.*memory_to_bytes32.*}}
+// CHECK:   sol.dyn_bytes_to_fixedbytes %{{.*}} : <Memory> to <32>
+
+// CHECK: sol.func @{{.*calldata_to_bytes32.*}}
+// CHECK:   sol.dyn_bytes_to_fixedbytes %{{.*}} : <CallData> to <32>
+
+// CHECK: sol.func @{{.*bytes_to_memory.*}}
+// CHECK:   sol.data_loc_cast %{{.*}} : !sol.string<CallData>, !sol.string<Memory>
+
+// CHECK: sol.func @{{.*array_to_memory.*}}
+// CHECK:   sol.data_loc_cast %{{.*}} : !sol.array<? x ui256, CallData>, !sol.array<? x ui256, Memory>
+
 contract C {
     function uint8_to_uint256(uint8 x) public pure returns (uint256) {
         return uint256(x);
@@ -56,5 +68,22 @@ contract C {
 
     function narrow_bytes(bytes32 x) public pure returns (bytes16) {
         return bytes16(x);
+    }
+
+    function memory_to_bytes32(bytes memory b) public pure returns (bytes32) {
+        return bytes32(b);
+    }
+
+    function calldata_to_bytes32(bytes calldata b) external pure returns (bytes32) {
+        return bytes32(b);
+    }
+
+    function bytes_to_memory(bytes calldata source) external pure returns (uint256) {
+        bytes memory copy = bytes(source);
+        return copy.length;
+    }
+
+    function array_to_memory(uint256[] calldata source) external pure returns (uint256[] memory) {
+        return uint256[](source);
     }
 }

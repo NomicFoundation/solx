@@ -122,6 +122,10 @@ unsafe extern "C" {
     /// 2=Memory, 3=Stack, 4=Immutable, 5=Transient).
     pub fn solxCreateStringType(context: MlirContext, data_location: u32) -> mlir_sys::MlirType;
 
+    /// Creates the `sol::ByteType` singleton (`!sol.byte`), the element a dynamic `bytes`
+    /// push yields.
+    pub fn solxCreateByteType(context: MlirContext) -> mlir_sys::MlirType;
+
     /// Creates a `sol::FixedBytesType` of the given byte width.
     pub fn solxCreateFixedBytesType(context: MlirContext, size: u32) -> mlir_sys::MlirType;
 
@@ -158,6 +162,10 @@ unsafe extern "C" {
     /// Whether the type is a `sol::AddressType`, regardless of payability.
     pub fn solxIsAddressType(ty: mlir_sys::MlirType) -> bool;
 
+    /// Whether the type is a `sol::StringType`, the shared representation of dynamic
+    /// `bytes` and `string`.
+    pub fn solxIsStringType(ty: mlir_sys::MlirType) -> bool;
+
     /// Whether the type is bytes-like: `sol::FixedBytesType` or `sol::ByteType`.
     pub fn solxIsBytesLikeType(ty: mlir_sys::MlirType) -> bool;
 
@@ -167,6 +175,10 @@ unsafe extern "C" {
     /// Whether the type is a scalar value type: integer, enum, function reference,
     /// address-like, or bytes-like.
     pub fn solxIsScalarType(ty: mlir_sys::MlirType) -> bool;
+
+    /// Returns the data location of a located reference type, in the same encoding the
+    /// type constructors take.
+    pub fn solxTypeDataLocation(ty: mlir_sys::MlirType) -> u32;
 
     /// Returns the element type of a non-mapping reference type. For
     /// struct types, `struct_field_idx` selects the member.

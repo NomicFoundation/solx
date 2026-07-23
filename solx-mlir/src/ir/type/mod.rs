@@ -13,6 +13,8 @@ use melior::ir::r#type::IntegerType;
 use num::BigInt;
 use num::bigint::Sign;
 
+use solx_utils::DataLocation;
+
 use crate::IntoOds;
 use crate::ffi;
 
@@ -107,6 +109,12 @@ impl<'context> Type<'context> {
         })
     }
 
+    /// The `sol::ByteType` singleton (`!sol.byte`), the element a dynamic `bytes` push yields,
+    /// distinct from the one-byte `bytes1`.
+    pub fn byte(context: &'context melior::Context) -> Self {
+        Self::new(unsafe { MlirType::from_raw(ffi::solxCreateByteType(context.to_raw())) })
+    }
+
     /// A `sol::FixedBytesType` of the given byte width.
     pub fn fixed_bytes(context: &'context melior::Context, width: u32) -> Self {
         Self::new(unsafe {
@@ -185,6 +193,12 @@ impl<'context> Type<'context> {
         unsafe { ffi::solxIsAddressType(self.inner.to_raw()) }
     }
 
+    /// Whether this is a `sol::StringType`, the shared representation of dynamic `bytes` and
+    /// `string`.
+    pub fn is_string(self) -> bool {
+        unsafe { ffi::solxIsStringType(self.inner.to_raw()) }
+    }
+
     /// Whether this is a bytes-like type: `sol::FixedBytesType` or `sol::ByteType`.
     pub fn is_bytes_like(self) -> bool {
         unsafe { ffi::solxIsBytesLikeType(self.inner.to_raw()) }
@@ -200,6 +214,12 @@ impl<'context> Type<'context> {
     /// bytes-like.
     pub fn is_scalar(self) -> bool {
         unsafe { ffi::solxIsScalarType(self.inner.to_raw()) }
+    }
+
+    /// The data location a located reference type carries, decoded from the constructors' FFI
+    /// encoding.
+    pub fn data_location(self) -> DataLocation {
+        DataLocation::from(unsafe { ffi::solxTypeDataLocation(self.inner.to_raw()) })
     }
 
     /// The integer attribute of `value` at this type, built via the arbitrary-width FFI constructor

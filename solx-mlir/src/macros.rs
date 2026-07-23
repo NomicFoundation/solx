@@ -345,14 +345,14 @@ macro_rules! sol_ops {
     };
 
     (
-        Value :: $base:ident | $flagged:ident ($($argument:ident : $kind:ident),* $(,)?)
-        -> value { $operation:ident $($chain:tt)* } flagged .$setter:ident ;
+        $receiver:ident :: $base:ident | $flagged:ident ($($argument:ident : $kind:ident),* $(,)?)
+        -> $disposition:ident { $operation:ident $($chain:tt)* } flagged .$setter:ident ;
         $($rest:tt)*
     ) => {
-        sol_ops!(Value :: $base ($($argument : $kind),*) -> value { $operation $($chain)* });
+        sol_ops!($receiver :: $base ($($argument : $kind),*) -> $disposition { $operation $($chain)* });
         sol_ops!(
-            Value :: $flagged ($($argument : $kind),*)
-            -> value { $operation $($chain)* .$setter(unit_flag) }
+            $receiver :: $flagged ($($argument : $kind),*)
+            -> $disposition { $operation $($chain)* .$setter(unit_flag) }
         );
         sol_ops!($($rest)*);
     };

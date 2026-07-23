@@ -24,6 +24,18 @@
 // CHECK: sol.func @{{.*delete_local.*}}
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Stack>
 
+// CHECK: sol.func @{{.*delete_memory_struct.*}}
+// CHECK:   sol.malloc zero_init : !sol.struct<(ui256, ui256), Memory>
+// CHECK:   sol.store %{{.*}}, %{{.*}} : !sol.struct<(ui256, ui256), Memory>, !sol.ptr<!sol.struct<(ui256, ui256), Memory>, Stack>
+
+// CHECK: sol.func @{{.*delete_memory_array.*}}
+// CHECK:   sol.malloc zero_init : !sol.array<? x ui256, Memory>
+// CHECK:   sol.store %{{.*}}, %{{.*}} : !sol.array<? x ui256, Memory>, !sol.ptr<!sol.array<? x ui256, Memory>, Stack>
+
+// CHECK: sol.func @{{.*delete_memory_string.*}}
+// CHECK:   sol.malloc : !sol.string<Memory>
+// CHECK:   sol.store %{{.*}}, %{{.*}} : !sol.string<Memory>, !sol.ptr<!sol.string<Memory>, Stack>
+
 contract C {
     uint256 scalar;
     bytes32 word;
@@ -64,5 +76,17 @@ contract C {
     function delete_local(uint256 value) public pure returns (uint256) {
         delete value;
         return value;
+    }
+
+    function delete_memory_struct(S memory value) public pure {
+        delete value;
+    }
+
+    function delete_memory_array(uint256[] memory value) public pure {
+        delete value;
+    }
+
+    function delete_memory_string(string memory value) public pure {
+        delete value;
     }
 }

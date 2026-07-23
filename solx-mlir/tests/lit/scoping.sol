@@ -9,8 +9,11 @@
 // CHECK:   sol.constant 42
 // CHECK:   %[[X_PTR:.*]] = sol.alloca : !sol.ptr<ui256, Stack>
 // CHECK:   sol.store %{{.*}}, %[[X_PTR]]
-// CHECK:   sol.constant 0 : ui256
-// CHECK:   sol.return %{{.*}} : ui256
+// CHECK:   %[[Z_PTR:.*]] = sol.alloca : !sol.ptr<ui256, Stack>
+// CHECK:   %[[ZERO:.*]] = sol.constant 0 : ui256
+// CHECK:   sol.store %[[ZERO]], %[[Z_PTR]]
+// CHECK:   %[[R:.*]] = sol.load %[[Z_PTR]]
+// CHECK:   sol.return %[[R]] : ui256
 
 contract C {
     function nested_scope() public pure returns (uint256) {
