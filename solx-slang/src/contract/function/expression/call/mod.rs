@@ -112,7 +112,7 @@ impl Call {
     }
 
     /// Builds the struct value in memory: allocates the call's result type and stores each
-    /// argument, coerced to its field type, through the field's address.
+    /// argument, converted to its field type, through the field's address.
     fn struct_construction<'context>(
         struct_definition: &StructDefinition,
         call: &FunctionCallExpression,
@@ -131,7 +131,7 @@ impl Call {
                 Some(solx_utils::DataLocation::Memory),
             );
             let field_address = struct_address.gep_field(index, field_type, scope);
-            field_address.store(scope.coerced(&argument, field_type), scope);
+            field_address.store(scope.converted(&argument, field_type), scope);
         }
         vec![struct_address.into()]
     }
@@ -187,7 +187,7 @@ impl Call {
                     Some(expression) => {
                         let string_memory_type =
                             MlirType::string(scope.melior, solx_utils::DataLocation::Memory);
-                        let message_value = scope.coerced(&expression, string_memory_type);
+                        let message_value = scope.converted(&expression, string_memory_type);
                         (
                             vec![message_value],
                             Some(Self::ERROR_STRING_SIGNATURE.to_owned()),
@@ -247,13 +247,22 @@ impl Call {
                     values[0], values[1], values[2], values[3], scope,
                 ))
             }
-            BuiltIn::Addmod => {
+            BuiltIn::Addmod => Some(scope.modular(arguments, Value::addmod)),
+            BuiltIn::Mulmod => Some(scope.modular(arguments, Value::mulmod)),
+            BuiltIn::Blockhash => {
+                let field = MlirType::field(scope.melior);
                 let values = scope.positional_arguments(arguments);
-                Some(Value::addmod(values[0], values[1], values[2], scope))
+                Some(Value::blockhash(values[0].convert(field, scope), scope))
             }
-            BuiltIn::Mulmod => {
+            BuiltIn::Blobhash => {
+                let field = MlirType::field(scope.melior);
                 let values = scope.positional_arguments(arguments);
-                Some(Value::mulmod(values[0], values[1], values[2], scope))
+                Some(Value::blobhash(values[0].convert(field, scope), scope))
+            }
+            BuiltIn::Selfdestruct => {
+                let values = scope.positional_arguments(arguments);
+                Value::selfdestruct(values[0], scope);
+                None
             }
             _ => unimplemented!("built-in {built_in:?} is not yet supported in call position"),
         }
@@ -261,7 +270,7 @@ impl Call {
 
     /// Resolves the member to its built-in and lowers it: the array mutators lower to `sol.pop` and
     /// `sol.push`, where the no-argument `arr.push()` yields the new element's slot reference while
-    /// `arr.push(x)` stores the coerced value into that slot and, like `arr.pop()` and `transfer`,
+    /// `arr.push(x)` stores the converted value into that slot and, like `arr.pop()` and `transfer`,
     /// produces no value. `abi.decode` takes its result type from `call` rather than from its
     /// operands, which is why the full call expression is passed alongside the arguments. A member
     /// resolving to no built-in, or to one not lowered yet, is the sole unsupported-member-call site.
@@ -360,7 +369,7 @@ impl Call {
                 if let Type::Bytes(_) = &base_slang_type
                     && let Some(value_argument) = &value_argument
                 {
-                    let appended = scope.coerced(
+                    let appended = scope.converted(
                         value_argument,
                         MlirType::fixed_bytes(scope.melior, solx_utils::BYTE_LENGTH_BYTE as u32),
                     );
@@ -393,7 +402,7 @@ impl Call {
                 let Some(value_argument) = value_argument else {
                     return Some(new_slot);
                 };
-                Place::from(new_slot).store(scope.coerced(&value_argument, element_type), scope);
+                Place::from(new_slot).store(scope.converted(&value_argument, element_type), scope);
                 None
             }
             Some(BuiltIn::BytesConcat | BuiltIn::StringConcat) => {
@@ -403,7 +412,7 @@ impl Call {
         }
     }
 
-    /// Resolves the callee's pre-registered MLIR signature by node id and coerces each argument to
+    /// Resolves the callee's pre-registered MLIR signature by node id and converts each argument to
     /// its declared parameter type before `sol.call`.
     fn function<'context>(
         function_definition: &FunctionDefinition,
@@ -414,14 +423,14 @@ impl Call {
             .contract
             .source_unit
             .function_signature(function_definition.node_id());
-        let coerced: Vec<Value<'context>> = arguments
+        let converted: Vec<Value<'context>> = arguments
             .iter()
             .zip(&signature.parameter_types)
-            .map(|(argument, &parameter_type)| scope.coerced(&argument, parameter_type))
+            .map(|(argument, &parameter_type)| scope.converted(&argument, parameter_type))
             .collect();
         Function::call(
             &signature.mlir_name,
-            &coerced,
+            &converted,
             &signature.return_types,
             scope,
         )

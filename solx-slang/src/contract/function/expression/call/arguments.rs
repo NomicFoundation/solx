@@ -16,7 +16,7 @@ use solx_mlir::Value;
 use crate::scope::function::FunctionScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// Emits each argument in the definition's parameter order, coerced to and paired with its
+    /// Emits each argument in the definition's parameter order, converted to and paired with its
     /// parameter.
     pub fn arguments_declaration(
         &mut self,
@@ -32,7 +32,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             .zip(ordered)
             .map(|(parameter, argument)| {
                 let parameter_type = self.typing(parameter.get_type());
-                let value = self.coerced(&argument, parameter_type);
+                let value = self.converted(&argument, parameter_type);
                 (parameter, value)
             })
             .collect()

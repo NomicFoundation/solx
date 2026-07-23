@@ -39,6 +39,24 @@ impl<'context> Place<'context> {
         )
     }
 
+    /// Assigns `value` under the reference-vs-value idiom: a reference-typed place is its own address
+    /// and takes a `sol.copy` that bridges type and data location, while a scalar slot stores the
+    /// value converted to `element_type`. Yields the value the assignment expression evaluates to.
+    pub fn assign(
+        self,
+        value: Value<'context>,
+        element_type: Type<'context>,
+        context: &Context<'context>,
+    ) -> Value<'context> {
+        if self.r#type() == element_type {
+            self.copy_from(value, context);
+            return Value::from(self);
+        }
+        let value = value.convert(element_type, context);
+        self.store(value, context);
+        value
+    }
+
     /// The pointer type `!sol.ptr<T, Loc>`.
     pub fn r#type(self) -> Type<'context> {
         Type::new(self.inner.r#type())
