@@ -61,7 +61,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             unreachable!("slang StructType always references a Struct definition");
         };
 
-        let member_name = node.member().name();
+        let member = node.member();
+        let member_name = member.name();
         let field_index = struct_definition
             .members()
             .iter()

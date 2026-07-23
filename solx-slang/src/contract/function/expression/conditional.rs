@@ -16,19 +16,16 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// arm runs. Each arm stores its element values into per-element stack slots, one for a scalar
     /// result and one per element for a tuple, loaded after the merge.
     pub fn conditional_values(&mut self, node: &ConditionalExpression) -> Vec<Value<'context>> {
-        let element_types: Vec<Type<'context>> = match node.get_type() {
-            Some(SlangType::Tuple(tuple_type)) => tuple_type
+        let element_types: Vec<Type<'context>> = match node
+            .get_type()
+            .expect("slang types every conditional expression")
+        {
+            SlangType::Tuple(tuple_type) => tuple_type
                 .types()
                 .iter()
                 .map(|element_type| self.typing(Some(element_type.clone())))
                 .collect(),
-            Some(scalar) => vec![self.typing(Some(scalar))],
-            // TODO: Slang does not resolve the type of a conditional whose arms differ in shape,
-            // such as a call versus a tuple literal, though the common type is well-defined; remove
-            // this arm once Slang v2 types such conditionals.
-            None => unimplemented!(
-                "conditional with heterogeneously-shaped arms: Slang does not resolve its type"
-            ),
+            scalar => vec![self.typing(Some(scalar))],
         };
         let condition = self.expression(&node.operand()).is_nonzero(self);
         let places: Vec<Place<'context>> = element_types
@@ -46,7 +43,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                     .zip(&element_types)
                     .zip(scope.expression_values(&branch))
                 {
-                    place.store(value.coerce(element_type, scope), scope);
+                    place.store(value.convert(element_type, scope), scope);
                 }
             });
         }

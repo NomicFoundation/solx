@@ -122,6 +122,12 @@ sol_ops! {
     Value::ripemd160(data: value) -> value {
         Ripemd160Operation.data(data).result(fixed_bytes(20))
     }
+    Value::blockhash(block_number: value) -> value {
+        BlockHashOperation.block_number(block_number).val(fixed_bytes(32))
+    }
+    Value::blobhash(index: value) -> value {
+        BlobHashOperation.idx(index).val(fixed_bytes(32))
+    }
 
     Value::balance(address: value) -> value {
         BalanceOperation.cont_addr(address).out(field())
@@ -137,6 +143,9 @@ sol_ops! {
     }
     Value::transfer(address: value, amount: value) {
         TransferOperation.addr(address).val(amount)
+    }
+    Value::selfdestruct(recipient: value) {
+        SelfdestructOperation.recipient(recipient)
     }
 
     Value::block_number() -> value { BlockNumberOperation.val(field()) }

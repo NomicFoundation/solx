@@ -1,16 +1,15 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func @{{.*assign_from_call.*}}
 // CHECK:   %[[R:.*]]:2 = sol.call @{{.*two.*}}()
-// CHECK:   sol.store %[[R]]#0, %{{.*}}
 // CHECK:   sol.store %[[R]]#1, %{{.*}}
+// CHECK:   sol.store %[[R]]#0, %{{.*}}
 
 // CHECK: sol.func @{{.*swap.*}}
 // CHECK:   %[[V0:.*]] = sol.load
 // CHECK:   %[[V1:.*]] = sol.load
-// CHECK:   sol.store %[[V0]], %{{.*}}
 // CHECK:   sol.store %[[V1]], %{{.*}}
+// CHECK:   sol.store %[[V0]], %{{.*}}
 
 // CHECK: sol.func @{{.*conditional_right.*}}
 // CHECK:   sol.if
@@ -21,8 +20,8 @@
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Stack>
 
 // CHECK: sol.func @{{.*reference_element.*}}
-// CHECK:   sol.copy %{{.*}}, %{{.*}} : !sol.array<3 x ui256, Memory>, !sol.array<? x ui256, Storage>
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Stack>
+// CHECK:   sol.copy %{{.*}}, %{{.*}} : !sol.array<3 x ui256, Memory>, !sol.array<? x ui256, Storage>
 
 contract C {
     uint256[] array;

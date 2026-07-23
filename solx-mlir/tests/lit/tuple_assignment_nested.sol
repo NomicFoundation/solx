@@ -6,13 +6,13 @@
 // CHECK: sol.func @{{.*parenthesized_swap.*}}
 // CHECK:   %[[B:.*]] = sol.load
 // CHECK:   %[[A:.*]] = sol.load
-// CHECK:   sol.store %[[B]], %{{.*}}
 // CHECK:   sol.store %[[A]], %{{.*}}
+// CHECK:   sol.store %[[B]], %{{.*}}
 
 // CHECK: sol.func @{{.*nested.*}}
-// CHECK:   sol.cast %c1_ui8
-// CHECK:   sol.cast %c2_ui8
 // CHECK:   sol.cast %c3_ui8
+// CHECK:   sol.cast %c2_ui8
+// CHECK:   sol.cast %c1_ui8
 
 contract C {
     function parenthesized_swap(uint256 a, uint256 b) public pure returns (uint256, uint256) {

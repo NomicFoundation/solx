@@ -147,7 +147,7 @@ macro_rules! sol_predicate_attribute {
     };
 }
 
-/// Coerces an op-builder setter argument to the type the ODS setter expects.
+/// Converts an op-builder setter argument to the type the ODS setter expects.
 ///
 /// A local trait rather than `From`/`Into`: the orphan rule forbids implementing `From` for the
 /// foreign melior setter types the domain conversions target, so the macros route every argument
@@ -211,7 +211,7 @@ macro_rules! sol_ops {
         $receiver.r#type().gep_result_type($element)
     };
     (@arg [$context:ident] [$receiver:tt] field()) => {
-        $crate::Type::unsigned($context.melior, solx_utils::BIT_LENGTH_FIELD)
+        $crate::Type::field($context.melior)
     };
     (@arg [$context:ident] [$receiver:tt] address()) => {
         $crate::Type::address($context.melior, false)

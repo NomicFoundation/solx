@@ -158,10 +158,11 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         }
     }
 
-    /// Emits an expression and coerces its value to `target_type`. A string literal reaching a
-    /// bytes-like target folds to that constant directly, since a materialized `sol.string_lit`
-    /// value cannot be reinterpreted.
-    pub fn coerced(
+    /// Emits an expression and converts its value to `target_type`, be it an implicit reconciliation
+    /// to the binder's type or an explicit `T(x)` cast. A string literal reaching a bytes-like target
+    /// folds to that constant directly, since a materialized `sol.string_lit` value cannot be
+    /// reinterpreted.
+    pub fn converted(
         &mut self,
         expression: &Expression,
         target_type: MlirType<'context>,
@@ -171,40 +172,28 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         {
             return Value::left_aligned_bytes(literal.value(), target_type, self);
         }
-        self.expression(expression).coerce(target_type, self)
-    }
-
-    /// Emits an expression and converts its value to `target_type` through an explicit `T(x)` cast.
-    pub fn converted(
-        &mut self,
-        expression: &Expression,
-        target_type: MlirType<'context>,
-    ) -> Value<'context> {
-        if let Expression::StringExpression(_) = expression {
-            return self.coerced(expression, target_type);
-        }
         self.expression(expression).convert(target_type, self)
     }
 
-    /// Evaluates both operands of a binary expression and coerces them to the binder's result type.
-    pub fn coerced_operands(
+    /// Evaluates both operands right-first for legacy compatibility, converts them to the binder's
+    /// common type, and returns them in source order.
+    pub fn converted_operands(
         &mut self,
         slang_type: Option<Type>,
         left: &Expression,
         right: &Expression,
     ) -> (Value<'context>, Value<'context>) {
         let result_type = self.typing(slang_type);
-        (
-            self.coerced(left, result_type),
-            self.coerced(right, result_type),
-        )
+        let right = self.converted(right, result_type);
+        let left = self.converted(left, result_type);
+        (left, right)
     }
 
-    /// Lowers a multi-value expression to values coerced to `targets`, a nested tuple flattening into
+    /// Lowers a multi-value expression to values converted to `targets`, a nested tuple flattening into
     /// the same list as `tuple_values` and a string-literal element folding to its bytes-like constant
-    /// as `coerced` does. A call or conditional coerces each result it yields; a `None` target passes
+    /// as `converted` does. A call or conditional converts each result it yields; a `None` target passes
     /// its value through, for a blank destructuring slot.
-    pub fn coerced_values(
+    pub fn converted_values(
         &mut self,
         node: &Expression,
         targets: &[Option<MlirType<'context>>],
@@ -214,7 +203,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 let mut values = Vec::with_capacity(targets.len());
                 for item in tuple.items().iter() {
                     let element = item.expression().expect("slang validates tuple elements");
-                    values.extend(self.coerced_values(&element, &targets[values.len()..]));
+                    values.extend(self.converted_values(&element, &targets[values.len()..]));
                 }
                 values
             }
@@ -223,12 +212,12 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 .into_iter()
                 .zip(targets)
                 .map(|(value, target)| match target {
-                    Some(target) => value.coerce(*target, self),
+                    Some(target) => value.convert(*target, self),
                     None => value,
                 })
                 .collect(),
             _ => match targets[0] {
-                Some(target) => vec![self.coerced(node, target)],
+                Some(target) => vec![self.converted(node, target)],
                 None => vec![self.expression(node)],
             },
         }
