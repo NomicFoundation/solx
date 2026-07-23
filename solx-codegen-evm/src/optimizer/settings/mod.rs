@@ -216,6 +216,13 @@ impl Settings {
     }
 
     ///
+    /// Whether the size fallback is active, i.e. enabled and already switched to the size level.
+    ///
+    pub fn is_fallback_to_size_active(&self) -> bool {
+        self.is_fallback_to_size_enabled && self.level_middle_end_size == SizeLevel::Z
+    }
+
+    ///
     /// Switches the optimization modes to the size fallback mode.
     ///
     pub fn switch_to_size_fallback(&mut self) {
@@ -223,6 +230,7 @@ impl Settings {
         self.level_middle_end_size = SizeLevel::Z;
         self.level_back_end = inkwell::OptimizationLevel::Aggressive;
         self.enable_fallback_to_size();
+        self.spill_area_size = None;
     }
 
     ///

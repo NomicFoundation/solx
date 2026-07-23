@@ -231,7 +231,7 @@ impl Contract {
                         selector_llvm_assembly,
                     ),
                     output_bytecode,
-                    false,
+                    optimizer_settings.is_fallback_to_size_active(),
                     &mut profiler,
                 )?;
                 let (immutables_out, metadata_out) = match code_segment {
@@ -378,7 +378,7 @@ impl Contract {
                         selector_llvm_assembly,
                     ),
                     output_bytecode,
-                    false,
+                    optimizer_settings.is_fallback_to_size_active(),
                     &mut profiler,
                 )?;
                 let dependencies = match code_segment {
@@ -474,7 +474,7 @@ impl Contract {
                         selector_llvm_assembly,
                     ),
                     output_bytecode,
-                    false,
+                    optimizer_settings.is_fallback_to_size_active(),
                     &mut profiler,
                 )?;
                 let (immutables_out, metadata_out) = match code_segment {
@@ -583,7 +583,7 @@ impl Contract {
                         selector_llvm_assembly,
                     ),
                     output_bytecode,
-                    false,
+                    optimizer_settings.is_fallback_to_size_active(),
                     &mut profiler,
                 )?;
                 let (immutables_out, metadata_out) = match code_segment {

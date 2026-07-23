@@ -816,21 +816,26 @@ impl Project {
         pool: &EVMProcessPool,
         job: &mut EVMProcessJob,
     ) -> crate::Result<EVMProcessOutput> {
-        let mut pass_count = 0;
+        let mut stack_too_deep_hit = false;
         loop {
-            pass_count += 1;
             match pool.execute(job) {
                 Err(Error::StackTooDeep(stack_too_deep)) => {
-                    assert!(
-                        pass_count <= 2,
-                        "Stack too deep error is not resolved after {pass_count} passes: {stack_too_deep}"
-                    );
-
-                    if stack_too_deep.is_size_fallback {
+                    if stack_too_deep.is_size_fallback
+                        && !job.optimizer_settings.is_fallback_to_size_active()
+                    {
                         job.optimizer_settings.switch_to_size_fallback();
+                        stack_too_deep_hit = false;
+                    } else if stack_too_deep_hit {
+                        break Err(solx_standard_json::OutputError::new_error_contract(
+                            Some(job.contract_name.path.as_str()),
+                            stack_too_deep,
+                        )
+                        .into());
+                    } else {
+                        stack_too_deep_hit = true;
+                        job.optimizer_settings
+                            .set_spill_area_size(stack_too_deep.spill_area_size);
                     }
-                    job.optimizer_settings
-                        .set_spill_area_size(stack_too_deep.spill_area_size);
                 }
                 result => break result,
             }
