@@ -93,6 +93,10 @@ MlirType solxCreateStringType(MlirContext ctx, uint32_t dataLocation) {
     return wrap(mlir::sol::StringType::get(context, location));
 }
 
+MlirType solxCreateByteType(MlirContext ctx) {
+    return wrap(mlir::sol::ByteType::get(unwrap(ctx)));
+}
+
 MlirType solxCreateFixedBytesType(MlirContext ctx, uint32_t size) {
     auto *context = unwrap(ctx);
     return wrap(mlir::sol::FixedBytesType::get(context, size));
@@ -133,6 +137,10 @@ bool solxIsAddressType(MlirType ty) {
     return mlir::isa<mlir::sol::AddressType>(unwrap(ty));
 }
 
+bool solxIsStringType(MlirType ty) {
+    return mlir::isa<mlir::sol::StringType>(unwrap(ty));
+}
+
 bool solxIsBytesLikeType(MlirType ty) {
     return mlir::sol::isBytesLikeType(unwrap(ty));
 }
@@ -143,6 +151,10 @@ uint32_t solxBytesLikeTypeWidth(MlirType ty) {
 
 bool solxIsScalarType(MlirType ty) {
     return mlir::sol::isScalar(unwrap(ty));
+}
+
+uint32_t solxTypeDataLocation(MlirType ty) {
+    return static_cast<uint32_t>(mlir::sol::getDataLocation(unwrap(ty)));
 }
 
 } /* extern "C" */

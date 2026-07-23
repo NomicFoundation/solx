@@ -9,6 +9,8 @@ use num::One;
 use num::Zero;
 use num::bigint::Sign;
 
+use solx_utils::DataLocation;
+
 use crate::CmpPredicate;
 use crate::Context;
 use crate::IntoOds;
@@ -64,6 +66,27 @@ impl<'context> Value<'context> {
         Self::constant(i64::from(value), Type::boolean(context.melior), context)
     }
 
+    /// Materialises the default-initialized value of `target_type`, matching solc's default-init:
+    /// a scalar's `zero`; an allocated empty memory `bytes`/`string`; a zero-filled memory array
+    /// or struct; the `sol.default_storage` / `sol.default_calldata` designator for a storage or
+    /// calldata reference.
+    pub fn default_initialized(target_type: Type<'context>, context: &Context<'context>) -> Self {
+        if target_type.is_scalar() {
+            return Self::zero(target_type, context);
+        }
+        match target_type.data_location() {
+            DataLocation::Memory if target_type.is_string() => {
+                Place::malloc(target_type, context).into()
+            }
+            DataLocation::Memory => Place::malloc_zeroed(target_type, context).into(),
+            DataLocation::Storage => Place::default_storage(target_type, context).into(),
+            DataLocation::CallData => Place::default_calldata(target_type, context).into(),
+            other => unreachable!(
+                "a reference default-initializes in memory, storage, or calldata; got {other:?}"
+            ),
+        }
+    }
+
     /// Materialises the `bytesN` constant of a string or hex literal: `bytes` left-aligned in
     /// `target_type`'s width, right-zero-padded, built as the unsigned integer of that width and
     /// reinterpreted with `sol.bytes_cast`.
@@ -98,6 +121,9 @@ impl<'context> Value<'context> {
                 .cast(integer_type, context)
                 .bytes_cast(target_type, context);
         }
+        if !self.r#type().is_scalar() && !target_type.is_scalar() {
+            return self.data_loc_cast(target_type, context);
+        }
         self.cast(target_type, context)
     }
 
@@ -117,6 +143,9 @@ impl<'context> Value<'context> {
                 );
             }
             return self.address_cast(target_type, context);
+        }
+        if self.r#type().is_string() && target_type.is_bytes_like() {
+            return self.dyn_bytes_to_fixedbytes(target_type, context);
         }
         self.coerce(target_type, context)
     }

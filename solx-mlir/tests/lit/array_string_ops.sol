@@ -8,6 +8,23 @@
 // CHECK: sol.func {{.*}}pushEmpty
 // CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
 // CHECK-NOT: sol.store
+
+// CHECK: sol.func {{.*}}pushAssign
+// CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
+// CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
+
+// CHECK: sol.func {{.*}}pushCompound
+// CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
+// CHECK:   sol.load %{{.*}} : !sol.ptr<ui256, Storage>, ui256
+// CHECK:   sol.cadd %{{.*}}, %{{.*}} : ui256
+// CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
+
+// CHECK: sol.func {{.*}}pushByte
+// CHECK:   sol.push_string %{{.*}}, %{{.*}} : <Storage>, !sol.fixedbytes<1>
+
+// CHECK: sol.func {{.*}}pushByteEmpty
+// CHECK:   sol.push %{{.*}} : !sol.string<Storage> -> !sol.ptr<!sol.byte, Storage>
+
 // CHECK: sol.func {{.*}}popLast
 // CHECK:   sol.pop %{{.*}} : !sol.array<? x ui256, Storage>
 
@@ -27,6 +44,22 @@ contract C {
 
     function pushEmpty() public {
         arr.push();
+    }
+
+    function pushAssign(uint256 x) public {
+        arr.push() = x;
+    }
+
+    function pushCompound(uint256 x) public {
+        arr.push() += x;
+    }
+
+    function pushByte(bytes1 element) public {
+        data.push(element);
+    }
+
+    function pushByteEmpty() public {
+        data.push();
     }
 
     function popLast() public {

@@ -16,6 +16,12 @@
 // CHECK: sol.func @{{.*rebind.*}}
 // CHECK:   sol.length %{{.*}} : !sol.array<? x ui256, Storage>
 
+// CHECK: sol.func @{{.*from_calldata.*}}
+// CHECK:   sol.data_loc_cast %{{.*}} : !sol.array<? x ui256, CallData>, !sol.array<? x ui256, Memory>
+
+// CHECK: sol.func @{{.*from_storage.*}}
+// CHECK:   sol.data_loc_cast %{{.*}} : !sol.array<? x ui256, Storage>, !sol.array<? x ui256, Memory>
+
 contract C {
     uint256[3] fixed_array;
     uint256[] dynamic_array;
@@ -47,5 +53,15 @@ contract C {
     function rebind() public view returns (uint256) {
         uint256[] storage pointer = dynamic_array;
         return pointer.length;
+    }
+
+    function from_calldata(uint256[] calldata source) external pure returns (uint256) {
+        uint256[] memory copy = source;
+        return copy.length;
+    }
+
+    function from_storage() public view returns (uint256) {
+        uint256[] memory copy = dynamic_array;
+        return copy.length;
     }
 }
