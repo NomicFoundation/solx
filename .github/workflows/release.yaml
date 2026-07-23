@@ -106,10 +106,18 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           submodules: 'recursive'
+          persist-credentials: false
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
 
       - name: Prepare matrix
         id: prepare-matrix
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_WINDOWS_AMD64: ${{ github.event.inputs.release_windows_amd64 }}
+          RELEASE_MACOS_AMD64: ${{ github.event.inputs.release_macos_amd64 }}
+          RELEASE_MACOS_ARM64: ${{ github.event.inputs.release_macos_arm64 }}
+          RELEASE_LINUX_AMD64_GNU: ${{ github.event.inputs.release_linux_amd64_gnu }}
+          RELEASE_LINUX_ARM64_GNU: ${{ github.event.inputs.release_linux_arm64_gnu }}
         run: |
           # Define general matrix parameters
           WINDOWS='{"name":"Windows","runner":"windows-2025","release-suffix":"windows-amd64-gnu"}'
@@ -118,14 +126,18 @@ jobs:
           LINUX_AMD64_GNU='{"name":"Linux-AMD64-gnu","runner":"ubuntu-24.04","image":"ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15","target":"x86_64-unknown-linux-gnu","release-suffix":"linux-amd64-gnu"}'
           LINUX_ARM64_GNU='{"name":"Linux-ARM64-gnu","runner":"ubuntu-24.04-arm","image":"ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15","target":"aarch64-unknown-linux-gnu","release-suffix":"linux-arm64-gnu"}'
           # Disable platforms for non-tag builds if user requested
-          if [ '${{ github.event_name }}' = 'workflow_dispatch' ] && [ "${GITHUB_REF_TYPE}" != tag ]; then
-            [ "${{ github.event.inputs.release_windows_amd64 }}" != true ] && WINDOWS=
-            [ "${{ github.event.inputs.release_macos_amd64 }}" != true ] && MACOS_AMD64=
-            [ "${{ github.event.inputs.release_macos_arm64 }}" != true ] && MACOS_ARM64=
-            [ "${{ github.event.inputs.release_linux_amd64_gnu }}" != true ] && LINUX_AMD64_GNU=
-            [ "${{ github.event.inputs.release_linux_arm64_gnu }}" != true ] && LINUX_ARM64_GNU=
+          if [ "${EVENT_NAME}" = 'workflow_dispatch' ] && [ "${GITHUB_REF_TYPE}" != tag ]; then
+            [ "${RELEASE_WINDOWS_AMD64}" != true ] && WINDOWS=
+            [ "${RELEASE_MACOS_AMD64}" != true ] && MACOS_AMD64=
+            [ "${RELEASE_MACOS_ARM64}" != true ] && MACOS_ARM64=
+            [ "${RELEASE_LINUX_AMD64_GNU}" != true ] && LINUX_AMD64_GNU=
+            [ "${RELEASE_LINUX_ARM64_GNU}" != true ] && LINUX_ARM64_GNU=
           fi
-          PLATFORMS=(${WINDOWS} ${MACOS_AMD64} ${MACOS_ARM64} ${LINUX_AMD64_GNU} ${LINUX_ARM64_GNU})
+          # Collect only the platforms left non-empty above; disabled ones are dropped.
+          PLATFORMS=()
+          for platform in "${WINDOWS}" "${MACOS_AMD64}" "${MACOS_ARM64}" "${LINUX_AMD64_GNU}" "${LINUX_ARM64_GNU}"; do
+            [ -n "${platform}" ] && PLATFORMS+=("${platform}")
+          done
           echo "matrix={ \"include\": [ $(IFS=, ; echo "${PLATFORMS[*]}") ] }" | tee -a "${GITHUB_OUTPUT}"
 
   build:
@@ -145,6 +157,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           submodules: 'recursive'
+          persist-credentials: false
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
 
       # This step is required to checkout submodules
@@ -204,6 +217,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
+          persist-credentials: false
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
 
       # Gets the tag of the published release marked `latest`
@@ -239,6 +253,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
+          persist-credentials: false
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
 
       - name: Download artifacts
@@ -249,26 +264,31 @@ jobs:
 
       - name: Identify release name
         id: release
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          EVENT_NAME: ${{ github.event_name }}
+          PRERELEASE_SUFFIX: ${{ github.event.inputs.prerelease_suffix }}
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-          if [ '${{ github.ref_type }}' = 'tag' ]; then
+          if [ "${REF_TYPE}" = 'tag' ]; then
             VERSION_OR_SHA="${GITHUB_REF#refs/tags/}"
-            echo "release_title=${VERSION_OR_SHA}" >> $GITHUB_OUTPUT
+            echo "release_title=${VERSION_OR_SHA}" >> "$GITHUB_OUTPUT"
           else
             VERSION_OR_SHA=$(git rev-parse --short HEAD)
-            echo "full_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-            if [ '${{ github.event_name }}' = 'pull_request' ]; then
-              echo "release_title=pr-dry-run-${VERSION_OR_SHA}" >> $GITHUB_OUTPUT
+            echo "full_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            if [ "${EVENT_NAME}" = 'pull_request' ]; then
+              echo "release_title=pr-dry-run-${VERSION_OR_SHA}" >> "$GITHUB_OUTPUT"
             else
-              echo "release_title=prerelease-${VERSION_OR_SHA}-${{ github.event.inputs.prerelease_suffix }}" >> $GITHUB_OUTPUT
+              echo "release_title=prerelease-${VERSION_OR_SHA}-${PRERELEASE_SUFFIX}" >> "$GITHUB_OUTPUT"
             fi
           fi
-          echo "version_or_sha=${VERSION_OR_SHA}" >> $GITHUB_OUTPUT
+          echo "version_or_sha=${VERSION_OR_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Check release version
         if: github.ref_type == 'tag'
+        env:
+          TAG: ${{ steps.release.outputs.version_or_sha }}
         run: |
-          TAG="${{ steps.release.outputs.version_or_sha }}"
           CARGO_PACKAGE_VERSION="$(${SFW_PREFIX:-} cargo pkgid --manifest-path solx/Cargo.toml | cut -d "#" -f2)"
           # All versions must be equal
           if [ "${CARGO_PACKAGE_VERSION}" != "${TAG}" ]; then
@@ -525,6 +545,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
+          persist-credentials: false
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
 
       - name: Download release bundle
@@ -583,6 +604,7 @@ jobs:
 
       - name: Publish release
         if: github.event_name != 'pull_request'
+        # zizmor: ignore[superfluous-actions] deliberate: gh-release handles release creation, asset globbing, changelog body, and prerelease flag in one step
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           name: ${{ needs.prepare.outputs.release_title }}
@@ -632,20 +654,25 @@ jobs:
           echo "============================================"
 
       - name: Summary
+        env:
+          RELEASE_TITLE: ${{ needs.prepare.outputs.release_title }}
+          VERSION_OR_SHA: ${{ needs.prepare.outputs.version_or_sha }}
+          IS_PRERELEASE: ${{ github.ref_type != 'tag' }}
+          ENVIRONMENT: ${{ github.event_name != 'pull_request' && 'solx-release' || 'none (dry-run)' }}
         run: |
-          echo "### Release Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Title** | \`${{ needs.prepare.outputs.release_title }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Version** | \`${{ needs.prepare.outputs.version_or_sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Prerelease** | \`${{ github.ref_type != 'tag' }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Environment** | \`${{ github.event_name != 'pull_request' && 'solx-release' || 'none (dry-run)' }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Files:**" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          find releases -type f -not -name '*.sha256' | sort >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "### Release Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Title** | \`${RELEASE_TITLE}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Version** | \`${VERSION_OR_SHA}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Prerelease** | \`${IS_PRERELEASE}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Environment** | \`${ENVIRONMENT}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Files:**" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+          find releases -type f -not -name '*.sha256' | sort >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
 
   deploy-docs:
     if: github.ref_type == 'tag'
@@ -679,7 +706,8 @@ jobs:
       - name: Download and run installation script
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          curl -fsSL -o "${{ runner.temp }}/install-solx" \
-            "https://raw.githubusercontent.com/NomicFoundation/solx/${{ github.ref_name }}/install-solx"
-          bash "${{ runner.temp }}/install-solx"
+          curl -fsSL -o "${RUNNER_TEMP}/install-solx" \
+            "https://raw.githubusercontent.com/NomicFoundation/solx/${REF_NAME}/install-solx"
+          bash "${RUNNER_TEMP}/install-solx"

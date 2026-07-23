@@ -64,6 +64,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           submodules: true
+          persist-credentials: false
 
       # actions/checkout's `git clean -ffdx` doesn't recurse into submodules,
       # so on a persistent self-hosted workspace a previous run can leave
@@ -77,6 +78,7 @@ jobs:
         with:
           ref: main
           submodules: true
+          persist-credentials: false
           path: temp-solx-main
 
       - name: Checkout submodules (PR)

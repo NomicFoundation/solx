@@ -31,6 +31,8 @@ jobs:
       devcontainer: ${{ steps.filter-devcontainer.outputs.devcontainer }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter
         with:
@@ -71,6 +73,8 @@ jobs:
 
       - name: Checkout source
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
 
       - name: Shellcheck devcontainer scripts
         run: shellcheck .devcontainer/*.sh
@@ -108,6 +112,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           submodules: true
+          persist-credentials: false
 
       - name: Free disk space (Linux)
         uses: ./.github/actions/free-disk-space-linux
@@ -250,6 +255,42 @@ jobs:
         with:
           target: ${{ matrix.target || '' }}
 
+  actionlint:
+    name: Lint GitHub Actions workflows
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      # Official image bundles shellcheck + pyflakes, so `run:` linting needs no runner deps.
+      - name: Run actionlint
+        uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+        env:
+          # Gate on shellcheck warnings/errors; info-level style nits are noise.
+          SHELLCHECK_OPTS: --severity=warning
+        with:
+          args: -color
+
+  zizmor:
+    name: Audit GitHub Actions security (zizmor)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@9bcaee1dcae34154180f412e2fa69355a7cda9f6 # v2.82.6
+        with:
+          tool: zizmor@1.26.1
+      # GH_TOKEN enables the online audits (known-vulnerabilities, tag->SHA resolution).
+      - name: Run zizmor
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: zizmor --format github .github
+
   # Special job that allows some of the jobs to be skipped or failed
   # requiring others to be successful
   pr-checks:
@@ -262,6 +303,8 @@ jobs:
       - build-and-test
       - cooldown-check
       - renovate-config-check
+      - actionlint
+      - zizmor
     steps:
       - name: Decide on PR checks
         uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
