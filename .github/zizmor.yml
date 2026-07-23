@@ -1,0 +1,13 @@
+# Template injection inside a composite action is a call-site concern: an
+# action's `inputs.*` are supplied by whatever workflow invokes it, so the
+# injection risk lives where the action is called, not in the action body.
+# Every composite action here is fed only repo-controlled values (build flags,
+# targets, runner facts), never external event data. Workflows stay fully
+# gated, so any new `github.event.*`-into-`run:` sink is still caught.
+#
+# zizmor matches `ignore` entries by basename, and every composite action is
+# named `action.yml`, so this single entry exempts them all.
+rules:
+  template-injection:
+    ignore:
+      - action.yml

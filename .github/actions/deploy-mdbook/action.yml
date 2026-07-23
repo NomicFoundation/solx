@@ -9,45 +9,37 @@ inputs:
     description: 'GitHub token for deployment.'
     required: true
   version:
-    type: string
     description: "Version of the documentation to deploy"
     required: false
     default: "latest"
   docs-dir:
-    type: string
     description: "Directory containing the mdbook documentation"
     required: false
     default: "docs"
   mdbook-version:
-    type: string
     description: "Version of mdbook to use"
     required: false
     default: "latest"
   enable-tests:
-    type: boolean
-    description: "Disable mdbook tests"
+    description: "Run mdbook tests before deploying"
     required: false
-    default: true
+    default: "true"
   publish-branch:
-    type: string
     description: "Branch to publish the documentation"
     required: false
     default: "gh-pages"
   project:
-    type: string
     description: "Name of the project to deploy"
     required: false
     default: ""
   deploy:
-    type: boolean
     description: "Enable or disable the deployment"
     required: false
-    default: false
+    default: "false"
   create-latest-symlink:
-    type: boolean
     description: "Create a symlink to the latest version"
     required: false
-    default: false
+    default: "false"
 
 runs:
   using: composite

@@ -58,6 +58,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           submodules: true
+          persist-credentials: false
 
       # actions/checkout's `git clean -ffdx` doesn't recurse into submodules,
       # so on a persistent self-hosted workspace a previous run can leave
@@ -73,6 +74,7 @@ jobs:
         with:
           ref: main
           submodules: true
+          persist-credentials: false
           path: temp-solx-main
 
       - name: Checkout submodules (PR)
@@ -410,21 +412,27 @@ jobs:
       # here would misattribute it.
       - name: Fail workflow if tests or benchmarks failed
         if: always()
+        env:
+          SOLX_TESTER_TESTS_OUTCOME: ${{ steps.solx_tester_tests.outcome }}
+          SOLX_TESTER_BENCH_PR_OUTCOME: ${{ steps.solx_tester_bench_pr.outcome }}
+          BENCHMARK_CONVERTER_OUTCOME: ${{ steps.benchmark_converter.outcome }}
+          HARDHAT_TESTS_OUTCOME: ${{ steps.hardhat_tests.outcome }}
+          FOUNDRY_TESTS_OUTCOME: ${{ steps.foundry_tests.outcome }}
         run: |
           failures=()
-          if [ "${{ steps.solx_tester_tests.outcome }}" = "failure" ]; then
+          if [ "${SOLX_TESTER_TESTS_OUTCOME}" = "failure" ]; then
             failures+=("solx-tester tests")
           fi
-          if [ "${{ steps.solx_tester_bench_pr.outcome }}" = "failure" ]; then
+          if [ "${SOLX_TESTER_BENCH_PR_OUTCOME}" = "failure" ]; then
             failures+=("solx-tester benchmarks (PR)")
           fi
-          if [ "${{ steps.benchmark_converter.outcome }}" = "failure" ]; then
+          if [ "${BENCHMARK_CONVERTER_OUTCOME}" = "failure" ]; then
             failures+=("benchmark converter")
           fi
-          if [ "${{ steps.hardhat_tests.outcome }}" = "failure" ]; then
+          if [ "${HARDHAT_TESTS_OUTCOME}" = "failure" ]; then
             failures+=("hardhat tests")
           fi
-          if [ "${{ steps.foundry_tests.outcome }}" = "failure" ]; then
+          if [ "${FOUNDRY_TESTS_OUTCOME}" = "failure" ]; then
             failures+=("foundry tests")
           fi
           if [ ${#failures[@]} -ne 0 ]; then

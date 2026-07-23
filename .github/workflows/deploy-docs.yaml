@@ -46,6 +46,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
+        # zizmor: ignore[artipacked] deploy-mdbook pushes to the docs branch over `origin` using the token this checkout persists
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Deploy
