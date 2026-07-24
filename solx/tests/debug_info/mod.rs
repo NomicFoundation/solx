@@ -10,7 +10,10 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::path::Path;
+use std::process::Command;
 
+use assert_cmd::assert::OutputAssertExt;
 use object::Object;
 use object::ObjectSection;
 use tempfile::TempDir;
@@ -228,6 +231,35 @@ fn bytecode_invariant_to_debug_info_selection(via_ir: bool) -> anyhow::Result<()
 }
 
 ///
+/// Debug info must not depend on the compiler's working directory. Standard JSON source
+/// names are the complete source identity, so identical inputs compiled from different
+/// directories must produce byte-identical DWARF.
+///
+#[test_case(false ; "evmla")]
+#[test_case(true ; "yul")]
+fn debug_info_invariant_to_working_directory(via_ir: bool) -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let mut input = fixture(crate::common::standard_json!(
+        "debug_info_generated_code.json"
+    ))?;
+    input.settings.via_ir = via_ir;
+
+    let first_directory = TempDir::with_prefix("solx_debug_info_first")?;
+    let second_directory = TempDir::with_prefix("solx_debug_info_second")?;
+    let first_output = compile_standard_json_in(&input, first_directory.path())?;
+    let second_output = compile_standard_json_in(&input, second_directory.path())?;
+
+    assert_eq!(
+        deployed_debug_info(&first_output, "Probe.sol", "Probe")?,
+        deployed_debug_info(&second_output, "Probe.sol", "Probe")?,
+        "debug info must not depend on the compiler working directory",
+    );
+
+    Ok(())
+}
+
+///
 /// Reads a standard JSON fixture into the typed input.
 ///
 fn fixture(path: &str) -> anyhow::Result<solx_standard_json::Input> {
@@ -240,6 +272,17 @@ fn fixture(path: &str) -> anyhow::Result<solx_standard_json::Input> {
 fn compile_standard_json(
     input: &solx_standard_json::Input,
 ) -> anyhow::Result<solx_standard_json::Output> {
+    let current_directory = std::env::current_dir()?;
+    compile_standard_json_in(input, current_directory.as_path())
+}
+
+///
+/// Keeps the subprocess working directory explicit without mutating process-global state.
+///
+fn compile_standard_json_in(
+    input: &solx_standard_json::Input,
+    current_directory: &Path,
+) -> anyhow::Result<solx_standard_json::Output> {
     let input_directory = TempDir::with_prefix("solx_debug_info")?;
     let input_path = input_directory.path().join("input.json");
     std::fs::write(&input_path, serde_json::to_string(input)?)?;
@@ -248,7 +291,12 @@ fn compile_standard_json(
         "--standard-json",
         input_path.to_str().expect("Always valid"),
     ];
-    let result = crate::cli::execute_solx(args)?.success();
+    let mut command = Command::new(assert_cmd::cargo::cargo_bin!(env!("CARGO_PKG_NAME")));
+    let result = command
+        .current_dir(current_directory)
+        .args(args)
+        .assert()
+        .success();
     Ok(serde_json::from_slice(
         result.get_output().stdout.as_slice(),
     )?)
