@@ -30,7 +30,7 @@ impl ContractName {
     ///
     pub fn new(path: String, name: Option<String>) -> Self {
         let full_path = match name.as_ref() {
-            Some(name) => format!("{path}:{name}"),
+            Some(name) => Self::full_path(path.as_str(), name),
             None => path.clone(),
         };
 
@@ -39,6 +39,13 @@ impl ContractName {
             name,
             full_path,
         }
+    }
+
+    ///
+    /// Builds the full identifier of a named contract: `<path>:<name>`.
+    ///
+    pub fn full_path(path: &str, name: &str) -> String {
+        format!("{path}:{name}")
     }
 
     ///

@@ -5,6 +5,8 @@
 pub mod cache_key;
 pub mod dwarf;
 pub mod mode;
+#[cfg(feature = "slang-ast")]
+pub mod slang_ast;
 pub mod subprocess;
 
 use std::collections::BTreeMap;

@@ -4837,6 +4837,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "sha3 0.12.0",
+ "slang_solidity_v2",
  "solx-benchmark-converter",
  "solx-codegen-evm",
  "solx-compiler-downloader",

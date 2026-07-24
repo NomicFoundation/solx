@@ -14,6 +14,8 @@ use std::sync::Mutex;
 
 use revm::primitives::Address;
 
+use solx_utils::ContractName;
+
 use crate::compilers::Compiler;
 use crate::compilers::mode::Mode;
 use crate::directories::Buildable;
@@ -132,7 +134,7 @@ impl MatterLabsTest {
                 let file_path_unified =
                     crate::utils::path_to_string_normalized(file_path.as_path());
                 *path_string = if let Some(contract_name) = contract_name {
-                    format!("{file_path_unified}:{contract_name}")
+                    ContractName::full_path(file_path_unified.as_str(), contract_name)
                 } else {
                     file_path_unified.clone()
                 };
@@ -225,7 +227,7 @@ impl MatterLabsTest {
     ) {
         if contracts.is_empty() {
             let contract_name = if is_multi_contract {
-                format!("{}:{}", self.selector.path, SIMPLE_TESTS_CONTRACT_NAME)
+                ContractName::full_path(self.selector.path.as_str(), SIMPLE_TESTS_CONTRACT_NAME)
             } else {
                 self.selector.path.to_string()
             };
@@ -260,7 +262,10 @@ impl MatterLabsTest {
                     name.to_owned(),
                     format!("0x{}", crate::utils::address_as_string(&address)),
                 );
-                library_addresses.insert(format!("{file_path_string}:{name}"), address);
+                library_addresses.insert(
+                    ContractName::full_path(file_path_string.as_str(), name),
+                    address,
+                );
             }
             libraries.insert(file_path_string, file_libraries);
         }
