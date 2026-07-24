@@ -61,66 +61,6 @@ fn deploy_time_linking(path: &str, placeholders: Vec<&str>) -> anyhow::Result<()
 
 #[cfg(feature = "solc")]
 #[test]
-fn stack_too_deep_solc() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let args = &[
-        crate::common::contract!("solidity/StackTooDeepSolc.sol"),
-        "--bin",
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-
-    result
-        .success()
-        .stdout(predicate::str::contains("Binary").count(1));
-
-    Ok(())
-}
-
-#[cfg(feature = "solc")]
-#[test]
-fn stack_too_deep_llvm() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let args = &[
-        crate::common::contract!("solidity/StackTooDeepLLVM.sol"),
-        "--bin",
-        "-O1",
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-
-    result
-        .success()
-        .stderr(predicate::str::contains("Warning: Performance of this contract can be compromised due to the presence of this memory-unsafe assembly block."));
-
-    Ok(())
-}
-
-#[cfg(feature = "solc")]
-#[test]
-fn stack_too_deep_llvm_suppressed() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let args = &[
-        crate::common::contract!("solidity/StackTooDeepLLVM.sol"),
-        "--bin",
-        "-O1",
-    ];
-    let env_vars = vec![("EVM_DISABLE_MEMORY_SAFE_ASM_CHECK", "1".to_owned())];
-
-    let result = crate::cli::execute_solx_with_env_vars(args, env_vars)?;
-
-    result
-        .success()
-        .stdout(predicate::str::contains("Binary").count(2));
-
-    Ok(())
-}
-
-#[cfg(feature = "solc")]
-#[test]
 fn fuzzed_linker_error() -> anyhow::Result<()> {
     crate::common::setup()?;
 

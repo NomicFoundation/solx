@@ -28,7 +28,10 @@ pub fn run() -> anyhow::Result<()> {
             inkwell::support::error_handling::install_stack_error_handler(evm_stack_error_handler);
 
             while let Some(job) = stdin.recv::<Job>()? {
-                solx_codegen_evm::IS_SIZE_FALLBACK.store(false, Ordering::Relaxed);
+                solx_codegen_evm::IS_SIZE_FALLBACK.store(
+                    job.optimizer_settings.is_fallback_to_size_active(),
+                    Ordering::Relaxed,
+                );
                 let result = Contract::compile_to_evm(
                     session.language,
                     session.solc_version.clone(),
