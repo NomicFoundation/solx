@@ -1,14 +1,24 @@
 name: Compile Benchmark
 
-# Times `solx --standard-json` over the fixtures in tests/benchmark/fixtures
-# with hyperfine, comparing the PR build against a main build and the latest
-# release binary, and posts the report as a PR comment. Label-gated like the
-# integration suite; report-only (no pass/fail gating on timings).
+# Times `solx --standard-json` over a corpus of real-world standard-JSON
+# inputs (fetched from the hardhat-published corpus repo, see "Checkout
+# benchmark corpus" below) with hyperfine, comparing the PR build against a
+# main build and the latest release binary, and posts the report as a PR
+# comment. Label-gated like the integration suite; report-only (no pass/fail
+# gating on timings).
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
+    inputs:
+      include_via_ir:
+        description: >-
+          Also benchmark the via-IR pipeline variant (off by default; the
+          EVMLA pipeline always runs). Note: workflow_dispatch runs only
+          upload the artifact — the report comment is posted on PRs.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -227,16 +237,50 @@ jobs:
           apt-get update -qq
           apt-get install -y hyperfine
 
+      # Standard-JSON corpus published by the hardhat solx benchmark. This is
+      # a temporary preview location — the final home is solx-corpus/ on this
+      # repo's main. Pinned to a commit (not the branch tip) because
+      # solx-corpus-preview is force-pushed by each hardhat PR run; bump `ref`
+      # to refresh the fixtures. Non-cone sparse-checkout materializes only the
+      # benchmarked files: the EVMLA and via-IR variants of the three
+      # scenarios. aave-v4 is deliberately absent — its dumps need
+      # EVM_DISABLE_MEMORY_SAFE_ASM_CHECK=1, which is not part of standard JSON,
+      # so run.sh's validation pass would abort on it.
+      - name: Checkout benchmark corpus
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: nomic-foundation-automation/hardhat-benchmark-results
+          ref: 7e64fe23420127e097977b0c325744860d04c339
+          path: corpus
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            solx-corpus/ens-verifiable-factory-solx/solx-legacy-dwarf.json
+            solx-corpus/ens-verifiable-factory-solx/solx-via-ir-dwarf.json
+            solx-corpus/uniswap-v4-core-solx/solx-legacy-dwarf.json
+            solx-corpus/uniswap-v4-core-solx/solx-via-ir-dwarf.json
+            solx-corpus/openzeppelin-contracts-0.34/solx-legacy-dwarf.json
+            solx-corpus/openzeppelin-contracts-0.34/solx-via-ir-dwarf.json
+
       # Corpus fixtures compile with production settings (optimizer + DWARF),
       # so a full sweep is ~80 s per binary; 3 runs keep the step around
       # 20 min (hyperfine σ on this corpus is well under 1%). The per-binary
-      # validation pass in run.sh doubles as cache warmup.
+      # validation pass in run.sh doubles as cache warmup. The via-IR variant
+      # is off by default and roughly doubles the sweep when enabled.
       - name: Run benchmark
+        env:
+          INCLUDE_VIA_IR: ${{ inputs.include_via_ir }}
         run: |
+          variants=()
+          if [ "${INCLUDE_VIA_IR}" = "true" ]; then
+            variants=(--variant solx-legacy-dwarf --variant solx-via-ir-dwarf)
+          fi
           ./tests/benchmark/run.sh \
             --bin pr=./target/x86_64-unknown-linux-gnu/release/solx \
             --bin main=./temp-solx-main/target/x86_64-unknown-linux-gnu/release/solx \
             --bin release=./solx-release \
+            --fixtures corpus/solx-corpus \
+            "${variants[@]}" \
             --runs 3 --warmup 1 \
             --out benchmark-out
           python3 ./tests/benchmark/report.py --dir benchmark-out --out benchmark-out/report.md

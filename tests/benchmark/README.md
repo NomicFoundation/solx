@@ -8,57 +8,71 @@ PR comment. Report-only: timings never gate the PR.
 
 ## Running locally
 
+The corpus is not vendored — fetch it first (a sparse checkout keeps it to the
+handful of fixtures the benchmark uses), then point `run.sh` at it:
+
 ```bash
+git clone --depth 1 --filter=blob:none --sparse --branch solx-corpus-preview \
+  https://github.com/nomic-foundation-automation/hardhat-benchmark-results corpus
+git -C corpus sparse-checkout set solx-corpus
+
 ./tests/benchmark/run.sh \
   --bin pr=./target/release/solx \
   --bin release=path/to/released/solx \
+  --fixtures corpus/solx-corpus \
   --out benchmark-out
 python3 ./tests/benchmark/report.py --dir benchmark-out --out benchmark-out/report.md
 ```
 
 The first `--bin` is the candidate; the second is the baseline for the
-relative column in the report.
+relative column in the report. By default only the EVMLA (legacy) pipeline is
+timed; add `--variant solx-via-ir-dwarf` to also benchmark the via-IR pipeline.
 
 ## Fixtures
 
 The fixtures are the exact standard-JSON inputs solx receives from Hardhat,
-captured by the hardhat repo's `bench:dump-standard-json` (the solx
-regression benchmark's "Dump solx standard JSON" step) and vendored here in
-the corpus layout `fixtures/<scenario>/<variant>.json`. `fixtures/manifest.json`
-is the dump's provenance record (per-file sha256, hardhat commit, CI run URL,
-scenario repo+commit pins) — it describes the full corpus, of which this
-directory vendors the legacy-DWARF subset:
+captured by the hardhat repo's `bench:dump-standard-json` (the solx regression
+benchmark's "Dump solx standard JSON" step) and published to the corpus repo
+`nomic-foundation-automation/hardhat-benchmark-results` in the layout
+`solx-corpus/<scenario>/<variant>.json` (with `solx-corpus/manifest.json`
+recording per-file sha256, hardhat commit, CI run URL, and scenario repo+commit
+pins). The workflow checks it out at a pinned commit — see the "Checkout
+benchmark corpus" step; bump that `ref` to refresh the fixtures.
 
-| fixture | contracts | notes |
+> This is a **temporary preview** location (`solx-corpus-preview`, force-pushed
+> per hardhat PR run — hence pinning to a commit, not the branch tip). The
+> final home is `solx-corpus/` on that repo's `main`, published from hardhat
+> merge runs.
+
+The benchmark times two variants per scenario, both compiled with production
+settings (optimizer enabled + DWARF debug info) so timings are comparable to
+what the Hardhat solx benchmark measures (minus Hardhat's own overhead):
+
+- `solx-legacy-dwarf` — the EVMLA pipeline, timed by default.
+- `solx-via-ir-dwarf` — the via-IR pipeline, off by default (enabled by the
+  `include_via_ir` `workflow_dispatch` input, or `--variant` locally).
+
+| scenario | contracts | notes |
 |---|---|---|
-| `ens-verifiable-factory-solx/solx-legacy-dwarf.json` | 52 | |
-| `openzeppelin-contracts-0.34/solx-legacy-dwarf.json` | 422 | the heavy cell (~50 s/compile on the CI runner) |
-| `uniswap-v4-core-solx/solx-legacy-dwarf.json` | 157 | |
+| `ens-verifiable-factory-solx` | 52 | |
+| `openzeppelin-contracts-0.34` | 422 | the heavy cell (~50 s/compile on the CI runner) |
+| `uniswap-v4-core-solx` | 157 | |
 
-These compile with production settings — optimizer enabled and DWARF debug
-info — unlike hand-packed inputs, so timings here are comparable to what the
-Hardhat solx benchmark measures (minus Hardhat's own overhead).
-
-Not yet vendored: `aave-v4-solx` — its profile compiles through multiple
-per-file-override jobs that all overwrite the same `SOLX_STANDARD_JSON_DEBUG`
-path, so which job the dump captures is machine-dependent; it returns once
-the hardhat-side dump captures every job. Note its dumps require
+`aave-v4-solx` exists in the corpus but is not benchmarked: its dumps require
 `EVM_DISABLE_MEMORY_SAFE_ASM_CHECK=1` to compile (scenario-level env in the
-hardhat benchmark; env vars are not part of standard JSON) — the validation
-pass in `run.sh` fails loudly if a fixture needs an env var it doesn't get.
-
-Long-term, the corpus is published by the hardhat workflow to
-`nomic-foundation-automation/hardhat-benchmark-results` under `solx-corpus/`
-(main runs only); once populated, refresh by copying from a pinned commit of
-that repo instead of a CI artifact.
+hardhat benchmark; env vars are not part of standard JSON), so the validation
+pass in `run.sh` would abort on it. The "Checkout benchmark corpus" step
+therefore doesn't fetch it.
 
 ## Extending
 
-- **More fixtures**: drop any valid standard-JSON input into a
-  `fixtures/<name>/` subdirectory; `run.sh` picks up every
-  `fixtures/*/*.json`. The per-binary validation pass rejects fixtures that
-  don't compile clean (the standard-JSON protocol reports errors inside the
-  JSON with exit code 0, so hyperfine alone would silently time failures).
+- **More fixtures**: publish the standard-JSON dump to the corpus repo, then
+  add its `solx-corpus/<scenario>/<variant>.json` path to the sparse-checkout
+  list in the "Checkout benchmark corpus" workflow step (and a `--variant` if
+  it introduces a new variant name). `run.sh`'s per-binary validation pass
+  rejects fixtures that don't compile clean — the standard-JSON protocol
+  reports errors inside the JSON with exit code 0, so hyperfine alone would
+  silently time failures.
 - **Slang v2 pipeline**: add a second timed dimension by passing the Slang
   frontend flag through an additional `--bin` entry once the pipeline accepts
   the same standard-JSON input (the driver only assembles
