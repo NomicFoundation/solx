@@ -837,9 +837,9 @@ impl Project {
                         .into());
                     } else {
                         stack_too_deep_retries += 1;
-                        job.optimizer_settings
-                            .set_spill_area_size(stack_too_deep.spill_area_size);
                     }
+                    job.optimizer_settings
+                        .set_spill_area_size(stack_too_deep.spill_area_size);
                 }
                 result => break result,
             }

@@ -230,7 +230,6 @@ impl Settings {
         self.level_middle_end_size = SizeLevel::Z;
         self.level_back_end = inkwell::OptimizationLevel::Aggressive;
         self.enable_fallback_to_size();
-        self.spill_area_size = None;
     }
 
     ///
