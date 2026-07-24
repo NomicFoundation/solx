@@ -163,6 +163,37 @@ impl<'ctx> Context<'ctx> {
     ) -> anyhow::Result<EVMBuild> {
         let contract_path = self.module.get_name().to_str().expect("Always valid");
 
+        let diagnostics = crate::diagnostics::Capture::install(self.llvm);
+
+        // Per-unit codegen parameters ride the module as flags. The presence
+        // guards keep the first pass's values through the size-fallback
+        // recursion, whose settings do not carry them.
+        if let Some(size) = self.optimizer.settings().spill_area_size()
+            && self.module().get_flag("evm-stack-region-size").is_none()
+        {
+            self.module().add_basic_value_flag(
+                "evm-stack-region-offset",
+                inkwell::module::FlagBehavior::Error,
+                self.llvm
+                    .i64_type()
+                    .const_int(crate::r#const::SOLC_USER_MEMORY_OFFSET, false),
+            );
+            self.module().add_basic_value_flag(
+                "evm-stack-region-size",
+                inkwell::module::FlagBehavior::Error,
+                self.llvm.i64_type().const_int(size, false),
+            );
+        }
+        if let Some(size) = self.optimizer.settings().metadata_size
+            && self.module().get_flag("evm-metadata-size").is_none()
+        {
+            self.module().add_basic_value_flag(
+                "evm-metadata-size",
+                inkwell::module::FlagBehavior::Error,
+                self.llvm.i64_type().const_int(size, false),
+            );
+        }
+
         let run_init_verify = profiler.start_evm_translation_unit(
             contract_path,
             self.code_segment,
@@ -264,6 +295,7 @@ impl<'ctx> Context<'ctx> {
                     inkwell::targets::FileType::Assembly,
                 )
                 .map_err(|error| anyhow::anyhow!("assembly emitting: {error}"))?;
+            diagnostics.check(is_size_fallback)?;
 
             if let Some(output_config) = self.output_config.as_ref() {
                 let assembly_text = String::from_utf8_lossy(assembly_buffer.as_slice());
@@ -311,6 +343,7 @@ impl<'ctx> Context<'ctx> {
                     })?;
                 (bytecode_buffer, None)
             };
+            diagnostics.check(is_size_fallback)?;
             run_emit_bytecode.borrow_mut().finish();
 
             let immutables = match self.code_segment {
@@ -327,8 +360,6 @@ impl<'ctx> Context<'ctx> {
             let bytecode_size = bytecode_buffer.as_slice().len();
             if bytecode_size > bytecode_size_limit {
                 if needs_size_fallback {
-                    crate::codegen::IS_SIZE_FALLBACK
-                        .store(true, std::sync::atomic::Ordering::Relaxed);
                     let mut size_fallback_settings = OptimizerSettings::size();
                     size_fallback_settings.metadata_size = self.optimizer.settings().metadata_size;
                     self.optimizer = Optimizer::new(size_fallback_settings);
