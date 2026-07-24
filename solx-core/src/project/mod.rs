@@ -52,6 +52,9 @@ pub struct Project {
 }
 
 impl Project {
+    /// The number of stack-too-deep retries allowed with the initial optimizer settings and, separately, with the size fallback.
+    const STACK_TOO_DEEP_RETRY_LIMIT: usize = 4;
+
     ///
     /// A shortcut constructor.
     ///
@@ -809,14 +812,15 @@ impl Project {
     ///
     /// Runs the multi-pass compilation pipeline.
     ///
-    /// It is expected to run up to 4 passes in the process of handling stack too deep errors
-    /// and turning on the size fallback to overcome the EVM bytecode size limit.
+    /// Stack-too-deep errors are retried with the reported spill area size, up to
+    /// `STACK_TOO_DEEP_RETRY_LIMIT` times with the initial optimizer settings and as many
+    /// times again after switching to the size fallback to overcome the EVM bytecode size limit.
     ///
     fn run_multi_pass_pipeline(
         pool: &EVMProcessPool,
         job: &mut EVMProcessJob,
     ) -> crate::Result<EVMProcessOutput> {
-        let mut stack_too_deep_hit = false;
+        let mut stack_too_deep_retries = 0;
         loop {
             match pool.execute(job) {
                 Err(Error::StackTooDeep(stack_too_deep)) => {
@@ -824,15 +828,15 @@ impl Project {
                         && !job.optimizer_settings.is_fallback_to_size_active()
                     {
                         job.optimizer_settings.switch_to_size_fallback();
-                        stack_too_deep_hit = false;
-                    } else if stack_too_deep_hit {
+                        stack_too_deep_retries = 0;
+                    } else if stack_too_deep_retries == Self::STACK_TOO_DEEP_RETRY_LIMIT {
                         break Err(solx_standard_json::OutputError::new_error_contract(
                             Some(job.contract_name.path.as_str()),
                             stack_too_deep,
                         )
                         .into());
                     } else {
-                        stack_too_deep_hit = true;
+                        stack_too_deep_retries += 1;
                         job.optimizer_settings
                             .set_spill_area_size(stack_too_deep.spill_area_size);
                     }
