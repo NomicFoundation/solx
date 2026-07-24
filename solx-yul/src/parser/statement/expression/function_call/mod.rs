@@ -5,6 +5,7 @@
 pub mod name;
 
 use inkwell::values::BasicValue;
+use num::ToPrimitive;
 use solx_codegen_evm::IContext;
 use solx_codegen_evm::ISolidityData;
 
@@ -771,7 +772,15 @@ impl FunctionCall {
                 solx_codegen_evm::call::linker_symbol(context, path.as_str()).map(Some)
             }
             Name::MemoryGuard => {
-                let arguments = self.pop_arguments_llvm::<1>(context)?;
+                let arguments = self.pop_arguments::<1>(context)?;
+                let guard = arguments[0]
+                    .constant
+                    .as_ref()
+                    .and_then(|constant| constant.to_u64())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("{location} `memoryguard` argument must be a literal")
+                    })?;
+                context.set_memory_guard(guard);
                 let spill_area = context
                     .optimizer()
                     .settings()
@@ -779,7 +788,7 @@ impl FunctionCall {
                     .unwrap_or_default();
                 solx_codegen_evm::arithmetic::addition(
                     context,
-                    arguments[0].into_int_value(),
+                    arguments[0].value.into_int_value(),
                     context.field_const(spill_area),
                 )
                 .map(Some)

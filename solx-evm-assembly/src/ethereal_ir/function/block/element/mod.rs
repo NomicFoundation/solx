@@ -183,6 +183,14 @@ impl solx_codegen_evm::WriteLLVM for Element {
             ),
             InstructionName::MEMORYGUARD => {
                 let arguments = self.pop_arguments_llvm(context)?;
+                let StackElement::Constant(guard) = &self.stack_input.elements[0] else {
+                    unreachable!("`MEMORYGUARD` is always preceded by a constant memory offset")
+                };
+                context.set_memory_guard(
+                    guard
+                        .to_u64()
+                        .expect("Memory guard offset always fits in 64 bits"),
+                );
                 let spill_area = context
                     .optimizer()
                     .settings()
