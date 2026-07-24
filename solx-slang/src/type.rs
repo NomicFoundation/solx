@@ -35,7 +35,7 @@ impl<'context> SourceUnitScope<'context> {
                 fixed_point_type.is_signed(),
             ),
             Type::Boolean(_) => MlirType::boolean(self.melior),
-            Type::Address(_) => MlirType::address(self.melior, false),
+            Type::Address(address) => MlirType::address(self.melior, address.is_payable()),
             Type::Literal(literal_type) => match literal_type.kind() {
                 LiteralKind::Address { .. } => MlirType::address(self.melior, false),
                 LiteralKind::Integer { value } => {

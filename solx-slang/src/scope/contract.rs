@@ -47,7 +47,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
     }
 
     /// Opens the function scope around `emit`: a fresh variable environment, the declared return
-    /// types a `return` coerces to, and checked arithmetic, with the MLIR cursor on `entry` for the
+    /// types a `return` converts to, and checked arithmetic, with the MLIR cursor on `entry` for the
     /// body's duration.
     pub fn function(
         &mut self,

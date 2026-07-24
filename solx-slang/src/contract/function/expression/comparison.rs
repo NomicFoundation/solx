@@ -13,19 +13,21 @@ use solx_mlir::Value;
 use crate::scope::function::FunctionScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// `a == b` and `a != b`, the operands coerced to the type the binder reconciles them to.
+    /// `a == b` and `a != b`, the operands converted to the type the binder reconciles them to.
     pub fn equality(&mut self, node: &EqualityExpression) -> Value<'context> {
         let predicate = match node.operator() {
             EqualityExpressionOperator::EqualEqual(_) => CmpPredicate::Eq,
             EqualityExpressionOperator::BangEqual(_) => CmpPredicate::Ne,
         };
-        let common = self.typing(node.common_operand_type());
-        let left = self.coerced(&node.left_operand(), common);
-        let right = self.coerced(&node.right_operand(), common);
+        let (left, right) = self.converted_operands(
+            node.common_operand_type(),
+            &node.left_operand(),
+            &node.right_operand(),
+        );
         left.compare(right, predicate, self)
     }
 
-    /// `a < b`, `a <= b`, `a > b`, and `a >= b`, the operands coerced to the type the binder
+    /// `a < b`, `a <= b`, `a > b`, and `a >= b`, the operands converted to the type the binder
     /// reconciles them to.
     pub fn inequality(&mut self, node: &InequalityExpression) -> Value<'context> {
         let predicate = match node.operator() {
@@ -34,9 +36,11 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             InequalityExpressionOperator::GreaterThan(_) => CmpPredicate::Gt,
             InequalityExpressionOperator::GreaterThanEqual(_) => CmpPredicate::Ge,
         };
-        let common = self.typing(node.common_operand_type());
-        let left = self.coerced(&node.left_operand(), common);
-        let right = self.coerced(&node.right_operand(), common);
+        let (left, right) = self.converted_operands(
+            node.common_operand_type(),
+            &node.left_operand(),
+            &node.right_operand(),
+        );
         left.compare(right, predicate, self)
     }
 }

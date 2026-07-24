@@ -46,7 +46,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                     .zip(&element_types)
                     .zip(scope.expression_values(&branch))
                 {
-                    place.store(value.coerce(element_type, scope), scope);
+                    place.store(value.convert(element_type, scope), scope);
                 }
             });
         }

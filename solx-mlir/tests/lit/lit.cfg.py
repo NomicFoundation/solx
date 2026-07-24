@@ -14,5 +14,9 @@ config.environment["PATH"] = os.pathsep.join(
     [solx_bin_dir, solc_bin_dir, os.environ.get("PATH", "")]
 )
 
+config.substitutions.append(
+    ("%evaluation_order", os.path.join(solx_root, "tests", "solidity", "simple", "evaluation_order"))
+)
+
 config.test_source_root = config_dir
 config.test_exec_root = os.path.join(config_dir, "Output")

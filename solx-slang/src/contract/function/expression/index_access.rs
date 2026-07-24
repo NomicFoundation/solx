@@ -85,10 +85,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         let base = self.expression(&node.operand());
         let start = match node.start() {
             Some(start) => self.expression(&start),
-            None => Value::zero(
-                MlirType::unsigned(self.melior, solx_utils::BIT_LENGTH_FIELD),
-                self,
-            ),
+            None => Value::zero(MlirType::field(self.melior), self),
         };
         let end = match node.end() {
             Some(end) => self.expression(&end),

@@ -39,6 +39,14 @@ impl<'context> Type<'context> {
         Self { inner }
     }
 
+    /// The boolean type: a signless `i1`.
+    pub fn boolean(context: &'context melior::Context) -> Self {
+        Self::new(MlirType::from(IntegerType::new(
+            context,
+            solx_utils::BIT_LENGTH_BOOLEAN as u32,
+        )))
+    }
+
     /// An unsigned integer type of `bits` width (`ui<bits>`).
     pub fn unsigned(context: &'context melior::Context, bits: usize) -> Self {
         Self::new(MlirType::from(IntegerType::unsigned(context, bits as u32)))
@@ -58,19 +66,16 @@ impl<'context> Type<'context> {
         }
     }
 
-    /// The boolean type: a signless `i1`.
-    pub fn boolean(context: &'context melior::Context) -> Self {
-        Self::new(MlirType::from(IntegerType::new(
-            context,
-            solx_utils::BIT_LENGTH_BOOLEAN as u32,
-        )))
-    }
-
     /// A `sol::AddressType` with the given payability.
     pub fn address(context: &'context melior::Context, payable: bool) -> Self {
         Self::new(unsafe {
             MlirType::from_raw(ffi::solxCreateAddressType(context.to_raw(), payable))
         })
+    }
+
+    /// The unsigned 256-bit integer, the native EVM word.
+    pub fn field(context: &'context melior::Context) -> Self {
+        Self::unsigned(context, solx_utils::BIT_LENGTH_FIELD)
     }
 
     /// A `sol::PointerType` with the given element type and data location.

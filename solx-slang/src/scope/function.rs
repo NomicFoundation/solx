@@ -18,13 +18,13 @@ use solx_mlir::Value;
 use crate::scope::contract::ContractScope;
 
 /// The function scope: the enclosing contract scope, the lexical variable environment, the declared
-/// return types a `return` coerces to, and whether arithmetic is checked at the current position.
+/// return types a `return` converts to, and whether arithmetic is checked at the current position.
 pub struct FunctionScope<'contract, 'source_unit, 'context> {
     /// The contract scope this function body is lowered within.
     pub contract: &'contract mut ContractScope<'source_unit, 'context>,
     /// The lexically scoped variable bindings.
     pub environment: Environment<'context>,
-    /// The declared return types a `return` coerces to.
+    /// The declared return types a `return` converts to.
     pub return_types: Vec<MlirType<'context>>,
     /// Whether arithmetic reverts on overflow at the current position.
     pub checked: bool,
@@ -100,7 +100,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// Branches `condition` into one `result_type` pointer and loads the merge. The pointer is first
     /// stored with whatever `initializer` yields, then each arm that yields a value stores it,
-    /// coerced to `result_type`, while an arm that yields none leaves the initializing value in
+    /// converted to `result_type`, while an arm that yields none leaves the initializing value in
     /// place. The shared lowering of `?:` (no initializer, both arms store) and the short-circuit
     /// `&&` / `||` (initialized, the short-circuiting arm empty).
     pub fn branch_value(
@@ -118,12 +118,12 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         let (then_block, else_block) = self.current_block().branch_with_else(condition, self);
         self.region(then_block, |scope| {
             if let Some(value) = then(scope) {
-                pointer.store(value.coerce(result_type, scope), scope);
+                pointer.store(value.convert(result_type, scope), scope);
             }
         });
         self.region(else_block, |scope| {
             if let Some(value) = r#else(scope) {
-                pointer.store(value.coerce(result_type, scope), scope);
+                pointer.store(value.convert(result_type, scope), scope);
             }
         });
         pointer.load(result_type, self)
