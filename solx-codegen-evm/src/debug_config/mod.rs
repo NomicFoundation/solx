@@ -129,12 +129,12 @@ impl OutputConfig {
         contract_path: &str,
         code: &str,
         is_size_fallback: bool,
-        spill_area: Option<(u64, u64)>,
+        spill_area_size: Option<u64>,
     ) -> anyhow::Result<()> {
         if !self.output_evmla {
             return Ok(());
         }
-        let suffix = Self::build_suffix(is_size_fallback, spill_area);
+        let suffix = Self::build_suffix(is_size_fallback, spill_area_size);
         let mut file_path = self.output_directory.to_owned();
         let full_file_name = Self::full_file_name(contract_path, suffix.as_deref(), IRType::EVMLA);
         file_path.push(full_file_name);
@@ -151,12 +151,12 @@ impl OutputConfig {
         contract_path: &str,
         code: &str,
         is_size_fallback: bool,
-        spill_area: Option<(u64, u64)>,
+        spill_area_size: Option<u64>,
     ) -> anyhow::Result<()> {
         if !self.output_ethir {
             return Ok(());
         }
-        let suffix = Self::build_suffix(is_size_fallback, spill_area);
+        let suffix = Self::build_suffix(is_size_fallback, spill_area_size);
         let mut file_path = self.output_directory.to_owned();
         let full_file_name = Self::full_file_name(contract_path, suffix.as_deref(), IRType::EthIR);
         file_path.push(full_file_name);
@@ -168,16 +168,16 @@ impl OutputConfig {
     ///
     /// Builds a suffix string from size fallback and spill area parameters.
     ///
-    fn build_suffix(is_size_fallback: bool, spill_area: Option<(u64, u64)>) -> Option<String> {
+    fn build_suffix(is_size_fallback: bool, spill_area_size: Option<u64>) -> Option<String> {
         let mut suffix = String::new();
         if is_size_fallback {
             suffix.push_str("size_fallback");
         }
-        if let Some((offset, size)) = spill_area {
+        if let Some(size) = spill_area_size {
             if !suffix.is_empty() {
                 suffix.push('.');
             }
-            suffix.push_str(format!("o{offset}s{size}").as_str());
+            suffix.push_str(format!("s{size}").as_str());
         }
         if suffix.is_empty() {
             None
@@ -194,7 +194,7 @@ impl OutputConfig {
         contract_path: &str,
         module: &inkwell::module::Module,
         is_size_fallback: bool,
-        spill_area: Option<(u64, u64)>,
+        spill_area_size: Option<u64>,
     ) -> anyhow::Result<()> {
         if !self.output_llvm_ir {
             return Ok(());
@@ -202,11 +202,9 @@ impl OutputConfig {
         let llvm_code = module.print_to_string().to_string();
 
         let mut suffix = "unoptimized".to_owned();
-        if is_size_fallback {
-            suffix.push_str(".size_fallback");
-        }
-        if let Some((offset, size)) = spill_area {
-            suffix.push_str(format!(".o{offset}s{size}").as_str());
+        if let Some(extra) = Self::build_suffix(is_size_fallback, spill_area_size) {
+            suffix.push('.');
+            suffix.push_str(extra.as_str());
         }
 
         let mut file_path = self.output_directory.to_owned();
@@ -226,7 +224,7 @@ impl OutputConfig {
         contract_path: &str,
         module: &inkwell::module::Module,
         is_size_fallback: bool,
-        spill_area: Option<(u64, u64)>,
+        spill_area_size: Option<u64>,
     ) -> anyhow::Result<()> {
         if !self.output_llvm_ir {
             return Ok(());
@@ -234,11 +232,9 @@ impl OutputConfig {
         let llvm_code = module.print_to_string().to_string();
 
         let mut suffix = "optimized".to_owned();
-        if is_size_fallback {
-            suffix.push_str(".size_fallback");
-        }
-        if let Some((offset, size)) = spill_area {
-            suffix.push_str(format!(".o{offset}s{size}").as_str());
+        if let Some(extra) = Self::build_suffix(is_size_fallback, spill_area_size) {
+            suffix.push('.');
+            suffix.push_str(extra.as_str());
         }
 
         let mut file_path = self.output_directory.to_owned();
@@ -258,21 +254,12 @@ impl OutputConfig {
         contract_path: &str,
         code: &str,
         is_size_fallback: bool,
-        spill_area: Option<(u64, u64)>,
+        spill_area_size: Option<u64>,
     ) -> anyhow::Result<()> {
         if !self.output_assembly {
             return Ok(());
         }
-        let mut suffix = if is_size_fallback {
-            Some("size_fallback".to_owned())
-        } else {
-            None
-        };
-        if let Some((offset, size)) = spill_area {
-            suffix
-                .get_or_insert_with(String::new)
-                .push_str(format!(".o{offset}s{size}").as_str());
-        }
+        let suffix = Self::build_suffix(is_size_fallback, spill_area_size);
 
         let mut file_path = self.output_directory.to_owned();
         let full_file_name =

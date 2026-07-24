@@ -72,6 +72,12 @@ pub struct Context<'ctx> {
     /// The output configuration telling whether to dump the needed IRs.
     output_config: Option<OutputConfig>,
 
+    /// The unit's `memoryguard` base offset, above which the spill area is placed so it never
+    /// overlaps solc's statically allocated memory below the guard, such as the immutable
+    /// staging slots of deploy code. Defaults to the free-memory start and is refined when a
+    /// `MEMORYGUARD` sets the reserved-memory boundary.
+    memory_guard: u64,
+
     /// The Solidity data.
     solidity_data: Option<SolidityData>,
     /// The EVM legacy assembly data.
@@ -140,6 +146,8 @@ impl<'ctx> Context<'ctx> {
             debug_info,
             output_config,
 
+            memory_guard: crate::r#const::SOLC_USER_MEMORY_OFFSET,
+
             solidity_data,
             evmla_data: None,
 
@@ -169,8 +177,12 @@ impl<'ctx> Context<'ctx> {
             "InitVerify",
             self.optimizer.settings(),
         );
-        let target_machine =
-            TargetMachine::new(self.optimizer.settings(), self.llvm_options.as_slice())?;
+        let spill_area_size = self.optimizer.settings().spill_area_size();
+        let target_machine = TargetMachine::new(
+            self.optimizer.settings(),
+            self.llvm_options.as_slice(),
+            spill_area_size.map(|size| (self.memory_guard, size)),
+        )?;
         target_machine.set_target_data(self.module());
         target_machine.set_asm_verbosity(true);
 
@@ -179,18 +191,12 @@ impl<'ctx> Context<'ctx> {
             self.debug_info = Some(debug_info);
         }
 
-        let spill_area = self
-            .optimizer
-            .settings()
-            .spill_area_size()
-            .map(|spill_area_size| (crate::r#const::SOLC_USER_MEMORY_OFFSET, spill_area_size));
-
         if let Some(output_config) = self.output_config.as_ref() {
             output_config.dump_llvm_ir_unoptimized(
                 contract_path,
                 self.module(),
                 is_size_fallback,
-                spill_area,
+                spill_area_size,
             )?;
         }
 
@@ -226,7 +232,7 @@ impl<'ctx> Context<'ctx> {
                 contract_path,
                 self.module(),
                 is_size_fallback,
-                spill_area,
+                spill_area_size,
             )?;
         }
 
@@ -271,7 +277,7 @@ impl<'ctx> Context<'ctx> {
                     contract_path,
                     assembly_text.as_ref(),
                     is_size_fallback,
-                    spill_area,
+                    spill_area_size,
                 )?;
             }
 
@@ -406,6 +412,13 @@ impl<'ctx> Context<'ctx> {
         self.module()
             .verify()
             .map_err(|error| anyhow::anyhow!(error.to_string()))
+    }
+
+    ///
+    /// Sets the memory guard base offset, above which the spill area is placed.
+    ///
+    pub fn set_memory_guard(&mut self, offset: u64) {
+        self.memory_guard = offset;
     }
 
     ///
