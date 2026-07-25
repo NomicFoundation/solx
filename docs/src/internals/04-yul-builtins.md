@@ -67,6 +67,8 @@ Yul builtins are lowered through one of three strategies:
 | `mcopy` | memcpy in address space 1 | EIP-5656 memory copy |
 | `msize` | Intrinsic `llvm.evm.msize` | Highest accessed memory index |
 
+Memory builtins are subject to LLVM memory optimizations. Operations that do not change memory contents may be removed even when they would have affected gas or `msize()`. See [Optimizer and Assembly Semantics](../user-guide/04-limitations.md#optimizer-and-assembly-semantics).
+
 ## Storage
 
 | Builtin | Lowering | Notes |

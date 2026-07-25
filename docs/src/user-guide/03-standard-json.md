@@ -41,6 +41,8 @@ This format introduces several **solx**-specific parameters such as `settings.op
 
 On the other hand, parameters that are not mentioned here but are parts of **solc** standard JSON protocol have no effect in **solx**.
 
+Optimizer modes follow the behavior described in [Optimizer and Assembly Semantics](./04-limitations.md#optimizer-and-assembly-semantics).
+
 ```javascript
 {
   // Required: Source code language.
