@@ -677,6 +677,9 @@ Sets the optimization level of the LLVM optimizer. Available values are:
 
 For most cases, it is fine to keep the default value of `3`. You should only use the level `z` if you are ready to deliberately sacrifice performance and optimize for size.
 
+> Optimization can affect exact gas consumption, memory expansion, and the preservation of source operations.
+> See [Optimizer and Assembly Semantics](./04-limitations.md#optimizer-and-assembly-semantics).
+
 > Large contracts may hit the EVM bytecode size limit. In this case, it is recommended to use the [`--optimization-size-fallback`](#--optimization-size-fallback) option rather than setting the level to `z`.
 
 Usage:
@@ -865,6 +868,8 @@ The following sections outline how to use **solx** with these languages.
 ### `--yul` (or `--strict-assembly`)
 
 Enables the Yul mode. In this mode, input is expected to be in the Yul language. The output works the same way as with Solidity input.
+
+Yul input is optimized through LLVM and is not emitted as a verbatim EVM opcode sequence. See [Optimizer and Assembly Semantics](./04-limitations.md#optimizer-and-assembly-semantics).
 
 Usage:
 
