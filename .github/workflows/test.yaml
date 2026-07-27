@@ -30,7 +30,7 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       devcontainer: ${{ steps.filter-devcontainer.outputs.devcontainer }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
@@ -72,7 +72,7 @@ jobs:
     steps:
 
       - name: Checkout source
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -109,7 +109,7 @@ jobs:
     steps:
 
       - name: Checkout source
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           submodules: true
           persist-credentials: false
@@ -138,7 +138,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
       - uses: ./.github/actions/cooldown-check
@@ -152,7 +152,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -212,7 +212,7 @@ jobs:
     steps:
 
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           submodules: true
           persist-credentials: false
@@ -261,7 +261,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
       # Official image bundles shellcheck + pyflakes, so `run:` linting needs no runner deps.
@@ -279,7 +279,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
       - uses: taiki-e/install-action@07b4745e0c39a41822af610387492e3e53aa222b # v2.83.4
