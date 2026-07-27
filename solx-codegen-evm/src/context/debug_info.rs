@@ -4,7 +4,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 use inkwell::debug_info::AsDIScope;
 use inkwell::debug_info::DIFlagsConstants;
@@ -19,9 +18,6 @@ use crate::context::IContext;
 pub struct DebugInfo<'ctx> {
     /// The debug info builder.
     builder: inkwell::debug_info::DebugInfoBuilder<'ctx>,
-    /// The main compile unit.
-    /// Directory of the current translation unit. Stored to prevent memory freeing.
-    _directory: PathBuf,
     /// The files used for the current translation unit.
     files: HashMap<usize, inkwell::debug_info::DIFile<'ctx>>,
 }
@@ -31,14 +27,12 @@ impl<'ctx> DebugInfo<'ctx> {
     /// A shortcut constructor.
     ///
     pub fn new(module: &inkwell::module::Module<'ctx>, sources: &BTreeMap<usize, String>) -> Self {
-        let directory = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-
         let (main_source_id, main_source_path) = sources.iter().next().expect("Always exists");
         let (builder, compile_unit) = module.create_debug_info_builder(
             true,
             inkwell::debug_info::DWARFSourceLanguage::Assembly,
             main_source_path.as_str(),
-            directory.to_str().expect("Always valid"),
+            "",
             "",
             true,
             "",
@@ -55,20 +49,11 @@ impl<'ctx> DebugInfo<'ctx> {
         let mut files = sources
             .iter()
             .skip(1)
-            .map(|(source_id, path)| {
-                (
-                    source_id.to_owned(),
-                    builder.create_file(path.as_str(), directory.to_str().expect("Always valid")),
-                )
-            })
+            .map(|(source_id, path)| (source_id.to_owned(), builder.create_file(path.as_str(), "")))
             .collect::<HashMap<usize, inkwell::debug_info::DIFile<'ctx>>>();
         files.insert(*main_source_id, compile_unit.get_file());
 
-        Self {
-            builder,
-            _directory: directory,
-            files,
-        }
+        Self { builder, files }
     }
 
     ///
