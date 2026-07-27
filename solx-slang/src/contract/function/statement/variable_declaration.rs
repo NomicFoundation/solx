@@ -36,7 +36,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         let declared_type = self.typing(node.declaration().get_type());
         match node.value() {
             Some(initializer) => {
-                let value = self.coerced(&initializer, declared_type);
+                let value = self.converted(&initializer, declared_type);
                 self.define_local(node.declaration().name().name(), declared_type, |_scope| {
                     value
                 });
@@ -49,7 +49,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         }
     }
 
-    /// A multi-typed variable declaration, destructuring a tuple or a call through `coerced_values`,
+    /// A multi-typed variable declaration, destructuring a tuple or a call through `converted_values`,
     /// so a string-literal tuple element folds to its bytes-like constant. A blank slot evaluates its
     /// operand but binds nothing.
     pub fn multi_typed_declaration(&mut self, node: &MultiTypedDeclaration) {
@@ -62,7 +62,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                     .map(|declaration| self.typing(declaration.get_type()))
             })
             .collect();
-        let values = self.coerced_values(&node.value(), &targets);
+        let values = self.converted_values(&node.value(), &targets);
         for ((member, target), value) in elements.iter().zip(targets).zip(values) {
             if let Some(declaration) = member.member() {
                 let target = target.expect("a bound slot has a declared type");

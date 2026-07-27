@@ -36,7 +36,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 self.state_variable_place(&state_variable, &slot_name)
             }
             Some(Definition::Variable(_) | Definition::Parameter(_)) => {
-                self.environment.variable_with_type(&node.name())
+                self.environment.variable_with_type(node.name())
             }
             None => unreachable!("slang resolves every identifier reference: {}", node.name()),
             Some(_) => unreachable!("identifier {} is not an assignable place", node.name()),

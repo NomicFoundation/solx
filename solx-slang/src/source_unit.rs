@@ -33,7 +33,7 @@ impl<'context> SourceUnitScope<'context> {
         let mut scope = SourceUnitScope::new(Context::new(&melior, evm_version));
         let method_identifiers = scope.contract_definition(contract);
 
-        let name = contract.name().name();
+        let name = contract.name().name().to_owned();
         let mlir = Context::from(scope).finalize_module(
             &format!("{name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX),
             capture_sol_dialect(&name),

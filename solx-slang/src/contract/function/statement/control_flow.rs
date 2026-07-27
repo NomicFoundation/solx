@@ -90,14 +90,14 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         self.current_block().r#continue(self);
     }
 
-    /// The `return` statement, its values coerced to the function's declared return types.
+    /// The `return` statement, its values converted to the function's declared return types.
     pub fn return_statement(&mut self, node: &ReturnStatement) {
         let Some(expression) = node.expression() else {
             self.current_block().r#return(&[], self);
             return;
         };
         let targets: Vec<_> = self.return_types.iter().copied().map(Some).collect();
-        let values = self.coerced_values(&expression, &targets);
+        let values = self.converted_values(&expression, &targets);
         self.current_block().r#return(&values, self);
     }
 }

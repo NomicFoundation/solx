@@ -33,6 +33,10 @@
 // CHECK: sol.if
 // CHECK: sol.return %{{.*}}, %{{.*}} : ui256, ui256
 
+// CHECK: sol.func @{{.*via_conditional_call_and_tuple.*}}
+// CHECK: sol.if
+// CHECK: sol.return %{{.*}}, %{{.*}} : ui256, ui256
+
 // CHECK: sol.func @{{.*via_nested_conditional.*}}
 // CHECK: sol.if
 // CHECK: sol.return %{{.*}}, %{{.*}} : ui256, ui256
@@ -68,6 +72,10 @@ contract C {
 
     function via_conditional_call(bool c) public pure returns (uint256, uint256) {
         return c ? two_constants() : two_constants();
+    }
+
+    function via_conditional_call_and_tuple(bool c) public pure returns (uint256, uint256) {
+        return c ? two_constants() : (3, 4);
     }
 
     function via_nested_conditional(bool a, bool b) public pure returns (uint256, uint256) {

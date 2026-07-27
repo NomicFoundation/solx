@@ -54,14 +54,14 @@ impl<'context> Environment<'context> {
     /// Registers a variable with its alloca'd pointer and element type in the current scope.
     pub fn define_variable(
         &mut self,
-        name: String,
+        name: &str,
         pointer: Place<'context>,
         element_type: Type<'context>,
     ) {
         self.scopes
             .last_mut()
             .expect("at least one scope exists")
-            .insert(name, (pointer, element_type));
+            .insert(name.to_owned(), (pointer, element_type));
     }
 
     /// Looks up a variable's alloca'd pointer and element type by name.

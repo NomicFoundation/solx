@@ -4,69 +4,63 @@
 
 use slang_solidity_v2::ast::AssignmentExpression;
 use slang_solidity_v2::ast::AssignmentExpressionOperator;
+use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::Type;
 
 use solx_mlir::Value;
 
 use crate::scope::function::FunctionScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// `lhs = rhs` and the compound `lhs op= rhs`. A multi-element tuple left operand destructures and
-    /// yields nothing, tuple assignment being value-less; every other form yields the stored value. A
-    /// reference-typed place is its own address and takes a `sol.copy` of the right operand, which
-    /// bridges both its type and its data location. A shift compound keeps its right operand at its
-    /// own type, every other form coerces it to the place's type.
+    /// `lhs = rhs` and the compound `lhs op= rhs`. A multi-element tuple destructures and yields
+    /// nothing, tuple assignment being value-less; every other form yields the stored value. The right
+    /// operand is evaluated before the left place, matching legacy's right-before-left order; a tuple
+    /// evaluates all values then all places left-first and commits the stores right-first. Whether the
+    /// place is a reference (its own address, taking a `sol.copy` that bridges type and data location)
+    /// or a scalar slot (a `store` of the value converted to the slot's own type) is read from the
+    /// resolved place. The lone exception is a string or hex literal at a bytes-like target: it folds
+    /// to a constant that needs the slot type up front and carries no side effect, so its place is
+    /// resolved first. A shift compound keeps its right operand at its own type, every other converts it.
     pub fn assignment(&mut self, node: &AssignmentExpression) -> Option<Value<'context>> {
-        let places = self.expression_places(&node.left_operand());
-        if places.len() > 1 {
-            let targets: Vec<_> = places
-                .iter()
-                .map(|&element| {
-                    let Some((place, element_type)) = element else {
-                        return None;
-                    };
-                    (place.r#type() != element_type).then_some(element_type)
-                })
-                .collect();
-            let values = self.coerced_values(&node.right_operand(), &targets);
-            for (place, value) in places.into_iter().zip(values) {
-                let Some((place, element_type)) = place else {
-                    continue;
-                };
-                if place.r#type() == element_type {
-                    place.copy_from(value, self);
-                } else {
-                    place.store(value, self);
+        let left = node.left_operand();
+        let right = node.right_operand();
+        let left_type = left.get_type();
+
+        if let Some(Type::Tuple(_)) = &left_type {
+            let values = self.expression_values(&right);
+            let places = self.expression_places(&left);
+            for (place, value) in places.into_iter().zip(values).rev() {
+                if let Some((place, r#type)) = place {
+                    place.assign(value, r#type, self);
                 }
             }
             return None;
         }
 
-        let (place, element_type) = places
-            .into_iter()
-            .next()
-            .flatten()
-            .expect("an assignment target denotes a place");
-
-        if place.r#type() == element_type {
-            let source = self.expression(&node.right_operand());
-            place.copy_from(source, self);
-            return Some(Value::from(place));
-        }
+        let element_type = self.typing(left_type);
 
         if let AssignmentExpressionOperator::Equal(_) = node.operator() {
-            let value = self.coerced(&node.right_operand(), element_type);
-            place.store(value, self);
-            return Some(value);
+            if let Expression::StringExpression(_) = &right
+                && element_type.is_bytes_like()
+            {
+                let (place, r#type) = self.expression_place(&left);
+                let value = self.converted(&right, r#type);
+                return Some(place.assign(value, r#type, self));
+            }
+            let value = self.expression(&right);
+            let (place, r#type) = self.expression_place(&left);
+            return Some(place.assign(value, r#type, self));
         }
 
         let rhs = match node.operator() {
             AssignmentExpressionOperator::LessThanLessThanEqual(_)
             | AssignmentExpressionOperator::GreaterThanGreaterThanEqual(_) => {
-                self.expression(&node.right_operand())
+                self.expression(&right)
             }
-            _ => self.coerced(&node.right_operand(), element_type),
+            _ => self.converted(&right, element_type),
         };
-        let current = place.load(element_type, self);
+        let (place, r#type) = self.expression_place(&left);
+        let current = place.load(r#type, self);
         let assigned = match node.operator() {
             AssignmentExpressionOperator::PlusEqual(_) => current.add(rhs, self.checked, self),
             AssignmentExpressionOperator::MinusEqual(_) => {

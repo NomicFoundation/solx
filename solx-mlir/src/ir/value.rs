@@ -104,30 +104,9 @@ impl<'context> Value<'context> {
         integer.bytes_cast(target_type, context)
     }
 
-    /// Coerces to `target_type` under Solidity's implicit conversions.
-    pub fn coerce(self, target_type: Type<'context>, context: &Context<'context>) -> Self {
-        if self.r#type() == target_type {
-            return self;
-        }
-        if self.r#type().is_bytes_like() {
-            return self.bytes_cast(target_type, context);
-        }
-        if target_type.is_bytes_like() {
-            let integer_type = Type::unsigned(
-                context.melior,
-                target_type.bytes_like_width() as usize * solx_utils::BIT_LENGTH_BYTE,
-            );
-            return self
-                .cast(integer_type, context)
-                .bytes_cast(target_type, context);
-        }
-        if !self.r#type().is_scalar() && !target_type.is_scalar() {
-            return self.data_loc_cast(target_type, context);
-        }
-        self.cast(target_type, context)
-    }
-
-    /// Converts to `target_type` under an explicit `T(x)` cast.
+    /// Emits the cast reconciling `self` to `target_type`, be it a computed common type or an
+    /// explicit `T(x)`. The address and string-to-`bytesN` arms, reachable only under an explicit
+    /// cast, precede the bytes and scalar arms an address or string would otherwise fall into.
     pub fn convert(mut self, target_type: Type<'context>, context: &Context<'context>) -> Self {
         if self.r#type() == target_type {
             return self;
@@ -147,7 +126,22 @@ impl<'context> Value<'context> {
         if self.r#type().is_string() && target_type.is_bytes_like() {
             return self.dyn_bytes_to_fixedbytes(target_type, context);
         }
-        self.coerce(target_type, context)
+        if self.r#type().is_bytes_like() {
+            return self.bytes_cast(target_type, context);
+        }
+        if target_type.is_bytes_like() {
+            let integer_type = Type::unsigned(
+                context.melior,
+                target_type.bytes_like_width() as usize * solx_utils::BIT_LENGTH_BYTE,
+            );
+            return self
+                .cast(integer_type, context)
+                .bytes_cast(target_type, context);
+        }
+        if !self.r#type().is_scalar() && !target_type.is_scalar() {
+            return self.data_loc_cast(target_type, context);
+        }
+        self.cast(target_type, context)
     }
 
     /// The `i1` truthiness of `self` via `sol.cmp ne 0`; a no-op when `self` is already `i1`.

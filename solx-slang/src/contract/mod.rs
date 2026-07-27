@@ -29,7 +29,7 @@ impl<'context> SourceUnitScope<'context> {
     /// Inherited state variables are not yet declared: derived contracts do not compile through
     /// this path.
     pub fn contract_definition(&mut self, node: &ContractDefinition) -> BTreeMap<String, String> {
-        let contract_name = node.name().name();
+        let contract_identifier = node.name();
 
         for function in node.functions().into_iter().chain(node.constructor()) {
             let parameter_types = function
@@ -78,13 +78,13 @@ impl<'context> SourceUnitScope<'context> {
         };
 
         let sol_contract = Contract::define(
-            &contract_name,
+            contract_identifier.name(),
             solx_mlir::ContractKind::Contract,
             self,
             Block::from(self.module.body()),
         );
         self.contract(
-            MlirType::contract(self.melior, &contract_name, node.is_payable()),
+            MlirType::contract(self.melior, contract_identifier.name(), node.is_payable()),
             sol_contract.body,
             state_variables,
             storage_layout,
