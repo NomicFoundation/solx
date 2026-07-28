@@ -106,7 +106,7 @@ The **solx** metadata format is compatible with the [Solidity metadata format](h
     // Optional: only set for Solidity and Yul contracts.
     "solc_version": "0.8.34",
     // Mandatory: current version of solx.
-    "solx_version": "0.1.5"
+    "solx_version": "0.1.6"
   }
 }
 ```
@@ -608,6 +608,9 @@ Sets the optimization level of the LLVM optimizer. Available values are:
 
 For most cases, it is fine to keep the default value of `3`. You should only use the level `z` if you are ready to deliberately sacrifice performance and optimize for size.
 
+> Optimization can affect exact gas consumption, memory expansion, and the preservation of source operations.
+> See [Optimizer and Assembly Semantics](./04-limitations.md#optimizer-and-assembly-semantics).
+
 > Large contracts may hit the EVM bytecode size limit. In this case, it is recommended to use the [`--optimization-size-fallback`](#--optimization-size-fallback) option rather than setting the level to `z`.
 
 Usage:
@@ -660,7 +663,7 @@ $ solx 'Simple.sol' --bin --metadata-hash 'ipfs'
 
 ======= Simple.sol:Simple =======
 Binary:
-34601557630000008480630000001a6080396080f35b5f5ffdfe34600b57600336116016575b5f5ffd5b5060016031565b5f3560e01c633df4ddf48114600f57635a8ac02d03600b5760025b60805260206080f3fea2646970667358221220[..]64736f6c637816736f6c783a302e312e353b736f6c633a302e382e33340047
+34601557630000008480630000001a6080396080f35b5f5ffdfe34600b57600336116016575b5f5ffd5b5060016031565b5f3560e01c633df4ddf48114600f57635a8ac02d03600b5760025b60805260206080f3fea2646970667358221220[..]64736f6c637816736f6c783a302e312e363b736f6c633a302e382e33340047
 
 ```
 
@@ -678,7 +681,7 @@ JSON representation of the CBOR payload:
     // Required: consists of semicolon-separated pairs of colon-separated compiler names and versions.
     // `solx:<version>` is always included.
     // `solc:<version>` is only included for Solidity and Yul contracts, but not included for LLVM IR ones.
-    "solc": "solx:0.1.5;solc:0.8.34"
+    "solc": "solx:0.1.6;solc:0.8.34"
 }
 ```
 
@@ -794,6 +797,8 @@ The following sections outline how to use **solx** with these languages.
 
 Enables the Yul mode. In this mode, input is expected to be in the Yul language. The output works the same way as with Solidity input.
 
+Yul input is optimized through LLVM and is not emitted as a verbatim EVM opcode sequence. See [Optimizer and Assembly Semantics](./04-limitations.md#optimizer-and-assembly-semantics).
+
 Usage:
 
 ```console
@@ -801,7 +806,7 @@ $ solx --yul 'Simple.yul' --bin
 
 ======= Simple.yul =======
 Binary:
-63000000298063000000105f395ff3fe602a5f5260205ff3fea164736f6c637816736f6c783a302e312e353b736f6c633a302e382e3334001e
+63000000298063000000105f395ff3fe602a5f5260205ff3fea164736f6c637816736f6c783a302e312e363b736f6c633a302e382e3334001e
 
 ```
 
@@ -823,7 +828,7 @@ $ solx --llvm-ir 'Simple.ll' --bin
 
 ======= Simple.ll =======
 Binary:
-5b630000004f8063000000115f395ff3fe34600b57600336116016575b5f5ffd5b5060016031565b5f3560e01c633df4ddf48114600f57635a8ac02d03600b5760025b60805260206080f3fea164736f6c63780a736f6c783a302e312e350012
+5b630000004f8063000000115f395ff3fe34600b57600336116016575b5f5ffd5b5060016031565b5f3560e01c633df4ddf48114600f57635a8ac02d03600b5760025b60805260206080f3fea164736f6c63780a736f6c783a302e312e360012
 
 ```
 
