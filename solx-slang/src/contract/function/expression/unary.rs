@@ -7,6 +7,7 @@ use slang_solidity_v2::ast::PostfixExpression;
 use slang_solidity_v2::ast::PostfixExpressionOperator;
 use slang_solidity_v2::ast::PrefixExpression;
 use slang_solidity_v2::ast::PrefixExpressionOperator;
+use slang_solidity_v2::ast::UserDefinedOperatorExpression;
 
 use solx_mlir::CmpPredicate;
 use solx_mlir::Context;
@@ -18,6 +19,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// The prefix `++`, `--`, `~`, `!`, and `-` operators, each yielding a value; and `delete`, which
     /// resets its operand and yields nothing, `delete` being value-less in Solidity.
     pub fn prefix(&mut self, node: &PrefixExpression) -> Option<Value<'context>> {
+        if let Some(function) = node.resolve_operator() {
+            return Some(self.bound_operator(&function, [node.operand()]));
+        }
         match node.operator() {
             PrefixExpressionOperator::PlusPlus(_) => Some(self.step(&node.operand(), Value::add).1),
             PrefixExpressionOperator::MinusMinus(_) => {

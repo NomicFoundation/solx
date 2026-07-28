@@ -72,7 +72,27 @@
 // CHECK: sol.func @{{.*ge_fixed_bytes.*}}
 // CHECK:   sol.cmp ge, %{{.*}}, %{{.*}} : !sol.fixedbytes<8>
 
+// CHECK: sol.func @{{.*eq_enum.*}}
+// CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : !sol.enum<2>
+
+// CHECK: sol.func @{{.*ne_enum.*}}
+// CHECK:   sol.cmp ne, %{{.*}}, %{{.*}} : !sol.enum<2>
+
+// CHECK: sol.func @{{.*lt_enum.*}}
+// CHECK:   sol.cmp lt, %{{.*}}, %{{.*}} : !sol.enum<2>
+
+// CHECK: sol.func @{{.*le_enum.*}}
+// CHECK:   sol.cmp le, %{{.*}}, %{{.*}} : !sol.enum<2>
+
+// CHECK: sol.func @{{.*gt_enum.*}}
+// CHECK:   sol.cmp gt, %{{.*}}, %{{.*}} : !sol.enum<2>
+
+// CHECK: sol.func @{{.*ge_enum.*}}
+// CHECK:   sol.cmp ge, %{{.*}}, %{{.*}} : !sol.enum<2>
+
 contract C {
+    enum E { First, Second, Third }
+
     function eq(uint256 a, uint256 b) public pure returns (bool) {
         return a == b;
     }
@@ -162,6 +182,30 @@ contract C {
     }
 
     function ge_fixed_bytes(bytes4 a, bytes8 b) public pure returns (bool) {
+        return a >= b;
+    }
+
+    function eq_enum(E a, E b) public pure returns (bool) {
+        return a == b;
+    }
+
+    function ne_enum(E a, E b) public pure returns (bool) {
+        return a != b;
+    }
+
+    function lt_enum(E a, E b) public pure returns (bool) {
+        return a < b;
+    }
+
+    function le_enum(E a, E b) public pure returns (bool) {
+        return a <= b;
+    }
+
+    function gt_enum(E a, E b) public pure returns (bool) {
+        return a > b;
+    }
+
+    function ge_enum(E a, E b) public pure returns (bool) {
         return a >= b;
     }
 }

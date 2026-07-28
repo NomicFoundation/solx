@@ -94,4 +94,4 @@ features = [
 [workspace.dependencies.slang_solidity_v2]
 git = "https://github.com/NomicFoundation/slang.git"
 # TODO: pin to a release tag instead of a revision.
-rev = "6daec8fef8f0151ccac1413e0c882053b4e850d4"
+rev = "0f2a4adf1bb709e57b00df9ad5c5b26181b75061"

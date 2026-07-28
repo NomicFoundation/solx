@@ -7,6 +7,7 @@ use slang_solidity_v2::ast::BitwiseOrExpression;
 use slang_solidity_v2::ast::BitwiseXorExpression;
 use slang_solidity_v2::ast::ShiftExpression;
 use slang_solidity_v2::ast::ShiftExpressionOperator;
+use slang_solidity_v2::ast::UserDefinedOperatorExpression;
 
 use solx_mlir::Value;
 
@@ -15,6 +16,9 @@ use crate::scope::function::FunctionScope;
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// `a & b`, both operands converted to the binder's result type.
     pub fn bitwise_and(&mut self, node: &BitwiseAndExpression) -> Value<'context> {
+        if let Some(function) = node.resolve_operator() {
+            return self.bound_operator(&function, [node.left_operand(), node.right_operand()]);
+        }
         let (lhs, rhs) =
             self.converted_operands(node.get_type(), &node.left_operand(), &node.right_operand());
         lhs.bitand(rhs, self)
@@ -22,6 +26,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// `a | b`, both operands converted to the binder's result type.
     pub fn bitwise_or(&mut self, node: &BitwiseOrExpression) -> Value<'context> {
+        if let Some(function) = node.resolve_operator() {
+            return self.bound_operator(&function, [node.left_operand(), node.right_operand()]);
+        }
         let (lhs, rhs) =
             self.converted_operands(node.get_type(), &node.left_operand(), &node.right_operand());
         lhs.bitor(rhs, self)
@@ -29,6 +36,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// `a ^ b`, both operands converted to the binder's result type.
     pub fn bitwise_xor(&mut self, node: &BitwiseXorExpression) -> Value<'context> {
+        if let Some(function) = node.resolve_operator() {
+            return self.bound_operator(&function, [node.left_operand(), node.right_operand()]);
+        }
         let (lhs, rhs) =
             self.converted_operands(node.get_type(), &node.left_operand(), &node.right_operand());
         lhs.bitxor(rhs, self)
