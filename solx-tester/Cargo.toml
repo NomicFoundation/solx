@@ -36,6 +36,8 @@ rlp = "0.6"
 once_cell = "1.21"
 revm = "41.0"
 
+slang_solidity_v2 = { workspace = true, optional = true }
+
 solx-standard-json = { path = "../solx-standard-json" }
 solx-codegen-evm = { path = "../solx-codegen-evm" }
 solx-utils = { path = "../solx-utils" }
@@ -45,4 +47,4 @@ solx-compiler-downloader = { path = "../solx-compiler-downloader" }
 solx-dev = { path = "../solx-dev" }
 
 [features]
-slang-ast = []
+slang-ast = ["dep:slang_solidity_v2"]

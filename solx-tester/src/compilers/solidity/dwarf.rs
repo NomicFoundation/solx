@@ -8,6 +8,7 @@ use object::Object;
 use object::ObjectSection;
 
 use solx_standard_json::Output;
+use solx_utils::ContractName;
 
 ///
 /// Validates DWARF debug information embedded in compiled contract bytecodes.
@@ -32,7 +33,7 @@ impl DwarfValidator {
     pub fn validate_output(output: &Output) -> anyhow::Result<()> {
         for (file_path, contracts) in output.contracts.iter() {
             for (contract_name, contract) in contracts.iter() {
-                let label = format!("{file_path}:{contract_name}");
+                let label = ContractName::full_path(file_path, contract_name);
 
                 let Some(evm) = contract.evm.as_ref() else {
                     continue;

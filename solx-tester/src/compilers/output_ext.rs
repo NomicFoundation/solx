@@ -8,6 +8,11 @@ use std::collections::HashMap;
 use solx_standard_json::InputLanguage;
 use solx_standard_json::Output;
 use solx_standard_json::OutputError;
+use solx_standard_json::output::source::Source;
+use solx_utils::ContractName;
+
+#[cfg(feature = "slang-ast")]
+use crate::compilers::solidity::slang_ast::SlangAst;
 
 ///
 /// Extracts method identifiers from all contracts in the output.
@@ -36,7 +41,7 @@ pub fn get_method_identifiers(
                     })?;
                 contract_identifiers.insert(entry.clone(), selector);
             }
-            method_identifiers.insert(format!("{path}:{name}"), contract_identifiers);
+            method_identifiers.insert(ContractName::full_path(path, name), contract_identifiers);
         }
     }
     Ok(method_identifiers)
@@ -62,21 +67,14 @@ pub fn get_last_contract(
                     continue;
                 };
                 match last_contract_name(source) {
-                    Ok(name) => return Ok(format!("{path}:{name}")),
+                    Ok(name) => return Ok(ContractName::full_path(path, name.as_str())),
                     Err(_error) => continue,
                 }
             }
 
-            // TODO: Slang frontend produces a CST instead of the solc AST, so
-            // `last_contract_name` cannot extract the name from the AST
-            // `nodes` array. Fall back to the contracts map directly.
             #[cfg(feature = "slang-ast")]
-            for (path, _source) in sources.iter().rev() {
-                if let Some(contracts) = output.contracts.get(path) {
-                    if let Some((name, _)) = contracts.last_key_value() {
-                        return Ok(format!("{path}:{name}"));
-                    }
-                }
+            if let Some(full_path) = SlangAst::parse(sources).last_deployable(&output.contracts) {
+                return Ok(full_path);
             }
 
             anyhow::bail!("The last contract not found in the output")
@@ -91,7 +89,7 @@ pub fn get_last_contract(
                 .and_then(|(path, contracts)| {
                     contracts
                         .first_key_value()
-                        .map(|(name, _contract)| format!("{path}:{name}"))
+                        .map(|(name, _contract)| ContractName::full_path(path, name))
                 })
                 .ok_or_else(|| {
                     anyhow::anyhow!("The sources are empty. Found errors: {:?}", output.errors)
@@ -116,7 +114,7 @@ pub fn extract_bytecode_builds(
     let mut builds = HashMap::with_capacity(output.contracts.len());
     for (file, source) in output.contracts.iter() {
         for (name, contract) in source.iter() {
-            let path = format!("{file}:{name}");
+            let path = ContractName::full_path(file, name);
             let deploy_code = match contract
                 .evm
                 .as_ref()
@@ -155,9 +153,7 @@ pub fn errors_opt(output: &Output) -> Option<&[OutputError]> {
 ///
 /// Returns the name of the last contract in the AST.
 ///
-fn last_contract_name(
-    source: &solx_standard_json::output::source::Source,
-) -> anyhow::Result<String> {
+fn last_contract_name(source: &Source) -> anyhow::Result<String> {
     source
         .ast
         .as_ref()

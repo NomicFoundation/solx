@@ -17,6 +17,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use solx_utils::ContractName;
+
 use crate::compilers::mode::Mode;
 use crate::directories::matter_labs::test::metadata::case::input::Input as MatterLabsTestInput;
 use crate::revm::REVM;
@@ -231,7 +233,7 @@ impl Input {
                 let source = crate::utils::str_to_string_normalized(
                     source.as_deref().unwrap_or(last_source),
                 );
-                let library = format!("{source}:{name}");
+                let library = ContractName::full_path(source.as_str(), name);
                 let instance = instances
                     .get(library.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Library `{library}` not found"))?;
