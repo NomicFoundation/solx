@@ -1,5 +1,5 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck --check-prefixes=CHECK,CHECK-SOLX %s
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck --check-prefixes=CHECK,CHECK-SOLC %s
 
 // CHECK: sol.func @{{.*if_else.*}}
 // CHECK:   sol.if %{{.*}} {
@@ -27,7 +27,8 @@
 // CHECK:   } body {
 // CHECK:     sol.yield
 // CHECK:   } step {
-// CHECK:     sol.add %
+// CHECK-SOLX: sol.cadd %
+// CHECK-SOLC: sol.add %
 // CHECK:     sol.yield
 
 // CHECK: sol.func @{{.*do_while.*}}

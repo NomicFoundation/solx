@@ -46,8 +46,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         self.condition_region(condition_block, |scope| scope.expression(&node.condition()));
     }
 
-    /// The `for` statement. The step expression emits unchecked, matching the solc lowering this
-    /// pipeline is verified against.
+    /// The `for` statement.
     pub fn for_statement(&mut self, node: &ForStatement) {
         self.nested(|scope| {
             scope.for_statement_initialization(&node.initialization());
@@ -61,7 +60,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             scope.region(body_block, |scope| scope.statement(&node.body()));
             scope.region(step_block, |scope| {
                 if let Some(iterator) = node.iterator() {
-                    scope.unchecked(|scope| scope.expression_effect(&iterator));
+                    scope.expression_effect(&iterator);
                 }
             });
         });
