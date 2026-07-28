@@ -11,8 +11,40 @@
 // CHECK-NEXT:       sol.return %{{.*}} : ui256
 // CHECK:        } {kind = #Contract}
 
+// CHECK:      module attributes {llvm.data_layout
+// CHECK:        sol.contract @{{.*Impl.*}} {
+// CHECK:          sol.func @{{.*h.*}}() -> ui256
+// CHECK:        } {kind = #Contract}
+
+// CHECK:      module attributes {llvm.data_layout
+// CHECK:        sol.contract @{{.*Second.*}} {
+// CHECK:          sol.func @{{.*g.*}}() -> ui256
+// CHECK:        } {kind = #Contract}
+
+// CHECK-NOT:  sol.contract
+
 contract C {
     function f() public pure returns (uint256) {
         return 42;
     }
+}
+
+interface Iface {
+    function h() external pure returns (uint256);
+}
+
+contract Impl is Iface {
+    function h() external pure returns (uint256) {
+        return 1;
+    }
+}
+
+contract Second {
+    function g() public pure returns (uint256) {
+        return 7;
+    }
+}
+
+abstract contract Undeployable {
+    function h() public pure virtual returns (uint256);
 }

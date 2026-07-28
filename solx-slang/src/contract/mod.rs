@@ -27,8 +27,7 @@ impl<'context> SourceUnitScope<'context> {
     /// `method_identifiers` map (externally-dispatchable signature to 4-byte selector, lower-case
     /// hex); `convert-sol-to-yul` builds the entry-point dispatcher from the function selectors.
     /// Function signatures are pre-registered for call resolution before any body is emitted.
-    /// `operator_functions` land in the contract body because MLIR has no file scope. Inherited
-    /// state variables are not yet declared: derived contracts do not compile through this path.
+    /// `operator_functions` land in the contract body because MLIR has no file scope.
     pub fn contract_definition(
         &mut self,
         node: &ContractDefinition,
