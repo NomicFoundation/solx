@@ -1,0 +1,33 @@
+name: Code changes filter
+description: >-
+  Detects whether any changed file is code rather than documentation.
+  The repository must already be checked out with full history
+  (fetch-depth 0) before calling this action.
+
+outputs:
+  code:
+    description: Whether any non-documentation file changed (true/false)
+    value: ${{ steps.filter.outputs.code }}
+
+runs:
+  using: composite
+  steps:
+    # token '' forces git-diff mode: the PR files API caps at 3,000 files, and
+    # a truncated list can fail open (matrix skipped despite a code change).
+    # 'every': a file counts as code only if no negation pattern excludes it.
+    # Not every .md is documentation — solx-benchmark-converter compiles
+    # templates/summary.md into the binary and asserts golden .md fixtures.
+    - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+      id: filter
+      with:
+        token: ''
+        predicate-quantifier: 'every'
+        filters: |
+          code:
+            - '**'
+            - '!docs/**'
+            - '!*.md'
+            - '!**/README.md'
+            - '!.github/**/*.md'
+            - '!**/LICENSE-APACHE'
+            - '!**/LICENSE-MIT'
