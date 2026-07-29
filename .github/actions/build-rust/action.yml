@@ -1,9 +1,6 @@
 name: 'Build'
 description: 'Build Rust executable.'
 inputs:
-  exec_name:
-    description: 'Name of the executable.'
-    required: true
   target:
     description: 'Specific build target triplet.'
     required: false
@@ -82,25 +79,27 @@ runs:
         if [[ "${RUNNER_OS}" == "Windows" ]] || [[ "${RUNNER_OS}" == "Linux" ]]; then
           export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
         fi
-        ${SFW_PREFIX:-} cargo ${BUILD_STD_LIB} build --frozen ${RELEASE} ${{ steps.build-target.outputs.target }}
+        ${SFW_PREFIX:-} cargo ${BUILD_STD_LIB} build-slang --frozen ${RELEASE} ${{ steps.build-target.outputs.target }}
         if [ '${{ inputs.target }}' != '' ]; then
-          BINARY_DIR="${PWD}/target/${{ inputs.target }}/${{ inputs.build-type }}"
+          BINARY_DIR="${PWD}/target-slang/${{ inputs.target }}/${{ inputs.build-type }}"
         else
-          BINARY_DIR="${PWD}/target/${{ inputs.build-type }}"
+          BINARY_DIR="${PWD}/target-slang/${{ inputs.build-type }}"
         fi
         [ "$RUNNER_OS" = "Windows" ] && WIN_SUFFIX=".exe"
         echo "${BINARY_DIR}" >> "${GITHUB_PATH}"
-        echo "binary-path=${BINARY_DIR}/${{ inputs.exec_name }}${WIN_SUFFIX}" >> "${GITHUB_OUTPUT}"
+        echo "binary-path=${BINARY_DIR}/solx${WIN_SUFFIX}" >> "${GITHUB_OUTPUT}"
 
     - name: Prepare binary
       if: inputs.release-suffix != ''
+      env:
+        BINARY_PATH: ${{ steps.build.outputs.binary-path }}
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: |
         mkdir -p ./releases/${{ inputs.release-suffix }}
         [ "$RUNNER_OS" = "Windows" ] && WIN_SUFFIX=".exe"
-        strip "./target/${{ inputs.target }}/${{ inputs.build-type }}/${{ inputs.exec_name }}${WIN_SUFFIX}"
-        mv "./target/${{ inputs.target }}/${{ inputs.build-type }}/${{ inputs.exec_name }}${WIN_SUFFIX}" \
-          "./releases/${{ inputs.release-suffix }}/${{ inputs.exec_name }}-${{ inputs.release-suffix }}${WIN_SUFFIX}"
+        strip "${BINARY_PATH}"
+        mv "${BINARY_PATH}" \
+          "./releases/${{ inputs.release-suffix }}/solx-${{ inputs.release-suffix }}${WIN_SUFFIX}"
 
     - name: Upload binary
       if: inputs.release-suffix != ''

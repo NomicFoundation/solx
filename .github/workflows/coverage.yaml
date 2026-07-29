@@ -2,6 +2,8 @@ name: Code coverage
 
 on:
   pull_request:
+    branches:
+      - main
   # Main runs upload the Codecov base for PR deltas and save the cargo cache
   # that PR runs restore (rust-cache save-if only fires on refs/heads/main).
   push:
@@ -98,12 +100,12 @@ jobs:
         with:
           cmake-build-type: RelWithDebInfo
           working-dir: 'solx-solidity'
+          enable-mlir: 'true'
 
       - name: Build solx
         id: build-solx
         uses: ./.github/actions/build-rust
         with:
-          exec_name: 'solx'
           build-type: 'release'
           enable-coverage: 'true'
           target: 'x86_64-unknown-linux-gnu'
