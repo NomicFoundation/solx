@@ -106,7 +106,6 @@ jobs:
         id: build-solx
         uses: ./.github/actions/build-rust
         with:
-          exec_name: 'solx'
           build-type: 'release'
           enable-coverage: 'true'
           target: 'x86_64-unknown-linux-gnu'

@@ -199,7 +199,6 @@ jobs:
       - name: Build solx
         uses: ./.github/actions/build-rust
         with:
-          exec_name: 'solx'
           target: ${{ matrix.target }}
           release-suffix: ${{ format('{0}-{1}', matrix.release-suffix, github.ref_type == 'tag' && format('v{0}', github.ref_name) || inputs.prerelease_suffix || 'notag') }}
 
