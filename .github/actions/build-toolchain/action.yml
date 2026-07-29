@@ -79,3 +79,4 @@ runs:
       with:
         cmake-build-type: RelWithDebInfo
         working-dir: 'solx-solidity'
+        enable-mlir: 'true'

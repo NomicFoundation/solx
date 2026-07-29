@@ -176,6 +176,7 @@ jobs:
         with:
           build-type: RelWithDebInfo
           enable-assertions: 'true'
+          enable-mlir: 'true'
           sanitizer: 'Address'
 
       - name: Touch LLVM ccache
@@ -265,6 +266,7 @@ jobs:
         with:
           build-type: Release
           enable-assertions: 'false'
+          enable-mlir: 'true'
 
       - name: Touch LLVM ccache
         if: always()
@@ -281,6 +283,7 @@ jobs:
         with:
           cmake-build-type: Release
           working-dir: 'solx-solidity'
+          enable-mlir: 'true'
 
       - name: Touch solc ccache
         if: always()

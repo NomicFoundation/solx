@@ -70,12 +70,14 @@ jobs:
           build-type: RelWithDebInfo
           sanitizer: ${{ env.LLVM_SANITIZER }}
           enable-assertions: 'true'
+          enable-mlir: 'true'
 
       - name: Building solc
         uses: ./.github/actions/build-solc
         with:
           cmake-build-type: RelWithDebInfo
           working-dir: 'solx-solidity'
+          enable-mlir: 'true'
 
       - name: Run tests
         uses: ./.github/actions/rust-unit-tests

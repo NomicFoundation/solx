@@ -96,6 +96,7 @@ jobs:
         with:
           build-type: Release
           enable-assertions: 'false'
+          enable-mlir: 'true'
 
       # Submodule SHA alone is not sufficient: `solx-dev llvm build` is
       # driven by `solx-dev/src/llvm/*`, so a PR that edits those scripts
@@ -141,6 +142,7 @@ jobs:
         with:
           cmake-build-type: Release
           working-dir: 'solx-solidity'
+          enable-mlir: 'true'
 
       # Match the cache key composition in build-solc/action.yml: SHA alone
       # is not sufficient because a PR can change `solx-dev/src/solc/*`
