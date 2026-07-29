@@ -211,21 +211,15 @@ impl Call {
                 None
             }
             BuiltIn::Revert => {
-                let signature: String = match arguments.iter().next() {
-                    Some(Expression::StringExpression(string_expression)) => {
-                        let message = String::from_utf8(string_expression.value())
-                            .expect("slang validates string lals are UTF-8");
-                        if message.is_empty() {
-                            unimplemented!(
-                                "revert with an empty reason is not yet supported; use revert() for a no-data revert"
-                            );
-                        }
-                        message
-                    }
+                let message = match arguments.iter().next() {
+                    Some(Expression::StringExpression(string_expression)) => Some(
+                        String::from_utf8(string_expression.value())
+                            .expect("slang validates string lals are UTF-8"),
+                    ),
                     Some(_) => unreachable!("revert message is a string lal"),
-                    None => String::new(),
+                    None => None,
                 };
-                scope.current_block().revert(&signature, &[], scope);
+                scope.current_block().revert(message.as_deref(), &[], scope);
                 None
             }
             BuiltIn::Gasleft => Some(Value::gas_left(scope)),

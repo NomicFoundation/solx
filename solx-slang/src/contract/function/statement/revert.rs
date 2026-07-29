@@ -12,7 +12,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     pub fn revert_statement(&mut self, node: &RevertStatement) {
         let error = match node.error().resolve_to_definition() {
             None => {
-                self.current_block().revert("", &[], self);
+                self.current_block().revert(None, &[], self);
                 return;
             }
             Some(Definition::Error(error)) => error,
@@ -27,6 +27,6 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             .map(|(_, value)| value)
             .collect();
         self.current_block()
-            .revert_custom(&signature, &values, self);
+            .revert_custom(Some(signature.as_str()), &values, self);
     }
 }

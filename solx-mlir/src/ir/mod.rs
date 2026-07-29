@@ -221,8 +221,8 @@ sol_ops! {
     Block::assert(self, condition: value) {
         AssertOperation.cond(condition)
     }
-    Block::revert | revert_custom (self, signature: str, arguments: values) {
-        RevertOperation.signature(str_attr(signature)).args(many(arguments))
+    Block::revert | revert_custom (self, signature: optional_str, arguments: values) {
+        RevertOperation.signature(optional_str(signature)).args(many(arguments))
     } flagged .call;
     Block::r#return(self, operands: values) {
         ReturnOperation.operands(many(operands))
