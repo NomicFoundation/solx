@@ -104,14 +104,15 @@ impl SlangAst {
                 .iter()
                 .collect();
             for member in members.iter().rev() {
-                let name = match member {
-                    SourceUnitMember::ContractDefinition(definition) => definition.name().name(),
-                    SourceUnitMember::InterfaceDefinition(definition) => definition.name().name(),
-                    SourceUnitMember::LibraryDefinition(definition) => definition.name().name(),
+                let identifier = match member {
+                    SourceUnitMember::ContractDefinition(definition) => definition.name(),
+                    SourceUnitMember::InterfaceDefinition(definition) => definition.name(),
+                    SourceUnitMember::LibraryDefinition(definition) => definition.name(),
                     _ => continue,
                 };
-                if compiled.contains_key(name.as_str()) {
-                    return Some(ContractName::full_path(file_id.as_str(), name.as_str()));
+                let name = identifier.name();
+                if compiled.contains_key(name) {
+                    return Some(ContractName::full_path(file_id.as_str(), name));
                 }
             }
         }
