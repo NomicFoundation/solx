@@ -70,6 +70,7 @@ jobs:
       TARGET: x86_64-unknown-linux-gnu
       RUST_SANITIZER: 'address'
       LLVM_SANITIZER: 'Address'
+      CARGO_TARGET_DIR: target-slang
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -91,21 +92,14 @@ jobs:
           build-type: RelWithDebInfo
           sanitizer: ${{ env.LLVM_SANITIZER }}
           enable-assertions: 'true'
-
-      - name: Building solc
-        uses: ./.github/actions/build-solc
-        with:
-          cmake-build-type: RelWithDebInfo
-          working-dir: 'solx-solidity'
+          enable-mlir: 'true'
 
       - name: Run tests
         uses: ./.github/actions/rust-unit-tests
-        env:
-          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
-          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
         with:
           target: ${{ env.TARGET }}
           sanitizer: ${{ env.RUST_SANITIZER }}
+          cargo-test-command: test-slang
 
   pr-checks:
     name: PR Checks (Sanitizer)
