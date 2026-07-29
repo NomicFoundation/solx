@@ -31,7 +31,7 @@ runs:
       working-directory: ${{ inputs.working-dir }}/..
       run: |
         SHA=$(git -C solx-solidity rev-parse HEAD)
-        SCRIPT_HASH=$(find solx-dev/src/solc -type f -print0 | sort -z | xargs -0 cat | sha256sum | cut -d' ' -f1)
+        SCRIPT_HASH=$({ find solx-dev/src/solc solx-dev/src/arguments/solc -type f -print0; printf '%s\0' solx-dev/src/build_type.rs solx-dev/src/ccache_variant.rs solx-dev/src/utils.rs; } | sort -z | xargs -0 cat | sha256sum | cut -d' ' -f1)
         KEY="v2-solc-${{ runner.os }}-${{ runner.arch }}"
         [ '${{ inputs.cmake-build-type }}' != 'Release' ] && KEY="${KEY}-${{ inputs.cmake-build-type }}"
         [ '${{ inputs.enable-mlir }}' = 'true' ] && KEY="${KEY}-mlir"
