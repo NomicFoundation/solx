@@ -385,14 +385,21 @@ impl Instruction {
 impl std::fmt::Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = self.name.to_string();
-        match self.name {
-            Name::Tag => write!(f, "{name:4}"),
-            _ => write!(f, "{name:20}"),
-        }?;
+        // Pad the mnemonic only when a value follows: trailing spaces would
+        // otherwise be load-bearing in documented output.
         match self.value.as_ref() {
-            Some(value) if value.len() <= 64 => write!(f, "{value}")?,
-            Some(value) => write!(f, "... {}", &value[value.len() - 60..])?,
-            None => {}
+            Some(value) => {
+                match self.name {
+                    Name::Tag => write!(f, "{name:4}"),
+                    _ => write!(f, "{name:20}"),
+                }?;
+                if value.len() <= 64 {
+                    write!(f, "{value}")?;
+                } else {
+                    write!(f, "... {}", &value[value.len() - 60..])?;
+                }
+            }
+            None => write!(f, "{name}")?,
         }
         Ok(())
     }

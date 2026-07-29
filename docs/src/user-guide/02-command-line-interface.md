@@ -263,9 +263,9 @@ $ solx 'Simple.sol' --asm-solc-json
 ======= Simple.sol:Simple =======
 EVM assembly:
 000     PUSH                80
-001     MEMORYGUARD         
+001     MEMORYGUARD
 002     PUSH                40
-003     MSTORE              
+003     MSTORE
 ...
 ```
 
