@@ -17,6 +17,9 @@ config.environment["PATH"] = os.pathsep.join(
 config.substitutions.append(
     ("%evaluation_order", os.path.join(solx_root, "tests", "solidity", "simple", "evaluation_order").replace("\\", "/"))
 )
+config.substitutions.append(
+    ("%for_loop", os.path.join(solx_root, "tests", "solidity", "simple", "loop", "for").replace("\\", "/"))
+)
 
 config.test_source_root = config_dir
 config.test_exec_root = os.path.join(config_dir, "Output")
