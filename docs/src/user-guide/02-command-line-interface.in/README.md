@@ -22,18 +22,9 @@ silently, and newly documented examples are covered automatically.
 
 The sibling `02-command-line-interface.out/` directory exists (with only a
 `.keep` file) to switch on trycmd's sandbox; without it, the commands would run
-in this directory and pollute the repository.
+in this directory and pollute the repository. An empty `.out/` does **not**
+assert that the sandbox ends up empty — the comparison is subset-matching, so
+files present in the sandbox but not listed under `.out/` are simply ignored.
 
-When the test fails after an intentional output change, regenerate the stale
-blocks in place and review the diff:
-
-```bash
-TRYCMD=overwrite cargo test -p solx --test mod docs_examples
-```
-
-Overwriting preserves `...` line elisions but expands inline `[..]` wildcards in
-rewritten regions to the literal output; restore those by hand — in particular
-benchmark timings, and working-directory paths hex-encoded inside DWARF output,
-which differ on every run. Version strings, hashes, and the CBOR trailer change
-on every version or solc-fork bump, so those PRs are expected to carry a blessed
-documentation update.
+Regeneration after an intentional output change is documented in
+[the testing chapter of the developer guide](../../developer-guide/01-testing.md).

@@ -1,28 +1,38 @@
 //!
-//! Checks that every example in the CLI user guide produces the output the
-//! guide shows. The guide is a [trycmd](https://docs.rs/trycmd) test file:
-//! each ```console block runs as documented — `$ solx …` invokes the binary
-//! under test, `$ ls '<dir>'` lists its artifacts — and the lines that
-//! follow each command must match its actual output. `...` on its own line
-//! elides any run of lines; `[..]` matches anything within a line. The input
-//! files live in `02-command-line-interface.in/` next to the guide and are
-//! copied into a temporary sandbox before the commands run.
+//! CLI tests for the user guide examples.
 //!
-//! On mismatch, rerun with `TRYCMD=overwrite` to rewrite the stale blocks in
-//! place, then review the documentation diff. Overwriting preserves `...`
-//! line elisions, but inline `[..]` wildcards in rewritten regions are
-//! expanded to the literal output and must be restored by hand — watch for
-//! benchmark timings and for working-directory paths hex-encoded inside
-//! DWARF output, which differ on every run.
+//! Every ```console block in the guide is a [trycmd](https://docs.rs/trycmd)
+//! case. Regeneration is documented in `docs/src/developer-guide/01-testing.md`.
 //!
+
+/// trycmd resolves only registered binaries (it never searches `PATH`),
+/// so external commands like `ls` must be resolved here and registered.
+fn find_in_path(name: &str) -> std::path::PathBuf {
+    let paths = std::env::var_os("PATH").expect("PATH is not set");
+    std::env::split_paths(&paths)
+        .flat_map(|directory| [directory.join(name), directory.join(format!("{name}.exe"))])
+        .find(|path| path.is_file())
+        .unwrap_or_else(|| panic!("`{name}` not found in PATH"))
+}
 
 #[test]
 fn docs_examples() {
+    let guide = "../docs/src/user-guide/02-command-line-interface.md";
+
+    // trycmd exits green when it recognizes zero cases, so a restructuring
+    // that breaks fence recognition must fail here instead of passing silently.
+    let source = std::fs::read_to_string(guide).expect("the CLI user guide is readable");
+    assert!(
+        source.contains("```console"),
+        "no ```console blocks found in {guide}; the harness would run nothing"
+    );
+
     trycmd::TestCases::new()
         .register_bin(
             "solx",
             assert_cmd::cargo::cargo_bin!(env!("CARGO_PKG_NAME")).to_path_buf(),
         )
+        .register_bin("ls", find_in_path("ls"))
         .env("LC_ALL", "C")
-        .case("../docs/src/user-guide/02-command-line-interface.md");
+        .case(guide);
 }

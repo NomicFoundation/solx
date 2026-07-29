@@ -7,5 +7,7 @@ solx-benchmark-converter/src/tests/fixtures/*.md text eol=lf
 
 # The CLI-guide fixtures are hashed in documented compiler output (the
 # metadata example embeds Simple.sol's keccak256), so CRLF checkouts on
-# Windows must not rewrite their line endings.
+# Windows must not rewrite their line endings. The .out/ rule is
+# preventive: any future expected-output fixture is compared byte-wise.
 docs/src/user-guide/02-command-line-interface.in/** text eol=lf
+docs/src/user-guide/02-command-line-interface.out/** text eol=lf

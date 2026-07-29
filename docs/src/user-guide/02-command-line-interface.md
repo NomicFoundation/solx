@@ -22,6 +22,21 @@ To compile a basic Solidity contract, run the simple example from [the *--bin* s
 
 The rest of this section describes the available CLI options and their usage. You may also check out `solx --help` for a quick reference.
 
+All examples on this page are executable and verified against the compiler on every change. Unless stated otherwise, they compile this contract, `Simple.sol`:
+
+```solidity
+{{#include 02-command-line-interface.in/Simple.sol}}
+```
+
+The examples use the following notation:
+
+- `$` precedes the command being run; the lines below it show the command's output.
+- `[..]` matches any text within a line — used for values that differ between runs or environments, such as timings and hashes.
+- `...` on its own line elides a run of output lines.
+- `? failed` marks a command that exits with a non-zero code.
+
+All commands on this page run in one shared working directory, so sections that emit files use per-section output directories (`./build-evmla/`, `./build-ethir/`, …) to keep each listing scoped to its own artifacts.
+
 
 
 ### `--bin`
@@ -33,7 +48,8 @@ $ solx 'Simple.sol' --bin
 
 ======= Simple.sol:Simple =======
 Binary:
-34601557630000008480630000001a[..]
+34601557630000008480630000001a6080396080f35b5f5ffdfe34600b57600336116016575b5f5ffd5b5060016031565b5f3560e01c633df4ddf48114600f57635a8ac02d03600b5760025b60805260206080f3fea2646970667358221220[..]64736f6c637816736f6c783a302e312e363b736f6c633a302e382e33340047
+
 ```
 
 
@@ -47,7 +63,8 @@ $ solx 'Simple.sol' --bin-runtime
 
 ======= Simple.sol:Simple =======
 Binary of the runtime part:
-34600b57600336116016575b5f5ffd[..]
+34600b57600336116016575b5f5ffd5b5060016031565b5f3560e01c633df4ddf48114600f57635a8ac02d03600b5760025b60805260206080f3fea2646970667358221220[..]64736f6c637816736f6c783a302e312e363b736f6c633a302e382e33340047
+
 ```
 
 
@@ -138,6 +155,8 @@ JSON AST:
 ======= Simple.sol:Simple =======
 
 ```
+
+The `nodes` array — the AST body itself — is abbreviated here; it spans several thousand characters even for this small contract.
 
 > Since **solx** communicates with **solc** only via standard JSON under the hood, the full JSON AST is emitted instead of the compact one.
 
@@ -300,6 +319,8 @@ Debug info:
 7f454c46010201ff[..]
 ```
 
+Only the ELF magic is shown: the DWARF payload embeds the absolute build directory, so its bytes differ between machines and are not reproducible documentation material.
+
 
 
 ### `--debug-info-runtime`
@@ -313,6 +334,8 @@ $ solx 'Simple.sol' --debug-info-runtime
 Debug info of the runtime part:
 7f454c46010201ff[..]
 ```
+
+The payload is abbreviated for the same reason as in [`--debug-info`](#--debug-info).
 
 
 
@@ -331,6 +354,7 @@ Compiler run successful. Artifact(s) can be found in directory "./build-evmla/".
 $ ls './build-evmla/'
 Simple_sol_Simple.evmla
 Simple_sol_Simple_runtime.evmla
+
 ```
 
 Usage with stdout:
@@ -363,6 +387,7 @@ Compiler run successful. Artifact(s) can be found in directory "./build-ethir/".
 $ ls './build-ethir/'
 Simple_sol_Simple.ethir
 Simple_sol_Simple_runtime.ethir
+
 ```
 
 Usage with stdout:
@@ -398,6 +423,7 @@ Simple_sol_Simple.optimized.ll
 Simple_sol_Simple.unoptimized.ll
 Simple_sol_Simple_runtime.optimized.ll
 Simple_sol_Simple_runtime.unoptimized.ll
+
 ```
 
 Usage with stdout:
@@ -500,6 +526,7 @@ Simple_sol_Simple_llvm.asm
 Simple_sol_Simple_llvm.asm-runtime
 Simple_sol_Simple_meta.json
 Simple_sol_Simple_runtime.asm
+
 ```
 
 
@@ -517,6 +544,8 @@ $ solx 'Simple.sol' --bin --output-dir './build/' --overwrite
 Compiler run successful. Artifact(s) can be found in directory "./build/".
 
 ```
+
+Here `./build/` already contains the artifacts emitted in [the `--output-dir` section](#--output-dir), so the flag has existing files to overwrite.
 
 If the `--overwrite` option is not specified and the output files already exist, **solx** refuses to overwrite them and exits with an error:
 
@@ -799,6 +828,12 @@ Enables the Yul mode. In this mode, input is expected to be in the Yul language.
 
 Yul input is optimized through LLVM and is not emitted as a verbatim EVM opcode sequence. See [Optimizer and Assembly Semantics](./04-limitations.md#optimizer-and-assembly-semantics).
 
+The example compiles this Yul object, `Simple.yul`:
+
+```yul
+{{#include 02-command-line-interface.in/Simple.yul}}
+```
+
 Usage:
 
 ```console
@@ -820,6 +855,8 @@ Enables the LLVM IR mode. In this mode, input is expected to be in the LLVM IR l
 > It is not possible to write deploy code manually yet, but it will be supported in the future.
 
 Unlike **solc**, **solx** is an LLVM-based compiler toolchain, so it uses LLVM IR as an intermediate representation. It is not recommended to write LLVM IR manually, but it can be useful for debugging and optimization purposes. LLVM IR is more low-level than Yul and EVM assembly in the **solx** IR hierarchy.
+
+The example input `Simple.ll` is the optimized runtime module of `Simple.sol` above, as produced by [`--emit-llvm-ir`](#--emit-llvm-ir).
 
 Usage:
 
@@ -881,6 +918,7 @@ Simple_sol_Simple_runtime.ethir
 Simple_sol_Simple_runtime.evmla
 Simple_sol_Simple_runtime.optimized.ll
 Simple_sol_Simple_runtime.unoptimized.ll
+
 ```
 
 The output file name is constructed as follows: `<ContractPath>_<ContractName>[_runtime].<Modifiers>.<Extension>`.
