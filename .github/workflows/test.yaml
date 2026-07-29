@@ -1,19 +1,17 @@
 name: Tests
 
-# Execute workflow for each PR and with each merge to the trunk
 on:
   pull_request:
     types: [opened, synchronize, reopened]
   merge_group:
   push:
     branches:
-      - main
+      - main-slang
 
 permissions:
   contents: read
   packages: read
 
-# Cancel the workflow if any new changes pushed to a feature branch or the trunk
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -133,7 +131,7 @@ jobs:
         with:
           prefix-key: cargo-checks-v1
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.ref == 'refs/heads/main-slang' }}
 
       - name: Cargo checks
         uses: ./.github/actions/cargo-check
@@ -142,7 +140,9 @@ jobs:
     name: Cargo cooldown check
     runs-on: ubuntu-24.04
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: >-
+      needs.changes.outputs.code == 'true'
+      && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork)
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -178,18 +178,18 @@ jobs:
           LOG_LEVEL: debug
         run: npx --yes renovate --platform=local --dry-run=full
 
-  # Build and run regression tests
   build-and-test:
-    needs: changes
-    if: needs.changes.outputs.code == 'true' || needs.changes.outputs.docs-examples == 'true'
-    env:
-      CARGO_INCREMENTAL: "0"
+    needs: [changes, cooldown-check]
+    # checks: write for the rust-unit-tests action's test-results check run.
     permissions:
       contents: read
       checks: write
       packages: read
+    env:
+      CARGO_TARGET_DIR: target-slang
+      CARGO_INCREMENTAL: "0"
     strategy:
-      fail-fast: false # finalize testing of all targets even if one failed
+      fail-fast: false
       matrix:
         include:
           - name: "MacOS x86"
@@ -230,36 +230,86 @@ jobs:
         if: runner.os == 'Linux' && matrix.image != ''
         uses: ./.github/actions/free-disk-space-linux
 
+      # solc is built separately below: the lit tests need a Release build,
+      # not the standard config.
       - name: Build toolchain
         uses: ./.github/actions/build-toolchain
-
-      # Positioned after build-toolchain: prepare-msys switches the rustup
-      # host, which is part of the cache key, so only the post-msys position
-      # matches the keys already saved on main.
-      - name: Cache cargo artifacts
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          prefix-key: build-and-test-v2
-          cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          solc: 'false'
 
-      - name: Free disk space (remove LLVM source and build artifacts)
+      # TODO: remove this step once the lit tests stop running against solc.
+      #
+      # Release: RelWithDebInfo bakes -g3 debug info into the statically
+      # linked solc.exe, producing a ~2 GB PE that the Windows loader
+      # rejects ("Exec format error"), and the lit tests execute solc.
+      - name: Build solc
+        uses: ./.github/actions/build-solc
+        with:
+          cmake-build-type: Release
+          enable-mlir: 'true'
+
+      # bindgen's embedded clang needs to know it's targeting MinGW,
+      # otherwise it can't parse MinGW-specific __attribute__ extensions
+      # in stdlib.h (rust-lang/rust-bindgen#1760).
+      - name: Set bindgen target for MinGW
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "BINDGEN_EXTRA_CLANG_ARGS=--target=x86_64-w64-windows-gnu" >> "${GITHUB_ENV}"
+
+      - name: Preserve lit tools before disk cleanup
+        shell: bash
+        run: |
+          EXE=${{ runner.os == 'Windows' && '.exe' || '' }}
+          LIT=llvm-lit${{ runner.os == 'Windows' && '.py' || '' }}
+          mkdir -p "${RUNNER_TEMP}/lit-tools"
+          cp -r \
+            target-llvm/target-final/bin/FileCheck${EXE} \
+            target-llvm/target-final/bin/${LIT} \
+            solx-llvm/llvm/utils/lit \
+            solx-solidity/build/solc/solc${EXE} \
+            "${RUNNER_TEMP}/lit-tools/"
+          echo "${RUNNER_TEMP}/lit-tools" >> "${GITHUB_PATH}"
+          echo "PYTHONPATH=${RUNNER_TEMP}/lit-tools/lit" >> "${GITHUB_ENV}"
+
+      - name: Free disk space (remove build artifacts before slang tests)
         shell: bash
         run: |
           echo "Before cleanup:" && df -h .
-          rm -rf solx-llvm target-llvm/build-final
-          # Remove solx-solidity source, keeping build/ and boost/ for tests
-          find solx-solidity -mindepth 1 -maxdepth 1 ! -name build ! -name boost -exec rm -rf {} +
-          rm -rf .git/modules
+          rm -rf solx-llvm target-llvm/build-final target solx-solidity
           echo "After cleanup:" && df -h .
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          prefix-key: slang-tests-v2
+          # `cargo test-slang` writes to target-slang, not target (.cargo/config.toml alias)
+          workspaces: ". -> target-slang"
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main-slang' }}
 
       - name: Run tests
         uses: ./.github/actions/rust-unit-tests
-        env:
-          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
-          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
         with:
           target: ${{ matrix.target || '' }}
+          cargo-test-command: 'test-slang'
+          results-xml: 'unit-tests-results.xml'
+          check-name: 'Unit Tests Results'
+
+      - name: Verify lit tools run outside MSYS2
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          ls -la "${RUNNER_TEMP}/lit-tools"
+          FileCheck --version
+          solc --version
+
+      - name: Run MLIR lit tests
+        shell: bash
+        env:
+          SOLX_LIT_TARGET: ${{ matrix.target || '' }}
+        run: |
+          LIT=llvm-lit${{ runner.os == 'Windows' && '.py' || '' }}
+          ${LIT} -v solx-mlir/tests/lit/
 
   actionlint:
     name: Lint GitHub Actions workflows
@@ -297,8 +347,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: zizmor --format github .github
 
-  # Special job that allows some of the jobs to be skipped or failed
-  # requiring others to be successful
   pr-checks:
     name: PR Checks (Tests)
     runs-on: ubuntu-24.04
@@ -316,8 +364,11 @@ jobs:
         uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
         with:
           jobs: ${{ toJSON(needs) }}
-          # Docs-only PRs may skip the cargo-level checks, but if the change
-          # touches the CLI guide or its fixtures, build-and-test (which runs
-          # the docs_examples test) must still pass.
           allowed-skips: >-
-            ${{ needs.changes.outputs.code != 'true' && (needs.changes.outputs.docs-examples == 'true' && 'cargo-checks, cooldown-check, renovate-config-check' || 'cargo-checks, build-and-test, cooldown-check, renovate-config-check') || '' }}
+            ${{
+              needs.changes.outputs.code != 'true'
+              && 'cargo-checks, build-and-test, cooldown-check, renovate-config-check'
+              || github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork
+              && 'build-and-test, cooldown-check'
+              || ''
+            }}

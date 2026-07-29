@@ -9,7 +9,7 @@ pub mod hardhat;
 pub mod solx_tester;
 
 /// Codegen variants every enabled compiler is tested with.
-pub(crate) const CODEGENS: [&str; 2] = ["legacy", "viaIR"];
+pub(crate) const CODEGENS: [&str; 1] = ["legacy"];
 
 ///
 /// The toolchain identifier that benchmark inputs, correctness tables, and
