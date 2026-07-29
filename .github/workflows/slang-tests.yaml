@@ -19,19 +19,40 @@ concurrency:
 jobs:
 
   label-check:
+    # Checks the PR's current label set, not the triggering action: keying on
+    # github.event.label.name would skip this run (and cancel a real one in
+    # flight) when an unrelated label is added to a PR carrying ci:slang.
     if: >-
       github.event_name == 'push'
-      || ((github.event.action == 'labeled' && github.event.label.name == 'ci:slang'
-      || github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'ci:slang'))
+      || (contains(github.event.pull_request.labels.*.name, 'ci:slang')
       && !github.event.pull_request.head.repo.fork)
     runs-on: ubuntu-24.04
     steps:
       - run: 'true'
 
+  changes:
+    needs: label-check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          # Full history for the filter's git-diff mode.
+          fetch-depth: 0
+      - uses: ./.github/actions/code-changes
+        id: filter
+
   cooldown-check:
     name: Cargo cooldown check
     runs-on: ubuntu-24.04
-    needs: label-check
+    needs: [label-check, changes]
+    # A custom if: overrides the implicit skip cascade from needs
+    # (actions/runner#491), so the label gate must be restated here.
+    if: needs.label-check.result == 'success' && needs.changes.outputs.code == 'true'
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -172,6 +193,7 @@ jobs:
     if: always()
     needs:
       - label-check
+      - changes
       - cooldown-check
       - slang-tests
     steps:
@@ -180,4 +202,6 @@ jobs:
         with:
           jobs: ${{ toJSON(needs) }}
           allowed-skips: >-
-            ${{ needs.label-check.result == 'skipped' && 'label-check, cooldown-check, slang-tests' || '' }}
+            ${{ needs.label-check.result == 'skipped' && 'label-check, changes, cooldown-check, slang-tests'
+            || needs.changes.outputs.code != 'true' && 'cooldown-check, slang-tests'
+            || '' }}

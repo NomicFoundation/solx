@@ -25,7 +25,6 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-      pull-requests: read
     outputs:
       code: ${{ steps.filter.outputs.code }}
       devcontainer: ${{ steps.filter-devcontainer.outputs.devcontainer }}
@@ -33,19 +32,12 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+          # Full history for the filters' git-diff mode.
+          fetch-depth: 0
+      - uses: ./.github/actions/code-changes
         id: filter
-        with:
-          predicate-quantifier: 'every'
-          filters: |
-            code:
-              - '**'
-              - '!docs/**'
-              - '!**/*.md'
-              - '!**/*.mdx'
-              - '!**/LICENSE*'
       # Separate step: the OR-list below needs the default 'some' quantifier,
-      # while the negation-style filter above needs 'every'. The docker dir is
+      # while the negation-style code filter needs 'every'. The docker dir is
       # included because the devcontainer builds its `base` stage locally;
       # rust-toolchain.toml because the container resolves it lazily on first
       # use; this workflow itself so edits to the validation harness (the
@@ -53,6 +45,7 @@ jobs:
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter-devcontainer
         with:
+          token: ''
           filters: |
             devcontainer:
               - '.devcontainer/**'
