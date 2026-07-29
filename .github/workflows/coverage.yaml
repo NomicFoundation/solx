@@ -3,12 +3,12 @@ name: Code coverage
 on:
   pull_request:
     branches:
-      - main
-  # Main runs upload the Codecov base for PR deltas and save the cargo cache
-  # that PR runs restore (rust-cache save-if only fires on refs/heads/main).
+      - main-slang*
+  # Trunk runs upload the Codecov base for PR deltas and save the cargo cache
+  # that PR runs restore (rust-cache save-if only fires on refs/heads/main-slang).
   push:
     branches:
-      - main
+      - main-slang
 
 concurrency:
   group: ${{ github.repository_id }}-${{ github.workflow }}-${{ github.ref }}
@@ -54,8 +54,6 @@ jobs:
         - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
         - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
     env:
-      BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
-      SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
       PROFDATA_FILE: solx.profdata
       LCOV_FILE: codecov.lcov
       OUTPUT_HTML_DIR: COVERAGE
@@ -85,7 +83,7 @@ jobs:
         with:
           prefix-key: coverage-v1
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.ref == 'refs/heads/main-slang' }}
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
@@ -95,13 +93,6 @@ jobs:
           enable-coverage: 'true'
           enable-mlir: 'true'
 
-      - name: Building solc
-        uses: ./.github/actions/build-solc
-        with:
-          cmake-build-type: RelWithDebInfo
-          working-dir: 'solx-solidity'
-          enable-mlir: 'true'
-
       - name: Build solx
         id: build-solx
         uses: ./.github/actions/build-rust
@@ -109,6 +100,12 @@ jobs:
           build-type: 'release'
           enable-coverage: 'true'
           target: 'x86_64-unknown-linux-gnu'
+
+      - name: Build solx-dev and solx-tester
+        env:
+          RUSTC_BOOTSTRAP: 1
+          RUSTFLAGS: '-C target-feature=+crt-static -C instrument-coverage -C link-arg=-fuse-ld=lld'
+        run: ${SFW_PREFIX:-} cargo build --frozen --release -p solx-dev -p solx-tester --features solx-tester/slang-ast --target x86_64-unknown-linux-gnu
 
       - name: Run integration tests
         env:
@@ -150,35 +147,7 @@ jobs:
           # pool of 4 files instead of leaving one profraw per process (CLI
           # tests spawn thousands of short-lived solx subprocesses).
           LLVM_PROFILE_FILE: 'unit-tests-%4m.profraw'
-        run: ${SFW_PREFIX:-} cargo fetch --locked && ${SFW_PREFIX:-} cargo test --frozen --release --target x86_64-unknown-linux-gnu
-
-      # Inkwell feature poisoning: solc path builds inkwell with LLVM linking,
-      # slang path needs no-llvm-linking. cargo clean cannot reliably clear
-      # cached llvm-sys build script output. Use a separate target directory
-      # for complete isolation.
-      - name: Run slang unit tests
-        if: contains(github.event.pull_request.labels.*.name, 'ci:slang')
-        env:
-          RUSTC_BOOTSTRAP: 1
-          RUSTFLAGS: '-C instrument-coverage -C link-arg=-fuse-ld=lld'
-          LLVM_PROFILE_FILE: 'slang-tests-%4m.profraw'
-          CARGO_TARGET_DIR: target-slang
         run: ${SFW_PREFIX:-} cargo test-slang --frozen --release --target x86_64-unknown-linux-gnu
-
-      - name: Preserve slang instrumented binary
-        if: contains(github.event.pull_request.labels.*.name, 'ci:slang')
-        run: cp "./target-slang/x86_64-unknown-linux-gnu/release/solx" "${GITHUB_WORKSPACE}/solx-slang-instrumented"
-
-      - name: Merge slang test profraw
-        if: contains(github.event.pull_request.labels.*.name, 'ci:slang')
-        run: |
-          find . -name 'slang-tests-*.profraw' -print > slang-profiles.lst
-          if [ -s slang-profiles.lst ]; then
-            TMP="${PROFDATA_FILE}.tmp"
-            llvm-profdata merge -sparse -num-threads="$(nproc)" -o "${TMP}" "${PROFDATA_FILE}" @slang-profiles.lst
-            mv -f "${TMP}" "${PROFDATA_FILE}"
-            find . -name 'slang-tests-*.profraw' -delete
-          fi
 
       - name: Merge unit test profraw
         run: |
@@ -197,7 +166,6 @@ jobs:
             -object "${GITHUB_WORKSPACE}/solx-tester-instrumented"
             -object "${GITHUB_WORKSPACE}/solx-dev-instrumented"
           )
-          [ -f "${GITHUB_WORKSPACE}/solx-slang-instrumented" ] && OBJECTS+=(-object "${GITHUB_WORKSPACE}/solx-slang-instrumented")
           llvm-cov show --show-directory-coverage \
             --format=html --output-dir=${OUTPUT_HTML_DIR} \
             --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
@@ -216,7 +184,6 @@ jobs:
             -object "${GITHUB_WORKSPACE}/solx-tester-instrumented"
             -object "${GITHUB_WORKSPACE}/solx-dev-instrumented"
           )
-          [ -f "${GITHUB_WORKSPACE}/solx-slang-instrumented" ] && OBJECTS+=(-object "${GITHUB_WORKSPACE}/solx-slang-instrumented")
           llvm-cov report -instr-profile=${PROFDATA_FILE} "${OBJECTS[@]}" \
             --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
             > coverage-report.txt

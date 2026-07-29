@@ -112,10 +112,7 @@ jobs:
         run: ${SFW_PREFIX:-} cargo fetch --locked
 
       - name: Build solx (PR)
-        run: |
-          ${SFW_PREFIX:-} cargo build-slang --frozen --release
-          mkdir -p target/release
-          cp target-slang/release/solx target/release/solx
+        run: ${SFW_PREFIX:-} cargo build-slang --frozen --release
 
       - name: Build solx-dev and solx-tester (PR)
         run: ${SFW_PREFIX:-} cargo build --frozen --release -p solx-dev -p solx-tester --features solx-tester/slang-ast
@@ -128,10 +125,7 @@ jobs:
       - name: Build solx (main-slang)
         working-directory: temp-solx-main
         continue-on-error: true
-        run: |
-          ${SFW_PREFIX:-} cargo build-slang --frozen --release
-          mkdir -p target/release
-          cp target-slang/release/solx target/release/solx
+        run: ${SFW_PREFIX:-} cargo build-slang --frozen --release
 
       - name: Build solx-dev and solx-tester (main-slang)
         working-directory: temp-solx-main
