@@ -2,6 +2,8 @@ name: Code coverage
 
 on:
   pull_request:
+    branches:
+      - main
   # Main runs upload the Codecov base for PR deltas and save the cargo cache
   # that PR runs restore (rust-cache save-if only fires on refs/heads/main).
   push:

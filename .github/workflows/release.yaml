@@ -7,7 +7,7 @@
 #
 #   workflow_dispatch       — Nightly / ad-hoc pre-release: same build & review
 #                             pipeline, publishes a GitHub pre-release. Individual
-#                             platforms can be toggled off. Requires manual approval.
+#                             platforms can be toggled off. No approval needed.
 #
 #   pull_request (ci:release label) — Dry-run: exercises the full pipeline but
 #                             skips attestation, GitHub Release creation, docs
@@ -179,13 +179,7 @@ jobs:
         with:
           build-type: Release
           enable-assertions: 'false'
-          enable-mlir: 'false'
-
-      - name: Building solc
-        uses: ./.github/actions/build-solc
-        with:
-          cmake-build-type: 'Release'
-          working-dir: 'solx-solidity'
+          enable-mlir: 'true'
 
       - name: Free disk space (remove LLVM build artifacts)
         shell: bash
@@ -194,11 +188,16 @@ jobs:
           rm -rf target-llvm/build-final
           echo "After cleanup:" && df -h .
 
+      # bindgen's embedded clang needs to know it's targeting MinGW,
+      # otherwise it can't parse MinGW-specific __attribute__ extensions
+      # in stdlib.h (rust-lang/rust-bindgen#1760).
+      - name: Set bindgen target for MinGW
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "BINDGEN_EXTRA_CLANG_ARGS=--target=x86_64-w64-windows-gnu" >> "${GITHUB_ENV}"
+
       - name: Build solx
         uses: ./.github/actions/build-rust
-        env:
-          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
-          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
         with:
           exec_name: 'solx'
           target: ${{ matrix.target }}
@@ -486,8 +485,8 @@ jobs:
       && needs.prepare.result == 'success'
       && needs.review.result == 'success'
       && needs.cooldown-check.result == 'success'
-    # PR dry-runs skip the manual approval gate; tag/dispatch runs still require it.
-    environment: ${{ github.event_name != 'pull_request' && 'solx-release' || '' }}
+    # Only tag releases require the manual approval gate; pre-releases publish unattended.
+    environment: ${{ github.ref_type == 'tag' && 'solx-release' || '' }}
     runs-on: ubuntu-24.04
     steps:
 
@@ -658,7 +657,7 @@ jobs:
           RELEASE_TITLE: ${{ needs.prepare.outputs.release_title }}
           VERSION_OR_SHA: ${{ needs.prepare.outputs.version_or_sha }}
           IS_PRERELEASE: ${{ github.ref_type != 'tag' }}
-          ENVIRONMENT: ${{ github.event_name != 'pull_request' && 'solx-release' || 'none (dry-run)' }}
+          ENVIRONMENT: ${{ github.ref_type == 'tag' && 'solx-release' || 'none' }}
         run: |
           echo "### Release Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"

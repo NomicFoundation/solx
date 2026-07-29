@@ -6,7 +6,7 @@ on:
   merge_group:
   push:
     branches:
-      - main
+      - main-slang
 
 permissions:
   contents: read
@@ -20,10 +20,8 @@ jobs:
 
   label-check:
     if: >-
-      github.event_name == 'push'
-      || ((github.event.action == 'labeled' && github.event.label.name == 'ci:slang'
-      || github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'ci:slang'))
-      && !github.event.pull_request.head.repo.fork)
+      github.event_name != 'pull_request'
+      || !github.event.pull_request.head.repo.fork
     runs-on: ubuntu-24.04
     steps:
       - run: 'true'
@@ -79,21 +77,15 @@ jobs:
           submodules: true
           persist-credentials: false
 
-      # solc is built separately below: the lit tests need a Release build
-      # against a synced solx-solidity, not the standard config.
+      # solc is built separately below: the lit tests need a Release build,
+      # not the standard config.
       - name: Build toolchain
         uses: ./.github/actions/build-toolchain
         with:
           solc: 'false'
 
-      # TODO: remove this step and the Build solc step below once the lit
-      # tests stop running against solc.
-      - name: Sync solx-solidity for MLIR codegen
-        shell: bash
-        run: |
-          git -C solx-solidity fetch origin main
-          git -C solx-solidity checkout FETCH_HEAD
-
+      # TODO: remove this step once the lit tests stop running against solc.
+      #
       # Release: RelWithDebInfo bakes -g3 debug info into the statically
       # linked solc.exe, producing a ~2 GB PE that the Windows loader
       # rejects ("Exec format error"), and the lit tests execute solc.
@@ -140,7 +132,7 @@ jobs:
           # `cargo test-slang` writes to target-slang, not target (.cargo/config.toml alias)
           workspaces: ". -> target-slang"
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.ref == 'refs/heads/main-slang' }}
 
       - name: Run slang tests
         uses: ./.github/actions/rust-unit-tests
