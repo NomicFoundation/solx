@@ -32,8 +32,8 @@ unsafe extern "C" {
     /// Creates the `canonicalize` pass.
     pub fn mlirCreateTransformsCanonicalizer() -> MlirPass;
 
-    /// Creates the `sol-modifier-op-lowering` pass.
-    pub fn mlirCreateSolModifierOpLoweringPass() -> MlirPass;
+    /// Creates the `sol-inline-modifiers` pass.
+    pub fn mlirCreateSolModifierInliningPass() -> MlirPass;
 
     // ---- Sol-to-Yul conversion ----
 

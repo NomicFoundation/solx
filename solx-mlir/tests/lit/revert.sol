@@ -2,10 +2,13 @@
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func @{{.*plain_revert.*}}
-// CHECK:   sol.revert ""
+// CHECK:   sol.revert{{$}}
 
 // CHECK: sol.func @{{.*message_revert.*}}
 // CHECK:   sol.revert "oops"
+
+// CHECK: sol.func @{{.*empty_message_revert.*}}
+// CHECK:   sol.revert ""
 
 // CHECK: sol.func @{{.*custom_error.*}}
 // CHECK:   sol.revert "TooLow(uint256,uint256)" %{{.*}}, %{{.*}} : ui256, ui256 {call}
@@ -24,6 +27,10 @@ contract C {
 
     function message_revert() public pure {
         revert("oops");
+    }
+
+    function empty_message_revert() public pure {
+        revert("");
     }
 
     function custom_error(uint256 x) public pure {

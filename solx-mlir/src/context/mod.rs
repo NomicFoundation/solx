@@ -144,16 +144,18 @@ impl<'context> Context<'context> {
     /// Run the Sol-to-LLVM conversion pass pipeline on a module in-place.
     ///
     /// The pass pipeline is:
-    /// 1. `convert-sol-to-yul`: Sol → Yul
-    /// 2. `convert-yul-to-std`: Yul → func/arith/scf/cf/LLVM
-    /// 3. `convert-scf-to-cf`
-    /// 4. `convert-func-to-llvm`
-    /// 5. `convert-arith-to-llvm`
-    /// 6. `convert-cf-to-llvm`
-    /// 7. `reconcile-unrealized-casts`
+    /// 1. `canonicalize`
+    /// 2. `sol-inline-modifiers`
+    /// 3. `convert-sol-to-yul`: Sol → Yul
+    /// 4. `convert-yul-to-std`: Yul → func/arith/scf/cf/LLVM
+    /// 5. `canonicalize`
+    /// 6. `convert-scf-to-cf`
+    /// 7. `convert-func-to-llvm`
+    /// 8. `convert-arith-to-llvm`
+    /// 9. `convert-cf-to-llvm`
+    /// 10. `reconcile-unrealized-casts`
     ///
-    /// Modifier lowering and LICM are skipped: they operate on `sol.modifier`
-    /// and `sol.while`/`sol.for` ops which are not yet emitted.
+    /// `sol-licm` is not yet in the pipeline.
     ///
     /// # Errors
     ///
@@ -167,7 +169,7 @@ impl<'context> Context<'context> {
                 crate::ffi::mlirCreateTransformsCanonicalizer(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateSolModifierOpLoweringPass(),
+                crate::ffi::mlirCreateSolModifierInliningPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionConvertSolToYulPass(),
