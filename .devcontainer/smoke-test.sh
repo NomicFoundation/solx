@@ -12,7 +12,7 @@ test "$(id -u)" -ne 0
 sudo -n true
 
 echo "==> Workspace and named volumes are writable"
-for dir in . target target-slang target-llvm "${CCACHE_DIR:?CCACHE_DIR not set}"; do
+for dir in . target target-llvm "${CCACHE_DIR:?CCACHE_DIR not set}"; do
     touch "${dir}/.devcontainer-smoke"
     rm "${dir}/.devcontainer-smoke"
 done

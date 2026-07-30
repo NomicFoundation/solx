@@ -5,9 +5,9 @@ description: >-
   on macOS), then the LLVM and solc builds. The build parameters below
   define the standard-config cache keys shared by test.yaml and
   cache-warmup.yaml — changing them here re-keys both workflows together.
-  Workflows needing a different LLVM
-  configuration (sanitizer, coverage, integration, release) call
-  build-llvm/build-solc directly and pair with their own cache-warmup job.
+  Workflows needing a different LLVM configuration (sanitizer, coverage,
+  integration, release) call build-llvm and build-solc directly as needed
+  and pair with their own cache-warmup job.
 
 inputs:
   llvm:
@@ -73,10 +73,15 @@ runs:
       shell: bash
       run: rm -fv "$(rustc --print sysroot)/bin/libwinpthread-1.dll"
 
+    # TODO: remove this step once the lit tests stop running against solc.
+    #
+    # Release: RelWithDebInfo bakes -g3 debug info into the statically
+    # linked solc.exe, producing a ~2 GB PE that the Windows loader
+    # rejects ("Exec format error"), and the lit tests execute solc.
     - name: Build solc
       if: inputs.solc == 'true'
       uses: ./.github/actions/build-solc
       with:
-        cmake-build-type: RelWithDebInfo
+        cmake-build-type: Release
         working-dir: 'solx-solidity'
         enable-mlir: 'true'

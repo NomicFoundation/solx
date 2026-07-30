@@ -5,8 +5,11 @@ name: 'Build LLVM'
 description: 'Builds backend LLVM framework'
 outputs:
   cache-hit:
-    description: 'Whether the LLVM cache was hit'
-    value: ${{ steps.llvm-artifact-cache.outputs.cache-hit }}
+    description: 'Whether the LLVM artifacts were reused, from the cache or a sibling mirror, and no build ran'
+    value: ${{ steps.llvm-artifact-cache.outputs.cache-hit || steps.llvm-mirror.outputs.mirrored }}
+  cache-key:
+    description: 'Artifact cache key; a sibling invocation''s `mirror-key`'
+    value: ${{ steps.llvm-cache.outputs.key }}
   llvm-prefix:
     description: 'Path to the LLVM installation'
     value: 'target-llvm/target-final'
@@ -15,6 +18,13 @@ inputs:
     description: 'Working directory.'
     required: false
     default: '.'
+  mirror-key:
+    description: >-
+      Sibling invocation's `cache-key`: when equal to this invocation's own
+      key, the workspace-root artifacts are symlinked, skipping restore and
+      build. Empty disables mirroring.
+    required: false
+    default: ''
   enable-utils:
     description: "Build and install the LLVM utility binaries (FileCheck, llvm-lit, etc.). Implied by enable-tests."
     required: false
@@ -57,7 +67,7 @@ inputs:
       Disable it when the solx-llvm tree changes every run (e.g. solx-llvm's own
       regression CI) or when later steps need the build directory: an artifact hit
       skips the build entirely, so target-llvm/build-final would not exist.
-      When disabled, the `cache-hit` output is always empty.
+      When disabled, `cache-hit` reports a mirror hit or nothing at all.
     required: false
     default: 'true'
 
@@ -74,29 +84,23 @@ runs:
       run: echo "hash=$(pacman -Q | sha256sum | head -c 8)" >> "${GITHUB_OUTPUT}"
 
     - name: Compute LLVM cache key
-      if: inputs.enable-artifact-cache == 'true'
+      if: inputs.enable-artifact-cache == 'true' || inputs.mirror-key != ''
       id: llvm-cache
       shell: bash
       working-directory: ${{ inputs.working-dir }}
       run: |
         SHA=$(git -C solx-llvm rev-parse HEAD)
-        # solx-dev owns LLVM-build cmake args (shared.rs + platforms/*.rs).
-        # Hash that tree into the key so any Rust-side flag change invalidates
-        # stale artifact-cache entries automatically. Truncate for readability.
-        DEV_HASH=$(printf %s '${{ hashFiles(format('{0}/solx-dev/src/llvm/**', inputs.working-dir)) }}' | head -c 8)
+        # solx-dev composes cmake args and flag defaults outside `llvm/**` too;
+        # hash every module the LLVM build reads so flag changes re-key.
+        DEV_HASH=$(printf %s '${{ hashFiles(format('{0}/solx-dev/src/llvm/**', inputs.working-dir), format('{0}/solx-dev/src/arguments/llvm/**', inputs.working-dir), format('{0}/solx-dev/src/build_type.rs', inputs.working-dir), format('{0}/solx-dev/src/ccache_variant.rs', inputs.working-dir), format('{0}/solx-dev/src/utils.rs', inputs.working-dir)) }}' | head -c 8)
         KEY="v1-llvm-${{ runner.os }}-${{ runner.arch }}"
         [ '${{ inputs.build-type }}' != 'Release' ] && KEY="${KEY}-${{ inputs.build-type }}"
         [ '${{ inputs.enable-mlir }}' = 'true' ] && KEY="${KEY}-mlir"
         [ -n '${{ inputs.sanitizer }}' ] && KEY="${KEY}-${{ inputs.sanitizer }}"
         [ '${{ inputs.enable-coverage }}' = 'true' ] && KEY="${KEY}-coverage"
         [ '${{ inputs.enable-assertions }}' != 'true' ] && KEY="${KEY}-no-assertions"
-        # `enable-utils` extends the install-distribution whitelist with
-        # FileCheck (see solx-dev's `build_opts_distribution`), so the install
-        # prefix actually differs by this flag. `enable-tests` is kept
-        # defensively even though no current workflow sets it; if one later
-        # does, LLVM_BUILD_TESTS=On could leak test artifacts into the prefix
-        # or change cmake-exports content.
-        # Normalize tests→utils because `--enable-tests` implies `--enable-utils`.
+        # `enable-utils` adds FileCheck to the install prefix; `enable-tests`
+        # implies it, so normalize before keying.
         UTILS='${{ inputs.enable-utils }}'
         [ '${{ inputs.enable-tests }}' = 'true' ] && UTILS='true'
         [ "$UTILS" = 'true' ] && KEY="${KEY}-utils"
@@ -105,8 +109,22 @@ runs:
         [ -n '${{ steps.msys-toolchain.outputs.hash }}' ] && KEY="${KEY}-msys${{ steps.msys-toolchain.outputs.hash }}"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
+    - name: Mirror LLVM from sibling checkout
+      if: inputs.mirror-key != ''
+      id: llvm-mirror
+      shell: bash
+      working-directory: ${{ inputs.working-dir }}
+      run: |
+        if [ '${{ steps.llvm-cache.outputs.key }}' = '${{ inputs.mirror-key }}' ]; then
+          mkdir -p target-llvm
+          ln -snf "${GITHUB_WORKSPACE}/target-llvm/target-final" target-llvm/target-final
+          echo "mirrored=true" | tee -a "${GITHUB_OUTPUT}"
+        else
+          echo "::notice::LLVM inputs differ (${{ steps.llvm-cache.outputs.key }} vs ${{ inputs.mirror-key }}), building separately"
+        fi
+
     - name: Restore LLVM artifact cache
-      if: inputs.enable-artifact-cache == 'true'
+      if: inputs.enable-artifact-cache == 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
       id: llvm-artifact-cache
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
@@ -116,12 +134,12 @@ runs:
     # Ninja build tool is not available on MacOS x64 runners by default. See:
     # https://github.com/actions/runner-images/issues/514
     - name: Install Ninja on MacOS x64
-      if: runner.os == 'macOS' && runner.arch == 'X64' && steps.llvm-artifact-cache.outputs.cache-hit != 'true'
+      if: runner.os == 'macOS' && runner.arch == 'X64' && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
       shell: 'bash'
       run: HOMEBREW_NO_AUTO_UPDATE=1 brew install ninja
 
     - name: Install LLVM builder
-      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
+      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
       working-directory: ${{ inputs.working-dir }}
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       env:
@@ -132,7 +150,7 @@ runs:
     # artifact-cache miss (i.e. submodule bump) and provides object-level reuse
     # across neighbouring solx-llvm commits.
     - name: Define ccache key
-      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
+      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       id: ccache-key
       run: |
@@ -157,7 +175,7 @@ runs:
     # The solx-ci-runner container doesn't ship sudo (steps run as root), so
     # we invoke apt-get directly. `-qq` silences routine output.
     - name: Prepare ccache installation
-      if: runner.os == 'Linux' && steps.llvm-artifact-cache.outputs.cache-hit != 'true'
+      if: runner.os == 'Linux' && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
       shell: 'bash'
       run: apt-get update -qq
 
@@ -167,7 +185,7 @@ runs:
     # KEEP-IN-SYNC with CCACHE_* env on Build LLVM and Show ccache stats steps
     # (GHA composite actions don't support YAML anchors).
     - name: Set up compiler cache
-      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
+      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
       uses: hendrikmuhs/ccache-action@d62db5f07c26379fc4b4e0916f098a92573c3b03 # v1.2.23
       env:
         CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
@@ -183,7 +201,7 @@ runs:
         save: ${{ github.event_name != 'pull_request' }}
 
     - name: Build LLVM
-      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
+      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       working-directory: ${{ inputs.working-dir }}
       env:
@@ -229,7 +247,7 @@ runs:
     # `continue-on-error` keeps a failing ccache install (→ ccache not on PATH)
     # from masking the real Build LLVM failure in the step summary.
     - name: Show ccache stats
-      if: always() && steps.llvm-artifact-cache.outputs.cache-hit != 'true'
+      if: always() && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
       continue-on-error: true
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       env:
@@ -240,7 +258,7 @@ runs:
       run: ccache --show-stats
 
     - name: Save LLVM artifact cache
-      if: inputs.enable-artifact-cache == 'true' && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
+      if: inputs.enable-artifact-cache == 'true' && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request' && steps.llvm-mirror.outputs.mirrored != 'true'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ inputs.working-dir != '.' && format('{0}/target-llvm/target-final', inputs.working-dir) || 'target-llvm/target-final' }}

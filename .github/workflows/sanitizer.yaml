@@ -49,7 +49,7 @@ jobs:
       TARGET: x86_64-unknown-linux-gnu
       RUST_SANITIZER: 'address'
       LLVM_SANITIZER: 'Address'
-      CARGO_TARGET_DIR: target-slang
+      TABLEGEN_210_PREFIX: ${{ github.workspace }}/target-llvm-tablegen
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -64,6 +64,25 @@ jobs:
         uses: ./.github/actions/setup-sfw
         with:
           optional: 'true'
+
+      # tblgen links libLLVMTableGen into the melior proc macro, which rustc
+      # dlopens without an ASan runtime: sanitized TableGen leaves __asan_*
+      # undefined and the load failure surfaces as E0463 at `Compiling melior`.
+      # Hand TABLEGEN_210_PREFIX the standard uninstrumented LLVM, built with
+      # build-toolchain's inputs so it restores from the warm standard cache;
+      # the sanitized build below covers everything the test executables link.
+      - name: Build LLVM for TableGen
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: RelWithDebInfo
+          enable-assertions: 'true'
+          enable-mlir: 'true'
+          enable-utils: 'true'
+
+      - name: Move TableGen LLVM aside
+        run: |
+          mv target-llvm/target-final target-llvm-tablegen
+          rm -rf target-llvm/build-final
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
