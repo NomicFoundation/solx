@@ -186,7 +186,6 @@ jobs:
       checks: write
       packages: read
     env:
-      CARGO_TARGET_DIR: target-slang
       CARGO_INCREMENTAL: "0"
     strategy:
       fail-fast: false
@@ -230,23 +229,8 @@ jobs:
         if: runner.os == 'Linux' && matrix.image != ''
         uses: ./.github/actions/free-disk-space-linux
 
-      # solc is built separately below: the lit tests need a Release build,
-      # not the standard config.
       - name: Build toolchain
         uses: ./.github/actions/build-toolchain
-        with:
-          solc: 'false'
-
-      # TODO: remove this step once the lit tests stop running against solc.
-      #
-      # Release: RelWithDebInfo bakes -g3 debug info into the statically
-      # linked solc.exe, producing a ~2 GB PE that the Windows loader
-      # rejects ("Exec format error"), and the lit tests execute solc.
-      - name: Build solc
-        uses: ./.github/actions/build-solc
-        with:
-          cmake-build-type: Release
-          enable-mlir: 'true'
 
       # bindgen's embedded clang needs to know it's targeting MinGW,
       # otherwise it can't parse MinGW-specific __attribute__ extensions
@@ -282,8 +266,6 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           prefix-key: slang-tests-v2
-          # `cargo test-slang` writes to target-slang, not target (.cargo/config.toml alias)
-          workspaces: ". -> target-slang"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main-slang' }}
 
@@ -292,8 +274,6 @@ jobs:
         with:
           target: ${{ matrix.target || '' }}
           cargo-test-command: 'test-slang'
-          results-xml: 'unit-tests-results.xml'
-          check-name: 'Unit Tests Results'
 
       - name: Verify lit tools run outside MSYS2
         if: runner.os == 'Windows'

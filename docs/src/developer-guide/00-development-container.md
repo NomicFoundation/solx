@@ -88,7 +88,6 @@ Build state lives in Docker named volumes so it survives **Rebuild Container** a
 | Volume | Mount point | Holds |
 |---|---|---|
 | `solx-target-<id>` | `target/` | solx build artifacts, `solx-dev` |
-| `solx-target-slang-<id>` | `target-slang/` | `cargo *-slang` alias artifacts |
 | `solx-target-llvm-<id>` | `target-llvm/` | LLVM build tree + installation |
 | `solx-rustup` | `/usr/local/rustup` | downloaded Rust toolchains |
 | `solx-cargo` | `/usr/local/cargo` | cargo registry/git caches |

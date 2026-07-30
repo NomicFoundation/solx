@@ -131,7 +131,7 @@ runs:
           export "CARGO_TARGET_${TARGET_UPPER}_LINKER=clang"
         fi
         if [ '${{ inputs.target }}' != '' ]; then
-          export CARGO_BIN_EXE_SOLX="./${CARGO_TARGET_DIR:-target}/${{ inputs.target }}/debug/solx"
+          export CARGO_BIN_EXE_SOLX="./target/${{ inputs.target }}/debug/solx"
         fi
         set -o pipefail
         if [ "${{ inputs.cargo-test-command }}" = "test" ]; then ${SFW_PREFIX:-} cargo build --frozen ${{ steps.build-target.outputs.target }}; fi
