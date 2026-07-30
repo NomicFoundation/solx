@@ -20,4 +20,8 @@ contract C {
         delete functionPointer;
         return functionPointer == g ? 1 : 0;
     }
+
+    function reset_external(function(uint256) external returns (uint256) p) public pure {
+        delete p;
+    }
 }

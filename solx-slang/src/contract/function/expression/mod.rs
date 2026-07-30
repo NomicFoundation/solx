@@ -70,7 +70,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 .next()
                 .expect("a call in value position yields a value"),
             Expression::CallOptionsExpression(_) => {
-                unimplemented!("call options are not yet supported")
+                unreachable!("call options reach the call they decorate, never a value position")
             }
             Expression::NewExpression(_) => {
                 unimplemented!("`new` expressions are not yet supported")

@@ -20,7 +20,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// resets its operand and yields nothing, `delete` being value-less in Solidity.
     pub fn prefix(&mut self, node: &PrefixExpression) -> Option<Value<'context>> {
         if let Some(function) = node.resolve_operator_to_function() {
-            return Some(self.bound_operator(&function, [node.operand()]));
+            return Some(self.bound_operator(&function, &[node.operand()]));
         }
         match node.operator() {
             PrefixExpressionOperator::PlusPlus(_) => Some(self.step(&node.operand(), Value::add).1),
