@@ -4,7 +4,12 @@
 
 use std::collections::BTreeMap;
 
+use itertools::Itertools;
+use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::SourceUnit;
+use slang_solidity_v2::ast::SourceUnitMember;
+use slang_solidity_v2::ast::UsingClause;
 
 use solx_mlir::Context;
 use solx_standard_json::output::contract::Contract;
@@ -31,7 +36,8 @@ impl<'context> SourceUnitScope<'context> {
         };
         let melior = Context::create_melior_context();
         let mut scope = SourceUnitScope::new(Context::new(&melior, evm_version));
-        let method_identifiers = scope.contract_definition(contract);
+        let method_identifiers =
+            scope.contract_definition(contract, &Self::operator_bound_functions(unit));
 
         let name = contract.name().name().to_owned();
         let mlir = Context::from(scope).finalize_module(
@@ -43,5 +49,31 @@ impl<'context> SourceUnitScope<'context> {
             name,
             Contract::new_mlir(mlir, method_identifiers),
         )]))
+    }
+
+    /// The functions `unit`'s `using {f as op} for T global;` directives bind operators to, in
+    /// source order and without repeats. A binding reaches the whole compilation unit, so a
+    /// function bound from another file is missing here.
+    // TODO: add support for cross-file binding of operator functions
+    fn operator_bound_functions(unit: &SourceUnit) -> Vec<FunctionDefinition> {
+        unit.members()
+            .iter()
+            .filter_map(|member| match member {
+                SourceUnitMember::UsingDirective(directive) if directive.is_global() => {
+                    match directive.clause() {
+                        UsingClause::UsingDeconstruction(deconstruction) => Some(deconstruction),
+                        UsingClause::IdentifierPath(_) => None,
+                    }
+                }
+                _ => None,
+            })
+            .flat_map(|deconstruction| deconstruction.symbols().iter().collect::<Vec<_>>())
+            .filter(|symbol| symbol.alias().is_some())
+            .filter_map(|symbol| match symbol.name().resolve_to_definition()? {
+                Definition::Function(function) => Some(function),
+                _ => None,
+            })
+            .unique_by(|function| function.node_id())
+            .collect()
     }
 }

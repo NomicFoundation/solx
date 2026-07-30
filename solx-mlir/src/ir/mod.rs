@@ -36,6 +36,9 @@ sol_ops! {
     Value::address_cast(self, target_type: ty) -> value {
         AddressCastOperation.inp(self).out(target_type)
     }
+    Value::enum_cast(self, target_type: ty) -> value {
+        EnumCastOperation.inp(self).out(target_type)
+    }
     Value::dyn_bytes_to_fixedbytes(self, target_type: ty) -> value {
         DynBytesToFixedBytesOperation.inp(self).out(target_type)
     }

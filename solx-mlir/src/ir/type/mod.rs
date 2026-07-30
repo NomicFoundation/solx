@@ -198,6 +198,17 @@ impl<'context> Type<'context> {
         unsafe { ffi::solxIsAddressType(self.inner.to_raw()) }
     }
 
+    /// Whether this is a `sol::EnumType`.
+    pub fn is_enum(self) -> bool {
+        unsafe { ffi::solxIsEnumType(self.inner.to_raw()) }
+    }
+
+    /// The largest ordinal this enum type admits; the classification is the caller's, via
+    /// `is_enum`.
+    pub fn enum_max(self) -> u32 {
+        unsafe { ffi::solxEnumTypeMax(self.inner.to_raw()) }
+    }
+
     /// Whether this is a `sol::StringType`, the shared representation of dynamic `bytes` and
     /// `string`.
     pub fn is_string(self) -> bool {

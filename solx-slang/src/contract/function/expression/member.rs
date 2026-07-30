@@ -2,6 +2,7 @@
 //! Member access expressions: struct fields and the environment intrinsics.
 //!
 
+use num::BigInt;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::MemberAccessExpression;
@@ -14,12 +15,24 @@ use solx_mlir::Value;
 use crate::scope::function::FunctionScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// A struct field loads from its place; every other member access is an environment or EVM
-    /// intrinsic.
+    /// A struct field loads from its place; an enum member is its ordinal; every other member access
+    /// is an environment or EVM intrinsic.
     pub fn member_access(&mut self, node: &MemberAccessExpression) -> Value<'context> {
         if matches!(node.operand().get_type(), Some(Type::Struct(_))) {
             let (place, element_type) = self.member_access_place(node);
             return place.load(element_type, self);
+        }
+        if let Some(Definition::EnumMember(member)) = node.member().resolve_to_definition() {
+            let Some(Definition::Enum(enum_definition)) = member.enclosing_definition() else {
+                unreachable!("an enum member is declared by an enum");
+            };
+            let ordinal = enum_definition
+                .members()
+                .iter()
+                .position(|candidate| candidate.node_id() == member.node_id())
+                .expect("an enum lists the members it declares");
+            let enum_type = self.typing(node.get_type());
+            return Value::constant_from_bigint(&BigInt::from(ordinal), enum_type, self);
         }
         match node.member().resolve_to_built_in() {
             Some(BuiltIn::AddressBalance) => Value::balance(self.expression(&node.operand()), self),
@@ -43,6 +56,11 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             Some(BuiltIn::BlockBlobbasefee) => Value::block_blob_base_fee(self),
             Some(BuiltIn::BlockDifficulty) => Value::block_difficulty(self),
             Some(BuiltIn::BlockPrevrandao) => Value::block_prev_randao(self),
+            Some(BuiltIn::TypeEnumMin) => Value::zero(self.typing(node.get_type()), self),
+            Some(BuiltIn::TypeEnumMax) => {
+                let enum_type = self.typing(node.get_type());
+                Value::constant_from_bigint(&BigInt::from(enum_type.enum_max()), enum_type, self)
+            }
             _ => unimplemented!("unsupported member access: {}", node.member().name()),
         }
     }
