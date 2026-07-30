@@ -18,8 +18,8 @@ fn main() {
     // job's ld.bfd resolves archives in one pass, leaving inkwell's
     // references undefined. Plain `-l` flags land after every rlib.
     println!("cargo:rustc-link-lib=lldC");
-    println!("cargo:rustc-link-lib=lldCommon");
     println!("cargo:rustc-link-lib=lldELF");
+    println!("cargo:rustc-link-lib=lldCommon");
 
     // Sol dialect — custom Solidity MLIR dialect defined in solx-llvm.
     println!("cargo:rustc-link-lib=static=MLIRSolDialect");
