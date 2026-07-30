@@ -37,7 +37,19 @@
 // CHECK: sol.func @{{.*array_to_memory.*}}
 // CHECK:   sol.data_loc_cast %{{.*}} : !sol.array<? x ui256, CallData>, !sol.array<? x ui256, Memory>
 
+// CHECK: sol.func @{{.*uint8_to_enum.*}}
+// CHECK:   sol.enum_cast %{{.*}} : ui8 to !sol.enum<2>
+
+// CHECK: sol.func @{{.*enum_to_uint8.*}}
+// CHECK:   sol.enum_cast %{{.*}} : !sol.enum<2> to ui8
+
+// CHECK: sol.func @{{.*enum_to_uint256.*}}
+// CHECK:   sol.enum_cast %{{.*}} : !sol.enum<2> to ui8
+// CHECK:   sol.cast %{{.*}} : ui8 to ui256
+
 contract C {
+    enum E { First, Second, Third }
+
     function uint8_to_uint256(uint8 x) public pure returns (uint256) {
         return uint256(x);
     }
@@ -85,5 +97,17 @@ contract C {
 
     function array_to_memory(uint256[] calldata source) external pure returns (uint256[] memory) {
         return uint256[](source);
+    }
+
+    function uint8_to_enum(uint8 x) public pure returns (E) {
+        return E(x);
+    }
+
+    function enum_to_uint8(E x) public pure returns (uint8) {
+        return uint8(x);
+    }
+
+    function enum_to_uint256(E x) public pure returns (uint256) {
+        return uint256(uint8(x));
     }
 }

@@ -9,6 +9,7 @@ use slang_solidity_v2::ast::ExponentiationExpression;
 use slang_solidity_v2::ast::MultiplicativeExpression;
 use slang_solidity_v2::ast::MultiplicativeExpressionOperator;
 use slang_solidity_v2::ast::PositionalArguments;
+use slang_solidity_v2::ast::UserDefinedOperatorExpression;
 
 use solx_mlir::Context;
 use solx_mlir::Type as MlirType;
@@ -19,6 +20,9 @@ use crate::scope::function::FunctionScope;
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// `a + b` and `a - b`, both operands converted to the binder's result type.
     pub fn additive(&mut self, node: &AdditiveExpression) -> Value<'context> {
+        if let Some(function) = node.resolve_operator_to_function() {
+            return self.bound_operator(&function, [node.left_operand(), node.right_operand()]);
+        }
         let (lhs, rhs) =
             self.converted_operands(node.get_type(), &node.left_operand(), &node.right_operand());
         match node.operator() {
@@ -29,6 +33,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// `a * b`, `a / b`, and `a % b`, both operands converted to the binder's result type.
     pub fn multiplicative(&mut self, node: &MultiplicativeExpression) -> Value<'context> {
+        if let Some(function) = node.resolve_operator_to_function() {
+            return self.bound_operator(&function, [node.left_operand(), node.right_operand()]);
+        }
         let (lhs, rhs) =
             self.converted_operands(node.get_type(), &node.left_operand(), &node.right_operand());
         match node.operator() {

@@ -7,6 +7,7 @@ use slang_solidity_v2::ast::EqualityExpression;
 use slang_solidity_v2::ast::EqualityExpressionOperator;
 use slang_solidity_v2::ast::InequalityExpression;
 use slang_solidity_v2::ast::InequalityExpressionOperator;
+use slang_solidity_v2::ast::UserDefinedOperatorExpression;
 
 use solx_mlir::CmpPredicate;
 use solx_mlir::Value;
@@ -16,6 +17,9 @@ use crate::scope::function::FunctionScope;
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// `a == b` and `a != b`, the operands converted to the type the binder reconciles them to.
     pub fn equality(&mut self, node: &EqualityExpression) -> Value<'context> {
+        if let Some(function) = node.resolve_operator_to_function() {
+            return self.bound_operator(&function, [node.left_operand(), node.right_operand()]);
+        }
         let predicate = match node.operator() {
             EqualityExpressionOperator::EqualEqual(_) => CmpPredicate::Eq,
             EqualityExpressionOperator::BangEqual(_) => CmpPredicate::Ne,
@@ -31,6 +35,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// `a < b`, `a <= b`, `a > b`, and `a >= b`, the operands converted to the type the binder
     /// reconciles them to.
     pub fn inequality(&mut self, node: &InequalityExpression) -> Value<'context> {
+        if let Some(function) = node.resolve_operator_to_function() {
+            return self.bound_operator(&function, [node.left_operand(), node.right_operand()]);
+        }
         let predicate = match node.operator() {
             InequalityExpressionOperator::LessThan(_) => CmpPredicate::Lt,
             InequalityExpressionOperator::LessThanEqual(_) => CmpPredicate::Le,
