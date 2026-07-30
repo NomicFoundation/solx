@@ -68,9 +68,9 @@ jobs:
       # tblgen links libLLVMTableGen into the melior proc macro, which rustc
       # dlopens without an ASan runtime: sanitized TableGen leaves __asan_*
       # undefined and the load failure surfaces as E0463 at `Compiling melior`.
-      # Hand TABLEGEN_210_PREFIX the standard uninstrumented LLVM (same inputs
-      # as build-toolchain, so it restores from the warm standard cache); the
-      # sanitized build below covers everything the test executables link.
+      # Hand TABLEGEN_210_PREFIX the standard uninstrumented LLVM, built with
+      # build-toolchain's inputs so it restores from the warm standard cache;
+      # the sanitized build below covers everything the test executables link.
       - name: Build LLVM for TableGen
         uses: ./.github/actions/build-llvm
         with:

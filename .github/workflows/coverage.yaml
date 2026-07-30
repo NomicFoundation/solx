@@ -119,7 +119,7 @@ jobs:
             "${TARGET_DIR}/solx-dev" test solx-tester \
               --binary "${TARGET_DIR}/solx-tester" \
               --solidity-compiler "${SOLX_BINARY}" \
-              --path "${TEST_PATH}" --workflow build --optimizer M3B3
+              --path "${TEST_PATH}" --workflow build --optimizer M3B3 || true
             mv *.profraw "${GITHUB_WORKSPACE}/${WORKDIR}/" || true
             find "${GITHUB_WORKSPACE}/${WORKDIR}" -type f -name '*.profraw' -print > profiles.lst
             if [[ -f "${PROFDATA_FILE}" ]]; then

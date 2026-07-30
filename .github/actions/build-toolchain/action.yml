@@ -6,8 +6,8 @@ description: >-
   define the standard-config cache keys shared by test.yaml and
   cache-warmup.yaml — changing them here re-keys both workflows together.
   Workflows needing a different LLVM configuration (sanitizer, coverage,
-  integration, release) call build-llvm/build-solc directly and pair with
-  their own cache-warmup job.
+  integration, release) call build-llvm and build-solc directly as needed
+  and pair with their own cache-warmup job.
 
 inputs:
   llvm:

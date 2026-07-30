@@ -12,10 +12,14 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", lib_path.display());
 
     // LLD C API — provides LLVMAssembleEVM used by inkwell's assemble_evm.
-    // LLVM libs are already linked by mlir-sys; only the LLD linker libs are missing.
-    println!("cargo:rustc-link-lib=static=lldC");
-    println!("cargo:rustc-link-lib=static=lldCommon");
-    println!("cargo:rustc-link-lib=static=lldELF");
+    // LLVM libs are already linked by mlir-sys; only the LLD linker libs are
+    // missing. Not `static=`: that bundles the archives into this crate's
+    // rlib, which precedes libinkwell in the final link, and the sanitizer
+    // job's ld.bfd resolves archives in one pass, leaving inkwell's
+    // references undefined. Plain `-l` flags land after every rlib.
+    println!("cargo:rustc-link-lib=lldC");
+    println!("cargo:rustc-link-lib=lldCommon");
+    println!("cargo:rustc-link-lib=lldELF");
 
     // Sol dialect — custom Solidity MLIR dialect defined in solx-llvm.
     println!("cargo:rustc-link-lib=static=MLIRSolDialect");

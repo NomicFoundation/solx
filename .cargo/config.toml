@@ -30,8 +30,6 @@ BOOST_PREFIX = { value = "./solx-solidity/boost/lib/", relative = true, force = 
 
 LLVM_SYS_211_PREFIX = { value = "./target-llvm/target-final/", relative = true, force = true }
 MLIR_SYS_210_PREFIX = { value = "./target-llvm/target-final/", relative = true, force = true }
-# Not forced: the sanitizer job substitutes an uninstrumented prefix
-# (rustc cannot load an ASan-instrumented proc macro).
 TABLEGEN_210_PREFIX = { value = "./target-llvm/target-final/", relative = true }
 
 [alias]
