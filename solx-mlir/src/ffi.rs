@@ -157,6 +157,16 @@ unsafe extern "C" {
     /// (one less than the number of enum members).
     pub fn solxCreateEnumType(context: MlirContext, max: u32) -> mlir_sys::MlirType;
 
+    /// Creates a `sol::FuncRefType`, an internal function pointer, over the
+    /// signature `parameter_types -> result_types`.
+    pub fn solxCreateFuncRefType(
+        context: MlirContext,
+        parameter_types: *const mlir_sys::MlirType,
+        parameter_count: usize,
+        result_types: *const mlir_sys::MlirType,
+        result_count: usize,
+    ) -> mlir_sys::MlirType;
+
     // ---- Sol type inference ----
 
     /// Whether the type is a `sol::AddressType`, regardless of payability.
@@ -177,6 +187,9 @@ unsafe extern "C" {
 
     /// Returns the byte width of a bytes-like type.
     pub fn solxBytesLikeTypeWidth(ty: mlir_sys::MlirType) -> u32;
+
+    /// Whether the type is a `sol::FuncRefType`, an internal function pointer.
+    pub fn solxIsFuncRefType(ty: mlir_sys::MlirType) -> bool;
 
     /// Whether the type is a scalar value type: integer, enum, function reference,
     /// address-like, or bytes-like.

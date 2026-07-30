@@ -10,6 +10,7 @@
  */
 
 #include "mlir/Dialect/Sol/Sol.h"
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir-c/BuiltinAttributes.h"
 #include "mlir-c/IR.h"
@@ -133,6 +134,24 @@ MlirType solxCreateEnumType(MlirContext ctx, uint32_t max) {
     return wrap(mlir::sol::EnumType::get(context, max));
 }
 
+MlirType solxCreateFuncRefType(MlirContext ctx, const MlirType *parameter_types,
+                               size_t parameter_count, const MlirType *result_types,
+                               size_t result_count) {
+    auto *context = unwrap(ctx);
+    std::vector<mlir::Type> parameters;
+    parameters.reserve(parameter_count);
+    for (size_t i = 0; i < parameter_count; i++) {
+        parameters.push_back(unwrap(parameter_types[i]));
+    }
+    std::vector<mlir::Type> results;
+    results.reserve(result_count);
+    for (size_t i = 0; i < result_count; i++) {
+        results.push_back(unwrap(result_types[i]));
+    }
+    auto functionType = mlir::FunctionType::get(context, parameters, results);
+    return wrap(mlir::sol::FuncRefType::get(context, functionType));
+}
+
 bool solxIsAddressType(MlirType ty) {
     return mlir::isa<mlir::sol::AddressType>(unwrap(ty));
 }
@@ -155,6 +174,10 @@ bool solxIsBytesLikeType(MlirType ty) {
 
 uint32_t solxBytesLikeTypeWidth(MlirType ty) {
     return mlir::sol::getNumBytes(unwrap(ty));
+}
+
+bool solxIsFuncRefType(MlirType ty) {
+    return mlir::isa<mlir::sol::FuncRefType>(unwrap(ty));
 }
 
 bool solxIsScalarType(MlirType ty) {

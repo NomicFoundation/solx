@@ -1,25 +1,24 @@
 //!
-//! Function call resolution metadata, and the `sol.func` / `sol.call` it emits.
+//! Function call resolution metadata.
 //!
 
 use melior::ir::Block as MlirBlock;
 use melior::ir::Region;
 use melior::ir::RegionLike;
-use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
 use melior::ir::operation::OperationLike;
-use melior::ir::r#type::FunctionType;
+use melior::ir::r#type::FunctionType as MlirFunctionType;
 use melior::ir::r#type::IntegerType;
 
 use crate::Block;
 use crate::Context;
 use crate::FunctionKind;
+use crate::FunctionType;
 use crate::StateMutability;
 use crate::Type;
 use crate::Value;
-use crate::ods::sol::CallOperation;
 use crate::ods::sol::FuncOperation;
 
 /// Cached signature of a lowered function: its mangled symbol and MLIR-interned parameter and
@@ -28,10 +27,8 @@ use crate::ods::sol::FuncOperation;
 pub struct Function<'context> {
     /// The mangled MLIR function name.
     pub mlir_name: String,
-    /// Parameter types, MLIR-interned, exact from the function signature.
-    pub parameter_types: Vec<Type<'context>>,
-    /// Return types, MLIR-interned, exact from the function signature.
-    pub return_types: Vec<Type<'context>>,
+    /// Parameter and result types, MLIR-interned, exact from the function signature.
+    pub function_type: FunctionType<'context>,
 }
 
 impl<'context> Function<'context> {
@@ -39,51 +36,50 @@ impl<'context> Function<'context> {
     pub const CONSTRUCTOR_NAME: &'static str = "@constructor()";
 
     /// Records a function's mangled name and interned signature.
-    pub fn new(
-        mlir_name: String,
-        parameter_types: Vec<Type<'context>>,
-        return_types: Vec<Type<'context>>,
-    ) -> Self {
+    pub fn new(mlir_name: String, function_type: FunctionType<'context>) -> Self {
         Self {
             mlir_name,
-            parameter_types,
-            return_types,
+            function_type,
         }
     }
 
     /// The signature of a synthesized parameterless constructor.
     pub fn constructor() -> Self {
-        Self::new(Self::CONSTRUCTOR_NAME.to_owned(), Vec::new(), Vec::new())
+        Self::new(Self::CONSTRUCTOR_NAME.to_owned(), FunctionType::default())
     }
 
     /// Emits this function's `sol.func` definition with an entry block whose arguments carry the
-    /// parameter types, returned for the body. `selector` / `kind` are the optional dispatch
-    /// attributes; an original function type is attached for selector-dispatched and constructor
-    /// functions.
+    /// parameter types, returned for the body. `selector` / `dispatch_identifier` / `kind` are the
+    /// optional dispatch attributes, the identifier tagging an internal-pointer target for the
+    /// `sol.icall` dispatch table; an original function type is attached for selector-dispatched
+    /// and constructor functions.
     pub fn define(
         &self,
         selector: Option<u32>,
+        dispatch_identifier: Option<usize>,
         state_mutability: StateMutability,
         kind: Option<FunctionKind>,
         context: &Context<'context>,
         contract_body: Block<'context>,
     ) -> Block<'context> {
-        let parameter_types = self
-            .parameter_types
+        let parameters = self
+            .function_type
+            .parameters
             .iter()
-            .map(|parameter_type| parameter_type.into_mlir())
+            .map(|parameter| parameter.into_mlir())
             .collect::<Vec<_>>();
-        let return_types = self
-            .return_types
+        let results = self
+            .function_type
+            .results
             .iter()
-            .map(|return_type| return_type.into_mlir())
+            .map(|result| result.into_mlir())
             .collect::<Vec<_>>();
-        let function_type = FunctionType::new(context.melior, &parameter_types, &return_types);
+        let function_type = MlirFunctionType::new(context.melior, &parameters, &results);
         let body_region = Region::new();
         let entry_block = MlirBlock::new(
-            &parameter_types
+            &parameters
                 .iter()
-                .map(|parameter_type| (*parameter_type, context.location()))
+                .map(|parameter| (*parameter, context.location()))
                 .collect::<Vec<_>>(),
         );
         body_region.append_block(entry_block);
@@ -102,6 +98,12 @@ impl<'context> Function<'context> {
                 selector_value as i64,
             ));
         }
+        if let Some(identifier) = dispatch_identifier {
+            operation_builder = operation_builder.id(IntegerAttribute::new(
+                IntegerType::new(context.melior, solx_utils::BIT_LENGTH_X64 as u32).into(),
+                identifier as i64,
+            ));
+        }
         if selector.is_some() || matches!(kind, Some(FunctionKind::Constructor)) {
             operation_builder =
                 operation_builder.orig_fn_type(TypeAttribute::new(function_type.into()));
@@ -116,32 +118,12 @@ impl<'context> Function<'context> {
         )
     }
 
-    /// Emits a `sol.call` to `callee` by symbol, returning its results in declaration order.
-    pub fn call(
-        callee: &str,
-        operands: &[Value<'context>],
-        result_types: &[Type<'context>],
-        context: &Context<'context>,
-    ) -> anyhow::Result<Vec<Value<'context>>> {
-        let operands = operands
-            .iter()
-            .map(|operand| operand.into_mlir())
-            .collect::<Vec<_>>();
-        let result_types = result_types
-            .iter()
-            .map(|result_type| result_type.into_mlir())
-            .collect::<Vec<_>>();
-        let operation = context.current_block().append_operation(mlir_op_build!(
+    /// Emits the internal function pointer to this function (`sol.func_constant`).
+    pub fn pointer_constant(&self, context: &Context<'context>) -> Value<'context> {
+        Value::function_constant(
+            &self.mlir_name,
+            self.function_type.reference(context.melior),
             context,
-            CallOperation
-                .callee(FlatSymbolRefAttribute::new(context.melior, callee))
-                .outs(result_types.as_slice())
-                .operands(operands.as_slice())
-        ));
-        let mut results = Vec::with_capacity(result_types.len());
-        for index in 0..result_types.len() {
-            results.push(Value::from(operation.result(index)?));
-        }
-        Ok(results)
+        )
     }
 }

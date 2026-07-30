@@ -11,6 +11,7 @@ use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
 
 use solx_mlir::Function;
+use solx_mlir::FunctionType;
 use solx_mlir::Place;
 use solx_mlir::StateMutability;
 use solx_mlir::Value;
@@ -41,22 +42,22 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         };
         let entry = signature.define(
             function.compute_selector(),
+            mlir_kind.is_none().then(|| function.node_id().into()),
             state_mutability,
             mlir_kind,
             self,
             self.contract_body,
         );
-        let Function {
-            parameter_types,
-            return_types,
-            ..
-        } = signature;
-        self.function(entry, return_types, |scope| {
+        let FunctionType {
+            parameters,
+            results,
+        } = signature.function_type;
+        self.function(entry, results, |scope| {
             for (index, parameter) in function.parameters().iter().enumerate() {
                 let Some(identifier) = parameter.name() else {
                     continue;
                 };
-                scope.define_local(identifier.name(), parameter_types[index], |_scope| {
+                scope.define_local(identifier.name(), parameters[index], |_scope| {
                     entry.argument(index)
                 });
             }
@@ -111,6 +112,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             return;
         }
         let entry = Function::constructor().define(
+            None,
             None,
             StateMutability::NonPayable,
             Some(solx_mlir::FunctionKind::Constructor),

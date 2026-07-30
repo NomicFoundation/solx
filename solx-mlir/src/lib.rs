@@ -33,6 +33,7 @@ pub use self::ir::block::Block;
 pub use self::ir::place::Place;
 pub use self::ir::r#type::Type;
 pub use self::ir::r#type::array_size::ArraySize;
+pub use self::ir::r#type::function_type::FunctionType;
 pub use self::ir::value::Value;
 pub use self::macros::IntoOds;
 pub use self::output::MlirOutput;

@@ -39,6 +39,8 @@ pub enum Call {
     Member(MemberAccessExpression),
     /// A direct call to a named function.
     Function(FunctionDefinition),
+    /// A call through a function-typed value, dispatched by `sol.icall`.
+    FunctionPointer,
 }
 
 impl Call {
@@ -68,6 +70,7 @@ impl Call {
             Self::Function(function_definition) => {
                 scope.call(&function_definition, arguments.iter())
             }
+            Self::FunctionPointer => Self::function_pointer(node, arguments, scope),
         }
     }
 
@@ -93,17 +96,27 @@ impl Call {
                 if let Some(built_in) = identifier.resolve_to_built_in() {
                     return Self::Builtin(built_in);
                 }
-                let Some(Definition::Function(function_definition)) =
+                if let Some(Definition::Function(function_definition)) =
                     identifier.resolve_to_definition()
-                else {
-                    unimplemented!(
-                        "callee '{}' does not resolve to a function",
-                        identifier.name()
-                    );
-                };
-                Self::Function(function_definition)
+                {
+                    return Self::Function(function_definition);
+                }
+                if matches!(identifier.get_type(), Some(Type::Function(_))) {
+                    return Self::FunctionPointer;
+                }
+                unimplemented!("unsupported callee '{}'", identifier.name())
             }
-            Expression::MemberAccessExpression(access) => Self::Member(access),
+            Expression::MemberAccessExpression(access) => {
+                if matches!(
+                    access.member().resolve_to_definition(),
+                    Some(Definition::StructMember(_))
+                ) && matches!(access.get_type(), Some(Type::Function(_)))
+                {
+                    return Self::FunctionPointer;
+                }
+                Self::Member(access)
+            }
+            callee if matches!(callee.get_type(), Some(Type::Function(_))) => Self::FunctionPointer,
             callee => unimplemented!(
                 "unsupported callee expression: {:?}",
                 std::mem::discriminant(&callee)
@@ -408,6 +421,27 @@ impl Call {
             _ => unimplemented!("unsupported member call: {}", access.member().name()),
         }
     }
+
+    /// The signature comes from the callee's binder type: a pointer callee names no definition to
+    /// look a registered signature up by.
+    fn function_pointer<'context>(
+        call: &FunctionCallExpression,
+        arguments: &PositionalArguments,
+        scope: &mut FunctionScope<'_, '_, 'context>,
+    ) -> Vec<Value<'context>> {
+        let callee = call.operand();
+        let Some(Type::Function(function_type)) = callee.get_type() else {
+            unreachable!("classification admits only function-typed callees");
+        };
+        let function_type = scope.contract.source_unit.function_type(&function_type);
+        let pointer = scope.expression(&callee);
+        let converted: Vec<Value<'context>> = arguments
+            .iter()
+            .zip(&function_type.parameters)
+            .map(|(argument, &parameter_type)| scope.converted(&argument, parameter_type))
+            .collect();
+        pointer.call(&converted, &function_type.results, scope)
+    }
 }
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
@@ -450,15 +484,14 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             .function_signature(function_definition.node_id());
         let converted: Vec<Value<'context>> = arguments
             .into_iter()
-            .zip(&signature.parameter_types)
+            .zip(&signature.function_type.parameters)
             .map(|(argument, &parameter_type)| self.converted(&argument, parameter_type))
             .collect();
         Function::call(
             &signature.mlir_name,
             &converted,
-            &signature.return_types,
+            &signature.function_type.results,
             self,
         )
-        .expect("sol.call yields its declared results")
     }
 }

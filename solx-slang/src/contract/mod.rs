@@ -17,6 +17,7 @@ use slang_solidity_v2::ast::FunctionKind;
 use solx_mlir::Block;
 use solx_mlir::Contract;
 use solx_mlir::Function;
+use solx_mlir::FunctionType;
 use solx_mlir::Type as MlirType;
 
 use crate::contract::storage_slot::StorageSlot;
@@ -41,28 +42,29 @@ impl<'context> SourceUnitScope<'context> {
             .chain(node.constructor())
             .chain(operator_functions.iter().cloned())
         {
-            let parameter_types = function
-                .parameters()
-                .iter()
-                .map(|parameter| self.typing(parameter.get_type()))
-                .collect();
-            let return_types = function
-                .returns()
-                .map(|returns| {
-                    returns
-                        .iter()
-                        .map(|parameter| self.typing(parameter.get_type()))
-                        .collect()
-                })
-                .unwrap_or_default();
+            let function_type = FunctionType::new(
+                function
+                    .parameters()
+                    .iter()
+                    .map(|parameter| self.typing(parameter.get_type()))
+                    .collect(),
+                function
+                    .returns()
+                    .map(|returns| {
+                        returns
+                            .iter()
+                            .map(|parameter| self.typing(parameter.get_type()))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            );
             self.function_signatures.insert(
                 function.node_id(),
                 Function::new(
                     function
                         .compute_internal_signature()
                         .expect("every emitted function has an internal signature"),
-                    parameter_types,
-                    return_types,
+                    function_type,
                 ),
             );
         }

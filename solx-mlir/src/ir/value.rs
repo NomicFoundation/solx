@@ -70,10 +70,14 @@ impl<'context> Value<'context> {
     }
 
     /// Materialises the default-initialized value of `target_type`, matching solc's default-init:
-    /// a scalar's `zero`; an allocated empty memory `bytes`/`string`; a zero-filled memory array
-    /// or struct; the `sol.default_storage` / `sol.default_calldata` designator for a storage or
-    /// calldata reference.
+    /// the null pointer of an internal function reference, which `zero` cannot materialise since a
+    /// `sol.constant` is illegal at a `!sol.func_ref`; a scalar's `zero`; an allocated empty memory
+    /// `bytes`/`string`; a zero-filled memory array or struct; the `sol.default_storage` /
+    /// `sol.default_calldata` designator for a storage or calldata reference.
     pub fn default_initialized(target_type: Type<'context>, context: &Context<'context>) -> Self {
+        if target_type.is_function_reference() {
+            return Self::default_function_constant(context);
+        }
         if target_type.is_scalar() {
             return Self::zero(target_type, context);
         }
