@@ -54,6 +54,7 @@ impl<'context> SourceUnitScope<'context> {
     /// The functions `unit`'s `using {f as op} for T global;` directives bind operators to, in
     /// source order and without repeats. A binding reaches the whole compilation unit, so a
     /// function bound from another file is missing here.
+    // TODO: add support for cross-file binding of operator functions
     fn operator_bound_functions(unit: &SourceUnit) -> Vec<FunctionDefinition> {
         unit.members()
             .iter()
