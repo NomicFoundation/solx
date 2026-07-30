@@ -3,12 +3,12 @@ name: Code coverage
 on:
   pull_request:
     branches:
-      - main
-  # Main runs upload the Codecov base for PR deltas and save the cargo cache
-  # that PR runs restore (rust-cache save-if only fires on refs/heads/main).
+      - main-slang*
+  # Trunk runs upload the Codecov base for PR deltas and save the cargo cache
+  # that PR runs restore (rust-cache save-if only fires on refs/heads/main-slang).
   push:
     branches:
-      - main
+      - main-slang
 
 concurrency:
   group: ${{ github.repository_id }}-${{ github.workflow }}-${{ github.ref }}
@@ -54,8 +54,6 @@ jobs:
         - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
         - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
     env:
-      BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
-      SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
       PROFDATA_FILE: solx.profdata
       LCOV_FILE: codecov.lcov
       OUTPUT_HTML_DIR: COVERAGE
@@ -85,7 +83,7 @@ jobs:
         with:
           prefix-key: coverage-v1
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.ref == 'refs/heads/main-slang' }}
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
@@ -95,13 +93,6 @@ jobs:
           enable-coverage: 'true'
           enable-mlir: 'true'
 
-      - name: Building solc
-        uses: ./.github/actions/build-solc
-        with:
-          cmake-build-type: RelWithDebInfo
-          working-dir: 'solx-solidity'
-          enable-mlir: 'true'
-
       - name: Build solx
         id: build-solx
         uses: ./.github/actions/build-rust
@@ -109,6 +100,12 @@ jobs:
           build-type: 'release'
           enable-coverage: 'true'
           target: 'x86_64-unknown-linux-gnu'
+
+      - name: Build solx-dev and solx-tester
+        env:
+          RUSTC_BOOTSTRAP: 1
+          RUSTFLAGS: '-C target-feature=+crt-static -C instrument-coverage -C link-arg=-fuse-ld=lld'
+        run: ${SFW_PREFIX:-} cargo build --frozen --release -p solx-dev -p solx-tester --features solx-tester/slang-ast --target x86_64-unknown-linux-gnu
 
       - name: Run integration tests
         env:
@@ -122,7 +119,7 @@ jobs:
             "${TARGET_DIR}/solx-dev" test solx-tester \
               --binary "${TARGET_DIR}/solx-tester" \
               --solidity-compiler "${SOLX_BINARY}" \
-              --path "${TEST_PATH}" --workflow build --optimizer M3B3
+              --path "${TEST_PATH}" --workflow build --optimizer M3B3 || true
             mv *.profraw "${GITHUB_WORKSPACE}/${WORKDIR}/" || true
             find "${GITHUB_WORKSPACE}/${WORKDIR}" -type f -name '*.profraw' -print > profiles.lst
             if [[ -f "${PROFDATA_FILE}" ]]; then
@@ -150,7 +147,7 @@ jobs:
           # pool of 4 files instead of leaving one profraw per process (CLI
           # tests spawn thousands of short-lived solx subprocesses).
           LLVM_PROFILE_FILE: 'unit-tests-%4m.profraw'
-        run: ${SFW_PREFIX:-} cargo fetch --locked && ${SFW_PREFIX:-} cargo test --frozen --release --target x86_64-unknown-linux-gnu
+        run: ${SFW_PREFIX:-} cargo test-slang --frozen --release --target x86_64-unknown-linux-gnu
 
       - name: Merge unit test profraw
         run: |

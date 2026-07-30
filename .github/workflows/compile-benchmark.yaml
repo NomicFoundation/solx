@@ -164,8 +164,8 @@ jobs:
       - name: Run benchmark
         run: |
           ./tests/benchmark/run.sh \
-            --bin pr=./target-slang/x86_64-unknown-linux-gnu/release/solx \
-            --bin main=./temp-solx-main/target-slang/x86_64-unknown-linux-gnu/release/solx \
+            --bin pr=./target/x86_64-unknown-linux-gnu/release/solx \
+            --bin main=./temp-solx-main/target/x86_64-unknown-linux-gnu/release/solx \
             --bin release=./solx-release \
             --runs 3 --warmup 1 \
             --out benchmark-out
