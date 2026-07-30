@@ -82,8 +82,8 @@ cargo build --release    # release (outputs to target/release/solx)
 ```bash
 cargo test                              # all tests (unit + CLI)
 cargo test --lib                        # unit tests only
-cargo test --test cli                   # CLI integration tests only
-cargo test --test cli -- cli::bin::default  # specific test
+cargo test --test mod                   # CLI integration tests only (target is `mod`)
+cargo test --test mod -- cli::bin::default  # specific test
 ```
 
 ### Slang/MLIR tests (cargo alias)

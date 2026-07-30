@@ -13,12 +13,39 @@ cargo test
 # Run only unit tests
 cargo test --lib
 
-# Run only CLI/integration tests
-cargo test --test cli
+# Run only CLI/integration tests (the test target is named `mod`)
+cargo test --test mod
 
 # Run a specific test
-cargo test --test cli -- cli::bin::default
+cargo test --test mod -- cli::bin::default
 ```
+
+## CLI Guide Examples
+
+Every ```` ```console ```` block in the
+[CLI user guide](../user-guide/02-command-line-interface.md) is an executable
+[trycmd](https://docs.rs/trycmd) case, run by the `docs_examples` CLI test
+(`solx/tests/cli/docs_examples.rs`) with the rest of the suite. The commands
+run in a temporary sandbox seeded from `02-command-line-interface.in/`, and
+the output lines in the guide must match the compiler's actual output.
+
+When the test fails after an intentional output change, regenerate the stale
+blocks in place and review the documentation diff:
+
+```shell
+TRYCMD=overwrite cargo test -p solx --test mod docs_examples
+```
+
+Overwriting preserves `...` line elisions, but inline `[..]` wildcards on
+lines that no longer match are expanded to the literal output and must be
+restored by hand — watch for benchmark timings and for working-directory
+paths hex-encoded inside DWARF output, which differ on every run.
+
+For version bumps, do not use `TRYCMD=overwrite`: the CBOR trailer lines that
+carry the version also carry a `[..]` metadata-digest wildcard, and a blessed
+literal digest only breaks weeks later on the next solc-fork re-pin. Update
+the hex-encoded version strings in the trailer lines directly instead — the
+new bytes are deterministic (hex of `solx:X.Y.Z;solc:A.B.C`).
 
 ## Integration Tests
 

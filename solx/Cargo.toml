@@ -37,6 +37,7 @@ assert_cmd = "2.2"
 predicates = "3.1"
 tempfile = "3.27"
 test-case = "3.3"
+trycmd = "1.2"
 
 gimli.workspace = true
 hex.workspace = true
