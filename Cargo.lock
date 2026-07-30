@@ -810,7 +810,7 @@ dependencies = [
  "bitflags",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.10.5",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -2765,7 +2765,7 @@ checksum = "7ebb8d8732c6a6df3d8f032a82911cfc747e00efb95cc46e8d0acd5b5b88570c"
 [[package]]
 name = "melior"
 version = "0.26.9"
-source = "git+https://github.com/NomicFoundation/melior?rev=52fa2611004e9553803de8dd5e6d44bb327af2da#52fa2611004e9553803de8dd5e6d44bb327af2da"
+source = "git+https://github.com/NomicFoundation/melior?rev=1e6f01701b344bec2458ac938b661db669cf27a2#1e6f01701b344bec2458ac938b661db669cf27a2"
 dependencies = [
  "melior-macro",
  "mlir-sys",
@@ -2774,7 +2774,7 @@ dependencies = [
 [[package]]
 name = "melior-macro"
 version = "0.19.5"
-source = "git+https://github.com/NomicFoundation/melior?rev=52fa2611004e9553803de8dd5e6d44bb327af2da#52fa2611004e9553803de8dd5e6d44bb327af2da"
+source = "git+https://github.com/NomicFoundation/melior?rev=1e6f01701b344bec2458ac938b661db669cf27a2#1e6f01701b344bec2458ac938b661db669cf27a2"
 dependencies = [
  "comrak",
  "convert_case 0.11.0",
@@ -5127,8 +5127,7 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 [[package]]
 name = "tblgen"
 version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c4e3abe8582a0bb8708d11142c45e8c622f013bc4936d918da42c2aade60e98"
+source = "git+https://github.com/hedgar2017/tblgen-rs?rev=56ad078a9bfc3ee785d56ef63bb923425ce1e088#56ad078a9bfc3ee785d56ef63bb923425ce1e088"
 dependencies = [
  "bindgen",
  "cc",
@@ -5143,7 +5142,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys 0.52.0",
