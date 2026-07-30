@@ -162,6 +162,12 @@ unsafe extern "C" {
     /// Whether the type is a `sol::AddressType`, regardless of payability.
     pub fn solxIsAddressType(ty: mlir_sys::MlirType) -> bool;
 
+    /// Whether the type is a `sol::EnumType`.
+    pub fn solxIsEnumType(ty: mlir_sys::MlirType) -> bool;
+
+    /// Returns the largest ordinal a `sol::EnumType` admits.
+    pub fn solxEnumTypeMax(ty: mlir_sys::MlirType) -> u32;
+
     /// Whether the type is a `sol::StringType`, the shared representation of dynamic
     /// `bytes` and `string`.
     pub fn solxIsStringType(ty: mlir_sys::MlirType) -> bool;

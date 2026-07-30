@@ -11,7 +11,8 @@ doctest = false
 
 [dependencies]
 anyhow.workspace = true
-num-bigint = "0.5"
+itertools.workspace = true
+num.workspace = true
 num-traits = "0.2"
 ruint.workspace = true
 serde_json.workspace = true

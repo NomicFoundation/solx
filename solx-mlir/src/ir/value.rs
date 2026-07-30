@@ -27,8 +27,9 @@ pub struct Value<'context> {
 
 impl<'context> Value<'context> {
     /// Materialises a `sol.constant` from an arbitrary-width [`BigInt`] at the type a constant can be
-    /// emitted at, then converts it to the target: `ui160` for an address, the width-matched unsigned
-    /// integer for a bytes-like target, the target type itself otherwise.
+    /// emitted at, then converts it to the target: `ui160` for an address, the EVM word for an enum
+    /// ordinal, the width-matched unsigned integer for a bytes-like target, the target type itself
+    /// otherwise.
     pub fn constant_from_bigint(
         value: &BigInt,
         result_type: Type<'context>,
@@ -36,6 +37,8 @@ impl<'context> Value<'context> {
     ) -> Self {
         let r#type = if result_type.is_address() {
             Type::unsigned(context.melior, solx_utils::BIT_LENGTH_ETH_ADDRESS)
+        } else if result_type.is_enum() {
+            Type::field(context.melior)
         } else if result_type.is_bytes_like() {
             let bits = result_type.bytes_like_width() as usize * solx_utils::BIT_LENGTH_BYTE;
             Type::unsigned(context.melior, bits)
@@ -105,11 +108,15 @@ impl<'context> Value<'context> {
     }
 
     /// Emits the cast reconciling `self` to `target_type`, be it a computed common type or an
-    /// explicit `T(x)`. The address and string-to-`bytesN` arms, reachable only under an explicit
-    /// cast, precede the bytes and scalar arms an address or string would otherwise fall into.
+    /// explicit `T(x)`. The enum, address, and string-to-`bytesN` arms, reachable only under an
+    /// explicit cast, precede the bytes and scalar arms an enum, address, or string would otherwise
+    /// fall into.
     pub fn convert(mut self, target_type: Type<'context>, context: &Context<'context>) -> Self {
         if self.r#type() == target_type {
             return self;
+        }
+        if self.r#type().is_enum() || target_type.is_enum() {
+            return self.enum_cast(target_type, context);
         }
         if self.r#type().is_address() {
             return self.address_cast(target_type, context);
