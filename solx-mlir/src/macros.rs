@@ -1,12 +1,7 @@
 //!
 //! ODS op-construction macros.
 //!
-//! `mlir_op_build!` / `mlir_op!` / `mlir_op_void!` / `mlir_region_op!` collapse the ceremony of an
-//! ODS-generated op builder (the `(context, unknown_location)` head and `.build().into()` tail) so a
-//! site states only the op name and its setters.
-//!
 
-/// Builds an inlined dialect op and yields it as an `Operation`, without appending.
 macro_rules! mlir_op_build {
     ($context:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
         $operation::builder($context.melior, $context.location())
@@ -16,12 +11,12 @@ macro_rules! mlir_op_build {
     };
 }
 
-/// Builds an inlined dialect op ([`mlir_op_build!`]), appends it to `$block`, and
-/// returns its single result value. The `expect` message is derived from the op.
-/// Omitting `$block` appends at the `current_block()` cursor.
 macro_rules! mlir_op {
     ($context:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
         mlir_op!($context, $context.current_block(), $operation $(.$method($($argument),*))*)
+    };
+    ($context:expr, $block:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))* ; ()) => {
+        $block.append_operation(mlir_op_build!($context, $operation $(.$method($($argument),*))*));
     };
     ($context:expr, $block:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
         $block
@@ -31,21 +26,6 @@ macro_rules! mlir_op {
     };
 }
 
-/// [`mlir_op!`] for a value-less op: a statement or effect such as `sol.store`
-/// or `sol.return`: appends the op ([`mlir_op_build!`]) and yields `()`.
-macro_rules! mlir_op_void {
-    ($context:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
-        mlir_op_void!($context, $context.current_block(), $operation $(.$method($($argument),*))*)
-    };
-    ($context:expr, $block:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
-        $block.append_operation(mlir_op_build!($context, $operation $(.$method($($argument),*))*));
-    };
-}
-
-/// Appends a region-bearing control-flow op (`sol.if`/`for`/`while`/`do`) and hands back each
-/// region's fresh entry block for the caller to emit into and terminate. A trailing `; empty name…`
-/// clause sets a region the op's shape requires but this method leaves bodiless — an `if` with no
-/// `else` — and it is not handed back.
 macro_rules! mlir_region_op {
     (
         $context:expr, $block:expr, $operation:ident
@@ -90,8 +70,6 @@ macro_rules! mlir_region_op {
     }};
 }
 
-/// A Sol dialect attribute enum built by a `solxCreate*Attr` FFI constructor: the `#[repr(u32)]`
-/// enum plus its `attribute()` builder. `From`/other impls, where present, live alongside the call.
 macro_rules! sol_dialect_attribute {
     (
         $(#[$enum_meta:meta])*
@@ -115,8 +93,6 @@ macro_rules! sol_dialect_attribute {
     };
 }
 
-/// A Sol comparison-predicate enum encoded as an `i64` `IntegerAttribute`: the `#[repr(i64)]` enum
-/// plus its `attribute()` builder. `From`/other impls, where present, live alongside the call.
 macro_rules! sol_predicate_attribute {
     (
         $(#[$enum_meta:meta])*
@@ -169,25 +145,6 @@ impl<'slice, T, const N: usize> IntoOds<&'slice [T]> for &'slice [T; N] {
     }
 }
 
-/// Declares Sol dialect op-wrapper methods on their entity homes as pure data: one ODS operation
-/// per declaration.
-///
-/// A declaration names the receiver, the method and its typed parameters, the disposition, the
-/// operation, and the builder setter chain. Every setter argument is a parameter, the receiver
-/// `self`, or a closed keyword from the `@arg` rules; keywords are call-shaped, so a bare
-/// identifier is always a parameter. The operation slot may be `checked(CheckedOp, UncheckedOp)`,
-/// which threads a `checked: bool` selector.
-///
-/// A `base | flagged (…) … { … } flagged .setter ;` declaration stamps a pair of methods off one
-/// chain: `base` omits the unit-flag setter and `flagged` appends `.setter(unit_flag)`, so a binary
-/// mode is two named methods rather than one method taking a `bool`.
-///
-/// Dispositions: `-> value` / `-> place` append at the `current_block()` cursor and wrap the single
-/// result; `-> value nop_if_same(param)` short-circuits when the receiver already has that type; an
-/// arrowless declaration is value-less and appends to the receiver block for a `Block` method, or at
-/// the `current_block()` cursor for a `Value` / `Place`. A `Block` declaration listing region names
-/// after `;` opens a region-bearing op and returns each region's entry block, or the sole block when
-/// one region is named. Every argument is routed through [`IntoOds`] to the setter's type.
 macro_rules! sol_ops {
     () => {};
 
@@ -314,6 +271,18 @@ macro_rules! sol_ops {
         .into()
     };
 
+    (@flag_ty $checked_op:ident) => { bool };
+    (@op [$context:ident] [$receiver:tt] [$flag:ident] checked($checked_op:ident) $operation:ident $($chain:tt)*) => {
+        if $flag {
+            sol_ops!(@build [$context] [$receiver] $checked_op $($chain)*)
+        } else {
+            sol_ops!(@build [$context] [$receiver] $operation $($chain)*)
+        }
+    };
+    (@op [$context:ident] [$receiver:tt] [$flag:ident] $operation:ident $($chain:tt)*) => {
+        sol_ops!(@build [$context] [$receiver] $operation $($chain)*)
+    };
+
     (@disp_ty value) => { $crate::Value<'context> };
     (@disp_ty place) => { $crate::Place<'context> };
     (@disp_ty values) => { ::std::vec::Vec<$crate::Value<'context>> };
@@ -381,37 +350,15 @@ macro_rules! sol_ops {
 
     (
         $receiver:ident :: $method:ident (self $(, $argument:ident : $kind:ident)* $(,)?)
-        -> value { checked($checked_op:ident, $unchecked_op:ident) $($chain:tt)* }
+        -> $disposition:ident $(nop_if_same($same:ident))? $(checked($checked_op:ident))?
+        { $operation:ident $($chain:tt)* }
         $($rest:tt)*
     ) => {
         impl<'context> $receiver<'context> {
             pub fn $method(
                 self,
                 $($argument: sol_ops!(@ty $kind),)*
-                checked: bool,
-                context: &$crate::Context<'context>,
-            ) -> $crate::Value<'context> {
-                let receiver = self;
-                let operation = if checked {
-                    sol_ops!(@build [context] [receiver] $checked_op $($chain)*)
-                } else {
-                    sol_ops!(@build [context] [receiver] $unchecked_op $($chain)*)
-                };
-                sol_ops!(@emit value [context] operation, "checked arithmetic op produces one result")
-            }
-        }
-        sol_ops!($($rest)*);
-    };
-
-    (
-        $receiver:ident :: $method:ident (self $(, $argument:ident : $kind:ident)* $(,)?)
-        -> $disposition:ident $(nop_if_same($same:ident))? { $operation:ident $($chain:tt)* }
-        $($rest:tt)*
-    ) => {
-        impl<'context> $receiver<'context> {
-            pub fn $method(
-                self,
-                $($argument: sol_ops!(@ty $kind),)*
+                $(checked: sol_ops!(@flag_ty $checked_op),)?
                 context: &$crate::Context<'context>,
             ) -> sol_ops!(@disp_ty $disposition) {
                 let receiver = self;
@@ -419,7 +366,8 @@ macro_rules! sol_ops {
                     return receiver.into();
                 })?
                 sol_ops!(@emit $disposition [context]
-                    sol_ops!(@build [context] [receiver] $operation $($chain)*),
+                    sol_ops!(@op [context] [receiver] [checked]
+                        $(checked($checked_op))? $operation $($chain)*),
                     concat!(stringify!($operation), " produces one result"))
             }
         }

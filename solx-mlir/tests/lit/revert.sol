@@ -4,6 +4,9 @@
 // CHECK: sol.func @{{.*plain_revert.*}}
 // CHECK:   sol.revert{{$}}
 
+// CHECK: sol.func @{{.*empty_named_revert.*}}
+// CHECK:   sol.revert{{$}}
+
 // CHECK: sol.func @{{.*message_revert.*}}
 // CHECK:   sol.revert "oops"
 
@@ -23,6 +26,10 @@ contract C {
 
     function plain_revert() public pure {
         revert();
+    }
+
+    function empty_named_revert() public pure {
+        revert({});
     }
 
     function message_revert() public pure {

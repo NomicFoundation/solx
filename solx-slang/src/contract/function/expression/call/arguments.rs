@@ -7,9 +7,9 @@ use std::collections::HashMap;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NamedArguments;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Parameter;
 use slang_solidity_v2::ast::Parameters;
-use slang_solidity_v2::ast::PositionalArguments;
 
 use solx_mlir::Value;
 
@@ -25,7 +25,10 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     ) -> Vec<(Parameter, Value<'context>)> {
         let ordered: Vec<Expression> = match arguments {
             ArgumentsDeclaration::PositionalArguments(positional) => positional.iter().collect(),
-            ArgumentsDeclaration::NamedArguments(named) => Self::named_arguments(named, parameters),
+            ArgumentsDeclaration::NamedArguments(named) => Self::named_arguments(
+                named,
+                parameters.iter().map(|parameter| parameter.node_id()),
+            ),
         };
         parameters
             .iter()
@@ -39,27 +42,36 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     }
 
     /// The positional argument list of a call, each argument evaluated in order.
-    pub fn positional_arguments(&mut self, node: &PositionalArguments) -> Vec<Value<'context>> {
-        node.iter()
-            .map(|argument| self.expression(&argument))
+    pub fn positional_arguments(&mut self, arguments: &[Expression]) -> Vec<Value<'context>> {
+        arguments
+            .iter()
+            .map(|argument| self.expression(argument))
             .collect()
     }
 
-    /// The named argument list of a call, reordered into the definition's parameter order by the
-    /// name matching slang has validated is total and unambiguous.
-    fn named_arguments(named: &NamedArguments, parameters: &Parameters) -> Vec<Expression> {
-        let mut by_name: HashMap<String, Expression> = named
+    /// The named argument list of a call, reordered into the targets' declaration order through
+    /// the label bindings slang resolves.
+    pub fn named_arguments(
+        named: &NamedArguments,
+        targets: impl Iterator<Item = NodeId>,
+    ) -> Vec<Expression> {
+        let mut by_target: HashMap<NodeId, Expression> = named
             .iter()
-            .map(|argument| (argument.name().name().to_owned(), argument.value()))
+            .map(|argument| {
+                (
+                    argument
+                        .name()
+                        .resolve_to_definition()
+                        .expect("slang binds every named-argument label")
+                        .node_id(),
+                    argument.value(),
+                )
+            })
             .collect();
-        parameters
-            .iter()
-            .map(|parameter| {
-                let identifier = parameter
-                    .name()
-                    .expect("slang validates a named argument targets a named parameter");
-                by_name
-                    .remove(identifier.name())
+        targets
+            .map(|target| {
+                by_target
+                    .remove(&target)
                     .expect("slang validates every parameter receives a named argument")
             })
             .collect()

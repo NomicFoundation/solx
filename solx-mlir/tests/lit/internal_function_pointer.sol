@@ -12,6 +12,10 @@
 // CHECK:   %[[POINTER:.*]] = sol.load %[[SLOT]] : !sol.ptr<!sol.func_ref<() -> ui256>, Stack>, !sol.func_ref<() -> ui256>
 // CHECK:   sol.icall %[[POINTER]]() : !sol.func_ref<() -> ui256>, () -> ui256
 
+// CHECK: sol.func @{{.*run_empty_braces.*}}
+// CHECK:   sol.func_constant @{{.*g.*}} : !sol.func_ref<() -> ui256>
+// CHECK:   sol.icall %{{[0-9]+}}() : !sol.func_ref<() -> ui256>, () -> ui256
+
 // CHECK: sol.func @{{.*invoke.*}}(%[[ARGUMENT:.*]]: !sol.func_ref<() -> ui256>) -> ui256
 // CHECK:   sol.store %[[ARGUMENT]], %[[SLOT:.*]] : !sol.func_ref<() -> ui256>, !sol.ptr<!sol.func_ref<() -> ui256>, Stack>
 // CHECK:   %[[POINTER:.*]] = sol.load %[[SLOT]] : !sol.ptr<!sol.func_ref<() -> ui256>, Stack>, !sol.func_ref<() -> ui256>
@@ -74,6 +78,11 @@ contract C {
     function run() public returns (uint256) {
         function () internal returns (uint256) functionPointer = g;
         return functionPointer();
+    }
+
+    function run_empty_braces() public returns (uint256) {
+        function () internal returns (uint256) functionPointer = g;
+        return functionPointer({});
     }
 
     function invoke(function () internal returns (uint256) f) internal returns (uint256) {

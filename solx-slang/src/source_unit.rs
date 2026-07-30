@@ -20,11 +20,11 @@ use crate::scope::source_unit::SourceUnitScope;
 
 impl<'context> SourceUnitScope<'context> {
     /// Lowers every contract the unit deploys into standard-JSON contract outputs keyed by contract
-    /// name, each in its own MLIR module off the file's melior context, as solc emits one module per
-    /// contract. An abstract contract and an interface deploy nothing and produce no module. A
-    /// contract with a contract base is skipped because emission collects only the contract's own
-    /// state and functions: an interface base carries nothing to inherit, a contract base carries
-    /// state and bodies that would be silently dropped.
+    /// name, each in its own MLIR module off the file's melior context. An abstract contract and an
+    /// interface deploy nothing and produce no module. A contract with a contract base is skipped
+    /// because emission collects only the contract's own state and functions: an interface base
+    /// carries nothing to inherit, a contract base carries state and bodies that would be silently
+    /// dropped.
     ///
     /// # Errors
     ///

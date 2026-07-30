@@ -23,6 +23,14 @@
 // CHECK:   sol.cast %{{.*}} : ui8 to ui256
 // CHECK:   sol.call @{{.*add.*}}
 
+// CHECK: sol.func @{{.*named_argument.*}}
+// CHECK:   sol.load %{{.*}}
+// CHECK:   sol.constant 1 : ui8
+// CHECK:   sol.call @{{.*add.*}}
+
+// CHECK: sol.func @{{.*empty_braces.*}}
+// CHECK:   sol.call @{{.*literal_argument.*}}() : () -> ()
+
 // CHECK: sol.func @{{.*tuple_statement.*}}
 // CHECK:   sol.call @{{.*add.*}}
 // CHECK:   sol.call @{{.*double.*}}
@@ -48,6 +56,14 @@ contract C {
 
     function widening_argument(uint8 a, uint8 b) public pure returns (uint256) {
         return add(a, b);
+    }
+
+    function named_argument(uint256 x) public pure returns (uint256) {
+        return add({b: 1, a: x});
+    }
+
+    function empty_braces() public pure {
+        literal_argument({});
     }
 
     function tuple_statement(uint256 x) public pure {
