@@ -14,6 +14,7 @@ use melior::ir::AttributeLike;
 use melior::ir::BlockLike;
 use melior::ir::Location;
 use melior::ir::Module;
+use melior::ir::Operation;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationLike;
 use melior::ir::operation::OperationMutLike;
@@ -243,8 +244,7 @@ impl<'context> Context<'context> {
     }
 
     /// Finds a nested `builtin.module` in `module`'s body whose `sym_name`
-    /// matches `target`, removes it from the parent, and returns its
-    /// textual form.
+    /// matches `target`, destroys it, and returns its textual form.
     fn take_nested_module_text(module: &mut Module, target: &str) -> anyhow::Result<String> {
         let body = module.body();
         std::iter::successors(body.first_operation_mut(), |operation| {
@@ -261,6 +261,7 @@ impl<'context> Context<'context> {
             }
             let text = operation.to_string();
             operation.remove_from_parent();
+            drop(unsafe { Operation::from_raw(operation.to_raw()) });
             Some(text)
         })
         .ok_or_else(|| anyhow::anyhow!("no module with sym_name `{target}` in Sol pass output"))
