@@ -81,9 +81,9 @@ runs:
         fi
         ${SFW_PREFIX:-} cargo ${BUILD_STD_LIB} build-slang --frozen ${RELEASE} ${{ steps.build-target.outputs.target }}
         if [ '${{ inputs.target }}' != '' ]; then
-          BINARY_DIR="${PWD}/target-slang/${{ inputs.target }}/${{ inputs.build-type }}"
+          BINARY_DIR="${PWD}/target/${{ inputs.target }}/${{ inputs.build-type }}"
         else
-          BINARY_DIR="${PWD}/target-slang/${{ inputs.build-type }}"
+          BINARY_DIR="${PWD}/target/${{ inputs.build-type }}"
         fi
         [ "$RUNNER_OS" = "Windows" ] && WIN_SUFFIX=".exe"
         echo "${BINARY_DIR}" >> "${GITHUB_PATH}"
