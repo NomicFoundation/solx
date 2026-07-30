@@ -137,6 +137,14 @@ bool solxIsAddressType(MlirType ty) {
     return mlir::isa<mlir::sol::AddressType>(unwrap(ty));
 }
 
+bool solxIsEnumType(MlirType ty) {
+    return mlir::isa<mlir::sol::EnumType>(unwrap(ty));
+}
+
+uint32_t solxEnumTypeMax(MlirType ty) {
+    return mlir::cast<mlir::sol::EnumType>(unwrap(ty)).getMax();
+}
+
 bool solxIsStringType(MlirType ty) {
     return mlir::isa<mlir::sol::StringType>(unwrap(ty));
 }

@@ -58,7 +58,7 @@ impl Call {
             Self::StructConstruction(struct_definition) => {
                 Self::struct_construction(&struct_definition, node, arguments, scope)
             }
-            Self::TypeConversion => Self::type_conversion(node, arguments, scope),
+            Self::TypeConversion => vec![Self::type_conversion(node, arguments, scope)],
             Self::Builtin(built_in) => Self::builtin(built_in, arguments, scope)
                 .into_iter()
                 .collect(),
@@ -66,7 +66,7 @@ impl Call {
                 .into_iter()
                 .collect(),
             Self::Function(function_definition) => {
-                Self::function(&function_definition, arguments, scope)
+                scope.call(&function_definition, arguments.iter())
             }
         }
     }
@@ -142,13 +142,13 @@ impl Call {
         call: &FunctionCallExpression,
         arguments: &PositionalArguments,
         scope: &mut FunctionScope<'_, '_, 'context>,
-    ) -> Vec<Value<'context>> {
+    ) -> Value<'context> {
         let operand = arguments
             .iter()
             .next()
             .expect("classification admits exactly one argument");
         let target_type = scope.typing(call.get_type());
-        vec![scope.converted(&operand, target_type)]
+        scope.converted(&operand, target_type)
     }
 
     /// Statement-style built-ins (`assert`, `require`, `revert`) produce no value.
@@ -402,33 +402,11 @@ impl Call {
             Some(BuiltIn::BytesConcat | BuiltIn::StringConcat) => {
                 Some(Value::concat(&scope.positional_arguments(arguments), scope))
             }
+            Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
+                Some(Self::type_conversion(call, arguments, scope))
+            }
             _ => unimplemented!("unsupported member call: {}", access.member().name()),
         }
-    }
-
-    /// Resolves the callee's pre-registered MLIR signature by node id and converts each argument to
-    /// its declared parameter type before `sol.call`.
-    fn function<'context>(
-        function_definition: &FunctionDefinition,
-        arguments: &PositionalArguments,
-        scope: &mut FunctionScope<'_, '_, 'context>,
-    ) -> Vec<Value<'context>> {
-        let signature = scope
-            .contract
-            .source_unit
-            .function_signature(function_definition.node_id());
-        let converted: Vec<Value<'context>> = arguments
-            .iter()
-            .zip(&signature.parameter_types)
-            .map(|(argument, &parameter_type)| scope.converted(&argument, parameter_type))
-            .collect();
-        Function::call(
-            &signature.mlir_name,
-            &converted,
-            &signature.return_types,
-            scope,
-        )
-        .expect("sol.call yields its declared results")
     }
 }
 
@@ -444,5 +422,43 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             .next()
             .expect("an array push in place position yields the new element's slot");
         (Place::from(slot), slot.r#type().element_type(0))
+    }
+
+    /// Calls the function a `using {f as op} for T global;` directive binds an operator to. Being a
+    /// call, its operands evaluate left-first, not in a built-in operator's right-first order.
+    pub fn bound_operator(
+        &mut self,
+        function_definition: &FunctionDefinition,
+        operands: impl IntoIterator<Item = Expression>,
+    ) -> Value<'context> {
+        self.call(function_definition, operands)
+            .into_iter()
+            .next()
+            .expect("a user-defined operator's function returns one value")
+    }
+
+    /// Resolves the callee's pre-registered MLIR signature by node id and converts each argument to
+    /// its declared parameter type before `sol.call`.
+    fn call(
+        &mut self,
+        function_definition: &FunctionDefinition,
+        arguments: impl IntoIterator<Item = Expression>,
+    ) -> Vec<Value<'context>> {
+        let signature = self
+            .contract
+            .source_unit
+            .function_signature(function_definition.node_id());
+        let converted: Vec<Value<'context>> = arguments
+            .into_iter()
+            .zip(&signature.parameter_types)
+            .map(|(argument, &parameter_type)| self.converted(&argument, parameter_type))
+            .collect();
+        Function::call(
+            &signature.mlir_name,
+            &converted,
+            &signature.return_types,
+            self,
+        )
+        .expect("sol.call yields its declared results")
     }
 }

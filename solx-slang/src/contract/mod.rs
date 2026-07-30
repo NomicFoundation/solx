@@ -11,6 +11,7 @@ use std::collections::HashMap;
 
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 
 use solx_mlir::Block;
@@ -26,12 +27,21 @@ impl<'context> SourceUnitScope<'context> {
     /// `method_identifiers` map (externally-dispatchable signature to 4-byte selector, lower-case
     /// hex); `convert-sol-to-yul` builds the entry-point dispatcher from the function selectors.
     /// Function signatures are pre-registered for call resolution before any body is emitted.
-    /// Inherited state variables are not yet declared: derived contracts do not compile through
-    /// this path.
-    pub fn contract_definition(&mut self, node: &ContractDefinition) -> BTreeMap<String, String> {
+    /// `operator_functions` land in the contract body because MLIR has no file scope. Inherited
+    /// state variables are not yet declared: derived contracts do not compile through this path.
+    pub fn contract_definition(
+        &mut self,
+        node: &ContractDefinition,
+        operator_functions: &[FunctionDefinition],
+    ) -> BTreeMap<String, String> {
         let contract_identifier = node.name();
 
-        for function in node.functions().into_iter().chain(node.constructor()) {
+        for function in node
+            .functions()
+            .into_iter()
+            .chain(node.constructor())
+            .chain(operator_functions.iter().cloned())
+        {
             let parameter_types = function
                 .parameters()
                 .iter()
@@ -108,8 +118,8 @@ impl<'context> SourceUnitScope<'context> {
                     );
                 }
                 scope.constructor(node);
-                for function in node.functions() {
-                    scope.function_definition(&function);
+                for function in node.functions().iter().chain(operator_functions) {
+                    scope.function_definition(function);
                 }
             },
         );
