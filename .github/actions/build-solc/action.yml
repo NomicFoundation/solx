@@ -4,11 +4,22 @@
 
 name: 'Build solc'
 description: 'Builds solc executable.'
+outputs:
+  cache-key:
+    description: 'Artifact cache key; a sibling invocation''s `mirror-key`'
+    value: ${{ steps.solc-cache.outputs.key }}
 inputs:
   working-dir:
     description: 'Working directory containing solx-solidity submodule.'
     required: false
     default: 'solx-solidity'
+  mirror-key:
+    description: >-
+      Sibling invocation's `cache-key`: when equal to this invocation's own
+      key, the root checkout's build and boost trees are symlinked, skipping
+      restore and build. Empty disables mirroring.
+    required: false
+    default: ''
   cmake-build-type:
     description: 'CMake build type (Release, Debug, or RelWithDebInfo).'
     required: false
@@ -31,14 +42,31 @@ runs:
       working-directory: ${{ inputs.working-dir }}/..
       run: |
         SHA=$(git -C solx-solidity rev-parse HEAD)
-        SCRIPT_HASH=$(find solx-dev/src/solc -type f -print0 | sort -z | xargs -0 cat | sha256sum | cut -d' ' -f1)
+        # solx-dev composes cmake args and flag defaults outside `solc/` too;
+        # hash every module the solc build reads so flag changes re-key.
+        SCRIPT_HASH=$({ find solx-dev/src/solc solx-dev/src/arguments/solc -type f -print0; printf '%s\0' solx-dev/src/build_type.rs solx-dev/src/ccache_variant.rs solx-dev/src/utils.rs; } | sort -z | xargs -0 cat | sha256sum | cut -d' ' -f1)
         KEY="v2-solc-${{ runner.os }}-${{ runner.arch }}"
         [ '${{ inputs.cmake-build-type }}' != 'Release' ] && KEY="${KEY}-${{ inputs.cmake-build-type }}"
         [ '${{ inputs.enable-mlir }}' = 'true' ] && KEY="${KEY}-mlir"
         KEY="${KEY}-boost${{ inputs.boost-version }}-${SHA}-script${SCRIPT_HASH:0:8}"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
+    - name: Mirror solc from sibling checkout
+      if: inputs.mirror-key != ''
+      id: solc-mirror
+      shell: bash
+      working-directory: ${{ inputs.working-dir }}
+      run: |
+        if [ '${{ steps.solc-cache.outputs.key }}' = '${{ inputs.mirror-key }}' ]; then
+          ln -snf "${GITHUB_WORKSPACE}/solx-solidity/build" build
+          ln -snf "${GITHUB_WORKSPACE}/solx-solidity/boost" boost
+          echo "mirrored=true" | tee -a "${GITHUB_OUTPUT}"
+        else
+          echo "::notice::solc inputs differ (${{ steps.solc-cache.outputs.key }} vs ${{ inputs.mirror-key }}), building separately"
+        fi
+
     - name: Restore solc artifact cache
+      if: steps.solc-mirror.outputs.mirrored != 'true'
       id: solc-artifact-cache
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
@@ -48,7 +76,7 @@ runs:
         key: ${{ steps.solc-cache.outputs.key }}
 
     - name: Build solx-dev
-      if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
+      if: steps.solc-artifact-cache.outputs.cache-hit != 'true' && steps.solc-mirror.outputs.mirrored != 'true'
       working-directory: ${{ inputs.working-dir }}/..
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       env:
@@ -63,7 +91,7 @@ runs:
     # The solx-ci-runner container doesn't ship sudo (steps run as root), so
     # we invoke apt-get directly. `-qq` silences routine output.
     - name: Prepare ccache installation
-      if: runner.os == 'Linux' && steps.solc-artifact-cache.outputs.cache-hit != 'true'
+      if: runner.os == 'Linux' && steps.solc-artifact-cache.outputs.cache-hit != 'true' && steps.solc-mirror.outputs.mirrored != 'true'
       shell: 'bash'
       run: apt-get update -qq
 
@@ -75,7 +103,7 @@ runs:
     # KEEP-IN-SYNC with CCACHE_* env on Build solc and Show ccache stats steps
     # (GHA composite actions don't support YAML anchors).
     - name: Set up compiler cache for solc
-      if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
+      if: steps.solc-artifact-cache.outputs.cache-hit != 'true' && steps.solc-mirror.outputs.mirrored != 'true'
       uses: hendrikmuhs/ccache-action@d62db5f07c26379fc4b4e0916f098a92573c3b03 # v1.2.23
       env:
         CCACHE_DIR: ${{ runner.temp }}/ccache-solc
@@ -99,7 +127,7 @@ runs:
     # deps submodules need the same setting or they surface as modified
     # content in the parent diff.
     - name: Align solc eol config with the checkout (Windows)
-      if: runner.os == 'Windows' && steps.solc-artifact-cache.outputs.cache-hit != 'true'
+      if: runner.os == 'Windows' && steps.solc-artifact-cache.outputs.cache-hit != 'true' && steps.solc-mirror.outputs.mirrored != 'true'
       shell: bash
       working-directory: ${{ inputs.working-dir }}
       run: |
@@ -107,7 +135,7 @@ runs:
         git submodule foreach --recursive git config core.autocrlf true
 
     - name: Build solc
-      if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
+      if: steps.solc-artifact-cache.outputs.cache-hit != 'true' && steps.solc-mirror.outputs.mirrored != 'true'
       # Run from the checkout root that owns solx-solidity
       working-directory: ${{ inputs.working-dir }}/..
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
@@ -129,7 +157,7 @@ runs:
     # `continue-on-error` keeps a failing ccache install (→ ccache not on PATH)
     # from masking the real Build solc failure in the step summary.
     - name: Show ccache stats
-      if: always() && steps.solc-artifact-cache.outputs.cache-hit != 'true'
+      if: always() && steps.solc-artifact-cache.outputs.cache-hit != 'true' && steps.solc-mirror.outputs.mirrored != 'true'
       continue-on-error: true
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       env:
@@ -140,7 +168,7 @@ runs:
       run: ccache --show-stats
 
     - name: Save solc artifact cache
-      if: steps.solc-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
+      if: steps.solc-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request' && steps.solc-mirror.outputs.mirrored != 'true'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
