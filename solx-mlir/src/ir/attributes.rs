@@ -43,7 +43,6 @@ sol_dialect_attribute! {
 }
 
 impl From<slang_solidity_v2::ast::FunctionMutability> for StateMutability {
-    /// The mutability a `sol.func` declares, from the one its definition carries.
     fn from(mutability: slang_solidity_v2::ast::FunctionMutability) -> Self {
         use slang_solidity_v2::ast::FunctionMutability as Slang;
         match mutability {

@@ -29,16 +29,9 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         };
         let signature = self.source_unit.function_signature(function.node_id());
         let state_mutability = StateMutability::from(function.attributes().mutability());
-        let dispatch = match function.kind() {
-            FunctionKind::Constructor => FunctionDispatch::Kind(MlirFunctionKind::Constructor),
-            FunctionKind::Fallback => FunctionDispatch::Kind(MlirFunctionKind::Fallback),
-            FunctionKind::Receive => FunctionDispatch::Kind(MlirFunctionKind::Receive),
-            FunctionKind::Regular => FunctionDispatch::Identifier(function.node_id().into()),
-            FunctionKind::Modifier => unreachable!("modifiers are filtered before emission"),
-        };
         let entry = signature.define(
             function.compute_selector(),
-            dispatch,
+            FunctionDispatch::from(function),
             state_mutability,
             self,
             self.contract_body,

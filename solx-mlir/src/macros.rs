@@ -169,8 +169,8 @@ impl<'slice, T, const N: usize> IntoOds<&'slice [T]> for &'slice [T; N] {
     }
 }
 
-/// Declares Sol dialect op-wrapper methods on [`Value`](crate::Value), [`Place`](crate::Place), and
-/// [`Block`](crate::Block) as pure data: one ODS operation per declaration.
+/// Declares Sol dialect op-wrapper methods on their entity homes as pure data: one ODS operation
+/// per declaration.
 ///
 /// A declaration names the receiver, the method and its typed parameters, the disposition, the
 /// operation, and the builder setter chain. Every setter argument is a parameter, the receiver

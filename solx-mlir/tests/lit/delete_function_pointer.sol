@@ -4,9 +4,11 @@
 // slot of another type; solx types it from the target so the store is consistent.
 
 // CHECK: sol.func @{{.*reset.*}}
-// CHECK: %[[DEFAULT:.*]] = sol.default_func_constant : !sol.func_ref<() -> ui256>
-// CHECK: sol.store %[[DEFAULT]], %{{[0-9]+}} : !sol.func_ref<() -> ui256>, !sol.ptr<!sol.func_ref<() -> ui256>, Stack>
-// CHECK: sol.cmp eq, %{{.*}}, %{{.*}} : !sol.func_ref<() -> ui256>
+// CHECK:   %[[DEFAULT:.*]] = sol.default_func_constant : !sol.func_ref<() -> ui256>
+// CHECK:   sol.store %[[DEFAULT]], %[[SLOT:.*]] : !sol.func_ref<() -> ui256>, !sol.ptr<!sol.func_ref<() -> ui256>, Stack>
+// CHECK:   %[[G:.*]] = sol.func_constant @{{.*g.*}} : !sol.func_ref<() -> ui256>
+// CHECK:   %[[CLEARED:.*]] = sol.load %[[SLOT]] : !sol.ptr<!sol.func_ref<() -> ui256>, Stack>, !sol.func_ref<() -> ui256>
+// CHECK:   sol.cmp eq, %[[CLEARED]], %[[G]] : !sol.func_ref<() -> ui256>
 
 contract C {
     function g() internal pure returns (uint256) {
