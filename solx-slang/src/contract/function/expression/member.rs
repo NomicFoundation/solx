@@ -35,11 +35,21 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             return Value::constant_from_bigint(&BigInt::from(ordinal), enum_type, self);
         }
         match node.member().resolve_to_built_in() {
-            Some(BuiltIn::AddressBalance) => Value::balance(self.expression(&node.operand()), self),
-            Some(BuiltIn::AddressCodehash) => {
-                Value::code_hash(self.expression(&node.operand()), self)
+            Some(BuiltIn::AddressBalance) => {
+                let address =
+                    self.converted(&node.operand(), MlirType::address(self.melior, false));
+                Value::balance(address, self)
             }
-            Some(BuiltIn::AddressCode) => Value::code(self.expression(&node.operand()), self),
+            Some(BuiltIn::AddressCodehash) => {
+                let address =
+                    self.converted(&node.operand(), MlirType::address(self.melior, false));
+                Value::code_hash(address, self)
+            }
+            Some(BuiltIn::AddressCode) => {
+                let address =
+                    self.converted(&node.operand(), MlirType::address(self.melior, false));
+                Value::code(address, self)
+            }
             Some(BuiltIn::Length) => self.expression(&node.operand()).length(self),
             Some(BuiltIn::TxOrigin) => Value::tx_origin(self),
             Some(BuiltIn::TxGasPrice) => Value::tx_gas_price(self),
@@ -65,8 +75,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         }
     }
 
-    /// The address yielded by `s.field` together with the field's element MLIR type. The field index
-    /// is derived by member-name comparison until node-id resolution is verified against the corpus.
+    /// The address yielded by `s.field` together with the field's element MLIR type.
     pub fn member_access_place(
         &mut self,
         node: &MemberAccessExpression,
@@ -79,13 +88,14 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             unreachable!("slang StructType always references a Struct definition");
         };
 
-        let member = node.member();
-        let member_name = member.name();
+        let Some(Definition::StructMember(member)) = node.member().resolve_to_definition() else {
+            unreachable!("a struct field access binds to the member it names");
+        };
         let field_index = struct_definition
             .members()
             .iter()
-            .position(|member| member.name().name() == member_name)
-            .expect("slang validates the accessed member exists");
+            .position(|candidate| candidate.node_id() == member.node_id())
+            .expect("a struct lists the members it declares");
 
         let base_value = self.expression(&base);
         let element_type = base_value.r#type().element_type(field_index as u64);

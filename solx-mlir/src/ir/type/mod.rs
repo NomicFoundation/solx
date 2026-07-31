@@ -3,6 +3,7 @@
 //!
 
 pub mod array_size;
+pub mod function_type;
 
 use std::ffi::c_char;
 
@@ -224,6 +225,11 @@ impl<'context> Type<'context> {
     /// `is_bytes_like`.
     pub fn bytes_like_width(self) -> u32 {
         unsafe { ffi::solxBytesLikeTypeWidth(self.inner.to_raw()) }
+    }
+
+    /// Whether this is a `sol::FuncRefType`, an internal function pointer.
+    pub fn is_function_reference(self) -> bool {
+        unsafe { ffi::solxIsFuncRefType(self.inner.to_raw()) }
     }
 
     /// Whether this is a scalar value type: integer, enum, function reference, address-like, or

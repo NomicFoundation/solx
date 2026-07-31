@@ -71,7 +71,6 @@ impl EVMVersion {
     }
 }
 
-#[cfg(feature = "mlir")]
 impl EVMVersion {
     /// Returns the Sol dialect `EvmVersionAttr` integer encoding.
     pub fn into_sol_dialect_identifier(self) -> u32 {
