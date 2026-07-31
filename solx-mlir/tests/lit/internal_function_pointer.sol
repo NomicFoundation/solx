@@ -33,6 +33,10 @@
 // CHECK:   sol.load %{{.*}} : !sol.ptr<!sol.func_ref<() -> ui256>, Memory>, !sol.func_ref<() -> ui256>
 // CHECK:   sol.icall %{{[0-9]+}}() : !sol.func_ref<() -> ui256>, () -> ui256
 
+// CHECK: sol.func @{{.*run_call_result.*}}
+// CHECK:   %[[PICKED:.*]] = sol.call @{{.*pick.*}} : () -> !sol.func_ref<() -> ui256>
+// CHECK:   sol.icall %[[PICKED]]() : !sol.func_ref<() -> ui256>, () -> ui256
+
 // CHECK: sol.func @{{.*run_arguments_results.*}}
 // CHECK:   %[[PAIR:.*]] = sol.func_constant @{{.*pair.*}} : !sol.func_ref<(ui256, ui256) -> (ui256, ui256)>
 // CHECK:   sol.store %[[PAIR]], %[[SLOT:.*]] : !sol.func_ref<(ui256, ui256) -> (ui256, ui256)>, !sol.ptr<!sol.func_ref<(ui256, ui256) -> (ui256, ui256)>, Stack>
@@ -70,6 +74,14 @@ contract C {
     function run_element() public returns (uint256) {
         function () internal returns (uint256)[1] memory functionPointers = [g];
         return functionPointers[0]();
+    }
+
+    function pick() internal returns (function () internal returns (uint256)) {
+        return g;
+    }
+
+    function run_call_result() public returns (uint256) {
+        return pick()();
     }
 
     function pair(uint256 a, uint256 b) internal returns (uint256, uint256) {

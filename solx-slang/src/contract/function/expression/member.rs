@@ -75,8 +75,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         }
     }
 
-    /// The address yielded by `s.field` together with the field's element MLIR type. The field index
-    /// is derived by member-name comparison until node-id resolution is verified against the corpus.
+    /// The address yielded by `s.field` together with the field's element MLIR type.
     pub fn member_access_place(
         &mut self,
         node: &MemberAccessExpression,
@@ -89,13 +88,14 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             unreachable!("slang StructType always references a Struct definition");
         };
 
-        let member = node.member();
-        let member_name = member.name();
+        let Some(Definition::StructMember(member)) = node.member().resolve_to_definition() else {
+            unreachable!("a struct field access binds to the member it names");
+        };
         let field_index = struct_definition
             .members()
             .iter()
-            .position(|member| member.name().name() == member_name)
-            .expect("slang validates the accessed member exists");
+            .position(|candidate| candidate.node_id() == member.node_id())
+            .expect("a struct lists the members it declares");
 
         let base_value = self.expression(&base);
         let element_type = base_value.r#type().element_type(field_index as u64);
