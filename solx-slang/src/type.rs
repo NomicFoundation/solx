@@ -4,10 +4,13 @@
 
 use num_traits::sign::Signed;
 use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::FunctionType as SlangFunctionType;
+use slang_solidity_v2::ast::FunctionTypeVisibility;
 use slang_solidity_v2::ast::LiteralKind;
 use slang_solidity_v2::ast::Type;
 
 use solx_mlir::ArraySize;
+use solx_mlir::FunctionType;
 use solx_mlir::Type as MlirType;
 
 use crate::scope::source_unit::SourceUnitScope;
@@ -160,6 +163,14 @@ impl<'context> SourceUnitScope<'context> {
                 let max = u8::try_from(member_count - 1).expect("enum member count fits in u8");
                 MlirType::enumeration(self.melior, max.into())
             }
+            Type::Function(function_type) => {
+                if matches!(function_type.visibility(), FunctionTypeVisibility::External) {
+                    unimplemented!(
+                        "MLIR type resolution is not yet implemented for external function types"
+                    );
+                }
+                self.function_type(function_type).reference(self.melior)
+            }
             Type::UserDefinedValue(udvt) => {
                 let target_type = udvt
                     .target_type()
@@ -167,6 +178,27 @@ impl<'context> SourceUnitScope<'context> {
                 self.resolve(&target_type, inherited_location)
             }
             _ => unimplemented!("unsupported Slang type"),
+        }
+    }
+
+    /// Resolves a function type's MLIR signature. Any non-external visibility resolves here:
+    /// `Public` types a bare reference to a public function, a legal internal pointer.
+    pub fn function_type(&self, function_type: &SlangFunctionType) -> FunctionType<'context> {
+        FunctionType {
+            parameters: function_type
+                .parameter_types()
+                .iter()
+                .map(|parameter_type| self.resolve(parameter_type, None))
+                .collect(),
+            results: match function_type.return_type() {
+                Type::Void(_) => Vec::new(),
+                Type::Tuple(tuple_type) => tuple_type
+                    .types()
+                    .iter()
+                    .map(|element_type| self.resolve(element_type, None))
+                    .collect(),
+                other => vec![self.resolve(&other, None)],
+            },
         }
     }
 

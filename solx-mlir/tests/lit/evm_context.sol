@@ -38,7 +38,8 @@
 // CHECK:   sol.prevrandao : ui256
 
 // CHECK: sol.func @{{.*get_balance.*}}
-// CHECK:   sol.balance %{{.*}} : !sol.address -> ui256
+// CHECK:   %[[BALANCE_RECEIVER:.*]] = sol.address_cast %{{.*}} : !sol.address<payable> to !sol.address
+// CHECK:   sol.balance %[[BALANCE_RECEIVER]] : !sol.address -> ui256
 
 contract C {
     function get_sender() public view returns (address) {
@@ -89,7 +90,7 @@ contract C {
         return block.prevrandao;
     }
 
-    function get_balance(address a) public view returns (uint256) {
+    function get_balance(address payable a) public view returns (uint256) {
         return a.balance;
     }
 }

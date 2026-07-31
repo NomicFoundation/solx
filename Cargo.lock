@@ -4848,6 +4848,7 @@ dependencies = [
  "num",
  "ruint",
  "serde",
+ "slang_solidity_v2",
  "solx-utils",
 ]
 

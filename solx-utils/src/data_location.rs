@@ -53,7 +53,6 @@ impl From<AddressSpace> for DataLocation {
     }
 }
 
-#[cfg(feature = "slang")]
 impl DataLocation {
     /// Converts a Slang semantic data location into the dialect's data location.
     ///

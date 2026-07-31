@@ -42,10 +42,10 @@ impl<'context> SourceUnitScope<'context> {
         let mut contracts = BTreeMap::new();
         for contract in unit.contracts().iter().filter(|contract| {
             !contract.is_abstract()
-                && !contract
-                    .direct_bases()
-                    .iter()
-                    .any(|base| matches!(base, ContractBase::Contract(_)))
+                && !contract.direct_bases().iter().any(|base| match base {
+                    ContractBase::Contract(_) => true,
+                    ContractBase::Interface(_) => false,
+                })
         }) {
             let mut scope = SourceUnitScope::new(Context::new(&melior, evm_version));
             let method_identifiers = scope.contract_definition(contract, &operator_functions);

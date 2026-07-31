@@ -1,5 +1,6 @@
 //!
-//! Identifier references: constants fold, variables load from their places.
+//! Identifier references: constants fold, function names materialise pointers, variables load from
+//! their places.
 //!
 
 use slang_solidity_v2::ast::Definition;
@@ -12,13 +13,23 @@ use solx_mlir::Value;
 use crate::scope::function::FunctionScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// A constant folds to its initializer; every other identifier loads from its place.
+    /// A constant folds to its initializer; a bare function name materialises its internal pointer
+    /// (`sol.func_constant`); every other identifier loads from its place.
     pub fn identifier(&mut self, node: &Identifier) -> Value<'context> {
-        if let Some(Definition::Constant(constant)) = node.resolve_to_definition() {
-            return self.expression(&constant.value().expect("constant has an initializer"));
+        match node.resolve_to_definition() {
+            Some(Definition::Constant(constant)) => {
+                self.expression(&constant.value().expect("constant has an initializer"))
+            }
+            Some(Definition::Function(function)) => self
+                .contract
+                .source_unit
+                .function_signature(function.node_id())
+                .pointer_constant(self),
+            _ => {
+                let (place, element_type) = self.identifier_place(node);
+                place.load(element_type, self)
+            }
         }
-        let (place, element_type) = self.identifier_place(node);
-        place.load(element_type, self)
     }
 
     /// A state variable resolves to its storage slot, a local variable or parameter to its stack

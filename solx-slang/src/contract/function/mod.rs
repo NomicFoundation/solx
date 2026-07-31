@@ -8,9 +8,11 @@ pub mod statement;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
-use slang_solidity_v2::ast::FunctionMutability;
 
 use solx_mlir::Function;
+use solx_mlir::FunctionDispatch;
+use solx_mlir::FunctionKind as MlirFunctionKind;
+use solx_mlir::FunctionType;
 use solx_mlir::Place;
 use solx_mlir::StateMutability;
 use solx_mlir::Value;
@@ -26,37 +28,24 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             return;
         };
         let signature = self.source_unit.function_signature(function.node_id());
-        let state_mutability = match function.attributes().mutability() {
-            FunctionMutability::Pure => StateMutability::Pure,
-            FunctionMutability::View => StateMutability::View,
-            FunctionMutability::Payable => StateMutability::Payable,
-            FunctionMutability::NonPayable => StateMutability::NonPayable,
-        };
-        let mlir_kind = match function.kind() {
-            FunctionKind::Constructor => Some(solx_mlir::FunctionKind::Constructor),
-            FunctionKind::Fallback => Some(solx_mlir::FunctionKind::Fallback),
-            FunctionKind::Receive => Some(solx_mlir::FunctionKind::Receive),
-            FunctionKind::Regular => None,
-            FunctionKind::Modifier => unreachable!("modifiers are filtered before emission"),
-        };
+        let state_mutability = StateMutability::from(function.attributes().mutability());
         let entry = signature.define(
             function.compute_selector(),
+            FunctionDispatch::from(function),
             state_mutability,
-            mlir_kind,
             self,
             self.contract_body,
         );
-        let Function {
-            parameter_types,
-            return_types,
-            ..
-        } = signature;
-        self.function(entry, return_types, |scope| {
+        let FunctionType {
+            parameters,
+            results,
+        } = signature.function_type;
+        self.function(entry, results, |scope| {
             for (index, parameter) in function.parameters().iter().enumerate() {
                 let Some(identifier) = parameter.name() else {
                     continue;
                 };
-                scope.define_local(identifier.name(), parameter_types[index], |_scope| {
+                scope.define_local(identifier.name(), parameters[index], |_scope| {
                     entry.argument(index)
                 });
             }
@@ -112,8 +101,8 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         }
         let entry = Function::constructor().define(
             None,
+            FunctionDispatch::Kind(MlirFunctionKind::Constructor),
             StateMutability::NonPayable,
-            Some(solx_mlir::FunctionKind::Constructor),
             self,
             self.contract_body,
         );
