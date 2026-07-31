@@ -42,6 +42,19 @@ sol_dialect_attribute! {
     }
 }
 
+impl From<slang_solidity_v2::ast::FunctionMutability> for StateMutability {
+    /// The mutability a `sol.func` declares, from the one its definition carries.
+    fn from(mutability: slang_solidity_v2::ast::FunctionMutability) -> Self {
+        use slang_solidity_v2::ast::FunctionMutability as Slang;
+        match mutability {
+            Slang::Pure => Self::Pure,
+            Slang::View => Self::View,
+            Slang::Payable => Self::Payable,
+            Slang::NonPayable => Self::NonPayable,
+        }
+    }
+}
+
 sol_predicate_attribute! {
     /// Sol dialect `sol.cmp` predicate values. Signedness is carried by the operand type, not the
     /// predicate.

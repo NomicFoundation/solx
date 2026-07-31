@@ -30,8 +30,8 @@ sol_ops! {
     Value::function_constant(symbol: str, result_type: ty) -> value {
         FuncConstantOperation.sym(symbol_attr(symbol)).addr(result_type)
     }
-    Value::default_function_constant() -> value {
-        DefaultFuncConstantOperation.addr(function_reference())
+    Value::default_function_constant(result_type: ty) -> value {
+        DefaultFuncConstantOperation.addr(result_type)
     }
 
     Value::cast(self, target_type: ty) -> value nop_if_same(target_type) {
@@ -179,7 +179,7 @@ sol_ops! {
     Function::call(callee: str, operands: values, result_types: types) -> values {
         CallOperation.callee(symbol_attr(callee)).outs(many(result_types)).operands(many(operands))
     }
-    Value::call(self, operands: values, result_types: types) -> values {
+    Value::indirect_call(self, operands: values, result_types: types) -> values {
         ICallOperation.callee(self).outs(many(result_types)).callee_operands(many(operands))
     }
 

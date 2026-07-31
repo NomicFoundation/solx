@@ -6,11 +6,15 @@
 // CHECK: sol.func @{{.*g.*}}() -> ui256 attributes {{.*}}id = {{[0-9]+}}
 
 // CHECK: sol.func @{{.*run.*}}
-// CHECK:   sol.func_constant @{{.*g.*}} : !sol.func_ref<() -> ui256>
-// CHECK:   sol.icall %{{[0-9]+}}() : !sol.func_ref<() -> ui256>, () -> ui256
+// CHECK:   %[[G:.*]] = sol.func_constant @{{.*g.*}} : !sol.func_ref<() -> ui256>
+// CHECK:   sol.store %[[G]], %[[SLOT:.*]] : !sol.func_ref<() -> ui256>, !sol.ptr<!sol.func_ref<() -> ui256>, Stack>
+// CHECK:   %[[POINTER:.*]] = sol.load %[[SLOT]] : !sol.ptr<!sol.func_ref<() -> ui256>, Stack>, !sol.func_ref<() -> ui256>
+// CHECK:   sol.icall %[[POINTER]]() : !sol.func_ref<() -> ui256>, () -> ui256
 
-// CHECK: sol.func @{{.*invoke.*}}(%{{.*}}: !sol.func_ref<() -> ui256>) -> ui256
-// CHECK:   sol.icall %{{[0-9]+}}() : !sol.func_ref<() -> ui256>, () -> ui256
+// CHECK: sol.func @{{.*invoke.*}}(%[[ARGUMENT:.*]]: !sol.func_ref<() -> ui256>) -> ui256
+// CHECK:   sol.store %[[ARGUMENT]], %[[SLOT:.*]] : !sol.func_ref<() -> ui256>, !sol.ptr<!sol.func_ref<() -> ui256>, Stack>
+// CHECK:   %[[POINTER:.*]] = sol.load %[[SLOT]] : !sol.ptr<!sol.func_ref<() -> ui256>, Stack>, !sol.func_ref<() -> ui256>
+// CHECK:   sol.icall %[[POINTER]]() : !sol.func_ref<() -> ui256>, () -> ui256
 
 // CHECK: sol.func @{{.*run_argument.*}}
 // CHECK:   sol.func_constant @{{.*g.*}} : !sol.func_ref<() -> ui256>
@@ -28,6 +32,12 @@
 // CHECK:   sol.gep %{{.*}}, %{{.*}} : !sol.array<1 x !sol.func_ref<() -> ui256>, Memory>, {{.*}}!sol.ptr<!sol.func_ref<() -> ui256>, Memory>
 // CHECK:   sol.load %{{.*}} : !sol.ptr<!sol.func_ref<() -> ui256>, Memory>, !sol.func_ref<() -> ui256>
 // CHECK:   sol.icall %{{[0-9]+}}() : !sol.func_ref<() -> ui256>, () -> ui256
+
+// CHECK: sol.func @{{.*run_arguments_results.*}}
+// CHECK:   %[[PAIR:.*]] = sol.func_constant @{{.*pair.*}} : !sol.func_ref<(ui256, ui256) -> (ui256, ui256)>
+// CHECK:   sol.store %[[PAIR]], %[[SLOT:.*]] : !sol.func_ref<(ui256, ui256) -> (ui256, ui256)>, !sol.ptr<!sol.func_ref<(ui256, ui256) -> (ui256, ui256)>, Stack>
+// CHECK:   %[[POINTER:.*]] = sol.load %[[SLOT]] : !sol.ptr<!sol.func_ref<(ui256, ui256) -> (ui256, ui256)>, Stack>, !sol.func_ref<(ui256, ui256) -> (ui256, ui256)>
+// CHECK:   sol.icall %[[POINTER]](%{{.*}}, %{{.*}}) : !sol.func_ref<(ui256, ui256) -> (ui256, ui256)>, (ui256, ui256) -> (ui256, ui256)
 
 contract C {
     function () internal returns (uint256) functionPointerState;
@@ -60,5 +70,14 @@ contract C {
     function run_element() public returns (uint256) {
         function () internal returns (uint256)[1] memory functionPointers = [g];
         return functionPointers[0]();
+    }
+
+    function pair(uint256 a, uint256 b) internal returns (uint256, uint256) {
+        return (a, b);
+    }
+
+    function run_arguments_results() public returns (uint256, uint256) {
+        function (uint256, uint256) internal returns (uint256, uint256) functionPointer = pair;
+        return functionPointer(7, 9);
     }
 }

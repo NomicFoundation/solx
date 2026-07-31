@@ -75,7 +75,7 @@ impl<'context> Value<'context> {
     /// value.
     pub fn default_initialized(target_type: Type<'context>, context: &Context<'context>) -> Self {
         if target_type.is_function_reference() {
-            return Self::default_function_constant(context);
+            return Self::default_function_constant(target_type, context);
         }
         if target_type.is_scalar() {
             return Self::zero(target_type, context);

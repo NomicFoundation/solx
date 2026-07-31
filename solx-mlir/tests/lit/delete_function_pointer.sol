@@ -1,9 +1,11 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
+
+// solc print-init types the default function constant as the unit signature and stores it into a
+// slot of another type; solx types it from the target so the store is consistent.
 
 // CHECK: sol.func @{{.*reset.*}}
-// CHECK: sol.default_func_constant : !sol.func_ref<() -> ()>
-// CHECK: sol.store %{{[0-9]+}}, %{{[0-9]+}} : !sol.func_ref<() -> ()>, !sol.ptr<!sol.func_ref<() -> ui256>
+// CHECK: %[[DEFAULT:.*]] = sol.default_func_constant : !sol.func_ref<() -> ui256>
+// CHECK: sol.store %[[DEFAULT]], %{{[0-9]+}} : !sol.func_ref<() -> ui256>, !sol.ptr<!sol.func_ref<() -> ui256>, Stack>
 // CHECK: sol.cmp eq, %{{.*}}, %{{.*}} : !sol.func_ref<() -> ui256>
 
 contract C {

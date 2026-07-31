@@ -228,9 +228,6 @@ macro_rules! sol_ops {
     (@arg [$context:ident] [$receiver:tt] ptr($pointee:ident, stack)) => {
         $crate::Type::pointer($context.melior, $pointee, solx_utils::DataLocation::Stack)
     };
-    (@arg [$context:ident] [$receiver:tt] function_reference()) => {
-        $crate::FunctionType::default().reference($context.melior)
-    };
     (@arg [$context:ident] [$receiver:tt] int_attr($value:ident, $result_type:ident)) => {
         ::melior::ir::Attribute::from(::melior::ir::attribute::IntegerAttribute::new(
             $result_type.into_mlir(),

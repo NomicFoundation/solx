@@ -34,4 +34,4 @@ solx-utils = { path = "../solx-utils" }
 
 [features]
 solc = []
-mlir = ["dep:solx-mlir", "solx-standard-json/mlir", "solx-utils/mlir"]
+mlir = ["dep:solx-mlir", "solx-standard-json/mlir"]

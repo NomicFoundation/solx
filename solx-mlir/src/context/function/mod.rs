@@ -2,6 +2,8 @@
 //! Function call resolution metadata.
 //!
 
+pub mod dispatch;
+
 use melior::ir::Block as MlirBlock;
 use melior::ir::Region;
 use melior::ir::RegionLike;
@@ -13,6 +15,7 @@ use melior::ir::r#type::IntegerType;
 
 use crate::Block;
 use crate::Context;
+use crate::FunctionDispatch;
 use crate::FunctionKind;
 use crate::FunctionType;
 use crate::StateMutability;
@@ -48,16 +51,13 @@ impl<'context> Function<'context> {
     }
 
     /// Emits this function's `sol.func` definition with an entry block whose arguments carry the
-    /// parameter types, returned for the body. `selector` / `dispatch_identifier` / `kind` are the
-    /// optional dispatch attributes, the identifier tagging an internal-pointer target for the
-    /// `sol.icall` dispatch table; an original function type is attached for selector-dispatched
-    /// and constructor functions.
+    /// parameter types, returned for the body. An original function type is attached for
+    /// selector-dispatched and constructor functions.
     pub fn define(
         &self,
         selector: Option<u32>,
-        dispatch_identifier: Option<usize>,
+        dispatch: FunctionDispatch,
         state_mutability: StateMutability,
-        kind: Option<FunctionKind>,
         context: &Context<'context>,
         contract_body: Block<'context>,
     ) -> Block<'context> {
@@ -82,22 +82,26 @@ impl<'context> Function<'context> {
             .function_type(TypeAttribute::new(function_type.into()))
             .state_mutability(state_mutability.attribute(context.melior))
             .body(body_region);
-        if let Some(function_kind) = kind {
-            operation_builder = operation_builder.kind(function_kind.attribute(context.melior));
-        }
+        operation_builder = match dispatch {
+            FunctionDispatch::Identifier(identifier) => {
+                operation_builder.id(IntegerAttribute::new(
+                    IntegerType::new(context.melior, solx_utils::BIT_LENGTH_X64 as u32).into(),
+                    identifier as i64,
+                ))
+            }
+            FunctionDispatch::Kind(function_kind) => {
+                operation_builder.kind(function_kind.attribute(context.melior))
+            }
+        };
         if let Some(selector_value) = selector {
             operation_builder = operation_builder.selector(IntegerAttribute::new(
                 IntegerType::new(context.melior, Type::SELECTOR_BIT_WIDTH).into(),
                 selector_value as i64,
             ));
         }
-        if let Some(identifier) = dispatch_identifier {
-            operation_builder = operation_builder.id(IntegerAttribute::new(
-                IntegerType::new(context.melior, solx_utils::BIT_LENGTH_X64 as u32).into(),
-                identifier as i64,
-            ));
-        }
-        if selector.is_some() || matches!(kind, Some(FunctionKind::Constructor)) {
+        if selector.is_some()
+            || matches!(dispatch, FunctionDispatch::Kind(FunctionKind::Constructor))
+        {
             operation_builder =
                 operation_builder.orig_fn_type(TypeAttribute::new(function_type.into()));
         }

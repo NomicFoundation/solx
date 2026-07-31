@@ -13,6 +13,9 @@ cc = "1.2.60"
 anyhow.workspace = true
 clap.workspace = true
 num.workspace = true
+ruint.workspace = true
+
+inkwell = { workspace = true, features = ["llvm21-1-no-llvm-linking"] }
 melior = { git = "https://github.com/NomicFoundation/melior", rev = "d188691b0620f91ff83e98cdbdf60507b2ee37d9", features = ["ods-dialects", "helpers"] }
 serde.workspace = true
 # mlir-sys 210 wraps LLVM 21.0 C API; llvm-sys (via inkwell) targets 21.1.
@@ -23,10 +26,9 @@ serde.workspace = true
 # TODO: Track mlir-sys 211 availability.
 mlir-sys = "210.0"
 
-inkwell = { workspace = true, features = ["llvm21-1-no-llvm-linking"] }
+slang_solidity_v2.workspace = true
 
-ruint.workspace = true
-solx-utils = { path = "../solx-utils", features = ["mlir"] }
+solx-utils = { path = "../solx-utils" }
 
 [dev-dependencies]
 hex.workspace = true

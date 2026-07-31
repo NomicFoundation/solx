@@ -8,9 +8,10 @@ pub mod statement;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
-use slang_solidity_v2::ast::FunctionMutability;
 
 use solx_mlir::Function;
+use solx_mlir::FunctionDispatch;
+use solx_mlir::FunctionKind as MlirFunctionKind;
 use solx_mlir::FunctionType;
 use solx_mlir::Place;
 use solx_mlir::StateMutability;
@@ -27,24 +28,18 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             return;
         };
         let signature = self.source_unit.function_signature(function.node_id());
-        let state_mutability = match function.attributes().mutability() {
-            FunctionMutability::Pure => StateMutability::Pure,
-            FunctionMutability::View => StateMutability::View,
-            FunctionMutability::Payable => StateMutability::Payable,
-            FunctionMutability::NonPayable => StateMutability::NonPayable,
-        };
-        let mlir_kind = match function.kind() {
-            FunctionKind::Constructor => Some(solx_mlir::FunctionKind::Constructor),
-            FunctionKind::Fallback => Some(solx_mlir::FunctionKind::Fallback),
-            FunctionKind::Receive => Some(solx_mlir::FunctionKind::Receive),
-            FunctionKind::Regular => None,
+        let state_mutability = StateMutability::from(function.attributes().mutability());
+        let dispatch = match function.kind() {
+            FunctionKind::Constructor => FunctionDispatch::Kind(MlirFunctionKind::Constructor),
+            FunctionKind::Fallback => FunctionDispatch::Kind(MlirFunctionKind::Fallback),
+            FunctionKind::Receive => FunctionDispatch::Kind(MlirFunctionKind::Receive),
+            FunctionKind::Regular => FunctionDispatch::Identifier(function.node_id().into()),
             FunctionKind::Modifier => unreachable!("modifiers are filtered before emission"),
         };
         let entry = signature.define(
             function.compute_selector(),
-            mlir_kind.is_none().then(|| function.node_id().into()),
+            dispatch,
             state_mutability,
-            mlir_kind,
             self,
             self.contract_body,
         );
@@ -113,9 +108,8 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         }
         let entry = Function::constructor().define(
             None,
-            None,
+            FunctionDispatch::Kind(MlirFunctionKind::Constructor),
             StateMutability::NonPayable,
-            Some(solx_mlir::FunctionKind::Constructor),
             self,
             self.contract_body,
         );

@@ -442,7 +442,7 @@ impl Call {
             .zip(&function_type.parameters)
             .map(|(argument, &parameter_type)| scope.converted(&argument, parameter_type))
             .collect();
-        pointer.call(&converted, &function_type.results, scope)
+        pointer.indirect_call(&converted, &function_type.results, scope)
     }
 }
 
