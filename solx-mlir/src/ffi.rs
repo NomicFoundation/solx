@@ -157,14 +157,11 @@ unsafe extern "C" {
     /// (one less than the number of enum members).
     pub fn solxCreateEnumType(context: MlirContext, max: u32) -> mlir_sys::MlirType;
 
-    /// Creates a `sol::FuncRefType`, an internal function pointer, over the
-    /// signature `parameter_types -> result_types`.
+    /// Creates a `sol::FuncRefType`, an internal function pointer, over `signature`, a
+    /// `mlir::FunctionType`.
     pub fn solxCreateFuncRefType(
         context: MlirContext,
-        parameter_types: *const mlir_sys::MlirType,
-        parameter_count: usize,
-        result_types: *const mlir_sys::MlirType,
-        result_count: usize,
+        signature: mlir_sys::MlirType,
     ) -> mlir_sys::MlirType;
 
     // ---- Sol type inference ----

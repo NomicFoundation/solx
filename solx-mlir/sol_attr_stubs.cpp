@@ -134,21 +134,9 @@ MlirType solxCreateEnumType(MlirContext ctx, uint32_t max) {
     return wrap(mlir::sol::EnumType::get(context, max));
 }
 
-MlirType solxCreateFuncRefType(MlirContext ctx, const MlirType *parameter_types,
-                               size_t parameter_count, const MlirType *result_types,
-                               size_t result_count) {
+MlirType solxCreateFuncRefType(MlirContext ctx, MlirType signature) {
     auto *context = unwrap(ctx);
-    std::vector<mlir::Type> parameters;
-    parameters.reserve(parameter_count);
-    for (size_t i = 0; i < parameter_count; i++) {
-        parameters.push_back(unwrap(parameter_types[i]));
-    }
-    std::vector<mlir::Type> results;
-    results.reserve(result_count);
-    for (size_t i = 0; i < result_count; i++) {
-        results.push_back(unwrap(result_types[i]));
-    }
-    auto functionType = mlir::FunctionType::get(context, parameters, results);
+    auto functionType = mlir::cast<mlir::FunctionType>(unwrap(signature));
     return wrap(mlir::sol::FuncRefType::get(context, functionType));
 }
 

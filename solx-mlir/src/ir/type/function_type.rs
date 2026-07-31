@@ -4,6 +4,7 @@
 
 use melior::ir::Type as MlirType;
 use melior::ir::TypeLike;
+use melior::ir::r#type::FunctionType as MlirFunctionType;
 
 use crate::Type;
 use crate::ffi;
@@ -19,33 +20,28 @@ pub struct FunctionType<'context> {
 }
 
 impl<'context> FunctionType<'context> {
-    /// Records a function's MLIR-interned parameter and result types.
-    pub fn new(parameters: Vec<Type<'context>>, results: Vec<Type<'context>>) -> Self {
-        Self {
-            parameters,
-            results,
-        }
+    /// The melior function type this signature interns to: what a `sol.func` declares and what a
+    /// function reference is parameterized by.
+    pub fn to_mlir(&self, context: &'context melior::Context) -> MlirFunctionType<'context> {
+        let parameters: Vec<MlirType<'context>> = self
+            .parameters
+            .iter()
+            .map(|parameter| parameter.into_mlir())
+            .collect();
+        let results: Vec<MlirType<'context>> = self
+            .results
+            .iter()
+            .map(|result| result.into_mlir())
+            .collect();
+        MlirFunctionType::new(context, &parameters, &results)
     }
 
     /// A `sol::FuncRefType` over this signature, an internal function pointer.
     pub fn reference(&self, context: &'context melior::Context) -> Type<'context> {
-        let parameters: Vec<mlir_sys::MlirType> = self
-            .parameters
-            .iter()
-            .map(|parameter| parameter.inner.to_raw())
-            .collect();
-        let results: Vec<mlir_sys::MlirType> = self
-            .results
-            .iter()
-            .map(|result| result.inner.to_raw())
-            .collect();
         Type::new(unsafe {
             MlirType::from_raw(ffi::solxCreateFuncRefType(
                 context.to_raw(),
-                parameters.as_ptr(),
-                parameters.len(),
-                results.as_ptr(),
-                results.len(),
+                MlirType::from(self.to_mlir(context)).to_raw(),
             ))
         })
     }

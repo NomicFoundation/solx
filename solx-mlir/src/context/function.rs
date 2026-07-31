@@ -9,7 +9,6 @@ use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
 use melior::ir::operation::OperationLike;
-use melior::ir::r#type::FunctionType as MlirFunctionType;
 use melior::ir::r#type::IntegerType;
 
 use crate::Block;
@@ -68,13 +67,7 @@ impl<'context> Function<'context> {
             .iter()
             .map(|parameter| parameter.into_mlir())
             .collect::<Vec<_>>();
-        let results = self
-            .function_type
-            .results
-            .iter()
-            .map(|result| result.into_mlir())
-            .collect::<Vec<_>>();
-        let function_type = MlirFunctionType::new(context.melior, &parameters, &results);
+        let function_type = self.function_type.to_mlir(context.melior);
         let body_region = Region::new();
         let entry_block = MlirBlock::new(
             &parameters

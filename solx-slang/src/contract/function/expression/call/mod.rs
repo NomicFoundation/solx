@@ -24,8 +24,8 @@ use solx_mlir::Value;
 use crate::scope::function::FunctionScope;
 
 /// The one emission kind a function call's callee resolves to, owning both the classification and
-/// the emission of each kind. The variants are mutually exclusive and tested in declaration order,
-/// so an earlier match wins.
+/// the emission of each kind. The variants are mutually exclusive: `from_call` resolves a callee to
+/// exactly one.
 pub enum Call {
     /// The callee names a struct, so the call builds a struct value from its members.
     StructConstruction(StructDefinition),
@@ -289,12 +289,14 @@ impl Call {
     ) -> Option<Value<'context>> {
         match access.member().resolve_to_built_in() {
             Some(BuiltIn::AddressSend) => {
-                let address = scope.expression(&access.operand());
+                let address =
+                    scope.converted(&access.operand(), MlirType::address(scope.melior, false));
                 let values = scope.positional_arguments(arguments);
                 Some(Value::send(address, values[0], scope))
             }
             Some(BuiltIn::AddressTransfer) => {
-                let address = scope.expression(&access.operand());
+                let address =
+                    scope.converted(&access.operand(), MlirType::address(scope.melior, false));
                 let values = scope.positional_arguments(arguments);
                 Value::transfer(address, values[0], scope);
                 None

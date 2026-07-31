@@ -35,11 +35,21 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             return Value::constant_from_bigint(&BigInt::from(ordinal), enum_type, self);
         }
         match node.member().resolve_to_built_in() {
-            Some(BuiltIn::AddressBalance) => Value::balance(self.expression(&node.operand()), self),
-            Some(BuiltIn::AddressCodehash) => {
-                Value::code_hash(self.expression(&node.operand()), self)
+            Some(BuiltIn::AddressBalance) => {
+                let address =
+                    self.converted(&node.operand(), MlirType::address(self.melior, false));
+                Value::balance(address, self)
             }
-            Some(BuiltIn::AddressCode) => Value::code(self.expression(&node.operand()), self),
+            Some(BuiltIn::AddressCodehash) => {
+                let address =
+                    self.converted(&node.operand(), MlirType::address(self.melior, false));
+                Value::code_hash(address, self)
+            }
+            Some(BuiltIn::AddressCode) => {
+                let address =
+                    self.converted(&node.operand(), MlirType::address(self.melior, false));
+                Value::code(address, self)
+            }
             Some(BuiltIn::Length) => self.expression(&node.operand()).length(self),
             Some(BuiltIn::TxOrigin) => Value::tx_origin(self),
             Some(BuiltIn::TxGasPrice) => Value::tx_gas_price(self),
