@@ -69,11 +69,14 @@ impl<'context> Value<'context> {
         Self::constant(i64::from(value), Type::boolean(context.melior), context)
     }
 
-    /// Materialises the default-initialized value of `target_type`, matching solc's default-init:
-    /// a scalar's `zero`; an allocated empty memory `bytes`/`string`; a zero-filled memory array
-    /// or struct; the `sol.default_storage` / `sol.default_calldata` designator for a storage or
-    /// calldata reference.
+    /// Materialises the default-initialized value of `target_type`, matching solc's default-init.
+    /// A function reference cannot route through `zero`, since `sol.constant` is illegal at a
+    /// `!sol.func_ref`, and a reference type's default is its location's designator rather than a
+    /// value.
     pub fn default_initialized(target_type: Type<'context>, context: &Context<'context>) -> Self {
+        if target_type.is_function_reference() {
+            return Self::default_function_constant(target_type, context);
+        }
         if target_type.is_scalar() {
             return Self::zero(target_type, context);
         }
