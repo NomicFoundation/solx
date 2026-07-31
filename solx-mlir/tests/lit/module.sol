@@ -11,12 +11,12 @@
 // CHECK-NEXT:       sol.return %{{.*}} : ui256
 // CHECK:        } {kind = #Contract}
 
-// CHECK:      module attributes {llvm.data_layout
+// CHECK:      module attributes {llvm.data_layout = "E-p:256:256-i256:256:256-S256-a:256:256", llvm.target_triple = "evm-unknown-unknown"
 // CHECK:        sol.contract @{{.*Impl.*}} {
 // CHECK:          sol.func @{{.*h.*}}() -> ui256
 // CHECK:        } {kind = #Contract}
 
-// CHECK:      module attributes {llvm.data_layout
+// CHECK:      module attributes {llvm.data_layout = "E-p:256:256-i256:256:256-S256-a:256:256", llvm.target_triple = "evm-unknown-unknown"
 // CHECK:        sol.contract @{{.*Second.*}} {
 // CHECK:          sol.func @{{.*g.*}}() -> ui256
 // CHECK:        } {kind = #Contract}
