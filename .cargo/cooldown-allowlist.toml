@@ -1,2 +1,6 @@
 # Allowlist for cargo-cooldown-check.
 # Add `[[allow.exact]]` entries to skip cooldown for a freshly published crate version.
+
+[[allow.exact]]
+crate = "ruint"
+version = "1.20.0"
