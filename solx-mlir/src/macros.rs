@@ -169,17 +169,13 @@ impl<'slice, T, const N: usize> IntoOds<&'slice [T]> for &'slice [T; N] {
     }
 }
 
-/// Declares Sol dialect op-wrapper methods on [`Value`](crate::Value), [`Place`](crate::Place), and
-/// [`Block`](crate::Block) as pure data: one ODS operation per declaration.
+/// Declares Sol dialect op-wrapper methods on their entity homes as pure data: one ODS operation
+/// per declaration.
 ///
 /// A declaration names the receiver, the method and its typed parameters, the disposition, the
 /// operation, and the builder setter chain. Every setter argument is a parameter, the receiver
-/// `self`, or a closed keyword. Keywords are call-shaped, so a bare identifier is always a parameter:
-/// result types `field()` / `address()` / `boolean()` / `memory()` / `calldata()` / `fixed_bytes(N)`
-/// / `ptr(pointee, stack)`; the receiver-derived `self` / `self_ty` / `gep_of(elem)`; attributes
-/// `int_attr` / `str_attr` / `bytes_attr` / `symbol_attr` / `predicate_attr` / `ty_attr` / `count_attr`; variadic
-/// operands `single` / `many` / `concat`; conditional setters `optional_str` / `optional_value`; the
-/// always-set unit flag `unit_flag`. The operation slot may be `checked(CheckedOp, UncheckedOp)`,
+/// `self`, or a closed keyword from the `@arg` rules; keywords are call-shaped, so a bare
+/// identifier is always a parameter. The operation slot may be `checked(CheckedOp, UncheckedOp)`,
 /// which threads a `checked: bool` selector.
 ///
 /// A `base | flagged (…) … { … } flagged .setter ;` declaration stamps a pair of methods off one
@@ -201,6 +197,7 @@ macro_rules! sol_ops {
     (@ty value) => { $crate::Value<'context> };
     (@ty values) => { &[$crate::Value<'context>] };
     (@ty ty) => { $crate::Type<'context> };
+    (@ty types) => { &[$crate::Type<'context>] };
     (@ty predicate) => { $crate::CmpPredicate };
     (@ty optional_str) => { ::core::option::Option<&str> };
     (@ty optional_value) => { ::core::option::Option<$crate::Value<'context>> };
@@ -319,6 +316,7 @@ macro_rules! sol_ops {
 
     (@disp_ty value) => { $crate::Value<'context> };
     (@disp_ty place) => { $crate::Place<'context> };
+    (@disp_ty values) => { ::std::vec::Vec<$crate::Value<'context>> };
 
     (@region_tuple $region:ident ; empty $($empty_region:ident),+) => {
         $crate::Block<'context>
@@ -343,6 +341,17 @@ macro_rules! sol_ops {
     (@emit place [$context:ident] $operation:expr, $message:expr) => {
         $crate::Place::from(sol_ops!(@one_result [$context] $operation, $message))
     };
+    (@emit values [$context:ident] $operation:expr, $message:expr) => {{
+        let operation = $context.current_block().append_operation($operation);
+        (0..::melior::ir::operation::OperationLike::result_count(&operation))
+            .map(|index| {
+                $crate::Value::from(
+                    ::melior::ir::operation::OperationLike::result(&operation, index)
+                        .expect("the index is bounded by the result count"),
+                )
+            })
+            .collect::<::std::vec::Vec<_>>()
+    }};
 
     (
         $receiver:ident :: $base:ident | $flagged:ident ($($argument:ident : $kind:ident),* $(,)?)

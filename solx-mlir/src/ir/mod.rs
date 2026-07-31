@@ -12,6 +12,7 @@ pub mod value;
 use melior::ir::BlockLike;
 
 use crate::Block;
+use crate::Function;
 use crate::Place;
 use crate::Value;
 use crate::ods::sol::*;
@@ -25,6 +26,12 @@ sol_ops! {
     }
     Value::array_literal(elements: values, array_type: ty) -> value {
         ArrayLitOperation.ins(many(elements)).addr(array_type)
+    }
+    Value::function_constant(symbol: str, result_type: ty) -> value {
+        FuncConstantOperation.sym(symbol_attr(symbol)).addr(result_type)
+    }
+    Value::default_function_constant(result_type: ty) -> value {
+        DefaultFuncConstantOperation.addr(result_type)
     }
 
     Value::cast(self, target_type: ty) -> value nop_if_same(target_type) {
@@ -168,6 +175,13 @@ sol_ops! {
     Value::msg_data() -> value { GetCallDataOperation.addr(calldata()) }
     Value::gas_left() -> value { GasLeftOperation.val(field()) }
     Value::this(contract_type: ty) -> value { ThisOperation.addr(contract_type) }
+
+    Function::call(callee: str, operands: values, result_types: types) -> values {
+        CallOperation.callee(symbol_attr(callee)).outs(many(result_types)).operands(many(operands))
+    }
+    Value::indirect_call(self, operands: values, result_types: types) -> values {
+        ICallOperation.callee(self).outs(many(result_types)).callee_operands(many(operands))
+    }
 
     Place::stack(pointee: ty) -> place {
         AllocaOperation.alloc_type(ty_attr(ptr(pointee, stack))).addr(ptr(pointee, stack))

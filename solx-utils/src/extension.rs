@@ -39,7 +39,6 @@ pub static EXTENSION_LLVM_SOURCE: &str = "ll";
 pub static EXTENSION_LLVM_BINARY: &str = "bc";
 
 /// The MLIR source code file extension.
-#[cfg(feature = "mlir")]
 pub static EXTENSION_MLIR: &str = "mlir";
 
 /// The Solidity AST file extension.

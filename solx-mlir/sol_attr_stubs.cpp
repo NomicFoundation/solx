@@ -10,6 +10,7 @@
  */
 
 #include "mlir/Dialect/Sol/Sol.h"
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir-c/BuiltinAttributes.h"
 #include "mlir-c/IR.h"
@@ -133,6 +134,12 @@ MlirType solxCreateEnumType(MlirContext ctx, uint32_t max) {
     return wrap(mlir::sol::EnumType::get(context, max));
 }
 
+MlirType solxCreateFuncRefType(MlirContext ctx, MlirType signature) {
+    auto *context = unwrap(ctx);
+    auto functionType = mlir::cast<mlir::FunctionType>(unwrap(signature));
+    return wrap(mlir::sol::FuncRefType::get(context, functionType));
+}
+
 bool solxIsAddressType(MlirType ty) {
     return mlir::isa<mlir::sol::AddressType>(unwrap(ty));
 }
@@ -155,6 +162,10 @@ bool solxIsBytesLikeType(MlirType ty) {
 
 uint32_t solxBytesLikeTypeWidth(MlirType ty) {
     return mlir::sol::getNumBytes(unwrap(ty));
+}
+
+bool solxIsFuncRefType(MlirType ty) {
+    return mlir::isa<mlir::sol::FuncRefType>(unwrap(ty));
 }
 
 bool solxIsScalarType(MlirType ty) {
