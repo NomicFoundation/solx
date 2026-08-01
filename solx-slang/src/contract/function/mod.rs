@@ -18,6 +18,7 @@ use solx_mlir::StateMutability;
 use solx_mlir::Value;
 
 use crate::scope::contract::ContractScope;
+use crate::scope::source_unit::SourceUnitScope;
 
 impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
     /// Emits `function`'s `sol.func` into the contract body from its pre-registered signature,
@@ -110,5 +111,19 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             scope.state_variable_initializers();
             scope.current_block().r#return(&[], scope);
         });
+    }
+}
+
+impl<'context> SourceUnitScope<'context> {
+    /// The function's symbol: its internal signature qualified by the node id, since internal
+    /// signatures alone collide.
+    pub fn symbol(function: &FunctionDefinition) -> String {
+        format!(
+            "{}_{}",
+            function
+                .compute_internal_signature()
+                .expect("every emitted function has an internal signature"),
+            function.node_id(),
+        )
     }
 }
