@@ -109,19 +109,13 @@ impl Assembly {
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
+    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_utils::Dependencies) {
         if let Some(code) = self.code.as_ref() {
             for instruction in code.iter() {
                 match instruction.name {
                     InstructionName::PUSH_DataOffset | InstructionName::PUSH_DataSize => {
                         let dependency = instruction.value.to_owned().expect("Always exists");
-                        let is_runtime_code = dependencies.identifier
-                            == dependency
-                                .strip_suffix(
-                                    format!(".{}", solx_utils::CodeSegment::Runtime).as_str(),
-                                )
-                                .unwrap_or(dependencies.identifier.as_str());
-                        dependencies.push(dependency, is_runtime_code);
+                        dependencies.push(dependency);
                     }
                     _ => {}
                 }

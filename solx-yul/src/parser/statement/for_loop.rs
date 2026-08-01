@@ -87,7 +87,7 @@ impl ForLoop {
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
+    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_utils::Dependencies) {
         self.initializer.accumulate_evm_dependencies(dependencies);
         self.condition.accumulate_evm_dependencies(dependencies);
         self.finalizer.accumulate_evm_dependencies(dependencies);

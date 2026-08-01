@@ -9,6 +9,7 @@ pub mod options;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::CallOptions;
+use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
@@ -36,6 +37,10 @@ use crate::scope::source_unit::SourceUnitScope;
 pub enum Call {
     /// The callee names a struct, so the call builds a struct value from its members.
     StructConstruction(StructDefinition),
+    /// `new C(..)` deploying a contract, its declared constructor ordering and typing the arguments.
+    Creation(ContractDefinition, Option<FunctionDefinition>),
+    /// `new T[](n)` / `new bytes(n)` allocating a dynamically sized value in memory.
+    Allocation,
     /// A one-argument elementary or user-defined-value-type conversion.
     TypeConversion,
     /// A built-in invoked by bare identifier (`require`, `keccak256`).
@@ -64,36 +69,104 @@ impl Call {
         node: &FunctionCallExpression,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Vec<Value<'context>> {
-        let (callee, options) = match node.operand() {
-            Expression::CallOptionsExpression(decorated) => {
-                (decorated.operand(), Some(decorated.options()))
-            }
-            callee => (callee, None),
-        };
+        let (callee, options) = Self::callee(node);
         let kind = Self::from_call(node, callee);
         let arguments = kind.arguments(node);
         match kind {
             Self::StructConstruction(struct_definition) => {
                 Self::struct_construction(&struct_definition, node, &arguments, scope)
             }
+            Self::Creation(contract_definition, constructor) => vec![Self::creation(
+                &contract_definition,
+                constructor.as_ref(),
+                node,
+                &arguments,
+                options.as_ref(),
+                false,
+                scope,
+            )],
+            Self::Allocation => vec![Self::allocation(node, &arguments, scope)],
             Self::TypeConversion => vec![Self::type_conversion(node, &arguments, scope)],
             Self::Builtin(built_in) => Self::builtin(built_in, &arguments, scope)
                 .into_iter()
                 .collect(),
-            Self::External(access, function_definition, function_type) => Self::external(
-                &access,
-                &function_definition,
-                &function_type,
-                &arguments,
-                options.as_ref(),
-                scope,
-            ),
+            Self::External(access, function_definition, function_type) => {
+                let (_status, values) = Self::external(
+                    &access,
+                    &function_definition,
+                    &function_type,
+                    &arguments,
+                    options.as_ref(),
+                    false,
+                    scope,
+                );
+                values
+            }
             Self::Member(access) => {
                 Self::member(&access, node, &arguments, options.as_ref(), scope)
             }
             Self::Function(function_definition) => scope.call(&function_definition, &arguments),
             Self::FunctionPointer(callee, function_type) => {
                 Self::function_pointer(&callee, &function_type, &arguments, options.as_ref(), scope)
+            }
+        }
+    }
+
+    /// Classifies and emits the call a `try` statement guards, keeping the status the unguarded path
+    /// drops and selecting the op's guarded wrapper. A creation carries no status of its own, so one
+    /// comes from the address it produced: `CREATE` reports failure by returning zero.
+    pub fn try_call<'context>(
+        node: &FunctionCallExpression,
+        scope: &mut FunctionScope<'_, '_, 'context>,
+    ) -> (Value<'context>, Vec<Value<'context>>) {
+        let (callee, options) = Self::callee(node);
+        let kind = Self::from_call(node, callee);
+        let arguments = kind.arguments(node);
+        match kind {
+            Self::Creation(contract_definition, constructor) => {
+                let contract = Self::creation(
+                    &contract_definition,
+                    constructor.as_ref(),
+                    node,
+                    &arguments,
+                    options.as_ref(),
+                    true,
+                    scope,
+                );
+                let address = contract
+                    .address_cast(MlirType::address(scope.melior, false), scope)
+                    .address_cast(
+                        MlirType::unsigned(scope.melior, solx_utils::BIT_LENGTH_ETH_ADDRESS),
+                        scope,
+                    );
+                (address.is_nonzero(scope), vec![contract])
+            }
+            Self::External(access, function_definition, function_type) => Self::external(
+                &access,
+                &function_definition,
+                &function_type,
+                &arguments,
+                options.as_ref(),
+                true,
+                scope,
+            ),
+            Self::FunctionPointer(callee, function_type) => Self::external_pointer(
+                &callee,
+                &function_type,
+                &arguments,
+                options.as_ref(),
+                true,
+                scope,
+            ),
+            Self::Member(access) => {
+                unimplemented!("unsupported member call: {}", access.member().name())
+            }
+            Self::StructConstruction(_)
+            | Self::Allocation
+            | Self::TypeConversion
+            | Self::Builtin(_)
+            | Self::Function(_) => {
+                unreachable!("a guarded call dispatches externally or creates a contract")
             }
         }
     }
@@ -115,6 +188,17 @@ impl Call {
             return Self::TypeConversion;
         }
         match callee {
+            Expression::NewExpression(_) => match call.get_type() {
+                Some(Type::Contract(contract_type)) => {
+                    let Definition::Contract(contract_definition) = contract_type.definition()
+                    else {
+                        unreachable!("slang ContractType always references a Contract definition");
+                    };
+                    let constructor = contract_definition.constructor();
+                    Self::Creation(contract_definition, constructor)
+                }
+                _ => Self::Allocation,
+            },
             Expression::Identifier(identifier) => {
                 if let Some(built_in) = identifier.resolve_to_built_in() {
                     return Self::Builtin(built_in);
@@ -162,6 +246,31 @@ impl Call {
         }
     }
 
+    /// The callee under the parentheses and call-option layers wrapping it, and the options those
+    /// layers carry. Both nest freely and in either order, so a peel that stops at one of them
+    /// leaves the other in a position no emitter admits.
+    fn callee(call: &FunctionCallExpression) -> (Expression, Option<CallOptions>) {
+        let mut callee = call.operand();
+        let mut options = None;
+        loop {
+            match callee {
+                Expression::CallOptionsExpression(decorated) => {
+                    options = Some(decorated.options());
+                    callee = decorated.operand();
+                }
+                Expression::TupleExpression(inner) => {
+                    callee = inner
+                        .items()
+                        .iter()
+                        .next()
+                        .and_then(|item| item.expression())
+                        .expect("a parenthesized callee wraps a single operand");
+                }
+                resolved => return (resolved, options),
+            }
+        }
+    }
+
     /// The call's arguments in the callee's declaration order, which is the order the named form
     /// evaluates in. A kind that declares no parameters orders against nothing, so the empty
     /// braces of `f({})` are its only named form.
@@ -176,15 +285,15 @@ impl Call {
                         .iter()
                         .map(|member| member.node_id()),
                 ),
-                Self::External(_, function_definition, _) | Self::Function(function_definition) => {
-                    FunctionScope::named_arguments(
-                        &named,
-                        function_definition
-                            .parameters()
-                            .iter()
-                            .map(|parameter| parameter.node_id()),
-                    )
-                }
+                Self::Creation(_, Some(function_definition))
+                | Self::External(_, function_definition, _)
+                | Self::Function(function_definition) => FunctionScope::named_arguments(
+                    &named,
+                    function_definition
+                        .parameters()
+                        .iter()
+                        .map(|parameter| parameter.node_id()),
+                ),
                 Self::FunctionPointer(_, function_type) => {
                     match function_type.associated_definition() {
                         Some(Definition::Function(function_definition)) => {
@@ -200,9 +309,19 @@ impl Call {
                         _ => unreachable!("a function value declares no labeled parameter"),
                     }
                 }
-                Self::Member(_) | Self::Builtin(_) if named.is_empty() => Vec::new(),
+                Self::Creation(_, None) | Self::Member(_) | Self::Builtin(_)
+                    if named.is_empty() =>
+                {
+                    Vec::new()
+                }
+                Self::Creation(_, None) => {
+                    unreachable!("a contract without a constructor declares no parameter")
+                }
                 Self::Member(_) => unimplemented!("named arguments on a member callee"),
                 Self::Builtin(_) => unreachable!("a built-in declares no labeled parameter"),
+                Self::Allocation => {
+                    unreachable!("an allocation takes its length argument positionally")
+                }
                 Self::TypeConversion => {
                     unreachable!("a type conversion classifies only positional arguments")
                 }
@@ -218,7 +337,7 @@ impl Call {
         arguments: &[Expression],
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Vec<Value<'context>> {
-        let struct_address = Place::malloc(scope.typing(call.get_type()), scope);
+        let struct_address = Place::malloc(scope.typing(call.get_type()), None, scope);
         for (index, (member, argument)) in struct_definition
             .members()
             .iter()
@@ -233,6 +352,68 @@ impl Call {
             field_address.store(scope.converted(argument, field_type), scope);
         }
         vec![struct_address.into()]
+    }
+
+    /// Deploys a contract, ABI-encoding the constructor arguments after the bytecode it copies.
+    /// A creation is an external dispatch in that respect, so a reference-typed argument is
+    /// encoded out of the location it already lives in and only a scalar converts.
+    fn creation<'context>(
+        contract_definition: &ContractDefinition,
+        constructor: Option<&FunctionDefinition>,
+        call: &FunctionCallExpression,
+        arguments: &[Expression],
+        options: Option<&CallOptions>,
+        guarded: bool,
+        scope: &mut FunctionScope<'_, '_, 'context>,
+    ) -> Value<'context> {
+        let result_type = scope.typing(call.get_type());
+        let options = options
+            .map(|options| Options::new(options, scope))
+            .unwrap_or_default();
+        let parameter_types: Vec<MlirType<'context>> = constructor
+            .map(|constructor| {
+                constructor
+                    .parameters()
+                    .iter()
+                    .map(|parameter| scope.typing(parameter.get_type()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let converted = scope.external_arguments(arguments, &parameter_types);
+        let amount = options.amount(scope);
+        let object = SourceUnitScope::object_identifier(
+            contract_definition.get_file_id(),
+            contract_definition.name().name(),
+        );
+        let create = if guarded {
+            Value::create_contract_try
+        } else {
+            Value::create_contract
+        };
+        create(
+            object.as_str(),
+            amount,
+            options.salt(),
+            &converted,
+            result_type,
+            scope,
+        )
+    }
+
+    /// Allocates a dynamically sized value in memory. The size reaches `sol.malloc` in its declared
+    /// type, which the lowering masks it against, so widening it here would change that cleanup.
+    fn allocation<'context>(
+        call: &FunctionCallExpression,
+        arguments: &[Expression],
+        scope: &mut FunctionScope<'_, '_, 'context>,
+    ) -> Value<'context> {
+        let result_type = scope.typing(call.get_type());
+        let size = scope.expression(
+            arguments
+                .first()
+                .expect("slang validates that an allocation names its size"),
+        );
+        Place::malloc_zeroed(result_type, Some(size), scope).into()
     }
 
     /// Converts the conversion's one operand to the call's result type through an explicit `T(x)`
@@ -378,7 +559,7 @@ impl Call {
     }
 
     /// Bridges the receiver to an address, converts each argument to its declared parameter type,
-    /// and dispatches on the callee's ABI selector. The status the op yields is dropped: a failed
+    /// and dispatches on the callee's ABI selector. Unguarded, the caller drops the status: a failed
     /// call reverts, so only the callee's results reach the expression.
     fn external<'context>(
         access: &MemberAccessExpression,
@@ -386,8 +567,9 @@ impl Call {
         function_type: &FunctionType,
         arguments: &[Expression],
         options: Option<&CallOptions>,
+        guarded: bool,
         scope: &mut FunctionScope<'_, '_, 'context>,
-    ) -> Vec<Value<'context>> {
+    ) -> (Value<'context>, Vec<Value<'context>>) {
         let address = scope.converted(&access.operand(), MlirType::address(scope.melior, false));
         let options = options
             .map(|options| Options::new(options, scope))
@@ -406,13 +588,13 @@ impl Call {
         );
         let gas = options.gas(scope);
         let amount = options.amount(scope);
-        let call = if Self::is_static(function_type) {
-            Function::external_static_call
-        } else {
-            Function::external_call
+        let call = match (Self::is_static(function_type), guarded) {
+            (false, false) => Function::external_call,
+            (true, false) => Function::external_static_call,
+            (false, true) => Function::external_try_call,
+            (true, true) => Function::external_static_try_call,
         };
-        let (_status, values) = call(&callee, &converted, address, selector, gas, amount, scope);
-        values
+        call(&callee, &converted, address, selector, gas, amount, scope)
     }
 
     /// Resolves the member to its built-in and lowers it. `abi.decode` takes its result type from
@@ -658,12 +840,9 @@ impl Call {
         }
     }
 
-    /// The signature comes from the callee's binder type: a pointer callee names no definition to
-    /// look a registered signature up by. An internal pointer takes its arguments before the
-    /// callee, an external one the callee first, then its options, then the arguments. An external
-    /// pointer dispatches through `sol.ext_icall`, whose status the caller drops as a named
-    /// external call does, and an internal function type admits no call options, so only the
-    /// external path forwards them.
+    /// A call through a function-typed value. An internal pointer goes through `sol.icall` and takes
+    /// its arguments before the callee; an external one is an external call in every respect and
+    /// drops its status as one does.
     fn function_pointer<'context>(
         callee: &Expression,
         function_type: &FunctionType,
@@ -671,34 +850,54 @@ impl Call {
         options: Option<&CallOptions>,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Vec<Value<'context>> {
-        let MlirFunctionType {
-            parameters,
-            results,
-        } = scope.contract.source_unit.function_type(function_type);
         match FunctionReferenceKind::from(function_type.visibility()) {
             FunctionReferenceKind::Internal => {
+                let MlirFunctionType {
+                    parameters,
+                    results,
+                } = scope.contract.source_unit.function_type(function_type);
                 let converted = scope.converted_arguments(arguments, &parameters);
                 scope
                     .expression(callee)
                     .indirect_call(&converted, &results, scope)
             }
             FunctionReferenceKind::External => {
-                let pointer = scope.expression(callee);
-                let options = options
-                    .map(|options| Options::new(options, scope))
-                    .unwrap_or_default();
-                let converted = scope.external_arguments(arguments, &parameters);
-                let gas = options.gas(scope);
-                let amount = options.amount(scope);
-                let call = if Self::is_static(function_type) {
-                    Value::external_static_call
-                } else {
-                    Value::external_call
-                };
-                let (_status, values) = call(pointer, &converted, &results, gas, amount, scope);
+                let (_status, values) =
+                    Self::external_pointer(callee, function_type, arguments, options, false, scope);
                 values
             }
         }
+    }
+
+    /// A call through an external function pointer: the callee, then its options, then the
+    /// arguments. The signature comes from the callee's binder type, since a pointer names no
+    /// definition to look a registered one up by.
+    fn external_pointer<'context>(
+        callee: &Expression,
+        function_type: &FunctionType,
+        arguments: &[Expression],
+        options: Option<&CallOptions>,
+        guarded: bool,
+        scope: &mut FunctionScope<'_, '_, 'context>,
+    ) -> (Value<'context>, Vec<Value<'context>>) {
+        let MlirFunctionType {
+            parameters,
+            results,
+        } = scope.contract.source_unit.function_type(function_type);
+        let pointer = scope.expression(callee);
+        let options = options
+            .map(|options| Options::new(options, scope))
+            .unwrap_or_default();
+        let converted = scope.external_arguments(arguments, &parameters);
+        let gas = options.gas(scope);
+        let amount = options.amount(scope);
+        let call = match (Self::is_static(function_type), guarded) {
+            (false, false) => Value::external_call,
+            (true, false) => Value::external_static_call,
+            (false, true) => Value::external_try_call,
+            (true, true) => Value::external_static_try_call,
+        };
+        call(pointer, &converted, &results, gas, amount, scope)
     }
 
     /// Whether a callee dispatches through a static call, read from the callee's mutability

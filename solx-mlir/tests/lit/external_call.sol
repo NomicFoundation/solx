@@ -46,6 +46,10 @@
 // CHECK:   %[[LEFT:.*]] = sol.gasleft
 // CHECK:   sol.ext_call "{{.*p.*}}"(%{{.*}}) at %[[RECEIVER]] gas %[[LEFT]] value %[[V]] selector
 
+// CHECK: sol.func @{{.*parenthesized.*}}
+// CHECK:   %[[V:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
+// CHECK:   sol.ext_call "{{.*p.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %[[V]] selector
+
 contract C {
     uint256[] stored;
 
@@ -79,6 +83,10 @@ contract C {
 
     function value_only(I i, uint256 v) public returns (uint256) {
         return i.p{value: v}(6);
+    }
+
+    function parenthesized(I i, uint256 v) public returns (uint256) {
+        return (i.p{value: v})(7);
     }
 }
 

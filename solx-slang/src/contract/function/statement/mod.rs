@@ -6,6 +6,7 @@ pub mod block;
 pub mod control_flow;
 pub mod event;
 pub mod revert;
+pub mod try_statement;
 pub mod variable_declaration;
 
 use slang_solidity_v2::ast::Statement;
@@ -32,8 +33,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             Statement::UncheckedBlock(inner) => self.unchecked_block(inner),
             Statement::RevertStatement(inner) => self.revert_statement(inner),
             Statement::EmitStatement(inner) => self.emit_statement(inner),
-            Statement::TryStatement(_) | Statement::AssemblyStatement(_) => {
-                unimplemented!("try/assembly statements are not yet supported")
+            Statement::TryStatement(inner) => self.try_statement(inner),
+            Statement::AssemblyStatement(_) => {
+                unimplemented!("assembly statements are not yet supported")
             }
         }
     }
