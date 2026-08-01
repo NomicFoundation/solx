@@ -47,12 +47,7 @@ impl<'context> SourceUnitScope<'context> {
             };
             self.function_signatures.insert(
                 function.node_id(),
-                Function::new(
-                    function
-                        .compute_internal_signature()
-                        .expect("every emitted function has an internal signature"),
-                    self.function_type(&function_type),
-                ),
+                Function::new(Self::symbol(&function), self.function_type(&function_type)),
             );
         }
 
