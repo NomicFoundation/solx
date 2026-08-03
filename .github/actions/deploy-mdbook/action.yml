@@ -53,7 +53,7 @@ runs:
         exit 1
 
     - name: Install cargo-binstall
-      uses: cargo-bins/cargo-binstall@ead08b90bd7b2e6d81963fb9cf0b7239f66d5db4 # v1.21.0
+      uses: cargo-bins/cargo-binstall@e00d2c94cc0067b77737821097a62d91c0301baa # v1.21.1
 
     # Note: cargo binstall is intentionally NOT wrapped with ${SFW_PREFIX:-}.
     # SFW's MITM proxy causes RSA padding errors with binstall's native-tls
