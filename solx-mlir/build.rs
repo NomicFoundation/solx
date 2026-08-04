@@ -64,7 +64,7 @@ fn main() {
     cc::Build::new()
         .cpp(true)
         .file("sol_attr_stubs.cpp")
-        .include(&include_path)
+        .flag(format!("-isystem{}", include_path.display()))
         .flag("-std=c++17")
         .compile("sol_attr_stubs");
 }

@@ -49,7 +49,7 @@ impl<'context> Contract<'context> {
         byte_offset: u32,
         context: &Context<'context>,
     ) {
-        mlir_op_void!(
+        mlir_op!(
             context,
             self.body,
             StateVarOperation
@@ -62,7 +62,8 @@ impl<'context> Contract<'context> {
                 .byte_offset(IntegerAttribute::new(
                     IntegerType::new(context.melior, solx_utils::BIT_LENGTH_X32 as u32).into(),
                     byte_offset.into(),
-                ))
+                ));
+            ()
         );
     }
 }

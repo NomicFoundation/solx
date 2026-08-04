@@ -70,23 +70,23 @@ sol_ops! {
         CmpOperation.predicate(predicate_attr(predicate)).lhs(self).rhs(other).result(boolean())
     }
 
-    Value::add(self, rhs: value) -> value {
-        checked(CAddOperation, AddOperation).lhs(self).rhs(rhs)
+    Value::add(self, rhs: value) -> value checked(CAddOperation) {
+        AddOperation.lhs(self).rhs(rhs)
     }
-    Value::subtract(self, rhs: value) -> value {
-        checked(CSubOperation, SubOperation).lhs(self).rhs(rhs)
+    Value::subtract(self, rhs: value) -> value checked(CSubOperation) {
+        SubOperation.lhs(self).rhs(rhs)
     }
-    Value::multiply(self, rhs: value) -> value {
-        checked(CMulOperation, MulOperation).lhs(self).rhs(rhs)
+    Value::multiply(self, rhs: value) -> value checked(CMulOperation) {
+        MulOperation.lhs(self).rhs(rhs)
     }
-    Value::divide(self, rhs: value) -> value {
-        checked(CDivOperation, DivOperation).lhs(self).rhs(rhs)
+    Value::divide(self, rhs: value) -> value checked(CDivOperation) {
+        DivOperation.lhs(self).rhs(rhs)
     }
     Value::remainder(self, rhs: value) -> value {
         ModOperation.lhs(self).rhs(rhs)
     }
-    Value::exponentiate(self, rhs: value) -> value {
-        checked(CExpOperation, ExpOperation).lhs(self).rhs(rhs).result(self_ty)
+    Value::exponentiate(self, rhs: value) -> value checked(CExpOperation) {
+        ExpOperation.lhs(self).rhs(rhs).result(self_ty)
     }
     Value::bitand(self, rhs: value) -> value {
         AndOperation.lhs(self).rhs(rhs)

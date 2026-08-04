@@ -46,7 +46,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// Binds a named local: allocates its stack pointer, stores the value its initializer yields,
     /// and defines the binding in the current scope. The initializer runs after the allocation so
-    /// the slot precedes the value that initializes it, matching solc's emission order.
+    /// the slot precedes the value that initializes it.
     pub fn define_local(
         &mut self,
         name: &str,
