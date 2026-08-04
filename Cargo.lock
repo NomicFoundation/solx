@@ -4810,7 +4810,6 @@ dependencies = [
  "clap",
  "colored",
  "fs_extra",
- "glob",
  "hex",
  "itertools 0.15.0",
  "path-slash",
