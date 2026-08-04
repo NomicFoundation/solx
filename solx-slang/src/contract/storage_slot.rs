@@ -8,9 +8,8 @@ use slang_solidity_v2::abi::StorageItem;
 /// Storage location of a state variable in contract storage.
 #[derive(Debug, Clone)]
 pub struct StorageSlot {
-    /// MLIR symbol name, formatted as `{label}_{node_id}` to match solc.
-    /// The slang AST node id disambiguates like-named variables across
-    /// inherited contracts.
+    /// MLIR symbol name, formatted as `{label}_{node_id}`. The slang AST node
+    /// id disambiguates like-named variables across inherited contracts.
     pub name: String,
     /// 256-bit storage slot index.
     pub slot: U256,

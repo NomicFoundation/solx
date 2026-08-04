@@ -30,8 +30,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     }
 
     /// A single-typed variable declaration. An explicit initializer is evaluated before the slot is
-    /// allocated, matching solc's order; an absent one default-initializes the slot to the type's
-    /// default value.
+    /// allocated; an absent one default-initializes the slot to the type's default value.
     pub fn single_typed_declaration(&mut self, node: &SingleTypedDeclaration) {
         let declared_type = self.typing(node.declaration().get_type());
         match node.value() {

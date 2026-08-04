@@ -9,6 +9,10 @@
 // CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
 // CHECK-NOT: sol.store
 
+// CHECK: sol.func {{.*}}pushEmptyBraces
+// CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
+// CHECK-NOT: sol.store
+
 // CHECK: sol.func {{.*}}pushAssign
 // CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
@@ -26,6 +30,9 @@
 // CHECK:   sol.push %{{.*}} : !sol.string<Storage> -> !sol.ptr<!sol.byte, Storage>
 
 // CHECK: sol.func {{.*}}popLast
+// CHECK:   sol.pop %{{.*}} : !sol.array<? x ui256, Storage>
+
+// CHECK: sol.func {{.*}}popEmptyBraces
 // CHECK:   sol.pop %{{.*}} : !sol.array<? x ui256, Storage>
 
 // CHECK: sol.func {{.*}}popByte
@@ -46,6 +53,10 @@ contract C {
         arr.push();
     }
 
+    function pushEmptyBraces() public {
+        arr.push({});
+    }
+
     function pushAssign(uint256 x) public {
         arr.push() = x;
     }
@@ -64,6 +75,10 @@ contract C {
 
     function popLast() public {
         arr.pop();
+    }
+
+    function popEmptyBraces() public {
+        arr.pop({});
     }
 
     function popByte() public {

@@ -2,6 +2,7 @@
 //! CLI tests for stack-too-deep handling.
 //!
 
+#[cfg(feature = "solc")]
 use predicates::prelude::*;
 
 #[cfg(feature = "solc")]

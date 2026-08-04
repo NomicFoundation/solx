@@ -6,9 +6,9 @@
 use slang_solidity_v2::ast::AdditiveExpression;
 use slang_solidity_v2::ast::AdditiveExpressionOperator;
 use slang_solidity_v2::ast::ExponentiationExpression;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MultiplicativeExpression;
 use slang_solidity_v2::ast::MultiplicativeExpressionOperator;
-use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::UserDefinedOperatorExpression;
 
 use solx_mlir::Context;
@@ -58,7 +58,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// legacy, then combined by `operator`.
     pub fn modular(
         &mut self,
-        arguments: &PositionalArguments,
+        arguments: &[Expression],
         operator: impl FnOnce(
             Value<'context>,
             Value<'context>,
@@ -67,7 +67,6 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         ) -> Value<'context>,
     ) -> Value<'context> {
         let field = MlirType::field(self.melior);
-        let arguments: Vec<_> = arguments.iter().collect();
         let modulus = self.converted(&arguments[2], field);
         let right = self.converted(&arguments[1], field);
         let left = self.converted(&arguments[0], field);
