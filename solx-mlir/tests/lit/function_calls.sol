@@ -28,6 +28,11 @@
 // CHECK:   sol.constant 1 : ui8
 // CHECK:   sol.call @{{.*add.*}}
 
+// CHECK: sol.func @{{.*paren_named_argument.*}}
+// CHECK:   %[[X:.*]] = sol.load
+// CHECK:   %[[ONE:.*]] = sol.cast
+// CHECK:   sol.icall %{{.*}}(%[[X]], %[[ONE]])
+
 // CHECK: sol.func @{{.*empty_braces.*}}
 // CHECK:   sol.call @{{.*literal_argument.*}}() : () -> ()
 
@@ -60,6 +65,10 @@ contract C {
 
     function named_argument(uint256 x) public pure returns (uint256) {
         return add({b: 1, a: x});
+    }
+
+    function paren_named_argument(uint256 x) public pure returns (uint256) {
+        return (add)({b: 1, a: x});
     }
 
     function empty_braces() public pure {

@@ -13,6 +13,10 @@
 // CHECK: sol.func @{{.*empty_message_revert.*}}
 // CHECK:   sol.revert ""
 
+// CHECK: sol.func @{{.*runtime_message_revert.*}}
+// CHECK:   %[[MESSAGE:.*]] = sol.data_loc_cast %{{.*}} : !sol.string<CallData>, !sol.string<Memory>
+// CHECK:   sol.revert "Error(string)" %[[MESSAGE]] : !sol.string<Memory> {call}
+
 // CHECK: sol.func @{{.*custom_error.*}}
 // CHECK:   sol.revert "TooLow(uint256,uint256)" %{{.*}}, %{{.*}} : ui256, ui256 {call}
 
@@ -38,6 +42,10 @@ contract C {
 
     function empty_message_revert() public pure {
         revert("");
+    }
+
+    function runtime_message_revert(string calldata message) public pure {
+        revert(message);
     }
 
     function custom_error(uint256 x) public pure {

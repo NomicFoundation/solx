@@ -1,7 +1,12 @@
 //!
 //! ODS op-construction macros.
 //!
+//! `mlir_op_build!` / `mlir_op!` / `mlir_region_op!` collapse the ceremony of an ODS-generated op
+//! builder (the `(context, unknown_location)` head and `.build().into()` tail) so a site states only
+//! the op name and its setters.
+//!
 
+/// Builds an inlined dialect op and yields it as an `Operation`, without appending.
 macro_rules! mlir_op_build {
     ($context:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
         $operation::builder($context.melior, $context.location())
@@ -11,6 +16,10 @@ macro_rules! mlir_op_build {
     };
 }
 
+/// Builds an inlined dialect op ([`mlir_op_build!`]), appends it to `$block`, and
+/// returns its single result value. The `expect` message is derived from the op.
+/// Omitting `$block` appends at the `current_block()` cursor. A `; ()` tail marks the value-less
+/// form of a `$block` site: the op is appended for its effect and yields `()`.
 macro_rules! mlir_op {
     ($context:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
         mlir_op!($context, $context.current_block(), $operation $(.$method($($argument),*))*)
@@ -26,6 +35,10 @@ macro_rules! mlir_op {
     };
 }
 
+/// Appends a region-bearing control-flow op (`sol.if`/`for`/`while`/`do`) and hands back each
+/// region's fresh entry block for the caller to emit into and terminate. A trailing `; empty name…`
+/// clause sets a region the op's shape requires but this method leaves bodiless — an `if` with no
+/// `else` — and it is not handed back.
 macro_rules! mlir_region_op {
     (
         $context:expr, $block:expr, $operation:ident
@@ -70,6 +83,8 @@ macro_rules! mlir_region_op {
     }};
 }
 
+/// A Sol dialect attribute enum built by a `solxCreate*Attr` FFI constructor: the `#[repr(u32)]`
+/// enum plus its `attribute()` builder. `From`/other impls, where present, live alongside the call.
 macro_rules! sol_dialect_attribute {
     (
         $(#[$enum_meta:meta])*
@@ -93,6 +108,8 @@ macro_rules! sol_dialect_attribute {
     };
 }
 
+/// A Sol comparison-predicate enum encoded as an `i64` `IntegerAttribute`: the `#[repr(i64)]` enum
+/// plus its `attribute()` builder. `From`/other impls, where present, live alongside the call.
 macro_rules! sol_predicate_attribute {
     (
         $(#[$enum_meta:meta])*
@@ -145,6 +162,26 @@ impl<'slice, T, const N: usize> IntoOds<&'slice [T]> for &'slice [T; N] {
     }
 }
 
+/// Declares Sol dialect op-wrapper methods on their entity homes as pure data: one ODS operation
+/// per declaration.
+///
+/// A declaration names the receiver, the method and its typed parameters, the disposition, the
+/// operation, and the builder setter chain. Every setter argument is a parameter, the receiver
+/// `self`, or a closed keyword from the `@arg` rules; keywords are call-shaped, so a bare
+/// identifier is always a parameter.
+///
+/// A `base | flagged (…) … { … } flagged .setter ;` declaration stamps a pair of methods off one
+/// chain: `base` omits the unit-flag setter and `flagged` appends `.setter(unit_flag)`, so a binary
+/// mode is two named methods rather than one method taking a `bool`.
+///
+/// Dispositions: `-> value` / `-> place` append at the `current_block()` cursor and wrap the single
+/// result; `-> value nop_if_same(param)` short-circuits when the receiver already has that type;
+/// `-> value checked(CheckedOp)` threads a `checked: bool` selector that builds `CheckedOp` in place
+/// of the declared operation off the same chain; an arrowless declaration is value-less and appends
+/// to the receiver block for a `Block` method, or at the `current_block()` cursor for a `Value` /
+/// `Place`. A `Block` declaration listing region names after `;` opens a region-bearing op and
+/// returns each region's entry block, or the sole block when one region is named. Every argument is
+/// routed through [`IntoOds`] to the setter's type.
 macro_rules! sol_ops {
     () => {};
 

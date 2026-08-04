@@ -11,6 +11,7 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::FunctionType;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type;
@@ -39,11 +40,11 @@ pub enum Call {
     /// A direct call to a named function.
     Function(FunctionDefinition),
     /// A call through a function-typed value, dispatched by `sol.icall`.
-    FunctionPointer,
+    FunctionPointer(FunctionType),
 }
 
 impl Call {
-    /// The canonical signature ABI-encoding a runtime `require` message.
+    /// The canonical signature ABI-encoding a runtime `require` or `revert` message.
     const ERROR_STRING_SIGNATURE: &'static str = "Error(string)";
 
     /// Classifies and emits `node`, routing each kind to its emission and returning its results in
@@ -66,7 +67,9 @@ impl Call {
                 .into_iter()
                 .collect(),
             Self::Function(function_definition) => scope.call(&function_definition, arguments),
-            Self::FunctionPointer => Self::function_pointer(node, &arguments, scope),
+            Self::FunctionPointer(function_type) => {
+                Self::function_pointer(&function_type, &node.operand(), &arguments, scope)
+            }
         }
     }
 
@@ -97,8 +100,8 @@ impl Call {
                 {
                     return Self::Function(function_definition);
                 }
-                if matches!(identifier.get_type(), Some(Type::Function(_))) {
-                    return Self::FunctionPointer;
+                if let Some(Type::Function(function_type)) = identifier.get_type() {
+                    return Self::FunctionPointer(function_type);
                 }
                 unimplemented!("unsupported callee '{}'", identifier.name())
             }
@@ -106,17 +109,19 @@ impl Call {
                 if matches!(
                     access.member().resolve_to_definition(),
                     Some(Definition::StructMember(_))
-                ) && matches!(access.get_type(), Some(Type::Function(_)))
+                ) && let Some(Type::Function(function_type)) = access.get_type()
                 {
-                    return Self::FunctionPointer;
+                    return Self::FunctionPointer(function_type);
                 }
                 Self::Member(access)
             }
-            callee if matches!(callee.get_type(), Some(Type::Function(_))) => Self::FunctionPointer,
-            callee => unimplemented!(
-                "unsupported callee expression: {:?}",
-                std::mem::discriminant(&callee)
-            ),
+            callee => match callee.get_type() {
+                Some(Type::Function(function_type)) => Self::FunctionPointer(function_type),
+                _ => unimplemented!(
+                    "unsupported callee expression: {:?}",
+                    std::mem::discriminant(&callee)
+                ),
+            },
         }
     }
 
@@ -141,10 +146,26 @@ impl Call {
                         .iter()
                         .map(|parameter| parameter.node_id()),
                 ),
-                Self::TypeConversion
-                | Self::Builtin(_)
-                | Self::Member(_)
-                | Self::FunctionPointer => Vec::new(),
+                Self::FunctionPointer(function_type) => match function_type.associated_definition()
+                {
+                    Some(Definition::Function(function_definition)) => {
+                        FunctionScope::named_arguments(
+                            &named,
+                            function_definition
+                                .parameters()
+                                .iter()
+                                .map(|parameter| parameter.node_id()),
+                        )
+                    }
+                    _ if named.is_empty() => Vec::new(),
+                    _ => unreachable!("a function value declares no labeled parameter"),
+                },
+                Self::Member(_) | Self::Builtin(_) if named.is_empty() => Vec::new(),
+                Self::Member(_) => unimplemented!("named arguments on a member callee"),
+                Self::Builtin(_) => unreachable!("a built-in declares no labeled parameter"),
+                Self::TypeConversion => {
+                    unreachable!("a type conversion classifies only positional arguments")
+                }
             },
         }
     }
@@ -247,15 +268,24 @@ impl Call {
                 None
             }
             BuiltIn::Revert => {
-                let message = match arguments.first() {
-                    Some(Expression::StringExpression(string_expression)) => Some(
-                        String::from_utf8(string_expression.value())
-                            .expect("slang validates string lals are UTF-8"),
-                    ),
-                    Some(_) => unreachable!("revert message is a string lal"),
-                    None => None,
-                };
-                scope.current_block().revert(message.as_deref(), &[], scope);
+                match arguments.first() {
+                    Some(Expression::StringExpression(string_expression)) => {
+                        let message = String::from_utf8(string_expression.value())
+                            .expect("slang validates string literals are UTF-8");
+                        scope.current_block().revert(Some(&message), &[], scope);
+                    }
+                    Some(expression) => {
+                        let string_type =
+                            MlirType::string(scope.melior, solx_utils::DataLocation::Memory);
+                        let message = scope.converted(expression, string_type);
+                        scope.current_block().revert_custom(
+                            Some(Self::ERROR_STRING_SIGNATURE),
+                            &[message],
+                            scope,
+                        );
+                    }
+                    None => scope.current_block().revert(None, &[], scope),
+                }
                 None
             }
             BuiltIn::Gasleft => Some(Value::gas_left(scope)),
@@ -449,16 +479,13 @@ impl Call {
     /// The signature comes from the callee's binder type: a pointer callee names no definition to
     /// look a registered signature up by.
     fn function_pointer<'context>(
-        call: &FunctionCallExpression,
+        function_type: &FunctionType,
+        callee: &Expression,
         arguments: &[Expression],
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Vec<Value<'context>> {
-        let callee = call.operand();
-        let Some(Type::Function(function_type)) = callee.get_type() else {
-            unreachable!("classification admits only function-typed callees");
-        };
-        let function_type = scope.contract.source_unit.function_type(&function_type);
-        let pointer = scope.expression(&callee);
+        let function_type = scope.contract.source_unit.function_type(function_type);
+        let pointer = scope.expression(callee);
         let converted: Vec<Value<'context>> = arguments
             .iter()
             .zip(&function_type.parameters)
