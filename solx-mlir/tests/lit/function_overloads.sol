@@ -4,6 +4,11 @@
 // CHECK: sol.func @{{.*pick.*}}(%{{.*}}: ui256) -> ui256
 // CHECK: sol.func @{{.*pick.*}}(%{{.*}}: i1) -> i1
 
+// CHECK: sol.func @{{.*pick_named.*}}
+// CHECK:   sol.call @{{.*pick.*}}(%{{.*}}) : (ui256) -> ui256
+// CHECK: sol.func @{{.*pick_named_bool.*}}
+// CHECK:   sol.call @{{.*pick.*}}(%{{.*}}) : (i1) -> i1
+
 // CHECK: sol.func @{{.*sum.*}}(%{{.*}}: ui256) -> ui256
 // CHECK: sol.func @{{.*sum.*}}(%{{.*}}: ui256, %{{.*}}: ui256) -> ui256
 
@@ -30,6 +35,14 @@ contract C {
 
     function pick(bool b) internal pure returns (bool) {
         return b;
+    }
+
+    function pick_named() public pure returns (uint256) {
+        return pick({x: 1});
+    }
+
+    function pick_named_bool() public pure returns (bool) {
+        return pick({b: true});
     }
 
     function sum(uint256 x) internal pure returns (uint256) {

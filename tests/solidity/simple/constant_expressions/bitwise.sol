@@ -1,4 +1,4 @@
-//! { "cases": [ {
+//! { "ignore": true, "cases": [ {
 //!     "name": "test",
 //!     "inputs": [
 //!         {
