@@ -69,7 +69,7 @@ impl<'context> Value<'context> {
         Self::constant(i64::from(value), Type::boolean(context.melior), context)
     }
 
-    /// Materialises the default-initialized value of `target_type`, matching solc's default-init.
+    /// Materialises the default-initialized value of `target_type`.
     /// A function reference cannot route through `zero`, since `sol.constant` is illegal at a
     /// `!sol.func_ref`, and a reference type's default is its location's designator rather than a
     /// value.

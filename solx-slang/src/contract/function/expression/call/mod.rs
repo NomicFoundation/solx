@@ -11,8 +11,8 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::FunctionType;
 use slang_solidity_v2::ast::MemberAccessExpression;
-use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type;
 
@@ -40,11 +40,11 @@ pub enum Call {
     /// A direct call to a named function.
     Function(FunctionDefinition),
     /// A call through a function-typed value, dispatched by `sol.icall`.
-    FunctionPointer,
+    FunctionPointer(FunctionType),
 }
 
 impl Call {
-    /// The canonical signature ABI-encoding a runtime `require` message.
+    /// The canonical signature ABI-encoding a runtime `require` or `revert` message.
     const ERROR_STRING_SIGNATURE: &'static str = "Error(string)";
 
     /// Classifies and emits `node`, routing each kind to its emission and returning its results in
@@ -53,24 +53,23 @@ impl Call {
         node: &FunctionCallExpression,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Vec<Value<'context>> {
-        let ArgumentsDeclaration::PositionalArguments(arguments) = &node.arguments() else {
-            unreachable!("only positional arguments supported");
-        };
-        match Self::from_call(node) {
+        let kind = Self::from_call(node);
+        let arguments = kind.arguments(node);
+        match kind {
             Self::StructConstruction(struct_definition) => {
-                Self::struct_construction(&struct_definition, node, arguments, scope)
+                Self::struct_construction(&struct_definition, node, &arguments, scope)
             }
-            Self::TypeConversion => vec![Self::type_conversion(node, arguments, scope)],
-            Self::Builtin(built_in) => Self::builtin(built_in, arguments, scope)
+            Self::TypeConversion => vec![Self::type_conversion(node, &arguments, scope)],
+            Self::Builtin(built_in) => Self::builtin(built_in, &arguments, scope)
                 .into_iter()
                 .collect(),
-            Self::Member(access) => Self::member(&access, node, arguments, scope)
+            Self::Member(access) => Self::member(&access, node, &arguments, scope)
                 .into_iter()
                 .collect(),
-            Self::Function(function_definition) => {
-                scope.call(&function_definition, arguments.iter())
+            Self::Function(function_definition) => scope.call(&function_definition, arguments),
+            Self::FunctionPointer(function_type) => {
+                Self::function_pointer(&function_type, &node.operand(), &arguments, scope)
             }
-            Self::FunctionPointer => Self::function_pointer(node, arguments, scope),
         }
     }
 
@@ -101,8 +100,8 @@ impl Call {
                 {
                     return Self::Function(function_definition);
                 }
-                if matches!(identifier.get_type(), Some(Type::Function(_))) {
-                    return Self::FunctionPointer;
+                if let Some(Type::Function(function_type)) = identifier.get_type() {
+                    return Self::FunctionPointer(function_type);
                 }
                 unimplemented!("unsupported callee '{}'", identifier.name())
             }
@@ -110,17 +109,64 @@ impl Call {
                 if matches!(
                     access.member().resolve_to_definition(),
                     Some(Definition::StructMember(_))
-                ) && matches!(access.get_type(), Some(Type::Function(_)))
+                ) && let Some(Type::Function(function_type)) = access.get_type()
                 {
-                    return Self::FunctionPointer;
+                    return Self::FunctionPointer(function_type);
                 }
                 Self::Member(access)
             }
-            callee if matches!(callee.get_type(), Some(Type::Function(_))) => Self::FunctionPointer,
-            callee => unimplemented!(
-                "unsupported callee expression: {:?}",
-                std::mem::discriminant(&callee)
-            ),
+            callee => match callee.get_type() {
+                Some(Type::Function(function_type)) => Self::FunctionPointer(function_type),
+                _ => unimplemented!(
+                    "unsupported callee expression: {:?}",
+                    std::mem::discriminant(&callee)
+                ),
+            },
+        }
+    }
+
+    /// The call's arguments in the callee's declaration order, which is the order the named form
+    /// evaluates in. A kind that declares no parameters orders against nothing, so the empty
+    /// braces of `f({})` are its only named form.
+    fn arguments(&self, call: &FunctionCallExpression) -> Vec<Expression> {
+        match call.arguments() {
+            ArgumentsDeclaration::PositionalArguments(positional) => positional.iter().collect(),
+            ArgumentsDeclaration::NamedArguments(named) => match self {
+                Self::StructConstruction(struct_definition) => FunctionScope::named_arguments(
+                    &named,
+                    struct_definition
+                        .members()
+                        .iter()
+                        .map(|member| member.node_id()),
+                ),
+                Self::Function(function_definition) => FunctionScope::named_arguments(
+                    &named,
+                    function_definition
+                        .parameters()
+                        .iter()
+                        .map(|parameter| parameter.node_id()),
+                ),
+                Self::FunctionPointer(function_type) => match function_type.associated_definition()
+                {
+                    Some(Definition::Function(function_definition)) => {
+                        FunctionScope::named_arguments(
+                            &named,
+                            function_definition
+                                .parameters()
+                                .iter()
+                                .map(|parameter| parameter.node_id()),
+                        )
+                    }
+                    _ if named.is_empty() => Vec::new(),
+                    _ => unreachable!("a function value declares no labeled parameter"),
+                },
+                Self::Member(_) | Self::Builtin(_) if named.is_empty() => Vec::new(),
+                Self::Member(_) => unimplemented!("named arguments on a member callee"),
+                Self::Builtin(_) => unreachable!("a built-in declares no labeled parameter"),
+                Self::TypeConversion => {
+                    unreachable!("a type conversion classifies only positional arguments")
+                }
+            },
         }
     }
 
@@ -129,14 +175,14 @@ impl Call {
     fn struct_construction<'context>(
         struct_definition: &StructDefinition,
         call: &FunctionCallExpression,
-        arguments: &PositionalArguments,
+        arguments: &[Expression],
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Vec<Value<'context>> {
         let struct_address = Place::malloc(scope.typing(call.get_type()), scope);
         for (index, (member, argument)) in struct_definition
             .members()
             .iter()
-            .zip(arguments.iter())
+            .zip(arguments)
             .enumerate()
         {
             let field_type = scope.resolve_type(
@@ -144,7 +190,7 @@ impl Call {
                 Some(solx_utils::DataLocation::Memory),
             );
             let field_address = struct_address.gep_field(index, field_type, scope);
-            field_address.store(scope.converted(&argument, field_type), scope);
+            field_address.store(scope.converted(argument, field_type), scope);
         }
         vec![struct_address.into()]
     }
@@ -153,15 +199,14 @@ impl Call {
     /// cast.
     fn type_conversion<'context>(
         call: &FunctionCallExpression,
-        arguments: &PositionalArguments,
+        arguments: &[Expression],
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Value<'context> {
         let operand = arguments
-            .iter()
-            .next()
+            .first()
             .expect("classification admits exactly one argument");
         let target_type = scope.typing(call.get_type());
-        scope.converted(&operand, target_type)
+        scope.converted(operand, target_type)
     }
 
     /// Statement-style built-ins (`assert`, `require`, `revert`) produce no value.
@@ -170,16 +215,15 @@ impl Call {
     /// evaluates at runtime and is ABI-encoded under the `Error(string)` selector via its call form.
     fn builtin<'context>(
         built_in: BuiltIn,
-        arguments: &PositionalArguments,
+        arguments: &[Expression],
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Option<Value<'context>> {
         match built_in {
             BuiltIn::Assert => {
                 let condition_expression = arguments
-                    .iter()
-                    .next()
+                    .first()
                     .expect("slang validates the arity of assert");
-                let condition = scope.expression(&condition_expression).is_nonzero(scope);
+                let condition = scope.expression(condition_expression).is_nonzero(scope);
                 scope.current_block().assert(condition, scope);
                 None
             }
@@ -187,7 +231,7 @@ impl Call {
                 let mut iter = arguments.iter();
                 let condition_expression =
                     iter.next().expect("slang validates the arity of require");
-                let condition = scope.expression(&condition_expression).is_nonzero(scope);
+                let condition = scope.expression(condition_expression).is_nonzero(scope);
                 let (values, message, custom) = match iter.next() {
                     Some(Expression::StringExpression(string_expression)) => (
                         Vec::new(),
@@ -200,7 +244,7 @@ impl Call {
                     Some(expression) => {
                         let string_memory_type =
                             MlirType::string(scope.melior, solx_utils::DataLocation::Memory);
-                        let message_value = scope.converted(&expression, string_memory_type);
+                        let message_value = scope.converted(expression, string_memory_type);
                         (
                             vec![message_value],
                             Some(Self::ERROR_STRING_SIGNATURE.to_owned()),
@@ -224,15 +268,24 @@ impl Call {
                 None
             }
             BuiltIn::Revert => {
-                let message = match arguments.iter().next() {
-                    Some(Expression::StringExpression(string_expression)) => Some(
-                        String::from_utf8(string_expression.value())
-                            .expect("slang validates string lals are UTF-8"),
-                    ),
-                    Some(_) => unreachable!("revert message is a string lal"),
-                    None => None,
-                };
-                scope.current_block().revert(message.as_deref(), &[], scope);
+                match arguments.first() {
+                    Some(Expression::StringExpression(string_expression)) => {
+                        let message = String::from_utf8(string_expression.value())
+                            .expect("slang validates string literals are UTF-8");
+                        scope.current_block().revert(Some(&message), &[], scope);
+                    }
+                    Some(expression) => {
+                        let string_type =
+                            MlirType::string(scope.melior, solx_utils::DataLocation::Memory);
+                        let message = scope.converted(expression, string_type);
+                        scope.current_block().revert_custom(
+                            Some(Self::ERROR_STRING_SIGNATURE),
+                            &[message],
+                            scope,
+                        );
+                    }
+                    None => scope.current_block().revert(None, &[], scope),
+                }
                 None
             }
             BuiltIn::Gasleft => Some(Value::gas_left(scope)),
@@ -284,7 +337,7 @@ impl Call {
     fn member<'context>(
         access: &MemberAccessExpression,
         call: &FunctionCallExpression,
-        arguments: &PositionalArguments,
+        arguments: &[Expression],
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Option<Value<'context>> {
         match access.member().resolve_to_built_in() {
@@ -342,14 +395,13 @@ impl Call {
                     scope,
                 );
                 let values = iter
-                    .map(|argument| scope.expression(&argument))
+                    .map(|argument| scope.expression(argument))
                     .collect::<Vec<_>>();
                 Some(Value::encode(&values, Some(selector), scope))
             }
             Some(BuiltIn::AbiDecode) => {
                 let payload_expression = arguments
-                    .iter()
-                    .next()
+                    .first()
                     .expect("slang validates the payload argument");
                 let return_slang_type = call
                     .get_type()
@@ -358,7 +410,7 @@ impl Call {
                     unimplemented!("abi.decode returning multiple values is not yet supported");
                 }
                 Some(Value::decode(
-                    scope.expression(&payload_expression),
+                    scope.expression(payload_expression),
                     scope.resolve_type(&return_slang_type, None),
                     scope,
                 ))
@@ -372,11 +424,11 @@ impl Call {
                 let base_slang_type = base
                     .get_type()
                     .expect("base of array push has a resolved type");
-                let value_argument = arguments.iter().next();
+                let value_argument = arguments.first();
                 let (place, _) = scope.expression_place(&base);
 
                 if let Type::Bytes(_) = &base_slang_type
-                    && let Some(value_argument) = &value_argument
+                    && let Some(value_argument) = value_argument
                 {
                     let appended = scope.converted(
                         value_argument,
@@ -411,7 +463,7 @@ impl Call {
                 let Some(value_argument) = value_argument else {
                     return Some(new_slot);
                 };
-                Place::from(new_slot).store(scope.converted(&value_argument, element_type), scope);
+                Place::from(new_slot).store(scope.converted(value_argument, element_type), scope);
                 None
             }
             Some(BuiltIn::BytesConcat | BuiltIn::StringConcat) => {
@@ -427,20 +479,17 @@ impl Call {
     /// The signature comes from the callee's binder type: a pointer callee names no definition to
     /// look a registered signature up by.
     fn function_pointer<'context>(
-        call: &FunctionCallExpression,
-        arguments: &PositionalArguments,
+        function_type: &FunctionType,
+        callee: &Expression,
+        arguments: &[Expression],
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Vec<Value<'context>> {
-        let callee = call.operand();
-        let Some(Type::Function(function_type)) = callee.get_type() else {
-            unreachable!("classification admits only function-typed callees");
-        };
-        let function_type = scope.contract.source_unit.function_type(&function_type);
-        let pointer = scope.expression(&callee);
+        let function_type = scope.contract.source_unit.function_type(function_type);
+        let pointer = scope.expression(callee);
         let converted: Vec<Value<'context>> = arguments
             .iter()
             .zip(&function_type.parameters)
-            .map(|(argument, &parameter_type)| scope.converted(&argument, parameter_type))
+            .map(|(argument, &parameter_type)| scope.converted(argument, parameter_type))
             .collect();
         pointer.indirect_call(&converted, &function_type.results, scope)
     }
