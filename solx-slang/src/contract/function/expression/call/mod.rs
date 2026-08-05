@@ -258,14 +258,18 @@ impl Call {
                     options = Some(decorated.options());
                     callee = decorated.operand();
                 }
-                Expression::TupleExpression(inner) => {
-                    callee = inner
-                        .items()
-                        .iter()
-                        .next()
-                        .and_then(|item| item.expression())
-                        .expect("a parenthesized callee wraps a single operand");
-                }
+                Expression::TupleExpression(inner) => match inner
+                    .items()
+                    .iter()
+                    .next()
+                    .and_then(|item| item.expression())
+                    .expect("a parenthesized callee wraps a single operand")
+                {
+                    Expression::Identifier(_) | Expression::MemberAccessExpression(_) => {
+                        return (Expression::TupleExpression(inner), options);
+                    }
+                    wrapped => callee = wrapped,
+                },
                 resolved => return (resolved, options),
             }
         }
