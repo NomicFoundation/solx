@@ -9,3 +9,29 @@ coverage:
       default: false  # disable the patch status that measures patch changes
 
 comment: false
+
+# solx-llvm fork coverage (uploaded under the `llvm-fork` flag) split by the
+# areas the LLVM team cares about. Paths are as they appear in the lcov from
+# coverage.yaml, i.e. relative to the solx checkout with the submodule prefix.
+component_management:
+  individual_components:
+    - component_id: llvm-evm-backend
+      name: LLVM EVM backend
+      paths:
+        - solx-llvm/llvm/lib/Target/EVM/**
+    - component_id: mlir-sol-dialect
+      name: MLIR Sol dialect
+      paths:
+        - solx-llvm/mlir/lib/Dialect/Sol/**
+    - component_id: mlir-yul-dialect
+      name: MLIR Yul dialect
+      paths:
+        - solx-llvm/mlir/lib/Dialect/Yul/**
+    - component_id: mlir-sol-to-yul
+      name: MLIR SolToYul
+      paths:
+        - solx-llvm/mlir/lib/Conversion/SolToYul/**
+    - component_id: mlir-yul-to-standard
+      name: MLIR YulToStandard
+      paths:
+        - solx-llvm/mlir/lib/Conversion/YulToStandard/**
