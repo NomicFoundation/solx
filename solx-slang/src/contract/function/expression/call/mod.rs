@@ -595,21 +595,7 @@ impl Call {
                         .collect(),
                     other => vec![scope.resolve_type(&other, None)],
                 };
-                let decoded_types: Vec<MlirType<'context>> = result_types
-                    .iter()
-                    .map(|&result_type| {
-                        if result_type.is_address() {
-                            MlirType::address(scope.melior, true)
-                        } else {
-                            result_type
-                        }
-                    })
-                    .collect();
-                Value::decode(payload, &decoded_types, scope)
-                    .into_iter()
-                    .zip(result_types)
-                    .map(|(value, result_type)| value.convert(result_type, scope))
-                    .collect()
+                Value::decode(payload, &result_types, scope)
             }
             Some(BuiltIn::ArrayPop) => {
                 scope.expression_place(&access.operand()).0.pop(scope);

@@ -10,6 +10,10 @@
 //!     "name": "bareReceiverOptions",
 //!     "inputs": [ { "method": "bareReceiverOptions", "calldata": [], "value": "10 wei" } ],
 //!     "expected": [ "12" ]
+//! }, {
+//!     "name": "selectorReceiver",
+//!     "inputs": [ { "method": "selectorReceiver", "calldata": [] } ],
+//!     "expected": [ "1" ]
 //! } ] }
 
 // SPDX-License-Identifier: MIT
@@ -58,6 +62,12 @@ contract Test {
     function bareReceiverOptions() public payable returns (uint256) {
         order = 0;
         bareReceiver().call{value: t(2)}("");
+        return order;
+    }
+
+    function selectorReceiver() public returns (uint256) {
+        order = 0;
+        receiver().target.selector;
         return order;
     }
 }

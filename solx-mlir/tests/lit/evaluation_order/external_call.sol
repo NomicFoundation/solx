@@ -19,3 +19,7 @@
 // CHECK:   %[[BARE_RECEIVER:.*]] = sol.call @"bareReceiver()_{{[0-9]+}}"
 // CHECK:   %[[BARE_VALUE:.*]] = sol.call @"t(uint256)_{{[0-9]+}}"
 // CHECK:   sol.bare_call %[[BARE_RECEIVER]] gas %{{.*}} value %[[BARE_VALUE]]
+
+// CHECK: sol.func @{{.*selectorReceiver.*}}
+// CHECK:   %{{.*}} = sol.call @"receiver()_{{[0-9]+}}"
+// CHECK:   sol.constant 2551302081 : ui32

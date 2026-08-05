@@ -18,6 +18,7 @@ pub mod member;
 pub mod tuple;
 pub mod unary;
 
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::Type;
 
@@ -152,6 +153,14 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 self.conditional_effect(inner);
             }
             Expression::TupleExpression(inner) => self.tuple_effect(inner),
+            Expression::ThisKeyword(_) => {}
+            Expression::Identifier(inner)
+                if matches!(
+                    inner.resolve_to_definition(),
+                    Some(
+                        Definition::Contract(_) | Definition::Interface(_) | Definition::Library(_)
+                    )
+                ) => {}
             _ => {
                 self.expression(node);
             }

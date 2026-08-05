@@ -140,6 +140,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             && let Some(Definition::Function(function_definition)) =
                 access.member().resolve_to_definition()
         {
+            self.expression_effect(&access.operand());
             return Value::selector(
                 function_definition
                     .compute_selector()
