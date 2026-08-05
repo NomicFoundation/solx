@@ -8,7 +8,11 @@ coverage:
     patch:
       default: false  # disable the patch status that measures patch changes
 
-comment: false
+# The Codecov app's PR comment. `components` adds the per-area solx-llvm
+# fork table (see component_management below); `flags` splits solx vs
+# llvm-fork.
+comment:
+  layout: "header, diff, flags, components, files"
 
 # solx-llvm fork coverage (uploaded under the `llvm-fork` flag) split by the
 # areas the LLVM team cares about. Paths are as they appear in the lcov from

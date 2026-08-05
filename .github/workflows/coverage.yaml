@@ -33,8 +33,8 @@ jobs:
       - uses: ./.github/actions/cooldown-check
 
   coverage:
-    # Fork PRs get a read-only GITHUB_TOKEN, which would fail the PR coverage
-    # summary comment step.
+    # Fork PRs get no repo secrets, so the Codecov uploads (which run with
+    # fail_ci_if_error) would fail without CODECOV_TOKEN.
     if: ${{ github.event_name == 'push' || !github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-24.04
     # Backstop against hung compiles (the tester drives a pipeline still in
@@ -43,7 +43,6 @@ jobs:
     timeout-minutes: 180
     permissions:
       contents: read
-      pull-requests: write
       packages: read
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
@@ -217,82 +216,6 @@ jobs:
           llvm-cov export --format=lcov \
             -instr-profile="${PROFDATA_FILE}" \
             "${OBJECTS[@]}" "${FORK_PATHS[@]}" > "./llvm/${LCOV_FILE_LLVM}"
-
-      - name: Coverage summary
-        id: coverage-summary
-        run: |
-          OBJECTS=(
-            -object "${GITHUB_WORKSPACE}/solx-instrumented"
-            -object "${GITHUB_WORKSPACE}/solx-tester-instrumented"
-            -object "${GITHUB_WORKSPACE}/solx-dev-instrumented"
-          )
-          llvm-cov report -instr-profile=${PROFDATA_FILE} "${OBJECTS[@]}" \
-            --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
-            > coverage-report.txt
-
-          # Parse llvm-cov report into per-crate markdown table
-          awk '
-          /^---/ || /^Filename/ || /^$/ { next }
-          /^TOTAL/ {
-            total_lines = $(NF-5); total_missed = $(NF-4)
-            total_funcs = $(NF-8); total_missed_funcs = $(NF-7)
-            next
-          }
-          NF > 3 {
-            file = $1
-            n = split(file, parts, "/")
-            crate = ""
-            for (i = 1; i <= n-1; i++) {
-              if (parts[i] ~ /^solx/ && parts[i+1] == "src") {
-                crate = parts[i]; break
-              }
-            }
-            if (crate == "") next
-            lines[crate] += $(NF-5)
-            missed[crate] += $(NF-4)
-            funcs[crate] += $(NF-8)
-            missed_f[crate] += $(NF-7)
-          }
-          END {
-            for (c in lines) {
-              lp = (lines[c] > 0) ? (lines[c] - missed[c]) / lines[c] * 100 : 0
-              fp = (funcs[c] > 0) ? (funcs[c] - missed_f[c]) / funcs[c] * 100 : 0
-              le = (lp >= 80) ? "🟢" : (lp >= 50) ? "🟡" : "🔴"
-              fe = (fp >= 80) ? "🟢" : (fp >= 50) ? "🟡" : "🔴"
-              printf "| %s | %s %.1f%% | %s %.1f%% |\n", c, le, lp, fe, fp
-            }
-            lp = (total_lines > 0) ? (total_lines - total_missed) / total_lines * 100 : 0
-            fp = (total_funcs > 0) ? (total_funcs - total_missed_funcs) / total_funcs * 100 : 0
-            le = (lp >= 80) ? "🟢" : (lp >= 50) ? "🟡" : "🔴"
-            fe = (fp >= 80) ? "🟢" : (fp >= 50) ? "🟡" : "🔴"
-            printf "ZTOTAL| **Total** | **%s %.1f%%** | **%s %.1f%%** |\n", le, lp, fe, fp
-          }' coverage-report.txt > coverage-rows.txt
-
-          {
-            echo "| Crate | Line Coverage | Function Coverage |"
-            echo "|:------|:------------:|:-----------------:|"
-            grep -v '^ZTOTAL' coverage-rows.txt | sort
-            sed -n 's/^ZTOTAL//p' coverage-rows.txt
-          } > coverage-summary.md
-
-          cat coverage-summary.md >> "${GITHUB_STEP_SUMMARY}"
-          {
-            echo "summary<<COVERAGE_EOF"
-            cat coverage-summary.md
-            echo "COVERAGE_EOF"
-          } >> "${GITHUB_OUTPUT}"
-
-      - name: Post PR coverage summary
-        if: github.event_name == 'pull_request'
-        uses: mshick/add-pr-comment@ec328af66588ab8f77cdeb2c264f14aba45bbf59 # v3.12
-        with:
-          message-id: 'coverage-summary'
-          message: |
-            ### Coverage Summary
-
-            ${{ steps.coverage-summary.outputs.summary }}
-
-            [Codecov Report](https://app.codecov.io/gh/${{ github.repository }}/pull/${{ github.event.pull_request.number }}) | [HTML Report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts) | [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
