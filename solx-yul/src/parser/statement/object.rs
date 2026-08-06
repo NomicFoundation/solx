@@ -179,17 +179,11 @@ impl Object {
     /// Get the list of EVM dependencies.
     ///
     pub fn get_evm_dependencies(&self, runtime_code: Option<&Self>) -> solx_utils::Dependencies {
-        let mut dependencies = solx_utils::Dependencies::new(self.identifier.as_str());
+        let mut dependencies = solx_utils::Dependencies::new(
+            self.identifier.as_str(),
+            runtime_code.map(|runtime_code| runtime_code.identifier.to_owned()),
+        );
         self.code.accumulate_evm_dependencies(&mut dependencies);
-
-        if let Some(runtime_code) = runtime_code
-            && !dependencies.inner.contains(&runtime_code.identifier)
-        {
-            dependencies
-                .inner
-                .insert(0, runtime_code.identifier.to_owned());
-        }
-
         dependencies
     }
 }

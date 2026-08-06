@@ -246,8 +246,11 @@ impl<'context> Context<'context> {
         );
         let (runtime_llvm, runtime_dependencies) =
             Self::take_nested_module(&mut module, runtime_code_identifier.as_str())?;
-        let deploy_dependencies =
-            Self::object_dependencies(&module.as_operation(), code_identifier);
+        let deploy_dependencies = Self::object_dependencies(
+            &module.as_operation(),
+            code_identifier,
+            Some(runtime_code_identifier),
+        );
         let deploy_llvm = module.as_operation().to_string();
 
         Ok(crate::output::MlirOutput {
@@ -322,7 +325,7 @@ impl<'context> Context<'context> {
                 return None;
             }
 
-            let dependencies = Self::object_dependencies(&operation, target);
+            let dependencies = Self::object_dependencies(&operation, target, None);
 
             let text = operation.to_string();
             operation.remove_from_parent();
@@ -337,8 +340,9 @@ impl<'context> Context<'context> {
     fn object_dependencies<'c: 'a, 'a>(
         operation: &impl OperationLike<'c, 'a>,
         identifier: &str,
+        runtime: Option<String>,
     ) -> solx_utils::Dependencies {
-        let mut dependencies = solx_utils::Dependencies::new(identifier);
+        let mut dependencies = solx_utils::Dependencies::new(identifier, runtime);
         operation.walk(WalkOrder::PreOrder, |operation| {
             if let Some(object) = Self::referenced_object(operation) {
                 dependencies.push(object);
