@@ -29,11 +29,20 @@ impl<'context> Options<'context> {
         let field = MlirType::field(scope.melior);
         let mut forwarded = Self::default();
         for option in options.iter() {
-            let operand = scope.converted(&option.value(), field);
             match option.name().resolve_to_built_in() {
-                Some(BuiltIn::CallOptionGas) => forwarded.gas = Some(operand),
-                Some(BuiltIn::CallOptionValue) => forwarded.amount = Some(operand),
-                Some(BuiltIn::CallOptionSalt) => forwarded.salt = Some(operand),
+                Some(BuiltIn::CallOptionGas) => {
+                    forwarded.gas = Some(scope.converted(&option.value(), field));
+                }
+                Some(BuiltIn::CallOptionValue) => {
+                    forwarded.amount = Some(scope.converted(&option.value(), field));
+                }
+                Some(BuiltIn::CallOptionSalt) => {
+                    let salt = scope.converted(
+                        &option.value(),
+                        MlirType::fixed_bytes(scope.melior, solx_utils::BYTE_LENGTH_FIELD),
+                    );
+                    forwarded.salt = Some(salt.bytes_cast(field, scope));
+                }
                 _ => unreachable!("slang admits gas, value and salt as the only call options"),
             }
         }
@@ -52,7 +61,6 @@ impl<'context> Options<'context> {
     }
 
     /// The salt operand, absent where a creation derives its address through `CREATE`.
-    #[expect(dead_code, reason = "TODO: sol.new will use this soon")]
     pub fn salt(&self) -> Option<Value<'context>> {
         self.salt
     }

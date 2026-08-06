@@ -14,6 +14,7 @@ use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::Type;
+use slang_solidity_v2::compilation::FileId;
 
 use solx_mlir::Block;
 use solx_mlir::Contract;
@@ -70,14 +71,16 @@ impl<'context> SourceUnitScope<'context> {
             None => HashMap::new(),
         };
 
+        let object_identifier =
+            Self::object_identifier(node.get_file_id(), contract_identifier.name());
         let sol_contract = Contract::define(
-            contract_identifier.name(),
+            object_identifier.as_str(),
             solx_mlir::ContractKind::Contract,
             self,
             Block::from(self.module.body()),
         );
         self.contract(
-            MlirType::contract(self.melior, contract_identifier.name(), node.is_payable()),
+            MlirType::contract(self.melior, object_identifier.as_str(), node.is_payable()),
             sol_contract.body,
             state_variables,
             storage_layout,
@@ -126,5 +129,11 @@ impl<'context> SourceUnitScope<'context> {
                 )
             })
             .collect()
+    }
+
+    /// The contract's object identifier, qualified by its file: linking keys objects by it, and two
+    /// files may declare the same name.
+    pub fn object_identifier(file_id: &FileId, name: &str) -> String {
+        solx_utils::ContractName::full_path(file_id.as_str(), name)
     }
 }

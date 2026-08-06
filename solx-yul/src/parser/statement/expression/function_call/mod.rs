@@ -110,7 +110,7 @@ impl FunctionCall {
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
+    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_utils::Dependencies) {
         match self.name {
             Name::DataSize | Name::DataOffset => {
                 if let Expression::Literal(Literal {
@@ -119,11 +119,7 @@ impl FunctionCall {
                 }) = self.arguments.first().expect("Always exists")
                 {
                     let object_name = identifier.inner.split(".").last().expect("Always exists");
-                    let is_runtime_code = dependencies.identifier.as_str()
-                        == object_name
-                            .strip_suffix("_deployed")
-                            .unwrap_or(dependencies.identifier.as_str());
-                    dependencies.push(object_name.to_owned(), is_runtime_code);
+                    dependencies.push(object_name.to_owned());
                 }
                 return;
             }

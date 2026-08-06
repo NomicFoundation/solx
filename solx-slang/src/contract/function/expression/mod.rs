@@ -74,7 +74,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 unreachable!("call options reach the call they decorate, never a value position")
             }
             Expression::NewExpression(_) => {
-                unimplemented!("`new` expressions are not yet supported")
+                unreachable!("`new C` denotes a creation function, which only a call consumes")
             }
             Expression::TypeExpression(_) => {
                 unimplemented!("`type(..)` expressions are not yet supported")
@@ -137,7 +137,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         }
     }
 
-    /// Emits an expression for its side effects, discarding the values.
+    /// Emits an expression for its side effects, discarding the values. `new C;` denotes a creation
+    /// function rather than performing one, so it evaluates nothing.
     pub fn expression_effect(&mut self, node: &Expression) {
         match node {
             Expression::FunctionCallExpression(call) => {
@@ -153,6 +154,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 self.conditional_effect(inner);
             }
             Expression::TupleExpression(inner) => self.tuple_effect(inner),
+            Expression::NewExpression(_) => {}
             Expression::ThisKeyword(_) => {}
             Expression::Identifier(inner)
                 if matches!(

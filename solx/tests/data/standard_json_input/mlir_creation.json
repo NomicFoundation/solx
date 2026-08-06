@@ -1,0 +1,19 @@
+{
+  "language": "Solidity",
+  "sources":
+  {
+    "creation.sol":
+    {
+      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.0;\ncontract A { uint256 a; constructor() { a = 1; } }\ncontract B { uint256 b; constructor() { b = 2; } }\ncontract C {\n    address deployed;\n    constructor() { deployed = address(new A()); }\n    function make() public returns (address) { return address(new B()); }\n}"
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "*": {
+        "*": [
+          "mlir"
+        ]
+      }
+    }
+  }
+}
