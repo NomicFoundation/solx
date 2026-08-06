@@ -10,7 +10,7 @@ pub struct LLVMIR {
     /// LLVM IR source code.
     pub source: String,
     /// Dependencies of the LLVM IR translation unit.
-    pub dependencies: solx_codegen_evm::Dependencies,
+    pub dependencies: solx_utils::Dependencies,
 }
 
 impl LLVMIR {
@@ -23,12 +23,12 @@ impl LLVMIR {
         let runtime_code_identifier = format!("{path}.{}", solx_utils::CodeSegment::Runtime);
         let dependencies = match code_segment {
             solx_utils::CodeSegment::Deploy => {
-                let mut dependencies = solx_codegen_evm::Dependencies::new(path.as_str());
-                dependencies.push(runtime_code_identifier.to_owned(), true);
+                let mut dependencies = solx_utils::Dependencies::new(path.as_str());
+                dependencies.push(runtime_code_identifier.to_owned());
                 dependencies
             }
             solx_utils::CodeSegment::Runtime => {
-                solx_codegen_evm::Dependencies::new(runtime_code_identifier.as_str())
+                solx_utils::Dependencies::new(runtime_code_identifier.as_str())
             }
         };
 

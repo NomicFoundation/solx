@@ -148,7 +148,7 @@ impl Block {
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
+    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_utils::Dependencies) {
         for statement in self.statements.iter() {
             statement.accumulate_evm_dependencies(dependencies);
         }

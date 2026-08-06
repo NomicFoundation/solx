@@ -318,7 +318,7 @@ impl Contract {
 
                 // Deploy: accumulate dependencies from assembly before it is consumed
                 let mut accumulated_dependencies =
-                    solx_codegen_evm::Dependencies::new(code_identifier.as_str());
+                    solx_utils::Dependencies::new(code_identifier.as_str());
                 if matches!(code_segment, solx_utils::CodeSegment::Deploy) {
                     code.assembly
                         .accumulate_evm_dependencies(&mut accumulated_dependencies);
@@ -504,32 +504,13 @@ impl Contract {
             }
             #[cfg(feature = "mlir")]
             (IR::MLIR(mlir), code_segment) => {
-                // TODO: bare contract names match what the Sol-to-LLVM pass
-                // embeds in `evm.datasize` / `evm.dataoffset` metadata, but
-                // collide if two contracts share a name across files. Fuse
-                // with the `<full_path>` convention used by EVMLA/LLVMIR via
-                // post-pass metadata substitution so the link symbols hash to
-                // the disambiguated full paths.
-                let bare_name = contract_name
-                    .name
-                    .as_deref()
-                    .expect("MLIR pipeline contracts always have a name");
-                let runtime_identifier =
-                    format!("{bare_name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX);
                 let code_identifier = match code_segment {
-                    solx_utils::CodeSegment::Deploy => bare_name.to_owned(),
-                    solx_utils::CodeSegment::Runtime => runtime_identifier.clone(),
-                };
-                let dependencies = match code_segment {
-                    solx_utils::CodeSegment::Deploy => {
-                        let mut dependencies =
-                            solx_codegen_evm::Dependencies::new(code_identifier.as_str());
-                        dependencies.push(runtime_identifier, true);
-                        dependencies
-                    }
-                    solx_utils::CodeSegment::Runtime => {
-                        solx_codegen_evm::Dependencies::new(code_identifier.as_str())
-                    }
+                    solx_utils::CodeSegment::Deploy => contract_name.full_path.to_owned(),
+                    solx_utils::CodeSegment::Runtime => format!(
+                        "{}{}",
+                        contract_name.full_path,
+                        solx_utils::Dependencies::DEPLOYED_OBJECT_SUFFIX
+                    ),
                 };
 
                 let melior = solx_mlir::Context::create_melior_context();
@@ -591,7 +572,7 @@ impl Contract {
                     solx_utils::CodeSegment::Runtime => (Some(BTreeMap::new()), metadata_bytes),
                 };
                 let object = EVMContractObject::new(
-                    code_identifier.clone(),
+                    code_identifier,
                     contract_name.clone(),
                     build.assembly,
                     build.bytecode,
@@ -604,7 +585,7 @@ impl Contract {
                     code_segment,
                     immutables_out,
                     metadata_out,
-                    dependencies,
+                    mlir.dependencies,
                     build.is_size_fallback,
                     build.warnings,
                     profiler.to_vec(),

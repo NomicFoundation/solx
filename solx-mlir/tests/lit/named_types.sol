@@ -2,9 +2,9 @@
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func {{.*}}identity_color{{.*}}!sol.enum<2>{{.*}}!sol.enum<2>
-// CHECK: sol.func {{.*}}identity_iface{{.*}}!sol.contract<"IFoo{{.*}}">{{.*}}!sol.contract<"IFoo{{.*}}">
-// CHECK: sol.func {{.*}}identity_token{{.*}}!sol.contract<"Token{{.*}}">{{.*}}!sol.contract<"Token{{.*}}">
-// CHECK: sol.func {{.*}}identity_vault{{.*}}!sol.contract<"Vault{{.*}}", payable>{{.*}}!sol.contract<"Vault{{.*}}", payable>
+// CHECK: sol.func {{.*}}identity_iface{{.*}}!sol.contract<"{{[^"]*}}IFoo{{[^"]*}}">{{.*}}!sol.contract<"{{[^"]*}}IFoo{{[^"]*}}">
+// CHECK: sol.func {{.*}}identity_token{{.*}}!sol.contract<"{{[^"]*}}Token{{[^"]*}}">{{.*}}!sol.contract<"{{[^"]*}}Token{{[^"]*}}">
+// CHECK: sol.func {{.*}}identity_vault{{.*}}!sol.contract<"{{[^"]*}}Vault{{[^"]*}}", payable>{{.*}}!sol.contract<"{{[^"]*}}Vault{{[^"]*}}", payable>
 
 contract C {
     enum Color { Red, Green, Blue }
