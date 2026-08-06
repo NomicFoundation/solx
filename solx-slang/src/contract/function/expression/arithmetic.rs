@@ -21,7 +21,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// `a + b` and `a - b`, both operands converted to the binder's result type.
     pub fn additive(&mut self, node: &AdditiveExpression) -> Value<'context> {
         if let Some(function) = node.resolve_operator_to_function() {
-            return self.bound_operator(&function, [node.left_operand(), node.right_operand()]);
+            return self.bound_operator(&function, &[node.left_operand(), node.right_operand()]);
         }
         let (lhs, rhs) =
             self.converted_operands(node.get_type(), &node.left_operand(), &node.right_operand());
@@ -34,7 +34,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// `a * b`, `a / b`, and `a % b`, both operands converted to the binder's result type.
     pub fn multiplicative(&mut self, node: &MultiplicativeExpression) -> Value<'context> {
         if let Some(function) = node.resolve_operator_to_function() {
-            return self.bound_operator(&function, [node.left_operand(), node.right_operand()]);
+            return self.bound_operator(&function, &[node.left_operand(), node.right_operand()]);
         }
         let (lhs, rhs) =
             self.converted_operands(node.get_type(), &node.left_operand(), &node.right_operand());

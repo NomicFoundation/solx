@@ -35,7 +35,7 @@ impl<'context> Value<'context> {
         result_type: Type<'context>,
         context: &Context<'context>,
     ) -> Self {
-        let r#type = if result_type.is_address() {
+        let r#type = if result_type.is_address() || result_type.is_contract() {
             Type::unsigned(context.melior, solx_utils::BIT_LENGTH_ETH_ADDRESS)
         } else if result_type.is_enum() {
             Type::field(context.melior)
@@ -69,6 +69,15 @@ impl<'context> Value<'context> {
         Self::constant(i64::from(value), Type::boolean(context.melior), context)
     }
 
+    /// Materialises an ABI selector as an integer, at the width its consumer reads.
+    pub fn selector(
+        selector: u32,
+        result_type: Type<'context>,
+        context: &Context<'context>,
+    ) -> Self {
+        Self::constant_from_bigint(&BigInt::from(selector), result_type, context)
+    }
+
     /// Materialises the default-initialized value of `target_type`.
     /// A function reference cannot route through `zero`, since `sol.constant` is illegal at a
     /// `!sol.func_ref`, and a reference type's default is its location's designator rather than a
@@ -76,6 +85,10 @@ impl<'context> Value<'context> {
     pub fn default_initialized(target_type: Type<'context>, context: &Context<'context>) -> Self {
         if target_type.is_function_reference() {
             return Self::default_function_constant(target_type, context);
+        }
+        if target_type.is_external_function_reference() {
+            let address = Self::zero(Type::address(context.melior, false), context);
+            return Self::external_function_constant(address, 0, target_type, context);
         }
         if target_type.is_scalar() {
             return Self::zero(target_type, context);
@@ -132,6 +145,11 @@ impl<'context> Value<'context> {
                 );
             }
             return self.address_cast(target_type, context);
+        }
+        if target_type.is_contract() {
+            return self
+                .convert(Type::address(context.melior, false), context)
+                .address_cast(target_type, context);
         }
         if self.r#type().is_string() && target_type.is_bytes_like() {
             return self.dyn_bytes_to_fixedbytes(target_type, context);
