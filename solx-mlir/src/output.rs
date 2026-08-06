@@ -13,7 +13,11 @@ pub struct MlirOutput {
     /// LLVM dialect text of the deploy module.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub deploy_source: String,
+    /// Objects the deploy code references, its runtime child leading.
+    pub deploy_dependencies: solx_utils::Dependencies,
     /// LLVM dialect text of the runtime module.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub runtime_source: String,
+    /// Objects the runtime code references.
+    pub runtime_dependencies: solx_utils::Dependencies,
 }

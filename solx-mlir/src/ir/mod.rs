@@ -201,7 +201,7 @@ sol_ops! {
         CallOperation.callee(symbol_attr(&callee.mlir_name))
             .outs(many(callee.function_type.results)).operands(many(operands))
     }
-    Function::external_call | external_static_call (
+    Function::external_call | external_static_call | external_try_call | external_static_try_call (
         callee: function, arguments: values,
         address: value, selector: value, gas: value, amount: value,
     ) -> status_and_values {
@@ -209,22 +209,28 @@ sol_ops! {
             .gas(gas).val(amount).selector(selector)
             .callee_type(ty_attr(signature(callee)))
             .status(boolean()).outs(many(callee.function_type.results))
-    } flagged .static_call;
+    } flagged .static_call, .try_call;
     Value::indirect_call(self, operands: values, result_types: types) -> values {
         ICallOperation.callee(self).outs(many(result_types)).callee_operands(many(operands))
     }
-    Value::external_call | external_static_call (
+    Value::external_call | external_static_call | external_try_call | external_static_try_call (
         self, operands: values, result_types: types, gas: value, amount: value,
     ) -> status_and_values {
         ExtICallOperation.callee(self).outs(status_and(result_types))
             .callee_operands(many(operands)).gas(gas).value(amount)
-    } flagged .static_call;
+    } flagged .static_call, .try_call;
+    Value::create_contract | create_contract_try (
+        object_name: str, amount: value, salt: optional_value, arguments: values, result_type: ty,
+    ) -> value {
+        NewOperation.obj_name(str_attr(object_name)).val(amount).salt(optional_value(salt))
+            .ctor_args(many(arguments)).out(result_type)
+    } flagged .try_call;
 
     Place::stack(pointee: ty) -> place {
         AllocaOperation.alloc_type(ty_attr(ptr(pointee, stack))).addr(ptr(pointee, stack))
     }
-    Place::malloc | malloc_zeroed (pointee: ty) -> place {
-        MallocOperation.addr(pointee)
+    Place::malloc | malloc_zeroed (pointee: ty, size: optional_value) -> place {
+        MallocOperation.size(optional_value(size)).addr(pointee)
     } flagged .zero_init;
     Place::default_storage(place_type: ty) -> place {
         DefaultStorageOperation.result(place_type)

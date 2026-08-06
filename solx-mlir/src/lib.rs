@@ -31,6 +31,8 @@ pub use self::ir::attributes::ContractKind;
 pub use self::ir::attributes::FunctionKind;
 pub use self::ir::attributes::StateMutability;
 pub use self::ir::block::Block;
+pub use self::ir::block::fallback_region::FallbackRegion;
+pub use self::ir::block::try_regions::TryRegions;
 pub use self::ir::place::Place;
 pub use self::ir::r#type::Type;
 pub use self::ir::r#type::array_size::ArraySize;

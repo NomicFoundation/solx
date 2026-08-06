@@ -18,6 +18,9 @@ use melior::ir::Operation;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationLike;
 use melior::ir::operation::OperationMutLike;
+use melior::ir::operation::OperationRef;
+use melior::ir::operation::WalkOrder;
+use melior::ir::operation::WalkResult;
 use melior::pass::PassManager;
 
 use crate::Block;
@@ -42,8 +45,26 @@ pub struct Context<'context> {
 }
 
 impl<'context> Context<'context> {
-    /// MLIR `builtin.module` operation name used to locate nested modules.
+    /// The op a code segment's module is.
     const BUILTIN_MODULE: &'static str = "builtin.module";
+    /// The data layout the LLVM translation reads off the module.
+    const DATA_LAYOUT: &'static str = "llvm.data_layout";
+    /// The target triple the LLVM translation reads off the module.
+    const TARGET_TRIPLE: &'static str = "llvm.target_triple";
+    /// The EVM version the `convert-sol-to-yul` pass reads off the module.
+    const EVM_VERSION: &'static str = "sol.evm_version";
+    /// The attribute a `builtin.module` carries its own identifier in.
+    const MODULE_SYMBOL: &'static str = "sym_name";
+
+    /// The op the object-naming intrinsics reach as, after the Yul-to-standard pass.
+    const LLVM_INTRINSIC_CALL: &'static str = "llvm.intrcall";
+    /// The intrinsics naming an object: the segment's own code, the runtime child its deploy
+    /// segment returns, and the contract a creation copies its bytecode from.
+    const OBJECT_INTRINSICS: [&'static str; 2] = ["evm.dataoffset", "evm.datasize"];
+    /// The attribute an intrinsic call carries its own name in.
+    const INTRINSIC_NAME: &'static str = "name";
+    /// The attribute an intrinsic call carries its string operands in.
+    const INTRINSIC_METADATA: &'static str = "metadata";
 
     /// Creates a fully-initialized `melior::Context` with all upstream
     /// dialects, Sol dialect, Yul dialect, and LLVM translation interfaces
@@ -86,7 +107,7 @@ impl<'context> Context<'context> {
     /// `convert-sol-to-yul` pass.
     pub fn new(melior: &'context melior::Context, evm_version: solx_utils::EVMVersion) -> Self {
         let location = Location::unknown(melior);
-        let module = Module::new(location);
+        let mut module = Module::new(location);
 
         let evm_version_attribute = unsafe {
             Attribute::from_raw(crate::ffi::solxCreateEvmVersionAttr(
@@ -94,31 +115,17 @@ impl<'context> Context<'context> {
                 evm_version.into_sol_dialect_identifier(),
             ))
         };
-        unsafe {
-            mlir_sys::mlirOperationSetAttributeByName(
-                module.as_operation().to_raw(),
-                mlir_sys::mlirStringRefCreateFromCString(c"sol.evm_version".as_ptr()),
-                evm_version_attribute.to_raw(),
-            );
-        }
-
         let target = solx_utils::Target::EVM;
-        let data_layout_attr: Attribute<'_> =
-            StringAttribute::new(melior, target.data_layout()).into();
-        let target_triple_attr: Attribute<'_> =
-            StringAttribute::new(melior, target.triple()).into();
-        unsafe {
-            mlir_sys::mlirOperationSetAttributeByName(
-                module.as_operation().to_raw(),
-                mlir_sys::mlirStringRefCreateFromCString(c"llvm.data_layout".as_ptr()),
-                data_layout_attr.to_raw(),
-            );
-            mlir_sys::mlirOperationSetAttributeByName(
-                module.as_operation().to_raw(),
-                mlir_sys::mlirStringRefCreateFromCString(c"llvm.target_triple".as_ptr()),
-                target_triple_attr.to_raw(),
-            );
-        }
+        let mut operation = module.as_operation_mut();
+        operation.set_attribute(Self::EVM_VERSION, evm_version_attribute);
+        operation.set_attribute(
+            Self::DATA_LAYOUT,
+            StringAttribute::new(melior, target.data_layout()).into(),
+        );
+        operation.set_attribute(
+            Self::TARGET_TRIPLE,
+            StringAttribute::new(melior, target.triple()).into(),
+        );
 
         Self {
             melior,
@@ -224,7 +231,7 @@ impl<'context> Context<'context> {
     /// is not found.
     pub fn finalize_module(
         self,
-        runtime_code_identifier: &str,
+        code_identifier: &str,
         capture_sol: bool,
     ) -> anyhow::Result<crate::output::MlirOutput> {
         let mut module = self.module;
@@ -233,38 +240,23 @@ impl<'context> Context<'context> {
 
         Self::run_sol_passes(self.melior, &mut module)?;
 
-        let runtime_llvm = Self::take_nested_module_text(&mut module, runtime_code_identifier)?;
+        let runtime_code_identifier = format!(
+            "{code_identifier}{}",
+            solx_utils::Dependencies::DEPLOYED_OBJECT_SUFFIX
+        );
+        let (runtime_llvm, runtime_dependencies) =
+            Self::take_nested_module(&mut module, runtime_code_identifier.as_str())?;
+        let deploy_dependencies =
+            Self::object_dependencies(&module.as_operation(), code_identifier);
         let deploy_llvm = module.as_operation().to_string();
 
         Ok(crate::output::MlirOutput {
             sol_source,
             deploy_source: deploy_llvm,
+            deploy_dependencies,
             runtime_source: runtime_llvm,
+            runtime_dependencies,
         })
-    }
-
-    /// Finds a nested `builtin.module` in `module`'s body whose `sym_name`
-    /// matches `target`, destroys it, and returns its textual form.
-    fn take_nested_module_text(module: &mut Module, target: &str) -> anyhow::Result<String> {
-        let body = module.body();
-        std::iter::successors(body.first_operation_mut(), |operation| {
-            operation.next_in_block_mut()
-        })
-        .find_map(|mut operation| {
-            if operation.name().as_string_ref().as_str().unwrap_or("") != Self::BUILTIN_MODULE {
-                return None;
-            }
-            let symbol = operation.attribute("sym_name").ok()?;
-            let symbol_name: StringAttribute = symbol.try_into().ok()?;
-            if symbol_name.value() != target {
-                return None;
-            }
-            let text = operation.to_string();
-            operation.remove_from_parent();
-            drop(unsafe { Operation::from_raw(operation.to_raw()) });
-            Some(text)
-        })
-        .ok_or_else(|| anyhow::anyhow!("no module with sym_name `{target}` in Sol pass output"))
     }
 
     /// Translate MLIR source text (LLVM dialect) to raw LLVM pointers.
@@ -304,5 +296,78 @@ impl<'context> Context<'context> {
                 module: llvm_module as *mut _,
             })
         }
+    }
+
+    /// Finds a nested `builtin.module` in `module`'s body whose `sym_name` matches `target`,
+    /// destroys it, and returns its textual form and the objects it references. The walk runs before
+    /// the module leaves the tree, so each segment's dependencies come from its own code.
+    fn take_nested_module(
+        module: &mut Module,
+        target: &str,
+    ) -> anyhow::Result<(String, solx_utils::Dependencies)> {
+        let body = module.body();
+        std::iter::successors(body.first_operation_mut(), |operation| {
+            operation.next_in_block_mut()
+        })
+        .find_map(|mut operation| {
+            if operation.name().as_string_ref().as_str() != Ok(Self::BUILTIN_MODULE) {
+                return None;
+            }
+            let symbol: StringAttribute = operation
+                .attribute(Self::MODULE_SYMBOL)
+                .ok()?
+                .try_into()
+                .ok()?;
+            if symbol.value() != target {
+                return None;
+            }
+
+            let dependencies = Self::object_dependencies(&operation, target);
+
+            let text = operation.to_string();
+            operation.remove_from_parent();
+            drop(unsafe { Operation::from_raw(operation.to_raw()) });
+
+            Some((text, dependencies))
+        })
+        .ok_or_else(|| anyhow::anyhow!("no module with sym_name `{target}` in Sol pass output"))
+    }
+
+    /// The objects `operation`'s code references, read off the intrinsics naming them.
+    fn object_dependencies<'c: 'a, 'a>(
+        operation: &impl OperationLike<'c, 'a>,
+        identifier: &str,
+    ) -> solx_utils::Dependencies {
+        let mut dependencies = solx_utils::Dependencies::new(identifier);
+        operation.walk(WalkOrder::PreOrder, |operation| {
+            if let Some(object) = Self::referenced_object(operation) {
+                dependencies.push(object);
+            }
+            WalkResult::Advance
+        });
+        dependencies
+    }
+
+    /// The object an `evm.dataoffset` / `evm.datasize` intrinsic call names.
+    fn referenced_object(operation: OperationRef<'_, '_>) -> Option<String> {
+        if operation.name().as_string_ref().as_str().ok()? != Self::LLVM_INTRINSIC_CALL {
+            return None;
+        }
+        let name: StringAttribute = operation
+            .attribute(Self::INTRINSIC_NAME)
+            .ok()?
+            .try_into()
+            .ok()?;
+        if !Self::OBJECT_INTRINSICS.contains(&name.value()) {
+            return None;
+        }
+        let metadata = operation
+            .attribute(Self::INTRINSIC_METADATA)
+            .expect("an object intrinsic names its object in `metadata`");
+        let object: StringAttribute =
+            unsafe { Attribute::from_raw(mlir_sys::mlirArrayAttrGetElement(metadata.to_raw(), 0)) }
+                .try_into()
+                .expect("`metadata` is a one-element string array");
+        Some(object.value().to_owned())
     }
 }

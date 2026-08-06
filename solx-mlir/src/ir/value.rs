@@ -95,9 +95,9 @@ impl<'context> Value<'context> {
         }
         match target_type.data_location() {
             DataLocation::Memory if target_type.is_string() => {
-                Place::malloc(target_type, context).into()
+                Place::malloc(target_type, None, context).into()
             }
-            DataLocation::Memory => Place::malloc_zeroed(target_type, context).into(),
+            DataLocation::Memory => Place::malloc_zeroed(target_type, None, context).into(),
             DataLocation::Storage => Place::default_storage(target_type, context).into(),
             DataLocation::CallData => Place::default_calldata(target_type, context).into(),
             other => unreachable!(
