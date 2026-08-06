@@ -192,7 +192,9 @@ macro_rules! sol_ops {
     (@ty values) => { &[$crate::Value<'context>] };
     (@ty ty) => { $crate::Type<'context> };
     (@ty types) => { &[$crate::Type<'context>] };
+    (@ty function) => { &$crate::Function<'context> };
     (@ty predicate) => { $crate::CmpPredicate };
+    (@ty selector) => { u32 };
     (@ty optional_str) => { ::core::option::Option<&str> };
     (@ty optional_value) => { ::core::option::Option<$crate::Value<'context>> };
 
@@ -216,11 +218,17 @@ macro_rules! sol_ops {
     (@arg [$context:ident] [$receiver:tt] calldata()) => {
         $crate::Type::string($context.melior, solx_utils::DataLocation::CallData)
     };
-    (@arg [$context:ident] [$receiver:tt] fixed_bytes($width:literal)) => {
+    (@arg [$context:ident] [$receiver:tt] fixed_bytes($width:expr)) => {
         $crate::Type::fixed_bytes($context.melior, $width)
+    };
+    (@arg [$context:ident] [$receiver:tt] selector()) => {
+        $crate::Type::selector($context.melior)
     };
     (@arg [$context:ident] [$receiver:tt] ptr($pointee:ident, stack)) => {
         $crate::Type::pointer($context.melior, $pointee, solx_utils::DataLocation::Stack)
+    };
+    (@arg [$context:ident] [$receiver:tt] signature($callee:ident)) => {
+        $crate::Type::new($callee.function_type.to_mlir($context.melior).into())
     };
     (@arg [$context:ident] [$receiver:tt] int_attr($value:ident, $result_type:ident)) => {
         ::melior::ir::Attribute::from(::melior::ir::attribute::IntegerAttribute::new(
@@ -228,17 +236,20 @@ macro_rules! sol_ops {
             $value,
         ))
     };
-    (@arg [$context:ident] [$receiver:tt] str_attr($text:ident)) => {
+    (@arg [$context:ident] [$receiver:tt] str_attr($text:expr)) => {
         ::melior::ir::attribute::StringAttribute::new($context.melior, $text)
     };
     (@arg [$context:ident] [$receiver:tt] bytes_attr($bytes:ident)) => {
         ::melior::ir::attribute::StringAttribute::from_bytes($context.melior, $bytes)
     };
-    (@arg [$context:ident] [$receiver:tt] symbol_attr($name:ident)) => {
+    (@arg [$context:ident] [$receiver:tt] symbol_attr($name:expr)) => {
         ::melior::ir::attribute::FlatSymbolRefAttribute::new($context.melior, $name)
     };
     (@arg [$context:ident] [$receiver:tt] predicate_attr($predicate:ident)) => {
         ::melior::ir::Attribute::from($predicate.attribute($context.melior))
+    };
+    (@arg [$context:ident] [$receiver:tt] selector_attr($selector:ident)) => {
+        $crate::Type::selector_attribute($selector, $context.melior)
     };
     (@arg [$context:ident] [$receiver:tt] ty_attr($($inner:tt)*)) => {
         ::melior::ir::attribute::TypeAttribute::new(
@@ -247,7 +258,11 @@ macro_rules! sol_ops {
     };
     (@arg [$context:ident] [$receiver:tt] count_attr($topics:ident)) => {
         ::melior::ir::attribute::IntegerAttribute::new(
-            ::melior::ir::r#type::IntegerType::new($context.melior, 8).into(),
+            ::melior::ir::r#type::IntegerType::new(
+                $context.melior,
+                solx_utils::BIT_LENGTH_BYTE as u32,
+            )
+            .into(),
             i8::try_from($topics.len())
                 .expect("EVM events carry at most four indexed arguments")
                 .into(),
@@ -282,9 +297,13 @@ macro_rules! sol_ops {
         };
         sol_ops!(@chain $builder [$context] [$receiver] $($rest)*)
     }};
-    (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (many($operands:ident)) $($rest:tt)*) => {{
+    (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (many($operands:expr)) $($rest:tt)*) => {{
         let $builder = $builder.$setter(sol_ops!(@operands $operands.iter()));
         sol_ops!(@chain $builder [$context] [$receiver] $($rest)*)
+    }};
+    (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (status_and($result_types:ident)) $($rest:tt)*) => {{
+        let status = [sol_ops!(@arg [$context] [$receiver] boolean())];
+        sol_ops!(@chain $builder [$context] [$receiver] .$setter(concat(status, $result_types)) $($rest)*)
     }};
     (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (concat($head:ident, $tail:ident)) $($rest:tt)*) => {{
         let $builder = $builder.$setter(sol_ops!(@operands $head.iter().chain($tail.iter())));
@@ -320,9 +339,13 @@ macro_rules! sol_ops {
         sol_ops!(@build [$context] [$receiver] $operation $($chain)*)
     };
 
+    (@disp_ty) => { () };
     (@disp_ty value) => { $crate::Value<'context> };
     (@disp_ty place) => { $crate::Place<'context> };
     (@disp_ty values) => { ::std::vec::Vec<$crate::Value<'context>> };
+    (@disp_ty status_and_values) => {
+        ($crate::Value<'context>, ::std::vec::Vec<$crate::Value<'context>>)
+    };
 
     (@region_tuple $region:ident ; empty $($empty_region:ident),+) => {
         $crate::Block<'context>
@@ -341,6 +364,9 @@ macro_rules! sol_ops {
             .result(0)
             .expect($message)
     };
+    (@emit [$context:ident] $operation:expr, $message:expr) => {{
+        $context.current_block().append_operation($operation);
+    }};
     (@emit value [$context:ident] $operation:expr, $message:expr) => {
         $crate::Value::from(sol_ops!(@one_result [$context] $operation, $message))
     };
@@ -358,74 +384,21 @@ macro_rules! sol_ops {
             })
             .collect::<::std::vec::Vec<_>>()
     }};
+    (@emit status_and_values [$context:ident] $operation:expr, $message:expr) => {{
+        let mut results = sol_ops!(@emit values [$context] $operation, $message);
+        (results.remove(0), results)
+    }};
 
     (
-        $receiver:ident :: $base:ident | $flagged:ident ($($argument:ident : $kind:ident),* $(,)?)
-        -> $disposition:ident { $operation:ident $($chain:tt)* } flagged .$setter:ident ;
+        $receiver:ident :: $base:ident | $flagged:ident ($($parameters:tt)*)
+        $(-> $disposition:ident)? { $operation:ident $($chain:tt)* } flagged .$setter:ident ;
         $($rest:tt)*
     ) => {
-        sol_ops!($receiver :: $base ($($argument : $kind),*) -> $disposition { $operation $($chain)* });
+        sol_ops!($receiver :: $base ($($parameters)*) $(-> $disposition)? { $operation $($chain)* });
         sol_ops!(
-            $receiver :: $flagged ($($argument : $kind),*)
-            -> $disposition { $operation $($chain)* .$setter(unit_flag) }
+            $receiver :: $flagged ($($parameters)*)
+            $(-> $disposition)? { $operation $($chain)* .$setter(unit_flag) }
         );
-        sol_ops!($($rest)*);
-    };
-
-    (
-        Block :: $base:ident | $flagged:ident (self $(, $argument:ident : $kind:ident)* $(,)?)
-        { $operation:ident $($chain:tt)* } flagged .$setter:ident ;
-        $($rest:tt)*
-    ) => {
-        sol_ops!(Block :: $base (self $(, $argument : $kind)*) { $operation $($chain)* });
-        sol_ops!(
-            Block :: $flagged (self $(, $argument : $kind)*)
-            { $operation $($chain)* .$setter(unit_flag) }
-        );
-        sol_ops!($($rest)*);
-    };
-
-    (
-        $receiver:ident :: $method:ident (self $(, $argument:ident : $kind:ident)* $(,)?)
-        -> $disposition:ident $(nop_if_same($same:ident))? $(checked($checked_op:ident))?
-        { $operation:ident $($chain:tt)* }
-        $($rest:tt)*
-    ) => {
-        impl<'context> $receiver<'context> {
-            pub fn $method(
-                self,
-                $($argument: sol_ops!(@ty $kind),)*
-                $(checked: sol_ops!(@flag_ty $checked_op),)?
-                context: &$crate::Context<'context>,
-            ) -> sol_ops!(@disp_ty $disposition) {
-                let receiver = self;
-                $(if receiver.r#type() == $same {
-                    return receiver.into();
-                })?
-                sol_ops!(@emit $disposition [context]
-                    sol_ops!(@op [context] [receiver] [checked]
-                        $(checked($checked_op))? $operation $($chain)*),
-                    concat!(stringify!($operation), " produces one result"))
-            }
-        }
-        sol_ops!($($rest)*);
-    };
-
-    (
-        $receiver:ident :: $method:ident ($($argument:ident : $kind:ident),* $(,)?)
-        -> $disposition:ident { $operation:ident $($chain:tt)* }
-        $($rest:tt)*
-    ) => {
-        impl<'context> $receiver<'context> {
-            pub fn $method(
-                $($argument: sol_ops!(@ty $kind),)*
-                context: &$crate::Context<'context>,
-            ) -> sol_ops!(@disp_ty $disposition) {
-                sol_ops!(@emit $disposition [context]
-                    sol_ops!(@build [context] [()] $operation $($chain)*),
-                    concat!(stringify!($operation), " produces one result"))
-            }
-        }
         sol_ops!($($rest)*);
     };
 
@@ -474,6 +447,7 @@ macro_rules! sol_ops {
 
     (
         $receiver:ident :: $method:ident (self $(, $argument:ident : $kind:ident)* $(,)?)
+        $(-> $disposition:ident)? $(nop_if_same($same:ident))? $(checked($checked_op:ident))?
         { $operation:ident $($chain:tt)* }
         $($rest:tt)*
     ) => {
@@ -481,12 +455,17 @@ macro_rules! sol_ops {
             pub fn $method(
                 self,
                 $($argument: sol_ops!(@ty $kind),)*
+                $(checked: sol_ops!(@flag_ty $checked_op),)?
                 context: &$crate::Context<'context>,
-            ) {
+            ) -> sol_ops!(@disp_ty $($disposition)?) {
                 let receiver = self;
-                context
-                    .current_block()
-                    .append_operation(sol_ops!(@build [context] [receiver] $operation $($chain)*));
+                $(if receiver.r#type() == $same {
+                    return receiver.into();
+                })?
+                sol_ops!(@emit $($disposition)? [context]
+                    sol_ops!(@op [context] [receiver] [checked]
+                        $(checked($checked_op))? $operation $($chain)*),
+                    concat!(stringify!($operation), " produces one result"))
             }
         }
         sol_ops!($($rest)*);
@@ -494,17 +473,17 @@ macro_rules! sol_ops {
 
     (
         $receiver:ident :: $method:ident ($($argument:ident : $kind:ident),* $(,)?)
-        { $operation:ident $($chain:tt)* }
+        $(-> $disposition:ident)? { $operation:ident $($chain:tt)* }
         $($rest:tt)*
     ) => {
         impl<'context> $receiver<'context> {
             pub fn $method(
                 $($argument: sol_ops!(@ty $kind),)*
                 context: &$crate::Context<'context>,
-            ) {
-                context
-                    .current_block()
-                    .append_operation(sol_ops!(@build [context] [()] $operation $($chain)*));
+            ) -> sol_ops!(@disp_ty $($disposition)?) {
+                sol_ops!(@emit $($disposition)? [context]
+                    sol_ops!(@build [context] [()] $operation $($chain)*),
+                    concat!(stringify!($operation), " produces one result"))
             }
         }
         sol_ops!($($rest)*);

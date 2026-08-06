@@ -2,6 +2,9 @@
 //! Sol dialect attribute enums for MLIR code generation.
 //!
 
+use slang_solidity_v2::ast::FunctionMutability;
+use slang_solidity_v2::ast::FunctionTypeMutability;
+
 use crate::ffi;
 
 sol_dialect_attribute! {
@@ -42,14 +45,24 @@ sol_dialect_attribute! {
     }
 }
 
-impl From<slang_solidity_v2::ast::FunctionMutability> for StateMutability {
-    fn from(mutability: slang_solidity_v2::ast::FunctionMutability) -> Self {
-        use slang_solidity_v2::ast::FunctionMutability as Slang;
+impl From<FunctionMutability> for StateMutability {
+    fn from(mutability: FunctionMutability) -> Self {
         match mutability {
-            Slang::Pure => Self::Pure,
-            Slang::View => Self::View,
-            Slang::Payable => Self::Payable,
-            Slang::NonPayable => Self::NonPayable,
+            FunctionMutability::Pure => Self::Pure,
+            FunctionMutability::View => Self::View,
+            FunctionMutability::Payable => Self::Payable,
+            FunctionMutability::NonPayable => Self::NonPayable,
+        }
+    }
+}
+
+impl From<FunctionTypeMutability> for StateMutability {
+    fn from(mutability: FunctionTypeMutability) -> Self {
+        match mutability {
+            FunctionTypeMutability::Pure => Self::Pure,
+            FunctionTypeMutability::View => Self::View,
+            FunctionTypeMutability::Payable => Self::Payable,
+            FunctionTypeMutability::NonPayable => Self::NonPayable,
         }
     }
 }

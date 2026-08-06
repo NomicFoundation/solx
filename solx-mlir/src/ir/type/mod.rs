@@ -10,6 +10,7 @@ use std::ffi::c_char;
 use melior::ir::Attribute;
 use melior::ir::Type as MlirType;
 use melior::ir::TypeLike;
+use melior::ir::attribute::IntegerAttribute;
 use melior::ir::r#type::IntegerType;
 use num::BigInt;
 use num::bigint::Sign;
@@ -30,10 +31,10 @@ pub struct Type<'context> {
 
 impl<'context> Type<'context> {
     /// Bit width of a Solidity function selector: 4 bytes.
-    pub const SELECTOR_BIT_WIDTH: u32 = solx_utils::BIT_LENGTH_X32 as u32;
+    const SELECTOR_BIT_WIDTH: usize = solx_utils::BIT_LENGTH_X32;
 
     /// Byte width of a Solidity function selector.
-    pub const SELECTOR_BYTE_WIDTH: u32 = solx_utils::BYTE_LENGTH_X32 as u32;
+    const SELECTOR_BYTE_WIDTH: usize = solx_utils::BYTE_LENGTH_X32;
 
     /// Wraps a melior type.
     pub fn new(inner: MlirType<'context>) -> Self {
@@ -122,10 +123,18 @@ impl<'context> Type<'context> {
     }
 
     /// A `sol::FixedBytesType` of the given byte width.
-    pub fn fixed_bytes(context: &'context melior::Context, width: u32) -> Self {
+    pub fn fixed_bytes(context: &'context melior::Context, width: usize) -> Self {
         Self::new(unsafe {
-            MlirType::from_raw(ffi::solxCreateFixedBytesType(context.to_raw(), width))
+            MlirType::from_raw(ffi::solxCreateFixedBytesType(
+                context.to_raw(),
+                width as u32,
+            ))
         })
+    }
+
+    /// The type a Solidity function selector is dispatched by.
+    pub fn selector(context: &'context melior::Context) -> Self {
+        Self::fixed_bytes(context, Self::SELECTOR_BYTE_WIDTH)
     }
 
     /// A `sol::ArrayType` of `element_type` at `location`.
@@ -199,6 +208,11 @@ impl<'context> Type<'context> {
         unsafe { ffi::solxIsAddressType(self.inner.to_raw()) }
     }
 
+    /// Whether this is a `sol::ContractType`, which an address bridges to and from.
+    pub fn is_contract(self) -> bool {
+        unsafe { ffi::solxIsContractType(self.inner.to_raw()) }
+    }
+
     /// Whether this is a `sol::EnumType`.
     pub fn is_enum(self) -> bool {
         unsafe { ffi::solxIsEnumType(self.inner.to_raw()) }
@@ -232,6 +246,11 @@ impl<'context> Type<'context> {
         unsafe { ffi::solxIsFuncRefType(self.inner.to_raw()) }
     }
 
+    /// Whether this is a `sol::ExtFuncRefType`, an external function pointer.
+    pub fn is_external_function_reference(self) -> bool {
+        unsafe { ffi::solxIsExtFuncRefType(self.inner.to_raw()) }
+    }
+
     /// Whether this is a scalar value type: integer, enum, function reference, address-like, or
     /// bytes-like.
     pub fn is_scalar(self) -> bool {
@@ -256,6 +275,18 @@ impl<'context> Type<'context> {
                 words.as_ptr(),
             ))
         }
+    }
+
+    /// The signless `i32` attribute a selector is dispatched by, on `sol.func` and on
+    /// `sol.ext_func_constant` alike.
+    pub fn selector_attribute(
+        selector: u32,
+        context: &'context melior::Context,
+    ) -> IntegerAttribute<'context> {
+        IntegerAttribute::new(
+            IntegerType::new(context, Self::SELECTOR_BIT_WIDTH as u32).into(),
+            selector.into(),
+        )
     }
 
     /// The element type of this non-mapping reference type, derived C-side by

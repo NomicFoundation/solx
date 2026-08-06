@@ -33,6 +33,15 @@ sol_ops! {
     Value::default_function_constant(result_type: ty) -> value {
         DefaultFuncConstantOperation.addr(result_type)
     }
+    Value::external_function_constant(address: value, selector: selector, result_type: ty) -> value {
+        ExtFuncConstantOperation.addr(address).selector(selector_attr(selector)).result(result_type)
+    }
+    Value::external_function_selector(self) -> value {
+        ExtFuncSelectorOperation.func(self).result(selector())
+    }
+    Value::external_function_address(self) -> value {
+        ExtFuncAddrOperation.func(self).result(address())
+    }
 
     Value::cast(self, target_type: ty) -> value nop_if_same(target_type) {
         CastOperation.inp(self).out(target_type)
@@ -54,7 +63,7 @@ sol_ops! {
     }
 
     Value::fixed_bytes_index(self, index: value) -> value {
-        FixedBytesIndexOperation.value(self).index(index).result(fixed_bytes(1))
+        FixedBytesIndexOperation.value(self).index(index).result(fixed_bytes(solx_utils::BYTE_LENGTH_BYTE))
     }
     Value::length(self) -> value {
         LengthOperation.inp(self).len(field())
@@ -116,27 +125,27 @@ sol_ops! {
     Value::encode | encode_packed (inputs: values, selector: optional_value) -> value {
         EncodeOperation.ins(many(inputs)).res(memory()).selector(optional_value(selector))
     } flagged .packed;
-    Value::decode(payload: value, result_type: ty) -> value {
-        DecodeOperation.addr(payload).outs(single(result_type))
+    Value::decode(payload: value, result_types: types) -> values {
+        DecodeOperation.addr(payload).outs(many(result_types))
     }
 
     Value::keccak256(data: value) -> value {
-        Keccak256Operation.addr(data).result(fixed_bytes(32))
+        Keccak256Operation.addr(data).result(fixed_bytes(solx_utils::BYTE_LENGTH_FIELD))
     }
     Value::ecrecover(hash: value, v: value, r: value, s: value) -> value {
         EcrecoverOperation.hash(hash).v(v).r(r).s(s).result(address())
     }
     Value::sha256(data: value) -> value {
-        Sha256Operation.data(data).result(fixed_bytes(32))
+        Sha256Operation.data(data).result(fixed_bytes(solx_utils::BYTE_LENGTH_FIELD))
     }
     Value::ripemd160(data: value) -> value {
-        Ripemd160Operation.data(data).result(fixed_bytes(20))
+        Ripemd160Operation.data(data).result(fixed_bytes(solx_utils::BYTE_LENGTH_ETH_ADDRESS))
     }
     Value::blockhash(block_number: value) -> value {
-        BlockHashOperation.block_number(block_number).val(fixed_bytes(32))
+        BlockHashOperation.block_number(block_number).val(fixed_bytes(solx_utils::BYTE_LENGTH_FIELD))
     }
     Value::blobhash(index: value) -> value {
-        BlobHashOperation.idx(index).val(fixed_bytes(32))
+        BlobHashOperation.idx(index).val(fixed_bytes(solx_utils::BYTE_LENGTH_FIELD))
     }
 
     Value::balance(address: value) -> value {
@@ -147,6 +156,18 @@ sol_ops! {
     }
     Value::code(address: value) -> value {
         CodeOperation.cont_addr(address).out(memory())
+    }
+    Value::bare_call(address: value, gas: value, amount: value, input: value) -> values {
+        BareCallOperation.addr(address).gas(gas).val(amount).inp(input)
+            .status(boolean()).ret_data(memory())
+    }
+    Value::bare_delegate_call(address: value, gas: value, input: value) -> values {
+        BareDelegateCallOperation.addr(address).gas(gas).inp(input)
+            .status(boolean()).ret_data(memory())
+    }
+    Value::bare_static_call(address: value, gas: value, input: value) -> values {
+        BareStaticCallOperation.addr(address).gas(gas).inp(input)
+            .status(boolean()).ret_data(memory())
     }
     Value::send(address: value, amount: value) -> value {
         SendOperation.addr(address).val(amount).status(boolean())
@@ -171,17 +192,33 @@ sol_ops! {
     Value::tx_gas_price() -> value { GasPriceOperation.val(field()) }
     Value::msg_sender() -> value { CallerOperation.addr(address()) }
     Value::msg_value() -> value { CallValueOperation.val(field()) }
-    Value::msg_sig() -> value { SigOperation.val(fixed_bytes(4)) }
+    Value::msg_sig() -> value { SigOperation.val(selector()) }
     Value::msg_data() -> value { GetCallDataOperation.addr(calldata()) }
     Value::gas_left() -> value { GasLeftOperation.val(field()) }
     Value::this(contract_type: ty) -> value { ThisOperation.addr(contract_type) }
 
-    Function::call(callee: str, operands: values, result_types: types) -> values {
-        CallOperation.callee(symbol_attr(callee)).outs(many(result_types)).operands(many(operands))
+    Function::call(callee: function, operands: values) -> values {
+        CallOperation.callee(symbol_attr(&callee.mlir_name))
+            .outs(many(callee.function_type.results)).operands(many(operands))
     }
+    Function::external_call | external_static_call (
+        callee: function, arguments: values,
+        address: value, selector: value, gas: value, amount: value,
+    ) -> status_and_values {
+        ExtCallOperation.callee(str_attr(&callee.mlir_name)).ins(many(arguments)).addr(address)
+            .gas(gas).val(amount).selector(selector)
+            .callee_type(ty_attr(signature(callee)))
+            .status(boolean()).outs(many(callee.function_type.results))
+    } flagged .static_call;
     Value::indirect_call(self, operands: values, result_types: types) -> values {
         ICallOperation.callee(self).outs(many(result_types)).callee_operands(many(operands))
     }
+    Value::external_call | external_static_call (
+        self, operands: values, result_types: types, gas: value, amount: value,
+    ) -> status_and_values {
+        ExtICallOperation.callee(self).outs(status_and(result_types))
+            .callee_operands(many(operands)).gas(gas).value(amount)
+    } flagged .static_call;
 
     Place::stack(pointee: ty) -> place {
         AllocaOperation.alloc_type(ty_attr(ptr(pointee, stack))).addr(ptr(pointee, stack))

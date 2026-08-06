@@ -5,23 +5,29 @@
 use num::BigInt;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::Type;
 
 use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
+use solx_utils::FunctionReferenceKind;
 
 use crate::scope::function::FunctionScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// A struct field loads from its place; an enum member is its ordinal; every other member access
-    /// is an environment or EVM intrinsic.
+    /// A struct field loads from its place; an enum member is its ordinal; an externally visible
+    /// function reached through a contract instance or `this` is the pointer dispatching it; every
+    /// other member access is an environment or EVM intrinsic.
     pub fn member_access(&mut self, node: &MemberAccessExpression) -> Value<'context> {
-        if matches!(node.operand().get_type(), Some(Type::Struct(_))) {
+        let operand = node.operand();
+
+        if matches!(operand.get_type(), Some(Type::Struct(_))) {
             let (place, element_type) = self.member_access_place(node);
             return place.load(element_type, self);
         }
+
         if let Some(Definition::EnumMember(member)) = node.member().resolve_to_definition() {
             let Some(Definition::Enum(enum_definition)) = member.enclosing_definition() else {
                 unreachable!("an enum member is declared by an enum");
@@ -34,23 +40,45 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             let enum_type = self.typing(node.get_type());
             return Value::constant_from_bigint(&BigInt::from(ordinal), enum_type, self);
         }
+
+        if let Some(Type::Function(function_type)) = node.get_type()
+            && FunctionReferenceKind::from(function_type.visibility())
+                == FunctionReferenceKind::External
+        {
+            let Some(Definition::Function(function_definition)) =
+                function_type.associated_definition()
+            else {
+                unreachable!("an external function type names the function it dispatches");
+            };
+            let address = self.converted(&operand, MlirType::address(self.melior, false));
+            return Value::external_function_constant(
+                address,
+                function_definition
+                    .compute_selector()
+                    .expect("an externally visible function has a selector"),
+                self.typing(node.get_type()),
+                self,
+            );
+        }
+
         match node.member().resolve_to_built_in() {
             Some(BuiltIn::AddressBalance) => {
-                let address =
-                    self.converted(&node.operand(), MlirType::address(self.melior, false));
+                let address = self.converted(&operand, MlirType::address(self.melior, false));
                 Value::balance(address, self)
             }
             Some(BuiltIn::AddressCodehash) => {
-                let address =
-                    self.converted(&node.operand(), MlirType::address(self.melior, false));
+                let address = self.converted(&operand, MlirType::address(self.melior, false));
                 Value::code_hash(address, self)
             }
             Some(BuiltIn::AddressCode) => {
-                let address =
-                    self.converted(&node.operand(), MlirType::address(self.melior, false));
+                let address = self.converted(&operand, MlirType::address(self.melior, false));
                 Value::code(address, self)
             }
-            Some(BuiltIn::Length) => self.expression(&node.operand()).length(self),
+            Some(BuiltIn::Length) => self.expression(&operand).length(self),
+            Some(BuiltIn::FunctionSelector) => self.external_selector(&operand),
+            Some(BuiltIn::FunctionAddress) => {
+                self.expression(&operand).external_function_address(self)
+            }
             Some(BuiltIn::TxOrigin) => Value::tx_origin(self),
             Some(BuiltIn::TxGasPrice) => Value::tx_gas_price(self),
             Some(BuiltIn::MsgSender) => Value::msg_sender(self),
@@ -103,5 +131,24 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             Place::from(base_value).gep_field(field_index, element_type, self),
             element_type,
         )
+    }
+
+    /// The ABI selector `.selector` yields: an operand naming a function folds to its selector
+    /// constant, while a pointer value carries its own.
+    pub fn external_selector(&mut self, operand: &Expression) -> Value<'context> {
+        if let Expression::MemberAccessExpression(access) = operand
+            && let Some(Definition::Function(function_definition)) =
+                access.member().resolve_to_definition()
+        {
+            self.expression_effect(&access.operand());
+            return Value::selector(
+                function_definition
+                    .compute_selector()
+                    .expect("an externally visible function has a selector"),
+                MlirType::selector(self.melior),
+                self,
+            );
+        }
+        self.expression(operand).external_function_selector(self)
     }
 }

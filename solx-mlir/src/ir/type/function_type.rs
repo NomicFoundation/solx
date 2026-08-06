@@ -36,12 +36,18 @@ impl<'context> FunctionType<'context> {
         MlirFunctionType::new(context, &parameters, &results)
     }
 
-    /// A `sol::FuncRefType` over this signature, an internal function pointer.
-    pub fn reference(&self, context: &'context melior::Context) -> Type<'context> {
+    /// The function pointer of `kind` over this signature: a `sol::FuncRefType` naming a module
+    /// symbol, or a `sol::ExtFuncRefType` carrying an address and a selector.
+    pub fn reference(
+        &self,
+        context: &'context melior::Context,
+        kind: solx_utils::FunctionReferenceKind,
+    ) -> Type<'context> {
         Type::new(unsafe {
             MlirType::from_raw(ffi::solxCreateFuncRefType(
                 context.to_raw(),
                 MlirType::from(self.to_mlir(context)).to_raw(),
+                kind as u32,
             ))
         })
     }

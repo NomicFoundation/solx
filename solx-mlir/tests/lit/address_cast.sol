@@ -26,6 +26,22 @@
 // CHECK:   sol.cast %{{.*}} : ui8 to ui160
 // CHECK:   sol.address_cast %{{.*}} : ui160 to !sol.address
 
+// CHECK: sol.func @{{.*contract_to_address.*}}
+// CHECK:   sol.address_cast %{{.*}} : !sol.contract<{{.*Other.*}}> to !sol.address
+
+// CHECK: sol.func @{{.*this_to_address.*}}
+// CHECK:   %[[SELF:.*]] = sol.this : !sol.contract<{{.*C.*}}>
+// CHECK:   sol.address_cast %[[SELF]] : !sol.contract<{{.*C.*}}> to !sol.address
+
+// CHECK: sol.func @{{.*interface_to_address.*}}
+// CHECK:   sol.address_cast %{{.*}} : !sol.contract<{{.*I.*}}> to !sol.address
+
+// CHECK: sol.func @{{.*address_to_contract.*}}
+// CHECK:   sol.address_cast %{{.*}} : !sol.address to !sol.contract<{{.*Other.*}}>
+
+// CHECK: sol.func @{{.*address_to_interface.*}}
+// CHECK:   sol.address_cast %{{.*}} : !sol.address to !sol.contract<{{.*I.*}}>
+
 contract C {
     function identity(address a) public pure returns (address) {
         return address(a);
@@ -54,4 +70,28 @@ contract C {
     function literal_to_address() public pure returns (address) {
         return address(0);
     }
+
+    function contract_to_address(Other o) public pure returns (address) {
+        return address(o);
+    }
+
+    function this_to_address() public view returns (address) {
+        return address(this);
+    }
+
+    function interface_to_address(I i) public pure returns (address) {
+        return address(i);
+    }
+
+    function address_to_contract(address a) public pure returns (Other) {
+        return Other(a);
+    }
+
+    function address_to_interface(address a) public pure returns (I) {
+        return I(a);
+    }
 }
+
+interface I {}
+
+contract Other {}

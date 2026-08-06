@@ -134,14 +134,25 @@ MlirType solxCreateEnumType(MlirContext ctx, uint32_t max) {
     return wrap(mlir::sol::EnumType::get(context, max));
 }
 
-MlirType solxCreateFuncRefType(MlirContext ctx, MlirType signature) {
+MlirType solxCreateFuncRefType(MlirContext ctx, MlirType signature, uint32_t kind) {
     auto *context = unwrap(ctx);
     auto functionType = mlir::cast<mlir::FunctionType>(unwrap(signature));
-    return wrap(mlir::sol::FuncRefType::get(context, functionType));
+    switch (kind) {
+    case 0:
+        return wrap(mlir::sol::FuncRefType::get(context, functionType));
+    case 1:
+        return wrap(mlir::sol::ExtFuncRefType::get(context, functionType));
+    default:
+        abort();
+    }
 }
 
 bool solxIsAddressType(MlirType ty) {
     return mlir::isa<mlir::sol::AddressType>(unwrap(ty));
+}
+
+bool solxIsContractType(MlirType ty) {
+    return mlir::isa<mlir::sol::ContractType>(unwrap(ty));
 }
 
 bool solxIsEnumType(MlirType ty) {
@@ -166,6 +177,10 @@ uint32_t solxBytesLikeTypeWidth(MlirType ty) {
 
 bool solxIsFuncRefType(MlirType ty) {
     return mlir::isa<mlir::sol::FuncRefType>(unwrap(ty));
+}
+
+bool solxIsExtFuncRefType(MlirType ty) {
+    return mlir::isa<mlir::sol::ExtFuncRefType>(unwrap(ty));
 }
 
 bool solxIsScalarType(MlirType ty) {
