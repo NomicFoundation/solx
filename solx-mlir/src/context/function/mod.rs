@@ -23,8 +23,9 @@ use crate::Type;
 use crate::Value;
 use crate::ods::sol::FuncOperation;
 
-/// Cached signature of a lowered function: its mangled symbol and MLIR-interned parameter and
-/// return types, so a call site emits `sol.call` without re-resolving the signature.
+/// A function a call site can name: its mangled symbol and MLIR-interned parameter and return
+/// types, so the site emits its call without re-resolving the signature. Functions this unit
+/// lowers are registered once; a callee in another contract is named where it is called.
 #[derive(Clone)]
 pub struct Function<'context> {
     /// The mangled MLIR function name.
@@ -94,10 +95,8 @@ impl<'context> Function<'context> {
             }
         };
         if let Some(selector_value) = selector {
-            operation_builder = operation_builder.selector(IntegerAttribute::new(
-                IntegerType::new(context.melior, Type::SELECTOR_BIT_WIDTH).into(),
-                selector_value as i64,
-            ));
+            operation_builder = operation_builder
+                .selector(Type::selector_attribute(selector_value, context.melior));
         }
         if selector.is_some()
             || matches!(dispatch, FunctionDispatch::Kind(FunctionKind::Constructor))
@@ -119,7 +118,8 @@ impl<'context> Function<'context> {
     pub fn pointer_constant(&self, context: &Context<'context>) -> Value<'context> {
         Value::function_constant(
             &self.mlir_name,
-            self.function_type.reference(context.melior),
+            self.function_type
+                .reference(context.melior, solx_utils::FunctionReferenceKind::Internal),
             context,
         )
     }

@@ -18,7 +18,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// `a == b` and `a != b`, the operands converted to the type the binder reconciles them to.
     pub fn equality(&mut self, node: &EqualityExpression) -> Value<'context> {
         if let Some(function) = node.resolve_operator_to_function() {
-            return self.bound_operator(&function, [node.left_operand(), node.right_operand()]);
+            return self.bound_operator(&function, &[node.left_operand(), node.right_operand()]);
         }
         let predicate = match node.operator() {
             EqualityExpressionOperator::EqualEqual(_) => CmpPredicate::Eq,
@@ -36,7 +36,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// reconciles them to.
     pub fn inequality(&mut self, node: &InequalityExpression) -> Value<'context> {
         if let Some(function) = node.resolve_operator_to_function() {
-            return self.bound_operator(&function, [node.left_operand(), node.right_operand()]);
+            return self.bound_operator(&function, &[node.left_operand(), node.right_operand()]);
         }
         let predicate = match node.operator() {
             InequalityExpressionOperator::LessThan(_) => CmpPredicate::Lt,

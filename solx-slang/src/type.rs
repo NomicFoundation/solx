@@ -5,7 +5,6 @@
 use num_traits::sign::Signed;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionType as SlangFunctionType;
-use slang_solidity_v2::ast::FunctionTypeVisibility;
 use slang_solidity_v2::ast::LiteralKind;
 use slang_solidity_v2::ast::Type;
 
@@ -60,10 +59,7 @@ impl<'context> SourceUnitScope<'context> {
                 LiteralKind::String { .. } => {
                     MlirType::string(self.melior, solx_utils::DataLocation::Memory)
                 }
-                LiteralKind::HexString { bytes } => MlirType::fixed_bytes(
-                    self.melior,
-                    bytes.try_into().expect("hex string length fits in u32"),
-                ),
+                LiteralKind::HexString { bytes } => MlirType::fixed_bytes(self.melior, bytes),
                 LiteralKind::Rational { .. } => unimplemented!(
                     "MLIR type resolution is not yet implemented for rational literals"
                 ),
@@ -81,7 +77,7 @@ impl<'context> SourceUnitScope<'context> {
                 MlirType::string(self.melior, location)
             }
             Type::ByteArray(byte_array_type) => {
-                MlirType::fixed_bytes(self.melior, byte_array_type.width())
+                MlirType::fixed_bytes(self.melior, byte_array_type.width() as usize)
             }
             Type::Array(array_type) => {
                 let element_type = self.resolve(&array_type.element_type(), inherited_location);
@@ -163,14 +159,9 @@ impl<'context> SourceUnitScope<'context> {
                 let max = u8::try_from(member_count - 1).expect("enum member count fits in u8");
                 MlirType::enumeration(self.melior, max.into())
             }
-            Type::Function(function_type) => {
-                if matches!(function_type.visibility(), FunctionTypeVisibility::External) {
-                    unimplemented!(
-                        "MLIR type resolution is not yet implemented for external function types"
-                    );
-                }
-                self.function_type(function_type).reference(self.melior)
-            }
+            Type::Function(function_type) => self
+                .function_type(function_type)
+                .reference(self.melior, function_type.visibility().into()),
             Type::UserDefinedValue(udvt) => {
                 let target_type = udvt
                     .target_type()
@@ -181,8 +172,8 @@ impl<'context> SourceUnitScope<'context> {
         }
     }
 
-    /// Resolves a function type's MLIR signature. Any non-external visibility resolves here:
-    /// `Public` types a bare reference to a public function, a legal internal pointer.
+    /// Resolves a function type's MLIR signature from the binder's type, so a callee naming no
+    /// definition to look a registered signature up by resolves here.
     pub fn function_type(&self, function_type: &SlangFunctionType) -> FunctionType<'context> {
         FunctionType {
             parameters: function_type

@@ -33,6 +33,21 @@
 // CHECK: sol.func @{{.*named_calldata.*}}
 // CHECK:   sol.default_calldata : !sol.array<? x ui256, CallData>
 
+// CHECK: sol.func @{{.*named_contract.*}}
+// CHECK:   %[[ZERO:.*]] = sol.constant 0 : ui160
+// CHECK:   %[[ADDR:.*]] = sol.address_cast %[[ZERO]] : ui160 to !sol.address
+// CHECK:   sol.address_cast %[[ADDR]] : !sol.address to !sol.contract<{{.*D.*}}>
+
+// CHECK: sol.func @{{.*named_interface.*}}
+// CHECK:   %[[ZERO:.*]] = sol.constant 0 : ui160
+// CHECK:   %[[ADDR:.*]] = sol.address_cast %[[ZERO]] : ui160 to !sol.address
+// CHECK:   sol.address_cast %[[ADDR]] : !sol.address to !sol.contract<{{.*I.*}}>
+
+// CHECK: sol.func @{{.*named_external_function.*}}
+// CHECK:   %[[ZERO:.*]] = sol.constant 0 : ui160
+// CHECK:   %[[ADDR:.*]] = sol.address_cast %[[ZERO]] : ui160 to !sol.address
+// CHECK:   sol.ext_func_constant %[[ADDR]] {selector = 0 : i32} : !sol.address -> !sol.ext_func_ref<(ui256) -> ui256>
+
 contract C {
     struct S {
         uint256 a;
@@ -87,4 +102,18 @@ contract C {
     function named_calldata(uint256[] calldata a) external pure returns (uint256[] calldata r) {
         r = a;
     }
+
+    function named_contract() public pure returns (D d) {}
+
+    function named_interface() public pure returns (I i) {}
+
+    function named_external_function()
+        public
+        pure
+        returns (function(uint256) external returns (uint256) f)
+    {}
 }
+
+interface I {}
+
+contract D {}

@@ -157,17 +157,21 @@ unsafe extern "C" {
     /// (one less than the number of enum members).
     pub fn solxCreateEnumType(context: MlirContext, max: u32) -> mlir_sys::MlirType;
 
-    /// Creates a `sol::FuncRefType`, an internal function pointer, over `signature`, a
-    /// `mlir::FunctionType`.
+    /// Creates a function-pointer type over `signature`, a `mlir::FunctionType`: a
+    /// `sol::FuncRefType` for `kind` 0, a `sol::ExtFuncRefType` for 1.
     pub fn solxCreateFuncRefType(
         context: MlirContext,
         signature: mlir_sys::MlirType,
+        kind: u32,
     ) -> mlir_sys::MlirType;
 
     // ---- Sol type inference ----
 
     /// Whether the type is a `sol::AddressType`, regardless of payability.
     pub fn solxIsAddressType(ty: mlir_sys::MlirType) -> bool;
+
+    /// Whether the type is a `sol::ContractType`, a contract or interface reference.
+    pub fn solxIsContractType(ty: mlir_sys::MlirType) -> bool;
 
     /// Whether the type is a `sol::EnumType`.
     pub fn solxIsEnumType(ty: mlir_sys::MlirType) -> bool;
@@ -187,6 +191,9 @@ unsafe extern "C" {
 
     /// Whether the type is a `sol::FuncRefType`, an internal function pointer.
     pub fn solxIsFuncRefType(ty: mlir_sys::MlirType) -> bool;
+
+    /// Whether the type is a `sol::ExtFuncRefType`, an external function pointer.
+    pub fn solxIsExtFuncRefType(ty: mlir_sys::MlirType) -> bool;
 
     /// Whether the type is a scalar value type: integer, enum, function reference,
     /// address-like, or bytes-like.
