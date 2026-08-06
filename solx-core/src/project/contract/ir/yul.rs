@@ -13,7 +13,7 @@ pub struct Yul {
     /// Yul AST object.
     pub object: Object,
     /// Dependencies of the Yul object.
-    pub dependencies: solx_codegen_evm::Dependencies,
+    pub dependencies: solx_utils::Dependencies,
     /// Runtime code object that is only set in deploy code.
     pub runtime_code: Option<Box<Self>>,
 }

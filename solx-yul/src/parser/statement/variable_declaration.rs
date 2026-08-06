@@ -116,7 +116,7 @@ impl VariableDeclaration {
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
+    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_utils::Dependencies) {
         if let Some(expression) = self.expression.as_ref() {
             expression.accumulate_evm_dependencies(dependencies);
         }

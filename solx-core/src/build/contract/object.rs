@@ -44,7 +44,7 @@ pub struct Object {
     /// Immutables of the runtime code.
     pub immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
     /// Dependencies.
-    pub dependencies: solx_codegen_evm::Dependencies,
+    pub dependencies: solx_utils::Dependencies,
     /// Linker symbols that were not provided at compile time.
     /// Such symbols must be resolved by tooling before deployment.
     pub unlinked_symbols: BTreeMap<String, Vec<u64>>,
@@ -79,7 +79,7 @@ impl Object {
         code_segment: solx_utils::CodeSegment,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
         metadata_bytes: Option<Vec<u8>>,
-        dependencies: solx_codegen_evm::Dependencies,
+        dependencies: solx_utils::Dependencies,
         is_size_fallback: bool,
         warnings: Vec<solx_codegen_evm::Warning>,
         benchmarks: Vec<(String, u64)>,

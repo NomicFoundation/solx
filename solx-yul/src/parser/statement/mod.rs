@@ -161,7 +161,7 @@ impl Statement {
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
+    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_utils::Dependencies) {
         match self {
             Self::Object(_) => {}
             Self::Code(inner) => inner.accumulate_evm_dependencies(dependencies),

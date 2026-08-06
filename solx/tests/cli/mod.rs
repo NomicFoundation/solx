@@ -54,6 +54,8 @@ mod metadata;
 mod metadata_hash;
 #[cfg(feature = "solc")]
 mod metadata_literal;
+#[cfg(feature = "mlir")]
+mod mlir_dependencies;
 mod no_cbor_metadata;
 #[cfg(feature = "solc")]
 mod no_import_callback;

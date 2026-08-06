@@ -51,9 +51,10 @@ impl<'context> SourceUnitScope<'context> {
             let method_identifiers = scope.contract_definition(contract, &operator_functions);
 
             let name = contract.name().name().to_owned();
+            let object_identifier = Self::object_identifier(contract.get_file_id(), name.as_str());
             let mlir = Context::from(scope).finalize_module(
-                &format!("{name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX),
-                capture_sol_dialect(&name),
+                object_identifier.as_str(),
+                capture_sol_dialect(name.as_str()),
             )?;
             contracts.insert(name, Contract::new_mlir(mlir, method_identifiers));
         }

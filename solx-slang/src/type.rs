@@ -140,7 +140,11 @@ impl<'context> SourceUnitScope<'context> {
                 };
                 MlirType::contract(
                     self.melior,
-                    contract_definition.name().name(),
+                    Self::object_identifier(
+                        contract_definition.get_file_id(),
+                        contract_definition.name().name(),
+                    )
+                    .as_str(),
                     contract_definition.is_payable(),
                 )
             }
@@ -149,7 +153,15 @@ impl<'context> SourceUnitScope<'context> {
                 else {
                     unreachable!("Slang InterfaceType always references an Interface definition");
                 };
-                MlirType::contract(self.melior, interface_definition.name().name(), false)
+                MlirType::contract(
+                    self.melior,
+                    Self::object_identifier(
+                        interface_definition.get_file_id(),
+                        interface_definition.name().name(),
+                    )
+                    .as_str(),
+                    false,
+                )
             }
             Type::Enum(enum_type) => {
                 let Definition::Enum(enum_definition) = enum_type.definition() else {
