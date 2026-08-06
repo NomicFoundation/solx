@@ -39,7 +39,7 @@ impl EVMLegacyAssembly {
             .to_owned();
         let runtime_code_identifier = format!("{full_path}.{}", solx_utils::CodeSegment::Runtime);
         let mut runtime_code_dependencies =
-            solx_utils::Dependencies::new(runtime_code_identifier.as_str());
+            solx_utils::Dependencies::new(runtime_code_identifier.as_str(), None);
         runtime_code_assembly.accumulate_evm_dependencies(&mut runtime_code_dependencies);
         let runtime_code = Some(Box::new(Self {
             assembly: runtime_code_assembly,
@@ -47,7 +47,8 @@ impl EVMLegacyAssembly {
             runtime_code: None,
         }));
 
-        let mut deploy_code_dependencies = solx_utils::Dependencies::new(full_path);
+        let mut deploy_code_dependencies =
+            solx_utils::Dependencies::new(full_path, Some(runtime_code_identifier.to_owned()));
         assembly.accumulate_evm_dependencies(&mut deploy_code_dependencies);
         assembly.strip_runtime_code(runtime_code_identifier);
 

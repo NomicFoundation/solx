@@ -146,10 +146,12 @@ impl Object {
     ) -> anyhow::Result<inkwell::memory_buffer::MemoryBuffer> {
         let memory_buffer = self.to_memory_buffer()?;
 
-        let mut memory_buffers = Vec::with_capacity(1 + self.dependencies.inner.len());
+        let mut memory_buffers = Vec::with_capacity(
+            1 + usize::from(self.dependencies.runtime.is_some()) + self.dependencies.inner.len(),
+        );
         memory_buffers.push((self.identifier.to_owned(), memory_buffer));
 
-        memory_buffers.extend(self.dependencies.inner.iter().map(|dependency| {
+        memory_buffers.extend(self.dependencies.into_iter().map(|dependency| {
             let original_dependency_identifier = dependency.to_owned();
             let dependency = objects_by_id
                 .get(dependency.as_str())

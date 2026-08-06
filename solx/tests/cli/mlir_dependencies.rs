@@ -22,9 +22,18 @@ fn per_code_segment() -> anyhow::Result<()> {
         .expect("the MLIR stage is selected");
 
     assert_eq!(
+        mlir.deploy_dependencies.runtime.as_deref(),
+        Some("creation.sol:C_deployed"),
+        "the deploy segment returns its own runtime object"
+    );
+    assert_eq!(
         mlir.deploy_dependencies.inner,
-        ["creation.sol:C_deployed", "creation.sol:A"],
+        ["creation.sol:A"],
         "the deploy segment's dependencies come from its own module, not the whole source unit"
+    );
+    assert_eq!(
+        mlir.runtime_dependencies.runtime, None,
+        "a runtime segment has no runtime child"
     );
     assert_eq!(
         mlir.runtime_dependencies.inner,
