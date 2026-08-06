@@ -317,8 +317,10 @@ impl Contract {
                 );
 
                 // Deploy: accumulate dependencies from assembly before it is consumed
-                let mut accumulated_dependencies =
-                    solx_utils::Dependencies::new(code_identifier.as_str());
+                let mut accumulated_dependencies = solx_utils::Dependencies::new(
+                    code_identifier.as_str(),
+                    code.dependencies.runtime.clone(),
+                );
                 if matches!(code_segment, solx_utils::CodeSegment::Deploy) {
                     code.assembly
                         .accumulate_evm_dependencies(&mut accumulated_dependencies);

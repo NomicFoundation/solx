@@ -28,9 +28,9 @@ impl EVMLegacyAssembly {
 
         let runtime_code_identifier = format!("{full_path}.{}", solx_utils::CodeSegment::Runtime);
         let mut runtime_code_dependencies =
-            solx_utils::Dependencies::new(runtime_code_identifier.as_str());
+            solx_utils::Dependencies::new(runtime_code_identifier.as_str(), None);
         let mut runtime_code_assembly = assembly
-            .take_runtime_code(runtime_code_identifier)
+            .take_runtime_code(runtime_code_identifier.clone())
             .map_err(|error| {
                 anyhow::anyhow!(
                     "EVM legacy assembly is missing runtime code for `{full_path}`: {error}"
@@ -44,7 +44,8 @@ impl EVMLegacyAssembly {
             runtime_code: None,
         }));
 
-        let mut deploy_code_dependencies = solx_utils::Dependencies::new(full_path);
+        let mut deploy_code_dependencies =
+            solx_utils::Dependencies::new(full_path, Some(runtime_code_identifier));
         assembly.accumulate_evm_dependencies(&mut deploy_code_dependencies);
 
         Ok(Self {

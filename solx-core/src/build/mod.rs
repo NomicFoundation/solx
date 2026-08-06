@@ -76,7 +76,7 @@ impl Build {
                     .iter()
                     .filter(|object| {
                         !object.is_assembled
-                            && object.dependencies.inner.iter().all(|dependency| {
+                            && object.dependencies.into_iter().all(|dependency| {
                                 objects_by_id
                                     .get(dependency.as_str())
                                     .map(|object| object.is_assembled)
