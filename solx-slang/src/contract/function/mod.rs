@@ -117,7 +117,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
 impl<'context> SourceUnitScope<'context> {
     /// The function's symbol: its internal signature qualified by the node id, since internal
     /// signatures alone collide.
-    pub fn symbol(function: &FunctionDefinition) -> String {
+    pub fn function_symbol(function: &FunctionDefinition) -> String {
         format!(
             "{}_{}",
             function
