@@ -806,32 +806,50 @@ impl Call {
                     return Vec::new();
                 }
 
-                let (element_type, slang_location) = match &base_slang_type {
-                    Type::Array(array_type) => (
-                        scope.resolve_type(&array_type.element_type(), None),
-                        array_type.location(),
-                    ),
+                let (element_type, slot_type) = match &base_slang_type {
+                    Type::Array(array_type) => {
+                        let element_slang_type = array_type.element_type();
+                        let element_type = scope.resolve_type(&element_slang_type, None);
+                        (
+                            element_type,
+                            scope.pointer_type(
+                                &element_slang_type,
+                                element_type,
+                                solx_utils::DataLocation::from_slang(array_type.location(), None),
+                            ),
+                        )
+                    }
                     Type::Bytes(bytes_type) => {
-                        (MlirType::byte(scope.melior), bytes_type.location())
+                        let element_type = MlirType::byte(scope.melior);
+                        (
+                            element_type,
+                            MlirType::pointer(
+                                scope.melior,
+                                element_type,
+                                solx_utils::DataLocation::from_slang(bytes_type.location(), None),
+                            ),
+                        )
                     }
                     other => unreachable!(
                         "Solidity's .push is a member of dynamic arrays and bytes only; got {:?}",
                         std::mem::discriminant(other)
                     ),
                 };
-                let new_slot = place.push(
-                    MlirType::pointer(
-                        scope.melior,
-                        element_type,
-                        solx_utils::DataLocation::from_slang(slang_location, None),
-                    ),
-                    scope,
-                );
+                let new_slot = place.push(slot_type, scope);
 
                 let Some(value_argument) = value_argument else {
                     return vec![new_slot];
                 };
-                Place::from(new_slot).store(scope.converted(value_argument, element_type), scope);
+                let place = Place::from(new_slot);
+                if let Expression::StringExpression(_) = value_argument
+                    && element_type.is_bytes_like()
+                {
+                    let value = scope.converted(value_argument, element_type);
+                    place.assign(value, element_type, scope);
+                    return Vec::new();
+                }
+                let value = scope.expression(value_argument);
+                place.assign(value, element_type, scope);
                 Vec::new()
             }
             Some(BuiltIn::BytesConcat | BuiltIn::StringConcat) => {
@@ -916,7 +934,7 @@ impl Call {
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// `arr.push()` is the sole call assignable in place position; the slot it grows is the value the
-    /// push emits, and its element type is that slot's pointee.
+    /// push emits. The binder types a `bytes` element `bytes1` where the dialect stores a byte.
     pub fn function_call_place(
         &mut self,
         node: &FunctionCallExpression,
@@ -925,7 +943,13 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             .into_iter()
             .next()
             .expect("an array push in place position yields the new element's slot");
-        (Place::from(slot), slot.r#type().element_type(0))
+        let slang_type = node.get_type().expect("the binder types every expression");
+        let element_type = if slang_type.is_reference_type() {
+            self.resolve_type(&slang_type, None)
+        } else {
+            slot.r#type().element_type(0)
+        };
+        (Place::from(slot), element_type)
     }
 
     /// Calls the function a `using {f as op} for T global;` directive binds an operator to. Being a
