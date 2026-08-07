@@ -199,6 +199,10 @@ unsafe extern "C" {
     /// address-like, or bytes-like.
     pub fn solxIsScalarType(ty: mlir_sys::MlirType) -> bool;
 
+    /// Whether the type is a `sol::PointerType`, as opposed to a reference type that is its
+    /// own place.
+    pub fn solxIsPointerType(ty: mlir_sys::MlirType) -> bool;
+
     /// Returns the data location of a located reference type, in the same encoding the
     /// type constructors take.
     pub fn solxTypeDataLocation(ty: mlir_sys::MlirType) -> u32;
