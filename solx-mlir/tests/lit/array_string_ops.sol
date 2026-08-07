@@ -23,6 +23,20 @@
 // CHECK:   sol.cadd %{{.*}}, %{{.*}} : ui256
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
 
+// CHECK: sol.func {{.*}}pushStructMember
+// CHECK:   sol.push %{{.*}} : !sol.array<? x !sol.struct<(ui256, ui256), Storage>, Storage> -> !sol.struct<(ui256, ui256), Storage>
+// CHECK:   sol.gep %{{.*}}, %{{.*}} : !sol.struct<(ui256, ui256), Storage>, ui64, !sol.ptr<ui256, Storage>
+// CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
+
+// CHECK: sol.func {{.*}}pushStructValue
+// CHECK:   sol.push %{{.*}} : !sol.array<? x !sol.struct<(ui256, ui256), Storage>, Storage> -> !sol.struct<(ui256, ui256), Storage>
+// CHECK:   sol.copy %{{.*}}, %{{.*}} : !sol.struct<(ui256, ui256), Memory>, !sol.struct<(ui256, ui256), Storage>
+
+// CHECK: sol.func {{.*}}pushNested
+// CHECK:   sol.push %{{.*}} : !sol.array<? x !sol.array<? x ui256, Storage>, Storage> -> !sol.array<? x ui256, Storage>
+// CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
+// CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
+
 // CHECK: sol.func {{.*}}pushByte
 // CHECK:   sol.push_string %{{.*}}, %{{.*}} : <Storage>, !sol.fixedbytes<1>
 
@@ -42,8 +56,15 @@
 // CHECK:   sol.array_lit %{{.*}}, %{{.*}}, %{{.*}} : (ui256, ui256, ui256) -> !sol.array<3 x ui256, Memory>
 
 contract C {
+    struct Y {
+        uint256 a;
+        uint256 b;
+    }
+
     uint256[] arr;
     bytes data;
+    Y[] records;
+    uint256[][] nested;
 
     function pushValue(uint256 x) public {
         arr.push(x);
@@ -63,6 +84,18 @@ contract C {
 
     function pushCompound(uint256 x) public {
         arr.push() += x;
+    }
+
+    function pushStructMember() public {
+        records.push().a = 1;
+    }
+
+    function pushStructValue() public {
+        records.push(Y(1, 2));
+    }
+
+    function pushNested() public {
+        nested.push().push(2);
     }
 
     function pushByte(bytes1 element) public {
