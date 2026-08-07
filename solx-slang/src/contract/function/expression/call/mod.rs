@@ -4,6 +4,7 @@
 //!
 
 pub mod arguments;
+pub mod external_callee;
 pub mod options;
 
 use slang_solidity_v2::ast::ArgumentsDeclaration;
@@ -27,6 +28,7 @@ use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
 use solx_utils::FunctionReferenceKind;
 
+use crate::contract::function::expression::call::external_callee::ExternalCallee;
 use crate::contract::function::expression::call::options::Options;
 use crate::scope::function::FunctionScope;
 use crate::scope::source_unit::SourceUnitScope;
@@ -45,10 +47,11 @@ pub enum Call {
     TypeConversion,
     /// A built-in invoked by bare identifier (`require`, `keccak256`).
     Builtin(BuiltIn),
-    /// A call to another contract's function (`instance.f(x)`, `this.f(x)`), dispatched by the
-    /// callee's ABI selector. The callee's type is the operand's, which is where an overload is
-    /// disambiguated and a decorated callee carries its partial application.
-    External(MemberAccessExpression, FunctionDefinition, FunctionType),
+    /// A call to another contract's function or public state-variable getter (`instance.f(x)`,
+    /// `this.x()`), dispatched by the callee's ABI selector. The callee's type is the operand's,
+    /// which is where an overload is disambiguated and a decorated callee carries its partial
+    /// application.
+    External(MemberAccessExpression, ExternalCallee, FunctionType),
     /// A member-access callee (`address.send`, `abi.encode`, `abi.decode`). The member is resolved
     /// at emission, so a member resolving to no built-in or to one not lowered yet is rejected in
     /// one place rather than at both classification and emission.
@@ -90,10 +93,10 @@ impl Call {
             Self::Builtin(built_in) => Self::builtin(built_in, &arguments, scope)
                 .into_iter()
                 .collect(),
-            Self::External(access, function_definition, function_type) => {
+            Self::External(access, callee, function_type) => {
                 let (_status, values) = Self::external(
                     &access,
-                    &function_definition,
+                    &callee,
                     &function_type,
                     &arguments,
                     options.as_ref(),
@@ -141,9 +144,9 @@ impl Call {
                     );
                 (address.is_nonzero(scope), vec![contract])
             }
-            Self::External(access, function_definition, function_type) => Self::external(
+            Self::External(access, callee, function_type) => Self::external(
                 &access,
-                &function_definition,
+                &callee,
                 &function_type,
                 &arguments,
                 options.as_ref(),
@@ -176,8 +179,8 @@ impl Call {
     /// as a named type, and its one-argument arity is part of the classification, per the variant's
     /// definition.
     fn from_call(call: &FunctionCallExpression, callee: Expression) -> Self {
-        if let Expression::Identifier(identifier) = &callee
-            && let Some(Definition::Struct(struct_definition)) = identifier.resolve_to_definition()
+        if let Some(Definition::Struct(struct_definition)) =
+            FunctionScope::resolved_definition(&callee)
         {
             return Self::StructConstruction(struct_definition);
         }
@@ -227,12 +230,29 @@ impl Call {
                         function_type,
                     );
                 }
-                if let Some(Definition::Function(function_definition)) =
-                    access.member().resolve_to_definition()
-                    && function_definition.compute_selector().is_some()
-                    && let Some(Type::Function(function_type)) = call.operand().get_type()
+                if let Expression::Identifier(operand) = access.operand()
+                    && matches!(
+                        operand.resolve_to_definition(),
+                        Some(Definition::Contract(_))
+                    )
                 {
-                    return Self::External(access, function_definition, function_type);
+                    if let Some(Definition::Function(function_definition)) =
+                        access.member().resolve_to_definition()
+                    {
+                        return Self::Function(function_definition);
+                    }
+                    if let Some(Type::Function(function_type)) = access.get_type() {
+                        return Self::FunctionPointer(
+                            Expression::MemberAccessExpression(access),
+                            function_type,
+                        );
+                    }
+                }
+                if let Some(definition) = access.member().resolve_to_definition()
+                    && let Some(Type::Function(function_type)) = call.operand().get_type()
+                    && let Some(callee) = ExternalCallee::from_definition(definition)
+                {
+                    return Self::External(access, callee, function_type);
                 }
                 Self::Member(access)
             }
@@ -290,7 +310,7 @@ impl Call {
                         .map(|member| member.node_id()),
                 ),
                 Self::Creation(_, Some(function_definition))
-                | Self::External(_, function_definition, _)
+                | Self::External(_, ExternalCallee::Function(function_definition, _), _)
                 | Self::Function(function_definition) => FunctionScope::named_arguments(
                     &named,
                     function_definition
@@ -313,13 +333,19 @@ impl Call {
                         _ => unreachable!("a function value declares no labeled parameter"),
                     }
                 }
-                Self::Creation(_, None) | Self::Member(_) | Self::Builtin(_)
+                Self::Creation(_, None)
+                | Self::External(_, ExternalCallee::Getter(..), _)
+                | Self::Member(_)
+                | Self::Builtin(_)
                     if named.is_empty() =>
                 {
                     Vec::new()
                 }
                 Self::Creation(_, None) => {
                     unreachable!("a contract without a constructor declares no parameter")
+                }
+                Self::External(_, ExternalCallee::Getter(..), _) => {
+                    unreachable!("a getter declares no labeled parameter")
                 }
                 Self::Member(_) => unimplemented!("named arguments on a member callee"),
                 Self::Builtin(_) => unreachable!("a built-in declares no labeled parameter"),
@@ -467,14 +493,29 @@ impl Call {
                         false,
                     ),
                     Some(expression) => {
-                        let string_memory_type =
-                            MlirType::string(scope.melior, solx_utils::DataLocation::Memory);
-                        let message_value = scope.converted(expression, string_memory_type);
-                        (
-                            vec![message_value],
-                            Some(Self::ERROR_STRING_SIGNATURE.to_owned()),
-                            true,
-                        )
+                        if let Expression::FunctionCallExpression(error_call) = expression
+                            && let Some(Definition::Error(error)) =
+                                FunctionScope::resolved_definition(&error_call.operand())
+                        {
+                            let signature = error
+                                .compute_canonical_signature()
+                                .expect("canonical signature is computable for a custom error");
+                            let values: Vec<_> = scope
+                                .arguments_declaration(&error_call.arguments(), &error.parameters())
+                                .into_iter()
+                                .map(|(_, value)| value)
+                                .collect();
+                            (values, Some(signature), true)
+                        } else {
+                            let string_memory_type =
+                                MlirType::string(scope.melior, solx_utils::DataLocation::Memory);
+                            let message_value = scope.converted(expression, string_memory_type);
+                            (
+                                vec![message_value],
+                                Some(Self::ERROR_STRING_SIGNATURE.to_owned()),
+                                true,
+                            )
+                        }
                     }
                     None => (Vec::new(), None, false),
                 };
@@ -567,7 +608,7 @@ impl Call {
     /// call reverts, so only the callee's results reach the expression.
     fn external<'context>(
         access: &MemberAccessExpression,
-        function_definition: &FunctionDefinition,
+        callee: &ExternalCallee,
         function_type: &FunctionType,
         arguments: &[Expression],
         options: Option<&CallOptions>,
@@ -578,27 +619,19 @@ impl Call {
         let options = options
             .map(|options| Options::new(options, scope))
             .unwrap_or_default();
-        let callee = Function::new(
-            SourceUnitScope::symbol(function_definition),
-            scope.contract.source_unit.function_type(function_type),
-        );
-        let converted = scope.external_arguments(arguments, &callee.function_type.parameters);
-        let selector = Value::selector(
-            function_definition
-                .compute_selector()
-                .expect("classification admits only callees with a selector"),
-            MlirType::field(scope.melior),
-            scope,
-        );
+        let function = callee.function(function_type, scope.contract.source_unit);
+        let converted = scope.external_arguments(arguments, &function.function_type.parameters);
+        let selector = Value::selector(callee.selector(), MlirType::field(scope.melior), scope);
         let gas = options.gas(scope);
         let amount = options.amount(scope);
-        let call = match (Self::is_static(function_type), guarded) {
+        let is_static = StateMutability::from(function_type.mutability()).is_static();
+        let call = match (is_static, guarded) {
             (false, false) => Function::external_call,
             (true, false) => Function::external_static_call,
             (false, true) => Function::external_try_call,
             (true, true) => Function::external_static_try_call,
         };
-        call(&callee, &converted, address, selector, gas, amount, scope)
+        call(&function, &converted, address, selector, gas, amount, scope)
     }
 
     /// Resolves the member to its built-in and lowers it. `abi.decode` takes its result type from
@@ -913,22 +946,14 @@ impl Call {
         let converted = scope.external_arguments(arguments, &parameters);
         let gas = options.gas(scope);
         let amount = options.amount(scope);
-        let call = match (Self::is_static(function_type), guarded) {
+        let is_static = StateMutability::from(function_type.mutability()).is_static();
+        let call = match (is_static, guarded) {
             (false, false) => Value::external_call,
             (true, false) => Value::external_static_call,
             (false, true) => Value::external_try_call,
             (true, true) => Value::external_static_try_call,
         };
         call(pointer, &converted, &results, gas, amount, scope)
-    }
-
-    /// Whether a callee dispatches through a static call, read from the callee's mutability
-    /// rather than from the call syntax.
-    fn is_static(function_type: &FunctionType) -> bool {
-        match StateMutability::from(function_type.mutability()) {
-            StateMutability::Pure | StateMutability::View => true,
-            StateMutability::NonPayable | StateMutability::Payable => false,
-        }
     }
 }
 

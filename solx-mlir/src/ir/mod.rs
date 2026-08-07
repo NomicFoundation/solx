@@ -157,6 +157,9 @@ sol_ops! {
     Value::code(address: value) -> value {
         CodeOperation.cont_addr(address).out(memory())
     }
+    Value::object_code(object_name: str) -> value {
+        ObjectCodeOperation.obj_name(str_attr(object_name)).out(memory())
+    }
     Value::bare_call(address: value, gas: value, amount: value, input: value) -> values {
         BareCallOperation.addr(address).gas(gas).val(amount).inp(input)
             .status(boolean()).ret_data(memory())
@@ -265,9 +268,9 @@ sol_ops! {
         DeleteOperation.reference(self)
     }
 
-    Place::gep(self, index: value, element_type: ty) -> place {
+    Place::gep | gep_no_panic_bounds (self, index: value, element_type: ty) -> place {
         GepOperation.base_addr(self).idx(index).addr(gep_of(element_type))
-    }
+    } flagged .no_panic_bounds;
     Place::map(self, key: value, entry_type: ty) -> place {
         MapOperation.mapping(self).key(key).addr(entry_type)
     }

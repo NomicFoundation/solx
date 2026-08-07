@@ -3,6 +3,7 @@
 //!
 
 pub mod function;
+pub mod getter;
 pub mod state_variable;
 pub mod storage_slot;
 
@@ -48,7 +49,10 @@ impl<'context> SourceUnitScope<'context> {
             };
             self.function_signatures.insert(
                 function.node_id(),
-                Function::new(Self::symbol(&function), self.function_type(&function_type)),
+                Function::new(
+                    Self::function_symbol(&function),
+                    self.function_type(&function_type),
+                ),
             );
         }
 
@@ -107,6 +111,13 @@ impl<'context> SourceUnitScope<'context> {
                 for function in node.functions().iter().chain(operator_functions) {
                     scope.function_definition(function);
                 }
+                for member in node.members().iter() {
+                    if let ContractMember::StateVariableDefinition(state_variable) = member
+                        && state_variable.is_externally_visible()
+                    {
+                        scope.state_variable_getter(&state_variable);
+                    }
+                }
             },
         );
 
@@ -120,14 +131,29 @@ impl<'context> SourceUnitScope<'context> {
                     function
                         .compute_canonical_signature()
                         .expect("an externally visible function has a canonical signature"),
-                    format!(
-                        "{:08x}",
-                        function
-                            .compute_selector()
-                            .expect("an externally visible function has a selector")
-                    ),
+                    function
+                        .compute_selector()
+                        .expect("an externally visible function has a selector"),
                 )
             })
+            .chain(node.members().iter().filter_map(|member| {
+                match member {
+                    ContractMember::StateVariableDefinition(state_variable)
+                        if state_variable.is_externally_visible() =>
+                    {
+                        Some((
+                            state_variable
+                                .compute_canonical_signature()
+                                .expect("a public state variable has a canonical signature"),
+                            state_variable
+                                .compute_selector()
+                                .expect("a public state variable has a selector"),
+                        ))
+                    }
+                    _ => None,
+                }
+            }))
+            .map(|(signature, selector)| (signature, format!("{selector:08x}")))
             .collect()
     }
 

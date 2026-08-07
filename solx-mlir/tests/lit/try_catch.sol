@@ -56,6 +56,12 @@
 // CHECK:     sol.store %[[OUTS]]#0
 // CHECK:     sol.store %[[OUTS]]#1
 
+// CHECK: sol.func @{{.*getter.*}}
+// CHECK:   %[[STATUS:[^,]*]], %{{.*}} = sol.ext_call "{{.*totalSupply.*}}"() at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = () -> ui256, static_call, try_call} : !sol.address, () -> (i1, ui256)
+// CHECK:   sol.try %[[STATUS]] {
+// CHECK:   } error {
+// CHECK:   } fallback {
+
 contract C {
     function every_clause(I i) public returns (uint256) {
         try i.f(1) returns (uint256 r) {
@@ -131,6 +137,16 @@ contract C {
             return 0;
         }
     }
+
+    function getter(Token t) public returns (uint256) {
+        try t.totalSupply() returns (uint256 s) {
+            return s;
+        } catch Error(string memory reason) {
+            return bytes(reason).length;
+        } catch {
+            return 0;
+        }
+    }
 }
 
 interface I {
@@ -145,4 +161,8 @@ interface I {
     function p(uint256 a) external payable returns (uint256);
 
     function q(uint256 a) external returns (uint256, uint256);
+}
+
+contract Token {
+    uint256 public totalSupply;
 }

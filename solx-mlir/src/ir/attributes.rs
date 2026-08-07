@@ -45,6 +45,16 @@ sol_dialect_attribute! {
     }
 }
 
+impl StateMutability {
+    /// Whether a callee of this mutability dispatches through a static call.
+    pub fn is_static(self) -> bool {
+        match self {
+            Self::Pure | Self::View => true,
+            Self::NonPayable | Self::Payable => false,
+        }
+    }
+}
+
 impl From<FunctionMutability> for StateMutability {
     fn from(mutability: FunctionMutability) -> Self {
         match mutability {

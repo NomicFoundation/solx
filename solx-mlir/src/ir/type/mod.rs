@@ -195,8 +195,12 @@ impl<'context> Type<'context> {
         IntegerType::try_from(self.inner).is_ok()
     }
 
-    /// The bit width of this integer type. Panics on a non-integer type, so a caller must first
-    /// establish the type is an integer through [`Self::is_integer`].
+    /// Whether this is a signed integer type.
+    pub fn is_signed_integer(self) -> bool {
+        IntegerType::try_from(self.inner).is_ok_and(|integer| integer.is_signed())
+    }
+
+    /// The bit width of this integer type.
     pub fn integer_bit_width(self) -> u32 {
         IntegerType::try_from(self.inner)
             .expect("integer_bit_width called on a non-integer type")
