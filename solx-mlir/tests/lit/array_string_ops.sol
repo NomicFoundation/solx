@@ -1,5 +1,7 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
+
+// solc's print-init types a `bytes` push slot `!sol.byte`, which solx spells
+// `!sol.fixedbytes<1>` — their cast lowers as a no-op — so this is solx-only.
 
 // CHECK: sol.func {{.*}}pushValue
 // CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
@@ -41,7 +43,7 @@
 // CHECK:   sol.push_string %{{.*}}, %{{.*}} : <Storage>, !sol.fixedbytes<1>
 
 // CHECK: sol.func {{.*}}pushByteEmpty
-// CHECK:   sol.push %{{.*}} : !sol.string<Storage> -> !sol.ptr<!sol.byte, Storage>
+// CHECK:   sol.push %{{.*}} : !sol.string<Storage> -> !sol.ptr<!sol.fixedbytes<1>, Storage>
 
 // CHECK: sol.func {{.*}}popLast
 // CHECK:   sol.pop %{{.*}} : !sol.array<? x ui256, Storage>
