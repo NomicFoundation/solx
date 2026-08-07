@@ -116,12 +116,6 @@ impl<'context> Type<'context> {
         })
     }
 
-    /// The `sol::ByteType` singleton (`!sol.byte`), the element a dynamic `bytes` push yields,
-    /// distinct from the one-byte `bytes1`.
-    pub fn byte(context: &'context melior::Context) -> Self {
-        Self::new(unsafe { MlirType::from_raw(ffi::solxCreateByteType(context.to_raw())) })
-    }
-
     /// A `sol::FixedBytesType` of the given byte width.
     pub fn fixed_bytes(context: &'context melior::Context, width: usize) -> Self {
         Self::new(unsafe {

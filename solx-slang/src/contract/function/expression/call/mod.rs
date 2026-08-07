@@ -820,7 +820,8 @@ impl Call {
                         )
                     }
                     Type::Bytes(bytes_type) => {
-                        let element_type = MlirType::byte(scope.melior);
+                        let element_type =
+                            MlirType::fixed_bytes(scope.melior, solx_utils::BYTE_LENGTH_BYTE);
                         (
                             element_type,
                             MlirType::pointer(
@@ -934,7 +935,7 @@ impl Call {
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// `arr.push()` is the sole call assignable in place position; the slot it grows is the value the
-    /// push emits. The binder types a `bytes` element `bytes1` where the dialect stores a byte.
+    /// push emits, typed by the binder as the array's element.
     pub fn function_call_place(
         &mut self,
         node: &FunctionCallExpression,
@@ -943,13 +944,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             .into_iter()
             .next()
             .expect("an array push in place position yields the new element's slot");
-        let slang_type = node.get_type().expect("the binder types every expression");
-        let element_type = if slang_type.is_reference_type() {
-            self.resolve_type(&slang_type, None)
-        } else {
-            slot.r#type().element_type(0)
-        };
-        (Place::from(slot), element_type)
+        (Place::from(slot), self.typing(node.get_type()))
     }
 
     /// Calls the function a `using {f as op} for T global;` directive binds an operator to. Being a

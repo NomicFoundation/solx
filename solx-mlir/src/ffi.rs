@@ -122,10 +122,6 @@ unsafe extern "C" {
     /// 2=Memory, 3=Stack, 4=Immutable, 5=Transient).
     pub fn solxCreateStringType(context: MlirContext, data_location: u32) -> mlir_sys::MlirType;
 
-    /// Creates the `sol::ByteType` singleton (`!sol.byte`), the element a dynamic `bytes`
-    /// push yields.
-    pub fn solxCreateByteType(context: MlirContext) -> mlir_sys::MlirType;
-
     /// Creates a `sol::FixedBytesType` of the given byte width.
     pub fn solxCreateFixedBytesType(context: MlirContext, size: u32) -> mlir_sys::MlirType;
 
