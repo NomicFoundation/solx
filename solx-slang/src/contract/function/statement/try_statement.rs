@@ -23,19 +23,22 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
         let (mut panic, mut error, mut fallback) = (None, None, None);
         for clause in node.catch_clauses().iter() {
-            match clause.kind().expect("slang classifies every catch clause") {
-                CatchClauseKind::Panic => panic = Some(clause),
-                CatchClauseKind::Error => error = Some(clause),
-                CatchClauseKind::LowLevel => fallback = Some(clause),
+            match clause.kind() {
+                CatchClauseKind::ClausePanicKind(_) => panic = Some(clause),
+                CatchClauseKind::ClauseErrorKind(_) => error = Some(clause),
+                CatchClauseKind::ClauseLowLevelKind(_) => fallback = Some(clause),
             }
         }
         let regions = self.current_block().r#try(
             status,
             panic.is_some(),
             error.is_some(),
-            fallback.as_ref().map(|clause| match clause.error() {
-                Some(_) => FallbackRegion::ReturnData,
-                None => FallbackRegion::Unbound,
+            fallback.as_ref().map(|clause| match clause.kind() {
+                CatchClauseKind::ClauseLowLevelKind(kind) => match kind.parameters() {
+                    Some(_) => FallbackRegion::ReturnData,
+                    None => FallbackRegion::Unbound,
+                },
+                _ => unreachable!("the fallback clause is low-level"),
             }),
             self,
         );
@@ -70,8 +73,13 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// A catch clause's body, its declared parameter bound from the region's block argument.
     fn catch_clause(&mut self, node: &CatchClause) {
-        if let Some(error) = node.error()
-            && let Some(parameter) = error.parameters().iter().next()
+        let parameters = match node.kind() {
+            CatchClauseKind::ClauseErrorKind(kind) => Some(kind.parameters()),
+            CatchClauseKind::ClausePanicKind(kind) => Some(kind.parameters()),
+            CatchClauseKind::ClauseLowLevelKind(kind) => kind.parameters(),
+        };
+        if let Some(parameters) = parameters
+            && let Some(parameter) = parameters.iter().next()
             && let Some(name) = parameter.name()
         {
             let declared_type = self.typing(parameter.get_type());
