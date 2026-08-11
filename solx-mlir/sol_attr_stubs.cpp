@@ -187,6 +187,10 @@ bool solxIsScalarType(MlirType ty) {
     return mlir::sol::isScalar(unwrap(ty));
 }
 
+bool solxIsPointerType(MlirType ty) {
+    return mlir::isa<mlir::sol::PointerType>(unwrap(ty));
+}
+
 uint32_t solxTypeDataLocation(MlirType ty) {
     return static_cast<uint32_t>(mlir::sol::getDataLocation(unwrap(ty)));
 }

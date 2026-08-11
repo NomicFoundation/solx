@@ -66,8 +66,7 @@
 // CHECK:   sol.decode %{{.*}} : !sol.string<Memory> -> ui256, !sol.string<Memory>
 
 // CHECK: sol.func @{{.*decodeAddress.*}}
-// CHECK:   %[[PAYABLE:.*]] = sol.decode %{{.*}} : !sol.string<Memory> -> !sol.address<payable>
-// CHECK:   sol.address_cast %[[PAYABLE]] : !sol.address<payable> to !sol.address
+// CHECK:   sol.decode %{{.*}} : !sol.string<Memory> -> !sol.address
 
 // CHECK: sol.func @{{.*decodeStorage.*}}
 // CHECK:   %[[SLOT:.*]] = sol.addr_of @{{.*}} : !sol.string<Storage>
