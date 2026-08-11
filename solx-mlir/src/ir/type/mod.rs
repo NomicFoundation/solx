@@ -257,6 +257,12 @@ impl<'context> Type<'context> {
         unsafe { ffi::solxIsScalarType(self.inner.to_raw()) }
     }
 
+    /// Whether this is a `sol::PointerType`, as opposed to a reference type that is its own
+    /// place.
+    pub fn is_pointer(self) -> bool {
+        unsafe { ffi::solxIsPointerType(self.inner.to_raw()) }
+    }
+
     /// The data location a located reference type carries, decoded from the constructors' FFI
     /// encoding.
     pub fn data_location(self) -> DataLocation {
