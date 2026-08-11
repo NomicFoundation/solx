@@ -74,7 +74,7 @@ impl SlangAst {
                     continue;
                 };
                 if let Pragma::AbicoderPragma(pragma) = directive.pragma()
-                    && matches!(pragma.version(), AbicoderVersion::AbicoderV1Keyword(_))
+                    && matches!(pragma.version(), AbicoderVersion::V1)
                 {
                     return true;
                 }
