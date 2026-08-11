@@ -23,7 +23,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
         let (mut panic, mut error, mut fallback) = (None, None, None);
         for clause in node.catch_clauses().iter() {
-            match clause.kind().expect("slang classifies every catch clause") {
+            match clause.kind() {
                 CatchClauseKind::Panic => panic = Some(clause),
                 CatchClauseKind::Error => error = Some(clause),
                 CatchClauseKind::LowLevel => fallback = Some(clause),
@@ -33,7 +33,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             status,
             panic.is_some(),
             error.is_some(),
-            fallback.as_ref().map(|clause| match clause.error() {
+            fallback.as_ref().map(|clause| match clause.parameters() {
                 Some(_) => FallbackRegion::ReturnData,
                 None => FallbackRegion::Unbound,
             }),
@@ -70,8 +70,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// A catch clause's body, its declared parameter bound from the region's block argument.
     fn catch_clause(&mut self, node: &CatchClause) {
-        if let Some(error) = node.error()
-            && let Some(parameter) = error.parameters().iter().next()
+        if let Some(parameters) = node.parameters()
+            && let Some(parameter) = parameters.iter().next()
             && let Some(name) = parameter.name()
         {
             let declared_type = self.typing(parameter.get_type());
