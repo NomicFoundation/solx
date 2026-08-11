@@ -230,22 +230,25 @@ impl Call {
                         function_type,
                     );
                 }
-                if let Expression::Identifier(operand) = access.operand()
-                    && matches!(
-                        operand.resolve_to_definition(),
-                        Some(Definition::Contract(_))
-                    )
-                {
-                    if let Some(Definition::Function(function_definition)) =
-                        access.member().resolve_to_definition()
-                    {
-                        return Self::Function(function_definition);
-                    }
-                    if let Some(Type::Function(function_type)) = access.get_type() {
-                        return Self::FunctionPointer(
-                            Expression::MemberAccessExpression(access),
-                            function_type,
-                        );
+                if let Expression::Identifier(namespace) = access.operand() {
+                    match namespace.resolve_to_definition() {
+                        Some(Definition::Contract(_)) => {
+                            if let Some(Definition::Function(function_definition)) =
+                                access.member().resolve_to_definition()
+                            {
+                                return Self::Function(function_definition);
+                            }
+                            if let Some(Type::Function(function_type)) = access.get_type() {
+                                return Self::FunctionPointer(
+                                    Expression::MemberAccessExpression(access),
+                                    function_type,
+                                );
+                            }
+                        }
+                        Some(Definition::Library(_)) => {
+                            unimplemented!("unsupported library call: {}", access.member().name())
+                        }
+                        _ => {}
                     }
                 }
                 if let Some(definition) = access.member().resolve_to_definition()
