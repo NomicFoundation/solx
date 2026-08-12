@@ -33,13 +33,16 @@ jobs:
       - uses: ./.github/actions/cooldown-check
 
   coverage:
-    # Fork PRs get a read-only GITHUB_TOKEN, which would fail the PR coverage
-    # summary comment step.
+    # Fork PRs get no repo secrets, so the Codecov uploads (which run with
+    # fail_ci_if_error) would fail without CODECOV_TOKEN.
     if: ${{ github.event_name == 'push' || !github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-24.04
+    # Backstop against hung compiles (the tester drives a pipeline still in
+    # development); sized for a cold instrumented LLVM build when a solx-llvm
+    # bump lands before cache-warmup has run for that SHA.
+    timeout-minutes: 180
     permissions:
       contents: read
-      pull-requests: write
       packages: read
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
@@ -56,7 +59,9 @@ jobs:
     env:
       PROFDATA_FILE: solx.profdata
       LCOV_FILE: codecov.lcov
+      LCOV_FILE_LLVM: codecov-llvm-fork.lcov
       OUTPUT_HTML_DIR: COVERAGE
+      OUTPUT_HTML_DIR_LLVM: COVERAGE-LLVM
       # ^/rustc/ = std sources monomorphized into our binaries; the remapped
       # path exists on no runner, so llvm-cov show errors trying to render it.
       COVERAGE_IGNORE_REGEX: '/(solx-llvm|target-llvm|solx-solidity|\.cargo|cargo/registry)/|^/rustc/'
@@ -110,6 +115,11 @@ jobs:
       - name: Run integration tests
         env:
           SOLX_BINARY: ${{ steps.build-solx.outputs.binary-path }}
+          # %Nm without %p: subprocesses merge online into a pool of 4 files
+          # instead of clobbering a single default.profraw. The pool is what
+          # preserves the solx-llvm C++ counters, which only the spawned solx
+          # compile subprocesses exercise.
+          LLVM_PROFILE_FILE: 'integration-%4m.profraw'
         run: |
           TMP="${PROFDATA_FILE}.tmp"
           TARGET_DIR="./target/x86_64-unknown-linux-gnu/release"
@@ -176,87 +186,48 @@ jobs:
             -instr-profile=${PROFDATA_FILE} \
             "${OBJECTS[@]}" > ./llvm/${LCOV_FILE}
 
-      - name: Coverage summary
-        id: coverage-summary
+      # solx-llvm fork coverage for the LLVM team: same profdata, restricted
+      # via positional source paths to the fork-specific dirs instead of the
+      # ignore regex that keeps them out of the solx report above.
+      - name: Generate LLVM fork coverage reports
         run: |
+          # First binary is positional: with -object only, llvm-cov consumes
+          # the first positional SOURCE path as the covered binary.
           OBJECTS=(
-            -object "${GITHUB_WORKSPACE}/solx-instrumented"
+            "${GITHUB_WORKSPACE}/solx-instrumented"
             -object "${GITHUB_WORKSPACE}/solx-tester-instrumented"
             -object "${GITHUB_WORKSPACE}/solx-dev-instrumented"
           )
-          llvm-cov report -instr-profile=${PROFDATA_FILE} "${OBJECTS[@]}" \
-            --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
-            > coverage-report.txt
-
-          # Parse llvm-cov report into per-crate markdown table
-          awk '
-          /^---/ || /^Filename/ || /^$/ { next }
-          /^TOTAL/ {
-            total_lines = $(NF-5); total_missed = $(NF-4)
-            total_funcs = $(NF-8); total_missed_funcs = $(NF-7)
-            next
-          }
-          NF > 3 {
-            file = $1
-            n = split(file, parts, "/")
-            crate = ""
-            for (i = 1; i <= n-1; i++) {
-              if (parts[i] ~ /^solx/ && parts[i+1] == "src") {
-                crate = parts[i]; break
-              }
-            }
-            if (crate == "") next
-            lines[crate] += $(NF-5)
-            missed[crate] += $(NF-4)
-            funcs[crate] += $(NF-8)
-            missed_f[crate] += $(NF-7)
-          }
-          END {
-            for (c in lines) {
-              lp = (lines[c] > 0) ? (lines[c] - missed[c]) / lines[c] * 100 : 0
-              fp = (funcs[c] > 0) ? (funcs[c] - missed_f[c]) / funcs[c] * 100 : 0
-              le = (lp >= 80) ? "🟢" : (lp >= 50) ? "🟡" : "🔴"
-              fe = (fp >= 80) ? "🟢" : (fp >= 50) ? "🟡" : "🔴"
-              printf "| %s | %s %.1f%% | %s %.1f%% |\n", c, le, lp, fe, fp
-            }
-            lp = (total_lines > 0) ? (total_lines - total_missed) / total_lines * 100 : 0
-            fp = (total_funcs > 0) ? (total_funcs - total_missed_funcs) / total_funcs * 100 : 0
-            le = (lp >= 80) ? "🟢" : (lp >= 50) ? "🟡" : "🔴"
-            fe = (fp >= 80) ? "🟢" : (fp >= 50) ? "🟡" : "🔴"
-            printf "ZTOTAL| **Total** | **%s %.1f%%** | **%s %.1f%%** |\n", le, lp, fe, fp
-          }' coverage-report.txt > coverage-rows.txt
-
-          {
-            echo "| Crate | Line Coverage | Function Coverage |"
-            echo "|:------|:------------:|:-----------------:|"
-            grep -v '^ZTOTAL' coverage-rows.txt | sort
-            sed -n 's/^ZTOTAL//p' coverage-rows.txt
-          } > coverage-summary.md
-
-          cat coverage-summary.md >> "${GITHUB_STEP_SUMMARY}"
-          {
-            echo "summary<<COVERAGE_EOF"
-            cat coverage-summary.md
-            echo "COVERAGE_EOF"
-          } >> "${GITHUB_OUTPUT}"
-
-      - name: Post PR coverage summary
-        if: github.event_name == 'pull_request'
-        uses: mshick/add-pr-comment@ec328af66588ab8f77cdeb2c264f14aba45bbf59 # v3.12
-        with:
-          message-id: 'coverage-summary'
-          message: |
-            ### Coverage Summary
-
-            ${{ steps.coverage-summary.outputs.summary }}
-
-            [Codecov Report](https://app.codecov.io/gh/${{ github.repository }}/pull/${{ github.event.pull_request.number }}) | [HTML Report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts) | [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          FORK_PATHS=(
+            "${GITHUB_WORKSPACE}/solx-llvm/llvm/lib/Target/EVM"
+            "${GITHUB_WORKSPACE}/solx-llvm/mlir/lib/Dialect/Sol"
+            "${GITHUB_WORKSPACE}/solx-llvm/mlir/lib/Dialect/Yul"
+            "${GITHUB_WORKSPACE}/solx-llvm/mlir/lib/Conversion/SolToYul"
+            "${GITHUB_WORKSPACE}/solx-llvm/mlir/lib/Conversion/YulToStandard"
+          )
+          # llvm-cov only warns on a nonexistent source path, silently dropping
+          # the area from every report; fail instead.
+          for path in "${FORK_PATHS[@]}"; do
+            [ -d "${path}" ] || { echo "::error::fork source dir missing: ${path}"; exit 1; }
+          done
+          llvm-cov show --show-directory-coverage \
+            --format=html --output-dir="${OUTPUT_HTML_DIR_LLVM}" \
+            -instr-profile="${PROFDATA_FILE}" "${OBJECTS[@]}" "${FORK_PATHS[@]}"
+          llvm-cov export --format=lcov \
+            -instr-profile="${PROFDATA_FILE}" \
+            "${OBJECTS[@]}" "${FORK_PATHS[@]}" > "./llvm/${LCOV_FILE_LLVM}"
 
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: 'Coverage integration tests HTML'
           path: ${{ env.OUTPUT_HTML_DIR }}
+
+      - name: Upload LLVM fork coverage artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: 'Coverage LLVM fork HTML'
+          path: ${{ env.OUTPUT_HTML_DIR_LLVM }}
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
@@ -270,4 +241,23 @@ jobs:
           plugins: noop
           slug: ${{ github.repository }}
           # Surface upload failures instead of silently going green.
+          fail_ci_if_error: true
+
+      # Separate flagged upload so the fork coverage can be filtered apart
+      # from the solx crates in the Codecov UI (see component_management in
+      # codecov.yml for the per-area split).
+      - name: Upload LLVM fork coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        if: (success() || failure())
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: 'llvm/codecov-llvm-fork.lcov'
+          flags: llvm-fork
+          # Enumerate the network with `git ls-files --recurse-submodules` so
+          # solx-llvm paths survive server-side path fixing; without this the
+          # fork files are silently dropped at ingest (not in the git tree).
+          recurse_submodules: true
+          disable_search: true
+          plugins: noop
+          slug: ${{ github.repository }}
           fail_ci_if_error: true
