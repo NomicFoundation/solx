@@ -3,13 +3,12 @@
 //!
 
 use slang_solidity_v2::ast::StructDefinition;
-use slang_solidity_v2::ast::Type;
+use slang_solidity_v2::ast::StructMember;
 
 use solx_mlir::Context;
 use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
-use solx_utils::FunctionReferenceKind;
 
 /// The read at the bottom of the getter's storage walk.
 pub enum Leaf<'context> {
@@ -21,28 +20,18 @@ pub enum Leaf<'context> {
 }
 
 impl<'context> Leaf<'context> {
-    /// The returnable members of a struct leaf: mappings and arrays are skipped, and a
-    /// function-typed member is returnable only when external.
-    pub fn members(struct_definition: &StructDefinition) -> Self {
+    /// The declared positions of `returned`, the members slang's getter type is built from.
+    pub fn members(struct_definition: &StructDefinition, returned: &[StructMember]) -> Self {
+        let declared = struct_definition.members();
         Self::Members(
-            struct_definition
-                .members()
+            returned
                 .iter()
-                .enumerate()
-                .filter(|(_, member)| {
-                    match member
-                        .get_type()
-                        .expect("struct member type resolved by semantic analysis")
-                    {
-                        Type::Mapping(_) | Type::Array(_) | Type::FixedSizeArray(_) => false,
-                        Type::Function(function_type) => {
-                            FunctionReferenceKind::from(function_type.visibility())
-                                == FunctionReferenceKind::External
-                        }
-                        _ => true,
-                    }
+                .map(|member| {
+                    declared
+                        .iter()
+                        .position(|candidate| candidate.node_id() == member.node_id())
+                        .expect("a struct lists the members it declares")
                 })
-                .map(|(index, _)| index)
                 .collect(),
         )
     }

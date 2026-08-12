@@ -76,7 +76,10 @@ impl<'context> Getter<'context> {
                     let Definition::Struct(struct_definition) = struct_type.definition() else {
                         unreachable!("Slang StructType always references a Struct definition");
                     };
-                    break Leaf::members(&struct_definition);
+                    break Leaf::members(
+                        &struct_definition,
+                        &state_variable.getter_struct_members(),
+                    );
                 }
                 other => break Leaf::Value(source_unit.resolve(&other, location)),
             }
