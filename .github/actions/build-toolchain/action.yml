@@ -4,10 +4,11 @@ description: >-
   checkout, Socket Firewall, platform prep (MSYS2 on Windows, disk cleanup
   on macOS), then the LLVM and solc builds. The build parameters below
   define the standard-config cache keys shared by test.yaml,
-  slang-tests.yaml, and cache-warmup.yaml — changing them here re-keys all
-  of those workflows together. Workflows needing a different LLVM
-  configuration (sanitizer, coverage, integration, release) call
-  build-llvm/build-solc directly and pair with their own cache-warmup job.
+  slang-tests.yaml, cross-os-tests.yaml, and cache-warmup.yaml — changing
+  them here re-keys all of those workflows together. Workflows needing a
+  different LLVM configuration (sanitizer, coverage, integration, release)
+  call build-llvm/build-solc directly and pair with their own cache-warmup
+  job.
 
 inputs:
   llvm:
