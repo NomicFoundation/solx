@@ -101,7 +101,10 @@ impl solx_core::Frontend for Solc {
         input_json.settings.optimizer.mode = None;
         input_json.settings.optimizer.size_fallback = None;
 
-        let input_string = serde_json::to_string(input_json)
+        let input_string = serde_json::to_string(input_json);
+        input_json.settings.output_selection = original_output_selection;
+        input_json.settings.optimizer = original_optimizer;
+        let input_string = input_string
             .map_err(|error| anyhow::anyhow!("solc standard JSON input serialization: {error}"))?;
         let input_c_string = CString::new(input_string)
             .map_err(|error| anyhow::anyhow!("solc standard JSON input CString: {error}"))?;
@@ -204,8 +207,6 @@ impl solx_core::Frontend for Solc {
             }
         };
 
-        input_json.settings.output_selection = original_output_selection;
-        input_json.settings.optimizer = original_optimizer;
         solc_output
             .errors
             .retain(|error| match error.error_code.as_deref() {
