@@ -114,9 +114,15 @@ jobs:
           ${SFW_PREFIX:-} cargo build-slang --release \
             ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
 
+      # CC/CXX pinned to gcc: cc-rs otherwise picks msys2 clang for the
+      # mlir-sys/solx-mlir C++ glue, whose MLIR TypeID data symbols don't
+      # resolve against the gcc-built LLVM tree (undefined .refptr at link).
       - name: Build solx (slang, release, Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
+        env:
+          CC: gcc
+          CXX: g++
         run: |
           ${SFW_PREFIX:-} cargo fetch --locked
           ${SFW_PREFIX:-} cargo build-slang --release \
