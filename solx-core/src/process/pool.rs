@@ -27,10 +27,11 @@ static FATAL_ERROR_HANDLER: Once = Once::new();
 /// after which the child exits. The number of live workers never exceeds the number of
 /// dispatching threads.
 ///
-/// With `SOLX_IN_PROCESS` set, jobs compile on the dispatching threads themselves and no
-/// subprocess is ever spawned. Codegen state is per-`LLVMContext` and per-module, so
-/// concurrent in-process jobs do not interfere; the trade-off is isolation — a crash or
-/// LLVM fatal error takes down the whole compiler, not one worker.
+/// By default jobs compile on the dispatching threads themselves and no subprocess is ever
+/// spawned: codegen state is per-`LLVMContext` and per-module, so concurrent in-process jobs
+/// do not interfere. With `SOLX_SUBPROCESS` set, jobs go to the worker pool instead — the
+/// isolation escape hatch: a crash or LLVM fatal error takes down one worker, not the
+/// compiler.
 ///
 pub struct Pool {
     /// The worker executable path.
@@ -45,10 +46,10 @@ pub struct Pool {
 
 impl Pool {
     ///
-    /// Creates a pool that dispatches jobs of `session` to worker subprocesses.
+    /// Creates a pool that dispatches jobs of `session`.
     ///
     pub fn new(session: Session) -> anyhow::Result<Self> {
-        let in_process = std::env::var_os("SOLX_IN_PROCESS").is_some_and(|value| value != "0");
+        let in_process = !std::env::var_os("SOLX_SUBPROCESS").is_some_and(|value| value != "0");
         if in_process {
             FATAL_ERROR_HANDLER.call_once(|| unsafe {
                 inkwell::support::error_handling::install_fatal_error_handler(fatal_error_handler);
