@@ -126,7 +126,6 @@ Tests live in `tests/solidity/`, `tests/yul/`, `tests/llvm-ir/`.
 
 ## CI Labels
 
-- `ci:slang` — enable Slang tests
 - `ci:sanitizer` — enable address sanitizer tests
 - `ci:integration` — enable integration tests
 
