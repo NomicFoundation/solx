@@ -39,6 +39,11 @@ runs:
     - name: Prepare env
       shell: msys2 {0}
       run: |
+        # cargo's libgit2 enforces the 260-char MAX_PATH when checking out
+        # git dependencies, and slang's generated snapshot paths exceed it.
+        # Written here so it lands in the msys2 HOME that the `msys2 {0}`
+        # cargo steps resolve as the global git config.
+        git config --global core.longpaths true
         rustup set default-host x86_64-pc-windows-gnu
         echo '${{ steps.msys2.outputs.msys2-location }}\mingw64\bin' >> "${GITHUB_PATH}"
         echo "${USERPROFILE}\\.cargo\\bin" >> "${GITHUB_PATH}"
