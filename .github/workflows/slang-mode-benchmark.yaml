@@ -50,10 +50,17 @@ jobs:
             runner: ubuntu-24.04
             image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
             target: "x86_64-unknown-linux-gnu"
+          # rustflags: aarch64-linux links with strict single-pass bfd
+          # (x86-64 rust uses order-tolerant rust-lld), and rustc places
+          # every crate's native-lib flags before the inkwell rlib that
+          # references the lld symbols (dedup keeps the first occurrence).
+          # Trailing link-args land after all rlibs. Durable fix: #[link]
+          # attributes in the inkwell fork.
           - name: "Linux ARM64 gnu"
             runner: ubuntu-24.04-arm
             image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
             target: "aarch64-unknown-linux-gnu"
+            rustflags: "-C link-arg=-llldC -C link-arg=-llldELF -C link-arg=-llldCommon"
           - name: "Windows"
             runner: windows-2025
             target: "x86_64-pc-windows-gnu"
@@ -61,9 +68,10 @@ jobs:
     container:
       image: ${{ matrix.image || '' }}
     name: ${{ matrix.name }}
-    # Cold LLVM builds on the 4-core macOS x86 / Windows runners exceed
-    # 2.5h; only the first run per solx-llvm pin pays this.
-    timeout-minutes: 360
+    # The LLVM "cache" is a ccache (timestamp-keyed), so every run
+    # recompiles LLVM with warm objects; Windows additionally cold-builds
+    # solx in release and needs the most headroom.
+    timeout-minutes: 480
     steps:
 
       - name: Checkout
@@ -109,6 +117,8 @@ jobs:
       - name: Build solx (slang, release)
         if: runner.os != 'Windows'
         shell: bash
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags || '' }}
         run: |
           ${SFW_PREFIX:-} cargo fetch --locked
           ${SFW_PREFIX:-} cargo build-slang --release \
