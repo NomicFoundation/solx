@@ -185,7 +185,9 @@ jobs:
           SOLX_LIT_TARGET: ${{ matrix.target || '' }}
         run: |
           LIT=llvm-lit${{ runner.os == 'Windows' && '.py' || '' }}
-          ${LIT} -v solx-mlir/tests/lit/
+          # CMake bakes the configuring python's absolute path into the lit
+          # shebang; runner image updates move it, so pick python3 from PATH.
+          python3 "${RUNNER_TEMP}/lit-tools/${LIT}" -v solx-mlir/tests/lit/
 
   pr-checks:
     name: PR Checks (Slang)
