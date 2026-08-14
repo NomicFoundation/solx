@@ -64,6 +64,26 @@ impl<'context> Value<'context> {
         Self::constant_from_bigint(&BigInt::one(), result_type, context)
     }
 
+    /// Materialises the smallest value the integer `result_type` admits: `type(T).min`.
+    pub fn minimum(result_type: Type<'context>, context: &Context<'context>) -> Self {
+        let value = if result_type.is_signed_integer() {
+            -(BigInt::one() << (result_type.integer_bit_width() - 1))
+        } else {
+            BigInt::zero()
+        };
+        Self::constant_from_bigint(&value, result_type, context)
+    }
+
+    /// Materialises the largest value the integer `result_type` admits: `type(T).max`.
+    pub fn maximum(result_type: Type<'context>, context: &Context<'context>) -> Self {
+        let value = if result_type.is_signed_integer() {
+            (BigInt::one() << (result_type.integer_bit_width() - 1)) - 1
+        } else {
+            (BigInt::one() << result_type.integer_bit_width()) - 1
+        };
+        Self::constant_from_bigint(&value, result_type, context)
+    }
+
     /// Materialises an `i1` boolean constant.
     pub fn boolean(value: bool, context: &Context<'context>) -> Self {
         Self::constant(i64::from(value), Type::boolean(context.melior), context)

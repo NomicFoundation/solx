@@ -5,6 +5,7 @@
 
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Identifier;
+use slang_solidity_v2::ast::StateVariableMutability;
 
 use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
@@ -19,6 +20,18 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         match node.resolve_to_definition() {
             Some(Definition::Constant(constant)) => {
                 self.expression(&constant.value().expect("constant has an initializer"))
+            }
+            Some(Definition::StateVariable(state_variable))
+                if matches!(
+                    state_variable.attributes().mutability(),
+                    StateVariableMutability::Constant
+                ) =>
+            {
+                self.expression(
+                    &state_variable
+                        .value()
+                        .expect("a constant state variable is initialized"),
+                )
             }
             Some(Definition::Function(function)) => self
                 .contract
