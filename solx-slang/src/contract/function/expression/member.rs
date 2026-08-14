@@ -8,13 +8,16 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::Type;
+use slang_solidity_v2::ast::TypeName;
 
 use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
 use solx_utils::FunctionReferenceKind;
 
+use crate::contract::function::expression::call::external_callee::ExternalCallee;
 use crate::scope::function::FunctionScope;
+use crate::scope::source_unit::SourceUnitScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// A struct field loads from its place; an enum member is its ordinal; an externally visible
@@ -45,20 +48,34 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             && FunctionReferenceKind::from(function_type.visibility())
                 == FunctionReferenceKind::External
         {
-            let Some(Definition::Function(function_definition)) =
-                function_type.associated_definition()
+            let Some(callee) = function_type
+                .associated_definition()
+                .and_then(ExternalCallee::from_definition)
             else {
-                unreachable!("an external function type names the function it dispatches");
+                unreachable!("an external function type names the callee it dispatches");
             };
             let address = self.converted(&operand, MlirType::address(self.melior, false));
             return Value::external_function_constant(
                 address,
-                function_definition
-                    .compute_selector()
-                    .expect("an externally visible function has a selector"),
+                callee.selector(),
                 self.typing(node.get_type()),
                 self,
             );
+        }
+
+        if let Expression::Identifier(namespace) = &operand {
+            match namespace.resolve_to_definition() {
+                Some(Definition::Contract(_)) => return self.identifier(&node.member()),
+                Some(Definition::Library(_))
+                    if matches!(
+                        node.member().resolve_to_definition(),
+                        Some(Definition::Constant(_) | Definition::StateVariable(_))
+                    ) =>
+                {
+                    return self.identifier(&node.member());
+                }
+                _ => {}
+            }
         }
 
         match node.member().resolve_to_built_in() {
@@ -99,16 +116,94 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 let enum_type = self.typing(node.get_type());
                 Value::constant_from_bigint(&BigInt::from(enum_type.enum_max()), enum_type, self)
             }
+            Some(BuiltIn::TypeMin) => Value::minimum(self.typing(node.get_type()), self),
+            Some(BuiltIn::TypeMax) => Value::maximum(self.typing(node.get_type()), self),
+            Some(BuiltIn::TypeName) => {
+                let name = match Self::meta_type_definition(&operand) {
+                    Definition::Contract(contract) => contract.name(),
+                    Definition::Interface(interface) => interface.name(),
+                    _ => unimplemented!("`type(..).name` names no contract or interface"),
+                };
+                Value::string_literal(name.name().as_bytes(), self)
+            }
+            Some(BuiltIn::TypeInterfaceId) => {
+                let Definition::Interface(interface) = Self::meta_type_definition(&operand) else {
+                    unimplemented!("`type(..).interfaceId` names no interface");
+                };
+                Value::selector(
+                    interface
+                        .compute_interface_id()
+                        .expect("an interface has an identifier"),
+                    self.typing(node.get_type()),
+                    self,
+                )
+            }
+            Some(BuiltIn::TypeCreationCode) => {
+                let Definition::Contract(contract) = Self::meta_type_definition(&operand) else {
+                    unimplemented!("`type(..).creationCode` names no contract");
+                };
+                let object = SourceUnitScope::object_identifier(
+                    contract.get_file_id(),
+                    contract.name().name(),
+                );
+                Value::object_code(object.as_str(), self)
+            }
+            Some(BuiltIn::TypeRuntimeCode) => {
+                let Definition::Contract(contract) = Self::meta_type_definition(&operand) else {
+                    unimplemented!("`type(..).runtimeCode` names no contract");
+                };
+                let object = format!(
+                    "{}{}",
+                    SourceUnitScope::object_identifier(
+                        contract.get_file_id(),
+                        contract.name().name(),
+                    ),
+                    solx_utils::Dependencies::DEPLOYED_OBJECT_SUFFIX,
+                );
+                Value::object_code(object.as_str(), self)
+            }
+            Some(BuiltIn::ErrorSelector) => {
+                let Some(Definition::Error(error)) = Self::resolved_definition(&operand) else {
+                    unreachable!("`.selector` on an error names an error definition");
+                };
+                Value::selector(
+                    error.compute_selector().expect("an error has a selector"),
+                    self.typing(node.get_type()),
+                    self,
+                )
+            }
+            Some(BuiltIn::EventSelector) => {
+                let Some(Definition::Event(event)) = Self::resolved_definition(&operand) else {
+                    unreachable!("`.selector` on an event names an event definition");
+                };
+                Value::left_aligned_bytes(
+                    event
+                        .compute_topic0()
+                        .expect("an event has a topic")
+                        .to_vec(),
+                    MlirType::fixed_bytes(self.melior, solx_utils::BYTE_LENGTH_FIELD),
+                    self,
+                )
+            }
             _ => unimplemented!("unsupported member access: {}", node.member().name()),
         }
     }
 
-    /// The address yielded by `s.field` together with the field's element MLIR type.
+    /// The address yielded by `s.field` together with the field's element MLIR type. A
+    /// contract-qualified state variable (`C.x`) is the variable's own place.
     pub fn member_access_place(
         &mut self,
         node: &MemberAccessExpression,
     ) -> (Place<'context>, MlirType<'context>) {
         let base = node.operand();
+        if let Expression::Identifier(namespace) = &base
+            && matches!(
+                namespace.resolve_to_definition(),
+                Some(Definition::Contract(_))
+            )
+        {
+            return self.identifier_place(&node.member());
+        }
         let Some(Type::Struct(struct_type)) = base.get_type() else {
             unreachable!("a member-access place always has a struct base");
         };
@@ -133,22 +228,30 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         )
     }
 
-    /// The ABI selector `.selector` yields: an operand naming a function folds to its selector
-    /// constant, while a pointer value carries its own.
+    /// The ABI selector `.selector` yields: an operand naming a function or a public state
+    /// variable folds to its selector constant, while a pointer value carries its own.
     pub fn external_selector(&mut self, operand: &Expression) -> Value<'context> {
         if let Expression::MemberAccessExpression(access) = operand
-            && let Some(Definition::Function(function_definition)) =
-                access.member().resolve_to_definition()
+            && let Some(callee) = access
+                .member()
+                .resolve_to_definition()
+                .and_then(ExternalCallee::from_definition)
         {
             self.expression_effect(&access.operand());
-            return Value::selector(
-                function_definition
-                    .compute_selector()
-                    .expect("an externally visible function has a selector"),
-                MlirType::selector(self.melior),
-                self,
-            );
+            return Value::selector(callee.selector(), MlirType::selector(self.melior), self);
         }
         self.expression(operand).external_function_selector(self)
+    }
+
+    /// The definition `type(X)` names.
+    fn meta_type_definition(operand: &Expression) -> Definition {
+        let Expression::TypeExpression(type_expression) = operand else {
+            unreachable!("the type built-ins decorate a `type(..)` expression");
+        };
+        let TypeName::IdentifierPath(path) = type_expression.type_name() else {
+            unreachable!("`type(..)` of a contract or interface names it by path");
+        };
+        path.resolve_to_definition()
+            .expect("slang resolves the type `type(..)` names")
     }
 }

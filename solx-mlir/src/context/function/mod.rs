@@ -93,6 +93,7 @@ impl<'context> Function<'context> {
             FunctionDispatch::Kind(function_kind) => {
                 operation_builder.kind(function_kind.attribute(context.melior))
             }
+            FunctionDispatch::Getter => operation_builder,
         };
         if let Some(selector_value) = selector {
             operation_builder = operation_builder

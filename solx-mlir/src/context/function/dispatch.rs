@@ -1,5 +1,5 @@
 //!
-//! The attribute a `sol.func` is reached through.
+//! The internal dispatch attribute a `sol.func` carries.
 //!
 
 use slang_solidity_v2::ast::FunctionDefinition;
@@ -8,14 +8,16 @@ use slang_solidity_v2::ast::NodeId;
 
 use crate::FunctionKind;
 
-/// The attribute a `sol.func` is reached through. A dispatch identifier is never zero, which the
-/// dialect reserves for the null function pointer, since slang numbers nodes from one.
+/// The internal dispatch attribute a `sol.func` carries, if any.
 #[derive(Clone, Copy)]
 pub enum FunctionDispatch {
-    /// The identifier an internal function pointer dispatches to.
+    /// The identifier an internal function pointer dispatches to; never zero, which the dialect
+    /// reserves for the null function pointer, since slang numbers nodes from one.
     Identifier(NodeId),
     /// The dialect kind of a constructor, fallback or receive function.
     Kind(FunctionKind),
+    /// A synthesized state-variable getter, dispatched by its ABI selector alone.
+    Getter,
 }
 
 impl From<&FunctionDefinition> for FunctionDispatch {

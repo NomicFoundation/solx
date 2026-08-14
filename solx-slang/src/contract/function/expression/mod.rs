@@ -233,4 +233,13 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             },
         }
     }
+
+    /// The definition a bare (`E`) or namespace-qualified (`Lib.E`) name resolves to.
+    pub fn resolved_definition(expression: &Expression) -> Option<Definition> {
+        match expression {
+            Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+            Expression::MemberAccessExpression(access) => access.member().resolve_to_definition(),
+            _ => None,
+        }
+    }
 }

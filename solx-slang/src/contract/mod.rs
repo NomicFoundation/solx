@@ -3,6 +3,7 @@
 //!
 
 pub mod function;
+pub mod getter;
 pub mod state_variable;
 pub mod storage_slot;
 
@@ -13,6 +14,7 @@ use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
+use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type;
 use slang_solidity_v2::compilation::FileId;
 
@@ -48,11 +50,14 @@ impl<'context> SourceUnitScope<'context> {
             };
             self.function_signatures.insert(
                 function.node_id(),
-                Function::new(Self::symbol(&function), self.function_type(&function_type)),
+                Function::new(
+                    Self::function_symbol(&function),
+                    self.function_type(&function_type),
+                ),
             );
         }
 
-        let state_variables = node
+        let state_variables: Vec<StateVariableDefinition> = node
             .members()
             .iter()
             .filter_map(|member| match member {
@@ -61,6 +66,11 @@ impl<'context> SourceUnitScope<'context> {
                 }
                 _ => None,
             })
+            .collect();
+        let public_state_variables: Vec<StateVariableDefinition> = state_variables
+            .iter()
+            .filter(|state_variable| state_variable.is_externally_visible())
+            .cloned()
             .collect();
         let storage_layout = match node.compute_abi() {
             Some(abi) => abi
@@ -85,7 +95,7 @@ impl<'context> SourceUnitScope<'context> {
             state_variables,
             storage_layout,
             |scope| {
-                for state_variable in &scope.state_variables {
+                for state_variable in scope.state_variables.iter() {
                     let Some(slot) = scope.storage_layout.get(&state_variable.node_id()) else {
                         continue;
                     };
@@ -107,6 +117,9 @@ impl<'context> SourceUnitScope<'context> {
                 for function in node.functions().iter().chain(operator_functions) {
                     scope.function_definition(function);
                 }
+                for state_variable in public_state_variables.iter() {
+                    scope.state_variable_getter(state_variable);
+                }
             },
         );
 
@@ -120,14 +133,22 @@ impl<'context> SourceUnitScope<'context> {
                     function
                         .compute_canonical_signature()
                         .expect("an externally visible function has a canonical signature"),
-                    format!(
-                        "{:08x}",
-                        function
-                            .compute_selector()
-                            .expect("an externally visible function has a selector")
-                    ),
+                    function
+                        .compute_selector()
+                        .expect("an externally visible function has a selector"),
                 )
             })
+            .chain(public_state_variables.iter().map(|state_variable| {
+                (
+                    state_variable
+                        .compute_canonical_signature()
+                        .expect("a public state variable has a canonical signature"),
+                    state_variable
+                        .compute_selector()
+                        .expect("a public state variable has a selector"),
+                )
+            }))
+            .map(|(signature, selector)| (signature, format!("{selector:08x}")))
             .collect()
     }
 
