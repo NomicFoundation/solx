@@ -187,7 +187,7 @@ pub struct Arguments {
     #[arg(long, help_heading = "Compilation Settings")]
     pub via_ir: bool,
 
-    /// Sets the number of threads, where each thread compiles its own translation unit in a child process.
+    /// Sets the number of threads, where each thread compiles its own translation unit.
     #[arg(short, long, help_heading = "Compilation Settings")]
     pub threads: Option<usize>,
 
