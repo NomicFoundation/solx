@@ -61,7 +61,9 @@ jobs:
     container:
       image: ${{ matrix.image || '' }}
     name: ${{ matrix.name }}
-    timeout-minutes: 150
+    # Cold LLVM builds on the 4-core macOS x86 / Windows runners exceed
+    # 2.5h; only the first run per solx-llvm pin pays this.
+    timeout-minutes: 360
     steps:
 
       - name: Checkout
@@ -81,10 +83,18 @@ jobs:
         shell: bash
         run: echo "BINDGEN_EXTRA_CLANG_ARGS=--target=x86_64-w64-windows-gnu" >> "${GITHUB_ENV}"
 
+      # The cargo cache must be keyed on the solx-llvm pin: Cargo.lock does
+      # not change when the submodule moves, and restored build-script
+      # outputs from an older LLVM tree poison the link (undefined lldC
+      # symbols).
+      - name: Compute solx-llvm pin
+        shell: bash
+        run: echo "LLVM_PIN=$(git rev-parse HEAD:solx-llvm)" >> "${GITHUB_ENV}"
+
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          prefix-key: slang-mode-bench-v1
+          prefix-key: slang-mode-bench-v2-${{ env.LLVM_PIN }}
           workspaces: ". -> target-slang"
           cache-on-failure: true
 
