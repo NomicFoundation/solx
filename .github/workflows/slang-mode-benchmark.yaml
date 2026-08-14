@@ -94,8 +94,19 @@ jobs:
         with:
           target: ${{ matrix.target }}
 
+      # The runner context is not available in a workflow step's `shell:`
+      # (composite actions only), so the Windows msys2 build is its own step.
       - name: Build solx (slang, release)
-        shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          ${SFW_PREFIX:-} cargo fetch --locked
+          ${SFW_PREFIX:-} cargo build-slang --release \
+            ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+
+      - name: Build solx (slang, release, Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
         run: |
           ${SFW_PREFIX:-} cargo fetch --locked
           ${SFW_PREFIX:-} cargo build-slang --release \
