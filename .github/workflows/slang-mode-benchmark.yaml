@@ -1,0 +1,113 @@
+name: Slang Pool-Mode Benchmark
+
+# Wall-clock comparison of the two compilation-dispatch modes (in-process
+# rayon threads vs SOLX_SUBPROCESS worker pool) across operating systems.
+# Opt-in: label a PR with ci:mode-bench, or dispatch manually.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  label-check:
+    # Checks the PR's current label set, not the triggering action (see
+    # slang-tests.yaml for the rationale).
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (contains(github.event.pull_request.labels.*.name, 'ci:mode-bench')
+      && !github.event.pull_request.head.repo.fork)
+    runs-on: ubuntu-24.04
+    steps:
+      - run: 'true'
+
+  benchmark:
+    needs: label-check
+    permissions:
+      contents: read
+      packages: read
+    env:
+      CARGO_TARGET_DIR: target-slang
+      CARGO_INCREMENTAL: "0"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "MacOS x86"
+            runner: macos-15-intel
+          - name: "MacOS arm64"
+            runner: macos-15
+          - name: "Linux x86 gnu"
+            runner: ubuntu-24.04
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
+            target: "x86_64-unknown-linux-gnu"
+          - name: "Linux ARM64 gnu"
+            runner: ubuntu-24.04-arm
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
+            target: "aarch64-unknown-linux-gnu"
+          - name: "Windows"
+            runner: windows-2025
+            target: "x86_64-pc-windows-gnu"
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: ${{ matrix.image || '' }}
+    name: ${{ matrix.name }}
+    timeout-minutes: 150
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+
+      - name: Build toolchain
+        uses: ./.github/actions/build-toolchain
+        with:
+          solc: 'false'
+
+      # See slang-tests.yaml (rust-lang/rust-bindgen#1760).
+      - name: Set bindgen target for MinGW
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "BINDGEN_EXTRA_CLANG_ARGS=--target=x86_64-w64-windows-gnu" >> "${GITHUB_ENV}"
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          prefix-key: slang-mode-bench-v1
+          workspaces: ". -> target-slang"
+          cache-on-failure: true
+
+      - name: Install build target
+        if: matrix.target != ''
+        uses: ./.github/actions/setup-rust
+        with:
+          target: ${{ matrix.target }}
+
+      - name: Build solx (slang, release)
+        shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+        run: |
+          ${SFW_PREFIX:-} cargo fetch --locked
+          ${SFW_PREFIX:-} cargo build-slang --release \
+            ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+
+      - name: Run benchmark
+        shell: bash
+        run: |
+          PY=$(command -v python3 || command -v python)
+          EXE=${{ runner.os == 'Windows' && '.exe' || '' }}
+          SOLX=target-slang/${{ matrix.target && format('{0}/', matrix.target) || '' }}release/solx${EXE}
+          "${PY}" tests/benchmark/pool-modes/gen_corpus.py "${RUNNER_TEMP}/pool-modes-corpus" 10
+          echo "cores: $("${PY}" -c 'import os; print(os.cpu_count())')"
+          "${PY}" tests/benchmark/pool-modes/bench.py \
+            --solx "${SOLX}" --corpus "${RUNNER_TEMP}/pool-modes-corpus" --pairs 5
