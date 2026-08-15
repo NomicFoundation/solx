@@ -22,7 +22,9 @@ parser.add_argument("--solx", required=True)
 parser.add_argument("--corpus", required=True)
 parser.add_argument("--threads", type=int, default=os.cpu_count())
 parser.add_argument("--pairs", type=int, default=5)
+parser.add_argument("--label", default=None)
 args = parser.parse_args()
+label = args.label or os.path.basename(os.path.normpath(args.corpus))
 
 solx = os.path.abspath(args.solx)
 files = sorted(f for f in os.listdir(args.corpus) if f.endswith(".sol"))
@@ -52,13 +54,13 @@ threads, workers = [], []
 for i in range(args.pairs):
     a = run(subprocess_mode=False)
     b = run(subprocess_mode=True)
-    print(f"pair {i}{' (warmup)' if i == 0 else ''}: "
+    print(f"[{label}] pair {i}{' (warmup)' if i == 0 else ''}: "
           f"threads={a:.2f}s subprocess={b:.2f}s", flush=True)
     if i > 0:
         threads.append(a)
         workers.append(b)
 
 mt, ms = statistics.median(threads), statistics.median(workers)
-print(f"RESULT files={len(files)} threads_n={args.threads} "
+print(f"RESULT label={label} files={len(files)} threads_n={args.threads} "
       f"threads_median={mt:.2f}s subprocess_median={ms:.2f}s "
       f"ratio={ms / mt:.2f}")
