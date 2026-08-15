@@ -6,6 +6,7 @@ use num::BigInt;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::Type;
 use slang_solidity_v2::ast::TypeName;
@@ -16,8 +17,8 @@ use solx_mlir::Value;
 use solx_utils::FunctionReferenceKind;
 
 use crate::contract::function::expression::call::external_callee::ExternalCallee;
+use crate::contract::object::Object;
 use crate::scope::function::FunctionScope;
-use crate::scope::source_unit::SourceUnitScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// A struct field loads from its place; an enum member is its ordinal; an externally visible
@@ -26,7 +27,10 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     pub fn member_access(&mut self, node: &MemberAccessExpression) -> Value<'context> {
         let operand = node.operand();
 
-        if matches!(operand.get_type(), Some(Type::Struct(_))) {
+        if matches!(
+            node.member().resolve_to_definition(),
+            Some(Definition::StructMember(_))
+        ) {
             let (place, element_type) = self.member_access_place(node);
             return place.load(element_type, self);
         }
@@ -63,19 +67,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             );
         }
 
-        if let Expression::Identifier(namespace) = &operand {
-            match namespace.resolve_to_definition() {
-                Some(Definition::Contract(_)) => return self.identifier(&node.member()),
-                Some(Definition::Library(_))
-                    if matches!(
-                        node.member().resolve_to_definition(),
-                        Some(Definition::Constant(_) | Definition::StateVariable(_))
-                    ) =>
-                {
-                    return self.identifier(&node.member());
-                }
-                _ => {}
-            }
+        if Self::is_namespace_member(&operand, &node.member()) {
+            return self.identifier(&node.member());
         }
 
         match node.member().resolve_to_built_in() {
@@ -122,7 +115,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 let name = match Self::meta_type_definition(&operand) {
                     Definition::Contract(contract) => contract.name(),
                     Definition::Interface(interface) => interface.name(),
-                    _ => unimplemented!("`type(..).name` names no contract or interface"),
+                    Definition::Library(library) => library.name(),
+                    _ => unreachable!("slang resolves `.name` on a code-bearing type alone"),
                 };
                 Value::string_literal(name.name().as_bytes(), self)
             }
@@ -139,29 +133,17 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 )
             }
             Some(BuiltIn::TypeCreationCode) => {
-                let Definition::Contract(contract) = Self::meta_type_definition(&operand) else {
-                    unimplemented!("`type(..).creationCode` names no contract");
-                };
-                let object = SourceUnitScope::object_identifier(
-                    contract.get_file_id(),
-                    contract.name().name(),
-                );
-                Value::object_code(object.as_str(), self)
+                Value::object_code(Self::meta_object_identifier(&operand).as_str(), self)
             }
-            Some(BuiltIn::TypeRuntimeCode) => {
-                let Definition::Contract(contract) = Self::meta_type_definition(&operand) else {
-                    unimplemented!("`type(..).runtimeCode` names no contract");
-                };
-                let object = format!(
+            Some(BuiltIn::TypeRuntimeCode) => Value::object_code(
+                format!(
                     "{}{}",
-                    SourceUnitScope::object_identifier(
-                        contract.get_file_id(),
-                        contract.name().name(),
-                    ),
+                    Self::meta_object_identifier(&operand),
                     solx_utils::Dependencies::DEPLOYED_OBJECT_SUFFIX,
-                );
-                Value::object_code(object.as_str(), self)
-            }
+                )
+                .as_str(),
+                self,
+            ),
             Some(BuiltIn::ErrorSelector) => {
                 let Some(Definition::Error(error)) = Self::resolved_definition(&operand) else {
                     unreachable!("`.selector` on an error names an error definition");
@@ -196,12 +178,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         node: &MemberAccessExpression,
     ) -> (Place<'context>, MlirType<'context>) {
         let base = node.operand();
-        if let Expression::Identifier(namespace) = &base
-            && matches!(
-                namespace.resolve_to_definition(),
-                Some(Definition::Contract(_))
-            )
-        {
+        if Self::is_namespace_member(&base, &node.member()) {
             return self.identifier_place(&node.member());
         }
         let Some(Type::Struct(struct_type)) = base.get_type() else {
@@ -243,13 +220,37 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         self.expression(operand).external_function_selector(self)
     }
 
+    /// Whether the member access qualifies a namespace (`C.x`, `L.f`, `M.Lib.K` — the operand may
+    /// chain aliases to any depth) and so resolves through its member alone: the namespace itself
+    /// denotes no value, and a selector-bearing library function is dispatched as an external
+    /// callee instead.
+    fn is_namespace_member(operand: &Expression, member: &Identifier) -> bool {
+        match Self::resolved_definition(operand) {
+            Some(Definition::Contract(_) | Definition::Import(_)) => true,
+            Some(Definition::Library(_)) => match member.resolve_to_definition() {
+                Some(Definition::Constant(_) | Definition::StateVariable(_)) => true,
+                Some(Definition::Function(function)) => function.compute_selector().is_none(),
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    /// The object identifier of the contract or library `type(X)` names.
+    fn meta_object_identifier(operand: &Expression) -> String {
+        let Some(object) = Object::from_definition(Self::meta_type_definition(operand)) else {
+            unreachable!("slang resolves the code built-ins on a deployable object alone")
+        };
+        object.identifier()
+    }
+
     /// The definition `type(X)` names.
     fn meta_type_definition(operand: &Expression) -> Definition {
         let Expression::TypeExpression(type_expression) = operand else {
             unreachable!("the type built-ins decorate a `type(..)` expression");
         };
         let TypeName::IdentifierPath(path) = type_expression.type_name() else {
-            unreachable!("`type(..)` of a contract or interface names it by path");
+            unreachable!("`type(..)` of a contract, interface, or library names it by path");
         };
         path.resolve_to_definition()
             .expect("slang resolves the type `type(..)` names")

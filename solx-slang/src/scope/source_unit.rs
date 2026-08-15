@@ -5,23 +5,23 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 
+use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::NodeId;
-use slang_solidity_v2::ast::StateVariableDefinition;
+use slang_solidity_v2::ast::Type;
 
-use solx_mlir::Block;
 use solx_mlir::Context;
+use solx_mlir::Contract;
 use solx_mlir::Function;
 use solx_mlir::Type as MlirType;
 
-use crate::contract::storage_slot::StorageSlot;
+use crate::contract::object::Object;
 use crate::scope::contract::ContractScope;
 
-/// The source unit scope: the owned MLIR context that every nested scope emits into, and the
-/// signatures of the functions lowered within it.
+/// The source unit scope: the owned MLIR context that every nested scope emits into.
 pub struct SourceUnitScope<'context> {
     /// The owned MLIR context, surrendered by the conversion into it.
     pub mlir: Context<'context>,
-    /// The function signatures keyed by the AST definition id of each function.
+    /// The mangled symbol and MLIR signature of each function, filled at its first naming.
     pub function_signatures: HashMap<NodeId, Function<'context>>,
 }
 
@@ -34,33 +34,36 @@ impl<'context> SourceUnitScope<'context> {
         }
     }
 
-    /// Opens the contract scope around `emit`: the body an enclosed function is defined into, the
-    /// state variables and storage layout it resolves against, with the `this` type installed on
-    /// the MLIR context for its duration.
+    /// Opens the contract scope around `emit`: the `sol.contract` an enclosed member is defined
+    /// into, the state variables and storage layout it resolves against, with the `this` type
+    /// installed on the MLIR context for its duration.
     pub fn contract(
         &mut self,
         contract_type: MlirType<'context>,
-        body: Block<'context>,
-        state_variables: Vec<StateVariableDefinition>,
-        storage_layout: HashMap<NodeId, StorageSlot>,
+        contract: Contract<'context>,
+        object: &Object,
         emit: impl FnOnce(&mut ContractScope<'_, 'context>),
     ) {
         self.mlir.current_contract_type = Some(contract_type);
-        emit(&mut ContractScope::new(
-            self,
-            body,
-            state_variables,
-            storage_layout,
-        ));
+        emit(&mut ContractScope::new(self, contract, object));
         self.mlir.current_contract_type = None;
     }
 
-    /// The pre-registered signature of `definition_node_id`'s function.
-    pub fn function_signature(&self, definition_node_id: NodeId) -> Function<'context> {
+    /// The function's mangled symbol and MLIR signature, computed at its first naming.
+    pub fn function_signature(&mut self, function: &FunctionDefinition) -> Function<'context> {
+        if let Some(signature) = self.function_signatures.get(&function.node_id()) {
+            return signature.clone();
+        }
+        let Some(Type::Function(function_type)) = function.get_type() else {
+            unreachable!("slang types every function definition");
+        };
+        let signature = Function::new(
+            Self::function_symbol(function),
+            self.function_type(&function_type),
+        );
         self.function_signatures
-            .get(&definition_node_id)
-            .cloned()
-            .expect("the contract lowering pre-registers every function")
+            .insert(function.node_id(), signature.clone());
+        signature
     }
 }
 

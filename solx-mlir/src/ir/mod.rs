@@ -160,6 +160,9 @@ sol_ops! {
     Value::object_code(object_name: str) -> value {
         ObjectCodeOperation.obj_name(str_attr(object_name)).out(memory())
     }
+    Value::library_address(object_name: str) -> value {
+        LibAddrOperation._name(str_attr(object_name)).val(address())
+    }
     Value::bare_call(address: value, gas: value, amount: value, input: value) -> values {
         BareCallOperation.addr(address).gas(gas).val(amount).inp(input)
             .status(boolean()).ret_data(memory())
@@ -204,15 +207,17 @@ sol_ops! {
         CallOperation.callee(symbol_attr(&callee.mlir_name))
             .outs(many(callee.function_type.results)).operands(many(operands))
     }
-    Function::external_call | external_static_call | external_try_call | external_static_try_call (
-        callee: function, arguments: values,
+    Function::external_call | external_static_call | external_try_call | external_static_try_call
+    | library_call | library_static_call | library_try_call | library_static_try_call (
+        callee: function, arguments: values, result_types: types,
         address: value, selector: value, gas: value, amount: value,
     ) -> status_and_values {
         ExtCallOperation.callee(str_attr(&callee.mlir_name)).ins(many(arguments)).addr(address)
             .gas(gas).val(amount).selector(selector)
             .callee_type(ty_attr(signature(callee)))
-            .status(boolean()).outs(many(callee.function_type.results))
-    } flagged .static_call, .try_call;
+            .status(boolean()).outs(many(result_types))
+    } flagged .static_call, .try_call; mode .delegate_call, .library_call;
+
     Value::indirect_call(self, operands: values, result_types: types) -> values {
         ICallOperation.callee(self).outs(many(result_types)).callee_operands(many(operands))
     }

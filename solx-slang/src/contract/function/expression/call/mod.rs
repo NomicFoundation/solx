@@ -30,6 +30,7 @@ use solx_utils::FunctionReferenceKind;
 
 use crate::contract::function::expression::call::external_callee::ExternalCallee;
 use crate::contract::function::expression::call::options::Options;
+use crate::contract::object::Object;
 use crate::scope::function::FunctionScope;
 use crate::scope::source_unit::SourceUnitScope;
 
@@ -52,12 +53,21 @@ pub enum Call {
     /// which is where an overload is disambiguated and a decorated callee carries its partial
     /// application.
     External(MemberAccessExpression, ExternalCallee, FunctionType),
+    /// A qualified call to an externally visible library function (`L.f(x)`), dispatched by
+    /// `DELEGATECALL` at the linked library address on the library selector.
+    Library(FunctionDefinition, u32),
+    /// An attached call to an externally visible library function (`x.f(y)`): the receiver leads
+    /// the argument list of the same library dispatch.
+    AttachedLibrary(Expression, FunctionDefinition, u32),
     /// A member-access callee (`address.send`, `abi.encode`, `abi.decode`). The member is resolved
     /// at emission, so a member resolving to no built-in or to one not lowered yet is rejected in
     /// one place rather than at both classification and emission.
     Member(MemberAccessExpression),
     /// A direct call to a named function.
     Function(FunctionDefinition),
+    /// An attached call to a selectorless library or free function: the receiver leads the
+    /// argument list of an internal `sol.call`.
+    Attached(Expression, FunctionDefinition),
     /// A call through a function-typed value, internal or external.
     FunctionPointer(Expression, FunctionType),
 }
@@ -105,10 +115,31 @@ impl Call {
                 );
                 values
             }
+            Self::Library(function_definition, selector) => {
+                let (_status, values) =
+                    Self::library(&function_definition, selector, &arguments, false, scope);
+                values
+            }
+            Self::AttachedLibrary(receiver, function_definition, selector) => {
+                let (_status, values) = Self::attached_library(
+                    receiver,
+                    &function_definition,
+                    selector,
+                    &arguments,
+                    false,
+                    scope,
+                );
+                values
+            }
             Self::Member(access) => {
                 Self::member(&access, node, &arguments, options.as_ref(), scope)
             }
             Self::Function(function_definition) => scope.call(&function_definition, &arguments),
+            Self::Attached(receiver, function_definition) => {
+                let operands: Vec<Expression> =
+                    std::iter::once(receiver).chain(arguments).collect();
+                scope.call(&function_definition, &operands)
+            }
             Self::FunctionPointer(callee, function_type) => {
                 Self::function_pointer(&callee, &function_type, &arguments, options.as_ref(), scope)
             }
@@ -153,6 +184,19 @@ impl Call {
                 true,
                 scope,
             ),
+            Self::Library(function_definition, selector) => {
+                Self::library(&function_definition, selector, &arguments, true, scope)
+            }
+            Self::AttachedLibrary(receiver, function_definition, selector) => {
+                Self::attached_library(
+                    receiver,
+                    &function_definition,
+                    selector,
+                    &arguments,
+                    true,
+                    scope,
+                )
+            }
             Self::FunctionPointer(callee, function_type) => Self::external_pointer(
                 &callee,
                 &function_type,
@@ -168,7 +212,8 @@ impl Call {
             | Self::Allocation
             | Self::TypeConversion
             | Self::Builtin(_)
-            | Self::Function(_) => {
+            | Self::Function(_)
+            | Self::Attached(..) => {
                 unreachable!("a guarded call dispatches externally or creates a contract")
             }
         }
@@ -230,23 +275,47 @@ impl Call {
                         function_type,
                     );
                 }
-                if let Expression::Identifier(namespace) = access.operand() {
-                    match namespace.resolve_to_definition() {
-                        Some(Definition::Contract(_)) => {
-                            if let Some(Definition::Function(function_definition)) =
-                                access.member().resolve_to_definition()
-                            {
-                                return Self::Function(function_definition);
-                            }
-                            if let Some(Type::Function(function_type)) = access.get_type() {
-                                return Self::FunctionPointer(
-                                    Expression::MemberAccessExpression(access),
-                                    function_type,
-                                );
-                            }
+                if matches!(
+                    FunctionScope::resolved_definition(&access.operand()),
+                    Some(Definition::Contract(_) | Definition::Import(_))
+                ) {
+                    if let Some(Definition::Function(function_definition)) =
+                        access.member().resolve_to_definition()
+                    {
+                        return Self::Function(function_definition);
+                    }
+                    if let Some(Type::Function(function_type)) = access.get_type() {
+                        return Self::FunctionPointer(
+                            Expression::MemberAccessExpression(access),
+                            function_type,
+                        );
+                    }
+                }
+                if let Some(Definition::Function(function_definition)) =
+                    access.member().resolve_to_definition()
+                {
+                    match (
+                        FunctionScope::resolved_definition(&access.operand()),
+                        function_definition.enclosing_definition(),
+                    ) {
+                        (Some(Definition::Library(_)), _) => {
+                            return match function_definition.compute_selector() {
+                                Some(selector) => Self::Library(function_definition, selector),
+                                None => Self::Function(function_definition),
+                            };
                         }
-                        Some(Definition::Library(_)) => {
-                            unimplemented!("unsupported library call: {}", access.member().name())
+                        (_, Some(Definition::Library(_))) => {
+                            return match function_definition.compute_selector() {
+                                Some(selector) => Self::AttachedLibrary(
+                                    access.operand(),
+                                    function_definition,
+                                    selector,
+                                ),
+                                None => Self::Attached(access.operand(), function_definition),
+                            };
+                        }
+                        (_, None) => {
+                            return Self::Attached(access.operand(), function_definition);
                         }
                         _ => {}
                     }
@@ -314,13 +383,25 @@ impl Call {
                 ),
                 Self::Creation(_, Some(function_definition))
                 | Self::External(_, ExternalCallee::Function(function_definition, _), _)
-                | Self::Function(function_definition) => FunctionScope::named_arguments(
+                | Self::Function(function_definition)
+                | Self::Library(function_definition, _) => FunctionScope::named_arguments(
                     &named,
                     function_definition
                         .parameters()
                         .iter()
                         .map(|parameter| parameter.node_id()),
                 ),
+                Self::Attached(_, function_definition)
+                | Self::AttachedLibrary(_, function_definition, _) => {
+                    FunctionScope::named_arguments(
+                        &named,
+                        function_definition
+                            .parameters()
+                            .iter()
+                            .skip(1)
+                            .map(|parameter| parameter.node_id()),
+                    )
+                }
                 Self::FunctionPointer(_, function_type) => {
                     match function_type.associated_definition() {
                         Some(Definition::Function(function_definition)) => {
@@ -400,9 +481,7 @@ impl Call {
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Value<'context> {
         let result_type = scope.typing(call.get_type());
-        let options = options
-            .map(|options| Options::new(options, scope))
-            .unwrap_or_default();
+        let options = Options::new(options, scope);
         let parameter_types: Vec<MlirType<'context>> = constructor
             .map(|constructor| {
                 constructor
@@ -414,10 +493,7 @@ impl Call {
             .unwrap_or_default();
         let converted = scope.external_arguments(arguments, &parameter_types);
         let amount = options.amount(scope);
-        let object = SourceUnitScope::object_identifier(
-            contract_definition.get_file_id(),
-            contract_definition.name().name(),
-        );
+        let object = Object::Contract(contract_definition.clone()).identifier();
         let create = if guarded {
             Value::create_contract_try
         } else {
@@ -558,26 +634,18 @@ impl Call {
                 None
             }
             BuiltIn::Gasleft => Some(Value::gas_left(scope)),
-            BuiltIn::Keccak256 => {
+            BuiltIn::Keccak256 | BuiltIn::Sha256 | BuiltIn::Ripemd160 => {
+                let hash = match built_in {
+                    BuiltIn::Keccak256 => Value::keccak256,
+                    BuiltIn::Sha256 => Value::sha256,
+                    BuiltIn::Ripemd160 => Value::ripemd160,
+                    _ => unreachable!("the arm admits the three hash built-ins"),
+                };
                 let data = scope.converted(
                     &arguments[0],
                     MlirType::string(scope.melior, solx_utils::DataLocation::Memory),
                 );
-                Some(Value::keccak256(data, scope))
-            }
-            BuiltIn::Sha256 => {
-                let data = scope.converted(
-                    &arguments[0],
-                    MlirType::string(scope.melior, solx_utils::DataLocation::Memory),
-                );
-                Some(Value::sha256(data, scope))
-            }
-            BuiltIn::Ripemd160 => {
-                let data = scope.converted(
-                    &arguments[0],
-                    MlirType::string(scope.melior, solx_utils::DataLocation::Memory),
-                );
-                Some(Value::ripemd160(data, scope))
+                Some(hash(data, scope))
             }
             BuiltIn::Ecrecover => {
                 let values = scope.positional_arguments(arguments);
@@ -619,22 +687,149 @@ impl Call {
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> (Value<'context>, Vec<Value<'context>>) {
         let address = scope.converted(&access.operand(), MlirType::address(scope.melior, false));
-        let options = options
-            .map(|options| Options::new(options, scope))
-            .unwrap_or_default();
+        let options = Options::new(options, scope);
         let function = callee.function(function_type, scope.contract.source_unit);
         let converted = scope.external_arguments(arguments, &function.function_type.parameters);
-        let selector = Value::selector(callee.selector(), MlirType::field(scope.melior), scope);
+        let is_static = StateMutability::from(function_type.mutability()).is_static();
+        Self::external_dispatch(
+            &function,
+            &converted,
+            &function.function_type.results,
+            address,
+            callee.selector(),
+            &options,
+            false,
+            is_static,
+            guarded,
+            scope,
+        )
+    }
+
+    /// Dispatches a qualified library call (`L.f(x)`) by `DELEGATECALL` at the linked library
+    /// address on the library selector: the address precedes the arguments, and the externalized
+    /// signature types both the callee and the results.
+    fn library<'context>(
+        definition: &FunctionDefinition,
+        selector: u32,
+        arguments: &[Expression],
+        guarded: bool,
+        scope: &mut FunctionScope<'_, '_, 'context>,
+    ) -> (Value<'context>, Vec<Value<'context>>) {
+        let address = Self::library_address(definition, scope);
+        let Some(Type::Function(externalized_type)) = definition.externalized_type() else {
+            unreachable!("slang externalizes every selector-bearing function's type");
+        };
+        let function = Function::new(
+            SourceUnitScope::function_symbol(definition),
+            scope.contract.source_unit.function_type(&externalized_type),
+        );
+        let converted = scope.external_arguments(arguments, &function.function_type.parameters);
+        let is_static = StateMutability::from(definition.attributes().mutability()).is_static();
+        Self::external_dispatch(
+            &function,
+            &converted,
+            &function.function_type.results,
+            address,
+            selector,
+            &Options::default(),
+            true,
+            is_static,
+            guarded,
+            scope,
+        )
+    }
+
+    /// Dispatches an attached library call (`x.f(y)`): the receiver leads the argument list and
+    /// the address follows it, the declared signature types the callee, and the externalized one
+    /// the results.
+    fn attached_library<'context>(
+        receiver: Expression,
+        definition: &FunctionDefinition,
+        selector: u32,
+        arguments: &[Expression],
+        guarded: bool,
+        scope: &mut FunctionScope<'_, '_, 'context>,
+    ) -> (Value<'context>, Vec<Value<'context>>) {
+        let function = scope.contract.source_unit.function_signature(definition);
+        let mut converted = scope.external_arguments(
+            std::slice::from_ref(&receiver),
+            &function.function_type.parameters[..1],
+        );
+        converted
+            .extend(scope.external_arguments(arguments, &function.function_type.parameters[1..]));
+        let address = Self::library_address(definition, scope);
+        let Some(Type::Function(externalized_type)) = definition.externalized_type() else {
+            unreachable!("slang externalizes every selector-bearing function's type");
+        };
+        let result_types = scope
+            .contract
+            .source_unit
+            .function_type(&externalized_type)
+            .results;
+        let is_static = StateMutability::from(definition.attributes().mutability()).is_static();
+        Self::external_dispatch(
+            &function,
+            &converted,
+            &result_types,
+            address,
+            selector,
+            &Options::default(),
+            true,
+            is_static,
+            guarded,
+            scope,
+        )
+    }
+
+    /// The linked address of the library enclosing `definition` (`sol.lib_addr`).
+    fn library_address<'context>(
+        definition: &FunctionDefinition,
+        scope: &mut FunctionScope<'_, '_, 'context>,
+    ) -> Value<'context> {
+        let Some(Definition::Library(library)) = definition.enclosing_definition() else {
+            unreachable!("a library callee is enclosed by its library");
+        };
+        Value::library_address(Object::Library(library).identifier().as_str(), scope)
+    }
+
+    /// Emits the `sol.ext_call` an external dispatch selects: the `library_*` emitters carry
+    /// `delegate_call, library_call`, while `static_call` and the `try` wrapper are independent
+    /// axes.
+    fn external_dispatch<'context>(
+        function: &Function<'context>,
+        arguments: &[Value<'context>],
+        result_types: &[MlirType<'context>],
+        address: Value<'context>,
+        selector: u32,
+        options: &Options<'context>,
+        is_library: bool,
+        is_static: bool,
+        guarded: bool,
+        scope: &mut FunctionScope<'_, '_, 'context>,
+    ) -> (Value<'context>, Vec<Value<'context>>) {
+        let selector = Value::selector(selector, MlirType::field(scope.melior), scope);
         let gas = options.gas(scope);
         let amount = options.amount(scope);
-        let is_static = StateMutability::from(function_type.mutability()).is_static();
-        let call = match (is_static, guarded) {
-            (false, false) => Function::external_call,
-            (true, false) => Function::external_static_call,
-            (false, true) => Function::external_try_call,
-            (true, true) => Function::external_static_try_call,
+        let call = match (is_library, is_static, guarded) {
+            (false, false, false) => Function::external_call,
+            (false, true, false) => Function::external_static_call,
+            (false, false, true) => Function::external_try_call,
+            (false, true, true) => Function::external_static_try_call,
+            (true, false, false) => Function::library_call,
+            (true, true, false) => Function::library_static_call,
+            (true, false, true) => Function::library_try_call,
+            (true, true, true) => Function::library_static_try_call,
         };
-        call(&function, &converted, address, selector, gas, amount, scope)
+        call(
+            function,
+            arguments,
+            result_types,
+            address,
+            selector,
+            gas,
+            amount,
+            scope,
+        )
     }
 
     /// Resolves the member to its built-in and lowers it. `abi.decode` takes its result type from
@@ -649,45 +844,31 @@ impl Call {
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Vec<Value<'context>> {
         match access.member().resolve_to_built_in() {
-            Some(BuiltIn::AddressCall) => {
+            Some(
+                built_in @ (BuiltIn::AddressCall
+                | BuiltIn::AddressDelegatecall
+                | BuiltIn::AddressStaticcall),
+            ) => {
                 let address =
                     scope.converted(&access.operand(), MlirType::address(scope.melior, false));
-                let options = options
-                    .map(|options| Options::new(options, scope))
-                    .unwrap_or_default();
+                let options = Options::new(options, scope);
                 let input = scope.converted(
                     &arguments[0],
                     MlirType::string(scope.melior, solx_utils::DataLocation::Memory),
                 );
                 let gas = options.gas(scope);
-                let amount = options.amount(scope);
-                Value::bare_call(address, gas, amount, input, scope)
-            }
-            Some(BuiltIn::AddressDelegatecall) => {
-                let address =
-                    scope.converted(&access.operand(), MlirType::address(scope.melior, false));
-                let options = options
-                    .map(|options| Options::new(options, scope))
-                    .unwrap_or_default();
-                let input = scope.converted(
-                    &arguments[0],
-                    MlirType::string(scope.melior, solx_utils::DataLocation::Memory),
-                );
-                let gas = options.gas(scope);
-                Value::bare_delegate_call(address, gas, input, scope)
-            }
-            Some(BuiltIn::AddressStaticcall) => {
-                let address =
-                    scope.converted(&access.operand(), MlirType::address(scope.melior, false));
-                let options = options
-                    .map(|options| Options::new(options, scope))
-                    .unwrap_or_default();
-                let input = scope.converted(
-                    &arguments[0],
-                    MlirType::string(scope.melior, solx_utils::DataLocation::Memory),
-                );
-                let gas = options.gas(scope);
-                Value::bare_static_call(address, gas, input, scope)
+                match built_in {
+                    BuiltIn::AddressCall => {
+                        Value::bare_call(address, gas, options.amount(scope), input, scope)
+                    }
+                    BuiltIn::AddressDelegatecall => {
+                        Value::bare_delegate_call(address, gas, input, scope)
+                    }
+                    BuiltIn::AddressStaticcall => {
+                        Value::bare_static_call(address, gas, input, scope)
+                    }
+                    _ => unreachable!("the arm admits the three bare-call built-ins"),
+                }
             }
             Some(BuiltIn::AddressSend) => {
                 let address =
@@ -820,7 +1001,7 @@ impl Call {
                 Value::decode(payload, &result_types, scope)
             }
             Some(BuiltIn::ArrayPop) => {
-                scope.expression_place(&access.operand()).0.pop(scope);
+                Place::from(scope.expression(&access.operand())).pop(scope);
                 Vec::new()
             }
             Some(BuiltIn::ArrayPush) => {
@@ -829,7 +1010,7 @@ impl Call {
                     .get_type()
                     .expect("base of array push has a resolved type");
                 let value_argument = arguments.first();
-                let (place, _) = scope.expression_place(&base);
+                let place = Place::from(scope.expression(&base));
 
                 if let Type::Bytes(_) = &base_slang_type
                     && let Some(value_argument) = value_argument
@@ -943,9 +1124,7 @@ impl Call {
             results,
         } = scope.contract.source_unit.function_type(function_type);
         let pointer = scope.expression(callee);
-        let options = options
-            .map(|options| Options::new(options, scope))
-            .unwrap_or_default();
+        let options = Options::new(options, scope);
         let converted = scope.external_arguments(arguments, &parameters);
         let gas = options.gas(scope);
         let amount = options.amount(scope);
@@ -993,17 +1172,18 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             .expect("a user-defined operator's function returns one value")
     }
 
-    /// Resolves the callee's pre-registered MLIR signature by node id and converts each argument to
-    /// its declared parameter type before `sol.call`.
+    /// Defines the callee in this module if absent and converts each argument to its declared
+    /// parameter type before `sol.call`.
     fn call(
         &mut self,
         function_definition: &FunctionDefinition,
         arguments: &[Expression],
     ) -> Vec<Value<'context>> {
+        self.contract.function_definition(function_definition);
         let signature = self
             .contract
             .source_unit
-            .function_signature(function_definition.node_id());
+            .function_signature(function_definition);
         let converted = self.converted_arguments(arguments, &signature.function_type.parameters);
         Function::call(&signature, &converted, self)
     }

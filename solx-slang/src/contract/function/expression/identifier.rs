@@ -11,11 +11,13 @@ use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
 
+use crate::contract::object::Object;
 use crate::scope::function::FunctionScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// A constant folds to its initializer; a bare function name materialises its internal pointer
-    /// (`sol.func_constant`); every other identifier loads from its place.
+    /// (`sol.func_constant`), defining the function in this module if absent; a library name is its
+    /// linked address (`sol.lib_addr`); every other identifier loads from its place.
     pub fn identifier(&mut self, node: &Identifier) -> Value<'context> {
         match node.resolve_to_definition() {
             Some(Definition::Constant(constant)) => {
@@ -33,11 +35,16 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                         .expect("a constant state variable is initialized"),
                 )
             }
-            Some(Definition::Function(function)) => self
-                .contract
-                .source_unit
-                .function_signature(function.node_id())
-                .pointer_constant(self),
+            Some(Definition::Function(function)) => {
+                self.contract.function_definition(&function);
+                self.contract
+                    .source_unit
+                    .function_signature(&function)
+                    .pointer_constant(self)
+            }
+            Some(Definition::Library(library)) => {
+                Value::library_address(Object::Library(library).identifier().as_str(), self)
+            }
             _ => {
                 let (place, element_type) = self.identifier_place(node);
                 place.load(element_type, self)

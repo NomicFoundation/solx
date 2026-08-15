@@ -391,6 +391,27 @@ macro_rules! sol_ops {
 
     (
         $receiver:ident :: $base:ident | $flagged:ident | $guarded:ident | $guarded_flagged:ident
+        | $mode:ident | $mode_flagged:ident | $mode_guarded:ident | $mode_guarded_flagged:ident
+        ($($parameters:tt)*)
+        -> $disposition:ident { $operation:ident $($chain:tt)* }
+        flagged .$setter:ident, .$guard:ident ; mode $(.$mode_flag:ident),+ ;
+        $($rest:tt)*
+    ) => {
+        sol_ops!(
+            $receiver :: $base | $flagged | $guarded | $guarded_flagged ($($parameters)*)
+            -> $disposition { $operation $($chain)* } flagged .$setter, .$guard;
+        );
+        sol_ops!(
+            $receiver :: $mode | $mode_flagged | $mode_guarded | $mode_guarded_flagged
+            ($($parameters)*)
+            -> $disposition { $operation $($chain)* $(.$mode_flag(unit_flag))+ }
+            flagged .$setter, .$guard;
+        );
+        sol_ops!($($rest)*);
+    };
+
+    (
+        $receiver:ident :: $base:ident | $flagged:ident | $guarded:ident | $guarded_flagged:ident
         ($($parameters:tt)*)
         -> $disposition:ident { $operation:ident $($chain:tt)* }
         flagged .$setter:ident, .$guard:ident ;

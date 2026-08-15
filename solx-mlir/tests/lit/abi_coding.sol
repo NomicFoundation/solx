@@ -76,6 +76,10 @@
 // CHECK: sol.func @{{.*decodeCalldata.*}}
 // CHECK:   sol.decode %{{.*}} : !sol.string<CallData> -> ui256
 
+// CHECK: sol.func @{{.*decodeLibrary.*}}
+// CHECK:   %[[LIB:.*]] = sol.decode %{{.*}} : !sol.string<Memory> -> !sol.contract<{{.*Lib.*}}>
+// CHECK:   sol.address_cast %[[LIB]] : !sol.contract<{{.*Lib.*}}> to !sol.address
+
 contract C {
     bytes stored;
 
@@ -112,6 +116,8 @@ contract C {
     function decodeStorage() public view returns (uint256) { return abi.decode(stored, (uint256)); }
 
     function decodeCalldata(bytes calldata data) public pure returns (uint256) { return abi.decode(data, (uint256)); }
+
+    function decodeLibrary(bytes memory data) public pure returns (address) { return address(abi.decode(data, (Lib))); }
 }
 
 interface I {
@@ -119,3 +125,5 @@ interface I {
 
     function n() external returns (uint256);
 }
+
+library Lib {}

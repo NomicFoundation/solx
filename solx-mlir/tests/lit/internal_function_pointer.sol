@@ -67,6 +67,12 @@
 // CHECK:   %[[POINTER:.*]] = sol.load %[[SLOT]] : !sol.ptr<!sol.func_ref<(ui256, ui256) -> (ui256, ui256)>, Stack>, !sol.func_ref<(ui256, ui256) -> (ui256, ui256)>
 // CHECK:   sol.icall %[[POINTER]](%{{.*}}, %{{.*}}) : !sol.func_ref<(ui256, ui256) -> (ui256, ui256)>, (ui256, ui256) -> (ui256, ui256)
 
+// CHECK: sol.contract @{{.*Lib.*}} {
+// CHECK: sol.func @{{.*run_library.*}}
+// CHECK:   sol.func_constant @{{.*double.*}} : !sol.func_ref<(ui256) -> ui256>
+// CHECK:   sol.icall %{{[0-9]+}}(%{{.*}}) : !sol.func_ref<(ui256) -> ui256>, (ui256) -> ui256
+// CHECK: } {kind = #Library}
+
 contract C {
     struct S {
         function () internal returns (uint256) f;
@@ -148,5 +154,16 @@ contract C {
     function run_arguments_results() public returns (uint256, uint256) {
         function (uint256, uint256) internal returns (uint256, uint256) functionPointer = pair;
         return functionPointer(7, 9);
+    }
+}
+
+library Lib {
+    function double(uint256 a) internal pure returns (uint256) {
+        return a * 2;
+    }
+
+    function run_library(uint256 x) internal pure returns (uint256) {
+        function (uint256) internal pure returns (uint256) functionPointer = double;
+        return functionPointer(x);
     }
 }
