@@ -51,19 +51,24 @@ jobs:
             image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
             target: "x86_64-unknown-linux-gnu"
           # rustflags: aarch64-linux links with strict single-pass bfd
-          # (x86-64 rust uses order-tolerant rust-lld), and rustc places
-          # every crate's native-lib flags before the inkwell rlib that
-          # references the lld symbols (dedup keeps the first occurrence).
-          # Trailing link-args land after all rlibs. Durable fix: #[link]
-          # attributes in the inkwell fork.
+          # (x86-64 rust uses order-tolerant rust-lld), which cannot
+          # resolve the crate-graph archive order rustc emits for the
+          # lld/LLVM static libs. Link with the CI image's lld instead.
+          # Durable fix: #[link] attributes in the inkwell fork.
           - name: "Linux ARM64 gnu"
             runner: ubuntu-24.04-arm
             image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
             target: "aarch64-unknown-linux-gnu"
-            rustflags: "-C link-arg=-llldC -C link-arg=-llldELF -C link-arg=-llldCommon"
-          - name: "Windows"
-            runner: windows-2025
-            target: "x86_64-pc-windows-gnu"
+            rustflags: "-C link-arg=-fuse-ld=lld -C link-arg=-B/usr/lib/llvm-21/bin"
+          # Windows is parked: the slang release build has never linked on
+          # MinGW. Two layers fixed here (cc-rs must use gcc to match the
+          # gcc-built LLVM tree; MLIR TypeID data symbols), the next one
+          # (mass undefined llvm::detail::UniqueFunctionBase/function_ref
+          # template instantiations) is a real porting effort. Re-add the
+          # entry once slang-release links on Windows:
+          #   - name: "Windows"
+          #     runner: windows-2025
+          #     target: "x86_64-pc-windows-gnu"
     runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.image || '' }}
