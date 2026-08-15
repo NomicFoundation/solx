@@ -29,9 +29,11 @@ static FATAL_ERROR_HANDLER: Once = Once::new();
 ///
 /// By default jobs compile on the dispatching threads themselves and no subprocess is ever
 /// spawned: codegen state is per-`LLVMContext` and per-module, so concurrent in-process jobs
-/// do not interfere. With `SOLX_SUBPROCESS` set, jobs go to the worker pool instead — the
-/// isolation escape hatch: a crash or LLVM fatal error takes down one worker, not the
-/// compiler.
+/// do not interfere. Windows is the exception — concurrent in-process codegen still corrupts
+/// LLVM's `PrettyStackTrace` entry stack there ("destruction is out of order" abort), so the
+/// worker pool stays its default. `SOLX_SUBPROCESS` overrides both ways: `0` forces
+/// in-process, any other value forces the pool — the isolation escape hatch: a crash or LLVM
+/// fatal error takes down one worker, not the compiler.
 ///
 pub struct Pool {
     /// The worker executable path.
@@ -49,7 +51,10 @@ impl Pool {
     /// Creates a pool that dispatches jobs of `session`.
     ///
     pub fn new(session: Session) -> anyhow::Result<Self> {
-        let in_process = !std::env::var_os("SOLX_SUBPROCESS").is_some_and(|value| value != "0");
+        let in_process = match std::env::var_os("SOLX_SUBPROCESS") {
+            Some(value) => value == "0",
+            None => !cfg!(windows),
+        };
         if in_process {
             FATAL_ERROR_HANDLER.call_once(|| unsafe {
                 inkwell::support::error_handling::install_fatal_error_handler(fatal_error_handler);
@@ -140,11 +145,18 @@ impl Pool {
 }
 
 ///
-/// Aborts on LLVM fatal errors: the default handler exits via `exit(1)`, whose atexit
-/// destructors tear down LLVM globals under concurrently compiling threads.
+/// Reproduces the default handler's diagnostics on LLVM fatal errors, but leaves via
+/// `_exit`: the default handler's `exit(1)` runs atexit destructors that tear down LLVM
+/// globals under concurrently compiling threads, and `abort` raises a signal that LLVM's
+/// crash handler decorates with bug-report boilerplate.
 ///
 extern "C" fn fatal_error_handler(message: *const std::ffi::c_char) {
     let message = unsafe { std::ffi::CStr::from_ptr(message) }.to_string_lossy();
-    eprintln!("LLVM fatal error: {message}");
-    std::process::abort();
+    eprintln!("LLVM ERROR: {message}");
+    unsafe { _exit(1) }
+}
+
+unsafe extern "C" {
+    /// Process exit without atexit handlers; provided by every libc, including mingw's.
+    fn _exit(code: i32) -> !;
 }
