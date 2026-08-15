@@ -149,7 +149,9 @@ jobs:
           PY=$(command -v python3 || command -v python)
           EXE=${{ runner.os == 'Windows' && '.exe' || '' }}
           SOLX=target-slang/${{ matrix.target && format('{0}/', matrix.target) || '' }}release/solx${EXE}
-          "${PY}" tests/benchmark/pool-modes/gen_corpus.py "${RUNNER_TEMP}/pool-modes-corpus" 10
+          "${PY}" tests/benchmark/pool-modes/gen_corpus.py "${RUNNER_TEMP}/pool-modes-corpus"
           echo "cores: $("${PY}" -c 'import os; print(os.cpu_count())')"
-          "${PY}" tests/benchmark/pool-modes/bench.py \
-            --solx "${SOLX}" --corpus "${RUNNER_TEMP}/pool-modes-corpus" --pairs 5
+          for corpus in tiny-clean tiny-overflow big-clean big-overflow mixed; do
+            "${PY}" tests/benchmark/pool-modes/bench.py \
+              --solx "${SOLX}" --corpus "${RUNNER_TEMP}/pool-modes-corpus/${corpus}" --pairs 5
+          done
