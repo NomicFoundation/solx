@@ -477,7 +477,7 @@ impl Call {
         call: &FunctionCallExpression,
         arguments: &[Expression],
         options: Option<&CallOptions>,
-        guarded: bool,
+        is_guarded: bool,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Value<'context> {
         let result_type = scope.typing(call.get_type());
@@ -494,7 +494,7 @@ impl Call {
         let converted = scope.external_arguments(arguments, &parameter_types);
         let amount = options.amount(scope);
         let object = Object::Contract(contract_definition.clone()).identifier();
-        let create = if guarded {
+        let create = if is_guarded {
             Value::create_contract_try
         } else {
             Value::create_contract
@@ -683,7 +683,7 @@ impl Call {
         function_type: &FunctionType,
         arguments: &[Expression],
         options: Option<&CallOptions>,
-        guarded: bool,
+        is_guarded: bool,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> (Value<'context>, Vec<Value<'context>>) {
         let address = scope.converted(&access.operand(), MlirType::address(scope.melior, false));
@@ -700,7 +700,7 @@ impl Call {
             &options,
             false,
             is_static,
-            guarded,
+            is_guarded,
             scope,
         )
     }
@@ -712,7 +712,7 @@ impl Call {
         definition: &FunctionDefinition,
         selector: u32,
         arguments: &[Expression],
-        guarded: bool,
+        is_guarded: bool,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> (Value<'context>, Vec<Value<'context>>) {
         let address = Self::library_address(definition, scope);
@@ -734,7 +734,7 @@ impl Call {
             &Options::default(),
             true,
             is_static,
-            guarded,
+            is_guarded,
             scope,
         )
     }
@@ -747,7 +747,7 @@ impl Call {
         definition: &FunctionDefinition,
         selector: u32,
         arguments: &[Expression],
-        guarded: bool,
+        is_guarded: bool,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> (Value<'context>, Vec<Value<'context>>) {
         let function = scope.contract.source_unit.function_signature(definition);
@@ -776,7 +776,7 @@ impl Call {
             &Options::default(),
             true,
             is_static,
-            guarded,
+            is_guarded,
             scope,
         )
     }
@@ -792,7 +792,7 @@ impl Call {
         Value::library_address(Object::Library(library).identifier().as_str(), scope)
     }
 
-    /// Emits the `sol.ext_call` an external dispatch selects: the `library_*` emitters carry
+    /// Emits the `sol.ext_call` an external dispatch selects: a library callee carries
     /// `delegate_call, library_call`, while `static_call` and the `try` wrapper are independent
     /// axes.
     fn external_dispatch<'context>(
@@ -804,23 +804,13 @@ impl Call {
         options: &Options<'context>,
         is_library: bool,
         is_static: bool,
-        guarded: bool,
+        is_guarded: bool,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> (Value<'context>, Vec<Value<'context>>) {
         let selector = Value::selector(selector, MlirType::field(scope.melior), scope);
         let gas = options.gas(scope);
         let amount = options.amount(scope);
-        let call = match (is_library, is_static, guarded) {
-            (false, false, false) => Function::external_call,
-            (false, true, false) => Function::external_static_call,
-            (false, false, true) => Function::external_try_call,
-            (false, true, true) => Function::external_static_try_call,
-            (true, false, false) => Function::library_call,
-            (true, true, false) => Function::library_static_call,
-            (true, false, true) => Function::library_try_call,
-            (true, true, true) => Function::library_static_try_call,
-        };
-        call(
+        Function::external_call(
             function,
             arguments,
             result_types,
@@ -828,6 +818,9 @@ impl Call {
             selector,
             gas,
             amount,
+            is_library,
+            is_static,
+            is_guarded,
             scope,
         )
     }
@@ -1116,7 +1109,7 @@ impl Call {
         function_type: &FunctionType,
         arguments: &[Expression],
         options: Option<&CallOptions>,
-        guarded: bool,
+        is_guarded: bool,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> (Value<'context>, Vec<Value<'context>>) {
         let MlirFunctionType {
@@ -1129,13 +1122,9 @@ impl Call {
         let gas = options.gas(scope);
         let amount = options.amount(scope);
         let is_static = StateMutability::from(function_type.mutability()).is_static();
-        let call = match (is_static, guarded) {
-            (false, false) => Value::external_call,
-            (true, false) => Value::external_static_call,
-            (false, true) => Value::external_try_call,
-            (true, true) => Value::external_static_try_call,
-        };
-        call(pointer, &converted, &results, gas, amount, scope)
+        Value::external_call(
+            pointer, &converted, &results, gas, amount, is_static, is_guarded, scope,
+        )
     }
 }
 
