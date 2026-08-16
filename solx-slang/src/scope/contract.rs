@@ -13,6 +13,7 @@ use slang_solidity_v2::ast::StateVariableDefinition;
 use solx_mlir::Block;
 use solx_mlir::Context;
 use solx_mlir::Contract;
+use solx_mlir::FunctionDispatch;
 use solx_mlir::Type as MlirType;
 
 use crate::contract::object::Object;
@@ -54,17 +55,18 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         }
     }
 
-    /// Opens the function scope around `emit`: a fresh variable environment, the declared return
-    /// types a `return` converts to, and checked arithmetic, with the MLIR cursor on `entry` for the
-    /// body's duration.
+    /// Opens the function scope around `emit`: the emitted function's dispatch, a fresh variable
+    /// environment, the declared return types a `return` converts to, and checked arithmetic, with
+    /// the MLIR cursor on `entry` for the body's duration.
     pub fn function(
         &mut self,
         entry: Block<'context>,
+        dispatch: FunctionDispatch,
         return_types: Vec<MlirType<'context>>,
         emit: impl FnOnce(&mut FunctionScope<'_, '_, 'context>),
     ) {
         let enclosing = self.source_unit.mlir.current_block.replace(entry);
-        emit(&mut FunctionScope::new(self, return_types));
+        emit(&mut FunctionScope::new(self, dispatch, return_types));
         self.source_unit.mlir.current_block = enclosing;
     }
 }

@@ -1,5 +1,6 @@
 //!
-//! The Contract declaration entity: emits `sol.contract` and its `sol.state_var` members.
+//! The Contract declaration entity: emits `sol.contract` and its `sol.state_var` and
+//! `sol.immutable` members.
 //!
 
 use melior::ir::attribute::IntegerAttribute;
@@ -13,6 +14,7 @@ use crate::Context;
 use crate::ContractKind;
 use crate::Type;
 use crate::ods::sol::ContractOperation;
+use crate::ods::sol::ImmutableOperation;
 use crate::ods::sol::StateVarOperation;
 
 /// A `sol.contract` declaration and the insertion point for its `sol.state_var` members.
@@ -66,6 +68,23 @@ impl<'context> Contract<'context> {
                     byte_offset.into(),
                 ))
                 .transient(transient);
+            ()
+        );
+    }
+
+    /// Emits a `sol.immutable @name` member of `element_type`.
+    pub fn declare_immutable(
+        self,
+        name: &str,
+        element_type: Type<'context>,
+        context: &Context<'context>,
+    ) {
+        mlir_op!(
+            context,
+            self.body,
+            ImmutableOperation
+                .sym_name(StringAttribute::new(context.melior, name))
+                .r#type(TypeAttribute::new(element_type.into_mlir()));
             ()
         );
     }

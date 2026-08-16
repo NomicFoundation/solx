@@ -1,7 +1,7 @@
 //!
-//! The function scope: the enclosing contract scope, the lexical variable environment, the declared
-//! return types, and the checked-arithmetic flag, together with the frame combinators every
-//! lowering threads through.
+//! The function scope: the enclosing contract scope, the dispatch of the function being emitted,
+//! the lexical variable environment, the declared return types, and the checked-arithmetic flag,
+//! together with the frame combinators every lowering threads through.
 //!
 
 use std::ops::Deref;
@@ -11,17 +11,21 @@ use slang_solidity_v2::ast::Type;
 use solx_mlir::Block;
 use solx_mlir::Context;
 use solx_mlir::Environment;
+use solx_mlir::FunctionDispatch;
 use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
 
 use crate::scope::contract::ContractScope;
 
-/// The function scope: the enclosing contract scope, the lexical variable environment, the declared
-/// return types a `return` converts to, and whether arithmetic is checked at the current position.
+/// The function scope: the enclosing contract scope, the dispatch of the `sol.func` being emitted,
+/// the lexical variable environment, the declared return types a `return` converts to, and whether
+/// arithmetic is checked at the current position.
 pub struct FunctionScope<'contract, 'source_unit, 'context> {
     /// The contract scope this function body is lowered within.
     pub contract: &'contract mut ContractScope<'source_unit, 'context>,
+    /// The dispatch of the `sol.func` being emitted.
+    pub dispatch: FunctionDispatch,
     /// The lexically scoped variable bindings.
     pub environment: Environment<'context>,
     /// The declared return types a `return` converts to.
@@ -31,13 +35,16 @@ pub struct FunctionScope<'contract, 'source_unit, 'context> {
 }
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// Opens a function scope within `contract` with the given declared return types.
+    /// Opens a function scope within `contract` for the dispatched function with the given
+    /// declared return types.
     pub fn new(
         contract: &'contract mut ContractScope<'source_unit, 'context>,
+        dispatch: FunctionDispatch,
         return_types: Vec<MlirType<'context>>,
     ) -> Self {
         Self {
             contract,
+            dispatch,
             environment: Environment::new(),
             return_types,
             checked: true,

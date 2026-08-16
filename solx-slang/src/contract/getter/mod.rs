@@ -106,7 +106,7 @@ impl<'context> Getter<'context> {
 impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
     /// Emits the `sol.func` a `public` state variable declares, dispatched by its ABI selector
     /// with slang's getter type as its signature. A constant folds its initializer; a mutable
-    /// variable reads its storage slot.
+    /// variable reads its storage slot; an immutable loads its linked value.
     pub fn state_variable_getter(&mut self, state_variable: &StateVariableDefinition) {
         let selector = state_variable
             .compute_selector()
@@ -130,19 +130,18 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                     self,
                     self.contract.body,
                 );
-                self.function(entry, signature.function_type.results, |scope| {
-                    let result_type = scope.return_types[0];
-                    let value = scope.converted(&initializer, result_type);
-                    scope.current_block().r#return(&[value], scope);
-                });
+                self.function(
+                    entry,
+                    FunctionDispatch::Getter,
+                    signature.function_type.results,
+                    |scope| {
+                        let result_type = scope.return_types[0];
+                        let value = scope.converted(&initializer, result_type);
+                        scope.current_block().r#return(&[value], scope);
+                    },
+                );
             }
             StateVariableMutability::Mutable | StateVariableMutability::Transient => {
-                let slot_name = self
-                    .storage_layout
-                    .get(&state_variable.node_id())
-                    .expect("slang lays out every state variable")
-                    .name
-                    .clone();
                 let getter = Getter::new(state_variable, self.source_unit);
                 let entry = signature.define(
                     Some(selector),
@@ -151,14 +150,47 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                     self,
                     self.contract.body,
                 );
-                self.function(entry, signature.function_type.results, |scope| {
-                    let (place, _) = scope.state_variable_place(state_variable, &slot_name);
-                    let values = getter.returned_values(place, &scope.return_types, entry, scope);
-                    scope.current_block().r#return(&values, scope);
-                });
+                self.function(
+                    entry,
+                    FunctionDispatch::Getter,
+                    signature.function_type.results,
+                    |scope| {
+                        let (place, _) = scope.state_variable_place(state_variable);
+                        let values =
+                            getter.returned_values(place, &scope.return_types, entry, scope);
+                        scope.current_block().r#return(&values, scope);
+                    },
+                );
             }
             StateVariableMutability::Immutable => {
-                unimplemented!("getter for a public immutable state variable")
+                let entry = signature.define(
+                    Some(selector),
+                    FunctionDispatch::Getter,
+                    StateMutability::View,
+                    self,
+                    self.contract.body,
+                );
+                self.function(
+                    entry,
+                    FunctionDispatch::Getter,
+                    signature.function_type.results,
+                    |scope| {
+                        let result_type = scope.return_types[0];
+                        let element_type = scope.resolve_type(
+                            &state_variable
+                                .get_type()
+                                .expect("binder types every state variable"),
+                            None,
+                        );
+                        let value = Value::load_immutable(
+                            &SourceUnitScope::state_variable_symbol(state_variable),
+                            element_type,
+                            scope,
+                        )
+                        .convert(result_type, scope);
+                        scope.current_block().r#return(&[value], scope);
+                    },
+                );
             }
         }
     }

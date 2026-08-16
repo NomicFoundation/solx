@@ -37,10 +37,11 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             _ => None,
         };
         let signature = self.source_unit.function_signature(function);
+        let dispatch = FunctionDispatch::from(function);
         let state_mutability = StateMutability::from(function.attributes().mutability());
         let entry = signature.define(
             selector,
-            FunctionDispatch::from(function),
+            dispatch,
             state_mutability,
             self,
             self.contract.body,
@@ -49,7 +50,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             parameters,
             results,
         } = signature.function_type;
-        self.function(entry, results, |scope| {
+        self.function(entry, dispatch, results, |scope| {
             for (index, parameter) in function.parameters().iter().enumerate() {
                 let Some(identifier) = parameter.name() else {
                     continue;
@@ -115,10 +116,15 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             self,
             self.contract.body,
         );
-        self.function(entry, Vec::new(), |scope| {
-            scope.state_variable_initializers();
-            scope.current_block().r#return(&[], scope);
-        });
+        self.function(
+            entry,
+            FunctionDispatch::Kind(MlirFunctionKind::Constructor),
+            Vec::new(),
+            |scope| {
+                scope.state_variable_initializers();
+                scope.current_block().r#return(&[], scope);
+            },
+        );
     }
 }
 

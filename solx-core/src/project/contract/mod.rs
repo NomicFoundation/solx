@@ -316,7 +316,6 @@ impl Contract {
                     solc_version.expect("Always exists").default,
                 );
 
-                // Deploy: accumulate dependencies from assembly before it is consumed
                 let mut accumulated_dependencies = solx_utils::Dependencies::new(
                     code_identifier.as_str(),
                     code.dependencies.runtime.clone(),
@@ -516,10 +515,6 @@ impl Contract {
                 };
 
                 let melior = solx_mlir::Context::create_melior_context();
-                // The deploy code of a failed runtime build still compiles, against a
-                // placeholder offset, so its own errors surface.
-                // TODO: support user-declared immutables, whose offsets the runtime build
-                // records per name beside the library address tag.
                 let immutables = match code_segment {
                     solx_utils::CodeSegment::Deploy => immutables.unwrap_or_else(|| {
                         BTreeMap::from([(

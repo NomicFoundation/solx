@@ -5,6 +5,7 @@
 //! crates to emit Sol dialect operations without the raw `melior` API.
 //!
 
+#![allow(clippy::too_many_arguments)]
 // `sol_ops!` expands through `macro_rules!` recursion, one frame per declaration; full Sol dialect
 // coverage exceeds the default limit of 128.
 #![recursion_limit = "256"]

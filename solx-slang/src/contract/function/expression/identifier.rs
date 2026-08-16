@@ -7,15 +7,19 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::StateVariableMutability;
 
+use solx_mlir::FunctionDispatch;
+use solx_mlir::FunctionKind;
 use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
 
 use crate::contract::object::Object;
 use crate::scope::function::FunctionScope;
+use crate::scope::source_unit::SourceUnitScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// A constant folds to its initializer; a bare function name materialises its internal pointer
+    /// A constant folds to its initializer; an immutable outside the constructor loads its linked
+    /// value (`sol.load_immutable`); a bare function name materialises its internal pointer
     /// (`sol.func_constant`), defining the function in this module if absent; a library name is its
     /// linked address (`sol.lib_addr`); every other identifier loads from its place.
     pub fn identifier(&mut self, node: &Identifier) -> Value<'context> {
@@ -24,15 +28,30 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 self.expression(&constant.value().expect("constant has an initializer"))
             }
             Some(Definition::StateVariable(state_variable))
-                if matches!(
-                    state_variable.attributes().mutability(),
-                    StateVariableMutability::Constant
-                ) =>
+                if let StateVariableMutability::Constant =
+                    state_variable.attributes().mutability() =>
             {
                 self.expression(
                     &state_variable
                         .value()
                         .expect("a constant state variable is initialized"),
+                )
+            }
+            Some(Definition::StateVariable(state_variable))
+                if let StateVariableMutability::Immutable =
+                    state_variable.attributes().mutability()
+                    && self.dispatch != FunctionDispatch::Kind(FunctionKind::Constructor) =>
+            {
+                let element_type = self.resolve_type(
+                    &state_variable
+                        .get_type()
+                        .expect("binder types every state variable"),
+                    None,
+                );
+                Value::load_immutable(
+                    &SourceUnitScope::state_variable_symbol(&state_variable),
+                    element_type,
+                    self,
                 )
             }
             Some(Definition::Function(function)) => {
@@ -57,14 +76,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     pub fn identifier_place(&mut self, node: &Identifier) -> (Place<'context>, MlirType<'context>) {
         match node.resolve_to_definition() {
             Some(Definition::StateVariable(state_variable)) => {
-                let slot_name = self
-                    .contract
-                    .storage_layout
-                    .get(&state_variable.node_id())
-                    .expect("state variable is registered in the storage layout")
-                    .name
-                    .clone();
-                self.state_variable_place(&state_variable, &slot_name)
+                self.state_variable_place(&state_variable)
             }
             Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                 self.environment.variable_with_type(node.name())
