@@ -6,6 +6,9 @@ pub mod contract;
 pub mod environment;
 pub mod function;
 
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::ffi::CString;
 use std::sync::Once;
 
 use melior::dialect::DialectRegistry;
@@ -264,7 +267,8 @@ impl<'context> Context<'context> {
 
     /// Translate MLIR source text (LLVM dialect) to raw LLVM pointers.
     ///
-    /// Parses the source, verifies it, and translates to LLVM IR.
+    /// Parses the source, verifies it, lowers each `llvm.setimmutable` into heap stores at its
+    /// id's `immutables` offsets, and translates to LLVM IR.
     /// Returns owned `(LLVMContextRef, LLVMModuleRef)`.
     ///
     /// # Errors
@@ -274,6 +278,7 @@ impl<'context> Context<'context> {
     pub fn translate_source_to_llvm(
         melior: &melior::Context,
         source: &str,
+        immutables: &BTreeMap<String, BTreeSet<u64>>,
     ) -> anyhow::Result<RawLlvmModule> {
         let module = Module::parse(melior, source)
             .ok_or_else(|| anyhow::anyhow!("failed to parse MLIR source text"))?;
@@ -282,7 +287,24 @@ impl<'context> Context<'context> {
             anyhow::bail!("MLIR module verification failed");
         }
 
+        let ids: Vec<CString> = immutables
+            .keys()
+            .map(|id| CString::new(id.as_str()).expect("an immutable id carries no NUL byte"))
+            .collect();
+        let (id_pointers, offsets): (Vec<*const std::ffi::c_char>, Vec<u64>) = ids
+            .iter()
+            .zip(immutables.values())
+            .flat_map(|(id, offsets)| offsets.iter().map(|offset| (id.as_ptr(), *offset)))
+            .unzip();
+
         unsafe {
+            crate::ffi::mlirEvmLowerSetImmutables(
+                module.to_raw(),
+                id_pointers.as_ptr(),
+                offsets.as_ptr(),
+                offsets.len() as u64,
+            );
+
             let raw_operation = module.as_operation().to_raw();
             let llvm_context = inkwell::llvm_sys::core::LLVMContextCreate();
 

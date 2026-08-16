@@ -163,6 +163,13 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                         Definition::Contract(_) | Definition::Interface(_) | Definition::Library(_)
                     )
                 ) => {}
+            Expression::MemberAccessExpression(inner)
+                if matches!(
+                    Self::resolved_definition(&inner.operand()),
+                    Some(
+                        Definition::Contract(_) | Definition::Interface(_) | Definition::Library(_)
+                    )
+                ) => {}
             _ => {
                 self.expression(node);
             }

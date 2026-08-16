@@ -516,8 +516,25 @@ impl Contract {
                 };
 
                 let melior = solx_mlir::Context::create_melior_context();
-                let raw_llvm = solx_mlir::Context::translate_source_to_llvm(&melior, &mlir.source)
-                    .context("MLIR translation")?;
+                // The deploy code of a failed runtime build still compiles, against a
+                // placeholder offset, so its own errors surface.
+                // TODO: support user-declared immutables, whose offsets the runtime build
+                // records per name beside the library address tag.
+                let immutables = match code_segment {
+                    solx_utils::CodeSegment::Deploy => immutables.unwrap_or_else(|| {
+                        BTreeMap::from([(
+                            solx_codegen_evm::LIBRARY_DEPLOY_ADDRESS_TAG.to_owned(),
+                            BTreeSet::from([0]),
+                        )])
+                    }),
+                    solx_utils::CodeSegment::Runtime => BTreeMap::new(),
+                };
+                let raw_llvm = solx_mlir::Context::translate_source_to_llvm(
+                    &melior,
+                    &mlir.source,
+                    &immutables,
+                )
+                .context("MLIR translation")?;
                 let context = unsafe { inkwell::context::Context::new(raw_llvm.context) };
                 let module = unsafe { inkwell::module::Module::new(raw_llvm.module) };
                 module.set_name(code_identifier.as_str());
@@ -571,7 +588,9 @@ impl Contract {
                 )?;
                 let (immutables_out, metadata_out) = match code_segment {
                     solx_utils::CodeSegment::Deploy => (None, None),
-                    solx_utils::CodeSegment::Runtime => (Some(BTreeMap::new()), metadata_bytes),
+                    solx_utils::CodeSegment::Runtime => {
+                        (Some(build.immutables.unwrap_or_default()), metadata_bytes)
+                    }
                 };
                 let object = EVMContractObject::new(
                     code_identifier,

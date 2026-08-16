@@ -134,35 +134,9 @@ impl<'context> SourceUnitScope<'context> {
                     .collect();
                 MlirType::structure(self.melior, &member_types, struct_location)
             }
-            Type::Contract(contract_type) => {
-                let Definition::Contract(contract_definition) = contract_type.definition() else {
-                    unreachable!("Slang ContractType always references a Contract definition");
-                };
-                MlirType::contract(
-                    self.melior,
-                    Self::object_identifier(
-                        contract_definition.get_file_id(),
-                        contract_definition.name().name(),
-                    )
-                    .as_str(),
-                    contract_definition.is_payable(),
-                )
-            }
-            Type::Interface(interface_type) => {
-                let Definition::Interface(interface_definition) = interface_type.definition()
-                else {
-                    unreachable!("Slang InterfaceType always references an Interface definition");
-                };
-                MlirType::contract(
-                    self.melior,
-                    Self::object_identifier(
-                        interface_definition.get_file_id(),
-                        interface_definition.name().name(),
-                    )
-                    .as_str(),
-                    false,
-                )
-            }
+            Type::Contract(inner) => self.object_type(inner.definition()),
+            Type::Interface(inner) => self.object_type(inner.definition()),
+            Type::Library(inner) => self.object_type(inner.definition()),
             Type::Enum(enum_type) => {
                 let Definition::Enum(enum_definition) = enum_type.definition() else {
                     unreachable!("Slang EnumType always references an Enum definition");
@@ -232,5 +206,21 @@ impl<'context> SourceUnitScope<'context> {
             return element_type;
         }
         MlirType::pointer(self.melior, element_type, base_location)
+    }
+
+    /// The Sol dialect type a value of an object type carries: the object identifier it is linked
+    /// by. Only a contract declares the payable dispatch that lets a plain transfer reach it.
+    fn object_type(&self, definition: Definition) -> MlirType<'context> {
+        let (file_id, name, is_payable) = match &definition {
+            Definition::Contract(node) => (node.get_file_id(), node.name(), node.is_payable()),
+            Definition::Interface(node) => (node.get_file_id(), node.name(), false),
+            Definition::Library(node) => (node.get_file_id(), node.name(), false),
+            _ => unreachable!("slang types an object type by its own definition"),
+        };
+        MlirType::contract(
+            self.melior,
+            solx_utils::ContractName::full_path(file_id.as_str(), name.name()).as_str(),
+            is_payable,
+        )
     }
 }

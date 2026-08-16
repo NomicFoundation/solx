@@ -2765,7 +2765,7 @@ checksum = "7ebb8d8732c6a6df3d8f032a82911cfc747e00efb95cc46e8d0acd5b5b88570c"
 [[package]]
 name = "melior"
 version = "0.26.9"
-source = "git+https://github.com/NomicFoundation/melior?rev=d188691b0620f91ff83e98cdbdf60507b2ee37d9#d188691b0620f91ff83e98cdbdf60507b2ee37d9"
+source = "git+https://github.com/NomicFoundation/melior?rev=f780c87b43f3015176ba919f7749c655cc13685e#f780c87b43f3015176ba919f7749c655cc13685e"
 dependencies = [
  "melior-macro",
  "mlir-sys",
@@ -2774,7 +2774,7 @@ dependencies = [
 [[package]]
 name = "melior-macro"
 version = "0.19.5"
-source = "git+https://github.com/NomicFoundation/melior?rev=d188691b0620f91ff83e98cdbdf60507b2ee37d9#d188691b0620f91ff83e98cdbdf60507b2ee37d9"
+source = "git+https://github.com/NomicFoundation/melior?rev=f780c87b43f3015176ba919f7749c655cc13685e#f780c87b43f3015176ba919f7749c655cc13685e"
 dependencies = [
  "comrak",
  "convert_case 0.11.0",
@@ -4567,7 +4567,7 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 [[package]]
 name = "slang_solidity_v2"
 version = "1.3.8"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=ad18c38a0af62abbcfb77ea55087184aa0d1eba5#ad18c38a0af62abbcfb77ea55087184aa0d1eba5"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=a1ade1c6642d2535fdb107848759b41341bbb205#a1ade1c6642d2535fdb107848759b41341bbb205"
 dependencies = [
  "slang_solidity_v2_ast",
  "slang_solidity_v2_common",
@@ -4580,7 +4580,7 @@ dependencies = [
 [[package]]
 name = "slang_solidity_v2_ast"
 version = "1.3.8"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=ad18c38a0af62abbcfb77ea55087184aa0d1eba5#ad18c38a0af62abbcfb77ea55087184aa0d1eba5"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=a1ade1c6642d2535fdb107848759b41341bbb205#a1ade1c6642d2535fdb107848759b41341bbb205"
 dependencies = [
  "itertools 0.15.0",
  "num-bigint",
@@ -4597,7 +4597,7 @@ dependencies = [
 [[package]]
 name = "slang_solidity_v2_common"
 version = "1.3.8"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=ad18c38a0af62abbcfb77ea55087184aa0d1eba5#ad18c38a0af62abbcfb77ea55087184aa0d1eba5"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=a1ade1c6642d2535fdb107848759b41341bbb205#a1ade1c6642d2535fdb107848759b41341bbb205"
 dependencies = [
  "fxhash",
  "indexmap 2.14.0",
@@ -4611,12 +4611,12 @@ dependencies = [
 [[package]]
 name = "slang_solidity_v2_cst"
 version = "1.3.8"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=ad18c38a0af62abbcfb77ea55087184aa0d1eba5#ad18c38a0af62abbcfb77ea55087184aa0d1eba5"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=a1ade1c6642d2535fdb107848759b41341bbb205#a1ade1c6642d2535fdb107848759b41341bbb205"
 
 [[package]]
 name = "slang_solidity_v2_ir"
 version = "1.3.8"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=ad18c38a0af62abbcfb77ea55087184aa0d1eba5#ad18c38a0af62abbcfb77ea55087184aa0d1eba5"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=a1ade1c6642d2535fdb107848759b41341bbb205#a1ade1c6642d2535fdb107848759b41341bbb205"
 dependencies = [
  "slang_solidity_v2_common",
  "slang_solidity_v2_cst",
@@ -4625,7 +4625,7 @@ dependencies = [
 [[package]]
 name = "slang_solidity_v2_parser"
 version = "1.3.8"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=ad18c38a0af62abbcfb77ea55087184aa0d1eba5#ad18c38a0af62abbcfb77ea55087184aa0d1eba5"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=a1ade1c6642d2535fdb107848759b41341bbb205#a1ade1c6642d2535fdb107848759b41341bbb205"
 dependencies = [
  "lalrpop",
  "lalrpop-util",
@@ -4639,7 +4639,7 @@ dependencies = [
 [[package]]
 name = "slang_solidity_v2_semantic"
 version = "1.3.8"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=ad18c38a0af62abbcfb77ea55087184aa0d1eba5#ad18c38a0af62abbcfb77ea55087184aa0d1eba5"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=a1ade1c6642d2535fdb107848759b41341bbb205#a1ade1c6642d2535fdb107848759b41341bbb205"
 dependencies = [
  "num-bigint",
  "num-integer",
@@ -4857,14 +4857,12 @@ name = "solx-slang"
 version = "0.1.7"
 dependencies = [
  "anyhow",
- "itertools 0.15.0",
  "num",
  "num-traits",
  "ruint",
  "semver 1.0.28",
  "serde_json",
  "slang_solidity_v2",
- "solx-codegen-evm",
  "solx-core",
  "solx-mlir",
  "solx-standard-json",

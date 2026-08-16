@@ -21,21 +21,29 @@ use crate::scope::contract::ContractScope;
 use crate::scope::source_unit::SourceUnitScope;
 
 impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
-    /// Emits `function`'s `sol.func` into the contract body from its pre-registered signature,
-    /// binding parameters and named-return pointers into a fresh function frame. A constructor runs
-    /// the contract's state variable initializers as its prologue.
+    /// Defines `function`'s `sol.func` in the contract body at its first naming, binding
+    /// parameters and named-return pointers into a fresh function frame. A constructor runs the
+    /// contract's state variable initializers as its prologue. A function carries its dispatch
+    /// selector only in its owner's module, so a copied body never becomes an entry point.
     pub fn function_definition(&mut self, function: &FunctionDefinition) {
         let Some(body) = function.body() else {
             return;
         };
-        let signature = self.source_unit.function_signature(function.node_id());
+        if !self.defined_functions.insert(function.node_id()) {
+            return;
+        }
+        let selector = match function.enclosing_definition() {
+            Some(enclosing) if enclosing.node_id() == self.object_id => function.compute_selector(),
+            _ => None,
+        };
+        let signature = self.source_unit.function_signature(function);
         let state_mutability = StateMutability::from(function.attributes().mutability());
         let entry = signature.define(
-            function.compute_selector(),
+            selector,
             FunctionDispatch::from(function),
             state_mutability,
             self,
-            self.contract_body,
+            self.contract.body,
         );
         let FunctionType {
             parameters,
@@ -105,7 +113,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             FunctionDispatch::Kind(MlirFunctionKind::Constructor),
             StateMutability::NonPayable,
             self,
-            self.contract_body,
+            self.contract.body,
         );
         self.function(entry, Vec::new(), |scope| {
             scope.state_variable_initializers();

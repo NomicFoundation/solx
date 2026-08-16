@@ -1,160 +1,74 @@
 //!
-//! Contract definition emission to Sol dialect MLIR.
+//! Contract and library definition emission to Sol dialect MLIR.
 //!
 
 pub mod function;
 pub mod getter;
+pub mod object;
 pub mod state_variable;
 pub mod storage_slot;
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
-
-use slang_solidity_v2::ast::ContractDefinition;
-use slang_solidity_v2::ast::ContractMember;
-use slang_solidity_v2::ast::FunctionDefinition;
-use slang_solidity_v2::ast::FunctionKind;
-use slang_solidity_v2::ast::StateVariableDefinition;
-use slang_solidity_v2::ast::Type;
-use slang_solidity_v2::compilation::FileId;
 
 use solx_mlir::Block;
 use solx_mlir::Contract;
-use solx_mlir::Function;
 use solx_mlir::Type as MlirType;
 
-use crate::contract::storage_slot::StorageSlot;
+use crate::contract::object::Object;
+use crate::scope::contract::ContractScope;
 use crate::scope::source_unit::SourceUnitScope;
 
 impl<'context> SourceUnitScope<'context> {
-    /// Emits a `sol.contract` wrapping a `sol.func` per function and returns the contract's ABI
-    /// `method_identifiers` map (externally-dispatchable signature to 4-byte selector, lower-case
-    /// hex); `convert-sol-to-yul` builds the entry-point dispatcher from the function selectors.
-    /// Function signatures are pre-registered for call resolution before any body is emitted.
-    /// `operator_functions` land in the contract body because MLIR has no file scope.
-    pub fn contract_definition(
-        &mut self,
-        node: &ContractDefinition,
-        operator_functions: &[FunctionDefinition],
-    ) -> BTreeMap<String, String> {
-        let contract_identifier = node.name();
-
-        for function in node
-            .functions()
-            .into_iter()
-            .chain(node.constructor())
-            .chain(operator_functions.iter().cloned())
-        {
-            let Some(Type::Function(function_type)) = function.get_type() else {
-                unreachable!("slang types every function definition");
-            };
-            self.function_signatures.insert(
-                function.node_id(),
-                Function::new(
-                    Self::function_symbol(&function),
-                    self.function_type(&function_type),
-                ),
-            );
-        }
-
-        let state_variables: Vec<StateVariableDefinition> = node
-            .members()
-            .iter()
-            .filter_map(|member| match member {
-                ContractMember::StateVariableDefinition(state_variable) => {
-                    Some(state_variable.clone())
-                }
-                _ => None,
-            })
-            .collect();
-        let public_state_variables: Vec<StateVariableDefinition> = state_variables
-            .iter()
-            .filter(|state_variable| state_variable.is_externally_visible())
-            .cloned()
-            .collect();
-        let storage_layout = match node.compute_abi() {
-            Some(abi) => abi
-                .storage_layout()
-                .iter()
-                .map(|item| (item.node_id(), StorageSlot::from(item)))
-                .collect(),
-            None => HashMap::new(),
-        };
-
-        let object_identifier =
-            Self::object_identifier(node.get_file_id(), contract_identifier.name());
-        let sol_contract = Contract::define(
-            object_identifier.as_str(),
-            solx_mlir::ContractKind::Contract,
+    /// Emits `object`'s `sol.contract` and returns its ABI `method_identifiers` map.
+    pub fn object_definition(&mut self, object: &Object) -> BTreeMap<String, String> {
+        let identifier = object.identifier();
+        let contract = Contract::define(
+            identifier.as_str(),
+            object.kind(),
             self,
             Block::from(self.module.body()),
         );
         self.contract(
-            MlirType::contract(self.melior, object_identifier.as_str(), node.is_payable()),
-            sol_contract.body,
-            state_variables,
-            storage_layout,
-            |scope| {
-                for state_variable in scope.state_variables.iter() {
-                    let Some(slot) = scope.storage_layout.get(&state_variable.node_id()) else {
-                        continue;
-                    };
-                    let element_type = scope.source_unit.resolve(
-                        &state_variable
-                            .get_type()
-                            .expect("binder types every state variable"),
-                        None,
-                    );
-                    sol_contract.declare_state_var(
-                        &slot.name,
-                        element_type,
-                        slot.slot,
-                        slot.byte_offset,
-                        scope,
-                    );
-                }
-                scope.constructor(node);
-                for function in node.functions().iter().chain(operator_functions) {
-                    scope.function_definition(function);
-                }
-                for state_variable in public_state_variables.iter() {
-                    scope.state_variable_getter(state_variable);
-                }
-            },
+            MlirType::contract(self.melior, identifier.as_str(), object.is_payable()),
+            contract,
+            object,
+            |scope| scope.members(object),
         );
 
-        node.functions()
-            .into_iter()
-            .filter(|function| {
-                matches!(function.kind(), FunctionKind::Regular) && function.is_externally_visible()
-            })
-            .map(|function| {
-                (
-                    function
-                        .compute_canonical_signature()
-                        .expect("an externally visible function has a canonical signature"),
-                    function
-                        .compute_selector()
-                        .expect("an externally visible function has a selector"),
-                )
-            })
-            .chain(public_state_variables.iter().map(|state_variable| {
-                (
-                    state_variable
-                        .compute_canonical_signature()
-                        .expect("a public state variable has a canonical signature"),
-                    state_variable
-                        .compute_selector()
-                        .expect("a public state variable has a selector"),
-                )
-            }))
-            .map(|(signature, selector)| (signature, format!("{selector:08x}")))
-            .collect()
+        object.method_identifiers()
     }
+}
 
-    /// The contract's object identifier, qualified by its file: linking keys objects by it, and two
-    /// files may declare the same name.
-    pub fn object_identifier(file_id: &FileId, name: &str) -> String {
-        solx_utils::ContractName::full_path(file_id.as_str(), name)
+impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
+    /// Emits the object's members: the state-variable declarations, the contract's constructor,
+    /// the functions, and the getters.
+    fn members(&mut self, object: &Object) {
+        for state_variable in self.state_variables.iter() {
+            let Some(slot) = self.storage_layout.get(&state_variable.node_id()) else {
+                continue;
+            };
+            let element_type = self.source_unit.resolve(
+                &state_variable
+                    .get_type()
+                    .expect("binder types every state variable"),
+                None,
+            );
+            self.contract.declare_state_var(
+                &slot.name,
+                element_type,
+                slot.slot,
+                slot.byte_offset,
+                self,
+            );
+        }
+        if let Object::Contract(node) = object {
+            self.constructor(node);
+        }
+        for function in object.functions().iter() {
+            self.function_definition(function);
+        }
+        for state_variable in object.public_state_variables() {
+            self.state_variable_getter(&state_variable);
+        }
     }
 }
