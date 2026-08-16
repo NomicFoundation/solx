@@ -116,8 +116,14 @@ impl Call {
                 values
             }
             Self::Library(function_definition, selector) => {
-                let (_status, values) =
-                    Self::library(&function_definition, selector, &arguments, false, scope);
+                let (_status, values) = Self::library(
+                    &function_definition,
+                    selector,
+                    &arguments,
+                    options.as_ref(),
+                    false,
+                    scope,
+                );
                 values
             }
             Self::AttachedLibrary(receiver, function_definition, selector) => {
@@ -126,6 +132,7 @@ impl Call {
                     &function_definition,
                     selector,
                     &arguments,
+                    options.as_ref(),
                     false,
                     scope,
                 );
@@ -184,15 +191,21 @@ impl Call {
                 true,
                 scope,
             ),
-            Self::Library(function_definition, selector) => {
-                Self::library(&function_definition, selector, &arguments, true, scope)
-            }
+            Self::Library(function_definition, selector) => Self::library(
+                &function_definition,
+                selector,
+                &arguments,
+                options.as_ref(),
+                true,
+                scope,
+            ),
             Self::AttachedLibrary(receiver, function_definition, selector) => {
                 Self::attached_library(
                     receiver,
                     &function_definition,
                     selector,
                     &arguments,
+                    options.as_ref(),
                     true,
                     scope,
                 )
@@ -712,10 +725,12 @@ impl Call {
         definition: &FunctionDefinition,
         selector: u32,
         arguments: &[Expression],
+        options: Option<&CallOptions>,
         is_guarded: bool,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> (Value<'context>, Vec<Value<'context>>) {
         let address = Self::library_address(definition, scope);
+        let options = Options::new(options, scope);
         let Some(Type::Function(externalized_type)) = definition.externalized_type() else {
             unreachable!("slang externalizes every selector-bearing function's type");
         };
@@ -731,7 +746,7 @@ impl Call {
             &function.function_type.results,
             address,
             selector,
-            &Options::default(),
+            &options,
             true,
             is_static,
             is_guarded,
@@ -747,10 +762,12 @@ impl Call {
         definition: &FunctionDefinition,
         selector: u32,
         arguments: &[Expression],
+        options: Option<&CallOptions>,
         is_guarded: bool,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> (Value<'context>, Vec<Value<'context>>) {
         let function = scope.contract.source_unit.function_signature(definition);
+        let options = Options::new(options, scope);
         let mut converted = scope.external_arguments(
             std::slice::from_ref(&receiver),
             &function.function_type.parameters[..1],
@@ -773,7 +790,7 @@ impl Call {
             &result_types,
             address,
             selector,
-            &Options::default(),
+            &options,
             true,
             is_static,
             is_guarded,
