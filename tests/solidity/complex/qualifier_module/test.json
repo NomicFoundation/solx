@@ -1,0 +1,29 @@
+{ "modes": [ "E" ], "cases": [ {
+    "name": "constant_member",
+    "inputs": [ { "instance": "Test", "method": "constantMember", "calldata": [] } ],
+    "expected": [ "7", "1" ]
+}, {
+    "name": "free_call",
+    "inputs": [ { "instance": "Test", "method": "freeCall", "calldata": [] } ],
+    "expected": [ "4", "21" ]
+}, {
+    "name": "designator",
+    "inputs": [ { "instance": "Test", "method": "designator", "calldata": [] } ],
+    "expected": [ "4", "21" ]
+}, {
+    "name": "chain",
+    "inputs": [ { "instance": "Test", "method": "chain", "calldata": [] } ],
+    "expected": [ "7", "1" ]
+}, {
+    "name": "aliased",
+    "inputs": [ { "instance": "Test", "method": "aliased", "calldata": [] } ],
+    "expected": [ "7", "1" ]
+}, {
+    "name": "stray",
+    "inputs": [ { "instance": "Test", "method": "stray", "calldata": [] } ],
+    "expected": [ "1" ]
+} ],
+    "contracts": {
+        "Test": "main.sol:Test"
+    }
+}

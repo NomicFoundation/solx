@@ -9,6 +9,10 @@
 // CHECK:   sol.constant 2 : ui256
 // CHECK:   sol.enum_cast %{{.*}} : ui256 to !sol.enum<2>
 
+// CHECK: sol.func @{{.*interface_variant.*}}-> !sol.enum<2>
+// CHECK:   sol.constant 1 : ui256
+// CHECK:   sol.enum_cast %{{.*}} : ui256 to !sol.enum<2>
+
 // CHECK: sol.func @{{.*type_min.*}}-> !sol.enum<2>
 // CHECK:   sol.constant 0 : ui256
 // CHECK:   sol.enum_cast %{{.*}} : ui256 to !sol.enum<2>
@@ -16,6 +20,10 @@
 // CHECK: sol.func @{{.*type_max.*}}-> !sol.enum<2>
 // CHECK:   sol.constant 2 : ui256
 // CHECK:   sol.enum_cast %{{.*}} : ui256 to !sol.enum<2>
+
+interface I {
+    enum E { First, Second, Third }
+}
 
 contract C {
     enum E { First, Second, Third }
@@ -26,6 +34,10 @@ contract C {
 
     function qualified_variant() public pure returns (E) {
         return C.E.Third;
+    }
+
+    function interface_variant() public pure returns (I.E) {
+        return I.E.Second;
     }
 
     function type_min() public pure returns (E) {

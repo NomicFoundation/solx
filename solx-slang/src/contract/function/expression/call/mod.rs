@@ -83,6 +83,7 @@ impl Call {
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Vec<Value<'context>> {
         let (callee, options) = Self::callee(node);
+        Self::qualifier_effect(&callee, scope);
         let kind = Self::from_call(node, callee);
         let arguments = kind.arguments(node);
         match kind {
@@ -161,6 +162,7 @@ impl Call {
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> (Value<'context>, Vec<Value<'context>>) {
         let (callee, options) = Self::callee(node);
+        Self::qualifier_effect(&callee, scope);
         let kind = Self::from_call(node, callee);
         let arguments = kind.arguments(node);
         match kind {
@@ -232,6 +234,21 @@ impl Call {
         }
     }
 
+    /// Evaluates an externally dispatched library callee's qualifier for effect before the
+    /// arguments.
+    fn qualifier_effect(callee: &Expression, scope: &mut FunctionScope) {
+        if let Expression::MemberAccessExpression(access) = callee
+            && let Some(Definition::Function(function)) = access.member().resolve_to_definition()
+            && matches!(
+                FunctionScope::resolved_definition(&access.operand()),
+                Some(Definition::Library(_))
+            )
+            && function.compute_selector().is_some()
+        {
+            scope.expression_effect(&access.operand());
+        }
+    }
+
     /// Classifies `call`'s callee into the single kind that emits it. A type conversion is probed
     /// before the callee's shape, its callee may be an elementary type or `payable` keyword as well
     /// as a named type, and its one-argument arity is part of the classification, per the variant's
@@ -288,21 +305,21 @@ impl Call {
                         function_type,
                     );
                 }
-                if matches!(
-                    FunctionScope::resolved_definition(&access.operand()),
-                    Some(Definition::Contract(_) | Definition::Import(_))
-                ) {
-                    if let Some(Definition::Function(function_definition)) =
+                if let Some(Definition::Contract(_)) =
+                    FunctionScope::resolved_definition(&access.operand())
+                    && let Some(Definition::Function(function_definition)) =
                         access.member().resolve_to_definition()
-                    {
-                        return Self::Function(function_definition);
-                    }
-                    if let Some(Type::Function(function_type)) = access.get_type() {
-                        return Self::FunctionPointer(
-                            Expression::MemberAccessExpression(access),
-                            function_type,
-                        );
-                    }
+                {
+                    return Self::Function(function_definition);
+                }
+                if let Some(Type::UserMetaType(meta)) = access.operand().get_type()
+                    && let Definition::Contract(_) | Definition::Import(_) = meta.definition()
+                    && let Some(Type::Function(function_type)) = access.get_type()
+                {
+                    return Self::FunctionPointer(
+                        Expression::MemberAccessExpression(access),
+                        function_type,
+                    );
                 }
                 if let Some(Definition::Function(function_definition)) =
                     access.member().resolve_to_definition()

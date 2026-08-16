@@ -36,6 +36,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         }
 
         if let Some(Definition::EnumMember(member)) = node.member().resolve_to_definition() {
+            self.expression_effect(&operand);
             let Some(Definition::Enum(enum_definition)) = member.enclosing_definition() else {
                 unreachable!("an enum member is declared by an enum");
             };
@@ -67,6 +68,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             );
         }
 
+        if Self::is_module_typed(&operand) {
+            self.expression_effect(&operand);
+        }
         if Self::is_namespace_member(&operand, &node.member()) {
             return self.identifier(&node.member());
         }
@@ -220,10 +224,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         self.expression(operand).external_function_selector(self)
     }
 
-    /// Whether the member access qualifies a namespace (`C.x`, `L.f`, `M.Lib.K` — the operand may
-    /// chain aliases to any depth) and so resolves through its member alone: the namespace itself
-    /// denotes no value, and a selector-bearing library function is dispatched as an external
-    /// callee instead.
+    /// Whether the member access qualifies a namespace and so resolves through its member: a
+    /// contract, a library, an alias chain of any depth, or a module denoted by type alone. A
+    /// selector-bearing library function is dispatched as an external callee instead.
     fn is_namespace_member(operand: &Expression, member: &Identifier) -> bool {
         match Self::resolved_definition(operand) {
             Some(Definition::Contract(_) | Definition::Import(_)) => true,
@@ -232,7 +235,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 Some(Definition::Function(function)) => function.compute_selector().is_none(),
                 _ => false,
             },
-            _ => false,
+            _ => Self::is_module_typed(operand),
         }
     }
 
