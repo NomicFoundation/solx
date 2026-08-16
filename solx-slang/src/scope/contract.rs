@@ -1,9 +1,10 @@
 //!
-//! The contract scope: the enclosing source unit scope, the block the contract's functions are
+//! The contract scope: the enclosing source unit scope, the `sol.contract` the members are
 //! defined into, and the state-variable data a member resolves against.
 //!
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ops::Deref;
 
 use slang_solidity_v2::ast::NodeId;
@@ -11,19 +12,25 @@ use slang_solidity_v2::ast::StateVariableDefinition;
 
 use solx_mlir::Block;
 use solx_mlir::Context;
+use solx_mlir::Contract;
 use solx_mlir::Type as MlirType;
 
+use crate::contract::object::Object;
 use crate::contract::storage_slot::StorageSlot;
 use crate::scope::function::FunctionScope;
 use crate::scope::source_unit::SourceUnitScope;
 
-/// The contract scope: the enclosing source unit scope, the block the contract's functions are
+/// The contract scope: the enclosing source unit scope, the `sol.contract` the members are
 /// defined into, and the state-variable data a member resolves against.
 pub struct ContractScope<'source_unit, 'context> {
     /// The source unit scope this contract is lowered within.
     pub source_unit: &'source_unit mut SourceUnitScope<'context>,
-    /// The block the contract's `sol.func`s are defined into.
-    pub contract_body: Block<'context>,
+    /// The `sol.contract` the members are declared and defined into.
+    pub contract: Contract<'context>,
+    /// The definition id of the object being emitted.
+    pub object_id: NodeId,
+    /// The definition ids of the functions the contract defines.
+    pub defined_functions: HashSet<NodeId>,
     /// The contract's state variable definitions in declaration order.
     pub state_variables: Vec<StateVariableDefinition>,
     /// The state-variable slots keyed by definition id.
@@ -34,15 +41,16 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
     /// Opens a contract scope within `source_unit`.
     pub fn new(
         source_unit: &'source_unit mut SourceUnitScope<'context>,
-        contract_body: Block<'context>,
-        state_variables: Vec<StateVariableDefinition>,
-        storage_layout: HashMap<NodeId, StorageSlot>,
+        contract: Contract<'context>,
+        object: &Object,
     ) -> Self {
         Self {
             source_unit,
-            contract_body,
-            state_variables,
-            storage_layout,
+            contract,
+            object_id: object.node_id(),
+            defined_functions: HashSet::new(),
+            state_variables: object.state_variables(),
+            storage_layout: object.storage_layout(),
         }
     }
 

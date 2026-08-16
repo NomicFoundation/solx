@@ -171,8 +171,8 @@ impl<'slice, T, const N: usize> IntoOds<&'slice [T]> for &'slice [T; N] {
 /// identifier is always a parameter.
 ///
 /// A `base | flagged (…) … { … } flagged .setter ;` declaration stamps a pair of methods off one
-/// chain: `base` omits the unit-flag setter and `flagged` appends `.setter(unit_flag)`, so a binary
-/// mode is two named methods rather than one method taking a `bool`.
+/// chain: `base` omits the unit-flag setter and `flagged` appends `.setter(unit_flag)`, naming a
+/// statically chosen mode; a runtime-selected flag is a `flag` parameter instead.
 ///
 /// Dispositions: `-> value` / `-> place` append at the `current_block()` cursor and wrap the single
 /// result; `-> value nop_if_same(param)` short-circuits when the receiver already has that type;
@@ -186,6 +186,7 @@ macro_rules! sol_ops {
     () => {};
 
     (@ty i64) => { i64 };
+    (@ty flag) => { bool };
     (@ty str) => { &str };
     (@ty bytes) => { &[u8] };
     (@ty value) => { $crate::Value<'context> };
@@ -278,7 +279,7 @@ macro_rules! sol_ops {
 
     (@chain $builder:ident [$context:ident] [$receiver:tt]) => { $builder };
     (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (unit_flag) $($rest:tt)*) => {{
-        let $builder = $builder.$setter(::melior::ir::Attribute::unit($context.melior));
+        let $builder = $builder.$setter(true);
         sol_ops!(@chain $builder [$context] [$receiver] $($rest)*)
     }};
     (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (optional_str($text:ident)) $($rest:tt)*) => {{
@@ -388,24 +389,6 @@ macro_rules! sol_ops {
         let mut results = sol_ops!(@emit values [$context] $operation, $message);
         (results.remove(0), results)
     }};
-
-    (
-        $receiver:ident :: $base:ident | $flagged:ident | $guarded:ident | $guarded_flagged:ident
-        ($($parameters:tt)*)
-        -> $disposition:ident { $operation:ident $($chain:tt)* }
-        flagged .$setter:ident, .$guard:ident ;
-        $($rest:tt)*
-    ) => {
-        sol_ops!(
-            $receiver :: $base | $flagged ($($parameters)*)
-            -> $disposition { $operation $($chain)* } flagged .$setter;
-        );
-        sol_ops!(
-            $receiver :: $guarded | $guarded_flagged ($($parameters)*)
-            -> $disposition { $operation $($chain)* .$guard(unit_flag) } flagged .$setter;
-        );
-        sol_ops!($($rest)*);
-    };
 
     (
         $receiver:ident :: $base:ident | $flagged:ident ($($parameters:tt)*)

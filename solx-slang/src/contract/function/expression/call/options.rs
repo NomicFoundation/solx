@@ -24,8 +24,11 @@ pub struct Options<'context> {
 }
 
 impl<'context> Options<'context> {
-    /// Emits each option the call names, in source order.
-    pub fn new(options: &CallOptions, scope: &mut FunctionScope<'_, '_, 'context>) -> Self {
+    /// Emits each option the call names, in source order; an undecorated call forwards defaults.
+    pub fn new(options: Option<&CallOptions>, scope: &mut FunctionScope<'_, '_, 'context>) -> Self {
+        let Some(options) = options else {
+            return Self::default();
+        };
         let field = MlirType::field(scope.melior);
         let mut forwarded = Self::default();
         for option in options.iter() {

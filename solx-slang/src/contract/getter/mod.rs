@@ -128,7 +128,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                     FunctionDispatch::Getter,
                     StateMutability::Pure,
                     self,
-                    self.contract_body,
+                    self.contract.body,
                 );
                 self.function(entry, signature.function_type.results, |scope| {
                     let result_type = scope.return_types[0];
@@ -149,7 +149,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                     FunctionDispatch::Getter,
                     StateMutability::View,
                     self,
-                    self.contract_body,
+                    self.contract.body,
                 );
                 self.function(entry, signature.function_type.results, |scope| {
                     let (place, _) = scope.state_variable_place(state_variable, &slot_name);

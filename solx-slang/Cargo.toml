@@ -11,7 +11,6 @@ doctest = false
 
 [dependencies]
 anyhow.workspace = true
-itertools.workspace = true
 num.workspace = true
 num-traits = "0.2"
 ruint.workspace = true
@@ -20,7 +19,6 @@ semver.workspace = true
 
 slang_solidity_v2.workspace = true
 
-solx-codegen-evm = { path = "../solx-codegen-evm" }
 solx-core = { path = "../solx-core", features = ["mlir"] }
 solx-mlir = { path = "../solx-mlir" }
 solx-standard-json = { path = "../solx-standard-json", features = ["mlir"] }
