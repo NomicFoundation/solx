@@ -40,13 +40,15 @@ impl<'context> Contract<'context> {
         Self { body }
     }
 
-    /// Emits a `sol.state_var @name` member of `element_type` at storage `slot`/`byte_offset`.
+    /// Emits a `sol.state_var @name` member of `element_type` at `slot`/`byte_offset` of the
+    /// persistent or, when `transient`, the transient storage.
     pub fn declare_state_var(
         self,
         name: &str,
         element_type: Type<'context>,
         slot: U256,
         byte_offset: u32,
+        transient: bool,
         context: &Context<'context>,
     ) {
         mlir_op!(
@@ -62,7 +64,8 @@ impl<'context> Contract<'context> {
                 .byte_offset(IntegerAttribute::new(
                     IntegerType::new(context.melior, solx_utils::BIT_LENGTH_X32 as u32).into(),
                     byte_offset.into(),
-                ));
+                ))
+                .transient(transient);
             ()
         );
     }
