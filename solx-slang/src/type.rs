@@ -60,9 +60,9 @@ impl<'context> SourceUnitScope<'context> {
                     MlirType::string(self.melior, solx_utils::DataLocation::Memory)
                 }
                 LiteralKind::HexString { bytes } => MlirType::fixed_bytes(self.melior, bytes),
-                LiteralKind::Rational { .. } => unimplemented!(
-                    "MLIR type resolution is not yet implemented for rational literals"
-                ),
+                LiteralKind::Rational { .. } => {
+                    unreachable!("a rational literal folds into its integer-typed parent")
+                }
             },
             Type::String(string_type) => {
                 let location = solx_utils::DataLocation::from_slang(

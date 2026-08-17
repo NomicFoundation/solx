@@ -94,6 +94,54 @@
 //!     "expected": [
 //!         "1000000000000000000"
 //!     ]
+//! }, {
+//!     "name": "half_plus_quarter_ether",
+//!     "inputs": [
+//!         {
+//!             "method": "half_plus_quarter_ether",
+//!             "calldata": [
+//!             ]
+//!         }
+//!     ],
+//!     "expected": [
+//!         "750000000000000000"
+//!     ]
+//! }, {
+//!     "name": "half_ether_plus_wei",
+//!     "inputs": [
+//!         {
+//!             "method": "half_ether_plus_wei",
+//!             "calldata": [
+//!             ]
+//!         }
+//!     ],
+//!     "expected": [
+//!         "500000000000000001"
+//!     ]
+//! }, {
+//!     "name": "half_ether_below_one",
+//!     "inputs": [
+//!         {
+//!             "method": "half_ether_below_one",
+//!             "calldata": [
+//!             ]
+//!         }
+//!     ],
+//!     "expected": [
+//!         "1"
+//!     ]
+//! }, {
+//!     "name": "half_ether_above_wei",
+//!     "inputs": [
+//!         {
+//!             "method": "half_ether_above_wei",
+//!             "calldata": [
+//!             ]
+//!         }
+//!     ],
+//!     "expected": [
+//!         "1"
+//!     ]
 //! } ] }
 
 // SPDX-License-Identifier: MIT
@@ -131,5 +179,21 @@ contract Test {
 
     function scientific_large() public pure returns (uint256) {
         return 1e18;
+    }
+
+    function half_plus_quarter_ether() public pure returns (uint256) {
+        return 0.5 ether + 0.25 ether;
+    }
+
+    function half_ether_plus_wei() public pure returns (uint256) {
+        return 0.5 ether + 1 wei;
+    }
+
+    function half_ether_below_one() public pure returns (bool) {
+        return 0.5 ether < 1 ether;
+    }
+
+    function half_ether_above_wei() public pure returns (bool) {
+        return 0.5 ether > 1 wei;
     }
 }

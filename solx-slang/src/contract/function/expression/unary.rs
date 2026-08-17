@@ -37,18 +37,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             }
             PrefixExpressionOperator::Minus(_) => {
                 let result_type = self.typing(node.get_type());
-                let magnitude = match node.operand() {
-                    Expression::DecimalNumberExpression(number) => number.integer_value(),
-                    Expression::HexNumberExpression(number) => number.integer_value(),
-                    _ => None,
-                };
-                Some(match magnitude {
-                    Some(magnitude) => Value::constant_from_bigint(&-magnitude, result_type, self),
-                    None => {
-                        let value = self.converted(&node.operand(), result_type);
-                        Value::zero(result_type, self).subtract(value, self.checked, self)
-                    }
-                })
+                let value = self.converted(&node.operand(), result_type);
+                Some(Value::zero(result_type, self).subtract(value, self.checked, self))
             }
             PrefixExpressionOperator::DeleteKeyword(_) => {
                 self.delete(&node.operand());
