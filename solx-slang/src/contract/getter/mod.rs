@@ -136,11 +136,11 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                     scope.current_block().r#return(&[value], scope);
                 });
             }
-            StateVariableMutability::Mutable => {
+            StateVariableMutability::Mutable | StateVariableMutability::Transient => {
                 let slot_name = self
                     .storage_layout
                     .get(&state_variable.node_id())
-                    .expect("slang lays out every mutable state variable")
+                    .expect("slang lays out every state variable")
                     .name
                     .clone();
                 let getter = Getter::new(state_variable, self.source_unit);
@@ -159,9 +159,6 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             }
             StateVariableMutability::Immutable => {
                 unimplemented!("getter for a public immutable state variable")
-            }
-            StateVariableMutability::Transient => {
-                unimplemented!("getter for a public transient state variable")
             }
         }
     }

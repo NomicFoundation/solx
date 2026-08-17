@@ -59,7 +59,11 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         (
             Place::addr_of(
                 slot_name,
-                self.pointer_type(&declared_type, element_type, DataLocation::Storage),
+                self.pointer_type(
+                    &declared_type,
+                    element_type,
+                    DataLocation::from(state_variable.attributes().mutability()),
+                ),
                 self,
             ),
             element_type,

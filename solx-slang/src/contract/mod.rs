@@ -10,6 +10,8 @@ pub mod storage_slot;
 
 use std::collections::BTreeMap;
 
+use slang_solidity_v2::ast::StateVariableMutability;
+
 use solx_mlir::Block;
 use solx_mlir::Contract;
 use solx_mlir::Type as MlirType;
@@ -58,6 +60,10 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 element_type,
                 slot.slot,
                 slot.byte_offset,
+                matches!(
+                    state_variable.attributes().mutability(),
+                    StateVariableMutability::Transient
+                ),
                 self,
             );
         }
