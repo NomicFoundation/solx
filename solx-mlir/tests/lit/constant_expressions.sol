@@ -1,5 +1,6 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
+
+// solc emits operands in the different order, so this test is solx-only.
 
 // CHECK: sol.func @{{.*add.*}}() -> ui256
 // CHECK:   %{{.*}} = sol.constant 5 : ui8
@@ -48,6 +49,29 @@
 // CHECK:   %{{.*}} = sol.cmp ge, %{{.*}}, %{{.*}} : ui8
 // CHECK:   sol.return %{{.*}} : i1
 
+// CHECK: sol.func @{{.*fractional.*}}() -> ui256
+// CHECK:   %{{.*}} = sol.constant 750000000000000000 : ui64
+// CHECK:   %{{.*}} = sol.cast %{{.*}} : ui64 to ui256
+// CHECK:   sol.return %{{.*}} : ui256
+
+// CHECK: sol.func @{{.*fractional_compared.*}}() -> i1
+// CHECK:   sol.constant 1000000000000000000 : ui64
+// CHECK:   sol.constant 500000000000000000 : ui64
+// CHECK:   %{{.*}} = sol.cmp lt, %{{.*}}, %{{.*}} : ui64
+// CHECK:   sol.return %{{.*}} : i1
+
+// CHECK: sol.func @{{.*mixed_denominations.*}}() -> ui256
+// CHECK:   %{{.*}} = sol.constant 500000000000000001 : ui64
+// CHECK:   %{{.*}} = sol.cast %{{.*}} : ui64 to ui256
+// CHECK:   sol.return %{{.*}} : ui256
+
+// CHECK: sol.func @{{.*mixed_compared.*}}() -> i1
+// CHECK:   %{{.*}} = sol.constant 1 : ui8
+// CHECK:   %{{.*}} = sol.cast %{{.*}} : ui8 to ui64
+// CHECK:   %{{.*}} = sol.constant 500000000000000000 : ui64
+// CHECK:   %{{.*}} = sol.cmp gt, %{{.*}}, %{{.*}} : ui64
+// CHECK:   sol.return %{{.*}} : i1
+
 contract C {
     function add() public pure returns (uint256) {
         return 2 + 3;
@@ -87,5 +111,21 @@ contract C {
 
     function compared() public pure returns (bool) {
         return 3 / 2 * 4 >= 12 / 2;
+    }
+
+    function fractional() public pure returns (uint256) {
+        return 0.5 ether + 0.25 ether;
+    }
+
+    function fractional_compared() public pure returns (bool) {
+        return 0.5 ether < 1 ether;
+    }
+
+    function mixed_denominations() public pure returns (uint256) {
+        return 0.5 ether + 1 wei;
+    }
+
+    function mixed_compared() public pure returns (bool) {
+        return 0.5 ether > 1 wei;
     }
 }
