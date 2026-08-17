@@ -20,6 +20,7 @@ pub mod unary;
 
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::Number;
 use slang_solidity_v2::ast::Type;
 
 use solx_mlir::Place;
@@ -31,13 +32,17 @@ use crate::scope::function::FunctionScope;
 use self::call::Call;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// Lowers an expression to its single MLIR value, routing each kind to its lowering. A call in
+    /// Lowers an expression to its single MLIR value, routing each kind to its lowering. An
+    /// expression the binder folded to an integer constant materializes it directly. A call in
     /// value position takes its one result.
     pub fn expression(&mut self, node: &Expression) -> Value<'context> {
+        let slang_type = node.get_type();
+        if let Some(Type::Literal(literal_type)) = &slang_type
+            && let Some(Number::Integer(value)) = Number::from_literal_kind(&literal_type.kind())
+        {
+            return Value::constant_from_bigint(&value, self.typing(slang_type), self);
+        }
         match node {
-            Expression::DecimalNumberExpression(_) | Expression::HexNumberExpression(_) => {
-                self.number_literal(node)
-            }
             Expression::TrueKeyword(_) => self.boolean_literal(true),
             Expression::FalseKeyword(_) => self.boolean_literal(false),
             Expression::StringExpression(inner) => self.string_literal(inner),
@@ -70,6 +75,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 .into_iter()
                 .next()
                 .expect("a call in value position yields a value"),
+            Expression::DecimalNumberExpression(_) | Expression::HexNumberExpression(_) => {
+                unreachable!("the binder folds every number literal to an integer constant")
+            }
             Expression::CallOptionsExpression(_) => {
                 unreachable!("call options reach the call they decorate, never a value position")
             }
