@@ -43,7 +43,7 @@ jobs:
       # rust-toolchain.toml because the container resolves it lazily on first
       # use; this workflow itself so edits to the validation harness (the
       # validate-devcontainer job, the devcontainers/ci pin) are validated too.
-      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter-devcontainer
         with:
           token: ''
@@ -57,7 +57,7 @@ jobs:
       # docs_examples CLI test), but they live under docs/ which the code
       # filter excludes — without this, a docs-only PR would skip the very
       # test that guards it.
-      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter-docs-examples
         with:
           filters: |
@@ -129,7 +129,7 @@ jobs:
           solc: 'false'
 
       - name: Cache cargo artifacts
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           prefix-key: cargo-checks-v1
           cache-on-failure: true
@@ -237,7 +237,7 @@ jobs:
       # host, which is part of the cache key, so only the post-msys position
       # matches the keys already saved on main.
       - name: Cache cargo artifacts
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           prefix-key: build-and-test-v2
           cache-on-failure: true
@@ -288,7 +288,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
+      - uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
         with:
           tool: zizmor@1.26.1
       # GH_TOKEN enables the online audits (known-vulnerabilities, tag->SHA resolution).
