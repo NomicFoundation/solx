@@ -31,6 +31,11 @@
 // CHECK:   %[[NC:.*]] = sol.data_loc_cast %[[NP]] : !sol.string<Storage>, !sol.string<Memory>
 // CHECK:   sol.return %[[NC]] : !sol.string<Memory>
 
+// CHECK: sol.func @{{.*tick.*}}() -> ui64 attributes {{.*}}selector = 1051680159 : i32
+// CHECK:   %[[TP:.*]] = sol.addr_of @{{.*tick.*}} : !sol.ptr<ui64, Transient>
+// CHECK:   %[[TV:.*]] = sol.load %[[TP]] : !sol.ptr<ui64, Transient>, ui64
+// CHECK:   sol.return %[[TV]] : ui64
+
 contract ConstantInt {
     uint256 public constant LIMIT = 42;
 }
@@ -47,4 +52,8 @@ contract Elementary {
 contract Reference {
     bytes public data;
     string public name;
+}
+
+contract TransientTick {
+    uint64 transient public tick;
 }

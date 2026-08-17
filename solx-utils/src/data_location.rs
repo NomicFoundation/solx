@@ -25,34 +25,6 @@ pub enum DataLocation {
     Transient = 5,
 }
 
-impl From<u32> for DataLocation {
-    fn from(discriminant: u32) -> Self {
-        match discriminant {
-            0 => Self::Storage,
-            1 => Self::CallData,
-            2 => Self::Memory,
-            3 => Self::Stack,
-            4 => Self::Immutable,
-            5 => Self::Transient,
-            other => unreachable!("no DataLocation with discriminant {other}"),
-        }
-    }
-}
-
-impl From<AddressSpace> for DataLocation {
-    fn from(space: AddressSpace) -> Self {
-        match space {
-            AddressSpace::Stack => Self::Stack,
-            AddressSpace::Heap => Self::Memory,
-            AddressSpace::Calldata => Self::CallData,
-            AddressSpace::Storage => Self::Storage,
-            AddressSpace::TransientStorage => Self::Transient,
-            // TODO: map ReturnData and Code once the Sol dialect supports them.
-            _ => unimplemented!("no DataLocation equivalent for {space:?}"),
-        }
-    }
-}
-
 impl DataLocation {
     /// Converts a Slang semantic data location into the dialect's data location.
     ///
@@ -76,6 +48,50 @@ impl DataLocation {
             Slang::Memory => Self::Memory,
             Slang::Inherited => inherited_fallback
                 .expect("data location 'Inherited' encountered without a parent struct location"),
+        }
+    }
+}
+
+impl From<u32> for DataLocation {
+    fn from(discriminant: u32) -> Self {
+        match discriminant {
+            0 => Self::Storage,
+            1 => Self::CallData,
+            2 => Self::Memory,
+            3 => Self::Stack,
+            4 => Self::Immutable,
+            5 => Self::Transient,
+            other => unreachable!("no DataLocation with discriminant {other}"),
+        }
+    }
+}
+
+impl From<AddressSpace> for DataLocation {
+    fn from(space: AddressSpace) -> Self {
+        match space {
+            AddressSpace::Stack => Self::Stack,
+            AddressSpace::Heap => Self::Memory,
+            AddressSpace::Calldata => Self::CallData,
+            AddressSpace::Storage => Self::Storage,
+            AddressSpace::TransientStorage => Self::Transient,
+            // TODO: map ReturnData and Code once the Sol dialect supports them.
+            AddressSpace::ReturnData | AddressSpace::Code => {
+                unimplemented!("no DataLocation equivalent for {space:?}")
+            }
+        }
+    }
+}
+
+impl From<slang_solidity_v2::ast::StateVariableMutability> for DataLocation {
+    fn from(mutability: slang_solidity_v2::ast::StateVariableMutability) -> Self {
+        use slang_solidity_v2::ast::StateVariableMutability as Slang;
+        match mutability {
+            Slang::Mutable => Self::Storage,
+            Slang::Immutable => Self::Immutable,
+            Slang::Transient => Self::Transient,
+            Slang::Constant => {
+                unreachable!("a constant state variable occupies no data location")
+            }
         }
     }
 }

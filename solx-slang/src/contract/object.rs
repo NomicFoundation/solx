@@ -104,8 +104,8 @@ impl Object {
             .collect()
     }
 
-    /// The storage slot of each state variable the object stores, keyed by definition id. A
-    /// library declares only constants, which occupy no slot.
+    /// The storage slot of each state variable the object stores, persistent and transient in one
+    /// map keyed by definition id. A library declares only constants, which occupy no slot.
     pub fn storage_layout(&self) -> HashMap<NodeId, StorageSlot> {
         match self {
             Self::Contract(node) => node
@@ -113,6 +113,7 @@ impl Object {
                 .map(|abi| {
                     abi.storage_layout()
                         .iter()
+                        .chain(abi.transient_storage_layout().iter())
                         .map(|item| (item.node_id(), StorageSlot::from(item)))
                         .collect()
                 })
