@@ -1029,8 +1029,10 @@ impl solx_codegen_evm::WriteLLVM for Element {
                 solx_codegen_evm::contract_context::block_hash(context, index).map(Some)
             }
             InstructionName::BLOBHASH => {
-                let _arguments = self.pop_arguments_llvm(context)?;
-                anyhow::bail!("The `BLOBHASH` instruction is not supported");
+                let arguments = self.pop_arguments_llvm(context)?;
+                let index = arguments[0].into_int_value();
+
+                solx_codegen_evm::contract_context::blob_hash(context, index).map(Some)
             }
             InstructionName::DIFFICULTY | InstructionName::PREVRANDAO => {
                 solx_codegen_evm::contract_context::difficulty(context).map(Some)
@@ -1042,7 +1044,7 @@ impl solx_codegen_evm::WriteLLVM for Element {
                 solx_codegen_evm::contract_context::basefee(context).map(Some)
             }
             InstructionName::BLOBBASEFEE => {
-                anyhow::bail!("The `BLOBBASEFEE` instruction is not supported");
+                solx_codegen_evm::contract_context::blob_basefee(context).map(Some)
             }
             InstructionName::MSIZE => solx_codegen_evm::contract_context::msize(context).map(Some),
 

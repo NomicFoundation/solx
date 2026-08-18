@@ -106,6 +106,10 @@ pub struct Intrinsics<'ctx> {
     /// The corresponding intrinsic function name.
     pub basefee: FunctionDeclaration<'ctx>,
     /// The corresponding intrinsic function name.
+    pub blobhash: FunctionDeclaration<'ctx>,
+    /// The corresponding intrinsic function name.
+    pub blobbasefee: FunctionDeclaration<'ctx>,
+    /// The corresponding intrinsic function name.
     pub timestamp: FunctionDeclaration<'ctx>,
     /// The corresponding intrinsic function name.
     pub number: FunctionDeclaration<'ctx>,
@@ -264,6 +268,12 @@ impl<'ctx> Intrinsics<'ctx> {
 
     /// The corresponding intrinsic function name.
     pub const FUNCTION_BASEFEE: &'static str = "llvm.evm.basefee";
+
+    /// The corresponding intrinsic function name.
+    pub const FUNCTION_BLOBHASH: &'static str = "llvm.evm.blobhash";
+
+    /// The corresponding intrinsic function name.
+    pub const FUNCTION_BLOBBASEFEE: &'static str = "llvm.evm.blobbasefee";
 
     /// The corresponding intrinsic function name.
     pub const FUNCTION_TIMESTAMP: &'static str = "llvm.evm.timestamp";
@@ -732,6 +742,18 @@ impl<'ctx> Intrinsics<'ctx> {
             Self::FUNCTION_BASEFEE,
             field_type.fn_type(&[], false),
         );
+        let blobhash = Self::declare(
+            llvm,
+            module,
+            Self::FUNCTION_BLOBHASH,
+            field_type.fn_type(&[field_type.as_basic_type_enum().into()], false),
+        );
+        let blobbasefee = Self::declare(
+            llvm,
+            module,
+            Self::FUNCTION_BLOBBASEFEE,
+            field_type.fn_type(&[], false),
+        );
         let timestamp = Self::declare(
             llvm,
             module,
@@ -913,6 +935,8 @@ impl<'ctx> Intrinsics<'ctx> {
             blockhash,
             coinbase,
             basefee,
+            blobhash,
+            blobbasefee,
             timestamp,
             number,
             chainid,
