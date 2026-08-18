@@ -76,7 +76,8 @@ impl Block {
                 InstructionName::RETURN
                 | InstructionName::REVERT
                 | InstructionName::STOP
-                | InstructionName::INVALID => {
+                | InstructionName::INVALID
+                | InstructionName::SELFDESTRUCT => {
                     cursor += 1;
                     dead_code = true;
                 }

@@ -64,7 +64,6 @@ If stack spilling is required in a contract that contains memory-unsafe assembly
 ## Unsupported Features
 
 - `CALLCODE` is rejected at compile time. Use `DELEGATECALL` instead.
-- `SELFDESTRUCT` is rejected at compile time (deprecated by EIP-6049).
 - `PC` (program counter) is not supported.
 - `solc` optimizer settings are ignored since the solc optimizer is disabled.
 

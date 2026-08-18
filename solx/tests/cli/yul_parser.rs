@@ -208,19 +208,33 @@ fn unsupported_pc() -> anyhow::Result<()> {
 }
 
 #[test]
-fn unsupported_selfdestruct() -> anyhow::Result<()> {
+fn selfdestruct() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("yul/ErrorUnsupportedSelfdestruct.yul"),
+        crate::common::contract!("yul/Selfdestruct.yul"),
         "--yul",
         "--bin",
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    result.failure().stderr(
-        predicate::str::contains("SELFDESTRUCT").and(predicate::str::contains("not supported")),
-    );
+    result.success().stdout(predicate::str::contains("Binary"));
+
+    Ok(())
+}
+
+#[test]
+fn selfdestruct_deploy_code() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("yul/SelfdestructDeployCode.yul"),
+        "--yul",
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains("Binary"));
 
     Ok(())
 }

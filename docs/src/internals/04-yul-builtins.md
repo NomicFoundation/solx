@@ -150,8 +150,7 @@ Note: `callcode` is rejected at compile time. Use `delegatecall` instead.
 | `revert` | Intrinsic `llvm.evm.revert` | Revert with return data |
 | `stop` | Intrinsic `llvm.evm.stop` | Stop execution |
 | `invalid` | Intrinsic `llvm.evm.invalid` | Invalid instruction (consumes all gas) |
-
-Note: `selfdestruct` is rejected at compile time (deprecated by EIP-6049).
+| `selfdestruct` | Intrinsic `llvm.evm.selfdestruct` | Halt and transfer balance (EIP-6780) |
 
 ## Block and Transaction Context
 
