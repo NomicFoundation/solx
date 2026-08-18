@@ -138,13 +138,15 @@ impl<'ctx> Function<'ctx> {
             );
         }
 
-        declaration.value.add_attribute(
-            inkwell::attributes::AttributeLoc::Function,
-            llvm.create_string_attribute(
-                StringAttribute::TargetFeatures.to_string().as_str(),
-                format!("+{evm_version}").as_str(),
-            ),
-        );
+        if let Some(target_features) = evm_version.llvm_target_features() {
+            declaration.value.add_attribute(
+                inkwell::attributes::AttributeLoc::Function,
+                llvm.create_string_attribute(
+                    StringAttribute::TargetFeatures.to_string().as_str(),
+                    target_features,
+                ),
+            );
+        }
         declaration.value.add_attribute(
             inkwell::attributes::AttributeLoc::Function,
             llvm.create_enum_attribute(Attribute::NoFree as u32, 0),
