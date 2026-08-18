@@ -15,11 +15,14 @@ pub enum Attribute {
     TargetFeatures,
 }
 
-impl std::fmt::Display for Attribute {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Attribute {
+    ///
+    /// Returns the LLVM attribute key.
+    ///
+    pub fn as_str(self) -> &'static str {
         match self {
-            Attribute::EVMEntryFunction => write!(f, "evm-entry-function"),
-            Attribute::TargetFeatures => write!(f, "target-features"),
+            Self::EVMEntryFunction => "evm-entry-function",
+            Self::TargetFeatures => "target-features",
         }
     }
 }

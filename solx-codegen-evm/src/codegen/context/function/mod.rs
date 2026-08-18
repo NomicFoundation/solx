@@ -142,7 +142,7 @@ impl<'ctx> Function<'ctx> {
             declaration.value.add_attribute(
                 inkwell::attributes::AttributeLoc::Function,
                 llvm.create_string_attribute(
-                    StringAttribute::TargetFeatures.to_string().as_str(),
+                    StringAttribute::TargetFeatures.as_str(),
                     target_features,
                 ),
             );
