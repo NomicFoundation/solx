@@ -2,7 +2,8 @@
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func @{{.*identity.*}}
-// CHECK-NOT: address_cast
+// CHECK:   %[[VALUE:.*]] = sol.load
+// CHECK-NEXT:   sol.return %[[VALUE]]
 
 // CHECK: sol.func @{{.*address_to_u160.*}}
 // CHECK:   sol.address_cast %{{.*}} : !sol.address to ui160

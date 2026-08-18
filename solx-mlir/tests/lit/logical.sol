@@ -4,27 +4,23 @@
 // CHECK: sol.func @{{.*logical_and.*}}
 // CHECK:   sol.alloca : !sol.ptr<i1, Stack>
 // CHECK:   sol.alloca : !sol.ptr<i1, Stack>
-// CHECK:   %[[RES:.*]] = sol.alloca : !sol.ptr<i1, Stack>
-// CHECK:   sol.store %{{.*}}, %[[RES]]
 // CHECK:   sol.if %{{.*}} {
-// CHECK:     sol.store %{{.*}}, %[[RES]]
+// CHECK:     sol.store %{{.*}}, %[[RES:[0-9]+]] :
 // CHECK:     sol.yield
 // CHECK:   } else {
 // CHECK:   }
-// CHECK:   sol.load %[[RES]]
+// CHECK:   sol.load %[[RES]] :
 // CHECK:   sol.return
 
 // CHECK: sol.func @{{.*logical_or.*}}
 // CHECK:   sol.alloca : !sol.ptr<i1, Stack>
 // CHECK:   sol.alloca : !sol.ptr<i1, Stack>
-// CHECK:   %[[RES:.*]] = sol.alloca : !sol.ptr<i1, Stack>
-// CHECK:   sol.store %{{.*}}, %[[RES]]
 // CHECK:   sol.if %{{.*}} {
 // CHECK:   } else {
-// CHECK:     sol.store %{{.*}}, %[[RES]]
+// CHECK:     sol.store %{{.*}}, %[[RES:[0-9]+]] :
 // CHECK:     sol.yield
 // CHECK:   }
-// CHECK:   sol.load %[[RES]]
+// CHECK:   sol.load %[[RES]] :
 // CHECK:   sol.return
 
 // CHECK: sol.func @{{.*logical_not.*}}

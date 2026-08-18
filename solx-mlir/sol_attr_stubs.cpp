@@ -21,6 +21,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <optional>
 #include <vector>
 
 extern "C" {
@@ -108,7 +109,9 @@ MlirType solxCreateArrayType(MlirContext ctx, int64_t size, MlirType elementType
     if (dataLocation > 5) abort();
     auto *context = unwrap(ctx);
     auto location = static_cast<mlir::sol::DataLocation>(dataLocation);
-    return wrap(mlir::sol::ArrayType::get(context, size, unwrap(elementType), location));
+    std::optional<llvm::APInt> sizeOpt;
+    if (size >= 0) sizeOpt = llvm::APInt(256, static_cast<uint64_t>(size));
+    return wrap(mlir::sol::ArrayType::get(context, sizeOpt, unwrap(elementType), location));
 }
 
 MlirType solxCreateMappingType(MlirContext ctx, MlirType keyType, MlirType valType) {
