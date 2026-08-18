@@ -167,7 +167,7 @@ impl Project {
                     .evm
                     .as_mut()
                     .and_then(|evm| evm.method_identifiers.take());
-                let legacy_assembly = contract
+                let mut legacy_assembly = contract
                     .evm
                     .as_mut()
                     .and_then(|evm| evm.legacy_assembly.take())
@@ -203,11 +203,18 @@ impl Project {
                         .evm
                         .as_mut()
                         .and_then(|evm| evm.extra_metadata.take());
-                    legacy_assembly.as_ref().map(|legacy_assembly| {
+                    // Translation consumes the assembly, so it is only cloned when
+                    // `evm.legacyAssembly` is requested in the output.
+                    let translated_assembly = legacy_assembly.take();
+                    legacy_assembly = translated_assembly
+                        .as_ref()
+                        .filter(|_| output_legacy_assembly)
+                        .cloned();
+                    translated_assembly.map(|translated_assembly| {
                         Ok(Some(ContractIR::from(
                             ContractEVMLegacyAssembly::from_contract(
                                 name.full_path.as_str(),
-                                legacy_assembly.to_owned(),
+                                translated_assembly,
                                 extra_metadata,
                             )?,
                         )))
