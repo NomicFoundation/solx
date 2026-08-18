@@ -22,7 +22,8 @@ fn default(evm_version: solx_utils::EVMVersion) -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
-        .stdout(predicate::str::contains("Binary:\n"));
+        .stdout(predicate::str::contains("Binary:\n"))
+        .stderr(predicate::str::contains("is not a recognized feature").not());
 
     Ok(())
 }

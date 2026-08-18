@@ -55,6 +55,23 @@ impl FromStr for EVMVersion {
 }
 
 impl EVMVersion {
+    ///
+    /// Returns the LLVM subtarget feature string for the EVM version, or `None` for versions
+    /// the EVM target does not model, which are its generic subtarget. Naming them anyway makes
+    /// LLVM warn about an unrecognized feature for every function they are set on.
+    ///
+    /// The backend gates instructions with `Version >= <feature>` checks, so a version added
+    /// after Osaka must keep advertising the features of every prior modelled version.
+    ///
+    pub fn llvm_target_features(self) -> Option<&'static str> {
+        match self {
+            Self::Cancun | Self::Prague => None,
+            Self::Osaka => Some("+osaka"),
+        }
+    }
+}
+
+impl EVMVersion {
     /// Returns the Sol dialect `EvmVersionAttr` integer encoding.
     pub fn into_sol_dialect_identifier(self) -> u32 {
         match self {

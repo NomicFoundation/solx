@@ -50,7 +50,7 @@ where
             inkwell::attributes::AttributeLoc::Function,
             context
                 .llvm()
-                .create_string_attribute(Attribute::EVMEntryFunction.to_string().as_str(), ""),
+                .create_string_attribute(Attribute::EVMEntryFunction.as_str(), ""),
         );
 
         self.inner.declare(context)
