@@ -2,6 +2,7 @@
 //! Function definition emission to Sol dialect MLIR.
 //!
 
+pub mod assembly;
 pub mod expression;
 pub mod statement;
 
