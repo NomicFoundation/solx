@@ -9,7 +9,20 @@
 //!         }
 //!     ],
 //!     "expected": [
-//!         "0"
+//!         "$BLOB_HASH:0"
+//!     ]
+//! }, {
+//!     "name": "one",
+//!     "inputs": [
+//!         {
+//!             "method": "main",
+//!             "calldata": [
+//!                 "1"
+//!             ]
+//!         }
+//!     ],
+//!     "expected": [
+//!         "$BLOB_HASH:1"
 //!     ]
 //! }, {
 //!     "name": "ordinar",
