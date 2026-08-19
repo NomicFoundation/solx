@@ -26,6 +26,11 @@ pub fn run() -> anyhow::Result<()> {
                 .ok_or_else(|| anyhow::anyhow!("The worker received no session"))?;
 
             inkwell::support::error_handling::install_stack_error_handler(evm_stack_error_handler);
+            unsafe {
+                inkwell::support::error_handling::install_fatal_error_handler(
+                    llvm_fatal_error_handler,
+                );
+            }
 
             while let Some(job) = stdin.recv::<Job>()? {
                 solx_codegen_evm::IS_SIZE_FALLBACK.store(
@@ -65,6 +70,23 @@ pub fn run() -> anyhow::Result<()> {
         .expect("Threading error")
         .join()
         .expect("Threading error")
+}
+
+///
+/// Handles LLVM fatal errors, e.g. failed stackification of a recursive function.
+///
+/// Replies with the error over the channel so that the parent reports it per contract
+/// instead of only observing a dead worker; LLVM state is unrecoverable at this point,
+/// so the process exits without the usual LLVM shutdown. Called from LLVM's
+/// `report_fatal_error`, which aborts if the handler returns, so the process must exit here.
+///
+extern "C" fn llvm_fatal_error_handler(message: *const std::ffi::c_char) {
+    let message = unsafe { std::ffi::CStr::from_ptr(message) }.to_string_lossy();
+    let result: crate::Result<EVMOutput> = Err(Error::Generic(format!("LLVM error: {message}")));
+    std::io::stdout()
+        .send(&result)
+        .unwrap_or_else(|error| panic!("LLVM fatal error response writing error: {error}"));
+    std::process::exit(solx_utils::EXIT_CODE_SUCCESS);
 }
 
 ///

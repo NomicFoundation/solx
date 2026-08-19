@@ -329,15 +329,26 @@ impl Build {
                         .unwrap_or_default(),
                 );
                 if deploy_object_result.is_err() || runtime_object_result.is_err() {
-                    if let Some(Err(Error::StandardJson(error))) =
-                        contract.deploy_object_result.take()
-                    {
-                        standard_json.errors.push(error);
-                    }
-                    if let Some(Err(Error::StandardJson(error))) =
-                        contract.runtime_object_result.take()
-                    {
-                        standard_json.errors.push(error);
+                    for result in [
+                        contract.deploy_object_result.take(),
+                        contract.runtime_object_result.take(),
+                    ] {
+                        match result {
+                            Some(Err(Error::StandardJson(error))) => {
+                                standard_json.errors.push(error);
+                            }
+                            // Worker deaths (e.g. LLVM fatal errors) surface as
+                            // generic errors; dropping them would emit a
+                            // successful output with the contract silently
+                            // missing.
+                            Some(Err(error)) => standard_json.errors.push(
+                                solx_standard_json::OutputError::new_error_contract(
+                                    Some(contract.name.path.as_str()),
+                                    error,
+                                ),
+                            ),
+                            Some(Ok(_)) | None => {}
+                        }
                     }
                     continue;
                 }
@@ -406,7 +417,7 @@ impl solx_standard_json::CollectableError for Build {
                 }
                 errors
             })
-            .map(|error| error.unwrap_standard_json_ref().to_string())
+            .map(|error| error.to_string())
             .collect();
         errors.extend(
             self.messages

@@ -1,0 +1,20 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "RecursiveStackTooDeep.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract RecursiveStackTooDeep {\n    function f(\n        uint256 a1, uint256 a2, uint256 a3, uint256 a4, uint256 a5, uint256 a6,\n        uint256 a7, uint256 a8, uint256 a9, uint256 a10, uint256 a11, uint256 a12,\n        uint256 a13, uint256 a14, uint256 a15, uint256 a16, uint256 a17, uint256 a18\n    ) public returns (uint256) {\n        if (a1 == 0) {\n            return a2 + a17 + a18;\n        }\n        uint256 r = f(\n            a1 - 1, a2 + 1, a3 ^ a4, a4 + a5, a5 * 2, a6 + a7, a7 ^ a8, a8 + 1,\n            a9 + a10, a10 ^ a11, a11 + a12, a12 + 1, a13 ^ a14, a14 + a15,\n            a15 + 1, a16 ^ a17, a17 + a18, a18 + a1\n        );\n        return r + a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11\n            + a12 + a13 + a14 + a15 + a16 + a17 + a18;\n    }\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "mode": "1"
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.bytecode.object"
+        ]
+      }
+    }
+  }
+}
