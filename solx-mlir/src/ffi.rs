@@ -158,6 +158,10 @@ unsafe extern "C" {
     /// (one less than the number of enum members).
     pub fn solxCreateEnumType(context: MlirContext, max: u32) -> mlir_sys::MlirType;
 
+    /// Creates the `yul::PtrType` singleton (`!yul.ptr`), the address a Yul-local
+    /// variable is held at.
+    pub fn solxCreateYulPtrType(context: MlirContext) -> mlir_sys::MlirType;
+
     /// Creates a function-pointer type over `signature`, a `mlir::FunctionType`: a
     /// `sol::FuncRefType` for `kind` 0, a `sol::ExtFuncRefType` for 1.
     pub fn solxCreateFuncRefType(
