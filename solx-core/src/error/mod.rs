@@ -32,6 +32,19 @@ impl Error {
             is_size_fallback,
         })
     }
+
+    ///
+    /// Converts the error into a standard JSON output error.
+    ///
+    /// Non-standard-JSON variants (e.g. worker deaths on LLVM fatal errors) are wrapped
+    /// into an error attributed to the contract at `path`.
+    ///
+    pub fn into_standard_json(self, path: Option<&str>) -> solx_standard_json::OutputError {
+        match self {
+            Error::StandardJson(error) => error,
+            error => solx_standard_json::OutputError::new_error_contract(path, error),
+        }
+    }
 }
 
 impl From<anyhow::Error> for Error {
