@@ -1,0 +1,157 @@
+name: Slang Pool-Mode Benchmark
+
+# Wall-clock comparison of the two compilation-dispatch modes (in-process
+# rayon threads vs SOLX_SUBPROCESS worker pool) across operating systems.
+# Opt-in: label a PR with ci:mode-bench, or dispatch manually.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  label-check:
+    # Checks the PR's current label set, not the triggering action (see
+    # slang-tests.yaml for the rationale).
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (contains(github.event.pull_request.labels.*.name, 'ci:mode-bench')
+      && !github.event.pull_request.head.repo.fork)
+    runs-on: ubuntu-24.04
+    steps:
+      - run: 'true'
+
+  benchmark:
+    needs: label-check
+    permissions:
+      contents: read
+      packages: read
+    env:
+      CARGO_TARGET_DIR: target-slang
+      CARGO_INCREMENTAL: "0"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "MacOS x86"
+            runner: macos-15-intel
+          - name: "MacOS arm64"
+            runner: macos-15
+          - name: "Linux x86 gnu"
+            runner: ubuntu-24.04
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
+            target: "x86_64-unknown-linux-gnu"
+          # rustflags: aarch64-linux links with strict single-pass bfd
+          # (x86-64 rust uses order-tolerant rust-lld), which cannot
+          # resolve the crate-graph archive order rustc emits for the
+          # lld/LLVM static libs. Link with the CI image's lld instead.
+          # Durable fix: #[link] attributes in the inkwell fork.
+          - name: "Linux ARM64 gnu"
+            runner: ubuntu-24.04-arm
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
+            target: "aarch64-unknown-linux-gnu"
+            rustflags: "-C link-arg=-fuse-ld=lld -C link-arg=-B/usr/lib/llvm-21/bin"
+          # Windows is parked: the slang release build has never linked on
+          # MinGW. Two layers fixed here (cc-rs must use gcc to match the
+          # gcc-built LLVM tree; MLIR TypeID data symbols), the next one
+          # (mass undefined llvm::detail::UniqueFunctionBase/function_ref
+          # template instantiations) is a real porting effort. Re-add the
+          # entry once slang-release links on Windows:
+          #   - name: "Windows"
+          #     runner: windows-2025
+          #     target: "x86_64-pc-windows-gnu"
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: ${{ matrix.image || '' }}
+    name: ${{ matrix.name }}
+    # The LLVM "cache" is a ccache (timestamp-keyed), so every run
+    # recompiles LLVM with warm objects; Windows additionally cold-builds
+    # solx in release and needs the most headroom.
+    timeout-minutes: 480
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+
+      - name: Build toolchain
+        uses: ./.github/actions/build-toolchain
+        with:
+          solc: 'false'
+
+      # See slang-tests.yaml (rust-lang/rust-bindgen#1760).
+      - name: Set bindgen target for MinGW
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "BINDGEN_EXTRA_CLANG_ARGS=--target=x86_64-w64-windows-gnu" >> "${GITHUB_ENV}"
+
+      # The cargo cache must be keyed on the solx-llvm pin: Cargo.lock does
+      # not change when the submodule moves, and restored build-script
+      # outputs from an older LLVM tree poison the link (undefined lldC
+      # symbols).
+      - name: Compute solx-llvm pin
+        shell: bash
+        run: echo "LLVM_PIN=$(git rev-parse HEAD:solx-llvm)" >> "${GITHUB_ENV}"
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          prefix-key: slang-mode-bench-v2-${{ env.LLVM_PIN }}
+          workspaces: ". -> target-slang"
+          cache-on-failure: true
+
+      - name: Install build target
+        if: matrix.target != ''
+        uses: ./.github/actions/setup-rust
+        with:
+          target: ${{ matrix.target }}
+
+      # The runner context is not available in a workflow step's `shell:`
+      # (composite actions only), so the Windows msys2 build is its own step.
+      - name: Build solx (slang, release)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags || '' }}
+        run: |
+          ${SFW_PREFIX:-} cargo fetch --locked
+          ${SFW_PREFIX:-} cargo build-slang --release \
+            ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+
+      # CC/CXX pinned to gcc: cc-rs otherwise picks msys2 clang for the
+      # mlir-sys/solx-mlir C++ glue, whose MLIR TypeID data symbols don't
+      # resolve against the gcc-built LLVM tree (undefined .refptr at link).
+      - name: Build solx (slang, release, Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        env:
+          CC: gcc
+          CXX: g++
+        run: |
+          ${SFW_PREFIX:-} cargo fetch --locked
+          ${SFW_PREFIX:-} cargo build-slang --release \
+            ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+
+      - name: Run benchmark
+        shell: bash
+        run: |
+          PY=$(command -v python3 || command -v python)
+          EXE=${{ runner.os == 'Windows' && '.exe' || '' }}
+          SOLX=target-slang/${{ matrix.target && format('{0}/', matrix.target) || '' }}release/solx${EXE}
+          "${PY}" tests/benchmark/pool-modes/gen_corpus.py "${RUNNER_TEMP}/pool-modes-corpus"
+          echo "cores: $("${PY}" -c 'import os; print(os.cpu_count())')"
+          for corpus in tiny-clean tiny-overflow big-clean big-overflow mixed; do
+            "${PY}" tests/benchmark/pool-modes/bench.py \
+              --solx "${SOLX}" --corpus "${RUNNER_TEMP}/pool-modes-corpus/${corpus}" --pairs 5
+          done

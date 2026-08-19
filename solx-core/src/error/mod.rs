@@ -51,7 +51,12 @@ impl Error {
 
 impl From<anyhow::Error> for Error {
     fn from(error: anyhow::Error) -> Self {
-        Error::Generic(error.to_string())
+        match error.downcast::<solx_codegen_evm::StackRegionOverflow>() {
+            Ok(overflow) => {
+                Error::stack_too_deep(overflow.total_stack_size, overflow.is_size_fallback)
+            }
+            Err(error) => Error::Generic(error.to_string()),
+        }
     }
 }
 
