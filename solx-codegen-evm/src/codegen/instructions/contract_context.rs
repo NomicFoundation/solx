@@ -123,6 +123,33 @@ pub fn basefee<'ctx>(
 }
 
 ///
+/// Translates the `blobhash` instruction.
+///
+pub fn blob_hash<'ctx>(
+    context: &mut Context<'ctx>,
+    index: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>> {
+    Ok(context
+        .build_call(
+            context.intrinsics().blobhash,
+            &[index.as_basic_value_enum()],
+            "blobhash",
+        )?
+        .expect("Always exists"))
+}
+
+///
+/// Translates the `blobbasefee` instruction.
+///
+pub fn blob_basefee<'ctx>(
+    context: &mut Context<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>> {
+    Ok(context
+        .build_call(context.intrinsics().blobbasefee, &[], "blobbasefee")?
+        .expect("Always exists"))
+}
+
+///
 /// Translates the `msize` instruction.
 ///
 pub fn msize<'ctx>(

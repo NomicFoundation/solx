@@ -31,7 +31,7 @@
 //!         "96"
 //!     ]
 //! }, {
-//!     "name": "small_ordinar",
+//!     "name": "small_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -57,7 +57,7 @@
 //!         "96"
 //!     ]
 //! }, {
-//!     "name": "ordinar",
+//!     "name": "ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -70,7 +70,7 @@
 //!         "2432"
 //!     ]
 //! }, {
-//!     "name": "ordinar_words",
+//!     "name": "ordinary_words",
 //!     "inputs": [
 //!         {
 //!             "method": "main",

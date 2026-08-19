@@ -51,7 +51,7 @@
 ;!         "1"
 ;!     ]
 ;! }, {
-;!     "name": "zero_ordinar",
+;!     "name": "zero_ordinary",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -64,7 +64,7 @@
 ;!         "0"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_zero",
+;!     "name": "ordinary_zero",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -77,7 +77,7 @@
 ;!         "0"
 ;!     ]
 ;! }, {
-;!     "name": "one_ordinar",
+;!     "name": "one_ordinary",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -90,7 +90,7 @@
 ;!         "0"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_one",
+;!     "name": "ordinary_one",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -103,7 +103,7 @@
 ;!         "121563127839120"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_ordinar",
+;!     "name": "ordinary_ordinary",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -116,7 +116,7 @@
 ;!         "76"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_ordinar_to_one",
+;!     "name": "ordinary_ordinary_to_one",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -129,7 +129,7 @@
 ;!         "1"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_ordinar_plus_one",
+;!     "name": "ordinary_ordinary_plus_one",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -142,7 +142,7 @@
 ;!         "0"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_ordinar_to_zero",
+;!     "name": "ordinary_ordinary_to_zero",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -207,7 +207,7 @@
 ;!         "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_max",
+;!     "name": "ordinary_max",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -220,7 +220,7 @@
 ;!         "0"
 ;!     ]
 ;! }, {
-;!     "name": "max_ordinar",
+;!     "name": "max_ordinary",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",

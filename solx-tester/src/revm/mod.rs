@@ -66,6 +66,16 @@ impl REVM {
     pub const COIN_BASE: &'static str = "0x7878787878787878787878787878787878787878";
     /// Default `tx.origin`.
     pub const TX_ORIGIN: &'static str = "0x9292929292929292929292929292929292929292";
+    /// First transaction blob hash; blob `N` hashes to this value plus `N`.
+    /// The value and count mirror solc's EVMHost so upstream semantic tests match.
+    pub const TX_BLOB_HASH: &'static str =
+        "0x0100000000000000000000000000000000000000000000000000000000000001";
+    /// Number of blob hashes attached to runtime transactions.
+    pub const TX_BLOB_HASH_COUNT: usize = 2;
+    /// Upfront fee for the attached blobs at the minimum blob gas price.
+    pub const TX_BLOB_FEE: u64 = Self::TX_BLOB_HASH_COUNT as u64
+        * revm::primitives::eip4844::GAS_PER_BLOB
+        * revm::primitives::eip4844::MIN_BLOB_GASPRICE;
 
     /// Block prevrandao.
     pub const BLOCK_PREVRANDAO: &'static str =
@@ -192,6 +202,16 @@ impl REVM {
             .data(revm::primitives::Bytes::from(calldata.inner))
             .value(revm::primitives::U256::from(value.unwrap_or_default()))
             .to(address)
+            .blob_hashes(
+                (0..Self::TX_BLOB_HASH_COUNT)
+                    .map(|index| {
+                        let hash = U256::from_str(Self::TX_BLOB_HASH).expect("Always valid")
+                            + U256::from(index);
+                        revm::primitives::B256::from(hash)
+                    })
+                    .collect(),
+            )
+            .max_fee_per_blob_gas(revm::primitives::eip4844::MIN_BLOB_GASPRICE as u128)
             .gas_price(Self::GAS_PRICE as u128)
             .gas_limit(Self::BLOCK_GAS_LIMIT)
             .build_fill()

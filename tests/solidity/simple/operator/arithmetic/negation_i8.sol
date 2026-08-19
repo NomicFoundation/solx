@@ -12,7 +12,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "ordinar_negative",
+//!     "name": "ordinary_negative",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -25,7 +25,7 @@
 //!         "42"
 //!     ]
 //! }, {
-//!     "name": "ordinar_positive",
+//!     "name": "ordinary_positive",
 //!     "inputs": [
 //!         {
 //!             "method": "main",

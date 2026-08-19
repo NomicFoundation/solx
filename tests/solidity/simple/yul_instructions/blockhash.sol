@@ -12,7 +12,7 @@
 //!         "0x3737373737373737373737373737373737373737373737373737373737373737"
 //!     ]
 //! }, {
-//!     "name": "small_ordinar",
+//!     "name": "small_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -64,7 +64,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "ordinar",
+//!     "name": "ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -116,7 +116,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "big_ordinar",
+//!     "name": "big_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",

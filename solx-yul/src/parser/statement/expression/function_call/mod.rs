@@ -866,12 +866,13 @@ impl FunctionCall {
                 anyhow::bail!("{location} The `SELFDESTRUCT` instruction is not supported")
             }
             Name::BlobHash => {
-                let _arguments = self.pop_arguments_llvm::<1>(context)?;
-                anyhow::bail!("{location} The `BLOBHASH` instruction is not supported")
+                let arguments = self.pop_arguments_llvm::<1>(context)?;
+                let index = arguments[0].into_int_value();
+
+                solx_codegen_evm::contract_context::blob_hash(context, index).map(Some)
             }
             Name::BlobBaseFee => {
-                let _arguments = self.pop_arguments_llvm::<0>(context)?;
-                anyhow::bail!("{location} The `BLOBBASEFEE` instruction is not supported")
+                solx_codegen_evm::contract_context::blob_basefee(context).map(Some)
             }
         }
     }

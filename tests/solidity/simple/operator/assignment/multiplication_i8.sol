@@ -12,7 +12,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "ordinar_positive",
+//!     "name": "ordinary_positive",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -25,7 +25,7 @@
 //!         "126"
 //!     ]
 //! }, {
-//!     "name": "ordinar_negative_first",
+//!     "name": "ordinary_negative_first",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -38,7 +38,7 @@
 //!         "-126"
 //!     ]
 //! }, {
-//!     "name": "ordinar_negative_second",
+//!     "name": "ordinary_negative_second",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -51,7 +51,7 @@
 //!         "-126"
 //!     ]
 //! }, {
-//!     "name": "ordinar_negative_both",
+//!     "name": "ordinary_negative_both",
 //!     "inputs": [
 //!         {
 //!             "method": "main",

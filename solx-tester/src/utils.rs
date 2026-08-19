@@ -41,7 +41,7 @@ pub fn address_to_u256(address: &Address) -> U256 {
 }
 
 ///
-/// Normalizes `path` by replacing possible backslashes with ordinar slashes, and returns a string.
+/// Normalizes `path` by replacing possible backslashes with ordinary slashes, and returns a string.
 ///
 pub fn path_to_string_normalized(path: &Path) -> String {
     path.to_string_lossy()
@@ -49,14 +49,14 @@ pub fn path_to_string_normalized(path: &Path) -> String {
 }
 
 ///
-/// Normalizes `path` by replacing possible backslashes with ordinar slashes, and returns a `PathBuf`.
+/// Normalizes `path` by replacing possible backslashes with ordinary slashes, and returns a `PathBuf`.
 ///
 pub fn str_to_path_normalized(path: &str) -> PathBuf {
     PathBuf::from(self::str_to_string_normalized(path))
 }
 
 ///
-/// Normalizes stringified `path` by replacing possible backslashes with ordinar slashes, and returns a string.
+/// Normalizes stringified `path` by replacing possible backslashes with ordinary slashes, and returns a string.
 ///
 pub fn str_to_string_normalized(path: &str) -> String {
     path.replace(std::path::MAIN_SEPARATOR_STR, "/")

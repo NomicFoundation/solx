@@ -226,37 +226,33 @@ fn unsupported_selfdestruct() -> anyhow::Result<()> {
 }
 
 #[test]
-fn unsupported_blobhash() -> anyhow::Result<()> {
+fn blobhash() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("yul/ErrorUnsupportedBlobhash.yul"),
+        crate::common::contract!("yul/Blobhash.yul"),
         "--yul",
         "--bin",
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    result.failure().stderr(
-        predicate::str::contains("BLOBHASH").and(predicate::str::contains("not supported")),
-    );
+    result.success().stdout(predicate::str::contains("Binary"));
 
     Ok(())
 }
 
 #[test]
-fn unsupported_blobbasefee() -> anyhow::Result<()> {
+fn blobbasefee() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("yul/ErrorUnsupportedBlobbasefee.yul"),
+        crate::common::contract!("yul/Blobbasefee.yul"),
         "--yul",
         "--bin",
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    result.failure().stderr(
-        predicate::str::contains("BLOBBASEFEE").and(predicate::str::contains("not supported")),
-    );
+    result.success().stdout(predicate::str::contains("Binary"));
 
     Ok(())
 }

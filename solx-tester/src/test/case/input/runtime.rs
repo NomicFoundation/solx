@@ -95,7 +95,8 @@ impl Runtime {
             self.value,
         );
 
-        let mut initial_balance = U256::from(self.value.unwrap_or_default());
+        let mut initial_balance =
+            U256::from(self.value.unwrap_or_default()) + U256::from(REVM::TX_BLOB_FEE);
         if REVM::get_rich_addresses().contains(&self.caller) {
             initial_balance += U256::from(1) << 100;
         }

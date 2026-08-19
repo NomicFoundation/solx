@@ -36,7 +36,7 @@
 //!         ]
 //!     }
 //! }, {
-//!     "name": "small_ordinar_deploy",
+//!     "name": "small_ordinary_deploy",
 //!     "inputs": [
 //!         {
 //!             "method": "#deployer",
@@ -72,7 +72,7 @@
 //!         ]
 //!     }
 //! }, {
-//!     "name": "ordinar_deploy",
+//!     "name": "ordinary_deploy",
 //!     "inputs": [
 //!         {
 //!             "method": "#deployer",
@@ -89,7 +89,7 @@
 //!         ]
 //!     }
 //! }, {
-//!     "name": "ordinar_words_deploy",
+//!     "name": "ordinary_words_deploy",
 //!     "inputs": [
 //!         {
 //!             "method": "#deployer",

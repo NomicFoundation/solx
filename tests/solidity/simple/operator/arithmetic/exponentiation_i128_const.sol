@@ -12,7 +12,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "ordinar_positive",
+//!     "name": "ordinary_positive",
 //!     "inputs": [
 //!         {
 //!             "method": "main",

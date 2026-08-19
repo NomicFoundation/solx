@@ -77,6 +77,15 @@ impl Value {
             let mut hash = U256::from_str(REVM::BLOCK_HASH).expect("Always valid");
             hash += U256::from(offset);
             hash
+        } else if value.starts_with("$BLOB_HASH") {
+            let offset: u64 = value
+                .split(':')
+                .next_back()
+                .and_then(|value| value.parse().ok())
+                .unwrap_or_default();
+            let mut hash = U256::from_str(REVM::TX_BLOB_HASH).expect("Always valid");
+            hash += U256::from(offset);
+            hash
         } else if value == "$BLOCK_NUMBER" {
             U256::from(REVM::BLOCK_NUMBER)
         } else if value == "$BLOCK_TIMESTAMP" {

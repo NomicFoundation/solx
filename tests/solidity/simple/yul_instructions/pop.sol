@@ -23,7 +23,7 @@
 //!     "expected": [
 //!     ]
 //! }, {
-//!     "name": "ordinar",
+//!     "name": "ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",

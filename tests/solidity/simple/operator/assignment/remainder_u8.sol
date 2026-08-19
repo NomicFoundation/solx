@@ -21,7 +21,7 @@
 //!         "exception": true
 //!     } ]
 //! }, {
-//!     "name": "ordinar_by_zero",
+//!     "name": "ordinary_by_zero",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -65,7 +65,7 @@
 //!         "exception": true
 //!     } ]
 //! }, {
-//!     "name": "ordinar",
+//!     "name": "ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -78,7 +78,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "ordinar_max_remainder",
+//!     "name": "ordinary_max_remainder",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -91,7 +91,7 @@
 //!         "6"
 //!     ]
 //! }, {
-//!     "name": "ordinar_next",
+//!     "name": "ordinary_next",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
