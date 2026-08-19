@@ -32,7 +32,6 @@ impl Error {
             is_size_fallback,
         })
     }
-
 }
 
 impl From<anyhow::Error> for Error {
