@@ -11,7 +11,7 @@
 // CHECK:   sol.store %{{.*}}, %{{.*}} : !sol.fixedbytes<32>, !sol.ptr<!sol.fixedbytes<32>, Storage>
 
 // CHECK: sol.func @{{.*delete_map_entry.*}}
-// CHECK:   %[[ENTRY:.*]] = sol.map %{{.*}}, %{{.*}} : !sol.mapping<ui256, ui256>, ui8, !sol.ptr<ui256, Storage>
+// CHECK:   %[[ENTRY:.*]] = sol.map %{{.*}}, %{{.*}} : !sol.mapping<ui256, ui256>, ui256, !sol.ptr<ui256, Storage>
 // CHECK:   sol.store %{{.*}}, %[[ENTRY]] : ui256, !sol.ptr<ui256, Storage>
 
 // CHECK: sol.func @{{.*delete_struct.*}}

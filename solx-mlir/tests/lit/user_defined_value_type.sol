@@ -7,22 +7,36 @@
 // CHECK: sol.func @{{.*identity_boolean.*}}: i1) -> i1
 
 // CHECK: sol.func @{{.*wrap_unsigned.*}}: ui256) -> ui256
-// CHECK-NOT: _cast
+// CHECK:   %[[VALUE:.*]] = sol.load
+// CHECK-NEXT:   sol.return %[[VALUE]]
+
 // CHECK: sol.func @{{.*unwrap_unsigned.*}}: ui256) -> ui256
-// CHECK-NOT: _cast
+// CHECK:   %[[VALUE:.*]] = sol.load
+// CHECK-NEXT:   sol.return %[[VALUE]]
+
 // CHECK: sol.func @{{.*wrap_signed.*}}: si8) -> si8
-// CHECK-NOT: _cast
+// CHECK:   %[[VALUE:.*]] = sol.load
+// CHECK-NEXT:   sol.return %[[VALUE]]
+
 // CHECK: sol.func @{{.*unwrap_signed.*}}: si8) -> si8
-// CHECK-NOT: _cast
+// CHECK:   %[[VALUE:.*]] = sol.load
+// CHECK-NEXT:   sol.return %[[VALUE]]
+
 // CHECK: sol.func @{{.*wrap_address.*}}: !sol.address) -> !sol.address
-// CHECK-NOT: _cast
+// CHECK:   %[[VALUE:.*]] = sol.load
+// CHECK-NEXT:   sol.return %[[VALUE]]
+
 // CHECK: sol.func @{{.*unwrap_address.*}}: !sol.address) -> !sol.address
-// CHECK-NOT: _cast
+// CHECK:   %[[VALUE:.*]] = sol.load
+// CHECK-NEXT:   sol.return %[[VALUE]]
+
 // CHECK: sol.func @{{.*wrap_boolean.*}}: i1) -> i1
-// CHECK-NOT: _cast
+// CHECK:   %[[VALUE:.*]] = sol.load
+// CHECK-NEXT:   sol.return %[[VALUE]]
+
 // CHECK: sol.func @{{.*unwrap_boolean.*}}: i1) -> i1
-// CHECK-NOT: _cast
-// CHECK: sol.return
+// CHECK:   %[[VALUE:.*]] = sol.load
+// CHECK-NEXT:   sol.return %[[VALUE]]
 
 contract C {
     type Unsigned is uint256;

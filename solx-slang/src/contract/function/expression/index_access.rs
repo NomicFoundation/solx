@@ -48,10 +48,12 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         let index_expression = node
             .start()
             .expect("slang validates a[i] has an index expression");
-        let index_value = self.expression(&index_expression);
 
         match &base_type {
-            Type::Mapping(_) => {
+            Type::Mapping(mapping_type) => {
+                let key_type =
+                    self.resolve_type(&mapping_type.key_type(), Some(DataLocation::Storage));
+                let index_value = self.converted(&index_expression, key_type);
                 let result_type = node
                     .get_type()
                     .expect("slang types every index-access expression");
@@ -70,6 +72,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 )
             }
             _ => {
+                let index_value = self.expression(&index_expression);
                 let element_type = base_value.r#type().element_type(0);
                 (
                     Place::from(base_value).gep(index_value, element_type, self),

@@ -51,8 +51,7 @@
 // CHECK:   sol.ext_call "{{.*p.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %[[V]] selector
 
 // CHECK: sol.func @{{.*parenthesized_reference.*}}
-// CHECK:   %[[POINTER:.*]] = sol.ext_func_constant %{{.*}} : !sol.address -> !sol.ext_func_ref<(ui256) -> ui256>
-// CHECK:   sol.ext_icall %[[POINTER]](%{{.*}}) gas %{{.*}} value %{{.*}} {static_call}
+// CHECK:   sol.ext_call "{{.*g.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256, static_call}
 
 contract C {
     uint256[] stored;

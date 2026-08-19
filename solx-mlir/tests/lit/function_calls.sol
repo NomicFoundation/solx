@@ -31,7 +31,7 @@
 // CHECK: sol.func @{{.*paren_named_argument.*}}
 // CHECK:   %[[X:.*]] = sol.load
 // CHECK:   %[[ONE:.*]] = sol.cast
-// CHECK:   sol.icall %{{.*}}(%[[X]], %[[ONE]])
+// CHECK:   sol.call @{{.*add.*}}(%[[X]], %[[ONE]])
 
 // CHECK: sol.func @{{.*empty_braces.*}}
 // CHECK:   sol.call @{{.*literal_argument.*}}() : () -> ()

@@ -9,8 +9,8 @@
 
 // CHECK: sol.func @{{.*plus_one.*}}
 // CHECK:   sol.alloca : !sol.ptr<ui256, Stack>
-// CHECK-NOT: sol.alloca
-// CHECK:   sol.return
+// CHECK:   %[[SUM:.*]] = sol.cadd
+// CHECK-NEXT:   sol.return %[[SUM]]
 
 // CHECK: sol.func @{{.*named_bytes.*}}
 // CHECK:   %[[ZERO:.*]] = sol.constant 0 : ui32
