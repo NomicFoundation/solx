@@ -191,7 +191,8 @@ EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 url = "https://github.com/maple-labs/fixed-term-loan"
 commit = "8fb3675288897cb0b5748a5bbe90a12055bf9fa1"
 description = "A set of contracts to facilitate on-chain loans."
-disabled = true
+# A nested submodule (maple-proxy-factory -> contract-test-utils) pins an SSH URL;
+# the harness clone rewrites it to https (see GITHUB_SSH_INSTEAD_OF in utils.rs).
 
 [projects.forge-std]
 url = "https://github.com/foundry-rs/forge-std"

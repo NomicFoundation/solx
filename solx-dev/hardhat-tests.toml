@@ -138,6 +138,9 @@ url = "https://github.com/antonbaliasnikov/ens-contracts"
 commit = "85ddeb9ff8def53e580a1fa70b156fe1c88775da"
 description = "The core contracts of the ENS protocol."
 build_system = "bun"
+# The fork lacks solx wiring (no USE_SOLX/SOLX in its Hardhat config) and only enables
+# solc 0.8.17/0.8.26, so the >=0.8.34 pragma pin fails HHE909. The pinned lockfile also
+# references @ensdomains/buffer@0.1.1, which has been unpublished from npm.
 disabled = true
 
 [projects.olympus]
@@ -145,6 +148,7 @@ url = "https://github.com/antonbaliasnikov/olympus-contracts"
 commit = "825a5e49ba21c3a15c2335584bb58bd3ced435e7"
 description = "A collection of contracts for Olympus DAO."
 build_system = "yarn"
+# The fork lacks solx wiring (no USE_SOLX/SOLX in its Hardhat config); solc pinned to 0.8.15.
 disabled = true
 
 [projects.synthetix]
@@ -152,4 +156,4 @@ url = "https://github.com/antonbaliasnikov/synthetix"
 commit = "1609d156708eb77025478cbcd92b98de51faf1e3"
 description = "A crypto-backed synthetic asset platform."
 build_system = "npm"
-disabled = true
+disabled = true # written in Solidity v0.4/v0.5, below the solx version floor

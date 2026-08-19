@@ -130,6 +130,11 @@ pub fn command_with_json_output<T: serde::de::DeserializeOwned>(
         .map_err(|error| anyhow::anyhow!("{command:?} output parsing: {error:?}"))
 }
 
+/// Some projects pin submodules to SSH URLs (e.g. maple-labs/fixed-term-loan ->
+/// maple-proxy-factory -> contract-test-utils), which unauthenticated CI cannot fetch.
+/// Passed via `-c` so it propagates to nested submodule clones without touching global config.
+const GITHUB_SSH_INSTEAD_OF: &str = "url.https://github.com/.insteadOf=git@github.com:";
+
 ///
 /// Clones a git repository into the given directory.
 ///
@@ -169,9 +174,9 @@ pub fn clone_repository(
         let gitmodules_path = std::path::Path::new(directory).join(".gitmodules");
         if gitmodules_path.exists() {
             let mut submodule_command = Command::new("git");
+            submodule_command.args(["-C", directory]);
+            submodule_command.args(["-c", GITHUB_SSH_INSTEAD_OF]);
             submodule_command.args([
-                "-C",
-                directory,
                 "submodule",
                 "update",
                 "--init",
@@ -183,6 +188,7 @@ pub fn clone_repository(
         }
     } else {
         let mut clone_command = Command::new("git");
+        clone_command.args(["-c", GITHUB_SSH_INSTEAD_OF]);
         clone_command.arg("clone");
         clone_command.args(["--depth", "1"]);
         clone_command.arg("--recurse-submodules");

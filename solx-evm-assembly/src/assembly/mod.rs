@@ -75,34 +75,25 @@ impl Assembly {
     }
 
     ///
-    /// Returns a runtime code mutable reference from the deploy code assembly.
-    ///
-    pub fn runtime_code_mut(&mut self) -> anyhow::Result<&mut Assembly> {
-        match self
-            .data
-            .as_mut()
-            .and_then(|data| data.get_mut("0"))
-            .ok_or_else(|| anyhow::anyhow!("Runtime code data not found"))?
-        {
-            Data::Assembly(assembly) => Ok(assembly),
-            Data::Hash(hash) => {
-                anyhow::bail!("Expected runtime code, found hash `{hash}`");
-            }
-            Data::Path(path) => {
-                anyhow::bail!("Expected runtime code, found path `{path}`");
-            }
-        }
-    }
-
-    ///
-    /// Replaces the nested runtime code with a path reference, dropping its instructions.
+    /// Moves the nested runtime code out, replacing it with a path reference.
     ///
     /// The deploy translation unit never enters the runtime blocks, so shipping the runtime
     /// instructions inside the deploy input is dead weight.
     ///
-    pub fn strip_runtime_code(&mut self, path: String) {
-        if let Some(data) = self.data.as_mut() {
-            data.insert("0".to_owned(), Data::Path(path));
+    pub fn take_runtime_code(&mut self, path: String) -> anyhow::Result<Assembly> {
+        match self
+            .data
+            .as_mut()
+            .and_then(|data| data.insert("0".to_owned(), Data::Path(path)))
+        {
+            Some(Data::Assembly(assembly)) => Ok(assembly),
+            Some(Data::Hash(hash)) => {
+                anyhow::bail!("Expected runtime code, found hash `{hash}`");
+            }
+            Some(Data::Path(path)) => {
+                anyhow::bail!("Expected runtime code, found path `{path}`");
+            }
+            None => anyhow::bail!("Runtime code data not found"),
         }
     }
 
