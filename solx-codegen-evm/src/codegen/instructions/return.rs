@@ -82,3 +82,19 @@ pub fn invalid(context: &mut Context) -> anyhow::Result<()> {
     context.build_unreachable()?;
     Ok(())
 }
+
+///
+/// Translates the `selfdestruct` instruction.
+///
+pub fn self_destruct<'ctx>(
+    context: &mut Context<'ctx>,
+    address: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<()> {
+    context.build_call(
+        context.intrinsics().selfdestruct,
+        &[address.as_basic_value_enum()],
+        "selfdestruct",
+    )?;
+    context.build_unreachable()?;
+    Ok(())
+}

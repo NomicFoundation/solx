@@ -1083,8 +1083,9 @@ impl solx_codegen_evm::WriteLLVM for Element {
                 anyhow::bail!("The `PC` instruction is not supported");
             }
             InstructionName::SELFDESTRUCT => {
-                let _arguments = self.pop_arguments_llvm(context)?;
-                anyhow::bail!("The `SELFDESTRUCT` instruction is not supported");
+                let arguments = self.pop_arguments_llvm(context)?;
+                solx_codegen_evm::r#return::self_destruct(context, arguments[0].into_int_value())
+                    .map(|_| None)
             }
 
             InstructionName::RecursiveCall {
