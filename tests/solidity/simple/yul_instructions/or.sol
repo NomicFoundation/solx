@@ -51,7 +51,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "zero_ordinar",
+//!     "name": "zero_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -64,7 +64,7 @@
 //!         "433478394034343"
 //!     ]
 //! }, {
-//!     "name": "ordinar_zero",
+//!     "name": "ordinary_zero",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -77,7 +77,7 @@
 //!         "121563127839120"
 //!     ]
 //! }, {
-//!     "name": "one_ordinar",
+//!     "name": "one_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -90,7 +90,7 @@
 //!         "433478394034343"
 //!     ]
 //! }, {
-//!     "name": "ordinar_one",
+//!     "name": "ordinary_one",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -103,7 +103,7 @@
 //!         "121563127839121"
 //!     ]
 //! }, {
-//!     "name": "ordinar_ordinar",
+//!     "name": "ordinary_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -116,7 +116,7 @@
 //!         "0xe8299dc2b23bb3b3b33fefb65ff82383433ffcf3bfdaabb3b2b678ffef7abfbc"
 //!     ]
 //! }, {
-//!     "name": "ordinar_ordinar_equals",
+//!     "name": "ordinary_ordinary_equals",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -129,7 +129,7 @@
 //!         "0x67AC08676F781278AA823890BC392384382FE19082382834A8237678CC128912"
 //!     ]
 //! }, {
-//!     "name": "ordinar_ordinar_to_max",
+//!     "name": "ordinary_ordinary_to_max",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -194,7 +194,7 @@
 //!         "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 //!     ]
 //! }, {
-//!     "name": "ordinar_max",
+//!     "name": "ordinary_max",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -207,7 +207,7 @@
 //!         "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 //!     ]
 //! }, {
-//!     "name": "max_ordinar",
+//!     "name": "max_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",

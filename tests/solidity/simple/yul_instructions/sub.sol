@@ -51,7 +51,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "zero_ordinar",
+//!     "name": "zero_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -64,7 +64,7 @@
 //!         "115792089237316195423570985008687907853269984665640564039457583574434735605593"
 //!     ]
 //! }, {
-//!     "name": "ordinar_zero",
+//!     "name": "ordinary_zero",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -77,7 +77,7 @@
 //!         "121563127839120"
 //!     ]
 //! }, {
-//!     "name": "one_ordinar",
+//!     "name": "one_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -90,7 +90,7 @@
 //!         "115792089237316195423570985008687907853269984665640564039457583574434735605594"
 //!     ]
 //! }, {
-//!     "name": "ordinar_one",
+//!     "name": "ordinary_one",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -103,7 +103,7 @@
 //!         "121563127839119"
 //!     ]
 //! }, {
-//!     "name": "ordinar_ordinar",
+//!     "name": "ordinary_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -116,7 +116,7 @@
 //!         "2378423904207157663330536"
 //!     ]
 //! }, {
-//!     "name": "ordinar_ordinar_to_zero",
+//!     "name": "ordinary_ordinary_to_zero",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -129,7 +129,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "ordinar_ordinar_min_overflow",
+//!     "name": "ordinary_ordinary_min_overflow",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -142,7 +142,7 @@
 //!         "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
 //!     ]
 //! }, {
-//!     "name": "ordinar_ordinar_overflow",
+//!     "name": "ordinary_ordinary_overflow",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -207,7 +207,7 @@
 //!         "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"
 //!     ]
 //! }, {
-//!     "name": "ordinar_max",
+//!     "name": "ordinary_max",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -220,7 +220,7 @@
 //!         "7437834752357434334343423343443375834785783475"
 //!     ]
 //! }, {
-//!     "name": "max_ordinar",
+//!     "name": "max_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",

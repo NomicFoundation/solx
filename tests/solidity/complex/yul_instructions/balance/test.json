@@ -131,7 +131,7 @@
             ]
           },
           {
-            "comment": "ordinar balance (12 index)",
+            "comment": "ordinary balance (12 index)",
             "instance": "Main",
             "method": "main",
             "value": "34334433434 wei",
@@ -170,7 +170,7 @@
             ]
           },
           {
-            "comment": "ordinar bigger 2 in 128 balance (15 index)",
+            "comment": "ordinary bigger 2 in 128 balance (15 index)",
             "instance": "Main",
             "method": "main",
             "value": "48384899813922913922990329231 wei",

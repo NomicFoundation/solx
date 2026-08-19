@@ -29,7 +29,7 @@
 //!         "exception": true
 //!     } ]
 //! }, {
-//!     "name": "ordinar_zero",
+//!     "name": "ordinary_zero",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -44,7 +44,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "ordinar_non_zero",
+//!     "name": "ordinary_non_zero",
 //!     "inputs": [
 //!         {
 //!             "method": "main",

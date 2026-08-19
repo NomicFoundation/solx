@@ -25,7 +25,7 @@
 //!         "$BLOB_HASH:1"
 //!     ]
 //! }, {
-//!     "name": "ordinar",
+//!     "name": "ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",

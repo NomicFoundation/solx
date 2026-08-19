@@ -25,7 +25,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "ordinar",
+//!     "name": "ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -71,7 +71,7 @@
 //!         "0x100000000000000000000000000000000"
 //!     ]
 //! }, {
-//!     "name": "ordinar_bigger_2_in_128",
+//!     "name": "ordinary_bigger_2_in_128",
 //!     "inputs": [
 //!         {
 //!             "method": "main",

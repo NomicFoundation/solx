@@ -25,7 +25,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "small_ordinar",
+//!     "name": "small_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -51,7 +51,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "ordinar",
+//!     "name": "ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -64,7 +64,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "ordinar_words",
+//!     "name": "ordinary_words",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -77,7 +77,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "big_ordinar",
+//!     "name": "big_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -119,7 +119,7 @@
 //!         "return_data": []
 //!     }
 //! }, {
-//!     "name": "2_in_32_minus_ordinar",
+//!     "name": "2_in_32_minus_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -161,7 +161,7 @@
 //!         "return_data": []
 //!     }
 //! }, {
-//!     "name": "ordinar_bigger_2_in_32",
+//!     "name": "ordinary_bigger_2_in_32",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -215,7 +215,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "zero_value_small_ordinar",
+//!     "name": "zero_value_small_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "with_value",
@@ -241,7 +241,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "zero_value_ordinar",
+//!     "name": "zero_value_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "with_value",
@@ -254,7 +254,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "zero_value_ordinar_words",
+//!     "name": "zero_value_ordinary_words",
 //!     "inputs": [
 //!         {
 //!             "method": "with_value",
@@ -293,7 +293,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "one_value_small_ordinar",
+//!     "name": "one_value_small_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "with_value",
@@ -319,7 +319,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "one_value_ordinar",
+//!     "name": "one_value_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "with_value",
@@ -332,7 +332,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "one_value_ordinar_words",
+//!     "name": "one_value_ordinary_words",
 //!     "inputs": [
 //!         {
 //!             "method": "with_value",
@@ -345,7 +345,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "ordinar_value_zero",
+//!     "name": "ordinary_value_zero",
 //!     "inputs": [
 //!         {
 //!             "method": "with_value",
@@ -358,7 +358,7 @@
 //!         "2513561237612763712737127371273871283871273172"
 //!     ]
 //! }, {
-//!     "name": "ordinar_value_one",
+//!     "name": "ordinary_value_one",
 //!     "inputs": [
 //!         {
 //!             "method": "with_value",
@@ -371,7 +371,7 @@
 //!         "2513561237612763712737127371273871283871273172"
 //!     ]
 //! }, {
-//!     "name": "ordinar_value_small_ordinar",
+//!     "name": "ordinary_value_small_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "with_value",
@@ -384,7 +384,7 @@
 //!         "2513561237612763712737127371273871283871273172"
 //!     ]
 //! }, {
-//!     "name": "ordinar_value_word",
+//!     "name": "ordinary_value_word",
 //!     "inputs": [
 //!         {
 //!             "method": "with_value",
@@ -397,7 +397,7 @@
 //!         "2513561237612763712737127371273871283871273172"
 //!     ]
 //! }, {
-//!     "name": "ordinar_value_ordinar",
+//!     "name": "ordinary_value_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "with_value",
@@ -410,7 +410,7 @@
 //!         "2513561237612763712737127371273871283871273172"
 //!     ]
 //! }, {
-//!     "name": "ordinar_value_ordinar_words",
+//!     "name": "ordinary_value_ordinary_words",
 //!     "inputs": [
 //!         {
 //!             "method": "with_value",
@@ -449,7 +449,7 @@
 //!         "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
 //!     ]
 //! }, {
-//!     "name": "max_value_small_ordinar",
+//!     "name": "max_value_small_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "with_value",
@@ -475,7 +475,7 @@
 //!         "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
 //!     ]
 //! }, {
-//!     "name": "max_value_ordinar",
+//!     "name": "max_value_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "with_value",
@@ -488,7 +488,7 @@
 //!         "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
 //!     ]
 //! }, {
-//!     "name": "max_value_ordinar_words",
+//!     "name": "max_value_ordinary_words",
 //!     "inputs": [
 //!         {
 //!             "method": "with_value",

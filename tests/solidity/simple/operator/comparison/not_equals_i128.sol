@@ -12,7 +12,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "ordinar_true_lesser",
+//!     "name": "ordinary_true_lesser",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -25,7 +25,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "ordinar_true_bigger",
+//!     "name": "ordinary_true_bigger",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -38,7 +38,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "ordinar_false_negative",
+//!     "name": "ordinary_false_negative",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -51,7 +51,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "ordinar_false_positive",
+//!     "name": "ordinary_false_positive",
 //!     "inputs": [
 //!         {
 //!             "method": "main",

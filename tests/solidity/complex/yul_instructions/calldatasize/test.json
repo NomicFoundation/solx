@@ -31,7 +31,7 @@
                 "1"
             ]
         }, {
-            "name": "small_ordinar_runtime",
+            "name": "small_ordinary_runtime",
             "inputs": [
                 {
                     "instance": "Main",
@@ -61,7 +61,7 @@
                 "32"
             ]
         }, {
-            "name": "ordinar_runtime",
+            "name": "ordinary_runtime",
             "inputs": [
                 {
                     "instance": "Main",
@@ -76,7 +76,7 @@
                 "2383"
             ]
         }, {
-            "name": "ordinar_words_runtime",
+            "name": "ordinary_words_runtime",
             "inputs": [
                 {
                     "instance": "Main",
@@ -131,7 +131,7 @@
                 ]
             }
         }, {
-            "name": "small_ordinar_deploy",
+            "name": "small_ordinary_deploy",
             "inputs": [
                 {
                     "instance": "Main",
@@ -171,7 +171,7 @@
                 ]
             }
         }, {
-            "name": "ordinar_deploy",
+            "name": "ordinary_deploy",
             "inputs": [
                 {
                     "instance": "Main",
@@ -191,7 +191,7 @@
                 ]
             }
         }, {
-            "name": "ordinar_words_deploy",
+            "name": "ordinary_words_deploy",
             "inputs": [
                 {
                     "instance": "Main",

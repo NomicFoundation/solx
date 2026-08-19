@@ -21,7 +21,7 @@
 //!         "exception": true
 //!     } ]
 //! }, {
-//!     "name": "ordinar_by_zero",
+//!     "name": "ordinary_by_zero",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -139,7 +139,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "ordinar_remainder_positive",
+//!     "name": "ordinary_remainder_positive",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -152,7 +152,7 @@
 //!         "3"
 //!     ]
 //! }, {
-//!     "name": "ordinar_remainder_negative_divided",
+//!     "name": "ordinary_remainder_negative_divided",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -165,7 +165,7 @@
 //!         "-3"
 //!     ]
 //! }, {
-//!     "name": "ordinar_remainder_negative_divider",
+//!     "name": "ordinary_remainder_negative_divider",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -178,7 +178,7 @@
 //!         "3"
 //!     ]
 //! }, {
-//!     "name": "ordinar_remainder_negative_both",
+//!     "name": "ordinary_remainder_negative_both",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -191,7 +191,7 @@
 //!         "-3"
 //!     ]
 //! }, {
-//!     "name": "ordinar_max_remainder",
+//!     "name": "ordinary_max_remainder",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -204,7 +204,7 @@
 //!         "6"
 //!     ]
 //! }, {
-//!     "name": "ordinar_next",
+//!     "name": "ordinary_next",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -256,7 +256,7 @@
 //!         "-1"
 //!     ]
 //! }, {
-//!     "name": "min_to_negative_ordinar",
+//!     "name": "min_to_negative_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -269,7 +269,7 @@
 //!         "-1"
 //!     ]
 //! }, {
-//!     "name": "max_to_negative_ordinar",
+//!     "name": "max_to_negative_ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",

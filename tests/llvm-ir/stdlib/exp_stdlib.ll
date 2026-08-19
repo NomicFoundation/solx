@@ -51,7 +51,7 @@
 ;!         "1"
 ;!     ]
 ;! }, {
-;!     "name": "zero_ordinar",
+;!     "name": "zero_ordinary",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -64,7 +64,7 @@
 ;!         "0"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_zero",
+;!     "name": "ordinary_zero",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -77,7 +77,7 @@
 ;!         "1"
 ;!     ]
 ;! }, {
-;!     "name": "one_ordinar",
+;!     "name": "one_ordinary",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -90,7 +90,7 @@
 ;!         "1"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_one",
+;!     "name": "ordinary_one",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -103,7 +103,7 @@
 ;!         "121563127839120"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_ordinar",
+;!     "name": "ordinary_ordinary",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -116,7 +116,7 @@
 ;!         "569381465857367090636427305760163241950353347303833610101782245331441"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_ordinar_big",
+;!     "name": "ordinary_ordinary_big",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -129,7 +129,7 @@
 ;!         "0xfffffffffffffffffffffffffffffffe00000000000000000000000000000001"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_ordinar_min_overflow",
+;!     "name": "ordinary_ordinary_min_overflow",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -142,7 +142,7 @@
 ;!         "0"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_ordinar_overflow",
+;!     "name": "ordinary_ordinary_overflow",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -207,7 +207,7 @@
 ;!         "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_max",
+;!     "name": "ordinary_max",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -220,7 +220,7 @@
 ;!         "0"
 ;!     ]
 ;! }, {
-;!     "name": "max_ordinar",
+;!     "name": "max_ordinary",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
