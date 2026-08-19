@@ -25,30 +25,49 @@
 // CHECK:   sol.map %{{.*}}, %{{.*}} : !sol.mapping<ui256, ui256>, ui256, !sol.ptr<ui256, Storage>
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
 
+// CHECK: sol.func {{.*}}readLiteralKey{{.*}}-> ui256
+// CHECK:   sol.constant 44048180597813453602326562734351324025098966208897425494240603688123167145984 : ui256
+// CHECK:   sol.bytes_cast %{{.*}} : ui256 to !sol.fixedbytes<32>
+// CHECK:   sol.map %{{.*}}, %{{.*}} : !sol.mapping<!sol.fixedbytes<32>, ui256>, !sol.fixedbytes<32>, !sol.ptr<ui256, Storage>
+
+// CHECK: sol.func {{.*}}readNarrowKey{{.*}}-> ui256
+// CHECK:   sol.cast %{{.*}} : si8 to si256
+// CHECK:   sol.map %{{.*}}, %{{.*}} : !sol.mapping<si256, ui256>, si256, !sol.ptr<ui256, Storage>
+
 contract C {
-    mapping(uint256 => uint256) m;
+    mapping(uint256 => uint256) map;
+    mapping(bytes32 => uint256) wordMap;
+    mapping(int256 => uint256) signedMap;
 
-    function readArray(uint256[] memory a, uint256 i) public pure returns (uint256) {
-        return a[i];
+    function readArray(uint256[] memory array, uint256 index) public pure returns (uint256) {
+        return array[index];
     }
 
-    function readBytes(bytes memory data, uint256 i) public pure returns (bytes1) {
-        return data[i];
+    function readBytes(bytes memory data, uint256 index) public pure returns (bytes1) {
+        return data[index];
     }
 
-    function readFixedBytes(bytes32 b, uint256 i) public pure returns (bytes1) {
-        return b[i];
+    function readFixedBytes(bytes32 word, uint256 index) public pure returns (bytes1) {
+        return word[index];
     }
 
-    function readMapping(uint256 k) public view returns (uint256) {
-        return m[k];
+    function readMapping(uint256 key) public view returns (uint256) {
+        return map[key];
     }
 
-    function writeArray(uint256[] memory a, uint256 i, uint256 v) public pure {
-        a[i] = v;
+    function writeArray(uint256[] memory array, uint256 index, uint256 value) public pure {
+        array[index] = value;
     }
 
-    function writeMapping(uint256 k, uint256 v) public {
-        m[k] = v;
+    function writeMapping(uint256 key, uint256 value) public {
+        map[key] = value;
+    }
+
+    function readLiteralKey() public view returns (uint256) {
+        return wordMap["abc"];
+    }
+
+    function readNarrowKey(int8 key) public view returns (uint256) {
+        return signedMap[key];
     }
 }

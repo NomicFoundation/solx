@@ -4,58 +4,58 @@
 // CHECK: sol.func @{{.*qualified_plain.*}}
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
 // CHECK:   %[[ARG:.*]] = sol.load
-// CHECK:   sol.ext_call "{{.*mutate.*}}"(%[[ARG]]) at %[[ADDR]] gas %{{.*}} value %c0_ui256 selector %c1899731083_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call} : !sol.address, (ui256) -> (i1, ui256)
+// CHECK:   sol.ext_call "{{.*mutate.*}}"(%[[ARG]]) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c1899731083_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call} : !sol.address, (ui256) -> (i1, ui256)
 
 // CHECK: sol.func @{{.*qualified_static.*}}
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
 // CHECK:   %[[ARG:.*]] = sol.load
-// CHECK:   sol.ext_call "{{.*observe.*}}"(%[[ARG]]) at %[[ADDR]] gas %{{.*}} value %c0_ui256 selector %c2147616019_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, static_call} : !sol.address, (ui256) -> (i1, ui256)
+// CHECK:   sol.ext_call "{{.*observe.*}}"(%[[ARG]]) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c2147616019_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, static_call} : !sol.address, (ui256) -> (i1, ui256)
 
 // CHECK: sol.func @{{.*qualified_try.*}}
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
 // CHECK:   %[[ARG:.*]] = sol.load
-// CHECK:   %[[STATUS:[^,]*]], %{{.*}} = sol.ext_call "{{.*mutate.*}}"(%[[ARG]]) at %[[ADDR]] gas %{{.*}} value %c0_ui256 selector %c1899731083_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, try_call} : !sol.address, (ui256) -> (i1, ui256)
+// CHECK:   %[[STATUS:[^,]*]], %{{.*}} = sol.ext_call "{{.*mutate.*}}"(%[[ARG]]) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c1899731083_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, try_call} : !sol.address, (ui256) -> (i1, ui256)
 // CHECK:   sol.try %[[STATUS]] {
 
 // CHECK: sol.func @{{.*qualified_static_try.*}}
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
 // CHECK:   %[[ARG:.*]] = sol.load
-// CHECK:   %[[STATUS:[^,]*]], %{{.*}} = sol.ext_call "{{.*observe.*}}"(%[[ARG]]) at %[[ADDR]] gas %{{.*}} value %c0_ui256 selector %c2147616019_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, static_call, try_call} : !sol.address, (ui256) -> (i1, ui256)
+// CHECK:   %[[STATUS:[^,]*]], %{{.*}} = sol.ext_call "{{.*observe.*}}"(%[[ARG]]) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c2147616019_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, static_call, try_call} : !sol.address, (ui256) -> (i1, ui256)
 // CHECK:   sol.try %[[STATUS]] {
 
 // CHECK: sol.func @{{.*qualified_named.*}}
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
 // CHECK:   %[[ARG:.*]] = sol.load
 // CHECK:   sol.constant 2 : ui8
-// CHECK:   sol.ext_call "{{.*named.*}}"(%[[ARG]], %{{.*}}) at %[[ADDR]] gas %{{.*}} value %c0_ui256 selector %c3351715987_ui256 {callee_type = (ui256, ui256) -> ui256, delegate_call, library_call, static_call} : !sol.address, (ui256, ui256) -> (i1, ui256)
+// CHECK:   sol.ext_call "{{.*named.*}}"(%[[ARG]], %{{.*}}) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c3351715987_ui256 {callee_type = (ui256, ui256) -> ui256, delegate_call, library_call, static_call} : !sol.address, (ui256, ui256) -> (i1, ui256)
 
 // CHECK: sol.func @{{.*attached_plain.*}}
 // CHECK:   %[[RECEIVER:.*]] = sol.load
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
-// CHECK:   sol.ext_call "{{.*mutate.*}}"(%[[RECEIVER]]) at %[[ADDR]] gas %{{.*}} value %c0_ui256 selector %c1899731083_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call} : !sol.address, (ui256) -> (i1, ui256)
+// CHECK:   sol.ext_call "{{.*mutate.*}}"(%[[RECEIVER]]) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c1899731083_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call} : !sol.address, (ui256) -> (i1, ui256)
 
 // CHECK: sol.func @{{.*attached_static.*}}
 // CHECK:   %[[RECEIVER:.*]] = sol.load
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
-// CHECK:   sol.ext_call "{{.*observe.*}}"(%[[RECEIVER]]) at %[[ADDR]] gas %{{.*}} value %c0_ui256 selector %c2147616019_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, static_call} : !sol.address, (ui256) -> (i1, ui256)
+// CHECK:   sol.ext_call "{{.*observe.*}}"(%[[RECEIVER]]) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c2147616019_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, static_call} : !sol.address, (ui256) -> (i1, ui256)
 
 // CHECK: sol.func @{{.*attached_try.*}}
 // CHECK:   %[[RECEIVER:.*]] = sol.load
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
-// CHECK:   %[[STATUS:[^,]*]], %{{.*}} = sol.ext_call "{{.*mutate.*}}"(%[[RECEIVER]]) at %[[ADDR]] gas %{{.*}} value %c0_ui256 selector %c1899731083_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, try_call} : !sol.address, (ui256) -> (i1, ui256)
+// CHECK:   %[[STATUS:[^,]*]], %{{.*}} = sol.ext_call "{{.*mutate.*}}"(%[[RECEIVER]]) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c1899731083_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, try_call} : !sol.address, (ui256) -> (i1, ui256)
 // CHECK:   sol.try %[[STATUS]] {
 
 // CHECK: sol.func @{{.*attached_static_try.*}}
 // CHECK:   %[[RECEIVER:.*]] = sol.load
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
-// CHECK:   %[[STATUS:[^,]*]], %{{.*}} = sol.ext_call "{{.*observe.*}}"(%[[RECEIVER]]) at %[[ADDR]] gas %{{.*}} value %c0_ui256 selector %c2147616019_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, static_call, try_call} : !sol.address, (ui256) -> (i1, ui256)
+// CHECK:   %[[STATUS:[^,]*]], %{{.*}} = sol.ext_call "{{.*observe.*}}"(%[[RECEIVER]]) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c2147616019_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, static_call, try_call} : !sol.address, (ui256) -> (i1, ui256)
 // CHECK:   sol.try %[[STATUS]] {
 
 // CHECK: sol.func @{{.*attached_named.*}}
 // CHECK:   %[[RECEIVER:.*]] = sol.load
 // CHECK:   sol.constant 3 : ui8
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
-// CHECK:   sol.ext_call "{{.*named.*}}"(%[[RECEIVER]], %{{.*}}) at %[[ADDR]] gas %{{.*}} value %c0_ui256 selector %c3351715987_ui256 {callee_type = (ui256, ui256) -> ui256, delegate_call, library_call, static_call} : !sol.address, (ui256, ui256) -> (i1, ui256)
+// CHECK:   sol.ext_call "{{.*named.*}}"(%[[RECEIVER]], %{{.*}}) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c3351715987_ui256 {callee_type = (ui256, ui256) -> ui256, delegate_call, library_call, static_call} : !sol.address, (ui256, ui256) -> (i1, ui256)
 
 library Lib {
     function mutate(uint256 a) external returns (uint256) {
