@@ -81,7 +81,7 @@ alloy-primitives = "1.6"
 # LLVM
 [workspace.dependencies.inkwell]
 git = "https://github.com/NomicFoundation/inkwell"
-rev = "7098f23bbb00ba0264aa3e73595f689328322ec9"
+rev = "0081bb29a84921447fb1c9773350c52813a7fe31"
 default-features = false
 features = [
     "llvm21-1",
