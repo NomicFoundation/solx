@@ -858,8 +858,9 @@ impl FunctionCall {
             }
             Name::Pc => anyhow::bail!("{location} The `PC` instruction is not supported"),
             Name::SelfDestruct => {
-                let _arguments = self.pop_arguments_llvm::<1>(context)?;
-                anyhow::bail!("{location} The `SELFDESTRUCT` instruction is not supported")
+                let arguments = self.pop_arguments_llvm::<1>(context)?;
+                solx_codegen_evm::r#return::self_destruct(context, arguments[0].into_int_value())
+                    .map(|_| None)
             }
             Name::BlobHash => {
                 let arguments = self.pop_arguments_llvm::<1>(context)?;

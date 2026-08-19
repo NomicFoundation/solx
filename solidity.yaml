@@ -4114,8 +4114,8 @@ entries:
         version: '>=0.8.24'
       transient_storage_selfdestruct.sol:
         hash: '0x694a5de51c5397e8fe30a663cc428e49'
-        enabled: false
-        comment: 'TODO: SELFDESTRUCT'
+        enabled: true
+        version: '>=0.8.24'
       transient_storage_simple_reentrancy_lock.sol:
         hash: '0x6c772ad2e01e89deadc0992ec318848f'
         enabled: true
@@ -7116,28 +7116,28 @@ entries:
         version: '>=0.4.12'
       selfdestruct_post_cancun.sol:
         hash: '0xf2c3bae0ecce84675d5247200b83d0b8'
-        enabled: false
-        comment: 'TODO: SELFDESTRUCT'
+        enabled: true
+        version: '>=0.8.24'
       selfdestruct_post_cancun_multiple_beneficiaries.sol:
         hash: '0x4feb55845bd01bdcecc9edde155990e9'
-        enabled: false
-        comment: 'TODO: SELFDESTRUCT'
+        enabled: true
+        version: '>=0.8.24'
       selfdestruct_post_cancun_redeploy.sol:
         hash: '0xc5e74e07b4978ae00ee8768923f0d429'
         enabled: false
-        comment: 'TODO: SELFDESTRUCT'
+        comment: 'The expected event values are CREATE2 addresses derived from the EVMHost account layout'
       selfdestruct_pre_cancun.sol:
         hash: '0xe60a63017f466b830b204516a80af900'
         enabled: false
-        comment: 'TODO: SELFDESTRUCT'
+        comment: 'Pre-Cancun EVM versions are not supported'
       selfdestruct_pre_cancun_multiple_beneficiaries.sol:
         hash: '0x70fcf6f92420b5ef537a99d9db28d4e5'
         enabled: false
-        comment: 'TODO: SELFDESTRUCT'
+        comment: 'Pre-Cancun EVM versions are not supported'
       selfdestruct_pre_cancun_redeploy.sol:
         hash: '0x022ff034132d368888700c60b9e6b536'
         enabled: false
-        comment: 'TODO: SELFDESTRUCT'
+        comment: 'Pre-Cancun EVM versions are not supported'
       senders_balance.sol:
         hash: '0xb1c91f546af65e4f182553f5572ce312'
         enabled: true

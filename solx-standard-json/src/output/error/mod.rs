@@ -41,8 +41,11 @@ pub struct Error {
 }
 
 impl Error {
-    /// The list of ignored `solc` warnings that are strictly EVM-related.
-    pub const IGNORED_WARNING_CODES: [&'static str; 5] = ["1699", "3860", "5159", "5574", "6417"];
+    /// The list of ignored `solc` warnings. 3860 (initcode size) and 5574 (code size) are
+    /// measured on the bytecode `solc` itself would have emitted, which solx discards in favor
+    /// of the LLVM backend output. 6417 (`type(...).runtimeCode` with an assembly constructor)
+    /// applies to solx output as well and may deserve un-ignoring.
+    pub const IGNORED_WARNING_CODES: [&'static str; 3] = ["3860", "5574", "6417"];
 
     ///
     /// A shortcut constructor.
