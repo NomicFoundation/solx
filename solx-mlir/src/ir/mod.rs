@@ -1,5 +1,6 @@
 //!
-//! Sol dialect IR wrappers: types, values, and attributes.
+//! Sol dialect IR wrappers: types, values, attributes, and the bridge ops that carry a Sol value or
+//! place across into the Yul dialect.
 //!
 #![expect(missing_docs, reason = "generated Sol op wrapper")]
 
@@ -8,6 +9,7 @@ pub mod block;
 pub mod place;
 pub mod r#type;
 pub mod value;
+pub mod yul;
 
 use melior::ir::BlockLike;
 
@@ -15,9 +17,10 @@ use crate::Block;
 use crate::Function;
 use crate::Place;
 use crate::Value;
+use crate::Word;
 use crate::ods::sol::*;
 
-sol_ops! {
+dialect_ops! {
     Value::constant(value: i64, result_type: ty) -> value {
         ConstantOperation.value(int_attr(value, result_type)).result(result_type)
     }
@@ -328,5 +331,41 @@ sol_ops! {
     }
     Block::do_while(self) {
         DoWhileOperation; body, cond
+    }
+
+    Block::inline_asm(self, memory_safe: flag) {
+        InlineAsmOperation.memory_safe(memory_safe); body
+    }
+
+    Value::yul_word(self) -> word {
+        YulValCastOperation.src(self).out(word())
+    }
+    Word::state_var_slot(symbol: str) -> word {
+        YulStateVarSlotOperation.sym(symbol_attr(symbol)).out(word())
+    }
+    Word::state_var_offset(symbol: str) -> word {
+        YulStateVarOffsetOperation.sym(symbol_attr(symbol)).out(word())
+    }
+
+    Place::yul_slot(self) -> slot {
+        YulPtrCastOperation.src(self).out(yul_ptr())
+    }
+    Place::yul_storage_slot(self) -> slot {
+        YulStorageSlotOperation.src(self).out(yul_ptr())
+    }
+    Place::yul_storage_offset(self) -> word {
+        YulStorageOffsetOperation.src(self).out(word())
+    }
+    Place::yul_calldata_offset(self) -> slot {
+        YulCallDataOffsetOperation.src(self).out(yul_ptr())
+    }
+    Place::yul_calldata_length(self) -> slot {
+        YulCallDataLengthOperation.src(self).out(yul_ptr())
+    }
+    Place::yul_selector(self) -> slot {
+        YulSelectorOperation.src(self).out(yul_ptr())
+    }
+    Place::yul_function_address(self) -> slot {
+        YulFuncAddrOperation.src(self).out(yul_ptr())
     }
 }

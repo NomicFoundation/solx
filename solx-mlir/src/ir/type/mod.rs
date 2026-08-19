@@ -80,6 +80,21 @@ impl<'context> Type<'context> {
         Self::unsigned(context, solx_utils::BIT_LENGTH_FIELD)
     }
 
+    /// The signless 256-bit integer every Yul value carries. Distinct from [`Self::field`]: the Yul
+    /// dialect is signless throughout, so a Solidity value crossing into inline assembly is
+    /// reinterpreted rather than converted.
+    pub fn yul_word(context: &'context melior::Context) -> Self {
+        Self::new(MlirType::from(IntegerType::new(
+            context,
+            solx_utils::BIT_LENGTH_FIELD as u32,
+        )))
+    }
+
+    /// The `yul::PtrType` singleton (`!yul.ptr`), the address a Yul-local variable is held at.
+    pub fn yul_pointer(context: &'context melior::Context) -> Self {
+        Self::new(unsafe { MlirType::from_raw(ffi::solxCreateYulPtrType(context.to_raw())) })
+    }
+
     /// A `sol::PointerType` with the given element type and data location.
     pub fn pointer(
         context: &'context melior::Context,
