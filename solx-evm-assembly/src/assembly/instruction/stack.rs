@@ -7,7 +7,7 @@ use inkwell::values::BasicValue;
 use solx_codegen_evm::IEVMLAData;
 
 ///
-/// Translates the ordinar value push.
+/// Translates the ordinary value push.
 ///
 pub fn push<'ctx, C>(
     context: &mut C,

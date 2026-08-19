@@ -25,7 +25,7 @@
 ;!         "1"
 ;!     ]
 ;! }, {
-;!     "name": "zero_ordinar",
+;!     "name": "zero_ordinary",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -77,7 +77,7 @@
 ;!         "2"
 ;!     ]
 ;! }, {
-;!     "name": "one_ordinar",
+;!     "name": "one_ordinary",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -103,7 +103,7 @@
 ;!         "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_bytes_zero",
+;!     "name": "ordinary_bytes_zero",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -116,7 +116,7 @@
 ;!         "0"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_bytes_one",
+;!     "name": "ordinary_bytes_one",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -129,7 +129,7 @@
 ;!         "0x10000000000"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_bytes_ordinar",
+;!     "name": "ordinary_bytes_ordinary",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -142,7 +142,7 @@
 ;!         "0x589349590349059034905903CDF343443AB34344343CCC343434430000000000"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_bytes_max",
+;!     "name": "ordinary_bytes_max",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -155,7 +155,7 @@
 ;!         "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000000000"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_zero",
+;!     "name": "ordinary_zero",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -168,7 +168,7 @@
 ;!         "0"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_one",
+;!     "name": "ordinary_one",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -181,7 +181,7 @@
 ;!         "0x8000000000000000000000000000000000000000000"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_ordinar",
+;!     "name": "ordinary_ordinary",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -194,7 +194,7 @@
 ;!         "0xD59A1A21A1E661A1A1A218000000000000000000000000000000000000000000"
 ;!     ]
 ;! }, {
-;!     "name": "ordinar_max",
+;!     "name": "ordinary_max",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -233,7 +233,7 @@
 ;!         "0x8000000000000000000000000000000000000000000000000000000000000000"
 ;!     ]
 ;! }, {
-;!     "name": "255_ordinar",
+;!     "name": "255_ordinary",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -285,7 +285,7 @@
 ;!         "0"
 ;!     ]
 ;! }, {
-;!     "name": "256_ordinar",
+;!     "name": "256_ordinary",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -311,7 +311,7 @@
 ;!         "0"
 ;!     ]
 ;! }, {
-;!     "name": "big_ordinar_zero",
+;!     "name": "big_ordinary_zero",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -324,7 +324,7 @@
 ;!         "0"
 ;!     ]
 ;! }, {
-;!     "name": "big_ordinar_one",
+;!     "name": "big_ordinary_one",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -337,7 +337,7 @@
 ;!         "0"
 ;!     ]
 ;! }, {
-;!     "name": "big_ordinar_ordinar",
+;!     "name": "big_ordinary_ordinary",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -350,7 +350,7 @@
 ;!         "0"
 ;!     ]
 ;! }, {
-;!     "name": "big_ordinar_max",
+;!     "name": "big_ordinary_max",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",
@@ -389,7 +389,7 @@
 ;!         "0"
 ;!     ]
 ;! }, {
-;!     "name": "max_ordinar",
+;!     "name": "max_ordinary",
 ;!     "inputs": [
 ;!         {
 ;!             "method": "#fallback",

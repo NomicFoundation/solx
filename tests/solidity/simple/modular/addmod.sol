@@ -29,7 +29,7 @@
 //!         "exception": true
 //!     } ]
 //! }, {
-//!     "name": "ordinar",
+//!     "name": "ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",

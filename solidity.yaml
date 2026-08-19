@@ -1637,12 +1637,12 @@ entries:
         version: '>=0.4.12'
       blobhash.sol:
         hash: '0xf6fa41b075941c5a4b2cbe820e7c650e'
-        enabled: false
-        comment: 'TODO: blobs'
+        enabled: true
+        version: '>=0.8.24'
       blobhash_shadow_resolution.sol:
         hash: '0x3dd723338ff481ce106cc1b38f5419cb'
-        enabled: false
-        comment: 'TODO: blobs'
+        enabled: true
+        version: '>=0.8.24'
       blockhash.sol:
         hash: '0x210dd8fc9ccad8334356984cddd0d979'
         enabled: true
@@ -3795,19 +3795,19 @@ entries:
       blobbasefee_shanghai_function.sol:
         hash: '0xeaa4b88398928b94456773826e23c031'
         enabled: false
-        comment: 'TODO: blobs'
+        comment: 'Pre-Cancun EVM versions are not supported'
       blobhash.sol:
         hash: '0xd422d239d63fd5e374dfd5595f0db8cd'
-        enabled: false
-        comment: 'TODO: blobs'
+        enabled: true
+        version: '>=0.8.24'
       blobhash_index_exceeding_blob_count.sol:
         hash: '0xd0a06a9e49fdce3754656a8940263fd4'
-        enabled: false
-        comment: 'TODO: blobs'
+        enabled: true
+        version: '>=0.8.24'
       blobhash_pre_cancun.sol:
         hash: '0x31cd2ea4de09c13c19b9dab1ed1cb1a3'
         enabled: false
-        comment: 'TODO: blobs'
+        comment: 'Pre-Cancun EVM versions are not supported'
       calldata_array_assign_dynamic.sol:
         hash: '0x1938c85c9cf5dbc6224ecb1b256d1487'
         enabled: true
@@ -5503,8 +5503,8 @@ entries:
     entries:
       blobhash.sol:
         hash: '0x9191a5da95ed7566cf07e19350809c50'
-        enabled: false
-        comment: 'TODO: blobs'
+        enabled: true
+        version: '>=0.8.24'
       block_basefee.sol:
         hash: '0xf736063ee012830ff7dd0f1530524b3f'
         enabled: false
@@ -5512,8 +5512,8 @@ entries:
         version: '>=0.8.7'
       block_blobbasefee.sol:
         hash: '0x015033380595f341ec5491fea80f01c2'
-        enabled: false
-        comment: 'TODO: blobs'
+        enabled: true
+        version: '>=0.8.24'
       block_chainid.sol:
         hash: '0x0725e081e08576b420ded517d4462e7d'
         enabled: true
@@ -5600,8 +5600,8 @@ entries:
         version: '>=0.4.12'
       uncalled_blobhash.sol:
         hash: '0xd85c3cb014d5d113f9abd476f6eeb0b8'
-        enabled: false
-        comment: 'TODO: blobs'
+        enabled: true
+        version: '>=0.8.24'
       uncalled_blockhash.sol:
         hash: '0xef0fdfaaa5e036a79f407c790c3f6468'
         enabled: true

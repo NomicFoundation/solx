@@ -1,5 +1,5 @@
 //! { "cases": [ {
-//!     "name": "ordinar",
+//!     "name": "ordinary",
 //!     "inputs": [
 //!         {
 //!             "method": "main",

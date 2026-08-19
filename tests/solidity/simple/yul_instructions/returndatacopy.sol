@@ -25,7 +25,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "small_ordinar_to",
+//!     "name": "small_ordinary_to",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -51,7 +51,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "ordinar_to",
+//!     "name": "ordinary_to",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -64,7 +64,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "ordinar_words_to",
+//!     "name": "ordinary_words_to",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -77,7 +77,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "big_ordinar_to",
+//!     "name": "big_ordinary_to",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -119,7 +119,7 @@
 //!         "return_data": []
 //!     }
 //! }, {
-//!     "name": "2_in_32_minus_ordinar_between_32_64_to",
+//!     "name": "2_in_32_minus_ordinary_between_32_64_to",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -175,7 +175,7 @@
 //!         "return_data": []
 //!     }
 //! }, {
-//!     "name": "2_in_32_minus_ordinar_to",
+//!     "name": "2_in_32_minus_ordinary_to",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -217,7 +217,7 @@
 //!         "return_data": []
 //!     }
 //! }, {
-//!     "name": "ordinar_bigger_2_in_32_to",
+//!     "name": "ordinary_bigger_2_in_32_to",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -271,7 +271,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "small_ordinar_from",
+//!     "name": "small_ordinary_from",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -297,7 +297,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "ordinar_from",
+//!     "name": "ordinary_from",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -310,7 +310,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "ordinar_words_from",
+//!     "name": "ordinary_words_from",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -323,7 +323,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "big_ordinar_from",
+//!     "name": "big_ordinary_from",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -365,7 +365,7 @@
 //!         "return_data": []
 //!     }
 //! }, {
-//!     "name": "2_in_32_minus_ordinar_between_32_64_from",
+//!     "name": "2_in_32_minus_ordinary_between_32_64_from",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -421,7 +421,7 @@
 //!         "return_data": []
 //!     }
 //! }, {
-//!     "name": "2_in_32_minus_ordinar_from",
+//!     "name": "2_in_32_minus_ordinary_from",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -463,7 +463,7 @@
 //!         "return_data": []
 //!     }
 //! }, {
-//!     "name": "ordinar_bigger_2_in_32_from",
+//!     "name": "ordinary_bigger_2_in_32_from",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -517,7 +517,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "small_ordinar_size",
+//!     "name": "small_ordinary_size",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -543,7 +543,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "ordinar_size",
+//!     "name": "ordinary_size",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -556,7 +556,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "ordinar_words_size",
+//!     "name": "ordinary_words_size",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -569,7 +569,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "big_ordinar_size",
+//!     "name": "big_ordinary_size",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -611,7 +611,7 @@
 //!         "return_data": []
 //!     }
 //! }, {
-//!     "name": "2_in_32_minus_ordinar_between_32_64_size",
+//!     "name": "2_in_32_minus_ordinary_between_32_64_size",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -667,7 +667,7 @@
 //!         "return_data": []
 //!     }
 //! }, {
-//!     "name": "2_in_32_minus_ordinar_size",
+//!     "name": "2_in_32_minus_ordinary_size",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -709,7 +709,7 @@
 //!         "return_data": []
 //!     }
 //! }, {
-//!     "name": "ordinar_bigger_2_in_32_size",
+//!     "name": "ordinary_bigger_2_in_32_size",
 //!     "inputs": [
 //!         {
 //!             "method": "main",

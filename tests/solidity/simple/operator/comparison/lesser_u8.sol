@@ -12,7 +12,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "ordinar_true_lesser",
+//!     "name": "ordinary_true_lesser",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -25,7 +25,7 @@
 //!         "1"
 //!     ]
 //! }, {
-//!     "name": "ordinar_true_bigger",
+//!     "name": "ordinary_true_bigger",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
@@ -38,7 +38,7 @@
 //!         "0"
 //!     ]
 //! }, {
-//!     "name": "ordinar_false",
+//!     "name": "ordinary_false",
 //!     "inputs": [
 //!         {
 //!             "method": "main",
