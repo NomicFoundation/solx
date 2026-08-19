@@ -2388,7 +2388,7 @@ dependencies = [
 [[package]]
 name = "inkwell"
 version = "0.7.1"
-source = "git+https://github.com/NomicFoundation/inkwell?rev=c2ac839f8f2b67246c9676fe29e7935e95e460fb#c2ac839f8f2b67246c9676fe29e7935e95e460fb"
+source = "git+https://github.com/NomicFoundation/inkwell?rev=7098f23bbb00ba0264aa3e73595f689328322ec9#7098f23bbb00ba0264aa3e73595f689328322ec9"
 dependencies = [
  "inkwell_internals",
  "libc",
@@ -2401,7 +2401,7 @@ dependencies = [
 [[package]]
 name = "inkwell_internals"
 version = "0.12.0"
-source = "git+https://github.com/NomicFoundation/inkwell?rev=c2ac839f8f2b67246c9676fe29e7935e95e460fb#c2ac839f8f2b67246c9676fe29e7935e95e460fb"
+source = "git+https://github.com/NomicFoundation/inkwell?rev=7098f23bbb00ba0264aa3e73595f689328322ec9#7098f23bbb00ba0264aa3e73595f689328322ec9"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -26,11 +26,7 @@ pub fn run() -> anyhow::Result<()> {
                 .ok_or_else(|| anyhow::anyhow!("The worker received no session"))?;
 
             inkwell::support::error_handling::install_stack_error_handler(evm_stack_error_handler);
-            unsafe {
-                inkwell::support::error_handling::install_fatal_error_handler(
-                    llvm_fatal_error_handler,
-                );
-            }
+            inkwell::support::error_handling::install_fatal_error_handler(llvm_fatal_error_handler);
 
             while let Some(job) = stdin.recv::<Job>()? {
                 solx_codegen_evm::IS_SIZE_FALLBACK.store(
