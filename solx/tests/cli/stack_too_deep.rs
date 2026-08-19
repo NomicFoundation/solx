@@ -65,6 +65,51 @@ fn stack_too_deep_llvm_suppressed() -> anyhow::Result<()> {
     Ok(())
 }
 
+// Recursive functions cannot use the memory spill, so their stack-too-deep is
+// unrecoverable: the worker relays the LLVM fatal error, and the failure must name
+// the contract instead of dropping it from the output.
+#[cfg(feature = "solc")]
+#[test]
+fn stack_too_deep_recursive() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/RecursiveStackTooDeep.sol"),
+        "--bin",
+        "-O1",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    result.failure().stderr(predicate::str::contains(
+        "It is recursive and has stack too deep errors.",
+    ));
+
+    Ok(())
+}
+
+#[cfg(feature = "solc")]
+#[test]
+fn stack_too_deep_recursive_standard_json() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("recursive_stack_too_deep.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    result
+        .success()
+        .stdout(predicate::str::contains(
+            "It is recursive and has stack too deep errors.",
+        ))
+        .stdout(predicate::str::contains("RecursiveStackTooDeep.sol"));
+
+    Ok(())
+}
+
 // The reported spill area is underestimated under the pinned LLVM backend, so the
 // fixture compiles only through stack-too-deep retries in both the initial settings
 // and the size fallback.

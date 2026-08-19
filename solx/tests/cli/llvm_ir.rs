@@ -162,7 +162,7 @@ fn linker_error() -> anyhow::Result<()> {
 
     let result = crate::cli::execute_solx(args)?;
     result.failure().stderr(predicate::str::contains(
-        "LLVM ERROR: cannot evaluate undefined symbol 'foo'",
+        "LLVM error: cannot evaluate undefined symbol 'foo'",
     ));
 
     Ok(())
