@@ -16,8 +16,6 @@ use solx_utils::SyncLock;
 
 use solx_standard_json::CollectableError;
 
-use crate::error::Error;
-
 use self::contract::Contract;
 use self::contract::object::Object as ContractObject;
 
@@ -329,15 +327,19 @@ impl Build {
                         .unwrap_or_default(),
                 );
                 if deploy_object_result.is_err() || runtime_object_result.is_err() {
-                    if let Some(Err(Error::StandardJson(error))) =
-                        contract.deploy_object_result.take()
-                    {
-                        standard_json.errors.push(error);
-                    }
-                    if let Some(Err(Error::StandardJson(error))) =
-                        contract.runtime_object_result.take()
-                    {
-                        standard_json.errors.push(error);
+                    for result in [
+                        contract.deploy_object_result.take(),
+                        contract.runtime_object_result.take(),
+                    ] {
+                        // Worker deaths (e.g. LLVM fatal errors) surface as
+                        // generic errors; dropping them would emit a
+                        // successful output with the contract silently
+                        // missing.
+                        if let Some(Err(error)) = result {
+                            standard_json
+                                .errors
+                                .push(error.into_standard_json(Some(contract.name.path.as_str())));
+                        }
                     }
                     continue;
                 }
@@ -406,7 +408,7 @@ impl solx_standard_json::CollectableError for Build {
                 }
                 errors
             })
-            .map(|error| error.unwrap_standard_json_ref().to_string())
+            .map(|error| error.to_string())
             .collect();
         errors.extend(
             self.messages

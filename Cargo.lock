@@ -1492,7 +1492,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ab67060fc6b8ef687992d439ca0fa36e7ed17e9a0b16b25b601e8757df720de"
 dependencies = [
  "data-encoding",
- "syn 2.0.117",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -2388,7 +2388,7 @@ dependencies = [
 [[package]]
 name = "inkwell"
 version = "0.7.1"
-source = "git+https://github.com/NomicFoundation/inkwell?rev=c2ac839f8f2b67246c9676fe29e7935e95e460fb#c2ac839f8f2b67246c9676fe29e7935e95e460fb"
+source = "git+https://github.com/NomicFoundation/inkwell?rev=0081bb29a84921447fb1c9773350c52813a7fe31#0081bb29a84921447fb1c9773350c52813a7fe31"
 dependencies = [
  "inkwell_internals",
  "libc",
@@ -2401,7 +2401,7 @@ dependencies = [
 [[package]]
 name = "inkwell_internals"
 version = "0.12.0"
-source = "git+https://github.com/NomicFoundation/inkwell?rev=c2ac839f8f2b67246c9676fe29e7935e95e460fb#c2ac839f8f2b67246c9676fe29e7935e95e460fb"
+source = "git+https://github.com/NomicFoundation/inkwell?rev=0081bb29a84921447fb1c9773350c52813a7fe31#0081bb29a84921447fb1c9773350c52813a7fe31"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -34,17 +34,15 @@ impl Error {
     }
 
     ///
-    /// Unwraps the error as a `StandardJson` error reference.
+    /// Converts the error into a standard JSON output error.
     ///
-    pub fn unwrap_standard_json_ref(&self) -> &solx_standard_json::OutputError {
+    /// Non-standard-JSON variants (e.g. worker deaths on LLVM fatal errors) are wrapped
+    /// into an error attributed to the contract at `path`.
+    ///
+    pub fn into_standard_json(self, path: Option<&str>) -> solx_standard_json::OutputError {
         match self {
             Error::StandardJson(error) => error,
-            Error::Generic(error) => {
-                panic!("Expected a StandardJson error, but got a Generic error: {error}")
-            }
-            Error::StackTooDeep(error) => {
-                panic!("Expected a StandardJson error, but got a StackTooDeep error: {error}")
-            }
+            error => solx_standard_json::OutputError::new_error_contract(path, error),
         }
     }
 }
