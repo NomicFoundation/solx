@@ -73,33 +73,33 @@
 // Every Yul function is emitted ahead of the body it is written in.
 // CHECK: sol.func @{{.*yul_functions.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     yul.func @double : (i256) -> i256 {
+// CHECK:     yul.func @{{.*double.*}} : (i256) -> i256 {
 // CHECK:       %[[PARAM:.*]] = yul.alloca : !yul.ptr
 // CHECK:       yul.store %{{.*}}, %[[PARAM]] : i256, !yul.ptr
 // CHECK:       %[[RESULT:.*]] = yul.alloca : !yul.ptr
 // CHECK:       yul.func_return
 // CHECK:     }
-// CHECK:     yul.func @pair : (i256) -> (i256, i256) {
+// CHECK:     yul.func @{{.*pair.*}} : (i256) -> (i256, i256) {
 // CHECK:       yul.func_return %{{.*}}, %{{.*}} : i256, i256
 // CHECK:     }
-// CHECK:     yul.func @effect_only : (i256) -> () {
+// CHECK:     yul.func @{{.*effect_only.*}} : (i256) -> () {
 // CHECK:       yul.func_return{{$}}
 // CHECK:     }
-// CHECK:     yul.func @early : (i256) -> i256 {
+// CHECK:     yul.func @{{.*early.*}} : (i256) -> i256 {
 // A `leave` is an early func_return carrying the return variables as they stand.
 // CHECK:       yul.func_return %{{.*}} : i256
 // CHECK:     }
-// CHECK:     %[[TWO:.*]]:2 = yul.func_call @pair(%{{.*}}) : (i256) -> (i256, i256)
-// CHECK:     yul.func_call @effect_only(%{{.*}}) : (i256) -> ()
+// CHECK:     %[[TWO:.*]]:2 = yul.func_call @{{.*pair.*}}(%{{.*}}) : (i256) -> (i256, i256)
+// CHECK:     yul.func_call @{{.*effect_only.*}}(%{{.*}}) : (i256) -> ()
 // The two calls feeding `add` run in either order depending on the frontend.
-// CHECK-DAG:     yul.func_call @double(%{{.*}}) : (i256) -> i256
-// CHECK-DAG:     yul.func_call @early(%{{.*}}) : (i256) -> i256
+// CHECK-DAG:     yul.func_call @{{.*double.*}}(%{{.*}}) : (i256) -> i256
+// CHECK-DAG:     yul.func_call @{{.*early.*}}(%{{.*}}) : (i256) -> i256
 
 // A call may name a function defined after it.
 // CHECK: sol.func @{{.*forward_reference.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     yul.func @later
-// CHECK:     yul.func_call @later
+// CHECK:     yul.func @{{.*later.*}}
+// CHECK:     yul.func_call @{{.*later.*}}
 
 contract C {
     function if_statement(uint256 n) public pure returns (uint256 r) {
