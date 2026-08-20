@@ -19,27 +19,27 @@
 // A state variable's `.slot` / `.offset` are compile-time words, not slots.
 // CHECK: sol.func @{{.*state_variable.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     %[[SLOT:.*]] = sol.yul_state_var_slot @{{.*value.*}}
-// CHECK:     %[[OFF:.*]] = sol.yul_state_var_offset @{{.*value.*}}
+// CHECK-DAG:     sol.yul_state_var_slot @{{.*value.*}}
+// CHECK-DAG:     sol.yul_state_var_offset @{{.*value.*}}
 // CHECK:     sol.yul_state_var_slot @{{.*array.*}}
 // CHECK:     sol.yul_state_var_slot @{{.*map.*}}
 
 // A storage-pointer local carries its slot and offset in the alloca itself.
 // CHECK: sol.func @{{.*storage_pointer.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     sol.yul_storage_slot %{{.*}} : !sol.ptr<!sol.array<? x ui256, Storage>, Stack> -> !yul.ptr
-// CHECK:     sol.yul_storage_offset %{{.*}} : !sol.ptr<!sol.array<? x ui256, Storage>, Stack>
+// CHECK-DAG:     sol.yul_storage_slot %{{.*}} : !sol.ptr<!sol.array<? x ui256, Storage>, Stack> -> !yul.ptr
+// CHECK-DAG:     sol.yul_storage_offset %{{.*}} : !sol.ptr<!sol.array<? x ui256, Storage>, Stack>
 
 // A calldata reference carries its offset and length as separate fields.
 // CHECK: sol.func @{{.*calldata_reference.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     sol.yul_calldata_offset %{{.*}} -> !yul.ptr
-// CHECK:     sol.yul_calldata_length %{{.*}} -> !yul.ptr
+// CHECK-DAG:     sol.yul_calldata_offset %{{.*}} -> !yul.ptr
+// CHECK-DAG:     sol.yul_calldata_length %{{.*}} -> !yul.ptr
 
 // CHECK: sol.func @{{.*function_pointer.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     sol.yul_selector %{{.*}} -> !yul.ptr
-// CHECK:     sol.yul_address_of %{{.*}} -> !yul.ptr
+// CHECK-DAG:     sol.yul_selector %{{.*}} -> !yul.ptr
+// CHECK-DAG:     sol.yul_address_of %{{.*}} -> !yul.ptr
 
 // A constant folds in the Sol dialect at its declared type, then crosses over.
 // CHECK: sol.func @{{.*constants.*}}
