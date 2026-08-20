@@ -1,6 +1,7 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// solc's print-init substitutes `sol.timestamp` for module member accesses, so this is solx-only.
+// solc's print-init drops a computed module qualifier's effect, which legacy keeps, so this is
+// solx-only.
 
 // CHECK: sol.func @{{.*parenthesized.*}}() -> ui256 attributes {{.*}}selector = -923061170 : i32
 // CHECK:   %[[PK:.*]] = sol.constant 11 : ui8
@@ -21,8 +22,7 @@
 // CHECK: sol.func @{{.*called.*}}() -> ui256 attributes {{.*}}selector = 1358542541 : i32
 // CHECK:   %[[AV:.*]] = sol.cast %{{.*}} : ui8 to ui256
 // CHECK:   sol.store %true, %{{.*}} : i1, !sol.ptr<i1, Storage>
-// CHECK:   %[[AF:.*]] = sol.func_constant @{{.*freeHalf.*}} : !sol.func_ref<(ui256) -> ui256>
-// CHECK:   %[[RV:.*]] = sol.icall %[[AF]](%[[AV]]) : !sol.func_ref<(ui256) -> ui256>, (ui256) -> ui256
+// CHECK:   %[[RV:.*]] = sol.call @{{.*freeHalf.*}}(%[[AV]]) : (ui256) -> ui256
 // CHECK:   sol.return %[[RV]] : ui256
 
 // CHECK: sol.func @{{.*tried.*}}() -> ui256 attributes {{.*}}selector = -553464963 : i32
@@ -33,8 +33,7 @@
 // CHECK: sol.func @{{.*designated.*}}() -> ui256 attributes {{.*}}selector = -1019040149 : i32
 // CHECK:   %[[DV:.*]] = sol.cast %{{.*}} : ui8 to ui256
 // CHECK:   sol.store %true, %{{.*}} : i1, !sol.ptr<i1, Storage>
-// CHECK:   %[[DF:.*]] = sol.func_constant @{{.*freeHalf.*}} : !sol.func_ref<(ui256) -> ui256>
-// CHECK:   %[[DR:.*]] = sol.icall %[[DF]](%[[DV]]) : !sol.func_ref<(ui256) -> ui256>, (ui256) -> ui256
+// CHECK:   %[[DR:.*]] = sol.call @{{.*freeHalf.*}}(%[[DV]]) : (ui256) -> ui256
 // CHECK:   sol.return %[[DR]] : ui256
 
 // CHECK: sol.func @{{.*qualified.*}}() -> ui256 attributes {{.*}}selector = -228858638 : i32

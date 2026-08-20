@@ -65,6 +65,9 @@ pub enum Call {
     Member(MemberAccessExpression),
     /// A direct call to a named function.
     Function(FunctionDefinition),
+    /// A direct call to a function named through a module denoted by type alone; the module is
+    /// evaluated for effect.
+    Module(Expression, FunctionDefinition),
     /// An attached call to a selectorless library or free function: the receiver leads the
     /// argument list of an internal `sol.call`.
     Attached(Expression, FunctionDefinition),
@@ -142,11 +145,16 @@ impl Call {
             Self::Member(access) => {
                 Self::member(&access, node, &arguments, options.as_ref(), scope)
             }
-            Self::Function(function_definition) => scope.call(&function_definition, &arguments),
+            Self::Function(function_definition) => {
+                scope.call(&function_definition, &arguments, None)
+            }
+            Self::Module(qualifier, function_definition) => {
+                scope.call(&function_definition, &arguments, Some(&qualifier))
+            }
             Self::Attached(receiver, function_definition) => {
                 let operands: Vec<Expression> =
                     std::iter::once(receiver).chain(arguments).collect();
-                scope.call(&function_definition, &operands)
+                scope.call(&function_definition, &operands, None)
             }
             Self::FunctionPointer(callee, function_type) => {
                 Self::function_pointer(&callee, &function_type, &arguments, options.as_ref(), scope)
@@ -230,6 +238,7 @@ impl Call {
             | Self::TypeConversion
             | Self::Builtin(_)
             | Self::Function(_)
+            | Self::Module(..)
             | Self::Attached(..) => {
                 unreachable!("a guarded call dispatches externally or creates a contract")
             }
@@ -282,32 +291,6 @@ impl Call {
                 unimplemented!("unsupported callee '{}'", identifier.name())
             }
             Expression::MemberAccessExpression(access) => {
-                if matches!(
-                    access.member().resolve_to_definition(),
-                    Some(Definition::StructMember(_))
-                ) && let Some(Type::Function(function_type)) = access.get_type()
-                {
-                    return Self::FunctionPointer(
-                        Expression::MemberAccessExpression(access),
-                        function_type,
-                    );
-                }
-                if let Some(Definition::Contract(_)) =
-                    FunctionScope::resolved_definition(&access.operand())
-                    && let Some(Definition::Function(function_definition)) =
-                        access.member().resolve_to_definition()
-                {
-                    return Self::Function(function_definition);
-                }
-                if let Some(Type::UserMetaType(meta)) = access.operand().get_type()
-                    && let Definition::Contract(_) | Definition::Import(_) = meta.definition()
-                    && let Some(Type::Function(function_type)) = access.get_type()
-                {
-                    return Self::FunctionPointer(
-                        Expression::MemberAccessExpression(access),
-                        function_type,
-                    );
-                }
                 if let Some(Definition::Function(function_definition)) =
                     access.member().resolve_to_definition()
                 {
@@ -315,6 +298,9 @@ impl Call {
                         FunctionScope::resolved_definition(&access.operand()),
                         function_definition.enclosing_definition(),
                     ) {
+                        (Some(Definition::Contract(_) | Definition::Import(_)), _) => {
+                            return Self::Function(function_definition);
+                        }
                         (Some(Definition::Library(_)), _) => {
                             return match function_definition.compute_selector() {
                                 Some(selector) => {
@@ -333,11 +319,28 @@ impl Call {
                                 None => Self::Attached(access.operand(), function_definition),
                             };
                         }
+                        (_, None) if FunctionScope::is_module_typed(&access.operand()) => {
+                            return Self::Module(access.operand(), function_definition);
+                        }
                         (_, None) => {
                             return Self::Attached(access.operand(), function_definition);
                         }
                         _ => {}
                     }
+                }
+                if let Some(Type::Function(function_type)) = access.get_type()
+                    && (matches!(
+                        access.member().resolve_to_definition(),
+                        Some(Definition::StructMember(_))
+                    ) || matches!(
+                        FunctionScope::resolved_definition(&access.operand()),
+                        Some(Definition::Contract(_))
+                    ))
+                {
+                    return Self::FunctionPointer(
+                        Expression::MemberAccessExpression(access),
+                        function_type,
+                    );
                 }
                 if let Some(definition) = access.member().resolve_to_definition()
                     && let Some(Type::Function(function_type)) = call.operand().get_type()
@@ -399,6 +402,7 @@ impl Call {
                 Self::Creation(_, Some(function_definition))
                 | Self::External(_, ExternalCallee::Function(function_definition, _), _)
                 | Self::Function(function_definition)
+                | Self::Module(_, function_definition)
                 | Self::Library(_, function_definition, _) => FunctionScope::named_arguments(
                     &named,
                     function_definition
@@ -1174,18 +1178,20 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         function_definition: &FunctionDefinition,
         operands: &[Expression],
     ) -> Value<'context> {
-        self.call(function_definition, operands)
+        self.call(function_definition, operands, None)
             .into_iter()
             .next()
             .expect("a user-defined operator's function returns one value")
     }
 
     /// Defines the callee in this module if absent and converts each argument to its declared
-    /// parameter type before `sol.call`.
+    /// parameter type before `sol.call`; a qualifier evaluates for effect after the arguments,
+    /// matching legacy's order.
     fn call(
         &mut self,
         function_definition: &FunctionDefinition,
         arguments: &[Expression],
+        qualifier: Option<&Expression>,
     ) -> Vec<Value<'context>> {
         self.contract.function_definition(function_definition);
         let signature = self
@@ -1193,6 +1199,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             .source_unit
             .function_signature(function_definition);
         let converted = self.converted_arguments(arguments, &signature.function_type.parameters);
+        if let Some(qualifier) = qualifier {
+            self.expression_effect(qualifier);
+        }
         Function::call(&signature, &converted, self)
     }
 }

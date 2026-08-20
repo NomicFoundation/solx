@@ -3,6 +3,7 @@
 pragma solidity >=0.8.0;
 
 import "./main.sol";
+import "./module.sol" as Mod;
 import "./nested.sol";
 import "./nested.sol" as Nested;
 

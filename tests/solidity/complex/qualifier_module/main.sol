@@ -4,6 +4,7 @@ pragma solidity >=0.8.0;
 
 import "./module.sol" as M;
 import "./module.sol" as Second;
+import * as Star from "./module.sol";
 
 contract Test {
     uint256 sequence;
@@ -52,5 +53,17 @@ contract Test {
         sequence = 0;
         (mark(1) ? M : M).Test;
         return sequence;
+    }
+
+    function plain() public pure returns (uint256) {
+        return M.half(8);
+    }
+
+    function chained() public pure returns (uint256) {
+        return M.Mod.half(8);
+    }
+
+    function starred() public pure returns (uint256) {
+        return Star.half(8);
     }
 }
