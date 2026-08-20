@@ -3,6 +3,7 @@
 //!
 
 pub mod dispatch;
+pub mod entry;
 
 use melior::ir::Block as MlirBlock;
 use melior::ir::Region;
@@ -16,6 +17,7 @@ use melior::ir::r#type::IntegerType;
 use crate::Block;
 use crate::Context;
 use crate::FunctionDispatch;
+use crate::FunctionEntry;
 use crate::FunctionKind;
 use crate::FunctionType;
 use crate::StateMutability;
@@ -52,8 +54,8 @@ impl<'context> Function<'context> {
     }
 
     /// Emits this function's `sol.func` definition with an entry block whose arguments carry the
-    /// parameter types, returned for the body. An original function type is attached for
-    /// selector-dispatched and constructor functions.
+    /// parameter types, returned for the body together with the declared dispatch. An original
+    /// function type is attached for selector-dispatched and constructor functions.
     pub fn define(
         &self,
         selector: Option<u32>,
@@ -61,7 +63,7 @@ impl<'context> Function<'context> {
         state_mutability: StateMutability,
         context: &Context<'context>,
         contract_body: Block<'context>,
-    ) -> Block<'context> {
+    ) -> FunctionEntry<'context> {
         let parameters = self
             .function_type
             .parameters
@@ -106,12 +108,15 @@ impl<'context> Function<'context> {
                 operation_builder.orig_fn_type(TypeAttribute::new(function_type.into()));
         }
         let operation = contract_body.append_operation(operation_builder.build().into());
-        Block::from(
-            operation
-                .region(0)
-                .expect("func has one region")
-                .first_block()
-                .expect("func body has entry block"),
+        FunctionEntry::new(
+            Block::from(
+                operation
+                    .region(0)
+                    .expect("func has one region")
+                    .first_block()
+                    .expect("func body has entry block"),
+            ),
+            dispatch,
         )
     }
 

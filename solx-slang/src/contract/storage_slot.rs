@@ -8,9 +8,6 @@ use slang_solidity_v2::abi::StorageItem;
 /// Storage location of a state variable in contract storage.
 #[derive(Debug, Clone)]
 pub struct StorageSlot {
-    /// MLIR symbol name, formatted as `{label}_{node_id}`. The slang AST node
-    /// id disambiguates like-named variables across inherited contracts.
-    pub name: String,
     /// 256-bit storage slot index.
     pub slot: U256,
     /// Byte offset within the slot. Non-zero only for variables packed
@@ -21,7 +18,6 @@ pub struct StorageSlot {
 impl From<&StorageItem> for StorageSlot {
     fn from(item: &StorageItem) -> Self {
         Self {
-            name: format!("{}_{}", item.label(), item.node_id()),
             slot: item.slot(),
             byte_offset: item.offset() as u32,
         }

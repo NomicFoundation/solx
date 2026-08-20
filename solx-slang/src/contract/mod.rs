@@ -46,26 +46,45 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
     /// the functions, and the getters.
     fn members(&mut self, object: &Object) {
         for state_variable in self.state_variables.iter() {
-            let Some(slot) = self.storage_layout.get(&state_variable.node_id()) else {
-                continue;
-            };
-            let element_type = self.source_unit.resolve(
-                &state_variable
-                    .get_type()
-                    .expect("binder types every state variable"),
-                None,
-            );
-            self.contract.declare_state_var(
-                &slot.name,
-                element_type,
-                slot.slot,
-                slot.byte_offset,
-                matches!(
-                    state_variable.attributes().mutability(),
-                    StateVariableMutability::Transient
-                ),
-                self,
-            );
+            match state_variable.attributes().mutability() {
+                StateVariableMutability::Mutable | StateVariableMutability::Transient => {
+                    let slot = self
+                        .storage_layout
+                        .get(&state_variable.node_id())
+                        .expect("slang lays out every state variable");
+                    let element_type = self.source_unit.resolve(
+                        &state_variable
+                            .get_type()
+                            .expect("binder types every state variable"),
+                        None,
+                    );
+                    self.contract.declare_state_var(
+                        &SourceUnitScope::state_variable_symbol(state_variable),
+                        element_type,
+                        slot.slot,
+                        slot.byte_offset,
+                        matches!(
+                            state_variable.attributes().mutability(),
+                            StateVariableMutability::Transient
+                        ),
+                        self,
+                    );
+                }
+                StateVariableMutability::Immutable => {
+                    let element_type = self.source_unit.resolve(
+                        &state_variable
+                            .get_type()
+                            .expect("binder types every state variable"),
+                        None,
+                    );
+                    self.contract.declare_immutable(
+                        &SourceUnitScope::state_variable_symbol(state_variable),
+                        element_type,
+                        self,
+                    );
+                }
+                StateVariableMutability::Constant => {}
+            }
         }
         if let Object::Contract(node) = object {
             self.constructor(node);

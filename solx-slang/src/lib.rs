@@ -5,6 +5,8 @@
 //! Each node's lowering lives in the file named for it at its nesting depth.
 //!
 
+#![allow(clippy::too_many_arguments)]
+
 pub(crate) mod contract;
 pub(crate) mod scope;
 pub(crate) mod slang;

@@ -37,10 +37,11 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             _ => None,
         };
         let signature = self.source_unit.function_signature(function);
+        let dispatch = FunctionDispatch::from(function);
         let state_mutability = StateMutability::from(function.attributes().mutability());
         let entry = signature.define(
             selector,
-            FunctionDispatch::from(function),
+            dispatch,
             state_mutability,
             self,
             self.contract.body,
@@ -55,7 +56,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                     continue;
                 };
                 scope.define_local(identifier.name(), parameters[index], |_scope| {
-                    entry.argument(index)
+                    entry.block.argument(index)
                 });
             }
 
