@@ -50,10 +50,12 @@ impl<'function, 'contract, 'source_unit, 'context>
     }
 
     /// Records `definition`'s signature, so a call site reaching it resolves whether or not the
-    /// definition has been emitted yet.
+    /// definition has been emitted yet. The symbol carries the definition's node id because Yul
+    /// scopes a function to its block while `sol.inline_asm` is one flat symbol table: sibling
+    /// blocks may each declare a `f`, and the bare name would collide.
     fn declare_function(&mut self, definition: &YulFunctionDefinition) {
         let signature = YulFunction::new(
-            definition.name().name().to_owned(),
+            format!("{}_{}", definition.name().name(), definition.node_id()),
             definition.parameters().len(),
             definition.returns().map_or(0, |returns| returns.len()),
         );
@@ -82,7 +84,10 @@ impl<'function, 'contract, 'source_unit, 'context>
             }
             let returns: Vec<Slot> = return_names
                 .iter()
-                .map(|name| scope.bind_zero(name.node_id()))
+                .map(|name| {
+                    let zero = scope.word_zero();
+                    scope.bind(name.node_id(), zero)
+                })
                 .collect();
 
             scope.in_function(returns, |scope| {

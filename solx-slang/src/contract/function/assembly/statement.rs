@@ -95,6 +95,10 @@ impl<'function, 'contract, 'source_unit, 'context>
     /// there outlives the loop op in MLIR while Yul scopes it to the loop.
     fn yul_for(&mut self, node: &YulForStatement) {
         self.yul_statements(&node.initialization());
+        // A `leave` in the initializer terminates the block, leaving the loop unreachable.
+        if self.current_block().is_terminated() {
+            return;
+        }
         let (condition_block, body_block, step_block) = self.current_block().for_loop(self);
 
         let condition = node.condition();
