@@ -108,9 +108,9 @@ macro_rules! sol_dialect_attribute {
     };
 }
 
-/// A Sol comparison-predicate enum encoded as an `i64` `IntegerAttribute`: the `#[repr(i64)]` enum
+/// A comparison-predicate enum encoded as an `i64` `IntegerAttribute`: the `#[repr(i64)]` enum
 /// plus its `attribute()` builder. `From`/other impls, where present, live alongside the call.
-macro_rules! sol_predicate_attribute {
+macro_rules! predicate_attribute {
     (
         $(#[$enum_meta:meta])*
         $name:ident {
@@ -162,8 +162,9 @@ impl<'slice, T, const N: usize> IntoOds<&'slice [T]> for &'slice [T; N] {
     }
 }
 
-/// Declares Sol dialect op-wrapper methods on their entity homes as pure data: one ODS operation
-/// per declaration.
+/// Declares Sol and Yul dialect op-wrapper methods on their entity homes as pure data: one ODS
+/// operation per declaration. Which dialect a declaration reaches follows from the `ods` module the
+/// invoking module imports, so the two tables are written the same way.
 ///
 /// A declaration names the receiver, the method and its typed parameters, the disposition, the
 /// operation, and the builder setter chain. Every setter argument is a parameter, the receiver
@@ -182,7 +183,10 @@ impl<'slice, T, const N: usize> IntoOds<&'slice [T]> for &'slice [T; N] {
 /// `Place`. A `Block` declaration listing region names after `;` opens a region-bearing op and
 /// returns each region's entry block, or the sole block when one region is named. Every argument is
 /// routed through [`IntoOds`] to the setter's type.
-macro_rules! sol_ops {
+///
+/// The Yul dispositions `-> word` / `-> slot` / `-> words` are the [`Word`](crate::Word) and
+/// [`Slot`](crate::Slot) counterparts of `value` / `place` / `values`.
+macro_rules! dialect_ops {
     () => {};
 
     (@ty i64) => { i64 };
@@ -198,6 +202,11 @@ macro_rules! sol_ops {
     (@ty selector) => { u32 };
     (@ty optional_str) => { ::core::option::Option<&str> };
     (@ty optional_value) => { ::core::option::Option<$crate::Value<'context>> };
+    (@ty word) => { $crate::Word<'context> };
+    (@ty words) => { &[$crate::Word<'context>] };
+    (@ty slot) => { $crate::Slot<'context> };
+    (@ty u256) => { &::ruint::aliases::U256 };
+    (@ty yul_predicate) => { $crate::YulCmpPredicate };
 
     (@arg [$context:ident] [$receiver:tt] self) => { $receiver.inner };
     (@arg [$context:ident] [$receiver:tt] self_ty) => { $receiver.r#type() };
@@ -225,6 +234,12 @@ macro_rules! sol_ops {
     (@arg [$context:ident] [$receiver:tt] selector()) => {
         $crate::Type::selector($context.melior)
     };
+    (@arg [$context:ident] [$receiver:tt] word()) => {
+        $crate::Type::yul_word($context.melior)
+    };
+    (@arg [$context:ident] [$receiver:tt] yul_ptr()) => {
+        $crate::Type::yul_pointer($context.melior)
+    };
     (@arg [$context:ident] [$receiver:tt] ptr($pointee:ident, stack)) => {
         $crate::Type::pointer($context.melior, $pointee, solx_utils::DataLocation::Stack)
     };
@@ -249,12 +264,18 @@ macro_rules! sol_ops {
     (@arg [$context:ident] [$receiver:tt] predicate_attr($predicate:ident)) => {
         ::melior::ir::Attribute::from($predicate.attribute($context.melior))
     };
+    (@arg [$context:ident] [$receiver:tt] word_attr($value:ident)) => {
+        ::melior::ir::attribute::IntegerAttribute::from_words(
+            $crate::Type::yul_word($context.melior).into_mlir(),
+            $value.as_limbs(),
+        )
+    };
     (@arg [$context:ident] [$receiver:tt] selector_attr($selector:ident)) => {
         $crate::Type::selector_attribute($selector, $context.melior)
     };
     (@arg [$context:ident] [$receiver:tt] ty_attr($($inner:tt)*)) => {
         ::melior::ir::attribute::TypeAttribute::new(
-            sol_ops!(@arg [$context] [$receiver] $($inner)*).into_mlir(),
+            dialect_ops!(@arg [$context] [$receiver] $($inner)*).into_mlir(),
         )
     };
     (@arg [$context:ident] [$receiver:tt] count_attr($topics:ident)) => {
@@ -280,15 +301,15 @@ macro_rules! sol_ops {
     (@chain $builder:ident [$context:ident] [$receiver:tt]) => { $builder };
     (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (unit_flag) $($rest:tt)*) => {{
         let $builder = $builder.$setter(true);
-        sol_ops!(@chain $builder [$context] [$receiver] $($rest)*)
+        dialect_ops!(@chain $builder [$context] [$receiver] $($rest)*)
     }};
     (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (optional_str($text:ident)) $($rest:tt)*) => {{
         let $builder = if let ::core::option::Option::Some(__text) = $text {
-            $builder.$setter(sol_ops!(@arg [$context] [$receiver] str_attr(__text)))
+            $builder.$setter(dialect_ops!(@arg [$context] [$receiver] str_attr(__text)))
         } else {
             $builder
         };
-        sol_ops!(@chain $builder [$context] [$receiver] $($rest)*)
+        dialect_ops!(@chain $builder [$context] [$receiver] $($rest)*)
     }};
     (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (optional_value($operand:ident)) $($rest:tt)*) => {{
         let $builder = if let ::core::option::Option::Some(__operand) = $operand {
@@ -296,33 +317,33 @@ macro_rules! sol_ops {
         } else {
             $builder
         };
-        sol_ops!(@chain $builder [$context] [$receiver] $($rest)*)
+        dialect_ops!(@chain $builder [$context] [$receiver] $($rest)*)
     }};
     (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (many($operands:expr)) $($rest:tt)*) => {{
-        let $builder = $builder.$setter(sol_ops!(@operands $operands.iter()));
-        sol_ops!(@chain $builder [$context] [$receiver] $($rest)*)
+        let $builder = $builder.$setter(dialect_ops!(@operands $operands.iter()));
+        dialect_ops!(@chain $builder [$context] [$receiver] $($rest)*)
     }};
     (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (status_and($result_types:ident)) $($rest:tt)*) => {{
-        let status = [sol_ops!(@arg [$context] [$receiver] boolean())];
-        sol_ops!(@chain $builder [$context] [$receiver] .$setter(concat(status, $result_types)) $($rest)*)
+        let status = [dialect_ops!(@arg [$context] [$receiver] boolean())];
+        dialect_ops!(@chain $builder [$context] [$receiver] .$setter(concat(status, $result_types)) $($rest)*)
     }};
     (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (concat($head:ident, $tail:ident)) $($rest:tt)*) => {{
-        let $builder = $builder.$setter(sol_ops!(@operands $head.iter().chain($tail.iter())));
-        sol_ops!(@chain $builder [$context] [$receiver] $($rest)*)
+        let $builder = $builder.$setter(dialect_ops!(@operands $head.iter().chain($tail.iter())));
+        dialect_ops!(@chain $builder [$context] [$receiver] $($rest)*)
     }};
     (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (single($operand:ident)) $($rest:tt)*) => {{
         let $builder = $builder.$setter(&[$crate::IntoOds::into_ods($operand)]);
-        sol_ops!(@chain $builder [$context] [$receiver] $($rest)*)
+        dialect_ops!(@chain $builder [$context] [$receiver] $($rest)*)
     }};
     (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident ($($argument:tt)*) $($rest:tt)*) => {{
-        let $builder = $builder.$setter($crate::IntoOds::into_ods(sol_ops!(@arg [$context] [$receiver] $($argument)*)));
-        sol_ops!(@chain $builder [$context] [$receiver] $($rest)*)
+        let $builder = $builder.$setter($crate::IntoOds::into_ods(dialect_ops!(@arg [$context] [$receiver] $($argument)*)));
+        dialect_ops!(@chain $builder [$context] [$receiver] $($rest)*)
     }};
 
     (@build [$context:ident] [$receiver:tt] $operation:ident $($chain:tt)*) => {
         {
             let builder = $operation::builder($context.melior, $context.location());
-            sol_ops!(@chain builder [$context] [$receiver] $($chain)*)
+            dialect_ops!(@chain builder [$context] [$receiver] $($chain)*)
         }
         .build()
         .into()
@@ -331,24 +352,30 @@ macro_rules! sol_ops {
     (@flag_ty $checked_op:ident) => { bool };
     (@op [$context:ident] [$receiver:tt] [$flag:ident] checked($checked_op:ident) $operation:ident $($chain:tt)*) => {
         if $flag {
-            sol_ops!(@build [$context] [$receiver] $checked_op $($chain)*)
+            dialect_ops!(@build [$context] [$receiver] $checked_op $($chain)*)
         } else {
-            sol_ops!(@build [$context] [$receiver] $operation $($chain)*)
+            dialect_ops!(@build [$context] [$receiver] $operation $($chain)*)
         }
     };
     (@op [$context:ident] [$receiver:tt] [$flag:ident] $operation:ident $($chain:tt)*) => {
-        sol_ops!(@build [$context] [$receiver] $operation $($chain)*)
+        dialect_ops!(@build [$context] [$receiver] $operation $($chain)*)
     };
 
     (@disp_ty) => { () };
     (@disp_ty value) => { $crate::Value<'context> };
     (@disp_ty place) => { $crate::Place<'context> };
     (@disp_ty values) => { ::std::vec::Vec<$crate::Value<'context>> };
+    (@disp_ty word) => { $crate::Word<'context> };
+    (@disp_ty slot) => { $crate::Slot<'context> };
+    (@disp_ty words) => { ::std::vec::Vec<$crate::Word<'context>> };
     (@disp_ty status_and_values) => {
         ($crate::Value<'context>, ::std::vec::Vec<$crate::Value<'context>>)
     };
 
     (@region_tuple $region:ident ; empty $($empty_region:ident),+) => {
+        $crate::Block<'context>
+    };
+    (@region_tuple $region:ident) => {
         $crate::Block<'context>
     };
     (@region_tuple $first:ident, $second:ident) => {
@@ -369,24 +396,36 @@ macro_rules! sol_ops {
         $context.current_block().append_operation($operation);
     }};
     (@emit value [$context:ident] $operation:expr, $message:expr) => {
-        $crate::Value::from(sol_ops!(@one_result [$context] $operation, $message))
+        $crate::Value::from(dialect_ops!(@one_result [$context] $operation, $message))
     };
     (@emit place [$context:ident] $operation:expr, $message:expr) => {
-        $crate::Place::from(sol_ops!(@one_result [$context] $operation, $message))
+        $crate::Place::from(dialect_ops!(@one_result [$context] $operation, $message))
     };
-    (@emit values [$context:ident] $operation:expr, $message:expr) => {{
+    (@emit word [$context:ident] $operation:expr, $message:expr) => {
+        $crate::Word::from(dialect_ops!(@one_result [$context] $operation, $message))
+    };
+    (@emit slot [$context:ident] $operation:expr, $message:expr) => {
+        $crate::Slot::from(dialect_ops!(@one_result [$context] $operation, $message))
+    };
+    (@all_results [$context:ident] [$wrapper:ident] $operation:expr) => {{
         let operation = $context.current_block().append_operation($operation);
         (0..::melior::ir::operation::OperationLike::result_count(&operation))
             .map(|index| {
-                $crate::Value::from(
+                $crate::$wrapper::from(
                     ::melior::ir::operation::OperationLike::result(&operation, index)
                         .expect("the index is bounded by the result count"),
                 )
             })
             .collect::<::std::vec::Vec<_>>()
     }};
+    (@emit words [$context:ident] $operation:expr, $message:expr) => {
+        dialect_ops!(@all_results [$context] [Word] $operation)
+    };
+    (@emit values [$context:ident] $operation:expr, $message:expr) => {
+        dialect_ops!(@all_results [$context] [Value] $operation)
+    };
     (@emit status_and_values [$context:ident] $operation:expr, $message:expr) => {{
-        let mut results = sol_ops!(@emit values [$context] $operation, $message);
+        let mut results = dialect_ops!(@emit values [$context] $operation, $message);
         (results.remove(0), results)
     }};
 
@@ -395,12 +434,12 @@ macro_rules! sol_ops {
         $(-> $disposition:ident)? { $operation:ident $($chain:tt)* } flagged .$setter:ident ;
         $($rest:tt)*
     ) => {
-        sol_ops!($receiver :: $base ($($parameters)*) $(-> $disposition)? { $operation $($chain)* });
-        sol_ops!(
+        dialect_ops!($receiver :: $base ($($parameters)*) $(-> $disposition)? { $operation $($chain)* });
+        dialect_ops!(
             $receiver :: $flagged ($($parameters)*)
             $(-> $disposition)? { $operation $($chain)* .$setter(unit_flag) }
         );
-        sol_ops!($($rest)*);
+        dialect_ops!($($rest)*);
     };
 
     (
@@ -411,19 +450,19 @@ macro_rules! sol_ops {
         impl<'context> Block<'context> {
             pub fn $method(
                 self,
-                $($argument: sol_ops!(@ty $kind),)*
+                $($argument: dialect_ops!(@ty $kind),)*
                 context: &$crate::Context<'context>,
-            ) -> sol_ops!(@region_tuple $($regions)+) {
+            ) -> dialect_ops!(@region_tuple $($regions)+) {
                 let receiver = self;
                 mlir_region_op!(
                     context,
                     &receiver.inner,
-                    $operation $(.$setter(sol_ops!(@arg [context] [receiver] $($source)*)))*
+                    $operation $(.$setter(dialect_ops!(@arg [context] [receiver] $($source)*)))*
                     ; $($regions)+
                 )
             }
         }
-        sol_ops!($($rest)*);
+        dialect_ops!($($rest)*);
     };
 
     (
@@ -434,16 +473,16 @@ macro_rules! sol_ops {
         impl<'context> Block<'context> {
             pub fn $method(
                 self,
-                $($argument: sol_ops!(@ty $kind),)*
+                $($argument: dialect_ops!(@ty $kind),)*
                 context: &$crate::Context<'context>,
             ) {
                 let receiver = self;
                 receiver
                     .inner
-                    .append_operation(sol_ops!(@build [context] [receiver] $operation $($chain)*));
+                    .append_operation(dialect_ops!(@build [context] [receiver] $operation $($chain)*));
             }
         }
-        sol_ops!($($rest)*);
+        dialect_ops!($($rest)*);
     };
 
     (
@@ -455,21 +494,21 @@ macro_rules! sol_ops {
         impl<'context> $receiver<'context> {
             pub fn $method(
                 self,
-                $($argument: sol_ops!(@ty $kind),)*
-                $(checked: sol_ops!(@flag_ty $checked_op),)?
+                $($argument: dialect_ops!(@ty $kind),)*
+                $(checked: dialect_ops!(@flag_ty $checked_op),)?
                 context: &$crate::Context<'context>,
-            ) -> sol_ops!(@disp_ty $($disposition)?) {
+            ) -> dialect_ops!(@disp_ty $($disposition)?) {
                 let receiver = self;
                 $(if receiver.r#type() == $same {
                     return receiver.into();
                 })?
-                sol_ops!(@emit $($disposition)? [context]
-                    sol_ops!(@op [context] [receiver] [checked]
+                dialect_ops!(@emit $($disposition)? [context]
+                    dialect_ops!(@op [context] [receiver] [checked]
                         $(checked($checked_op))? $operation $($chain)*),
                     concat!(stringify!($operation), " produces one result"))
             }
         }
-        sol_ops!($($rest)*);
+        dialect_ops!($($rest)*);
     };
 
     (
@@ -479,14 +518,14 @@ macro_rules! sol_ops {
     ) => {
         impl<'context> $receiver<'context> {
             pub fn $method(
-                $($argument: sol_ops!(@ty $kind),)*
+                $($argument: dialect_ops!(@ty $kind),)*
                 context: &$crate::Context<'context>,
-            ) -> sol_ops!(@disp_ty $($disposition)?) {
-                sol_ops!(@emit $($disposition)? [context]
-                    sol_ops!(@build [context] [()] $operation $($chain)*),
+            ) -> dialect_ops!(@disp_ty $($disposition)?) {
+                dialect_ops!(@emit $($disposition)? [context]
+                    dialect_ops!(@build [context] [()] $operation $($chain)*),
                     concat!(stringify!($operation), " produces one result"))
             }
         }
-        sol_ops!($($rest)*);
+        dialect_ops!($($rest)*);
     };
 }
