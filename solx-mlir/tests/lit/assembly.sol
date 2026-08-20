@@ -3,10 +3,12 @@
 
 // CHECK: sol.func @{{.*arithmetic.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     %[[X:.*]] = sol.yul_ptr_cast %{{.*}} : !sol.ptr<ui256, Stack> -> !yul.ptr
-// CHECK:     %[[XV:.*]] = yul.load %[[X]] : !yul.ptr -> i256
-// CHECK:     %[[ONE:.*]] = yul.constant 1
-// CHECK:     %[[SUM:.*]] = yul.add %[[XV]], %[[ONE]]
+// A Yul argument list is materialized in an order the two frontends disagree on, so this
+// file asserts which ops a builtin lowers to; assembly_evaluation_order.sol asserts the order.
+// CHECK-DAG:     sol.yul_ptr_cast %{{.*}} : !sol.ptr<ui256, Stack> -> !yul.ptr
+// CHECK-DAG:     yul.load %{{.*}} : !yul.ptr -> i256
+// CHECK-DAG:     yul.constant 1
+// CHECK:     %[[SUM:.*]] = yul.add
 // CHECK:     %[[SLOT:.*]] = yul.alloca : !yul.ptr
 // CHECK:     yul.store %[[SUM]], %[[SLOT]] : i256, !yul.ptr
 // CHECK:     yul.mul
