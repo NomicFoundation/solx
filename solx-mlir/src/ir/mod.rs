@@ -160,6 +160,9 @@ sol_ops! {
     Value::object_code(object_name: str) -> value {
         ObjectCodeOperation.obj_name(str_attr(object_name)).out(memory())
     }
+    Value::load_immutable(symbol: str, result_type: ty) -> value {
+        LoadImmutableOperation._name(symbol_attr(symbol)).val(result_type)
+    }
     Value::library_address(object_name: str) -> value {
         LibAddrOperation._name(str_attr(object_name)).val(address())
     }

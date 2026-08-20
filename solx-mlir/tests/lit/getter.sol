@@ -21,6 +21,10 @@
 // CHECK:   %[[OV:.*]] = sol.load %[[OP]] : !sol.ptr<!sol.address, Storage>, !sol.address
 // CHECK:   sol.return %[[OV]] : !sol.address
 
+// CHECK: sol.func @{{.*price.*}}() -> ui256 attributes {{.*}}selector = -1607093762 : i32
+// CHECK:   %[[IV:.*]] = sol.load_immutable @{{.*price.*}} : ui256
+// CHECK:   sol.return %[[IV]] : ui256
+
 // CHECK: sol.func @{{.*data.*}}() -> !sol.string<Memory> attributes {{.*}}selector = 1943314746 : i32
 // CHECK:   %[[P:.*]] = sol.addr_of @{{.*data.*}} : !sol.string<Storage>
 // CHECK:   %[[C:.*]] = sol.data_loc_cast %[[P]] : !sol.string<Storage>, !sol.string<Memory>
@@ -47,6 +51,10 @@ contract ConstantKeccak {
 contract Elementary {
     uint256 public value;
     address public owner;
+}
+
+contract ImmutablePrice {
+    uint256 public immutable price;
 }
 
 contract Reference {
