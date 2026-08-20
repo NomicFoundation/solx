@@ -22,11 +22,15 @@ impl LegacyAssembly {
     ///
     /// Parses the [`LegacyAssembly::Raw`] variant into [`LegacyAssembly::Parsed`] in place.
     ///
+    /// `solc` emits the assembly as a pre-serialized JSON string, so the raw value is unwrapped
+    /// before the assembly itself is parsed.
+    ///
     pub fn materialize(&mut self) -> anyhow::Result<()> {
         if let Self::Raw(raw) = self {
-            *self = Self::Parsed(solx_utils::deserialize_from_slice::<
-                solx_evm_assembly::Assembly,
-            >(raw.get().as_bytes())?);
+            let json = solx_utils::deserialize_from_slice::<String>(raw.get().as_bytes())?;
+            let assembly =
+                solx_utils::deserialize_from_str::<solx_evm_assembly::Assembly>(json.as_str())?;
+            *self = Self::Parsed(assembly);
         }
         Ok(())
     }
