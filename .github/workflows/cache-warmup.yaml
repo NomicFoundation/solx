@@ -93,6 +93,7 @@ jobs:
 
   # ── solc: standard config (test.yaml / build-and-test) ──────────────
   warm-solc:
+    needs: warm-llvm
     strategy:
       fail-fast: false
       matrix:
@@ -131,8 +132,6 @@ jobs:
 
       - name: Build toolchain
         uses: ./.github/actions/build-toolchain
-        with:
-          llvm: 'false'
 
       - name: Touch solc ccache
         if: always()
