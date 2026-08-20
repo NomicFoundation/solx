@@ -33,16 +33,6 @@ impl<'function, 'contract, 'source_unit, 'context>
         slot
     }
 
-    /// Binds a Yul variable whose slot precedes the zero stored into it: a function's return
-    /// variable, which Yul initializes at entry rather than at a declaration site.
-    pub fn bind_zero(&mut self, declaration: NodeId) -> Slot<'context> {
-        let slot = Slot::alloca(self);
-        let zero = self.word_zero();
-        slot.store(zero, self);
-        self.variables.insert(declaration, slot);
-        slot
-    }
-
     /// The `yul.constant 0` a Yul variable defaults to.
     pub fn word_zero(&mut self) -> Word<'context> {
         Word::constant(&U256::ZERO, self)

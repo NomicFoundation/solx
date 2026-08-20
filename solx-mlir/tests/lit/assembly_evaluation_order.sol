@@ -8,24 +8,24 @@
 
 // CHECK: sol.func @{{.*two_calls.*}}
 // CHECK:   sol.inline_asm {
-// CHECK-SOLX:     yul.func_call @right(
-// CHECK-SOLX:     yul.func_call @left(
-// CHECK-SOLC:     yul.func_call @left(
-// CHECK-SOLC:     yul.func_call @right(
+// CHECK-SOLX:     yul.func_call @{{.*right.*}}(
+// CHECK-SOLX:     yul.func_call @{{.*left.*}}(
+// CHECK-SOLC:     yul.func_call @{{.*left.*}}(
+// CHECK-SOLC:     yul.func_call @{{.*right.*}}(
 // CHECK:     yul.add
 
 // Nested calls: the outer argument list is evaluated right to left, and each argument
 // evaluates its own list the same way.
 // CHECK: sol.func @{{.*nested_calls.*}}
 // CHECK:   sol.inline_asm {
-// CHECK-SOLX:     yul.func_call @third(
-// CHECK-SOLX:     yul.func_call @second(
-// CHECK-SOLX:     yul.func_call @first(
-// CHECK-SOLX:     yul.func_call @sum(
-// CHECK-SOLC:     yul.func_call @first(
-// CHECK-SOLC:     yul.func_call @second(
-// CHECK-SOLC:     yul.func_call @sum(
-// CHECK-SOLC:     yul.func_call @third(
+// CHECK-SOLX:     yul.func_call @{{.*third.*}}(
+// CHECK-SOLX:     yul.func_call @{{.*second.*}}(
+// CHECK-SOLX:     yul.func_call @{{.*first.*}}(
+// CHECK-SOLX:     yul.func_call @{{.*sum.*}}(
+// CHECK-SOLC:     yul.func_call @{{.*first.*}}(
+// CHECK-SOLC:     yul.func_call @{{.*second.*}}(
+// CHECK-SOLC:     yul.func_call @{{.*sum.*}}(
+// CHECK-SOLC:     yul.func_call @{{.*third.*}}(
 
 // A builtin's operands are no different: the literal is materialized before the load.
 // Only the emission order reverses - the operand list stays in source order, so `mstore`
