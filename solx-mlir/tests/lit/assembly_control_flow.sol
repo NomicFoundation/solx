@@ -91,8 +91,9 @@
 // CHECK:     }
 // CHECK:     %[[TWO:.*]]:2 = yul.func_call @pair(%{{.*}}) : (i256) -> (i256, i256)
 // CHECK:     yul.func_call @effect_only(%{{.*}}) : (i256) -> ()
-// CHECK:     yul.func_call @double(%{{.*}}) : (i256) -> i256
-// CHECK:     yul.func_call @early(%{{.*}}) : (i256) -> i256
+// The two calls feeding `add` run in either order depending on the frontend.
+// CHECK-DAG:     yul.func_call @double(%{{.*}}) : (i256) -> i256
+// CHECK-DAG:     yul.func_call @early(%{{.*}}) : (i256) -> i256
 
 // A call may name a function defined after it.
 // CHECK: sol.func @{{.*forward_reference.*}}

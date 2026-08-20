@@ -57,11 +57,15 @@ impl<'function, 'contract, 'source_unit, 'context>
             .iter()
             .next()
             .expect("a Yul callee path names one identifier");
-        let arguments: Vec<_> = node
-            .arguments()
+        // Yul evaluates an argument list right to left - the order the EVM pushes them in. Only the
+        // emission order is reversed; the operand list itself stays in source order.
+        let expressions: Vec<_> = node.arguments().iter().collect();
+        let mut arguments: Vec<_> = expressions
             .iter()
-            .map(|argument| self.yul_expression(&argument))
+            .rev()
+            .map(|argument| self.yul_expression(argument))
             .collect();
+        arguments.reverse();
 
         if let Some(built_in) = name.resolve_to_built_in() {
             return self.yul_builtin(built_in, &arguments);
