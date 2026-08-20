@@ -13,119 +13,77 @@ contract Test {
     uint256 immutable given = 9;
     uint256 stored;
     Inner inner;
-    uint256 sequence;
 
-    function mark(uint256 digit) internal returns (bool) {
-        sequence = sequence * 10 + digit;
-        return true;
-    }
-
-    function seven() internal returns (uint256) {
-        mark(2);
+    function seven() internal pure returns (uint256) {
         return 7;
     }
 
-    function eight() internal returns (uint256) {
-        mark(2);
-        return 8;
+    function enumMember() public pure returns (uint256) {
+        return uint256(M.Tier.High);
     }
 
-    function nine() internal returns (uint256) {
-        mark(2);
-        return 9;
+    function interfaceEnum() public pure returns (uint256) {
+        return uint256(M.Surface.Level.High);
     }
 
-    function enumMember() public returns (uint256, uint256) {
-        sequence = 0;
-        M.Tier tier = (mark(1) ? M : M).Tier.High;
-        return (uint256(tier), sequence);
-    }
-
-    function interfaceEnum() public returns (uint256, uint256) {
-        sequence = 0;
-        M.Surface.Level level = (mark(1) ? M : M).Surface.Level.High;
-        return (uint256(level), sequence);
-    }
-
-    function stateRead() public returns (uint256, uint256) {
+    function stateRead() public returns (uint256) {
         stored = 9;
-        sequence = 0;
-        uint256 value = (mark(1) ? M : M).Test.stored;
-        return (value, sequence);
+        return M.Test.stored;
     }
 
-    function stateWrite() public returns (uint256, uint256) {
-        sequence = 0;
-        (mark(1) ? M : M).Test.stored = nine();
-        return (stored, sequence);
+    function stateWrite() public returns (uint256) {
+        M.Test.stored = 9;
+        return stored;
     }
 
-    function stateCompound() public returns (uint256, uint256) {
+    function stateCompound() public returns (uint256) {
         stored = 9;
-        sequence = 0;
-        (mark(1) ? M : M).Test.stored += nine();
-        return (stored, sequence);
+        M.Test.stored += 9;
+        return stored;
     }
 
-    function stateDelete() public returns (uint256, uint256) {
+    function stateDelete() public returns (uint256) {
         stored = 9;
-        sequence = 0;
-        delete (mark(1) ? M : M).Test.stored;
-        return (stored, sequence);
+        delete M.Test.stored;
+        return stored;
     }
 
-    function fieldRead() public returns (uint256, uint256) {
+    function fieldRead() public returns (uint256) {
         inner.value = 9;
-        sequence = 0;
-        uint256 value = (mark(1) ? M : M).Test.inner.value;
-        return (value, sequence);
+        return M.Test.inner.value;
     }
 
-    function fieldWrite() public returns (uint256, uint256) {
-        sequence = 0;
-        (mark(1) ? M : M).Test.inner.value = nine();
-        return (inner.value, sequence);
+    function fieldWrite() public returns (uint256) {
+        M.Test.inner.value = 9;
+        return inner.value;
     }
 
-    function constantMember() public returns (uint256, uint256) {
-        sequence = 0;
-        uint256 value = (mark(1) ? M : M).Test.SEVEN;
-        return (value, sequence);
+    function constantMember() public pure returns (uint256) {
+        return M.Test.SEVEN;
     }
 
-    function immutableMember() public returns (uint256, uint256) {
-        sequence = 0;
-        uint256 value = (mark(1) ? M : M).Test.given;
-        return (value, sequence);
+    function immutableMember() public view returns (uint256) {
+        return M.Test.given;
     }
 
-    function internalCall() public returns (uint256, uint256) {
-        sequence = 0;
-        uint256 value = (mark(1) ? M : M).Test.seven();
-        return (value, sequence);
+    function internalCall() public pure returns (uint256) {
+        return M.Test.seven();
     }
 
-    function libraryCall() public returns (uint256, uint256) {
-        sequence = 0;
-        uint256 value = (mark(1) ? M : M).Halver.half(eight());
-        return (value, sequence);
+    function libraryCall() public pure returns (uint256) {
+        return M.Halver.half(8);
     }
 
-    function libraryConstant() public returns (uint256, uint256) {
-        sequence = 0;
-        uint256 value = (mark(1) ? M : M).Halver.SEVEN;
-        return (value, sequence);
+    function libraryConstant() public pure returns (uint256) {
+        return M.Halver.SEVEN;
     }
 
-    function wrap() public returns (uint256, uint256) {
-        sequence = 0;
-        uint256 value = M.Cost.unwrap((mark(1) ? M : M).Cost.wrap(nine()));
-        return (value, sequence);
+    function wrap() public pure returns (uint256) {
+        return M.Cost.unwrap(M.Cost.wrap(9));
     }
 
-    function construction() public returns (uint256, uint256) {
-        sequence = 0;
-        M.Pair memory pair = (mark(1) ? M : M).Pair(nine());
-        return (pair.first, sequence);
+    function construction() public pure returns (uint256) {
+        M.Pair memory pair = M.Pair(9);
+        return pair.first;
     }
 }

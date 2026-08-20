@@ -55,7 +55,7 @@ pub enum Call {
     External(MemberAccessExpression, ExternalCallee, FunctionType),
     /// A qualified call to an externally visible library function (`L.f(x)`), dispatched by
     /// `DELEGATECALL` at the linked library address on the library selector.
-    Library(Expression, FunctionDefinition, u32),
+    Library(FunctionDefinition, u32),
     /// An attached call to an externally visible library function (`x.f(y)`): the receiver leads
     /// the argument list of the same library dispatch.
     AttachedLibrary(Expression, FunctionDefinition, u32),
@@ -65,9 +65,6 @@ pub enum Call {
     Member(MemberAccessExpression),
     /// A direct call to a named function.
     Function(FunctionDefinition),
-    /// A direct call to a function named through a module denoted by type alone; the module is
-    /// evaluated for effect.
-    Module(Expression, FunctionDefinition),
     /// An attached call to a selectorless library or free function: the receiver leads the
     /// argument list of an internal `sol.call`.
     Attached(Expression, FunctionDefinition),
@@ -118,8 +115,7 @@ impl Call {
                 );
                 values
             }
-            Self::Library(qualifier, function_definition, selector) => {
-                scope.expression_effect(&qualifier);
+            Self::Library(function_definition, selector) => {
                 let (_status, values) = Self::library(
                     &function_definition,
                     selector,
@@ -145,16 +141,11 @@ impl Call {
             Self::Member(access) => {
                 Self::member(&access, node, &arguments, options.as_ref(), scope)
             }
-            Self::Function(function_definition) => {
-                scope.call(&function_definition, &arguments, None)
-            }
-            Self::Module(qualifier, function_definition) => {
-                scope.call(&function_definition, &arguments, Some(&qualifier))
-            }
+            Self::Function(function_definition) => scope.call(&function_definition, &arguments),
             Self::Attached(receiver, function_definition) => {
                 let operands: Vec<Expression> =
                     std::iter::once(receiver).chain(arguments).collect();
-                scope.call(&function_definition, &operands, None)
+                scope.call(&function_definition, &operands)
             }
             Self::FunctionPointer(callee, function_type) => {
                 Self::function_pointer(&callee, &function_type, &arguments, options.as_ref(), scope)
@@ -200,17 +191,14 @@ impl Call {
                 true,
                 scope,
             ),
-            Self::Library(qualifier, function_definition, selector) => {
-                scope.expression_effect(&qualifier);
-                Self::library(
-                    &function_definition,
-                    selector,
-                    &arguments,
-                    options.as_ref(),
-                    true,
-                    scope,
-                )
-            }
+            Self::Library(function_definition, selector) => Self::library(
+                &function_definition,
+                selector,
+                &arguments,
+                options.as_ref(),
+                true,
+                scope,
+            ),
             Self::AttachedLibrary(receiver, function_definition, selector) => {
                 Self::attached_library(
                     receiver,
@@ -238,7 +226,6 @@ impl Call {
             | Self::TypeConversion
             | Self::Builtin(_)
             | Self::Function(_)
-            | Self::Module(..)
             | Self::Attached(..) => {
                 unreachable!("a guarded call dispatches externally or creates a contract")
             }
@@ -303,9 +290,7 @@ impl Call {
                         }
                         (Some(Definition::Library(_)), _) => {
                             return match function_definition.compute_selector() {
-                                Some(selector) => {
-                                    Self::Library(access.operand(), function_definition, selector)
-                                }
+                                Some(selector) => Self::Library(function_definition, selector),
                                 None => Self::Function(function_definition),
                             };
                         }
@@ -318,9 +303,6 @@ impl Call {
                                 ),
                                 None => Self::Attached(access.operand(), function_definition),
                             };
-                        }
-                        (_, None) if FunctionScope::is_module_typed(&access.operand()) => {
-                            return Self::Module(access.operand(), function_definition);
                         }
                         (_, None) => {
                             return Self::Attached(access.operand(), function_definition);
@@ -402,8 +384,7 @@ impl Call {
                 Self::Creation(_, Some(function_definition))
                 | Self::External(_, ExternalCallee::Function(function_definition, _), _)
                 | Self::Function(function_definition)
-                | Self::Module(_, function_definition)
-                | Self::Library(_, function_definition, _) => FunctionScope::named_arguments(
+                | Self::Library(function_definition, _) => FunctionScope::named_arguments(
                     &named,
                     function_definition
                         .parameters()
@@ -1178,20 +1159,18 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         function_definition: &FunctionDefinition,
         operands: &[Expression],
     ) -> Value<'context> {
-        self.call(function_definition, operands, None)
+        self.call(function_definition, operands)
             .into_iter()
             .next()
             .expect("a user-defined operator's function returns one value")
     }
 
     /// Defines the callee in this module if absent and converts each argument to its declared
-    /// parameter type before `sol.call`; a qualifier evaluates for effect after the arguments,
-    /// matching legacy's order.
+    /// parameter type before `sol.call`.
     fn call(
         &mut self,
         function_definition: &FunctionDefinition,
         arguments: &[Expression],
-        qualifier: Option<&Expression>,
     ) -> Vec<Value<'context>> {
         self.contract.function_definition(function_definition);
         let signature = self
@@ -1199,9 +1178,6 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             .source_unit
             .function_signature(function_definition);
         let converted = self.converted_arguments(arguments, &signature.function_type.parameters);
-        if let Some(qualifier) = qualifier {
-            self.expression_effect(qualifier);
-        }
         Function::call(&signature, &converted, self)
     }
 }

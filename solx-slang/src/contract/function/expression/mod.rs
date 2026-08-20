@@ -180,11 +180,6 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                     )
                 ) => {}
             Expression::MemberAccessExpression(inner)
-                if Self::is_module_typed(&inner.operand()) =>
-            {
-                self.expression_effect(&inner.operand());
-            }
-            Expression::MemberAccessExpression(inner)
                 if matches!(
                     Self::resolved_definition(&inner.operand()),
                     Some(
@@ -274,16 +269,6 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 Self::resolved_definition(&inner.items().iter().next()?.expression()?)
             }
             _ => None,
-        }
-    }
-
-    /// Whether a parenthesized or conditional form over import aliases denotes a module by its
-    /// type, which the resolution walk cannot name: never materialized, it evaluates for effect
-    /// and its members resolve by name.
-    pub fn is_module_typed(expression: &Expression) -> bool {
-        match expression.get_type() {
-            Some(Type::UserMetaType(meta)) => matches!(meta.definition(), Definition::Import(_)),
-            _ => false,
         }
     }
 }

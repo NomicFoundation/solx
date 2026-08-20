@@ -31,11 +31,28 @@
 // CHECK:   %[[SC:.*]] = sol.call @{{.*freeTriple.*}}(%[[SA]]) : (ui256) -> ui256
 // CHECK:   sol.return %[[SC]] : ui256
 
+// CHECK: sol.func @{{.*parenthesized.*}}() -> ui256 attributes {{.*}}selector = -923061170 : i32
+// CHECK:   %[[NK:.*]] = sol.constant 11 : ui8
+// CHECK:   %[[NV:.*]] = sol.cast %[[NK]] : ui8 to ui256
+// CHECK:   sol.return %[[NV]] : ui256
+
+// CHECK: sol.func @{{.*qualified.*}}() -> ui256 attributes {{.*}}selector = -228858638 : i32
+// CHECK:   %[[QA:.*]] = sol.cast %{{.*}} : ui8 to ui256
+// CHECK:   %[[QC:.*]] = sol.call @{{.*halve.*}}(%[[QA]]) : (ui256) -> ui256
+// CHECK:   sol.return %[[QC]] : ui256
+
+// CHECK: sol.func @{{.*wrapped.*}}() -> ui256 attributes {{.*}}selector = 1357319496 : i32
+// CHECK:   %[[WK:.*]] = sol.constant 6 : ui8
+// CHECK:   %[[WV:.*]] = sol.cast %[[WK]] : ui8 to ui256
+// CHECK:   sol.return %[[WV]] : ui256
+
 import "./module_members.sol" as M;
 import {FREE_K as RENAMED_K, freeTriple} from "./module_members.sol";
 import * as S from "./module_members.sol";
 
 uint256 constant FREE_K = 11;
+
+type Cost is uint256;
 
 function freeTriple(uint256 x) pure returns (uint256) {
     return x * 3;
@@ -64,5 +81,21 @@ contract ModuleMembers {
 
     function starredCall() public pure returns (uint256) {
         return S.freeTriple(4);
+    }
+
+    function parenthesized() public pure returns (uint256) {
+        return (M).FREE_K;
+    }
+
+    function qualified() public pure returns (uint256) {
+        return M.ModuleMembers.halve(6);
+    }
+
+    function wrapped() public pure returns (uint256) {
+        return Cost.unwrap(M.Cost.wrap(6));
+    }
+
+    function halve(uint256 x) internal pure returns (uint256) {
+        return x / 2;
     }
 }

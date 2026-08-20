@@ -1,11 +1,11 @@
 { "modes": [ "E" ], "cases": [ {
     "name": "external_call",
     "inputs": [ { "instance": "Test", "method": "externalCall", "calldata": [] } ],
-    "expected": [ "4", "12" ]
+    "expected": [ "4" ]
 }, {
     "name": "tried",
     "inputs": [ { "instance": "Test", "method": "tried", "calldata": [] } ],
-    "expected": [ "4", "12" ]
+    "expected": [ "4" ]
 } ],
     "contracts": {
         "Test": "main.sol:Test",

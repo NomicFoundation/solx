@@ -1,63 +1,63 @@
 { "modes": [ "E" ], "cases": [ {
     "name": "enum_member",
     "inputs": [ { "instance": "Test", "method": "enumMember", "calldata": [] } ],
-    "expected": [ "1", "1" ]
+    "expected": [ "1" ]
 }, {
     "name": "interface_enum",
     "inputs": [ { "instance": "Test", "method": "interfaceEnum", "calldata": [] } ],
-    "expected": [ "1", "0" ]
+    "expected": [ "1" ]
 }, {
     "name": "state_read",
     "inputs": [ { "instance": "Test", "method": "stateRead", "calldata": [] } ],
-    "expected": [ "9", "0" ]
+    "expected": [ "9" ]
 }, {
     "name": "state_write",
     "inputs": [ { "instance": "Test", "method": "stateWrite", "calldata": [] } ],
-    "expected": [ "9", "2" ]
+    "expected": [ "9" ]
 }, {
     "name": "state_compound",
     "inputs": [ { "instance": "Test", "method": "stateCompound", "calldata": [] } ],
-    "expected": [ "18", "2" ]
+    "expected": [ "18" ]
 }, {
     "name": "state_delete",
     "inputs": [ { "instance": "Test", "method": "stateDelete", "calldata": [] } ],
-    "expected": [ "0", "0" ]
+    "expected": [ "0" ]
 }, {
     "name": "field_read",
     "inputs": [ { "instance": "Test", "method": "fieldRead", "calldata": [] } ],
-    "expected": [ "9", "0" ]
+    "expected": [ "9" ]
 }, {
     "name": "field_write",
     "inputs": [ { "instance": "Test", "method": "fieldWrite", "calldata": [] } ],
-    "expected": [ "9", "2" ]
+    "expected": [ "9" ]
 }, {
     "name": "constant_member",
     "inputs": [ { "instance": "Test", "method": "constantMember", "calldata": [] } ],
-    "expected": [ "7", "0" ]
+    "expected": [ "7" ]
 }, {
     "name": "immutable_member",
     "inputs": [ { "instance": "Test", "method": "immutableMember", "calldata": [] } ],
-    "expected": [ "9", "0" ]
+    "expected": [ "9" ]
 }, {
     "name": "internal_call",
     "inputs": [ { "instance": "Test", "method": "internalCall", "calldata": [] } ],
-    "expected": [ "7", "2" ]
+    "expected": [ "7" ]
 }, {
     "name": "library_call",
     "inputs": [ { "instance": "Test", "method": "libraryCall", "calldata": [] } ],
-    "expected": [ "4", "2" ]
+    "expected": [ "4" ]
 }, {
     "name": "library_constant",
     "inputs": [ { "instance": "Test", "method": "libraryConstant", "calldata": [] } ],
-    "expected": [ "7", "0" ]
+    "expected": [ "7" ]
 }, {
     "name": "wrap",
     "inputs": [ { "instance": "Test", "method": "wrap", "calldata": [] } ],
-    "expected": [ "9", "2" ]
+    "expected": [ "9" ]
 }, {
     "name": "construction",
     "inputs": [ { "instance": "Test", "method": "construction", "calldata": [] } ],
-    "expected": [ "9", "2" ]
+    "expected": [ "9" ]
 } ],
     "contracts": {
         "Test": "main.sol:Test"

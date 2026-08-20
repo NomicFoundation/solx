@@ -2696,7 +2696,8 @@ entries:
         version: '>=0.4.12'
       module_from_ternary_expression.sol:
         hash: '0xc1560929c43117f8d19e6ab15ecf4cdb'
-        enabled: true
+        enabled: false
+        comment: Module conditionals are rejected by Slang
         version: '>=0.6.11'
       tuple_from_ternary_expression.sol:
         hash: '0xeb7fb8021a1150d98f082fbd659dec97'
