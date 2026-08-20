@@ -50,13 +50,13 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             parameters,
             results,
         } = signature.function_type;
-        self.function(entry, dispatch, results, |scope| {
+        self.function(entry, results, |scope| {
             for (index, parameter) in function.parameters().iter().enumerate() {
                 let Some(identifier) = parameter.name() else {
                     continue;
                 };
                 scope.define_local(identifier.name(), parameters[index], |_scope| {
-                    entry.argument(index)
+                    entry.block.argument(index)
                 });
             }
 
@@ -116,15 +116,10 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             self,
             self.contract.body,
         );
-        self.function(
-            entry,
-            FunctionDispatch::Kind(MlirFunctionKind::Constructor),
-            Vec::new(),
-            |scope| {
-                scope.state_variable_initializers();
-                scope.current_block().r#return(&[], scope);
-            },
-        );
+        self.function(entry, Vec::new(), |scope| {
+            scope.state_variable_initializers();
+            scope.current_block().r#return(&[], scope);
+        });
     }
 }
 

@@ -26,6 +26,7 @@ pub use self::context::contract::Contract;
 pub use self::context::environment::Environment;
 pub use self::context::function::Function;
 pub use self::context::function::dispatch::FunctionDispatch;
+pub use self::context::function::entry::FunctionEntry;
 pub use self::dialect::Dialect;
 pub use self::ir::attributes::CmpPredicate;
 pub use self::ir::attributes::ContractKind;

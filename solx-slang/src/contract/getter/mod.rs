@@ -130,16 +130,11 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                     self,
                     self.contract.body,
                 );
-                self.function(
-                    entry,
-                    FunctionDispatch::Getter,
-                    signature.function_type.results,
-                    |scope| {
-                        let result_type = scope.return_types[0];
-                        let value = scope.converted(&initializer, result_type);
-                        scope.current_block().r#return(&[value], scope);
-                    },
-                );
+                self.function(entry, signature.function_type.results, |scope| {
+                    let result_type = scope.return_types[0];
+                    let value = scope.converted(&initializer, result_type);
+                    scope.current_block().r#return(&[value], scope);
+                });
             }
             StateVariableMutability::Mutable | StateVariableMutability::Transient => {
                 let getter = Getter::new(state_variable, self.source_unit);
@@ -150,17 +145,12 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                     self,
                     self.contract.body,
                 );
-                self.function(
-                    entry,
-                    FunctionDispatch::Getter,
-                    signature.function_type.results,
-                    |scope| {
-                        let (place, _) = scope.state_variable_place(state_variable);
-                        let values =
-                            getter.returned_values(place, &scope.return_types, entry, scope);
-                        scope.current_block().r#return(&values, scope);
-                    },
-                );
+                self.function(entry, signature.function_type.results, |scope| {
+                    let (place, _) = scope.state_variable_place(state_variable);
+                    let values =
+                        getter.returned_values(place, &scope.return_types, entry.block, scope);
+                    scope.current_block().r#return(&values, scope);
+                });
             }
             StateVariableMutability::Immutable => {
                 let entry = signature.define(
@@ -170,27 +160,22 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                     self,
                     self.contract.body,
                 );
-                self.function(
-                    entry,
-                    FunctionDispatch::Getter,
-                    signature.function_type.results,
-                    |scope| {
-                        let result_type = scope.return_types[0];
-                        let element_type = scope.resolve_type(
-                            &state_variable
-                                .get_type()
-                                .expect("binder types every state variable"),
-                            None,
-                        );
-                        let value = Value::load_immutable(
-                            &SourceUnitScope::state_variable_symbol(state_variable),
-                            element_type,
-                            scope,
-                        )
-                        .convert(result_type, scope);
-                        scope.current_block().r#return(&[value], scope);
-                    },
-                );
+                self.function(entry, signature.function_type.results, |scope| {
+                    let result_type = scope.return_types[0];
+                    let element_type = scope.resolve_type(
+                        &state_variable
+                            .get_type()
+                            .expect("binder types every state variable"),
+                        None,
+                    );
+                    let value = Value::load_immutable(
+                        &SourceUnitScope::state_variable_symbol(state_variable),
+                        element_type,
+                        scope,
+                    )
+                    .convert(result_type, scope);
+                    scope.current_block().r#return(&[value], scope);
+                });
             }
         }
     }
