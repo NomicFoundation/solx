@@ -1,0 +1,19 @@
+{ "modes": [ "E" ], "cases": [ {
+    "name": "external_call",
+    "inputs": [ { "instance": "Test", "method": "externalCall", "calldata": [] } ],
+    "expected": [ "4" ]
+}, {
+    "name": "tried",
+    "inputs": [ { "instance": "Test", "method": "tried", "calldata": [] } ],
+    "expected": [ "4" ]
+} ],
+    "contracts": {
+        "Test": "main.sol:Test",
+        "Library": "library.sol:Halver"
+    },
+    "libraries": {
+        "library.sol": {
+            "Halver": "Library"
+        }
+    }
+}

@@ -6,7 +6,7 @@ config.test_format = lit.formats.ShTest(True)
 config.suffixes = [".sol"]
 
 config_dir = os.path.dirname(os.path.abspath(__file__))
-solx_root = os.path.join(config_dir, "..", "..", "..")
+solx_root = os.path.normpath(os.path.join(config_dir, "..", "..", ".."))
 solx_bin_dir = os.path.join(solx_root, "target", os.environ.get("SOLX_LIT_TARGET", ""), "debug")
 solc_bin_dir = os.path.join(solx_root, "solx-solidity", "build", "solc")
 
@@ -19,6 +19,15 @@ config.substitutions.append(
 )
 config.substitutions.append(
     ("%for_loop", os.path.join(solx_root, "tests", "solidity", "simple", "loop", "for").replace("\\", "/"))
+)
+config.substitutions.append(
+    ("%qualifier_module", os.path.join(solx_root, "tests", "solidity", "complex", "qualifier_module").replace("\\", "/"))
+)
+config.substitutions.append(
+    ("%qualifier_type_name", os.path.join(solx_root, "tests", "solidity", "complex", "qualifier_type_name").replace("\\", "/"))
+)
+config.substitutions.append(
+    ("%qualifier_library_external", os.path.join(solx_root, "tests", "solidity", "complex", "qualifier_library_external").replace("\\", "/"))
 )
 
 config.test_source_root = config_dir

@@ -9,6 +9,9 @@
 // CHECK: sol.func @{{.*run.*}}
 // CHECK:   sol.func_constant @{{.*g.*}} : !sol.func_ref<() -> ui256>
 // CHECK:   sol.icall %{{[0-9]+}}() : !sol.func_ref<() -> ui256>, () -> ui256
+// CHECK: sol.func @{{.*parenthesized.*}}
+// CHECK:   sol.func_constant @{{.*g.*}} : !sol.func_ref<() -> ui256>
+// CHECK:   sol.icall %{{[0-9]+}}() : !sol.func_ref<() -> ui256>, () -> ui256
 // CHECK: sol.func @{{.*qualified_library.*}}
 // CHECK:   sol.func_constant @{{.*pick.*}} : !sol.func_ref<() -> ui256>
 // CHECK:   sol.icall %{{[0-9]+}}() : !sol.func_ref<() -> ui256>, () -> ui256
@@ -27,6 +30,11 @@ contract C {
 
     function run() public returns (uint256) {
         function () internal returns (uint256) functionPointer = C.g;
+        return functionPointer();
+    }
+
+    function parenthesized() public returns (uint256) {
+        function () internal returns (uint256) functionPointer = (C).g;
         return functionPointer();
     }
 
