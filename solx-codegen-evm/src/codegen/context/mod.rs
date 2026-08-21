@@ -101,6 +101,11 @@ impl<'ctx> Context<'ctx> {
     /// The loop stack default capacity.
     const LOOP_STACK_INITIAL_CAPACITY: usize = 16;
 
+    /// The module flag the MLIR pipeline sets when inline assembly is not
+    /// memory-safe.
+    const UNSAFE_ASM_FLAG: &'static str = "evm-unsafe-asm";
+
+
     ///
     /// Initializes a new LLVM context.
     ///
@@ -179,6 +184,13 @@ impl<'ctx> Context<'ctx> {
             optimizer_mode.as_str(),
             spill_area_size,
         );
+        if spill_area_size.is_some()
+            && self.module().get_flag(Self::UNSAFE_ASM_FLAG).is_some()
+            && std::env::var(solx_utils::ENV_DISABLE_UNSAFE_MEMORY_ASM_STACK_TOO_DEEP_CHECK)
+                .is_err()
+        {
+            anyhow::bail!(solx_utils::ERROR_UNSAFE_MEMORY_ASM_STACK_TOO_DEEP);
+        }
         let target_machine = TargetMachine::new(
             self.optimizer.settings(),
             self.llvm_options.as_slice(),
