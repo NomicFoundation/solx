@@ -41,8 +41,10 @@ unsafe extern "C" {
     /// Creates the `convert-sol-to-yul` pass.
     pub fn mlirCreateConversionConvertSolToYulPass() -> MlirPass;
 
-    /// Creates the `convert-yul-to-std` pass.
-    pub fn mlirCreateConversionConvertYulToStandardPass() -> MlirPass;
+    /// Creates the `convert-yul-to-std` pass. `symbolic_mem_guard` lowers
+    /// `yul.memoryguard` to the `evm.memoryguard` intrinsic instead of a
+    /// constant.
+    pub fn mlirSolCreateConvertYulToStandardPass(symbolic_mem_guard: bool) -> MlirPass;
 
     // ---- Standard-to-LLVM conversion passes ----
 
