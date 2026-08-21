@@ -158,7 +158,9 @@ impl<'context> Context<'context> {
     /// 1. `canonicalize`
     /// 2. `sol-inline-modifiers`
     /// 3. `convert-sol-to-yul`: Sol → Yul
-    /// 4. `convert-yul-to-std`: Yul → func/arith/scf/cf/LLVM
+    /// 4. `convert-yul-to-std`: Yul → func/arith/scf/cf/LLVM, keeping the
+    ///    memoryguard symbolic; the EVM backend's `evm-fold-memory-guard` pass
+    ///    folds it on each spill retry
     /// 5. `canonicalize`
     /// 6. `convert-scf-to-cf`
     /// 7. `convert-func-to-llvm`
@@ -186,7 +188,9 @@ impl<'context> Context<'context> {
                 crate::ffi::mlirCreateConversionConvertSolToYulPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionConvertYulToStandardPass(),
+                crate::ffi::mlirSolCreateConvertYulToStandardPass(
+                    /* symbolic_mem_guard = */ true,
+                ),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateTransformsCanonicalizer(),
@@ -269,7 +273,9 @@ impl<'context> Context<'context> {
     ///
     /// Parses the source, verifies it, lowers each `llvm.setimmutable` into heap stores at its
     /// id's `immutables` offsets, and translates to LLVM IR.
-    /// Returns owned `(LLVMContextRef, LLVMModuleRef)`.
+    /// Returns owned `(LLVMContextRef, LLVMModuleRef)`. The translated
+    /// module still carries the symbolic memoryguard calls; the EVM backend
+    /// folds them at the start of the optimization pipeline.
     ///
     /// # Errors
     ///
