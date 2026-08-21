@@ -278,32 +278,6 @@ impl Call {
                 unimplemented!("unsupported callee '{}'", identifier.name())
             }
             Expression::MemberAccessExpression(access) => {
-                if matches!(
-                    access.member().resolve_to_definition(),
-                    Some(Definition::StructMember(_))
-                ) && let Some(Type::Function(function_type)) = access.get_type()
-                {
-                    return Self::FunctionPointer(
-                        Expression::MemberAccessExpression(access),
-                        function_type,
-                    );
-                }
-                if matches!(
-                    FunctionScope::resolved_definition(&access.operand()),
-                    Some(Definition::Contract(_) | Definition::Import(_))
-                ) {
-                    if let Some(Definition::Function(function_definition)) =
-                        access.member().resolve_to_definition()
-                    {
-                        return Self::Function(function_definition);
-                    }
-                    if let Some(Type::Function(function_type)) = access.get_type() {
-                        return Self::FunctionPointer(
-                            Expression::MemberAccessExpression(access),
-                            function_type,
-                        );
-                    }
-                }
                 if let Some(Definition::Function(function_definition)) =
                     access.member().resolve_to_definition()
                 {
@@ -311,6 +285,9 @@ impl Call {
                         FunctionScope::resolved_definition(&access.operand()),
                         function_definition.enclosing_definition(),
                     ) {
+                        (Some(Definition::Contract(_) | Definition::Import(_)), _) => {
+                            return Self::Function(function_definition);
+                        }
                         (Some(Definition::Library(_)), _) => {
                             return match function_definition.compute_selector() {
                                 Some(selector) => Self::Library(function_definition, selector),
@@ -332,6 +309,20 @@ impl Call {
                         }
                         _ => {}
                     }
+                }
+                if let Some(Type::Function(function_type)) = access.get_type()
+                    && (matches!(
+                        access.member().resolve_to_definition(),
+                        Some(Definition::StructMember(_))
+                    ) || matches!(
+                        FunctionScope::resolved_definition(&access.operand()),
+                        Some(Definition::Contract(_))
+                    ))
+                {
+                    return Self::FunctionPointer(
+                        Expression::MemberAccessExpression(access),
+                        function_type,
+                    );
                 }
                 if let Some(definition) = access.member().resolve_to_definition()
                     && let Some(Type::Function(function_type)) = call.operand().get_type()

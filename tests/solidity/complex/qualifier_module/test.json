@@ -1,0 +1,21 @@
+{ "modes": [ "E" ], "cases": [ {
+    "name": "plain",
+    "inputs": [ { "instance": "Test", "method": "plain", "calldata": [] } ],
+    "expected": [ "4" ]
+}, {
+    "name": "chained",
+    "inputs": [ { "instance": "Test", "method": "chained", "calldata": [] } ],
+    "expected": [ "4" ]
+}, {
+    "name": "starred",
+    "inputs": [ { "instance": "Test", "method": "starred", "calldata": [] } ],
+    "expected": [ "4" ]
+}, {
+    "name": "chain",
+    "inputs": [ { "instance": "Test", "method": "chain", "calldata": [] } ],
+    "expected": [ "7" ]
+} ],
+    "contracts": {
+        "Test": "main.sol:Test"
+    }
+}
