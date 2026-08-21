@@ -89,29 +89,143 @@ pub fn test(
         let mut project_directory = crate::utils::absolute_path(projects_directory.as_path())?;
         project_directory.push(project_name.as_str());
 
+        crate::utils::remove(project_directory.as_path(), project_name.as_str())?;
+
+        let project_directory_str = project_directory.to_string_lossy();
+        crate::utils::clone_repository(
+            project.url.as_str(),
+            &project_directory_str,
+            project.commit.as_deref(),
+            &format!(
+                "{} Hardhat project {}",
+                solx_utils::cargo_status_ok("Cloning"),
+                project_name.bright_white().bold()
+            ),
+        )?;
+
+        let build_system = project.build_system.to_string();
+        if let Some(version) = config.build_systems.get(&project.build_system) {
+            let npm_spec = format!("{build_system}@{version}");
+            let mut npm_install_build_system = Command::new("npm");
+            npm_install_build_system.current_dir(project_directory.as_path());
+            npm_install_build_system.args(["--loglevel", "error"]);
+            npm_install_build_system.arg("--force");
+            npm_install_build_system.arg("--yes");
+            npm_install_build_system.arg("install");
+            npm_install_build_system.arg("--global");
+            npm_install_build_system.arg(&npm_spec);
+            crate::utils::command_with_retries(
+                &mut npm_install_build_system,
+                format!(
+                    "{} build system {} for Hardhat project {project_name}",
+                    solx_utils::cargo_status_ok("Installing"),
+                    build_system.bright_yellow().bold()
+                )
+                .as_str(),
+                16,
+            )?;
+        } else if project.build_system != BuildSystem::Npm {
+            anyhow::bail!("Hardhat test configuration missing `build_systems.{build_system}`");
+        }
+        let mut build_system_install_command = Command::new(build_system.as_str());
+        build_system_install_command.current_dir(project_directory.as_path());
+        match project.build_system {
+            BuildSystem::Npm => {
+                build_system_install_command.args(["--loglevel", "error"]);
+                build_system_install_command.arg("--force");
+                build_system_install_command.arg("--yes");
+            }
+            BuildSystem::Pnpm => {
+                build_system_install_command.arg("--ignore-scripts");
+            }
+            _ => {}
+        }
+        build_system_install_command.arg("install");
+        crate::utils::command_with_retries(
+            &mut build_system_install_command,
+            format!(
+                "{} dependencies for Hardhat project {project_name}",
+                solx_utils::cargo_status_ok("Installing")
+            )
+            .as_str(),
+            16,
+        )?;
+
+        let mut dependency_override_command = Command::new(build_system.as_str());
+        dependency_override_command.current_dir(project_directory.as_path());
+        match project.build_system {
+            BuildSystem::Npm => {
+                dependency_override_command.args(["--loglevel", "error"]);
+                dependency_override_command.arg("--force");
+                dependency_override_command.arg("--yes");
+            }
+            BuildSystem::Yarn => {
+                dependency_override_command.arg("--silent");
+            }
+            BuildSystem::Pnpm => {
+                dependency_override_command.arg("--ignore-scripts");
+            }
+            _ => {}
+        }
+        dependency_override_command.arg("install");
+        dependency_override_command.args(project.dependencies.as_slice());
+        dependency_override_command.arg("--save-dev");
+        crate::utils::command_with_retries(
+            &mut dependency_override_command,
+            format!(
+                "{} dependences with {} for Hardhat project {project_name}",
+                solx_utils::cargo_status_ok("Overriding"),
+                project
+                    .dependencies
+                    .iter()
+                    .map(|dependency| dependency.bright_yellow().bold())
+                    .join(", ")
+            )
+            .as_str(),
+            16,
+        )?;
+
+        crate::utils::commit_checkout(
+            &project_directory_str,
+            format!(
+                "{} the post-setup state of Hardhat project {}",
+                solx_utils::cargo_status_ok("Committing"),
+                project_name.bright_white().bold()
+            )
+            .as_str(),
+        )?;
+
+        let config_file_name = if project_directory.join("hardhat.config.ts").exists() {
+            Some("hardhat.config.ts")
+        } else if project_directory.join("hardhat.config.js").exists() {
+            Some("hardhat.config.js")
+        } else {
+            None
+        };
+
         for ((identifier, compiler), codegen) in config
             .compilers
             .iter()
             .filter(|(_identifier, compiler)| !compiler.disabled)
             .cartesian_product(crate::test::CODEGENS)
         {
-            crate::utils::remove(project_directory.as_path(), project_name.as_str())?;
-
             let solidity_version = compiler
                 .solidity_version
                 .as_deref()
                 .unwrap_or(solidity_version.as_str());
 
-            let project_directory_str = project_directory.to_string_lossy();
-            crate::utils::clone_repository(
-                project.url.as_str(),
+            // The reset also forces Hardhat to recompile: its cache cannot
+            // tell two solx binaries reporting the same base solc version
+            // apart, and would otherwise reuse the previous toolchain's
+            // artifacts.
+            crate::utils::reset_checkout(
                 &project_directory_str,
-                project.commit.as_deref(),
-                &format!(
-                    "{} Hardhat project {}",
-                    solx_utils::cargo_status_ok("Cloning"),
+                format!(
+                    "{} Hardhat project {} to its post-setup state",
+                    solx_utils::cargo_status_ok("Resetting"),
                     project_name.bright_white().bold()
-                ),
+                )
+                .as_str(),
             )?;
 
             eprintln!(
@@ -119,11 +233,10 @@ pub fn test(
                 solx_utils::cargo_status_ok("Fixing"),
                 project_name.bright_white().bold()
             );
-            for solidity_file in
-                glob::glob(format!("{}/**/*.sol", project_directory.to_string_lossy()).as_str())
-                    .expect("Always valid")
-                    .filter_map(Result::ok)
-            {
+            // Tracked files only: dependencies under node_modules keep their
+            // own pragmas.
+            for solidity_file in crate::utils::git_tracked_files(&project_directory_str, "*.sol")? {
+                let solidity_file = project_directory.join(solidity_file);
                 if !solidity_file.is_file() {
                     continue;
                 }
@@ -136,95 +249,6 @@ pub fn test(
                 )?;
             }
 
-            let build_system = project.build_system.to_string();
-            if let Some(version) = config.build_systems.get(&project.build_system) {
-                let npm_spec = format!("{build_system}@{version}");
-                let mut npm_install_build_system = Command::new("npm");
-                npm_install_build_system.current_dir(project_directory.as_path());
-                npm_install_build_system.args(["--loglevel", "error"]);
-                npm_install_build_system.arg("--force");
-                npm_install_build_system.arg("--yes");
-                npm_install_build_system.arg("install");
-                npm_install_build_system.arg("--global");
-                npm_install_build_system.arg(&npm_spec);
-                crate::utils::command_with_retries(
-                    &mut npm_install_build_system,
-                    format!(
-                        "{} build system {} for Hardhat project {project_name}",
-                        solx_utils::cargo_status_ok("Installing"),
-                        build_system.bright_yellow().bold()
-                    )
-                    .as_str(),
-                    16,
-                )?;
-            } else if project.build_system != BuildSystem::Npm {
-                anyhow::bail!("Hardhat test configuration missing `build_systems.{build_system}`");
-            }
-            let mut build_system_install_command = Command::new(build_system.as_str());
-            build_system_install_command.current_dir(project_directory.as_path());
-            match project.build_system {
-                BuildSystem::Npm => {
-                    build_system_install_command.args(["--loglevel", "error"]);
-                    build_system_install_command.arg("--force");
-                    build_system_install_command.arg("--yes");
-                }
-                BuildSystem::Pnpm => {
-                    build_system_install_command.arg("--ignore-scripts");
-                }
-                _ => {}
-            }
-            build_system_install_command.arg("install");
-            crate::utils::command_with_retries(
-                &mut build_system_install_command,
-                format!(
-                    "{} dependencies for Hardhat project {project_name}",
-                    solx_utils::cargo_status_ok("Installing")
-                )
-                .as_str(),
-                16,
-            )?;
-
-            let mut dependency_override_command = Command::new(build_system.as_str());
-            dependency_override_command.current_dir(project_directory.as_path());
-            match project.build_system {
-                BuildSystem::Npm => {
-                    dependency_override_command.args(["--loglevel", "error"]);
-                    dependency_override_command.arg("--force");
-                    dependency_override_command.arg("--yes");
-                }
-                BuildSystem::Yarn => {
-                    dependency_override_command.arg("--silent");
-                }
-                BuildSystem::Pnpm => {
-                    dependency_override_command.arg("--ignore-scripts");
-                }
-                _ => {}
-            }
-            dependency_override_command.arg("install");
-            dependency_override_command.args(project.dependencies.as_slice());
-            dependency_override_command.arg("--save-dev");
-            crate::utils::command_with_retries(
-                &mut dependency_override_command,
-                format!(
-                    "{} dependences with {} for Hardhat project {project_name}",
-                    solx_utils::cargo_status_ok("Overriding"),
-                    project
-                        .dependencies
-                        .iter()
-                        .map(|dependency| dependency.bright_yellow().bold())
-                        .join(", ")
-                )
-                .as_str(),
-                16,
-            )?;
-
-            let config_file_name = if project_directory.join("hardhat.config.ts").exists() {
-                Some("hardhat.config.ts")
-            } else if project_directory.join("hardhat.config.js").exists() {
-                Some("hardhat.config.js")
-            } else {
-                None
-            };
             if let Some(config_file_name) = config_file_name {
                 eprintln!(
                     "{} the configuration file {} of Hardhat project {}",
@@ -232,6 +256,8 @@ pub fn test(
                     config_file_name.bright_white().bold(),
                     project_name.bright_white().bold(),
                 );
+                // Targets the committed literal version, which the checkout
+                // reset restored.
                 crate::utils::sed_file(
                     project_directory.join(config_file_name).as_path(),
                     &[
@@ -306,6 +332,9 @@ pub fn test(
             for (key, value) in project.env.iter() {
                 npm_test_command.env(key, value);
             }
+            // The checkout reset removed any report left by the previous
+            // toolchain, which would silently stand in for a test run that
+            // failed to produce one.
             let npm_test_report_path = project_directory.join("junit-report.json");
             let npm_test_report_path_str = npm_test_report_path.to_string_lossy();
             npm_test_command.env("JUNIT_REPORT", &*npm_test_report_path_str);
