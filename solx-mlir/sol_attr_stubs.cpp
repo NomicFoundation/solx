@@ -107,6 +107,7 @@ MlirType solxCreateFixedBytesType(MlirContext ctx, uint32_t size) {
 MlirType solxCreateArrayType(MlirContext ctx, int64_t size, MlirType elementType,
                              uint32_t dataLocation) {
     if (dataLocation > 5) abort();
+    if (size < -1) abort();
     auto *context = unwrap(ctx);
     auto location = static_cast<mlir::sol::DataLocation>(dataLocation);
     std::optional<llvm::APInt> sizeOpt;
