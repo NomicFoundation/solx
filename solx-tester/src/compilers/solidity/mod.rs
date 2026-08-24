@@ -239,7 +239,7 @@ impl SolidityCompiler {
             solx_standard_json::InputSelector::EVMLegacyAssembly
         });
 
-        solx_standard_json::Input::try_from_solidity_sources(
+        let mut input = solx_standard_json::Input::try_from_solidity_sources(
             sources_json,
             libraries.clone(),
             BTreeSet::new(),
@@ -254,7 +254,11 @@ impl SolidityCompiler {
             solx_standard_json::InputMetadata::default(),
             llvm_options,
         )
-        .map_err(|error| anyhow::anyhow!("Solidity standard JSON I/O error: {error}"))
+        .map_err(|error| anyhow::anyhow!("Solidity standard JSON I/O error: {error}"))?;
+        input.settings.debug = test_params.map(|params| solx_standard_json::InputDebug {
+            revert_strings: Some(params.revert_strings.to_string()),
+        });
+        Ok(input)
     }
 
     ///

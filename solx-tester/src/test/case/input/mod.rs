@@ -128,6 +128,7 @@ impl Input {
                     expected,
                 ))
             }
+            "#storage_empty" => Input::StorageEmpty(StorageEmpty::new(true)),
             entry => {
                 let address = instance.address().ok_or_else(|| {
                     anyhow::anyhow!(
