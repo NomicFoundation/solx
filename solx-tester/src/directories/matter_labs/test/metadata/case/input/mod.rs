@@ -31,6 +31,7 @@ pub struct Input {
     /// The contract method name.
     /// `#deployer` for the deployer call
     /// `#fallback` for the fallback
+    /// `#storage_empty` for asserting that the entire contract storage holds no non-zero word
     pub method: String,
     /// The passed calldata.
     pub calldata: Calldata,

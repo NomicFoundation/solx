@@ -31,6 +31,10 @@ pub struct Metadata {
     /// If the entire test file must be ignored.
     #[serde(default)]
     pub ignore: bool,
+    /// The revert strings mode: `debug` compiles internal reverts with verbose
+    /// messages, letting expectations assert them.
+    #[serde(default)]
+    pub revert_strings: Option<String>,
 }
 
 impl FromStr for Metadata {

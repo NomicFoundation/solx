@@ -299,13 +299,28 @@ impl Buildable for MatterLabsTest {
             selector: self.selector.clone(),
         };
 
+        let test_params = match self.metadata.revert_strings.as_deref() {
+            Some(value) => {
+                match solx_solc_test_adapter::Params::try_from(
+                    format!("revertStrings: {value}").as_str(),
+                ) {
+                    Ok(params) => Some(params),
+                    Err(error) => {
+                        Summary::invalid(summary, test_description, error);
+                        return None;
+                    }
+                }
+            }
+            None => None,
+        };
+
         let evm_input = match compiler
             .compile_for_evm(
                 self.selector.path.to_string(),
                 sources,
                 libraries,
                 &mode,
-                None,
+                test_params.as_ref(),
                 vec![],
                 debug_config,
             )
