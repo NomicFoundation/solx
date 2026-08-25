@@ -172,6 +172,15 @@ impl<'context> Value<'context> {
                 .address_cast(target_type, context);
         }
         if self.r#type().is_string() && target_type.is_bytes_like() {
+            let byte = Type::byte(context.melior);
+            if target_type == byte {
+                return self
+                    .dyn_bytes_to_fixedbytes(
+                        Type::fixed_bytes(context.melior, solx_utils::BYTE_LENGTH_BYTE),
+                        context,
+                    )
+                    .bytes_cast(byte, context);
+            }
             return self.dyn_bytes_to_fixedbytes(target_type, context);
         }
         if self.r#type().is_bytes_like() {

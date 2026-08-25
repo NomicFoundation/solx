@@ -15,6 +15,9 @@ config.environment["PATH"] = os.pathsep.join(
 )
 
 config.substitutions.append(
+    ("%constants", os.path.join(solx_root, "tests", "solidity", "simple", "constants").replace("\\", "/"))
+)
+config.substitutions.append(
     ("%evaluation_order", os.path.join(solx_root, "tests", "solidity", "simple", "evaluation_order").replace("\\", "/"))
 )
 config.substitutions.append(
