@@ -648,10 +648,12 @@ impl Call {
                 Some(hash(data, scope))
             }
             BuiltIn::Ecrecover => {
-                let values = scope.positional_arguments(arguments);
-                Some(Value::ecrecover(
-                    values[0], values[1], values[2], values[3], scope,
-                ))
+                let word = MlirType::fixed_bytes(scope.melior, solx_utils::BYTE_LENGTH_FIELD);
+                let hash = scope.converted(&arguments[0], word);
+                let v = scope.expression(&arguments[1]);
+                let r = scope.converted(&arguments[2], word);
+                let s = scope.converted(&arguments[3], word);
+                Some(Value::ecrecover(hash, v, r, s, scope))
             }
             BuiltIn::Addmod => Some(scope.modular(arguments, Value::addmod)),
             BuiltIn::Mulmod => Some(scope.modular(arguments, Value::mulmod)),
@@ -870,14 +872,26 @@ impl Call {
             Some(BuiltIn::AddressSend) => {
                 let address =
                     scope.converted(&access.operand(), MlirType::address(scope.melior, false));
-                let values = scope.positional_arguments(arguments);
-                vec![Value::send(address, values[0], scope)]
+                let amount = scope.converted(
+                    arguments
+                        .iter()
+                        .next()
+                        .expect("slang validates non-empty arguments"),
+                    MlirType::field(scope.melior),
+                );
+                vec![Value::send(address, amount, scope)]
             }
             Some(BuiltIn::AddressTransfer) => {
                 let address =
                     scope.converted(&access.operand(), MlirType::address(scope.melior, false));
-                let values = scope.positional_arguments(arguments);
-                Value::transfer(address, values[0], scope);
+                let amount = scope.converted(
+                    arguments
+                        .iter()
+                        .next()
+                        .expect("slang validates non-empty arguments"),
+                    MlirType::field(scope.melior),
+                );
+                Value::transfer(address, amount, scope);
                 Vec::new()
             }
             Some(BuiltIn::AbiEncode) => {

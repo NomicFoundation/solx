@@ -18,23 +18,45 @@ use crate::scope::function::FunctionScope;
 use crate::scope::source_unit::SourceUnitScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// A constant folds to its initializer; an immutable outside the constructor loads its linked
-    /// value (`sol.load_immutable`); a bare function name materialises its internal pointer
+    /// A constant folds to its initializer converted to the declared type, since the initializer
+    /// alone may carry another (a string literal initializing a `bytesN`); an immutable outside
+    /// the constructor loads its linked value (`sol.load_immutable`); a bare function name
+    /// materialises its internal pointer
     /// (`sol.func_constant`), defining the function in this module if absent; a library name is its
     /// linked address (`sol.lib_addr`); every other identifier loads from its place.
     pub fn identifier(&mut self, node: &Identifier) -> Value<'context> {
         match node.resolve_to_definition() {
             Some(Definition::Constant(constant)) => {
-                self.expression(&constant.value().expect("constant has an initializer"))
+                let declared_type = Self::constant_folding_type(
+                    self.resolve_type(
+                        &constant.get_type().expect("binder types every constant"),
+                        None,
+                    ),
+                    self,
+                );
+                self.converted(
+                    &constant.value().expect("constant has an initializer"),
+                    declared_type,
+                )
             }
             Some(Definition::StateVariable(state_variable))
                 if let StateVariableMutability::Constant =
                     state_variable.attributes().mutability() =>
             {
-                self.expression(
+                let declared_type = Self::constant_folding_type(
+                    self.resolve_type(
+                        &state_variable
+                            .get_type()
+                            .expect("binder types every state variable"),
+                        None,
+                    ),
+                    self,
+                );
+                self.converted(
                     &state_variable
                         .value()
                         .expect("a constant state variable is initialized"),
+                    declared_type,
                 )
             }
             Some(Definition::StateVariable(state_variable))
@@ -84,5 +106,17 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             None => unreachable!("slang resolves every identifier reference: {}", node.name()),
             Some(_) => unreachable!("identifier {} is not an assignable place", node.name()),
         }
+    }
+
+    /// The type a constant folds at: its declared type, except that a `string`/`bytes` constant
+    /// folds in memory.
+    fn constant_folding_type(
+        declared_type: MlirType<'context>,
+        scope: &Self,
+    ) -> MlirType<'context> {
+        if declared_type.is_string() {
+            return MlirType::string(scope.melior, solx_utils::DataLocation::Memory);
+        }
+        declared_type
     }
 }

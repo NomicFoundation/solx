@@ -60,7 +60,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             _ => self.converted(&right, element_type),
         };
         let (place, r#type) = self.expression_place(&left);
-        let current = place.load(r#type, self);
+        let current = place.load(r#type, self).convert(element_type, self);
         let assigned = match node.operator() {
             AssignmentExpressionOperator::PlusEqual(_) => current.add(rhs, self.checked, self),
             AssignmentExpressionOperator::MinusEqual(_) => {
@@ -81,7 +81,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 unreachable!("`=` is handled above and Solidity has no `>>>`")
             }
         };
-        place.store(assigned, self);
+        place.assign(assigned, r#type, self);
         Some(assigned)
     }
 }
