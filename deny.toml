@@ -1,20 +1,6 @@
 [advisories]
 yanked = "deny"
 
-# arrayref 0.3.5-0.3.9 -- every version satisfying our dependents' ^0.3.5
-# (blake2b_simd/blake2s_simd) and ^0.3.6 (revm-precompile) -- were yanked on
-# 2026-08-20, leaving 0.3.10 as the only resolvable version. 0.3.10 adds a
-# dependency on `proc-macro1`, a typosquat of proc-macro2 pulling in ureq and
-# rustls, which crates.io has since deleted outright rather than yanked. Its
-# src/lib.rs is byte-identical to 0.3.9's and it has no corresponding upstream
-# commit or tag, so the release carries no fix -- only the new dependency.
-# Hold at 0.3.9 and do NOT run `cargo update -p arrayref`, which cargo-deny's
-# own error message suggests. Drop this entry once a clean version ships or the
-# yanks are reverted.
-ignore = [
-    { crate = "arrayref@0.3.9", reason = "yanked to force resolution onto the compromised 0.3.10; see comment above" },
-]
-
 [licenses]
 allow = [
     "GPL-3.0-only",
