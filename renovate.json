@@ -42,6 +42,16 @@
       ],
       "depNameTemplate": "rust",
       "datasourceTemplate": "rust-version"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the Foundry release the integration workflow installs. Pinning the foundry-toolchain action digest is not enough: its `version` input defaults to `stable`, so the compiler frontend floated free of any pin. forge 1.8.1 shipped a lint-on-build ICE (foundry-rs/foundry#16473) that turned the foundry leg red on an unrelated PR, with no version bump anywhere for Renovate to see. Unlike the managers above this one reads datasource/depName from the `# renovate:` marker comment, so the regex anchors to the pinned value rather than to the step's YAML shape.",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/integration-tests\\.yaml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>\\S+)\\s+version: (?<currentValue>v\\d+\\.\\d+\\.\\d+)"
+      ]
     }
   ],
   "packageRules": [
@@ -103,6 +113,12 @@
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["hardhat"],
       "allowedVersions": "<3"
+    },
+    {
+      "description": "Hold Foundry on 1.7.x until the harness is ported to 1.8. Two 1.8.x changes break solx-dev/src/test/foundry: `forge build` runs the linter unless `--no-lint` is passed, and 1.8.1's linter ICEs on aave-v3 (foundry-rs/foundry#16473, fixed after the 1.8.1 cut); and `--fuzz-runs 0` is rejected outright, while the harness relies on 0 to leave fuzz tests unexecuted and contributing zero gas — raising it to 1 executes them across every project, shifting both the pass/fail surface and the benchmark baselines. v1.7.1 is the toolchain the suite was green on until 2026-08-27. Drop this rule once that port lands.",
+      "matchManagers": ["custom.regex"],
+      "matchDepNames": ["foundry-rs/foundry"],
+      "allowedVersions": "<1.8"
     },
     {
       "description": "custom.regex deps only feed the integration harness; label so the gated suite runs.",
