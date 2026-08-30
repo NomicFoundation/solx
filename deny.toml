@@ -1,6 +1,27 @@
 [advisories]
 yanked = "deny"
 
+# chacha20 0.10.0 and 0.10.1 were yanked on 2026-08-27: the SSE2 backend wrote
+# the counter back with `_mm_extract_epi32`, an SSE4.1 intrinsic, on a path
+# guarded only by `target_feature(enable = "sse2")`. That emits PEXTRD where
+# only SSE2 is guaranteed, so it traps on x86_64 CPUs without SSE4.1 -- and the
+# SSE2 backend is precisely the fallback those CPUs take. 0.10.2 replaces both
+# writebacks with a single `_mm_storeu_si128`; the extra lanes it stores are the
+# nonce, which the counter add never touches, so the fix is equivalent.
+#
+# solx never runs that code. chacha20 arrives with only the `rng` feature via
+# solx-evm-assembly -> twox-hash -> rand, and twox-hash calls `rand::random()`
+# from exactly two places, `xxhash32::RandomState::new` and its xxhash64 twin.
+# solx uses `XxHash3_64::default()` and `XxHash3_64::oneshot()`, both
+# deterministic, so the ChaCha RNG is compiled in and never entered.
+#
+# 0.10.2 lands inside our 7-day cooldown until 2026-09-03 17:51 UTC. Holding an
+# unreachable yanked version for that window beats allowlisting a fresh crate
+# past the gate. Drop this entry and take 0.10.2 once the cooldown expires.
+ignore = [
+    { crate = "chacha20@0.10.1", reason = "SSE4.1 intrinsic on the SSE2 path; unreachable from solx, and 0.10.2 is held until its cooldown expires 2026-09-03" },
+]
+
 [licenses]
 allow = [
     "GPL-3.0-only",
