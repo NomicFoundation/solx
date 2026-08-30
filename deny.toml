@@ -1,18 +1,25 @@
 [advisories]
 yanked = "deny"
 
-# arrayref 0.3.5-0.3.9 -- every version satisfying our dependents' ^0.3.5
-# (blake2b_simd/blake2s_simd) and ^0.3.6 (revm-precompile) -- were yanked on
-# 2026-08-20, leaving 0.3.10 as the only resolvable version. 0.3.10 adds a
-# dependency on `proc-macro1`, a typosquat of proc-macro2 pulling in ureq and
-# rustls, which crates.io has since deleted outright rather than yanked. Its
-# src/lib.rs is byte-identical to 0.3.9's and it has no corresponding upstream
-# commit or tag, so the release carries no fix -- only the new dependency.
-# Hold at 0.3.9 and do NOT run `cargo update -p arrayref`, which cargo-deny's
-# own error message suggests. Drop this entry once a clean version ships or the
-# yanks are reverted.
+# chacha20 0.10.0 and 0.10.1 were yanked on 2026-08-27: the SSE2 backend wrote
+# the counter back with `_mm_extract_epi32`, an SSE4.1 intrinsic, on a path
+# guarded only by `target_feature(enable = "sse2")`. That emits PEXTRD where
+# only SSE2 is guaranteed, so it traps on x86_64 CPUs without SSE4.1 -- and the
+# SSE2 backend is precisely the fallback those CPUs take. 0.10.2 replaces both
+# writebacks with a single `_mm_storeu_si128`; the extra lanes it stores are the
+# nonce, which the counter add never touches, so the fix is equivalent.
+#
+# solx never runs that code. chacha20 arrives with only the `rng` feature via
+# solx-evm-assembly -> twox-hash -> rand, and twox-hash calls `rand::random()`
+# from exactly two places, `xxhash32::RandomState::new` and its xxhash64 twin.
+# solx uses `XxHash3_64::default()` and `XxHash3_64::oneshot()`, both
+# deterministic, so the ChaCha RNG is compiled in and never entered.
+#
+# 0.10.2 lands inside our 7-day cooldown until 2026-09-03 17:51 UTC. Holding an
+# unreachable yanked version for that window beats allowlisting a fresh crate
+# past the gate. Drop this entry and take 0.10.2 once the cooldown expires.
 ignore = [
-    { crate = "arrayref@0.3.9", reason = "yanked to force resolution onto the compromised 0.3.10; see comment above" },
+    { crate = "chacha20@0.10.1", reason = "SSE4.1 intrinsic on the SSE2 path; unreachable from solx, and 0.10.2 is held until its cooldown expires 2026-09-03" },
 ]
 
 [licenses]
