@@ -27,7 +27,7 @@ abstract contract MerkleStatementVerifier is IMerkleVerifier {
 
     // Computes the hash of the Merkle statement, and verifies that it is registered in the
     // Merkle Fact Registry. Receives as input the queuePtr (as address), its length
-    // the numbers of queries n, and the root. The channelPtr is is ignored.
+    // the numbers of queries n, and the root. The channelPtr is ignored.
     function verifyMerkle(
         uint256, /*channelPtr*/
         uint256 queuePtr,
