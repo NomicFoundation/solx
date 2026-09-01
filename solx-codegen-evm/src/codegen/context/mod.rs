@@ -178,11 +178,9 @@ impl<'ctx> Context<'ctx> {
             self.optimizer.settings(),
         );
         let spill_area_size = self.optimizer.settings().spill_area_size();
-        let target_machine = TargetMachine::new(
-            self.optimizer.settings(),
-            self.llvm_options.as_slice(),
-            spill_area_size.map(|size| (self.memory_guard, size)),
-        )?;
+        self.describe_stack_region(spill_area_size.unwrap_or_default());
+        let target_machine =
+            TargetMachine::new(self.optimizer.settings(), self.llvm_options.as_slice())?;
         target_machine.set_target_data(self.module());
         target_machine.set_asm_verbosity(true);
 
@@ -419,6 +417,66 @@ impl<'ctx> Context<'ctx> {
     ///
     pub fn set_memory_guard(&mut self, offset: u64) {
         self.memory_guard = offset;
+    }
+
+    ///
+    /// Describes the spill region to the EVM backend as module flags.
+    ///
+    /// The MLIR front end publishes the guard itself, since only it knows where
+    /// its static allocations end; the other front ends fold the guard during
+    /// codegen and carry it on the context. The size is always ours: it is what
+    /// the backend reported on the previous pass, so a retry rewrites it.
+    ///
+    fn describe_stack_region(&self, size: u64) {
+        if self
+            .module()
+            .get_global_metadata("llvm.module.flags")
+            .iter()
+            .all(|flag| !Self::is_module_flag(flag, "evm-memory-guard"))
+        {
+            self.set_module_flag("evm-memory-guard", self.memory_guard);
+        }
+        self.set_module_flag("evm-stack-region-size", size);
+    }
+
+    ///
+    /// Whether `flag` is the `llvm.module.flags` triplet named `key`.
+    ///
+    fn is_module_flag(flag: &inkwell::values::MetadataValue<'ctx>, key: &str) -> bool {
+        flag.get_node_values().get(1).is_some_and(|name| {
+            name.into_metadata_value()
+                .get_string_value()
+                .is_some_and(|name| name.to_bytes() == key.as_bytes())
+        })
+    }
+
+    ///
+    /// Adds the `key` module flag, or replaces its value if it is already there.
+    ///
+    /// The IR verifier requires flag keys to be unique, so a second add is an
+    /// error rather than an override. LLVM-C exposes no `LLVMSetModuleFlag`, and
+    /// `LLVMGetModuleFlag` hands back the uniqued value operand rather than the
+    /// mutable triplet, so the replacement goes through the MDNode operand API.
+    ///
+    fn set_module_flag(&self, key: &str, value: u64) {
+        use inkwell::values::AsValueRef;
+
+        let value = self.llvm().i64_type().const_int(value, false);
+        for flag in self.module().get_global_metadata("llvm.module.flags") {
+            if !Self::is_module_flag(&flag, key) {
+                continue;
+            }
+            unsafe {
+                inkwell::llvm_sys::core::LLVMReplaceMDNodeOperandWith(
+                    flag.as_value_ref(),
+                    2,
+                    inkwell::llvm_sys::core::LLVMValueAsMetadata(value.as_value_ref()),
+                );
+            }
+            return;
+        }
+        self.module()
+            .add_basic_value_flag(key, inkwell::module::FlagBehavior::Error, value);
     }
 
     ///
