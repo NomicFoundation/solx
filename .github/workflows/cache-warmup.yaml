@@ -7,7 +7,7 @@ name: Cache Warmup
 on:
   push:
     branches:
-      - main-slang
+      - main
     paths:
       - 'solx-llvm'
       - 'solx-solidity'

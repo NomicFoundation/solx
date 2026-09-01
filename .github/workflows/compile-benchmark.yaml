@@ -1,7 +1,7 @@
 name: Compile Benchmark
 
 # Times `solx --standard-json` over the fixtures in tests/benchmark/fixtures
-# with hyperfine, comparing the PR build against a main-slang build and the latest
+# with hyperfine, comparing the PR build against a main build and the latest
 # release binary, and posts the report as a PR comment. Label-gated like the
 # integration suite; report-only (no pass/fail gating on timings).
 
@@ -69,14 +69,14 @@ jobs:
       # actions/checkout's `git clean -ffdx` doesn't recurse into submodules,
       # so on a persistent self-hosted workspace a previous run can leave
       # stale dirs inside temp-solx-main. Wipe wholesale before re-checking
-      # out main-slang. (Same pattern as integration-tests.yaml.)
+      # out main. (Same pattern as integration-tests.yaml.)
       - name: Reset main checkout dir
         run: rm -rf temp-solx-main
 
-      - name: Checkout main-slang
+      - name: Checkout main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main-slang
+          ref: main
           submodules: true
           persist-credentials: false
           path: temp-solx-main

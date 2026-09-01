@@ -63,15 +63,15 @@ jobs:
       # actions/checkout's `git clean -ffdx` doesn't recurse into submodules,
       # so on a persistent self-hosted workspace a previous run can leave
       # stale artifacts inside temp-solx-main. Wipe wholesale before
-      # re-checking out main-slang.
-      - name: Reset main-slang checkout dir
+      # re-checking out main.
+      - name: Reset main checkout dir
         run: rm -rf temp-solx-main
 
-      - name: Checkout main-slang
+      - name: Checkout main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         continue-on-error: true
         with:
-          ref: main-slang
+          ref: main
           submodules: true
           persist-credentials: false
           path: temp-solx-main
@@ -79,7 +79,7 @@ jobs:
       - name: Checkout submodules (PR)
         uses: ./.github/actions/checkout-submodules
 
-      - name: Checkout submodules (main-slang)
+      - name: Checkout submodules (main)
         uses: ./.github/actions/checkout-submodules
         continue-on-error: true
         with:
@@ -98,7 +98,7 @@ jobs:
           enable-assertions: 'false'
           enable-mlir: 'true'
 
-      - name: Build LLVM (main-slang)
+      - name: Build LLVM (main)
         uses: ./.github/actions/build-llvm
         continue-on-error: true
         with:
@@ -117,17 +117,17 @@ jobs:
       - name: Build solx-dev and solx-tester (PR)
         run: ${SFW_PREFIX:-} cargo build --frozen --release -p solx-dev -p solx-tester --features solx-tester/slang-ast
 
-      - name: Fetch dependencies (main-slang)
+      - name: Fetch dependencies (main)
         working-directory: temp-solx-main
         continue-on-error: true
         run: ${SFW_PREFIX:-} cargo fetch --locked
 
-      - name: Build solx (main-slang)
+      - name: Build solx (main)
         working-directory: temp-solx-main
         continue-on-error: true
         run: ${SFW_PREFIX:-} cargo build-slang --frozen --release
 
-      - name: Build solx-dev and solx-tester (main-slang)
+      - name: Build solx-dev and solx-tester (main)
         working-directory: temp-solx-main
         continue-on-error: true
         run: ${SFW_PREFIX:-} cargo build --frozen --release -p solx-dev -p solx-tester --features solx-tester/slang-ast
@@ -155,7 +155,7 @@ jobs:
             ' "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
           done
 
-      - name: Run solx-tester benchmarks (main-slang)
+      - name: Run solx-tester benchmarks (main)
         id: solx_tester_bench_main
         continue-on-error: true
         working-directory: temp-solx-main

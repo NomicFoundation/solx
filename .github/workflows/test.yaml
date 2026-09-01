@@ -6,7 +6,7 @@ on:
   merge_group:
   push:
     branches:
-      - main-slang
+      - main
 
 permissions:
   contents: read
@@ -131,7 +131,7 @@ jobs:
         with:
           prefix-key: cargo-checks-v1
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main-slang' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Cargo checks
         uses: ./.github/actions/cargo-check
@@ -267,7 +267,7 @@ jobs:
         with:
           prefix-key: slang-tests-v2
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main-slang' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run tests
         uses: ./.github/actions/rust-unit-tests
