@@ -533,9 +533,6 @@ impl Contract {
                 let context = unsafe { inkwell::context::Context::new(raw_llvm.context) };
                 let module = unsafe { inkwell::module::Module::new(raw_llvm.module) };
                 module.set_name(code_identifier.as_str());
-                if let Some(size) = optimizer.settings().spill_area_size() {
-                    Self::set_spill_area_module_flag(&context, &module, size)?;
-                }
 
                 let (selector_llvm_ir_unoptimized, selector_llvm_ir, selector_llvm_assembly) =
                     match code_segment {
@@ -612,46 +609,5 @@ impl Contract {
                 Ok(object)
             }
         }
-    }
-
-    ///
-    /// Points the `evm-stack-region-size` module flag at `size`.
-    ///
-    /// The MLIR pipeline always emits the flag, so this replaces its operand
-    /// rather than adding a second entry, which the IR verifier rejects.
-    /// inkwell wraps every call but the replacement itself.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the module carries no such flag.
-    ///
-    #[cfg(feature = "mlir")]
-    fn set_spill_area_module_flag(
-        context: &inkwell::context::Context,
-        module: &inkwell::module::Module,
-        size: u64,
-    ) -> anyhow::Result<()> {
-        use inkwell::values::AsValueRef;
-
-        let size = context.i64_type().const_int(size, false);
-        for flag in module.get_global_metadata("llvm.module.flags") {
-            let is_target = flag.get_node_values().get(1).is_some_and(|key| {
-                key.into_metadata_value()
-                    .get_string_value()
-                    .is_some_and(|key| key.to_bytes() == b"evm-stack-region-size")
-            });
-            if !is_target {
-                continue;
-            }
-            unsafe {
-                inkwell::llvm_sys::core::LLVMReplaceMDNodeOperandWith(
-                    flag.as_value_ref(),
-                    2,
-                    inkwell::llvm_sys::core::LLVMValueAsMetadata(size.as_value_ref()),
-                );
-            }
-            return Ok(());
-        }
-        anyhow::bail!("the module carries no evm-stack-region-size flag")
     }
 }
