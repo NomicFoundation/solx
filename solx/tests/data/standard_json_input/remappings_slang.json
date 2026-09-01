@@ -1,0 +1,23 @@
+{
+  "language": "Solidity",
+  "sources":
+  {
+    "project/contracts/Main.sol":
+    {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity >=0.8.0;\nimport \"@dep/Dep.sol\" as D;\ncontract Main { function main() public pure returns (uint256) { return D.add(40, 2); } }"
+    },
+    "npm/dep@1.0.0/Dep.sol":
+    {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity >=0.8.0;\nfunction add(uint256 a, uint256 b) pure returns (uint256) { return a + b; }"
+    }
+  },
+  "settings": {
+    "optimizer": { "mode": "3" },
+    "remappings": ["project/:@dep/=npm/dep@1.0.0/"],
+    "outputSelection": {
+      "*": {
+        "*": ["evm.bytecode.object"]
+      }
+    }
+  }
+}
