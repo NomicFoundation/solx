@@ -57,3 +57,42 @@ fn standard_json() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[cfg(feature = "slang")]
+#[test]
+fn resolves_direct_import() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/remapping/Main.sol"),
+        crate::common::contract!("solidity/remapping/Dep.sol"),
+        "virt/=tests/data/contracts/solidity/remapping/",
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("Binary:\n").count(1));
+
+    Ok(())
+}
+
+#[cfg(feature = "slang")]
+#[test]
+fn unresolved_import_without_remapping() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/remapping/Main.sol"),
+        crate::common::contract!("solidity/remapping/Dep.sol"),
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .failure()
+        .stderr(predicate::str::contains("virt/Dep.sol"));
+
+    Ok(())
+}

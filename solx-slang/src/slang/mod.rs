@@ -20,6 +20,7 @@ use solx_standard_json::output::error::source_location::SourceLocation;
 
 use crate::scope::source_unit::SourceUnitScope;
 
+use self::import_resolver::Remapping;
 use self::import_resolver::SourceImportResolver;
 
 /// The Slang frontend implementation.
@@ -44,7 +45,8 @@ impl Slang {
     pub const NAME: &'static str = "Slang";
 
     /// Builds a Slang compilation unit from the given source files, parsing every source and
-    /// resolving imports.
+    /// resolving imports. Import paths are resolved against the source map with the given
+    /// remappings applied, following solc's semantics.
     ///
     /// Every EVM built-in is admitted (`EvmTarget::LATEST`): Slang gates built-in availability on
     /// the target, whereas solx handles EVM-version targeting downstream.
@@ -52,7 +54,11 @@ impl Slang {
     /// # Errors
     ///
     /// Returns an error if Slang does not support the Solidity version.
-    fn compile(&self, sources: &BTreeMap<FileId, &str>) -> anyhow::Result<CompilationUnit> {
+    fn compile(
+        &self,
+        sources: &BTreeMap<FileId, &str>,
+        remappings: &[Remapping],
+    ) -> anyhow::Result<CompilationUnit> {
         let language_version: LanguageVersion =
             self.version.default.clone().try_into().map_err(|error| {
                 anyhow::anyhow!(
@@ -67,7 +73,10 @@ impl Slang {
             sources: sources
                 .iter()
                 .map(|(file_id, content)| (file_id.clone(), *content)),
-            resolver: SourceImportResolver { sources },
+            resolver: SourceImportResolver {
+                sources,
+                remappings,
+            },
         }))
     }
 }
@@ -103,6 +112,21 @@ impl Frontend for Slang {
             return Ok(output);
         }
 
+        let mut remappings = Vec::with_capacity(input_json.settings.remappings.len());
+        for remapping in input_json.settings.remappings.iter() {
+            match Remapping::parse(remapping.as_str()) {
+                Some(remapping) => remappings.push(remapping),
+                None => output
+                    .errors
+                    .push(solx_standard_json::OutputError::new_error(
+                        format!("Invalid remapping: \"{remapping}\"").as_str(),
+                    )),
+            }
+        }
+        if output.has_errors() {
+            return Ok(output);
+        }
+
         let mut sources = BTreeMap::new();
         for (path, source) in input_json.sources.iter() {
             let Some(source_code) = source.content() else {
@@ -124,7 +148,7 @@ impl Frontend for Slang {
             sources.insert(path.as_str().into(), source_code);
         }
 
-        let unit = self.compile(&sources)?;
+        let unit = self.compile(&sources, &remappings)?;
 
         output
             .errors
