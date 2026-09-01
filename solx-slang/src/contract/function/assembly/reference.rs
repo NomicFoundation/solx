@@ -19,6 +19,7 @@ use solx_mlir::YulReference;
 use solx_utils::DataLocation;
 
 use crate::scope::assembly::AssemblyScope;
+use crate::scope::source_unit::SourceUnitScope;
 
 impl<'function, 'contract, 'source_unit, 'context>
     AssemblyScope<'function, 'contract, 'source_unit, 'context>
@@ -77,14 +78,7 @@ impl<'function, 'contract, 'source_unit, 'context>
                 )
             }
             Some(Definition::StateVariable(state_variable)) => {
-                let symbol = self
-                    .function
-                    .contract
-                    .storage_layout
-                    .get(&state_variable.node_id())
-                    .expect("state variable is registered in the storage layout")
-                    .name
-                    .clone();
+                let symbol = SourceUnitScope::state_variable_symbol(&state_variable);
                 YulReference::Word(match suffix {
                     Some(YulField::Slot) => Word::state_var_slot(symbol.as_str(), self),
                     Some(YulField::Offset) => Word::state_var_offset(symbol.as_str(), self),
