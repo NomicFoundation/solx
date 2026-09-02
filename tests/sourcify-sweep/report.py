@@ -4,14 +4,18 @@
 Accepts one or more result files (shard outputs may simply be concatenated)
 and writes markdown: the outcome table, candidate wall-time percentiles, the
 outcome split per corpus trait, and the failure census — candidate-only
-failures ranked by normalised signature with example contract ids, so the
-ranked list doubles as the frontend's feature-gap backlog.
+failures ranked by signature with example contract ids, so the ranked list
+doubles as the frontend's feature-gap backlog.
+
+run.py records raw material (diagnostics, stderr tail); the bucketing lives
+here so it can be refined and re-rendered over old results.
 """
 
 import argparse
 import collections
 import json
 import pathlib
+import re
 import statistics
 import sys
 
@@ -24,6 +28,57 @@ OUTCOME_MEANING = {
     "both-fail": "candidate and baseline both fail: corpus artifact or documented solx limitation",
     "timeout": "candidate exceeded the per-contract timeout",
 }
+CRASH_LINE = re.compile(r"(Assertion `.*?' failed|LLVM ERROR: [^\n]+|fatal error: [^\n]+|Unexpected [^\n]+)")
+
+
+def normalise(text: str) -> str:
+    """Collapse a diagnostic into a bucket key: paths, hashes and numbers replaced."""
+    lines = [line.strip() for line in text.replace("\\n", "\n").splitlines() if line.strip()]
+    line = " ".join(lines[:2]) if lines else "<empty>"
+    line = re.sub(r"\$[0-9a-f]{64}\$", "$<hash>$", line)
+    line = re.sub(r"[^\s\"'`]+\.sol\b", "<file>", line)
+    line = re.sub(r"0x[0-9a-fA-F]+", "0x…", line)
+    line = re.sub(r"\b\d+\b", "N", line)
+    return line[:160]
+
+
+def import_bucket(message: str) -> str:
+    match = re.match(r"failed to resolve import (\S+) in (\S+)", message)
+    if not match:
+        return "import resolution: " + normalise(message)
+    import_path, importer = match.groups()
+    if "://" in importer or "://" in import_path:
+        return "import resolution: URL-style source path"
+    if import_path.startswith("."):
+        return "import resolution: relative import not found"
+    return "import resolution: non-relative import (remapping or exact source name)"
+
+
+def refine(leg: dict) -> tuple:
+    """(kind, signature) for one leg, sharper than what run.py recorded."""
+    kind = leg["kind"]
+    stderr = leg.get("stderr") or ""
+    if kind == "error":
+        messages = leg.get("messages") or []
+        imports = [m for m in messages if m.startswith("failed to resolve import")]
+        if imports:
+            return kind, import_bucket(imports[0])
+        first = messages[0] if messages else leg.get("signature", "")
+        if first.startswith("Sol pass pipeline failed"):
+            match = re.search(r"error: ([^\n]+)", stderr)
+            return kind, "MLIR verifier: " + normalise(match.group(1) if match else first)
+        if "worker exited without replying" in first:
+            match = CRASH_LINE.search(stderr)
+            return kind, "worker crash: " + normalise(match.group(1) if match else first)
+        return kind, normalise(first)
+    if kind == "panic":
+        match = re.search(r"panicked at ([^\n:]+):\d+:\d+", stderr)
+        where = "/".join(match.group(1).split("/")[-2:]) if match else "?"
+        return kind, f"{leg.get('signature', '')} @ {where}"
+    if kind == "abort":
+        match = CRASH_LINE.search(stderr)
+        return kind, normalise(match.group(1)) if match else leg.get("signature", "")
+    return kind, leg.get("signature", "")
 
 
 def load(paths):
@@ -46,16 +101,17 @@ def percentile(values, fraction):
     return values[min(len(values) - 1, int(len(values) * fraction))]
 
 
-def census(results, title, lines):
-    """Rank failures by (kind, signature); list counts and example ids."""
+def census(results, leg_name, title, lines):
+    """Rank failures of one leg by (kind, signature); list counts and example ids."""
     buckets = collections.defaultdict(list)
     for result in results:
-        leg = result["solx"]
-        buckets[(leg["kind"], leg.get("signature", ""))].append(result["id"])
+        buckets[refine(result[leg_name])].append(result["id"])
     if not buckets:
         return
     lines += [f"### {title} ({len(results)})", ""]
-    by_kind = collections.Counter(kind for kind, _ in buckets for _ in buckets[(kind, _)])
+    by_kind = collections.Counter()
+    for (kind, _), ids in buckets.items():
+        by_kind[kind] += len(ids)
     lines += ["kinds: " + ", ".join(f"`{kind}` {count}" for kind, count in by_kind.most_common()), ""]
     lines += ["| count | kind | signature | examples |", "|---|---|---|---|"]
     ranked = sorted(buckets.items(), key=lambda item: (-len(item[1]), item[0]))
@@ -120,8 +176,10 @@ def main() -> int:
         lines.append(f"| {label} | {len(subset)} | {cells} |")
     lines.append("")
 
-    census([r for r in results if r["outcome"] == "solx-fail"], "Candidate-only failures", lines)
-    census([r for r in results if r["outcome"] == "both-fail"], "Failures shared with the baseline", lines)
+    census([r for r in results if r["outcome"] == "solx-fail"], "solx", "Candidate-only failures", lines)
+    # For shared failures the baseline's diagnostic is the one that explains the contract.
+    both = [r for r in results if r["outcome"] == "both-fail" and "baseline" in r]
+    census(both, "baseline", "Failures shared with the baseline (baseline diagnostics)", lines)
     timeouts = [r for r in results if r["outcome"] == "timeout"]
     if timeouts:
         lines += [f"### Timeouts ({len(timeouts)})", "", ", ".join(f"`{r['id']}`" for r in sorted(timeouts, key=lambda r: r["id"])[:20]), ""]
