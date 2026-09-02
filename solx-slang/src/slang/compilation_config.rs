@@ -11,40 +11,7 @@ use slang_solidity_v2::compilation::FileId;
 use slang_solidity_v2::diagnostics::kinds::compilation::MissingFile;
 use slang_solidity_v2::diagnostics::kinds::compilation::UnresolvedImport;
 
-/// An import remapping in solc's `[context:]prefix=target` form.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Remapping {
-    /// Applies only within files whose identifier starts with this; empty matches every file.
-    pub context: String,
-    /// The import path prefix that `target` replaces.
-    pub prefix: String,
-    /// The replacement for `prefix`.
-    pub target: String,
-}
-
-impl Remapping {
-    ///
-    /// Parses solc's `[context:]prefix=target` form.
-    ///
-    /// Returns `None` for an invalid remapping: no `=`, or an empty prefix,
-    /// as in solc's `ImportRemapper::parseRemapping`.
-    ///
-    pub fn parse(remapping: &str) -> Option<Self> {
-        let (rest, target) = remapping.split_once('=')?;
-        let (context, prefix) = match rest.split_once(':') {
-            Some((context, prefix)) => (context, prefix),
-            None => ("", rest),
-        };
-        if prefix.is_empty() {
-            return None;
-        }
-        Some(Self {
-            context: context.to_owned(),
-            prefix: prefix.to_owned(),
-            target: target.to_owned(),
-        })
-    }
-}
+use solx_utils::Remapping;
 
 /// Provides file reading and import resolution for the Slang compilation builder.
 pub struct CompilationConfig {
@@ -65,7 +32,8 @@ impl CompilationConfig {
 
     ///
     /// Resolves a relative import against the importing file's directory,
-    /// normalizing `.` and `..` components.
+    /// normalizing `.` and `..` components. A `..` above the root is dropped,
+    /// as solc's `absolutePath` does.
     ///
     fn resolve_relative(source_file_id: &str, import_path: &str) -> String {
         let dir = Path::new(source_file_id)
@@ -76,9 +44,7 @@ impl CompilationConfig {
         for component in resolved.components() {
             match component {
                 Component::ParentDir => {
-                    if normalized.pop().is_none() {
-                        normalized.push(component);
-                    }
+                    normalized.pop();
                 }
                 Component::CurDir => {}
                 other => normalized.push(other),
@@ -93,6 +59,9 @@ impl CompilationConfig {
     /// `ImportRemapper::apply`: the longest matching context wins, then the
     /// longest matching prefix; on ties the later remapping wins. Without a
     /// match the path is returned unchanged.
+    ///
+    /// `settings.remappings` is a sorted set, so "later" means lexicographically
+    /// greater rather than later in the input, unlike solc.
     ///
     fn apply_remappings(&self, context: &str, path: &str) -> String {
         let mut longest_context = 0;
@@ -155,8 +124,8 @@ impl CompilationBuilderConfig for CompilationConfig {
             return Ok(key);
         }
 
-        // Sources can be registered under non-normalized identifiers such as
-        // `./main.sol`; fall back to the verbatim import string.
+        // CLI input paths become source identifiers verbatim, so `solx ./Main.sol`
+        // registers `./Main.sol`; fall back to the unresolved import string.
         let verbatim = FileId::from(import_path);
         if self.sources.contains_key(&verbatim) {
             return Ok(verbatim);
@@ -175,18 +144,19 @@ mod tests {
     use slang_solidity_v2::compilation::CompilationBuilderConfig;
     use slang_solidity_v2::compilation::FileId;
 
+    use solx_utils::Remapping;
+
     use super::CompilationConfig;
-    use super::Remapping;
 
     /// Builds a configuration with empty sources under the given identifiers.
     fn config(source_ids: &[&str], remappings: &[&str]) -> CompilationConfig {
         let sources: BTreeMap<FileId, String> = source_ids
             .iter()
-            .map(|id| (FileId::from(*id), String::new()))
+            .map(|source_id| (FileId::from(*source_id), String::new()))
             .collect();
         let remappings = remappings
             .iter()
-            .map(|remapping| Remapping::parse(remapping).expect("valid remapping"))
+            .map(|remapping| Remapping::try_from(*remapping).expect("valid remapping"))
             .collect();
         CompilationConfig::new(sources, remappings)
     }
@@ -197,47 +167,6 @@ mod tests {
             .resolve_import(&FileId::from(from), import)
             .ok()
             .map(|file_id| file_id.to_string())
-    }
-
-    #[test]
-    fn parse() {
-        assert_eq!(
-            Remapping::parse("@oz/=npm/oz@1.0.0/"),
-            Some(Remapping {
-                context: "".to_owned(),
-                prefix: "@oz/".to_owned(),
-                target: "npm/oz@1.0.0/".to_owned(),
-            })
-        );
-        assert_eq!(
-            Remapping::parse("project/:@dep/=npm/dep@1.2.3/"),
-            Some(Remapping {
-                context: "project/".to_owned(),
-                prefix: "@dep/".to_owned(),
-                target: "npm/dep@1.2.3/".to_owned(),
-            })
-        );
-        // The prefix may contain colons past the first separator.
-        assert_eq!(
-            Remapping::parse("a:b:c=d"),
-            Some(Remapping {
-                context: "a".to_owned(),
-                prefix: "b:c".to_owned(),
-                target: "d".to_owned(),
-            })
-        );
-        // An empty target erases the prefix.
-        assert_eq!(
-            Remapping::parse("lib/="),
-            Some(Remapping {
-                context: "".to_owned(),
-                prefix: "lib/".to_owned(),
-                target: "".to_owned(),
-            })
-        );
-        assert_eq!(Remapping::parse("no-equals-sign"), None);
-        assert_eq!(Remapping::parse("=target"), None);
-        assert_eq!(Remapping::parse(":=target"), None);
     }
 
     #[test]
@@ -314,8 +243,8 @@ mod tests {
 
     #[test]
     fn relative_import_remapped_after_resolution() {
-        // Verified against solc: `./A.sol` from `contracts/B.sol` resolves to
-        // `contracts/A.sol`, which the remapping then rewrites.
+        // `./A.sol` from `contracts/B.sol` resolves to `contracts/A.sol`, which the
+        // remapping then rewrites.
         let mut config = config(&["contracts/B.sol", "lib/A.sol"], &["contracts/=lib/"]);
         assert_eq!(
             resolve(&mut config, "contracts/B.sol", "./A.sol"),
@@ -334,6 +263,10 @@ mod tests {
             resolve(&mut config, "a/b.sol", "../x.sol"),
             Some("x.sol".to_owned())
         );
+        assert_eq!(
+            resolve(&mut config, "x.sol", "../x.sol"),
+            Some("x.sol".to_owned())
+        );
     }
 
     #[test]
@@ -343,6 +276,12 @@ mod tests {
             resolve(&mut config, "Factory.sol", "Storage.sol"),
             Some("Storage.sol".to_owned())
         );
+    }
+
+    #[test]
+    fn non_relative_import_does_not_resolve_against_importing_directory() {
+        let mut config = config(&["dir/B.sol", "dir/A.sol"], &[]);
+        assert_eq!(resolve(&mut config, "dir/B.sol", "A.sol"), None);
     }
 
     #[test]
