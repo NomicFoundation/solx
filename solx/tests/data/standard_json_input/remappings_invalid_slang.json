@@ -1,0 +1,19 @@
+{
+  "language": "Solidity",
+  "sources":
+  {
+    "Main.sol":
+    {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity >=0.8.0;\ncontract Main { function main() public pure returns (uint256) { return 42; } }"
+    }
+  },
+  "settings": {
+    "optimizer": { "mode": "3" },
+    "remappings": ["=missing-prefix/"],
+    "outputSelection": {
+      "*": {
+        "*": ["evm.bytecode.object"]
+      }
+    }
+  }
+}

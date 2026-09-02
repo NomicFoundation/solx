@@ -482,7 +482,7 @@ solx 'Simple.sol' 'Complex.sol' --bin
 solx 'Simple.sol' 'github.com/ethereum/dapp-bin/=/usr/local/lib/dapp-bin/' --bin
 ```
 
-**solx** does not handle remappings itself, but only passes them through to *solc*.
+With the *solc* frontend, **solx** only validates the remapping syntax and passes remappings through to *solc*. The Slang frontend applies them itself, following the same semantics.
 Visit [the **solc** documentation](https://docs.soliditylang.org/en/latest/using-the-compiler.html#base-path-and-import-remapping) to learn more about the processing of remappings.
 
 
