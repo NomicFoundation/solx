@@ -20,8 +20,6 @@ pub struct Settings {
     /// Fallback to optimizing for size if the bytecode is too large.
     pub is_fallback_to_size_enabled: bool,
 
-    /// Size of the spill area used for stack-too-deep mitigation.
-    pub spill_area_size: Option<u64>,
     /// Metadata size, used for LLVM for gas/size tradeoffs.
     pub metadata_size: Option<u64>,
 
@@ -81,7 +79,6 @@ impl Settings {
             level_back_end,
             is_fallback_to_size_enabled: false,
 
-            spill_area_size: None,
             metadata_size: None,
 
             is_verify_each_enabled,
@@ -220,30 +217,6 @@ impl Settings {
     ///
     pub fn is_fallback_to_size_active(&self) -> bool {
         self.is_fallback_to_size_enabled && self.level_middle_end_size == SizeLevel::Z
-    }
-
-    ///
-    /// Switches the optimization modes to the size fallback mode.
-    ///
-    pub fn switch_to_size_fallback(&mut self) {
-        self.level_middle_end = inkwell::OptimizationLevel::Default;
-        self.level_middle_end_size = SizeLevel::Z;
-        self.level_back_end = inkwell::OptimizationLevel::Aggressive;
-        self.enable_fallback_to_size();
-    }
-
-    ///
-    /// Sets the deploy code spill area size.
-    ///
-    pub fn set_spill_area_size(&mut self, size: u64) {
-        self.spill_area_size = Some(size);
-    }
-
-    ///
-    /// Returns the spill area size depending on the code segment.
-    ///
-    pub fn spill_area_size(&self) -> Option<u64> {
-        self.spill_area_size
     }
 
     ///
