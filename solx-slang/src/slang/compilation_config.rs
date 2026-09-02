@@ -3,8 +3,6 @@
 //!
 
 use std::collections::BTreeMap;
-use std::path::Component;
-use std::path::Path;
 
 use slang_solidity_v2::compilation::CompilationBuilderConfig;
 use slang_solidity_v2::compilation::FileId;
@@ -31,27 +29,47 @@ impl CompilationConfig {
     }
 
     ///
-    /// Resolves a relative import against the importing file's directory,
-    /// normalizing `.` and `..` components. A `..` above the root is dropped,
-    /// as solc's `absolutePath` does.
+    /// Resolves a relative import against the importing file as solc's
+    /// `util::absolutePath` does: the parent of the source identifier is taken
+    /// as a string and the import's components are appended to it. Rebuilding
+    /// from path components instead would collapse the `//` in URL identifiers
+    /// such as `https://github.com/...` and drop leading `..` segments, both of
+    /// which occur in verified contracts.
     ///
     fn resolve_relative(source_file_id: &str, import_path: &str) -> String {
-        let dir = Path::new(source_file_id)
-            .parent()
-            .unwrap_or_else(|| Path::new(""));
-        let resolved = dir.join(import_path);
-        let mut normalized = Vec::new();
-        for component in resolved.components() {
+        let mut resolved = Self::parent_path(source_file_id);
+        for component in import_path.split('/') {
             match component {
-                Component::ParentDir => {
-                    normalized.pop();
+                ".." => resolved = Self::parent_path(resolved.as_str()),
+                "." | "" => {}
+                component => {
+                    if !resolved.is_empty() && !resolved.ends_with('/') {
+                        resolved.push('/');
+                    }
+                    resolved.push_str(component);
                 }
-                Component::CurDir => {}
-                other => normalized.push(other),
             }
         }
-        let clean: std::path::PathBuf = normalized.into_iter().collect();
-        clean.to_string_lossy().replace('\\', "/")
+        resolved
+    }
+
+    ///
+    /// Drops the last component and the separators before it, as
+    /// `boost::filesystem::path::parent_path` does; a root `/` is kept and
+    /// the parent of a single component is empty.
+    ///
+    fn parent_path(path: &str) -> String {
+        match path.rfind('/') {
+            None => String::new(),
+            Some(index) => {
+                let parent = path[..index].trim_end_matches('/');
+                if parent.is_empty() {
+                    "/".to_owned()
+                } else {
+                    parent.to_owned()
+                }
+            }
+        }
     }
 
     ///
@@ -110,10 +128,7 @@ impl CompilationBuilderConfig for CompilationConfig {
         // solc semantics (`CompilerStack::resolveImports`): an import with a leading
         // `.` or `..` component resolves against the importing file first; any other
         // path is taken verbatim; remappings then rewrite the result.
-        let resolved = if matches!(
-            Path::new(import_path).components().next(),
-            Some(Component::CurDir | Component::ParentDir)
-        ) {
+        let resolved = if matches!(import_path.split('/').next(), Some("." | "..")) {
             Self::resolve_relative(source_file_id.as_str(), import_path)
         } else {
             import_path.to_owned()
@@ -122,13 +137,6 @@ impl CompilationBuilderConfig for CompilationConfig {
         let key = FileId::from(remapped.as_str());
         if self.sources.contains_key(&key) {
             return Ok(key);
-        }
-
-        // CLI input paths become source identifiers verbatim, so `solx ./Main.sol`
-        // registers `./Main.sol`; fall back to the unresolved import string.
-        let verbatim = FileId::from(import_path);
-        if self.sources.contains_key(&verbatim) {
-            return Ok(verbatim);
         }
 
         Err(UnresolvedImport {
@@ -279,18 +287,66 @@ mod tests {
     }
 
     #[test]
+    fn url_source_identifiers_keep_their_double_slash() {
+        // Sourcify stores Remix-style sources under their GitHub URLs.
+        let mut config = config(
+            &[
+                "https://github.com/oz/contracts/access/Ownable.sol",
+                "https://github.com/oz/contracts/utils/Context.sol",
+            ],
+            &[],
+        );
+        assert_eq!(
+            resolve(
+                &mut config,
+                "https://github.com/oz/contracts/access/Ownable.sol",
+                "../utils/Context.sol"
+            ),
+            Some("https://github.com/oz/contracts/utils/Context.sol".to_owned())
+        );
+    }
+
+    #[test]
+    fn source_identifiers_keep_leading_parent_dirs() {
+        // Foundry projects verified from a subdirectory key their libraries this way.
+        let mut config = config(
+            &[
+                "../../lib/oz/contracts/access/Ownable.sol",
+                "../../lib/oz/contracts/utils/Context.sol",
+            ],
+            &[],
+        );
+        assert_eq!(
+            resolve(
+                &mut config,
+                "../../lib/oz/contracts/access/Ownable.sol",
+                "../utils/Context.sol"
+            ),
+            Some("../../lib/oz/contracts/utils/Context.sol".to_owned())
+        );
+    }
+
+    #[test]
     fn non_relative_import_does_not_resolve_against_importing_directory() {
         let mut config = config(&["dir/B.sol", "dir/A.sol"], &[]);
         assert_eq!(resolve(&mut config, "dir/B.sol", "A.sol"), None);
     }
 
     #[test]
-    fn verbatim_fallback_for_non_normalized_keys() {
+    fn dot_prefixed_source_identifiers_resolve_directly() {
+        // CLI input paths become source identifiers verbatim, so `solx ./b.sol ./a.sol`
+        // registers `./b.sol` and `./a.sol`.
         let mut config = config(&["./b.sol", "./a.sol"], &[]);
         assert_eq!(
             resolve(&mut config, "./b.sol", "./a.sol"),
             Some("./a.sol".to_owned())
         );
+    }
+
+    #[test]
+    fn remapped_import_does_not_fall_back_to_its_original_path() {
+        let mut config = config(&["Main.sol", "lib/A.sol"], &["lib/=x/"]);
+        assert_eq!(resolve(&mut config, "Main.sol", "lib/A.sol"), None);
     }
 
     #[test]
