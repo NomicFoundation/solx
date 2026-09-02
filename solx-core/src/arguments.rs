@@ -257,9 +257,6 @@ impl Arguments {
     /// Expected argument count for `--version` (binary name + flag).
     const VERSION_MAX_ARGS: usize = 2;
 
-    /// Expected number of parts in a remapping (key=value).
-    const REMAPPING_PART_COUNT: usize = 2;
-
     ///
     /// Validates the arguments.
     ///
@@ -451,21 +448,17 @@ impl Arguments {
 
         for input in self.inputs.iter() {
             if input.contains('=') {
-                let mut parts = Vec::with_capacity(2);
-                for path in input.trim().split('=') {
-                    let path = PathBuf::from(path);
-                    parts.push(
-                        Self::path_to_posix(path.as_path())?
-                            .to_string_lossy()
-                            .to_string(),
-                    );
+                let mut remapping = solx_utils::Remapping::try_from(input.trim())?;
+                for part in [
+                    &mut remapping.context,
+                    &mut remapping.prefix,
+                    &mut remapping.target,
+                ] {
+                    *part = Self::path_to_posix(Path::new(part.as_str()))?
+                        .to_string_lossy()
+                        .to_string();
                 }
-                if parts.len() != Self::REMAPPING_PART_COUNT {
-                    anyhow::bail!(
-                        "Invalid remapping `{input}`: expected two parts separated by '='."
-                    );
-                }
-                remappings.insert(parts.join("="));
+                remappings.insert(remapping.to_string());
             } else {
                 let path = PathBuf::from(input.trim());
                 let path = Self::path_to_posix(path.as_path())?;

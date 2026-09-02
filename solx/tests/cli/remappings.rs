@@ -23,7 +23,7 @@ fn default() -> anyhow::Result<()> {
 }
 
 #[test]
-fn excess_equals_sign() -> anyhow::Result<()> {
+fn equals_sign_in_target() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
@@ -33,8 +33,26 @@ fn excess_equals_sign() -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("Binary:\n"));
+
+    Ok(())
+}
+
+#[test]
+fn missing_prefix() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT,
+        "=./path/to/2.sol",
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
     result.failure().stderr(predicate::str::contains(
-        "expected two parts separated by '='",
+        "Invalid remapping: \"=./path/to/2.sol\"",
     ));
 
     Ok(())
@@ -90,9 +108,9 @@ fn unresolved_import_without_remapping() -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    result
-        .failure()
-        .stderr(predicate::str::contains("virt/Dep.sol"));
+    result.failure().stderr(predicate::str::contains(
+        "failed to resolve import virt/Dep.sol",
+    ));
 
     Ok(())
 }
