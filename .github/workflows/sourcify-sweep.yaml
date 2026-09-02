@@ -1,0 +1,222 @@
+name: Sourcify Sweep
+
+# Compiles the pinned Sourcify corpus (every verified solc 0.8.34 contract with
+# evmVersion >= cancun, 112k contracts) through the Slang-frontend solx build
+# of the PR, re-runs each failure with the released solc-frontend solx as a
+# baseline, and reports the outcome table plus the ranked failure census.
+# Expensive (24 shards x ~1h), so it only runs when asked for: label the PR
+# `ci:sourcify-sweep` (re-label to re-run) or dispatch manually. Report-only:
+# frontend failures never fail the run, only harness breakage does.
+#
+# See tests/sourcify-sweep/README.md; the corpus release is pinned in
+# tests/sourcify-sweep/corpus-pin.txt.
+
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash -ex {0}
+
+env:
+  SHARD_COUNT: 24
+  # Released solc-frontend solx used as the baseline leg.
+  BASELINE_TAG: 0.1.8
+
+jobs:
+
+  label-check:
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event.label.name == 'ci:sourcify-sweep'
+        && !github.event.pull_request.head.repo.fork)
+    runs-on: ubuntu-24.04
+    steps:
+      - run: 'true'
+
+  cooldown-check:
+    name: Cargo cooldown check
+    runs-on: ubuntu-24.04
+    needs: label-check
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/cooldown-check
+
+  sweep:
+    name: Sweep shard ${{ matrix.shard }}
+    needs: [label-check, cooldown-check]
+    permissions:
+      contents: read
+      packages: read
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
+      # Same host bind-mounts as test.yaml's cargo-checks job so the
+      # free-disk-space-linux action can reclaim room for the LLVM tree.
+      volumes:
+        - /usr/share/dotnet:/mnt/free-disk-space/dotnet
+        - /usr/local/lib/android:/mnt/free-disk-space/android
+        - /opt/ghc:/mnt/free-disk-space/ghc
+        - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
+        - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
+    # Warm caches: ~15 min toolchain + solx build, ~45 min sweep. A cold LLVM
+    # build (solx-llvm bump on the PR) adds well over an hour.
+    timeout-minutes: 180
+    env:
+      CARGO_INCREMENTAL: "0"
+      SHARD: ${{ matrix.shard }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Must stay in sync with SHARD_COUNT above.
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: true
+          persist-credentials: false
+
+      - name: Free disk space (Linux)
+        uses: ./.github/actions/free-disk-space-linux
+
+      # Standard toolchain configuration (RelWithDebInfo + assertions + MLIR):
+      # the LLVM cache that cache-warmup.yaml keeps warm on hosted runners.
+      - name: Build toolchain
+        uses: ./.github/actions/build-toolchain
+        with:
+          solc: 'false'
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          prefix-key: sourcify-sweep-v1
+          cache-on-failure: true
+          # Every shard builds the same artifacts; one saver is enough.
+          save-if: ${{ matrix.shard == 0 }}
+
+      - name: Build solx (Slang frontend)
+        run: |
+          ${SFW_PREFIX:-} cargo fetch --locked
+          ${SFW_PREFIX:-} cargo build-slang --frozen --release
+          cp target/release/solx "${RUNNER_TEMP}/solx-slang"
+          "${RUNNER_TEMP}/solx-slang" --version
+
+      # The sweep needs only the binary; the LLVM tree and target dir go so
+      # the corpus slice and 4 concurrent compiler processes have room.
+      - name: Free disk space (remove build artifacts)
+        run: |
+          df -h .
+          rm -rf solx-llvm target-llvm target
+          df -h .
+
+      - name: Download baseline solx
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          ASSET="solx-linux-amd64-gnu-v${BASELINE_TAG}"
+          BASE="https://github.com/NomicFoundation/solx/releases/download/${BASELINE_TAG}"
+          curl -fsSL --retry 3 -o "${RUNNER_TEMP}/solx-baseline" "${BASE}/${ASSET}"
+          # The .sha256 asset embeds a CI-internal path; normalise the file name.
+          curl -fsSL --retry 3 "${BASE}/${ASSET}.sha256" | sed "s|[^ ]*${ASSET}|${RUNNER_TEMP}/solx-baseline|" | sha256sum -c -
+          chmod +x "${RUNNER_TEMP}/solx-baseline"
+          "${RUNNER_TEMP}/solx-baseline" --version
+
+      # Extract only this shard's round-robin slice of the sorted contract
+      # list (~200 MB of the 4.7 GB corpus); run.py then sweeps the slice whole.
+      - name: Download the pinned corpus slice
+        run: |
+          url=$(sed -n 's/^url=//p' tests/sourcify-sweep/corpus-pin.txt)
+          sha256=$(sed -n 's/^sha256=//p' tests/sourcify-sweep/corpus-pin.txt)
+          curl -fsSL --retry 3 -o "${RUNNER_TEMP}/corpus.tar.xz" "${url}"
+          echo "${sha256}  ${RUNNER_TEMP}/corpus.tar.xz" | sha256sum -c -
+          tar -tJf "${RUNNER_TEMP}/corpus.tar.xz" | grep '^\./contracts/.*\.json$' | LC_ALL=C sort \
+            | awk -v n="${SHARD_COUNT}" -v i="${SHARD}" '(NR - 1) % n == i' > "${RUNNER_TEMP}/slice.txt"
+          wc -l "${RUNNER_TEMP}/slice.txt"
+          mkdir "${RUNNER_TEMP}/corpus"
+          tar -xJf "${RUNNER_TEMP}/corpus.tar.xz" -C "${RUNNER_TEMP}/corpus" -T "${RUNNER_TEMP}/slice.txt"
+          rm "${RUNNER_TEMP}/corpus.tar.xz"
+          df -h "${RUNNER_TEMP}"
+
+      - name: Run the sweep shard
+        run: |
+          python3 tests/sourcify-sweep/run.py \
+            --bin "${RUNNER_TEMP}/solx-slang" \
+            --baseline "${RUNNER_TEMP}/solx-baseline" \
+            --corpus "${RUNNER_TEMP}/corpus" \
+            --out "${RUNNER_TEMP}/results-shard-${SHARD}.jsonl" \
+            --concurrency 4 \
+            --timeout 300 \
+            --memory-limit-mb 6144
+
+      - name: Upload shard results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sourcify-sweep-results-shard-${{ matrix.shard }}
+          path: ${{ runner.temp }}/results-shard-${{ matrix.shard }}.jsonl
+          if-no-files-found: error
+
+  summarize:
+    name: Summarize
+    needs: sweep
+    if: ${{ !cancelled() && needs.sweep.result != 'skipped' }}
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Download shard results
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: sourcify-sweep-results-shard-*
+          path: ${{ runner.temp }}/shards
+          merge-multiple: true
+
+      - name: Combine shards and report
+        run: |
+          shards=$(find "${RUNNER_TEMP}/shards" -name 'results-shard-*.jsonl' | wc -l)
+          if [ "${shards}" -ne "${SHARD_COUNT}" ]; then
+            echo "Expected ${SHARD_COUNT} shard result files, found ${shards}." >&2
+            exit 1
+          fi
+          cat "${RUNNER_TEMP}"/shards/results-shard-*.jsonl > "${RUNNER_TEMP}/results.jsonl"
+          python3 tests/sourcify-sweep/report.py \
+            --results "${RUNNER_TEMP}/results.jsonl" \
+            --out "${RUNNER_TEMP}/report.md" \
+            --title "Sourcify sweep (Slang frontend vs solx ${BASELINE_TAG})"
+          cat "${RUNNER_TEMP}/report.md" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Post report comment
+        if: github.event_name == 'pull_request'
+        uses: mshick/add-pr-comment@ec328af66588ab8f77cdeb2c264f14aba45bbf59 # v3.12
+        with:
+          message-id: 'sourcify-sweep-report'
+          message-path: ${{ runner.temp }}/report.md
+
+      - name: Upload combined results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sourcify-sweep-results
+          path: |
+            ${{ runner.temp }}/results.jsonl
+            ${{ runner.temp }}/report.md
