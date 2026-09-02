@@ -341,7 +341,6 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
             .to_owned();
 
         let is_size_fallback = context.optimizer().settings().is_fallback_to_size_enabled();
-        let spill_area_size = context.optimizer().settings().spill_area_size();
 
         let output_evmla = context
             .output_config()
@@ -361,7 +360,6 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
                     contract_path.as_str(),
                     evmla_string.as_str(),
                     is_size_fallback,
-                    spill_area_size,
                 )?,
                 None => context.set_captured_evmla(evmla_string),
             }
@@ -389,7 +387,6 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
                     contract_path.as_str(),
                     ethir_string.as_str(),
                     is_size_fallback,
-                    spill_area_size,
                 )?,
                 None => context.set_captured_ethir(ethir_string),
             }
