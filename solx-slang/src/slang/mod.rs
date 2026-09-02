@@ -17,10 +17,10 @@ use slang_solidity_v2::utils::LanguageVersion;
 use solx_core::Frontend;
 use solx_standard_json::CollectableError;
 use solx_standard_json::output::error::source_location::SourceLocation;
+use solx_utils::Remapping;
 
 use crate::scope::source_unit::SourceUnitScope;
 
-use self::import_resolver::Remapping;
 use self::import_resolver::SourceImportResolver;
 
 /// The Slang frontend implementation.
@@ -114,13 +114,11 @@ impl Frontend for Slang {
 
         let mut remappings = Vec::with_capacity(input_json.settings.remappings.len());
         for remapping in input_json.settings.remappings.iter() {
-            match Remapping::parse(remapping.as_str()) {
-                Some(remapping) => remappings.push(remapping),
-                None => output
+            match Remapping::try_from(remapping.as_str()) {
+                Ok(remapping) => remappings.push(remapping),
+                Err(error) => output
                     .errors
-                    .push(solx_standard_json::OutputError::new_error(
-                        format!("Invalid remapping: \"{remapping}\"").as_str(),
-                    )),
+                    .push(solx_standard_json::OutputError::new_error(error)),
             }
         }
         if output.has_errors() {
