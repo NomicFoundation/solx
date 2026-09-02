@@ -138,7 +138,12 @@ def compile_once(binary: str, stdjson: dict, target: str, timeout: float, memory
         for contract in contracts.values()
     )
     if not has_bytecode:
-        leg.update(kind="no-bytecode", signature="no errors reported but no bytecode for the target source", stderr=stderr)
+        # Which contracts did come out (with bytecode or not) says what was skipped.
+        emitted = {
+            path: sorted(name for name, contract in file.items() if ((contract.get("evm") or {}).get("bytecode") or {}).get("object"))
+            for path, file in (output.get("contracts") or {}).items()
+        }
+        leg.update(kind="no-bytecode", signature="no errors reported but no bytecode for the target source", stderr=stderr, emitted=emitted)
         return leg
     leg["kind"] = "ok"
     return leg
