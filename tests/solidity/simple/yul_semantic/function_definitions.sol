@@ -111,6 +111,50 @@
 //!     "expected": [
 //!         "0"
 //!     ]
+//! }, {
+//!     "name": "sibling_scopes",
+//!     "inputs": [
+//!         {
+//!             "method": "sibling_scopes",
+//!             "calldata": []
+//!         }
+//!     ],
+//!     "expected": [
+//!         "1", "2"
+//!     ]
+//! }, {
+//!     "name": "nested_definition",
+//!     "inputs": [
+//!         {
+//!             "method": "nested_definition",
+//!             "calldata": []
+//!         }
+//!     ],
+//!     "expected": [
+//!         "16"
+//!     ]
+//! }, {
+//!     "name": "forward_reference",
+//!     "inputs": [
+//!         {
+//!             "method": "forward_reference",
+//!             "calldata": []
+//!         }
+//!     ],
+//!     "expected": [
+//!         "107"
+//!     ]
+//! }, {
+//!     "name": "leave_in_for_step",
+//!     "inputs": [
+//!         {
+//!             "method": "leave_in_for_step",
+//!             "calldata": []
+//!         }
+//!     ],
+//!     "expected": [
+//!         "1"
+//!     ]
 //! } ] }
 
 // SPDX-License-Identifier: MIT
@@ -253,6 +297,49 @@ contract Test {
         assembly {
             function f() -> ret {}
             mstore(0, f())
+            return(0, 32)
+        }
+    }
+
+    function sibling_scopes() external pure {
+        assembly {
+            {
+                function f() -> ret { ret := 1 }
+                mstore(0, f())
+            }
+            {
+                function f() -> ret { ret := 2 }
+                mstore(32, f())
+            }
+            return(0, 64)
+        }
+    }
+
+    function nested_definition() external pure {
+        assembly {
+            function outer(x) -> ret {
+                function inner(y) -> z { z := mul(y, 3) }
+                ret := add(inner(x), 1)
+            }
+            mstore(0, outer(5))
+            return(0, 32)
+        }
+    }
+
+    function forward_reference() external pure {
+        assembly {
+            mstore(0, later(7))
+            function later(x) -> ret { ret := add(x, 100) }
+            return(0, 32)
+        }
+    }
+
+    function leave_in_for_step() external pure {
+        assembly {
+            function h(m) -> y {
+                for { let i := 0 } lt(i, m) { leave } { y := add(y, 1) }
+            }
+            mstore(0, h(5))
             return(0, 32)
         }
     }

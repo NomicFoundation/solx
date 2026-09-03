@@ -4,8 +4,10 @@
 //!
 
 use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::StateVariableMutability;
+use slang_solidity_v2::ast::Type;
 
 use solx_mlir::FunctionDispatch;
 use solx_mlir::FunctionKind;
@@ -25,38 +27,16 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// (`sol.func_constant`), defining the function in this module if absent; a library name is its
     /// linked address (`sol.lib_addr`); every other identifier loads from its place.
     pub fn identifier(&mut self, node: &Identifier) -> Value<'context> {
-        match node.resolve_to_definition() {
-            Some(Definition::Constant(constant)) => {
-                let declared_type = self
-                    .resolve_type(
-                        &constant.get_type().expect("binder types every constant"),
-                        None,
-                    )
-                    .folded_constant();
-                self.converted(
-                    &constant.value().expect("constant has an initializer"),
-                    declared_type,
-                )
-            }
-            Some(Definition::StateVariable(state_variable))
-                if let StateVariableMutability::Constant =
-                    state_variable.attributes().mutability() =>
-            {
-                let declared_type = self
-                    .resolve_type(
-                        &state_variable
-                            .get_type()
-                            .expect("binder types every state variable"),
-                        None,
-                    )
-                    .folded_constant();
-                self.converted(
-                    &state_variable
-                        .value()
-                        .expect("a constant state variable is initialized"),
-                    declared_type,
-                )
-            }
+        let definition = node.resolve_to_definition();
+        if let Some(definition) = &definition
+            && let Some((initializer, declared_type)) = Self::constant_definition(definition)
+        {
+            let declared_type = self
+                .resolve_type(&declared_type.expect("binder types every constant"), None)
+                .folded_constant();
+            return self.converted(&initializer, declared_type);
+        }
+        match definition {
             Some(Definition::StateVariable(state_variable))
                 if let StateVariableMutability::Immutable =
                     state_variable.attributes().mutability()
@@ -88,6 +68,29 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 let (place, element_type) = self.identifier_place(node);
                 place.load(element_type, self)
             }
+        }
+    }
+
+    /// The initializer and declared type of a compile-time constant - a file-level `constant` or a
+    /// `constant` state variable - absent for every other definition.
+    pub fn constant_definition(definition: &Definition) -> Option<(Expression, Option<Type>)> {
+        match definition {
+            Definition::Constant(constant) => Some((
+                constant.value().expect("a constant has an initializer"),
+                constant.get_type(),
+            )),
+            Definition::StateVariable(state_variable)
+                if let StateVariableMutability::Constant =
+                    state_variable.attributes().mutability() =>
+            {
+                Some((
+                    state_variable
+                        .value()
+                        .expect("a constant state variable is initialized"),
+                    state_variable.get_type(),
+                ))
+            }
+            _ => None,
         }
     }
 
