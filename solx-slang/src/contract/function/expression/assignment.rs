@@ -60,7 +60,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             _ => self.converted(&right, element_type),
         };
         let (place, r#type) = self.expression_place(&left);
-        let current = place.load(r#type, self);
+        // A `bytes` element loads as `!sol.byte` while the binder types it `bytes1`: operate at the
+        // binder's type and store back through the place's.
+        let current = place.load(r#type, self).bytes_cast(element_type, self);
         let assigned = match node.operator() {
             AssignmentExpressionOperator::PlusEqual(_) => current.add(rhs, self.checked, self),
             AssignmentExpressionOperator::MinusEqual(_) => {
@@ -81,7 +83,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 unreachable!("`=` is handled above and Solidity has no `>>>`")
             }
         };
-        place.store(assigned, self);
+        place.store(assigned.bytes_cast(r#type, self), self);
         Some(assigned)
     }
 }
