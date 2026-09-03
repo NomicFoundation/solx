@@ -16,7 +16,10 @@ contract Main {
     function deploy(uint256 len) external {
         bytes memory deploy_calldata = type(Deploy).creationCode;
         assembly {
-            let result := create(0, add(deploy_calldata, 32), add(132, len))
+            // EIP-3860 caps init code at 49152 bytes; the largest case asks for more.
+            let size := add(mload(deploy_calldata), len)
+            if gt(size, 49152) { size := 49152 }
+            let result := create(0, add(deploy_calldata, 32), size)
             if gt(result, 0) {
                 result := 1
             }
