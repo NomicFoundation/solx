@@ -1,13 +1,13 @@
 //!
 //! MLIR integration for solx via melior.
 //!
-//! Provides MLIR building primitives for the Sol dialect and LLVM translation, used by frontend
-//! crates to emit Sol dialect operations without the raw `melior` API.
+//! Provides MLIR building primitives for the Sol and Yul dialects and LLVM translation, used by
+//! frontend crates to emit dialect operations without the raw `melior` API.
 //!
 
 #![allow(clippy::too_many_arguments)]
-// `sol_ops!` expands through `macro_rules!` recursion, one frame per declaration; full Sol dialect
-// coverage exceeds the default limit of 128.
+// `dialect_ops!` expands through `macro_rules!` recursion, one frame per declaration; full Sol
+// dialect coverage exceeds the default limit of 128.
 #![recursion_limit = "256"]
 
 #[macro_use]
@@ -27,6 +27,7 @@ pub use self::context::environment::Environment;
 pub use self::context::function::Function;
 pub use self::context::function::dispatch::FunctionDispatch;
 pub use self::context::function::entry::FunctionEntry;
+pub use self::context::yul_function::YulFunction;
 pub use self::dialect::Dialect;
 pub use self::ir::attributes::CmpPredicate;
 pub use self::ir::attributes::ContractKind;
@@ -40,5 +41,9 @@ pub use self::ir::r#type::Type;
 pub use self::ir::r#type::array_size::ArraySize;
 pub use self::ir::r#type::function_type::FunctionType;
 pub use self::ir::value::Value;
+pub use self::ir::yul::block::YulBlock;
+pub use self::ir::yul::pointer::Pointer;
+pub use self::ir::yul::predicate::YulCmpPredicate;
+pub use self::ir::yul::word::Word;
 pub use self::macros::IntoOds;
 pub use self::output::MlirOutput;
