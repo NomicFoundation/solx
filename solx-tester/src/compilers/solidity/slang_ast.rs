@@ -7,11 +7,10 @@ use std::collections::BTreeMap;
 use slang_solidity_v2::ast::AbicoderVersion;
 use slang_solidity_v2::ast::Pragma;
 use slang_solidity_v2::ast::SourceUnitMember;
-use slang_solidity_v2::compilation::CompilationBuilder;
-use slang_solidity_v2::compilation::CompilationBuilderConfig;
 use slang_solidity_v2::compilation::CompilationUnit;
+use slang_solidity_v2::compilation::Configuration;
 use slang_solidity_v2::compilation::FileId;
-use slang_solidity_v2::diagnostics::kinds::compilation::MissingFile;
+use slang_solidity_v2::compilation::ImportResolver;
 use slang_solidity_v2::diagnostics::kinds::compilation::UnresolvedImport;
 use slang_solidity_v2::utils::EvmTarget;
 use slang_solidity_v2::utils::LanguageVersion;
@@ -42,23 +41,15 @@ impl SlangAst {
             .iter()
             .map(|(path, _source_code)| FileId::from(path.as_str()))
             .collect();
-        let mut builder = CompilationBuilder::create(
-            LanguageVersion::LATEST,
-            EvmTarget::LATEST,
-            TestSources(
-                sources
-                    .iter()
-                    .map(|(path, source_code)| (FileId::from(path.as_str()), source_code.clone()))
-                    .collect(),
-            ),
-        );
-        for file_id in files.iter() {
-            builder.add_file(file_id.clone());
-        }
-        Self {
-            unit: builder.build(),
-            files,
-        }
+        let unit = CompilationUnit::create(Configuration {
+            language_version: LanguageVersion::LATEST,
+            evm_target: EvmTarget::LATEST,
+            sources: sources
+                .iter()
+                .map(|(path, source_code)| (FileId::from(path.as_str()), source_code.as_str())),
+            resolver: VerbatimImportResolver,
+        });
+        Self { unit, files }
     }
 
     ///
@@ -121,32 +112,19 @@ impl SlangAst {
 }
 
 ///
-/// Serves source contents to the compilation builder.
+/// Resolves an import path to the test file of that exact name.
 ///
-/// Import resolution is an exact lookup among the test's own files: the tester's queries
-/// are syntactic, so an unresolved import costs nothing beyond an unused diagnostic.
+/// Slang reports an import of a file outside the test's own sources; the tester's queries
+/// are syntactic, so it costs nothing beyond an unused diagnostic.
 ///
-struct TestSources(BTreeMap<FileId, String>);
+struct VerbatimImportResolver;
 
-impl CompilationBuilderConfig for TestSources {
-    fn read_file(&mut self, file_id: &FileId) -> Result<String, MissingFile> {
-        self.0.get(file_id).cloned().ok_or_else(|| MissingFile {
-            reason: format!("file not found {file_id}"),
-        })
-    }
-
+impl ImportResolver for VerbatimImportResolver {
     fn resolve_import(
         &mut self,
-        source_file_id: &FileId,
+        _source_file_id: &FileId,
         import_path: &str,
     ) -> Result<FileId, UnresolvedImport> {
-        let candidate = FileId::from(import_path);
-        if self.0.contains_key(&candidate) {
-            Ok(candidate)
-        } else {
-            Err(UnresolvedImport {
-                reason: format!("failed to resolve import {import_path} in {source_file_id}"),
-            })
-        }
+        Ok(import_path.into())
     }
 }
