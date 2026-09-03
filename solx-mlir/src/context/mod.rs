@@ -5,6 +5,7 @@
 pub mod contract;
 pub mod environment;
 pub mod function;
+pub mod yul_function;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;

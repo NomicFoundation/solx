@@ -59,10 +59,7 @@ impl<'context> Contract<'context> {
             StateVarOperation
                 .sym_name(StringAttribute::new(context.melior, name))
                 .r#type(TypeAttribute::new(element_type.into_mlir()))
-                .slot(IntegerAttribute::from_words(
-                    IntegerType::new(context.melior, solx_utils::BIT_LENGTH_FIELD as u32).into(),
-                    slot.as_limbs(),
-                ))
+                .slot(Type::yul_word_attribute(&slot, context.melior))
                 .byte_offset(IntegerAttribute::new(
                     IntegerType::new(context.melior, solx_utils::BIT_LENGTH_X32 as u32).into(),
                     byte_offset.into(),
