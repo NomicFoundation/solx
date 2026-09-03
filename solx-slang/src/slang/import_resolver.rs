@@ -1,39 +1,22 @@
 //!
-//! Compilation builder configuration for the Slang frontend.
+//! Import resolution for the Slang frontend.
 //!
 
 use std::collections::BTreeMap;
 use std::path::Component;
 use std::path::Path;
 
-use slang_solidity_v2::compilation::CompilationBuilderConfig;
 use slang_solidity_v2::compilation::FileId;
-use slang_solidity_v2::diagnostics::kinds::compilation::MissingFile;
+use slang_solidity_v2::compilation::ImportResolver;
 use slang_solidity_v2::diagnostics::kinds::compilation::UnresolvedImport;
 
-/// Provides file reading and import resolution for the Slang compilation builder.
-pub struct CompilationConfig {
-    /// The file contents keyed by identifier, for reading and import resolution.
-    pub sources: BTreeMap<FileId, String>,
+/// Resolves import paths to the source files provided to the compilation.
+pub struct SourceImportResolver<'a> {
+    /// The source files keyed by identifier; an import resolves only to one of them.
+    pub sources: &'a BTreeMap<FileId, &'a str>,
 }
 
-impl CompilationConfig {
-    /// Creates a new configuration from a map of file identifiers to source contents.
-    pub fn new(sources: BTreeMap<FileId, String>) -> Self {
-        Self { sources }
-    }
-}
-
-impl CompilationBuilderConfig for CompilationConfig {
-    fn read_file(&mut self, file_id: &FileId) -> Result<String, MissingFile> {
-        self.sources
-            .get(file_id)
-            .cloned()
-            .ok_or_else(|| MissingFile {
-                reason: format!("file not found {file_id}"),
-            })
-    }
-
+impl ImportResolver for SourceImportResolver<'_> {
     fn resolve_import(
         &mut self,
         source_file_id: &FileId,

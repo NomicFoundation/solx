@@ -2,13 +2,13 @@
 //! Slang Solidity frontend implementation.
 //!
 
-mod compilation_config;
+mod import_resolver;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use slang_solidity_v2::compilation::CompilationBuilder;
 use slang_solidity_v2::compilation::CompilationUnit;
+use slang_solidity_v2::compilation::Configuration;
 use slang_solidity_v2::compilation::FileId;
 use slang_solidity_v2::diagnostics::DiagnosticExtensions;
 use slang_solidity_v2::utils::EvmTarget;
@@ -20,7 +20,7 @@ use solx_standard_json::output::error::source_location::SourceLocation;
 
 use crate::scope::source_unit::SourceUnitScope;
 
-use self::compilation_config::CompilationConfig;
+use self::import_resolver::SourceImportResolver;
 
 /// The Slang frontend implementation.
 #[derive(Debug)]
@@ -51,25 +51,24 @@ impl Slang {
     ///
     /// # Errors
     ///
-    /// Returns an error if the compilation builder fails to initialize or if import resolution
-    /// fails.
-    fn compile(&self, sources: BTreeMap<FileId, String>) -> anyhow::Result<CompilationUnit> {
-        let file_ids: Vec<FileId> = sources.keys().cloned().collect();
-        let configuration = CompilationConfig::new(sources);
-        let version: LanguageVersion =
+    /// Returns an error if Slang does not support the Solidity version.
+    fn compile(&self, sources: &BTreeMap<FileId, &str>) -> anyhow::Result<CompilationUnit> {
+        let language_version: LanguageVersion =
             self.version.default.clone().try_into().map_err(|error| {
                 anyhow::anyhow!(
                     "failed to convert Solidity version '{}' to a Slang language version: {error}",
                     self.version.default
                 )
             })?;
-        let mut builder = CompilationBuilder::create(version, EvmTarget::LATEST, configuration);
 
-        for file_id in file_ids {
-            builder.add_file(file_id);
-        }
-
-        Ok(builder.build())
+        Ok(CompilationUnit::create(Configuration {
+            language_version,
+            evm_target: EvmTarget::LATEST,
+            sources: sources
+                .iter()
+                .map(|(file_id, content)| (file_id.clone(), *content)),
+            resolver: SourceImportResolver { sources },
+        }))
     }
 }
 
@@ -122,10 +121,10 @@ impl Frontend for Slang {
                     ));
                 continue;
             };
-            sources.insert(path.as_str().into(), source_code.to_owned());
+            sources.insert(path.as_str().into(), source_code);
         }
 
-        let unit = self.compile(sources)?;
+        let unit = self.compile(&sources)?;
 
         output
             .errors
