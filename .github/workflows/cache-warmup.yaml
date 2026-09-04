@@ -7,12 +7,14 @@ name: Cache Warmup
 on:
   push:
     branches:
-      - main
+      - main-solc
     paths:
       - 'solx-llvm'
       - 'solx-solidity'
   schedule:
-    # Daily safety net at 04:00 UTC — rebuilds any evicted caches
+    # Daily safety net at 04:00 UTC — rebuilds any evicted caches. Dead on this
+    # branch: scheduled runs only ever execute the default branch's copy, so
+    # main-solc's caches are warmed by its own pushes alone.
     - cron: '0 4 * * *'
   workflow_dispatch:
 
@@ -21,7 +23,9 @@ permissions:
   packages: read
 
 concurrency:
-  group: cache-warmup
+  # Concurrency groups are repo-wide, so main's warm-up and this one would
+  # otherwise cancel each other; they build different submodule pins.
+  group: cache-warmup-main-solc
   cancel-in-progress: true
 
 jobs:

@@ -2,11 +2,11 @@ name: Code coverage
 
 on:
   pull_request:
-  # Main runs upload the Codecov base for PR deltas and save the cargo cache
-  # that PR runs restore (rust-cache save-if only fires on refs/heads/main).
+  # main-solc runs upload the Codecov base for PR deltas and save the cargo
+  # cache that PR runs restore (rust-cache save-if only fires on the trunk).
   push:
     branches:
-      - main
+      - main-solc
 
 concurrency:
   group: ${{ github.repository_id }}-${{ github.workflow }}-${{ github.ref }}
@@ -83,7 +83,7 @@ jobs:
         with:
           prefix-key: coverage-v1
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.ref == 'refs/heads/main-solc' }}
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm

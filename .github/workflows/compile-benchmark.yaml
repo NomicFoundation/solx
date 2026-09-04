@@ -69,14 +69,14 @@ jobs:
       # actions/checkout's `git clean -ffdx` doesn't recurse into submodules,
       # so on a persistent self-hosted workspace a previous run can leave
       # stale dirs inside temp-solx-main. Wipe wholesale before re-checking
-      # out main. (Same pattern as integration-tests.yaml.)
-      - name: Reset main checkout dir
+      # out main-solc. (Same pattern as integration-tests.yaml.)
+      - name: Reset main-solc checkout dir
         run: rm -rf temp-solx-main
 
-      - name: Checkout main
+      - name: Checkout main-solc
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          ref: main-solc
           submodules: true
           persist-credentials: false
           path: temp-solx-main
@@ -84,7 +84,7 @@ jobs:
       - name: Checkout submodules (PR)
         uses: ./.github/actions/checkout-submodules
 
-      - name: Checkout submodules (main)
+      - name: Checkout submodules (main-solc)
         uses: ./.github/actions/checkout-submodules
         with:
           working-directory: temp-solx-main
@@ -103,7 +103,7 @@ jobs:
           build-type: Release
           enable-assertions: 'false'
 
-      - name: Build LLVM (main)
+      - name: Build LLVM (main-solc)
         uses: ./.github/actions/build-llvm
         with:
           working-dir: temp-solx-main
@@ -118,7 +118,7 @@ jobs:
           cmake-build-type: Release
           working-dir: 'solx-solidity'
 
-      - name: Build solc (main)
+      - name: Build solc (main-solc)
         uses: ./.github/actions/build-solc
         with:
           cmake-build-type: 'Release'
@@ -138,7 +138,7 @@ jobs:
           ${SFW_PREFIX:-} cargo fetch --locked
           ${SFW_PREFIX:-} cargo build --frozen --release --bin solx --target x86_64-unknown-linux-gnu
 
-      - name: Build solx (main)
+      - name: Build solx (main-solc)
         working-directory: temp-solx-main
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
