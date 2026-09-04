@@ -66,7 +66,7 @@ unsafe extern "C" {
     /// Loads a dialect into the context by handle.
     pub fn mlirDialectHandleInsertDialect(handle: MlirDialectHandle, registry: MlirDialectRegistry);
 
-    // ---- Sol attribute constructors (from sol_attr_stubs.cpp) ----
+    // ---- Sol attribute constructors (from dialect_stubs.cpp) ----
 
     /// Creates a `ContractKindAttr` (0=Interface, 1=Contract, 2=Library).
     pub fn solxCreateContractKindAttr(context: MlirContext, kind: u32) -> mlir_sys::MlirAttribute;
@@ -94,7 +94,7 @@ unsafe extern "C" {
         magnitude: *const u64,
     ) -> mlir_sys::MlirAttribute;
 
-    // ---- Sol type constructors (from sol_attr_stubs.cpp) ----
+    // ---- Sol type constructors (from dialect_stubs.cpp) ----
 
     /// Creates a `sol::PointerType` with the given element type and data location.
     ///
@@ -165,6 +165,12 @@ unsafe extern "C" {
         signature: mlir_sys::MlirType,
         kind: u32,
     ) -> mlir_sys::MlirType;
+
+    // ---- Yul type constructors (from dialect_stubs.cpp) ----
+
+    /// Creates the `yul::PtrType` singleton (`!yul.ptr`), the address a Yul-local
+    /// variable is held at.
+    pub fn solxCreateYulPtrType(context: MlirContext) -> mlir_sys::MlirType;
 
     // ---- Sol type inference ----
 

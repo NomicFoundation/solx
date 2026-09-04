@@ -34,9 +34,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             Statement::RevertStatement(inner) => self.revert_statement(inner),
             Statement::EmitStatement(inner) => self.emit_statement(inner),
             Statement::TryStatement(inner) => self.try_statement(inner),
-            Statement::AssemblyStatement(_) => {
-                unimplemented!("assembly statements are not yet supported")
-            }
+            Statement::AssemblyStatement(inner) => self.assembly_statement(inner),
         }
     }
 }
