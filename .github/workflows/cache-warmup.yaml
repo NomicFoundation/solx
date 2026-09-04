@@ -1,18 +1,20 @@
 name: Cache Warmup
 
 # Proactively build and cache LLVM/solc artifacts so that downstream CI
-# workflows (test, sanitizer, coverage, integration-tests) hit warm caches
+# workflows (test, sanitizer, integration-tests) hit warm caches
 # on the first run after a submodule bump.
 
 on:
   push:
     branches:
-      - main
+      - main-solc
     paths:
       - 'solx-llvm'
       - 'solx-solidity'
   schedule:
-    # Daily safety net at 04:00 UTC — rebuilds any evicted caches
+    # Daily safety net at 04:00 UTC — rebuilds any evicted caches. Dead on this
+    # branch: scheduled runs only ever execute the default branch's copy, so
+    # main-solc's caches are warmed by its own pushes alone.
     - cron: '0 4 * * *'
   workflow_dispatch:
 
@@ -21,7 +23,9 @@ permissions:
   packages: read
 
 concurrency:
-  group: cache-warmup
+  # Concurrency groups are repo-wide, so main's warm-up and this one would
+  # otherwise cancel each other; they build different submodule pins.
+  group: cache-warmup-main-solc
   cancel-in-progress: true
 
 jobs:
@@ -185,51 +189,6 @@ jobs:
           path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
           restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-Address-end
-          fail-on-cache-miss: false
-          lookup-only: true
-
-  # ── LLVM: coverage config (coverage.yaml) ───────────────────────────
-  warm-llvm-coverage:
-    runs-on: ubuntu-24.04
-    container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
-      volumes: *free-disk-volumes
-    name: "LLVM · Coverage"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          submodules: true
-          persist-credentials: false
-
-      - name: Free disk space (Linux)
-        uses: ./.github/actions/free-disk-space-linux
-
-      - name: Checkout submodules
-        run: |
-          git config --global --add safe.directory '*'
-          git submodule update --force --depth=1 --recursive --checkout
-
-      - name: Setup SFW (optional)
-        uses: ./.github/actions/setup-sfw
-        with:
-          optional: 'true'
-
-      - name: Build LLVM
-        uses: ./.github/actions/build-llvm
-        with:
-          build-type: RelWithDebInfo
-          enable-assertions: 'false'
-          enable-coverage: 'true'
-          enable-mlir: 'true'
-
-      - name: Touch LLVM ccache
-        if: always()
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/ccache-llvm
-          key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-mlir-coverage-no-assertions-end
           fail-on-cache-miss: false
           lookup-only: true
 

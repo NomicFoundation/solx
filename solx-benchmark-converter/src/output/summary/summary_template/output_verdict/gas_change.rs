@@ -7,7 +7,7 @@
 ///
 #[derive(Debug, PartialEq)]
 pub struct GasChange {
-    /// Gated-gas measurements that differed between PR and `main`.
+    /// Gated-gas measurements that differed between PR and `main-solc`.
     pub diffs: u64,
     /// Gated-gas measurements compared in total.
     pub cells: u64,

@@ -7,7 +7,7 @@ on:
   merge_group:
   push:
     branches:
-      - main
+      - main-solc
 
 permissions:
   contents: read
@@ -133,7 +133,7 @@ jobs:
         with:
           prefix-key: cargo-checks-v1
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.ref == 'refs/heads/main-solc' }}
 
       - name: Cargo checks
         uses: ./.github/actions/cargo-check
@@ -235,13 +235,13 @@ jobs:
 
       # Positioned after build-toolchain: prepare-msys switches the rustup
       # host, which is part of the cache key, so only the post-msys position
-      # matches the keys already saved on main.
+      # matches the keys already saved on main-solc.
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           prefix-key: build-and-test-v2
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.ref == 'refs/heads/main-solc' }}
 
       - name: Free disk space (remove LLVM source and build artifacts)
         shell: bash

@@ -223,7 +223,7 @@ fn one_sided_size_never_flips_the_output_verdict() {
 
 #[test]
 fn bytecode_the_pr_stopped_emitting_is_not_excused_as_one_sided() {
-    // The mirror of the above: `main` built C2 and the PR emits nothing.
+    // The mirror of the above: `main-solc` built C2 and the PR emits nothing.
     // Losing 22 KB of compiler output is a regression, not a pair with no
     // baseline to compare against.
     let tests = vec![
@@ -295,7 +295,9 @@ fn main_orphan_runs_are_surfaced_and_not_counted_as_pre_existing() {
     )];
     let out = Summary::new(vec![SummarySuite::merged(SuiteKind::Foundry, tests)]).render();
     assert!(
-        out.contains("⚠️ **Missing on PR** — Foundry: 1 run (7 failures) exists only on `main`"),
+        out.contains(
+            "⚠️ **Missing on PR** — Foundry: 1 run (7 failures) exists only on `main-solc`"
+        ),
         "{out}"
     );
     assert!(out.contains("✅ 0 (2 pre-existing)"), "{out}");
@@ -547,7 +549,7 @@ fn fixture_output_changed() {
 
 /// Build and test regressions: the red verdict and the inline listing of
 /// regressed projects, including the shapes a build failure produces: no
-/// test count on the failed side, and a `main` build failure that leaves
+/// test count on the failed side, and a `main-solc` build failure that leaves
 /// its PR counterpart nothing to regress against.
 #[test]
 fn fixture_new_failures() {
@@ -596,7 +598,7 @@ fn fixture_new_failures() {
 
 /// Every harness-degradation signal at once: an errored suite, toolchain
 /// naming that matches nothing, a foreign run next to healthy PR data,
-/// and runs without a `main` baseline.
+/// and runs without a `main-solc` baseline.
 #[test]
 fn fixture_degraded_harness() {
     let foundry = SummarySuite::merged(

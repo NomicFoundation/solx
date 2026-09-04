@@ -80,8 +80,8 @@ impl CompileView {
 
         let conclusion_line = if !any_paired {
             Some(
-                "_No paired compile-time data — no pipeline was measured on both `main` and the \
-                 PR._"
+                "_No paired compile-time data — no pipeline was measured on both \
+                 `main-solc` and the PR._"
                     .to_owned(),
             )
         } else if outlier_entries.is_empty() && !any_suite_flag {

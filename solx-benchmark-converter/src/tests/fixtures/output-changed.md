@@ -1,4 +1,4 @@
-### 🧪 Integration tests — standard · PR vs `main`
+### 🧪 Integration tests — standard · PR vs `main-solc`
 
 ⚠️ **Output changed** — 8 of 9 size comparisons differ (+139 B total); 1 of 1 solx-tester gas comparison differs. If this PR is meant to be output-preserving, investigate before merging.
 ✅ **No new failures**.

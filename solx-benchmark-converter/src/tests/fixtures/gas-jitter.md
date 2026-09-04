@@ -1,4 +1,4 @@
-### 🧪 Integration tests — standard · PR vs `main`
+### 🧪 Integration tests — standard · PR vs `main-solc`
 
 ✅ **Output-preserving** — bytecode size identical (3 comparisons).
 ✅ **No new failures**.

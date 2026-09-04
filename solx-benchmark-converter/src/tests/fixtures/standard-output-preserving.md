@@ -1,7 +1,7 @@
-### 🧪 Integration tests — standard · PR vs `main`
+### 🧪 Integration tests — standard · PR vs `main-solc`
 
 ✅ **Output-preserving** — bytecode size identical (7 comparisons), solx-tester gas identical (3).
-✅ **No new failures** — Foundry's 3 / Hardhat's 2 failures already present on `main`.
+✅ **No new failures** — Foundry's 3 / Hardhat's 2 failures already present on `main-solc`.
 
 | Suite | New failures | Size Δ | Gas Δ | Report |
 |---|---|---|---|---|

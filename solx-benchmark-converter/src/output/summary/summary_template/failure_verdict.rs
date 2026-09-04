@@ -1,19 +1,19 @@
 //!
-//! Whether any suite failed more than its `main` baseline.
+//! Whether any suite failed more than its `main-solc` baseline.
 //!
 
 use crate::output::summary::suite_failures::SuiteFailures;
 use crate::output::summary::suite_stats::SuiteStats;
 
 ///
-/// Whether any suite failed more than its `main` baseline.
+/// Whether any suite failed more than its `main-solc` baseline.
 ///
 #[derive(Debug, PartialEq)]
 pub enum FailureVerdict {
-    /// No suite paired a PR run with a `main` counterpart, never a green
+    /// No suite paired a PR run with a `main-solc` counterpart, never a green
     /// checkmark over zero comparisons.
     NoData,
-    /// No suite regressed; failures already present on `main` are carried
+    /// No suite regressed; failures already present on `main-solc` are carried
     /// per suite label so the verdict can say so.
     Clean { pre_existing: Vec<(String, usize)> },
     /// At least one suite regressed.
@@ -61,14 +61,14 @@ impl FailureVerdict {
     pub fn line(self) -> String {
         match self {
             Self::NoData => {
-                "⚪ **No failure data** — no PR run had a `main` counterpart to compare against."
+                "⚪ **No failure data** — no PR run had a `main-solc` counterpart to compare against."
                     .to_owned()
             }
             Self::Clean { pre_existing } if pre_existing.is_empty() => {
                 "✅ **No new failures**.".to_owned()
             }
             Self::Clean { pre_existing } => format!(
-                "✅ **No new failures** — {} {} already present on `main`.",
+                "✅ **No new failures** — {} {} already present on `main-solc`.",
                 pre_existing
                     .iter()
                     .map(|(label, count)| format!(

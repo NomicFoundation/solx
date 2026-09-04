@@ -3,8 +3,8 @@
 //!
 //! The benchmark data identifies runs only by mode strings like
 //! `02.solx-main-legacy` or `01.solx-solx-E-M3B3-0.8.34`; everything the
-//! summary knows about which run is the PR, which is the `main` baseline, and
-//! how they pair up is derived here and nowhere else. Roles come from the
+//! summary knows about which run is the PR, which is the `main-solc`
+//! baseline, and how they pair up is derived here and nowhere else. Roles come from the
 //! declared per-matrix toolchain tables below, so a renamed toolchain matches
 //! nothing and renders as a loud harness error instead of a silently
 //! misclassified baseline.
@@ -23,9 +23,10 @@ use crate::role::Role;
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolchainMatrix {
-    /// solx-tester: a `main` baseline and the PR build.
+    /// solx-tester: a `main-solc` baseline and the PR build.
     Tester,
-    /// Foundry/Hardhat projects: solc, released solx, `main`, and the PR build.
+    /// Foundry/Hardhat projects: solc, released solx, `main-solc`, and the
+    /// PR build.
     Project,
 }
 
@@ -54,7 +55,7 @@ impl ToolchainMatrix {
     ///
     /// The PR-vs-baseline diff comparisons over a set of toolchain columns: the
     /// PR run of each pairing key paired with every baseline run sharing that
-    /// key. For the tester matrix that is the `main` baseline; the report
+    /// key. For the tester matrix that is the `main-solc` baseline; the report
     /// renders each pair as a `(PR - baseline) / baseline` column.
     ///
     pub fn comparisons(self, toolchains: &BTreeSet<String>) -> Vec<Comparison> {

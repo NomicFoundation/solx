@@ -3,7 +3,10 @@ name: Build CI runner image
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    # main-solc, not main: a push to main runs main's copy of this workflow.
+    # `latest` and the date tag stay gated on is_default_branch below, so runs
+    # from here publish only the commit-sha tag.
+    branches: [main-solc]
     paths:
       - ".github/docker/**"
   schedule:
