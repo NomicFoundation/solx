@@ -22,7 +22,7 @@ pub struct FailureRegression {
     pub mode: String,
     /// Whether the excess failures are build or test failures.
     pub kind: FailureKind,
-    /// The `main` counterpart's failure count.
+    /// The `main-solc` counterpart's failure count.
     pub main: usize,
     /// The PR run's failure count.
     pub pr: usize,

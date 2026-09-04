@@ -25,7 +25,7 @@ impl Worksheet {
     /// Width of columns that contain values.
     const VALUE_COLUMN_WIDTH: usize = 12;
 
-    /// Width of the PR-vs-`main` comparison columns.
+    /// Width of the PR-vs-`main-solc` comparison columns.
     const COMPARISON_COLUMN_WIDTH: usize = 10;
 
     ///

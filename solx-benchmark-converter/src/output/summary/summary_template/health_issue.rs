@@ -27,7 +27,7 @@ pub enum HealthIssue {
     /// Recognized runs whose mode carries no recognized pipeline token, such
     /// as a new codegen letter the tables don't know yet.
     UnrecognizedPipelines { label: String, modes: Vec<String> },
-    /// PR runs with no `main` counterpart; their failures are not compared.
+    /// PR runs with no `main-solc` counterpart; their failures are not compared.
     Unbaselined {
         label: String,
         runs: usize,

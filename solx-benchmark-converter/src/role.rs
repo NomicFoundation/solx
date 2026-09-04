@@ -9,7 +9,7 @@
 pub enum Role {
     /// The current commit under test.
     Pr,
-    /// The `main`-branch build the PR is compared against.
+    /// The `main-solc`-branch build the PR is compared against.
     Main,
     /// The latest released solx, a full-matrix baseline.
     Latest,

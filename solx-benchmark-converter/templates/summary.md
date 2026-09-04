@@ -1,4 +1,4 @@
-### 🧪 Integration tests — {% if full_matrix %}full matrix{% else %}standard{% endif %} · PR vs `main`
+### 🧪 Integration tests — {% if full_matrix %}full matrix{% else %}standard{% endif %} · PR vs `main-solc`
 
 {{ output_line }}
 {{ failures_line }}
@@ -11,7 +11,7 @@
 {% for row in suite_rows %}| {{ row.suite }} | {{ row.failures }} | {{ row.size }} | {{ row.gas }} | {{ row.report }} |
 {% endfor -%}
 {% if !new_failure_bullets.is_empty() %}
-**New failures (PR vs `main`):**
+**New failures (PR vs `main-solc`):**
 
 {% for bullet in new_failure_bullets %}- {{ bullet }}
 {% endfor -%}

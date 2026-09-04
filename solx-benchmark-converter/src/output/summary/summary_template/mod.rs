@@ -153,7 +153,7 @@ impl SummaryTemplate {
         let mut warn_lines = Vec::new();
         if !unbaselined.is_empty() {
             warn_lines.push(format!(
-                "⚠️ **No baseline** — {} {} no `main` counterpart; {} {} not compared.",
+                "⚠️ **No baseline** — {} {} no `main-solc` counterpart; {} {} not compared.",
                 unbaselined.join("; "),
                 crate::utils::agreeing(unbaselined_runs as u64, "has", "have"),
                 crate::utils::agreeing(unbaselined_runs as u64, "its", "their"),
@@ -162,7 +162,7 @@ impl SummaryTemplate {
         }
         if !main_only.is_empty() {
             warn_lines.push(format!(
-                "⚠️ **Missing on PR** — {} {} only on `main`; the comparison set shrank.",
+                "⚠️ **Missing on PR** — {} {} only on `main-solc`; the comparison set shrank.",
                 main_only.join("; "),
                 crate::utils::agreeing(main_only_runs as u64, "exists", "exist")
             ));

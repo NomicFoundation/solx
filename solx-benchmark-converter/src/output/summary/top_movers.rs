@@ -18,7 +18,7 @@ pub struct Movement {
     pub label: String,
     /// The humanized toolchain the movement was measured on.
     pub mode: String,
-    /// The `main` baseline value.
+    /// The `main-solc` baseline value.
     pub main: u64,
     /// The PR value.
     pub pr: u64,

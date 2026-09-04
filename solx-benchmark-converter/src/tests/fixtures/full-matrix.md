@@ -1,4 +1,4 @@
-### 🧪 Integration tests — full matrix · PR vs `main`
+### 🧪 Integration tests — full matrix · PR vs `main-solc`
 
 ✅ **Output-preserving** — bytecode size identical (3 comparisons), solx-tester gas identical (1).
 ✅ **No new failures**.

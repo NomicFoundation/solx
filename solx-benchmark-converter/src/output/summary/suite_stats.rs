@@ -1,7 +1,7 @@
 //!
 //! Everything the renderer needs about one suite, computed in a single pass.
 //!
-//! One pass over a suite's benchmark pairs every PR run with its `main`
+//! One pass over a suite's benchmark pairs every PR run with its `main-solc`
 //! counterpart and reduces the pairs to numbers. Nothing here produces
 //! markdown. How the numbers read is the rendering layer's decision.
 //!
@@ -49,7 +49,7 @@ pub struct SuiteStats {
     pub total_runs: usize,
     /// Runs classified as the PR toolchain.
     pub pr_runs_seen: usize,
-    /// PR runs that found a `main` counterpart. The failure verdict only
+    /// PR runs that found a `main-solc` counterpart. The failure verdict only
     /// means something when at least one suite compared something.
     pub paired_runs: usize,
     /// PR runs with no main counterpart, and the failures recorded on them.
@@ -71,14 +71,14 @@ pub struct SuiteStats {
     /// Their per-pipeline data is excluded and the drift surfaced loudly.
     pub unrecognized_pipelines: BTreeSet<String>,
 
-    /// Bytecode-size comparisons between the PR and `main`.
+    /// Bytecode-size comparisons between the PR and `main-solc`.
     pub size: DiffCounter,
-    /// Size pairs the PR emitted and `main` did not: no baseline exists, so
+    /// Size pairs the PR emitted and `main-solc` did not: no baseline exists, so
     /// they are excluded from the diff count and stated apart in the cell.
-    /// The mirror, `main` emitted bytecode the PR lost, is a regression and
+    /// The mirror, `main-solc` emitted bytecode the PR lost, is a regression and
     /// counts as a differing pair rather than landing here.
     pub size_one_sided: u64,
-    /// Gas comparisons between the PR and `main`.
+    /// Gas comparisons between the PR and `main-solc`.
     pub gas: DiffCounter,
     /// Relative gas differences seen on a non-gating suite, in percent. The
     /// median is reported. A max would routinely be a huge but meaningless
@@ -123,7 +123,7 @@ impl SuiteStats {
     const JITTER_MEDIAN_FLOOR_PERCENT: f64 = 0.05;
 
     /// Reduces one suite's benchmark to the numbers the renderer needs, pairing
-    /// each PR run with its `main` counterpart in a single pass.
+    /// each PR run with its `main-solc` counterpart in a single pass.
     pub fn from_suite(suite: &SummarySuite) -> Self {
         let mut stats = Self {
             label: suite.kind.label().to_owned(),
@@ -316,12 +316,12 @@ impl SuiteStats {
         stats
     }
 
-    /// PR failures in excess of `main`, build and test together.
+    /// PR failures in excess of `main-solc`, build and test together.
     pub fn new_failures(&self) -> usize {
         self.new_build_failures + self.new_test_failures
     }
 
-    /// Failures already present on the paired `main` runs, build and test
+    /// Failures already present on the paired `main-solc` runs, build and test
     /// together.
     pub fn baseline_failures(&self) -> usize {
         self.baseline_build_failures + self.baseline_test_failures
@@ -381,7 +381,7 @@ impl SuiteStats {
         }
     }
 
-    /// The failures column: the new-vs-`main` verdict, with pre-existing and
+    /// The failures column: the new-vs-`main-solc` verdict, with pre-existing and
     /// unbaselined counts folded in.
     fn failures_cell(&self) -> String {
         let unbaselined = match self.unbaselined_failures {

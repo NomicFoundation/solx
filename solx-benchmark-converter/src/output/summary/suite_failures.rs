@@ -9,9 +9,9 @@
 pub struct SuiteFailures {
     /// The suite label.
     pub label: String,
-    /// New build failures in excess of `main`.
+    /// New build failures in excess of `main-solc`.
     pub new_build: usize,
-    /// New test failures in excess of `main`.
+    /// New test failures in excess of `main-solc`.
     pub new_test: usize,
 }
 

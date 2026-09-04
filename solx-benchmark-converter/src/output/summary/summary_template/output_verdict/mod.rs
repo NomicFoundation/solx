@@ -20,7 +20,7 @@ use self::size_change::SizeChange;
 ///
 #[derive(Debug, PartialEq)]
 pub enum OutputVerdict {
-    /// No size or gated-gas comparison paired a PR value with a `main` one,
+    /// No size or gated-gas comparison paired a PR value with a `main-solc` one,
     /// whether nothing was collected or everything collected was one-sided:
     /// never a green checkmark over data that was never compared.
     NoData,
@@ -85,7 +85,7 @@ impl OutputVerdict {
     pub fn line(self) -> String {
         match self {
             Self::NoData => {
-                "⚪ **No output data** — no size or gated-gas comparison had a `main` counterpart \
+                "⚪ **No output data** — no size or gated-gas comparison had a `main-solc` counterpart \
                  to compare against."
                     .to_owned()
             }
