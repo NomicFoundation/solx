@@ -129,12 +129,11 @@ impl OutputConfig {
         contract_path: &str,
         code: &str,
         is_size_fallback: bool,
-        spill_area_size: Option<u64>,
     ) -> anyhow::Result<()> {
         if !self.output_evmla {
             return Ok(());
         }
-        let suffix = Self::build_suffix(is_size_fallback, spill_area_size);
+        let suffix = Self::build_suffix(is_size_fallback);
         let mut file_path = self.output_directory.to_owned();
         let full_file_name = Self::full_file_name(contract_path, suffix.as_deref(), IRType::EVMLA);
         file_path.push(full_file_name);
@@ -151,12 +150,11 @@ impl OutputConfig {
         contract_path: &str,
         code: &str,
         is_size_fallback: bool,
-        spill_area_size: Option<u64>,
     ) -> anyhow::Result<()> {
         if !self.output_ethir {
             return Ok(());
         }
-        let suffix = Self::build_suffix(is_size_fallback, spill_area_size);
+        let suffix = Self::build_suffix(is_size_fallback);
         let mut file_path = self.output_directory.to_owned();
         let full_file_name = Self::full_file_name(contract_path, suffix.as_deref(), IRType::EthIR);
         file_path.push(full_file_name);
@@ -166,24 +164,68 @@ impl OutputConfig {
     }
 
     ///
-    /// Builds a suffix string from size fallback and spill area parameters.
+    /// Builds a suffix string from the size fallback parameter.
     ///
-    fn build_suffix(is_size_fallback: bool, spill_area_size: Option<u64>) -> Option<String> {
-        let mut suffix = String::new();
-        if is_size_fallback {
-            suffix.push_str("size_fallback");
-        }
-        if let Some(size) = spill_area_size {
-            if !suffix.is_empty() {
-                suffix.push('.');
+    fn build_suffix(is_size_fallback: bool) -> Option<String> {
+        is_size_fallback.then(|| "size_fallback".to_owned())
+    }
+
+    ///
+    /// Renames the LLVM IR and assembly files dumped for `contract_path`, appending
+    /// an `o<offset>.s<size>` suffix denoting the spill area, so translation units
+    /// where the LLVM backend generated stack spills are easy to identify.
+    ///
+    /// The spill area is only known after code emission, whereas the files are
+    /// dumped earlier in the pipeline, hence the renaming.
+    ///
+    pub fn mark_spills(
+        &self,
+        contract_path: &str,
+        is_size_fallback: bool,
+        spill_area_offset: u64,
+        spill_area_size: u64,
+    ) -> anyhow::Result<()> {
+        let targets: [(bool, Option<&str>, IRType); 3] = [
+            (self.output_llvm_ir, Some("unoptimized"), IRType::LLVM),
+            (self.output_llvm_ir, Some("optimized"), IRType::LLVM),
+            (self.output_assembly, None, IRType::EVMAssembly),
+        ];
+        for (is_enabled, base, ir_type) in targets {
+            if !is_enabled {
+                continue;
             }
-            suffix.push_str(format!("s{size}").as_str());
+
+            let mut old_suffix = base.map(str::to_owned);
+            if let Some(extra) = Self::build_suffix(is_size_fallback) {
+                old_suffix = Some(match old_suffix {
+                    Some(mut suffix) => {
+                        suffix.push('.');
+                        suffix.push_str(extra.as_str());
+                        suffix
+                    }
+                    None => extra,
+                });
+            }
+            let new_suffix = match old_suffix.as_deref() {
+                Some(suffix) => format!("{suffix}.o{spill_area_offset}.s{spill_area_size}"),
+                None => format!("o{spill_area_offset}.s{spill_area_size}"),
+            };
+
+            let old_path = self.output_directory.join(Self::full_file_name(
+                contract_path,
+                old_suffix.as_deref(),
+                ir_type,
+            ));
+            let new_path = self.output_directory.join(Self::full_file_name(
+                contract_path,
+                Some(new_suffix.as_str()),
+                ir_type,
+            ));
+            if old_path.exists() {
+                std::fs::rename(old_path.as_path(), new_path.as_path())?;
+            }
         }
-        if suffix.is_empty() {
-            None
-        } else {
-            Some(suffix)
-        }
+        Ok(())
     }
 
     ///
@@ -194,7 +236,6 @@ impl OutputConfig {
         contract_path: &str,
         module: &inkwell::module::Module,
         is_size_fallback: bool,
-        spill_area_size: Option<u64>,
     ) -> anyhow::Result<()> {
         if !self.output_llvm_ir {
             return Ok(());
@@ -202,7 +243,7 @@ impl OutputConfig {
         let llvm_code = module.print_to_string().to_string();
 
         let mut suffix = "unoptimized".to_owned();
-        if let Some(extra) = Self::build_suffix(is_size_fallback, spill_area_size) {
+        if let Some(extra) = Self::build_suffix(is_size_fallback) {
             suffix.push('.');
             suffix.push_str(extra.as_str());
         }
@@ -224,7 +265,6 @@ impl OutputConfig {
         contract_path: &str,
         module: &inkwell::module::Module,
         is_size_fallback: bool,
-        spill_area_size: Option<u64>,
     ) -> anyhow::Result<()> {
         if !self.output_llvm_ir {
             return Ok(());
@@ -232,7 +272,7 @@ impl OutputConfig {
         let llvm_code = module.print_to_string().to_string();
 
         let mut suffix = "optimized".to_owned();
-        if let Some(extra) = Self::build_suffix(is_size_fallback, spill_area_size) {
+        if let Some(extra) = Self::build_suffix(is_size_fallback) {
             suffix.push('.');
             suffix.push_str(extra.as_str());
         }
@@ -254,12 +294,11 @@ impl OutputConfig {
         contract_path: &str,
         code: &str,
         is_size_fallback: bool,
-        spill_area_size: Option<u64>,
     ) -> anyhow::Result<()> {
         if !self.output_assembly {
             return Ok(());
         }
-        let suffix = Self::build_suffix(is_size_fallback, spill_area_size);
+        let suffix = Self::build_suffix(is_size_fallback);
 
         let mut file_path = self.output_directory.to_owned();
         let full_file_name =
