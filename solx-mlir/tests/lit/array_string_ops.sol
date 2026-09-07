@@ -43,6 +43,14 @@
 // CHECK: sol.func {{.*}}pushByteEmpty
 // CHECK:   sol.push %{{.*}} : !sol.string<Storage> -> !sol.ptr<!sol.byte, Storage>
 
+// CHECK: sol.func {{.*}}pushByteStrLit
+// CHECK:   %[[PSL:.*]] = sol.push %{{.*}} : !sol.string<Storage> -> !sol.ptr<!sol.byte, Storage>
+// CHECK:   sol.store %{{.*}}, %[[PSL]] : !sol.byte, !sol.ptr<!sol.byte, Storage>
+
+// CHECK: sol.func {{.*}}pushByteHexLit
+// CHECK:   %[[PHL:.*]] = sol.push %{{.*}} : !sol.string<Storage> -> !sol.ptr<!sol.byte, Storage>
+// CHECK:   sol.store %{{.*}}, %[[PHL]] : !sol.byte, !sol.ptr<!sol.byte, Storage>
+
 // CHECK: sol.func {{.*}}popLast
 // CHECK:   sol.pop %{{.*}} : !sol.array<? x ui256, Storage>
 
@@ -104,6 +112,14 @@ contract C {
 
     function pushByteEmpty() public {
         data.push();
+    }
+
+    function pushByteStrLit() public {
+        data.push() = "G";
+    }
+
+    function pushByteHexLit() public {
+        data.push() = hex"48";
     }
 
     function popLast() public {

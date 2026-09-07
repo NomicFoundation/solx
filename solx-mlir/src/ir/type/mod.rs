@@ -116,6 +116,20 @@ impl<'context> Type<'context> {
         })
     }
 
+    /// The type a constant of this declared type folds at. A `string`/`bytes` constant folds in
+    /// memory. A value type folds as itself.
+    pub fn folded_constant(self) -> Self {
+        if self.is_string() {
+            return Self::new(unsafe {
+                MlirType::from_raw(ffi::solxCreateStringType(
+                    mlir_sys::mlirTypeGetContext(self.inner.to_raw()),
+                    solx_utils::DataLocation::Memory as u32,
+                ))
+            });
+        }
+        self
+    }
+
     /// The `sol::ByteType` singleton (`!sol.byte`), the element a dynamic `bytes` push yields,
     /// distinct from the one-byte `bytes1`.
     pub fn byte(context: &'context melior::Context) -> Self {
