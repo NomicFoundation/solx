@@ -68,8 +68,9 @@ dialect_ops! {
     Word::byte(index: word, value: word) -> word {
         ByteOperation.idx(index).val(value).out(yul_word())
     }
+    // YulOps.td names the byte index `val` and the value `off`.
     Word::signextend(index: word, value: word) -> word {
-        SignExtendOperation.idx(index).val(value).out(yul_word())
+        SignExtendOperation.val(index).off(value).out(yul_word())
     }
 
     Word::mload(offset: word) -> word { MLoadOperation.addr(offset).out(yul_word()) }

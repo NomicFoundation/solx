@@ -15,9 +15,9 @@ use crate::scope::function::FunctionScope;
 use crate::scope::source_unit::SourceUnitScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// Emits every state variable's inline initializer (`T x = <expr>;`) in source order as the
-    /// constructor prologue, storing each into its place. Reference-typed slots take a
-    /// `sol.copy`; value-typed places convert to the declared element type and `sol.store`.
+    /// Emits every state variable's inline initializer (`T x = <expr>;`) in storage order over the
+    /// hierarchy as the constructor prologue, storing each into its place. Reference-typed slots
+    /// take a `sol.copy`; value-typed places convert to the declared element type and `sol.store`.
     pub fn state_variable_initializers(&mut self) {
         let initializers: Vec<(StateVariableDefinition, Expression)> = self
             .contract

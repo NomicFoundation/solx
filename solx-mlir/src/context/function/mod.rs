@@ -3,7 +3,6 @@
 //!
 
 pub mod dispatch;
-pub mod entry;
 
 use melior::ir::Block as MlirBlock;
 use melior::ir::Region;
@@ -17,7 +16,6 @@ use melior::ir::r#type::IntegerType;
 use crate::Block;
 use crate::Context;
 use crate::FunctionDispatch;
-use crate::FunctionEntry;
 use crate::FunctionKind;
 use crate::FunctionType;
 use crate::StateMutability;
@@ -53,9 +51,9 @@ impl<'context> Function<'context> {
         Self::new(Self::CONSTRUCTOR_NAME.to_owned(), FunctionType::default())
     }
 
-    /// Emits this function's `sol.func` definition with an entry block whose arguments carry the
-    /// parameter types, returned for the body together with the declared dispatch. An original
-    /// function type is attached for selector-dispatched and constructor functions.
+    /// Emits this function's `sol.func` definition and returns its entry block, whose arguments
+    /// carry the parameter types. An original function type is attached for selector-dispatched
+    /// and constructor functions.
     pub fn define(
         &self,
         selector: Option<u32>,
@@ -63,7 +61,7 @@ impl<'context> Function<'context> {
         state_mutability: StateMutability,
         context: &Context<'context>,
         contract_body: Block<'context>,
-    ) -> FunctionEntry<'context> {
+    ) -> Block<'context> {
         let parameters = self
             .function_type
             .parameters
@@ -89,13 +87,13 @@ impl<'context> Function<'context> {
             FunctionDispatch::Identifier(identifier) => {
                 operation_builder.id(IntegerAttribute::new(
                     IntegerType::new(context.melior, solx_utils::BIT_LENGTH_X64 as u32).into(),
-                    usize::from(identifier) as i64,
+                    identifier as i64,
                 ))
             }
             FunctionDispatch::Kind(function_kind) => {
                 operation_builder.kind(function_kind.attribute(context.melior))
             }
-            FunctionDispatch::Getter => operation_builder,
+            FunctionDispatch::Symbol => operation_builder,
         };
         if let Some(selector_value) = selector {
             operation_builder = operation_builder
@@ -108,15 +106,12 @@ impl<'context> Function<'context> {
                 operation_builder.orig_fn_type(TypeAttribute::new(function_type.into()));
         }
         let operation = contract_body.append_operation(operation_builder.build().into());
-        FunctionEntry::new(
-            Block::from(
-                operation
-                    .region(0)
-                    .expect("func has one region")
-                    .first_block()
-                    .expect("func body has entry block"),
-            ),
-            dispatch,
+        Block::from(
+            operation
+                .region(0)
+                .expect("func has one region")
+                .first_block()
+                .expect("func body has entry block"),
         )
     }
 

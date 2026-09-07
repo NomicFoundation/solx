@@ -4,6 +4,7 @@
 
 use num_traits::sign::Signed;
 use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionType as SlangFunctionType;
 use slang_solidity_v2::ast::LiteralKind;
 use slang_solidity_v2::ast::Type;
@@ -177,6 +178,14 @@ impl<'context> SourceUnitScope<'context> {
                 other => vec![self.resolve(&other, None)],
             },
         }
+    }
+
+    /// The MLIR signature type `function` declares: its parameters and results.
+    pub fn signature_type(&self, function: &FunctionDefinition) -> FunctionType<'context> {
+        let Some(Type::Function(function_type)) = function.get_type() else {
+            unreachable!("slang types every function definition");
+        };
+        self.function_type(&function_type)
     }
 
     /// Resolves the binder's typing of a node to its Sol dialect MLIR type.

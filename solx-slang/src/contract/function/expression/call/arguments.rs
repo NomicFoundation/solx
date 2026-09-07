@@ -8,7 +8,6 @@ use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NamedArguments;
 use slang_solidity_v2::ast::NodeId;
-use slang_solidity_v2::ast::Parameter;
 use slang_solidity_v2::ast::Parameters;
 
 use solx_mlir::Type as MlirType;
@@ -17,13 +16,12 @@ use solx_mlir::Value;
 use crate::scope::function::FunctionScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// Emits each argument in the definition's parameter order, converted to and paired with its
-    /// parameter.
+    /// Emits each argument in the definition's parameter order, converted to its parameter's type.
     pub fn arguments_declaration(
         &mut self,
         arguments: &ArgumentsDeclaration,
         parameters: &Parameters,
-    ) -> Vec<(Parameter, Value<'context>)> {
+    ) -> Vec<Value<'context>> {
         let ordered: Vec<Expression> = match arguments {
             ArgumentsDeclaration::PositionalArguments(positional) => positional.iter().collect(),
             ArgumentsDeclaration::NamedArguments(named) => Self::named_arguments(
@@ -36,8 +34,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             .zip(ordered)
             .map(|(parameter, argument)| {
                 let parameter_type = self.typing(parameter.get_type());
-                let value = self.converted(&argument, parameter_type);
-                (parameter, value)
+                self.converted(&argument, parameter_type)
             })
             .collect()
     }

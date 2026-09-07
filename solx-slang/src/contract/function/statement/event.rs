@@ -14,10 +14,11 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         let Some(Definition::Event(event)) = node.event().resolve_to_definition() else {
             unreachable!("emit target resolves to an event definition");
         };
+        let parameters = event.parameters();
+        let values = self.arguments_declaration(&node.arguments(), &parameters);
         let mut indexed = Vec::new();
         let mut non_indexed = Vec::new();
-        for (parameter, value) in self.arguments_declaration(&node.arguments(), &event.parameters())
-        {
+        for (parameter, value) in parameters.iter().zip(values) {
             (if parameter.is_indexed() {
                 &mut indexed
             } else {

@@ -18,12 +18,15 @@ use solx_utils::FunctionReferenceKind;
 
 use crate::contract::function::expression::call::external_callee::ExternalCallee;
 use crate::contract::object::Object;
+use crate::scope::contract::Lookup;
 use crate::scope::function::FunctionScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// A struct field loads from its place; an enum member is its ordinal; an externally visible
-    /// function reached through a contract instance or `this` is the pointer dispatching it; every
-    /// other member access is an environment or EVM intrinsic.
+    /// A struct field loads from its place; an enum member is its ordinal; a `super` member is the
+    /// internal pointer of the override the object runs after the enclosing contract; an
+    /// externally visible function reached through a contract instance or `this` is the pointer
+    /// dispatching it; a namespace member resolves as the name it qualifies, a function among them
+    /// by its declaration; every other member access is an environment or EVM intrinsic.
     pub fn member_access(&mut self, node: &MemberAccessExpression) -> Value<'context> {
         let operand = node.operand();
 
@@ -49,6 +52,10 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             return Value::constant_from_bigint(&BigInt::from(ordinal), enum_type, self);
         }
 
+        if let Some(lookup) = Self::super_lookup(node) {
+            return self.identifier(&node.member(), &lookup);
+        }
+
         if let Some(Type::Function(function_type)) = node.get_type()
             && FunctionReferenceKind::from(function_type.visibility())
                 == FunctionReferenceKind::External
@@ -69,7 +76,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         }
 
         if Self::is_namespace_member(&operand, &node.member()) {
-            return self.identifier(&node.member());
+            return self.identifier(&node.member(), &Lookup::Declared);
         }
 
         match node.member().resolve_to_built_in() {
