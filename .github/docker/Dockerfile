@@ -182,7 +182,7 @@ RUN curl -fsSL -o valgrind-${VALGRIND_VERSION}.tar.bz2 \
 # weight in the dev image. rust-src serves the -Zbuild-std actions
 # (build-rust, rust-unit-tests). On a bump, re-check the LLVM section
 # comment in base (rustc's embedded LLVM major moves).
-ARG RUST_VERSION=1.97.1
+ARG RUST_VERSION=1.98.0
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         | sh -s -- -y --default-toolchain "${RUST_VERSION}" --profile default \
     && . "$HOME/.cargo/env" \
