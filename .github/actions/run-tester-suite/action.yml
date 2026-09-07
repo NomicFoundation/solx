@@ -1,0 +1,174 @@
+name: Run solx-tester suite
+description: |
+  Builds solx and solx-tester and runs a smoke test plus a (optionally
+  filtered) suite under a watchdog. A run that neither crashes nor finishes
+  is diagnosed before being killed: on macOS the tester and its solx
+  processes are `sample`d and new crash reports are collected; elsewhere the
+  process table is snapshotted. Signal deaths are reported by name instead
+  of a bare exit code. Stage outcomes are aggregated at the end so
+  diagnostics always run.
+
+  The caller provides the toolchain: LLVM and solc must be built/restored,
+  and on Windows the msys2 shell must be prepared and the bundled static
+  libstdc++.a removed from the LLVM tree first (see solx#550).
+
+inputs:
+  target:
+    description: Cargo target triple to build for (empty = host default)
+    required: false
+    default: ''
+  path-filter:
+    description: solx-tester --path filter for the suite run (empty = full suite)
+    required: false
+    default: ''
+  watchdog-seconds:
+    description: Seconds before a still-running suite is diagnosed and killed
+    required: false
+    default: '1800'
+  diagnostics-name:
+    description: Artifact name for samples/crash reports (empty = tester-diagnostics-<os>)
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Install build target
+      if: inputs.target != ''
+      uses: ./.github/actions/setup-rust
+      with:
+        target: ${{ inputs.target }}
+
+    - name: Build solx and solx-tester
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      run: |
+        ${SFW_PREFIX:-} cargo fetch --locked
+        target_flag=""
+        if [ -n "${{ inputs.target }}" ]; then
+          target_flag="--target ${{ inputs.target }}"
+        fi
+        # shellcheck disable=SC2086 # target_flag is intentionally word-split
+        ${SFW_PREFIX:-} cargo build --frozen --release $target_flag \
+          --bin solx --bin solx-tester
+
+    - name: Locate binaries and mark crash-report baseline
+      shell: bash
+      run: |
+        dir="target/release"
+        if [ -n "${{ inputs.target }}" ]; then
+          dir="target/${{ inputs.target }}/release"
+        fi
+        ext=""
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          ext=".exe"
+        fi
+        echo "TESTER_SUITE_TESTER_BIN=./${dir}/solx-tester${ext}" >> "$GITHUB_ENV"
+        echo "TESTER_SUITE_SOLX_BIN=./${dir}/solx${ext}" >> "$GITHUB_ENV"
+        touch "${RUNNER_TEMP}/ips-baseline"
+
+    # solx-tester is invoked directly (not via `solx-dev test solx-tester`):
+    # the wrapper reduces a signal death to "subprocess failed without exit
+    # code", while here the signal is named. Stages record their exit codes
+    # instead of failing so diagnostics collection always runs; the final
+    # step delivers the verdict.
+    - name: Smoke test (one test, one thread)
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      run: |
+        set +e
+        "$TESTER_SUITE_TESTER_BIN" \
+          --solidity-compiler "$TESTER_SUITE_SOLX_BIN" \
+          --path tests/solidity/simple/default.sol \
+          --threads 1 \
+          --verbose
+        ec=$?
+        if [ "$ec" -gt 128 ]; then
+          echo "::error::smoke: solx-tester killed by signal $((ec - 128)) (SIG$(kill -l $((ec - 128))))"
+        fi
+        echo "TESTER_SUITE_SMOKE_EC=$ec" >> "$GITHUB_ENV"
+        exit 0
+
+    - name: Suite run under watchdog
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      run: |
+        set +e
+        args=()
+        if [ -n "${{ inputs.path-filter }}" ]; then
+          args+=(--path "${{ inputs.path-filter }}")
+        fi
+        start=$(date +%s)
+        "$TESTER_SUITE_TESTER_BIN" --solidity-compiler "$TESTER_SUITE_SOLX_BIN" "${args[@]}" &
+        PID=$!
+        elapsed=0
+        ec=0
+        while kill -0 "$PID" 2>/dev/null; do
+          if [ "$elapsed" -ge "${{ inputs.watchdog-seconds }}" ]; then
+            echo "::error::suite still running after ${elapsed}s; capturing diagnostics, then killing"
+            if [ "$RUNNER_OS" = "macOS" ]; then
+              pgrep -fl 'solx' || true
+              sample "$PID" 10 -file solx-tester-hang.sample.txt || true
+              # Top-level solx parents AND pooled workers: the #524 old-tip
+              # hang showed the parents are where a wedge hides.
+              for p in $(pgrep -x solx | head -5); do
+                sample "$p" 5 -file "solx-parent-${p}.sample.txt" || true
+              done
+              for p in $(pgrep -f -- '--recursive-process' | head -5); do
+                sample "$p" 5 -file "solx-worker-${p}.sample.txt" || true
+              done
+            elif [ "$RUNNER_OS" = "Windows" ]; then
+              tasklist | grep -i "solx" || echo "(no solx processes in tasklist)"
+            else
+              ps -ef | grep -i "solx" | grep -v grep || true
+            fi
+            kill -9 "$PID"
+            if [ "$RUNNER_OS" = "Windows" ]; then
+              taskkill //F //IM solx.exe //T 2>/dev/null || true
+              taskkill //F //IM solx-tester.exe //T 2>/dev/null || true
+            fi
+            ec=124
+            break
+          fi
+          sleep 30
+          elapsed=$((elapsed + 30))
+        done
+        if [ "$ec" -ne 124 ]; then
+          wait "$PID"
+          ec=$?
+          echo "suite finished in $(( $(date +%s) - start ))s with exit code $ec"
+          if [ "$ec" -gt 128 ]; then
+            echo "::error::suite: solx-tester killed by signal $((ec - 128)) (SIG$(kill -l $((ec - 128))))"
+          fi
+        fi
+        echo "TESTER_SUITE_SUITE_EC=$ec" >> "$GITHUB_ENV"
+        exit 0
+
+    - name: Collect crash reports and samples
+      shell: bash
+      run: |
+        mkdir -p tester-diagnostics
+        cp ./*.sample.txt tester-diagnostics/ 2>/dev/null || true
+        if [ "$RUNNER_OS" = "macOS" ]; then
+          find "${HOME}/Library/Logs/DiagnosticReports" -type f -newer "${RUNNER_TEMP}/ips-baseline" 2>/dev/null \
+            | while read -r report; do
+                echo "=== ${report} ==="
+                head -c 20000 "${report}"
+                echo
+                cp "${report}" tester-diagnostics/ || true
+              done
+        fi
+        ls -la tester-diagnostics/ || true
+
+    - name: Upload diagnostics
+      if: hashFiles('tester-diagnostics/*') != ''
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ inputs.diagnostics-name != '' && inputs.diagnostics-name || format('tester-diagnostics-{0}', runner.os) }}
+        path: tester-diagnostics/
+
+    - name: Verdict
+      shell: bash
+      run: |
+        echo "smoke exit code: ${TESTER_SUITE_SMOKE_EC}, suite exit code: ${TESTER_SUITE_SUITE_EC}"
+        if [ "${TESTER_SUITE_SMOKE_EC}" = "0" ] && [ "${TESTER_SUITE_SUITE_EC}" = "0" ]; then
+          exit 0
+        fi
+        exit 1
