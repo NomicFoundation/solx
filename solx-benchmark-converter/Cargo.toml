@@ -21,7 +21,7 @@ thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 glob.workspace = true
-rust_xlsxwriter = "0.97"
+rust_xlsxwriter = "0.99"
 askama = "0.16"
 
 [dev-dependencies]
