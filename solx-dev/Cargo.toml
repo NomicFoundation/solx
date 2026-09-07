@@ -21,7 +21,6 @@ serde.workspace = true
 sha2.workspace = true
 serde_json.workspace = true
 regex.workspace = true
-glob.workspace = true
 hex.workspace = true
 itertools.workspace = true
 toml = "1.0"
