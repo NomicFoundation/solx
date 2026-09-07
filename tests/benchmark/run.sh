@@ -1,26 +1,33 @@
 #!/usr/bin/env bash
 #
 # Compile-time benchmark driver: times `<solx> --standard-json <fixture>` for
-# each fixture in the fixtures directory across one or more solx binaries,
-# using hyperfine. Raw hyperfine JSON lands in --out; report.py renders the
-# markdown report from it.
+# each selected fixture across one or more solx binaries, using hyperfine. Raw
+# hyperfine JSON lands in --out; report.py renders the markdown report from it.
 #
 # Usage:
-#   run.sh --bin <name>=<path> [--bin <name>=<path> ...] \
-#          [--fixtures <dir>] [--out <dir>] [--runs N] [--warmup N]
+#   run.sh --bin <name>=<path> [--bin <name>=<path> ...] --fixtures <dir> \
+#          [--variant <name>]... [--out <dir>] [--runs N] [--warmup N]
+#
+# --fixtures points at a corpus laid out as <scenario>/<variant>.json. Each
+# --variant selects the <scenario>/<variant>.json of every scenario; the
+# default is the EVMLA (legacy) pipeline. The compiler pipeline is encoded in
+# the standard JSON itself, so switching variants needs no solx flag.
 #
 # The first --bin is the candidate; report.py treats the second as the
-# baseline for the Δ column. Example:
-#   run.sh --bin pr=./target/release/solx --bin main=./temp-solx-main/target/release/solx
+# baseline for the vs-baseline column. Example:
+#   run.sh --bin pr=./target/release/solx --bin main=./temp-solx-main/target/release/solx \
+#          --fixtures corpus/solx-corpus --variant solx-via-ir-dwarf
 
 set -euo pipefail
+shopt -s nullglob  # a variant that matches no scenario expands to nothing
 
-FIXTURES_DIR="$(dirname "$0")/fixtures"
+FIXTURES_DIR=""
 OUT_DIR="benchmark-out"
 RUNS=5
 WARMUP=2
 BIN_NAMES=()
 BIN_PATHS=()
+VARIANTS=()
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -29,6 +36,7 @@ while [ $# -gt 0 ]; do
       BIN_PATHS+=("${2#*=}")
       shift 2 ;;
     --fixtures) FIXTURES_DIR="$2"; shift 2 ;;
+    --variant) VARIANTS+=("$2"); shift 2 ;;
     --out) OUT_DIR="$2"; shift 2 ;;
     --runs) RUNS="$2"; shift 2 ;;
     --warmup) WARMUP="$2"; shift 2 ;;
@@ -37,6 +45,19 @@ while [ $# -gt 0 ]; do
 done
 
 [ "${#BIN_NAMES[@]}" -ge 1 ] || { echo "at least one --bin required" >&2; exit 1; }
+[ -n "${FIXTURES_DIR}" ] || { echo "--fixtures <dir> required" >&2; exit 1; }
+[ "${#VARIANTS[@]}" -ge 1 ] || VARIANTS=(solx-legacy-dwarf)
+
+# Resolve the requested variants to concrete fixtures up front so a typo or an
+# empty corpus fails here rather than silently benchmarking nothing.
+FIXTURES=()
+for variant in "${VARIANTS[@]}"; do
+  FIXTURES+=("${FIXTURES_DIR}"/*/"${variant}.json")
+done
+[ "${#FIXTURES[@]}" -ge 1 ] || {
+  echo "no fixtures found under ${FIXTURES_DIR} for variant(s): ${VARIANTS[*]}" >&2
+  exit 1
+}
 
 mkdir -p "${OUT_DIR}"
 
@@ -62,9 +83,7 @@ assert out.get("contracts"), "no contracts in output"
 '
 }
 
-# Fixtures mirror the hardhat-published corpus layout: <scenario>/<variant>.json
-# (manifest.json at the root carries provenance and is not a fixture).
-for fixture in "${FIXTURES_DIR}"/*/*.json; do
+for fixture in "${FIXTURES[@]}"; do
   name="$(basename "$(dirname "${fixture}")")--$(basename "${fixture}" .json)"
   args=()
   for i in "${!BIN_NAMES[@]}"; do
