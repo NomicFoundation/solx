@@ -52,6 +52,6 @@ runs:
     # non-msys2 steps must resolve python3 to the stock CPython, not the
     # pip-less MinGW python that mingw-w64-x86_64-python puts in mingw64\bin.
     - name: Install Python
-      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       with:
         python-version: '3.14'
