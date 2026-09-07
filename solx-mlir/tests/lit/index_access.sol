@@ -13,6 +13,11 @@
 // CHECK: sol.func {{.*}}readFixedBytes{{.*}}-> !sol.fixedbytes<1>
 // CHECK:   sol.fixed_bytes_index %{{.*}}[%{{.*}}] : !sol.fixedbytes<32>, ui256 -> !sol.fixedbytes<1>
 
+// CHECK: sol.func {{.*}}readConstantBytes{{.*}}-> !sol.fixedbytes<1>
+// CHECK:   sol.constant 64058384521018188869745042196707698022 : ui128
+// CHECK:   sol.bytes_cast %{{.*}} : ui128 to !sol.fixedbytes<16>
+// CHECK:   sol.fixed_bytes_index %{{.*}}[%{{.*}}] : !sol.fixedbytes<16>, ui256 -> !sol.fixedbytes<1>
+
 // CHECK: sol.func {{.*}}readMapping{{.*}}-> ui256
 // CHECK:   sol.map %{{.*}}, %{{.*}} : !sol.mapping<ui256, ui256>, ui256, !sol.ptr<ui256, Storage>
 // CHECK:   sol.load %{{.*}} : !sol.ptr<ui256, Storage>, ui256
@@ -38,6 +43,7 @@ contract C {
     mapping(uint256 => uint256) map;
     mapping(bytes32 => uint256) wordMap;
     mapping(int256 => uint256) signedMap;
+    bytes16 private constant HEX_DIGITS = "0123456789abcdef";
 
     function readArray(uint256[] memory array, uint256 index) public pure returns (uint256) {
         return array[index];
@@ -49,6 +55,10 @@ contract C {
 
     function readFixedBytes(bytes32 word, uint256 index) public pure returns (bytes1) {
         return word[index];
+    }
+
+    function readConstantBytes(uint256 value) public pure returns (bytes1) {
+        return HEX_DIGITS[value & 0xf];
     }
 
     function readMapping(uint256 key) public view returns (uint256) {

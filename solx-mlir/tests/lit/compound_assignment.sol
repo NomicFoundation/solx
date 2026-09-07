@@ -101,6 +101,18 @@
 // CHECK-SOLC:   sol.shr %[[OLD]], %[[SHR_AMOUNT]] : ui256, ui256
 // CHECK:   sol.store %{{.*}}, %[[XPTR]]
 
+// CHECK: sol.func @{{.*xor_assign_byte.*}}
+// CHECK-SOLX:   %[[RHS:.*]] = sol.bytes_cast %{{.*}} : ui8 to !sol.fixedbytes<1>
+// CHECK-SOLX:   %[[OLD:.*]] = sol.load %[[BPTR:.*]] : !sol.ptr<!sol.byte, Memory>, !sol.byte
+// CHECK-SOLX:   %[[OLD_BYTES:.*]] = sol.bytes_cast %[[OLD]] : !sol.byte to !sol.fixedbytes<1>
+// CHECK-SOLX:   %[[NEW:.*]] = sol.xor %[[OLD_BYTES]], %[[RHS]] : !sol.fixedbytes<1>
+// CHECK-SOLX:   %[[NEW_BYTE:.*]] = sol.bytes_cast %[[NEW]] : !sol.fixedbytes<1> to !sol.byte
+// CHECK-SOLX:   sol.store %[[NEW_BYTE]], %[[BPTR]] : !sol.byte, !sol.ptr<!sol.byte, Memory>
+// CHECK-SOLC:   %[[OLD:.*]] = sol.load %[[BPTR:.*]] : !sol.ptr<!sol.byte, Memory>, !sol.byte
+// CHECK-SOLC:   %[[RHS:.*]] = sol.bytes_cast %{{.*}} : ui8 to !sol.byte
+// CHECK-SOLC:   %[[NEW:.*]] = sol.xor %[[OLD]], %[[RHS]] : !sol.byte
+// CHECK-SOLC:   sol.store %[[NEW]], %[[BPTR]] : !sol.byte, !sol.ptr<!sol.byte, Memory>
+
 contract C {
     function add_assign(uint256 x, uint256 y) public pure returns (uint256) {
         x += y;
@@ -160,5 +172,10 @@ contract C {
     function shr_assign_mixed(uint256 x, uint8 y) public pure returns (uint256) {
         x >>= y;
         return x;
+    }
+
+    function xor_assign_byte(bytes memory b, uint256 i) public pure returns (bytes memory) {
+        b[i] ^= 0x20;
+        return b;
     }
 }

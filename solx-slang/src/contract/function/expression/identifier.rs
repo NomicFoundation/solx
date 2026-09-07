@@ -4,8 +4,10 @@
 //!
 
 use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::StateVariableMutability;
+use slang_solidity_v2::ast::Type;
 
 use solx_mlir::FunctionDispatch;
 use solx_mlir::FunctionKind;
@@ -18,23 +20,26 @@ use crate::scope::function::FunctionScope;
 use crate::scope::source_unit::SourceUnitScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// A constant folds to its initializer; an immutable outside the constructor loads its linked
-    /// value (`sol.load_immutable`); a bare function name materialises its internal pointer
-    /// (`sol.func_constant`), defining the function in this module if absent; a library name is its
-    /// linked address (`sol.lib_addr`); every other identifier loads from its place.
+    /// A constant folds to its initializer at its declared type; an immutable outside the
+    /// constructor loads its linked value (`sol.load_immutable`); a bare function name materialises
+    /// its internal pointer (`sol.func_constant`), defining the function in this module if absent;
+    /// a library name is its linked address (`sol.lib_addr`); every other identifier loads from
+    /// its place.
     pub fn identifier(&mut self, node: &Identifier) -> Value<'context> {
         match node.resolve_to_definition() {
-            Some(Definition::Constant(constant)) => {
-                self.expression(&constant.value().expect("constant has an initializer"))
-            }
+            Some(Definition::Constant(constant)) => self.constant_value(
+                &constant.value().expect("constant has an initializer"),
+                constant.get_type(),
+            ),
             Some(Definition::StateVariable(state_variable))
                 if let StateVariableMutability::Constant =
                     state_variable.attributes().mutability() =>
             {
-                self.expression(
+                self.constant_value(
                     &state_variable
                         .value()
                         .expect("a constant state variable is initialized"),
+                    state_variable.get_type(),
                 )
             }
             Some(Definition::StateVariable(state_variable))
@@ -69,6 +74,18 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 place.load(element_type, self)
             }
         }
+    }
+
+    /// A constant's initializer converted to the constant's declared type: the binder types the
+    /// initializer on its own (`bytes16 constant X = "0123456789abcdef"` is a `string` literal),
+    /// and uses such as `X[i]` need the declared `!sol.fixedbytes<16>`.
+    fn constant_value(
+        &mut self,
+        initializer: &Expression,
+        declared_type: Option<Type>,
+    ) -> Value<'context> {
+        let declared_type = self.typing(declared_type);
+        self.converted(initializer, declared_type)
     }
 
     /// A state variable resolves to its storage slot, a local variable or parameter to its stack
