@@ -1,5 +1,5 @@
 //!
-//! The contextual keyword expressions: `this` today; `super` and `payable` once they lower.
+//! The contextual keyword expressions: `this` as a value.
 //!
 
 use solx_mlir::Value;

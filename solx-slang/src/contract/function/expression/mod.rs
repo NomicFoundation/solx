@@ -116,7 +116,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             Expression::MemberAccessExpression(inner) => self.member_access_place(inner),
             Expression::IndexAccessExpression(inner) => self.index_access_place(inner),
             Expression::FunctionCallExpression(inner) => self.function_call_place(inner),
-            Expression::TupleExpression(inner) if inner.items().len() == 1 => {
+            Expression::TupleExpression(inner) => {
                 let operand = inner
                     .items()
                     .iter()
@@ -163,7 +163,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             }
             Expression::TupleExpression(inner) => self.tuple_effect(inner),
             Expression::NewExpression(_) => {}
-            Expression::ThisKeyword(_) => {}
+            Expression::ThisKeyword(_) | Expression::SuperKeyword(_) => {}
             Expression::Identifier(inner)
                 if matches!(
                     inner.resolve_to_definition(),
@@ -265,7 +265,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         match expression {
             Expression::Identifier(identifier) => identifier.resolve_to_definition(),
             Expression::MemberAccessExpression(access) => access.member().resolve_to_definition(),
-            Expression::TupleExpression(inner) if inner.items().len() == 1 => {
+            Expression::TupleExpression(inner) => {
                 Self::resolved_definition(&inner.items().iter().next()?.expression()?)
             }
             _ => None,

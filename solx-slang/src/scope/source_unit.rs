@@ -14,6 +14,7 @@ use solx_mlir::Contract;
 use solx_mlir::Function;
 use solx_mlir::Type as MlirType;
 
+use crate::contract::constructor_chain::ConstructorChain;
 use crate::contract::object::Object;
 use crate::scope::contract::ContractScope;
 
@@ -35,17 +36,18 @@ impl<'context> SourceUnitScope<'context> {
     }
 
     /// Opens the contract scope around `emit`: the `sol.contract` an enclosed member is defined
-    /// into, the state variables and storage layout it resolves against, with the `this` type
-    /// installed on the MLIR context for its duration.
+    /// into and the object whose hierarchy it resolves against, with the `this` type installed on
+    /// the MLIR context for its duration.
     pub fn contract(
         &mut self,
         contract_type: MlirType<'context>,
         contract: Contract<'context>,
         object: &Object,
+        chain: &ConstructorChain,
         emit: impl FnOnce(&mut ContractScope<'_, 'context>),
     ) {
         self.mlir.current_contract_type = Some(contract_type);
-        emit(&mut ContractScope::new(self, contract, object));
+        emit(&mut ContractScope::new(self, contract, object, chain));
         self.mlir.current_contract_type = None;
     }
 
