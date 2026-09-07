@@ -1,5 +1,6 @@
 //!
-//! Sol dialect IR wrappers: types, values, and attributes.
+//! Sol dialect IR wrappers: types, values, places, attributes, and the bridge ops that carry a Sol
+//! value or place across into the Yul dialect, whose own wrappers live in [`yul`].
 //!
 #![expect(missing_docs, reason = "generated Sol op wrapper")]
 
@@ -8,6 +9,7 @@ pub mod block;
 pub mod place;
 pub mod r#type;
 pub mod value;
+pub mod yul;
 
 use melior::ir::BlockLike;
 
@@ -15,9 +17,10 @@ use crate::Block;
 use crate::Function;
 use crate::Place;
 use crate::Value;
+use crate::Word;
 use crate::ods::sol::*;
 
-sol_ops! {
+dialect_ops! {
     Value::constant(value: i64, result_type: ty) -> value {
         ConstantOperation.value(int_attr(value, result_type)).result(result_type)
     }
@@ -66,7 +69,7 @@ sol_ops! {
         FixedBytesIndexOperation.value(self).index(index).result(fixed_bytes(solx_utils::BYTE_LENGTH_BYTE))
     }
     Value::length(self) -> value {
-        LengthOperation.inp(self).len(field())
+        LengthOperation.inp(self).len(word())
     }
     Value::slice(self, start: value, end: value) -> value {
         SliceOperation.arr(self).start(start).end(end).res(self_ty)
@@ -149,10 +152,10 @@ sol_ops! {
     }
 
     Value::balance(address: value) -> value {
-        BalanceOperation.cont_addr(address).out(field())
+        BalanceOperation.cont_addr(address).out(word())
     }
     Value::code_hash(address: value) -> value {
-        CodeHashOperation.cont_addr(address).out(field())
+        CodeHashOperation.cont_addr(address).out(word())
     }
     Value::code(address: value) -> value {
         CodeOperation.cont_addr(address).out(memory())
@@ -188,22 +191,22 @@ sol_ops! {
         SelfdestructOperation.recipient(recipient)
     }
 
-    Value::block_number() -> value { BlockNumberOperation.val(field()) }
-    Value::block_timestamp() -> value { TimestampOperation.val(field()) }
+    Value::block_number() -> value { BlockNumberOperation.val(word()) }
+    Value::block_timestamp() -> value { TimestampOperation.val(word()) }
     Value::block_coinbase() -> value { CoinbaseOperation.addr(address()) }
-    Value::block_difficulty() -> value { DifficultyOperation.val(field()) }
-    Value::block_prev_randao() -> value { PrevRandaoOperation.val(field()) }
-    Value::block_gas_limit() -> value { GasLimitOperation.val(field()) }
-    Value::block_base_fee() -> value { BaseFeeOperation.val(field()) }
-    Value::block_blob_base_fee() -> value { BlobBaseFeeOperation.val(field()) }
-    Value::block_chain_id() -> value { ChainIdOperation.val(field()) }
+    Value::block_difficulty() -> value { DifficultyOperation.val(word()) }
+    Value::block_prev_randao() -> value { PrevRandaoOperation.val(word()) }
+    Value::block_gas_limit() -> value { GasLimitOperation.val(word()) }
+    Value::block_base_fee() -> value { BaseFeeOperation.val(word()) }
+    Value::block_blob_base_fee() -> value { BlobBaseFeeOperation.val(word()) }
+    Value::block_chain_id() -> value { ChainIdOperation.val(word()) }
     Value::tx_origin() -> value { OriginOperation.addr(address()) }
-    Value::tx_gas_price() -> value { GasPriceOperation.val(field()) }
+    Value::tx_gas_price() -> value { GasPriceOperation.val(word()) }
     Value::msg_sender() -> value { CallerOperation.addr(address()) }
-    Value::msg_value() -> value { CallValueOperation.val(field()) }
+    Value::msg_value() -> value { CallValueOperation.val(word()) }
     Value::msg_sig() -> value { SigOperation.val(selector()) }
     Value::msg_data() -> value { GetCallDataOperation.addr(calldata()) }
-    Value::gas_left() -> value { GasLeftOperation.val(field()) }
+    Value::gas_left() -> value { GasLeftOperation.val(word()) }
     Value::this(contract_type: ty) -> value { ThisOperation.addr(contract_type) }
 
     Function::call(callee: function, operands: values) -> values {
@@ -328,5 +331,41 @@ sol_ops! {
     }
     Block::do_while(self) {
         DoWhileOperation; body, cond
+    }
+
+    Block::inline_asm(self, memory_safe: flag) {
+        InlineAsmOperation.memory_safe(memory_safe); body
+    }
+
+    Value::yul_word(self) -> word {
+        YulValCastOperation.src(self).out(yul_word())
+    }
+    Word::state_variable_slot(symbol: str) -> word {
+        YulStateVarSlotOperation.sym(symbol_attr(symbol)).out(yul_word())
+    }
+    Word::state_variable_offset(symbol: str) -> word {
+        YulStateVarOffsetOperation.sym(symbol_attr(symbol)).out(yul_word())
+    }
+
+    Place::yul_pointer(self) -> yul_pointer {
+        YulPtrCastOperation.src(self).out(yul_ptr())
+    }
+    Place::yul_storage_slot(self) -> yul_pointer {
+        YulStorageSlotOperation.src(self).out(yul_ptr())
+    }
+    Place::yul_storage_offset(self) -> word {
+        YulStorageOffsetOperation.src(self).out(yul_word())
+    }
+    Place::yul_calldata_offset(self) -> yul_pointer {
+        YulCallDataOffsetOperation.src(self).out(yul_ptr())
+    }
+    Place::yul_calldata_length(self) -> yul_pointer {
+        YulCallDataLengthOperation.src(self).out(yul_ptr())
+    }
+    Place::yul_selector(self) -> yul_pointer {
+        YulSelectorOperation.src(self).out(yul_ptr())
+    }
+    Place::yul_function_address(self) -> yul_pointer {
+        YulFuncAddrOperation.src(self).out(yul_ptr())
     }
 }

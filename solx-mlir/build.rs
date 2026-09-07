@@ -57,14 +57,12 @@ fn main() {
         .file("mlir_execution_engine_stubs.c")
         .compile("mlir_execution_engine_stubs");
 
-    // Compile C++ wrappers for Sol dialect attribute creation.
-    // The Sol C API does not expose ContractKindAttr/StateMutabilityAttr
-    // constructors, so we provide thin extern "C" wrappers.
-    println!("cargo:rerun-if-changed=sol_attr_stubs.cpp");
+    // Compile the C wrappers in dialect_stubs.cpp; see its header for why they exist.
+    println!("cargo:rerun-if-changed=dialect_stubs.cpp");
     cc::Build::new()
         .cpp(true)
-        .file("sol_attr_stubs.cpp")
+        .file("dialect_stubs.cpp")
         .flag(format!("-isystem{}", include_path.display()))
         .flag("-std=c++17")
-        .compile("sol_attr_stubs");
+        .compile("dialect_stubs");
 }

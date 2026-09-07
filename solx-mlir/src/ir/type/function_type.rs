@@ -1,5 +1,5 @@
 //!
-//! Signature parameter for the Sol function reference types.
+//! Signature parameter for the Sol function reference types and for a Yul function's symbol.
 //!
 
 use melior::ir::Type as MlirType;
@@ -9,8 +9,9 @@ use melior::ir::r#type::FunctionType as MlirFunctionType;
 use crate::Type;
 use crate::ffi;
 
-/// The types a function is called through: what a `sol::FuncRefType` is parameterized by, and what
-/// a call names as its callee type. The zero-argument default is the unit signature `() -> ()`.
+/// The types a function is called through: what a `sol::FuncRefType` is parameterized by, what a
+/// call names as its callee type, and what a `yul.func` declares - a Yul signature is words in,
+/// words out. The zero-argument default is the unit signature `() -> ()`.
 #[derive(Default, Clone)]
 pub struct FunctionType<'context> {
     /// Parameter types, in declaration order.

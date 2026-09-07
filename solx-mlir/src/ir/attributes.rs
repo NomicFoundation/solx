@@ -77,7 +77,7 @@ impl From<FunctionTypeMutability> for StateMutability {
     }
 }
 
-sol_predicate_attribute! {
+predicate_attribute! {
     /// Sol dialect `sol.cmp` predicate values. Signedness is carried by the operand type, not the
     /// predicate.
     CmpPredicate {

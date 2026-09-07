@@ -38,7 +38,7 @@ impl<'context> Value<'context> {
         let r#type = if result_type.is_address() || result_type.is_contract() {
             Type::unsigned(context.melior, solx_utils::BIT_LENGTH_ETH_ADDRESS)
         } else if result_type.is_enum() {
-            Type::field(context.melior)
+            Type::word(context.melior)
         } else if result_type.is_bytes_like() {
             let bits = result_type.bytes_like_width() as usize * solx_utils::BIT_LENGTH_BYTE;
             Type::unsigned(context.melior, bits)

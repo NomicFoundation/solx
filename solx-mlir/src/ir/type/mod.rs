@@ -1,5 +1,5 @@
 //!
-//! An MLIR type in the Sol dialect: its construction and property queries.
+//! An MLIR type the Sol and Yul dialects are built over: its construction and property queries.
 //!
 
 pub mod array_size;
@@ -14,6 +14,7 @@ use melior::ir::attribute::IntegerAttribute;
 use melior::ir::r#type::IntegerType;
 use num::BigInt;
 use num::bigint::Sign;
+use ruint::aliases::U256;
 
 use solx_utils::DataLocation;
 
@@ -22,7 +23,7 @@ use crate::ffi;
 
 use self::array_size::ArraySize;
 
-/// A thin wrapper over a `melior` type handle in the Sol dialect.
+/// A thin wrapper over a `melior` type handle, in the Sol dialect or the Yul one.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Type<'context> {
     /// The wrapped melior type.
@@ -76,8 +77,18 @@ impl<'context> Type<'context> {
     }
 
     /// The unsigned 256-bit integer, the native EVM word.
-    pub fn field(context: &'context melior::Context) -> Self {
+    pub fn word(context: &'context melior::Context) -> Self {
         Self::unsigned(context, solx_utils::BIT_LENGTH_FIELD)
+    }
+
+    /// The signless 256-bit integer every Yul value carries. Distinct from [`Self::word`]: the Yul
+    /// dialect is signless throughout, so a Solidity value crossing into inline assembly is
+    /// reinterpreted rather than converted.
+    pub fn yul_word(context: &'context melior::Context) -> Self {
+        Self::new(MlirType::from(IntegerType::new(
+            context,
+            solx_utils::BIT_LENGTH_FIELD as u32,
+        )))
     }
 
     /// A `sol::PointerType` with the given element type and data location.
@@ -93,6 +104,11 @@ impl<'context> Type<'context> {
                 location as u32,
             ))
         })
+    }
+
+    /// The `yul::PtrType` singleton (`!yul.ptr`), the address a Yul-local variable is held at.
+    pub fn yul_pointer(context: &'context melior::Context) -> Self {
+        Self::new(unsafe { MlirType::from_raw(ffi::solxCreateYulPtrType(context.to_raw())) })
     }
 
     /// A `sol::ContractType` for the named contract with the given payability.
@@ -285,6 +301,15 @@ impl<'context> Type<'context> {
                 words.as_ptr(),
             ))
         }
+    }
+
+    /// A `U256` as an attribute at the signless word type ([`Self::yul_word`]): a Yul constant, a
+    /// `yul.switch` case value, a storage slot.
+    pub fn yul_word_attribute(
+        value: &U256,
+        context: &'context melior::Context,
+    ) -> IntegerAttribute<'context> {
+        IntegerAttribute::from_words(Self::yul_word(context).into_mlir(), value.as_limbs())
     }
 
     /// The signless `i32` attribute a selector is dispatched by, on `sol.func` and on
