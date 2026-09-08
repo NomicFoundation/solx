@@ -2,11 +2,15 @@
 //! The projection from Slang's semantic type tree onto Sol dialect types.
 //!
 
+use std::collections::HashMap;
+
 use num_traits::sign::Signed;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionType as SlangFunctionType;
 use slang_solidity_v2::ast::LiteralKind;
+use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type;
 
 use solx_mlir::ArraySize;
@@ -15,16 +19,95 @@ use solx_mlir::Type as MlirType;
 
 use crate::scope::source_unit::SourceUnitScope;
 
+/// The struct types one walk has entered, by definition and data location: a recursive struct is
+/// recorded before its members are walked, so a cycle back to it finds it opaque.
+type EnteredStructures<'context> = HashMap<(NodeId, solx_utils::DataLocation), MlirType<'context>>;
+
+/// The position of a type within its parent, deciding whether an identified struct still being
+/// built may be embedded there before its body is known.
+enum Position {
+    /// The parent lays the type out inline, so it needs the struct's body.
+    ByValue,
+    /// The parent refers to the type without laying it out, so a cycle may break here.
+    ByReference,
+}
+
 impl<'context> SourceUnitScope<'context> {
     /// Resolves a Slang semantic type to its Sol dialect MLIR type.
     ///
     /// `inherited_location` is the dialect data location to substitute when a type's Slang location
-    /// is `Inherited` (struct-field-relative). Top-level callers pass `None`; the `Struct` arm sets
-    /// it to the parent struct's location for the duration of member resolution.
+    /// is `Inherited` (struct-field-relative). Top-level callers pass `None`; `structure_members`
+    /// sets it to the parent struct's location for its members.
     pub fn resolve(
         &self,
         node: &Type,
         inherited_location: Option<solx_utils::DataLocation>,
+    ) -> MlirType<'context> {
+        self.resolve_within(
+            node,
+            inherited_location,
+            &mut EnteredStructures::new(),
+            Position::ByValue,
+        )
+    }
+
+    /// Resolves a function type's MLIR signature from the binder's type, so a callee naming no
+    /// definition to look a registered signature up by resolves here.
+    pub fn function_type(&self, function_type: &SlangFunctionType) -> FunctionType<'context> {
+        self.function_type_within(function_type, &mut EnteredStructures::new())
+    }
+
+    /// The MLIR signature type `function` declares: its parameters and results.
+    pub fn signature_type(&self, function: &FunctionDefinition) -> FunctionType<'context> {
+        let Some(Type::Function(function_type)) = function.get_type() else {
+            unreachable!("slang types every function definition");
+        };
+        self.function_type(&function_type)
+    }
+
+    /// Resolves the binder's typing of a node to its Sol dialect MLIR type.
+    pub fn typing(&self, slang_type: Option<Type>) -> MlirType<'context> {
+        self.resolve(
+            &slang_type.expect("the binder types every expression"),
+            None,
+        )
+    }
+
+    /// The MLIR pointer type a `sol.gep` / `sol.map` / `sol.addr_of` yields for a value of this
+    /// Slang type: mirrors `Sol_GepOp::build`'s non-ptr-ref-in-storage rule, where a
+    /// reference-typed element living in `Storage` or `CallData` is its own storage pointer, so
+    /// the pointer type is the element type itself.
+    pub fn pointer(
+        &self,
+        node: &Type,
+        element_type: MlirType<'context>,
+        base_location: solx_utils::DataLocation,
+    ) -> MlirType<'context> {
+        if node.is_reference_type()
+            && matches!(
+                base_location,
+                solx_utils::DataLocation::Storage | solx_utils::DataLocation::CallData
+            )
+        {
+            return element_type;
+        }
+        MlirType::pointer(self.melior, element_type, base_location)
+    }
+
+    /// [`Self::resolve`] within one top-level resolution: `entered` holds the struct types the
+    /// walk has entered, and `position` where the type sits in its parent. A recursive struct is
+    /// an identified type, recorded opaque before its members are walked and returned as such
+    /// where a cycle breaks: at a by-reference position naming a struct still opaque. A by-value
+    /// position naming one rebuilds its body through this nested walk, so the enclosing walk's
+    /// later identical body is a no-op. The walk terminates because every legal cycle carries a
+    /// recursive struct entered by reference. A struct entered once returns at once, or a chain
+    /// naming each successor twice would be re-walked at every level.
+    fn resolve_within(
+        &self,
+        node: &Type,
+        inherited_location: Option<solx_utils::DataLocation>,
+        entered: &mut EnteredStructures<'context>,
+        position: Position,
     ) -> MlirType<'context> {
         match node {
             Type::Integer(integer_type) => MlirType::integer(
@@ -81,14 +164,23 @@ impl<'context> SourceUnitScope<'context> {
                 MlirType::fixed_bytes(self.melior, byte_array_type.width() as usize)
             }
             Type::Array(array_type) => {
-                let element_type = self.resolve(&array_type.element_type(), inherited_location);
+                let element_type = self.resolve_within(
+                    &array_type.element_type(),
+                    inherited_location,
+                    entered,
+                    Position::ByReference,
+                );
                 let location =
                     solx_utils::DataLocation::from_slang(array_type.location(), inherited_location);
                 MlirType::array(self.melior, ArraySize::Dynamic, element_type, location)
             }
             Type::FixedSizeArray(fixed_array_type) => {
-                let element_type =
-                    self.resolve(&fixed_array_type.element_type(), inherited_location);
+                let element_type = self.resolve_within(
+                    &fixed_array_type.element_type(),
+                    inherited_location,
+                    entered,
+                    position,
+                );
                 let location = solx_utils::DataLocation::from_slang(
                     fixed_array_type.location(),
                     inherited_location,
@@ -103,13 +195,17 @@ impl<'context> SourceUnitScope<'context> {
                 )
             }
             Type::Mapping(mapping_type) => {
-                let key_type = self.resolve(
+                let key_type = self.resolve_within(
                     &mapping_type.key_type(),
                     Some(solx_utils::DataLocation::Storage),
+                    entered,
+                    Position::ByReference,
                 );
-                let value_type = self.resolve(
+                let value_type = self.resolve_within(
                     &mapping_type.value_type(),
                     Some(solx_utils::DataLocation::Storage),
+                    entered,
+                    Position::ByReference,
                 );
                 MlirType::mapping(self.melior, key_type, value_type)
             }
@@ -121,19 +217,40 @@ impl<'context> SourceUnitScope<'context> {
                 let Definition::Struct(struct_definition) = struct_type.definition() else {
                     unreachable!("Slang StructType always references a Struct definition");
                 };
-                let member_types: Vec<MlirType<'context>> = struct_definition
-                    .members()
-                    .iter()
-                    .map(|member| {
-                        self.resolve(
-                            &member
-                                .get_type()
-                                .expect("struct member type resolved by semantic analysis"),
-                            Some(struct_location),
-                        )
-                    })
-                    .collect();
-                MlirType::structure(self.melior, &member_types, struct_location)
+                let key = (struct_definition.node_id(), struct_location);
+                if let Some(&structure) = entered.get(&key)
+                    && (!structure.structure_is_opaque()
+                        || matches!(position, Position::ByReference))
+                {
+                    return structure;
+                }
+                if !struct_definition.is_recursive() {
+                    let structure = MlirType::structure(
+                        self.melior,
+                        &self.structure_members(&struct_definition, struct_location, entered),
+                        struct_location,
+                    );
+                    entered.insert(key, structure);
+                    return structure;
+                }
+                // The node id keeps same-named structs of two scopes apart: the type uniquer's
+                // key is not the module's symbol table.
+                let structure = MlirType::identified_structure(
+                    self.melior,
+                    &format!(
+                        "{}_{}",
+                        struct_definition.name().name(),
+                        struct_definition.node_id()
+                    ),
+                    struct_location,
+                );
+                entered.insert(key, structure);
+                structure.set_body(&self.structure_members(
+                    &struct_definition,
+                    struct_location,
+                    entered,
+                ));
+                structure
             }
             Type::Contract(inner) => self.object_type(inner.definition()),
             Type::Interface(inner) => self.object_type(inner.definition()),
@@ -147,74 +264,69 @@ impl<'context> SourceUnitScope<'context> {
                 MlirType::enumeration(self.melior, max.into())
             }
             Type::Function(function_type) => self
-                .function_type(function_type)
+                .function_type_within(function_type, entered)
                 .reference(self.melior, function_type.visibility().into()),
             Type::UserDefinedValue(udvt) => {
                 let target_type = udvt
                     .target_type()
                     .expect("UDVT target type resolved by semantic analysis");
-                self.resolve(&target_type, inherited_location)
+                self.resolve_within(&target_type, inherited_location, entered, position)
             }
             _ => unimplemented!("unsupported Slang type"),
         }
     }
 
-    /// Resolves a function type's MLIR signature from the binder's type, so a callee naming no
-    /// definition to look a registered signature up by resolves here.
-    pub fn function_type(&self, function_type: &SlangFunctionType) -> FunctionType<'context> {
+    /// [`Self::function_type`] within one top-level resolution, its parameters and results
+    /// referred to without being laid out.
+    fn function_type_within(
+        &self,
+        function_type: &SlangFunctionType,
+        entered: &mut EnteredStructures<'context>,
+    ) -> FunctionType<'context> {
         FunctionType {
             parameters: function_type
                 .parameter_types()
                 .iter()
-                .map(|parameter_type| self.resolve(parameter_type, None))
+                .map(|parameter_type| {
+                    self.resolve_within(parameter_type, None, entered, Position::ByReference)
+                })
                 .collect(),
             results: match function_type.return_type() {
                 Type::Void(_) => Vec::new(),
                 Type::Tuple(tuple_type) => tuple_type
                     .types()
                     .iter()
-                    .map(|element_type| self.resolve(element_type, None))
+                    .map(|element_type| {
+                        self.resolve_within(element_type, None, entered, Position::ByReference)
+                    })
                     .collect(),
-                other => vec![self.resolve(&other, None)],
+                other => vec![self.resolve_within(&other, None, entered, Position::ByReference)],
             },
         }
     }
 
-    /// The MLIR signature type `function` declares: its parameters and results.
-    pub fn signature_type(&self, function: &FunctionDefinition) -> FunctionType<'context> {
-        let Some(Type::Function(function_type)) = function.get_type() else {
-            unreachable!("slang types every function definition");
-        };
-        self.function_type(&function_type)
-    }
-
-    /// Resolves the binder's typing of a node to its Sol dialect MLIR type.
-    pub fn typing(&self, slang_type: Option<Type>) -> MlirType<'context> {
-        self.resolve(
-            &slang_type.expect("the binder types every expression"),
-            None,
-        )
-    }
-
-    /// The MLIR pointer type a `sol.gep` / `sol.map` / `sol.addr_of` yields for a value of this
-    /// Slang type: mirrors `Sol_GepOp::build`'s non-ptr-ref-in-storage rule, where a
-    /// reference-typed element living in `Storage` or `CallData` is its own storage pointer, so
-    /// the pointer type is the element type itself.
-    pub fn pointer(
+    /// The MLIR types of `definition`'s members, each resolved at the struct's own data
+    /// location and laid out inline.
+    fn structure_members(
         &self,
-        node: &Type,
-        element_type: MlirType<'context>,
-        base_location: solx_utils::DataLocation,
-    ) -> MlirType<'context> {
-        if node.is_reference_type()
-            && matches!(
-                base_location,
-                solx_utils::DataLocation::Storage | solx_utils::DataLocation::CallData
-            )
-        {
-            return element_type;
-        }
-        MlirType::pointer(self.melior, element_type, base_location)
+        definition: &StructDefinition,
+        location: solx_utils::DataLocation,
+        entered: &mut EnteredStructures<'context>,
+    ) -> Vec<MlirType<'context>> {
+        definition
+            .members()
+            .iter()
+            .map(|member| {
+                self.resolve_within(
+                    &member
+                        .get_type()
+                        .expect("struct member type resolved by semantic analysis"),
+                    Some(location),
+                    entered,
+                    Position::ByValue,
+                )
+            })
+            .collect()
     }
 
     /// The Sol dialect type a value of an object type carries: the object identifier it is linked
