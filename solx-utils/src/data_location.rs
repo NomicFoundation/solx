@@ -8,7 +8,7 @@ use crate::AddressSpace;
 ///
 /// Mirrors `mlir::sol::DataLocation` from the LLVM Sol dialect.
 /// Use [`From<AddressSpace>`] to convert from the EVM address space model.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum DataLocation {
     /// Persistent storage (SLOAD/SSTORE).
