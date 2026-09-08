@@ -6,6 +6,7 @@
 
 use std::ops::Deref;
 
+use slang_solidity_v2::ast::Parameters;
 use slang_solidity_v2::ast::Type;
 
 use solx_mlir::Block;
@@ -48,6 +49,17 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             environment: Environment::new(),
             return_types: return_types.to_vec(),
             checked: true,
+        }
+    }
+
+    /// Binds each named parameter to a stack slot holding the value the entry block carries for
+    /// it. A frame whose entry carries more values than the definition declares, as a constructor
+    /// threading a base's parameters does, binds only the declared ones.
+    pub fn bind_parameters(&mut self, parameters: &Parameters, values: &[Value<'context>]) {
+        for (parameter, &value) in parameters.iter().zip(values) {
+            if let Some(identifier) = parameter.name() {
+                self.define_local(identifier.name(), value.r#type(), |_scope| value);
+            }
         }
     }
 

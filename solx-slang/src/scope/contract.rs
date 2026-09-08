@@ -9,6 +9,7 @@ use std::ops::Deref;
 
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::ModifierInvocation;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::VirtualTarget;
 
@@ -32,8 +33,9 @@ pub struct ContractScope<'source_unit, 'context> {
     pub contract: Contract<'context>,
     /// The object being emitted, whose linearisation resolves the references its bodies make.
     pub object: &'source_unit Object,
-    /// The definition ids of the functions defined so far.
-    pub defined_functions: HashSet<NodeId>,
+    /// The definition ids of the functions and modifiers defined so far, each inserted before its
+    /// body is emitted, since a body may reach a function the modifier decorates.
+    pub defined_members: HashSet<NodeId>,
     /// The state-variable slots keyed by definition id.
     pub storage_layout: HashMap<NodeId, StorageSlot>,
     /// The constructors the object's creation runs and the argument lists they pass along.
@@ -54,7 +56,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             source_unit,
             contract,
             object,
-            defined_functions: HashSet::new(),
+            defined_members: HashSet::new(),
             storage_layout: object.storage_layout(),
             chain,
             dispatched_functions: object
@@ -109,6 +111,21 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             unreachable!("`super` is written in a contract alone");
         };
         node.resolve_super(function, enclosing_contract)
+    }
+
+    /// The modifier the modifier-list entry `invocation`, naming `declaration`, runs in this
+    /// object: in a contract, Slang's answer, the most-derived override of a virtual declaration
+    /// for a bare name and the declaration for a qualified one; in a library, the declaration,
+    /// which nothing overrides.
+    pub fn resolve_modifier(
+        &self,
+        invocation: &ModifierInvocation,
+        declaration: &FunctionDefinition,
+    ) -> FunctionDefinition {
+        match &self.object {
+            Object::Contract(node) => node.resolve_modifier(invocation, declaration),
+            Object::Library(_) => declaration.clone(),
+        }
     }
 }
 

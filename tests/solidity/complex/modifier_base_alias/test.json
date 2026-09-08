@@ -1,0 +1,9 @@
+{ "modes": [ "E" ], "cases": [ {
+    "name": "planted",
+    "inputs": [ { "instance": "Test", "method": "planted", "calldata": [] } ],
+    "expected": [ "7" ]
+} ],
+    "contracts": {
+        "Test": "main.sol:Test"
+    }
+}

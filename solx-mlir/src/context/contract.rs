@@ -1,6 +1,6 @@
 //!
-//! The Contract declaration entity: emits `sol.contract` and its `sol.state_var` and
-//! `sol.immutable` members.
+//! The Contract declaration entity: emits `sol.contract` and its `sol.state_var`, `sol.immutable`
+//! and `sol.modifier` members.
 //!
 
 use melior::ir::attribute::IntegerAttribute;
@@ -12,12 +12,14 @@ use ruint::aliases::U256;
 use crate::Block;
 use crate::Context;
 use crate::ContractKind;
+use crate::FunctionType;
 use crate::Type;
 use crate::ods::sol::ContractOperation;
 use crate::ods::sol::ImmutableOperation;
+use crate::ods::sol::ModifierOperation;
 use crate::ods::sol::StateVarOperation;
 
-/// A `sol.contract` declaration and the insertion point for its `sol.state_var` members.
+/// A `sol.contract` declaration and the insertion point for its members.
 #[derive(Clone, Copy)]
 pub struct Contract<'context> {
     /// The contract's body region entry block, where its members and functions are emitted.
@@ -84,5 +86,34 @@ impl<'context> Contract<'context> {
                 .r#type(TypeAttribute::new(element_type.into_mlir()));
             ()
         );
+    }
+
+    /// Emits a `sol.modifier @symbol` member taking `parameters`, which yields nothing and so
+    /// declares no result, and returns the entry block its body is emitted into, whose arguments
+    /// carry the parameters.
+    pub fn define_modifier(
+        self,
+        symbol: &str,
+        parameters: Vec<Type<'context>>,
+        context: &Context<'context>,
+    ) -> Block<'context> {
+        let (body, entry) = Block::region(&parameters, context);
+        mlir_op!(
+            context,
+            self.body,
+            ModifierOperation
+                .sym_name(StringAttribute::new(context.melior, symbol))
+                .function_type(TypeAttribute::new(
+                    FunctionType {
+                        parameters,
+                        results: Vec::new(),
+                    }
+                    .to_mlir(context.melior)
+                    .into(),
+                ))
+                .body(body);
+            ()
+        );
+        entry
     }
 }
