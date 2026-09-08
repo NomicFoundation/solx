@@ -24,7 +24,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
     /// Defines `function`'s `sol.func` in the contract body at its first naming, binding
     /// parameters and named-return pointers into a fresh function frame.
     pub fn function_definition(&mut self, function: &FunctionDefinition) -> Function<'context> {
-        if !self.defined_functions.insert(function.node_id()) {
+        if !self.defined_members.insert(function.node_id()) {
             return self.source_unit.function_signature(function);
         }
 
@@ -101,6 +101,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 }
                 scope.base_constructor_call(position, entry);
             }
+            scope.modifier_invocations(function);
 
             scope.statements(&body.statements());
 
@@ -153,14 +154,14 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
 }
 
 impl<'context> SourceUnitScope<'context> {
-    /// The function's symbol: its internal signature qualified by the node id, since internal
-    /// signatures alone collide.
+    /// The symbol of a function or modifier definition: its internal signature qualified by the
+    /// node id, since internal signatures alone collide.
     pub fn function_symbol(function: &FunctionDefinition) -> String {
         format!(
             "{}_{}",
             function
                 .compute_internal_signature()
-                .expect("every emitted function has an internal signature"),
+                .expect("every emitted definition has an internal signature"),
             function.node_id(),
         )
     }

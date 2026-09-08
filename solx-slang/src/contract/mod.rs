@@ -5,6 +5,7 @@
 pub mod constructor_chain;
 pub mod function;
 pub mod getter;
+pub mod modifier;
 pub mod object;
 pub mod state_variable;
 pub mod storage_slot;
