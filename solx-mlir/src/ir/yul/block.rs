@@ -2,14 +2,9 @@
 //! The Yul block: the receiver of a Yul statement and the region-bearing control flow it opens.
 //!
 
-use melior::ir::Block as MlirBlock;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Region;
-use melior::ir::RegionLike;
 use melior::ir::attribute::DenseElementsAttribute;
-use melior::ir::operation::OperationLike;
-use melior::ir::operation::OperationRef;
 use melior::ir::r#type::RankedTensorType;
 use ruint::aliases::U256;
 
@@ -65,21 +60,22 @@ impl<'context> YulBlock<'context> {
         )
         .expect("a ranked tensor type is shaped");
 
-        let operation = self.inner.append_operation(
+        let (default_region, default_block) = Block::region(&[], context);
+        let (case_regions, case_blocks): (Vec<_>, Vec<_>) =
+            cases.iter().map(|_| Block::region(&[], context)).unzip();
+        self.inner.append_operation(
             SwitchOperation::builder(context.melior, context.location())
                 .results(&[])
                 .arg(argument.into_mlir())
-                .default_region(Self::entry_region())
-                .case_regions(cases.iter().map(|_| Self::entry_region()).collect())
+                .default_region(default_region)
+                .case_regions(case_regions)
                 .cases(cases_attribute.into())
                 .build()
                 .into(),
         );
         (
-            Self::entry_block(&operation, 0),
-            (1..=cases.len())
-                .map(|index| Self::entry_block(&operation, index))
-                .collect(),
+            Self::from(default_block),
+            case_blocks.into_iter().map(Self::from).collect(),
         )
     }
 
@@ -97,24 +93,6 @@ impl<'context> YulBlock<'context> {
     pub fn is_terminated(self) -> bool {
         self.inner.terminator().is_some()
     }
-
-    /// A region holding one empty entry block, the shape every Yul control-flow region takes.
-    fn entry_region() -> Region<'context> {
-        let region = Region::new();
-        region.append_block(MlirBlock::new(&[]));
-        region
-    }
-
-    /// The entry block of the operation's region at `index`.
-    fn entry_block(operation: &OperationRef<'context, 'context>, index: usize) -> Self {
-        Self::from(
-            operation
-                .region(index)
-                .expect("region index in range")
-                .first_block()
-                .expect("the region was opened with an entry block"),
-        )
-    }
 }
 
 impl<'context, 'block, B> From<B> for YulBlock<'context>
@@ -131,8 +109,8 @@ where
 }
 
 impl<'context> From<Block<'context>> for YulBlock<'context> {
-    /// The Yul view of a block: the `sol.inline_asm` body is opened as a Sol block and emitted into
-    /// as a Yul one.
+    /// The Yul view of a block opened as a Sol one: the `sol.inline_asm` body, a `yul.func` entry
+    /// and a `yul.switch` region are all emitted into as Yul.
     fn from(block: Block<'context>) -> Self {
         Self { inner: block.inner }
     }

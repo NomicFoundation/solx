@@ -9,6 +9,7 @@ use std::ops::Deref;
 
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::ModifierInvocation;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableDefinition;
 
@@ -40,8 +41,9 @@ pub struct ContractScope<'source_unit, 'context> {
     pub storage_layout: HashMap<NodeId, StorageSlot>,
     /// The constructors the object's creation runs and the argument lists they pass along.
     pub chain: ConstructorChain,
-    /// The definition ids of the functions defined so far.
-    pub defined_functions: HashSet<NodeId>,
+    /// The definition ids of the functions and modifiers defined so far, each inserted before its
+    /// body is emitted, since a body may reach a function the modifier decorates.
+    pub defined_members: HashSet<NodeId>,
 }
 
 /// How a function reference is looked up in the object, by the reference's shape.
@@ -75,7 +77,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             state_variables,
             storage_layout,
             chain,
-            defined_functions: HashSet::new(),
+            defined_members: HashSet::new(),
         }
     }
 
@@ -105,6 +107,21 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             (Object::Library(_), Lookup::Super(_)) => {
                 unreachable!("`super` is written in a contract alone")
             }
+        }
+    }
+
+    /// The modifier the modifier-list entry `invocation`, naming `declaration`, runs in this
+    /// object: in a contract, Slang's answer, the most-derived override of a virtual declaration
+    /// for a bare name and the declaration for a qualified one; in a library, the declaration,
+    /// which nothing overrides.
+    pub fn resolve_modifier(
+        &self,
+        invocation: &ModifierInvocation,
+        declaration: &FunctionDefinition,
+    ) -> FunctionDefinition {
+        match &self.object {
+            Object::Contract(node) => node.resolve_modifier(invocation, declaration),
+            Object::Library(_) => declaration.clone(),
         }
     }
 }

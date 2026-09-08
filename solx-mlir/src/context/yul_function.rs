@@ -2,12 +2,8 @@
 //! Yul function call resolution metadata.
 //!
 
-use melior::ir::Block as MlirBlock;
-use melior::ir::Region;
-use melior::ir::RegionLike;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
-use melior::ir::operation::OperationLike;
 
 use crate::Block;
 use crate::Context;
@@ -44,25 +40,17 @@ impl<'context> YulFunction<'context> {
         }
     }
 
-    /// Emits this function's `yul.func` at `position` in `body` - the `sol.inline_asm` region, which
-    /// is the symbol table Yul functions live in - and returns the entry block its body is emitted
-    /// into. The entry block's arguments carry the parameter words.
+    /// Emits this function's `yul.func` at `position` in `assembly_body` - the `sol.inline_asm`
+    /// region, which is the symbol table Yul functions live in - and returns the entry block its
+    /// body is emitted into. The entry block's arguments carry the parameter words.
     pub fn define(
         &self,
         position: usize,
         context: &Context<'context>,
-        body: Block<'context>,
+        assembly_body: Block<'context>,
     ) -> YulBlock<'context> {
-        let entry_arguments: Vec<_> = self
-            .function_type
-            .parameters
-            .iter()
-            .map(|parameter| (parameter.into_mlir(), context.location()))
-            .collect();
-        let region = Region::new();
-        region.append_block(MlirBlock::new(&entry_arguments));
-
-        let operation = body.insert_operation(
+        let (body, entry) = Block::region(&self.function_type.parameters, context);
+        assembly_body.insert_operation(
             position,
             FuncOperation::builder(context.melior, context.location())
                 .sym_name(StringAttribute::new(
@@ -72,16 +60,10 @@ impl<'context> YulFunction<'context> {
                 .function_type(TypeAttribute::new(
                     self.function_type.to_mlir(context.melior).into(),
                 ))
-                .body(region)
+                .body(body)
                 .build()
                 .into(),
         );
-        YulBlock::from(
-            operation
-                .region(0)
-                .expect("yul.func has one region")
-                .first_block()
-                .expect("yul.func body has an entry block"),
-        )
+        YulBlock::from(entry)
     }
 }

@@ -30,7 +30,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
     /// the chain, receiving the values threaded through it as trailing parameters, and a base
     /// constructor is reached by that call alone.
     pub fn function_definition(&mut self, function: &FunctionDefinition) {
-        if !self.defined_functions.insert(function.node_id()) {
+        if !self.defined_members.insert(function.node_id()) {
             return;
         }
         let body = function
@@ -68,11 +68,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             position.is_some(),
             signature.function_type.results,
             |scope| {
-                let parameters = function.parameters();
-                let arguments: Vec<Value> = (0..parameters.len())
-                    .map(|index| entry.argument(index))
-                    .collect();
-                scope.bind_parameters(&parameters, &arguments);
+                scope.bind_parameters(&function.parameters(), &entry.arguments());
 
                 let return_pointers: Vec<Option<Place>> = function
                     .returns()
@@ -97,6 +93,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                     }
                     scope.base_constructor_call(position, entry);
                 }
+                scope.modifier_invocations(function);
 
                 scope.statements(&body.statements());
 
@@ -157,14 +154,14 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
 }
 
 impl<'context> SourceUnitScope<'context> {
-    /// The function's symbol: its internal signature qualified by the node id, since internal
-    /// signatures alone collide.
+    /// The symbol of a function or modifier definition: its internal signature qualified by the
+    /// node id, since internal signatures alone collide.
     pub fn function_symbol(function: &FunctionDefinition) -> String {
         format!(
             "{}_{}",
             function
                 .compute_internal_signature()
-                .expect("every emitted function has an internal signature"),
+                .expect("every emitted definition has an internal signature"),
             function.node_id(),
         )
     }

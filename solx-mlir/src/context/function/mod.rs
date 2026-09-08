@@ -4,13 +4,9 @@
 
 pub mod dispatch;
 
-use melior::ir::Block as MlirBlock;
-use melior::ir::Region;
-use melior::ir::RegionLike;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
-use melior::ir::operation::OperationLike;
 use melior::ir::r#type::IntegerType;
 
 use crate::Block;
@@ -62,27 +58,13 @@ impl<'context> Function<'context> {
         context: &Context<'context>,
         contract_body: Block<'context>,
     ) -> Block<'context> {
-        let parameters = self
-            .function_type
-            .parameters
-            .iter()
-            .map(|parameter| parameter.into_mlir())
-            .collect::<Vec<_>>();
         let function_type = self.function_type.to_mlir(context.melior);
-        let body_region = Region::new();
-        let entry_block = MlirBlock::new(
-            &parameters
-                .iter()
-                .map(|parameter| (*parameter, context.location()))
-                .collect::<Vec<_>>(),
-        );
-        body_region.append_block(entry_block);
-
+        let (body, entry) = Block::region(&self.function_type.parameters, context);
         let mut operation_builder = FuncOperation::builder(context.melior, context.location())
             .sym_name(StringAttribute::new(context.melior, &self.mlir_name))
             .function_type(TypeAttribute::new(function_type.into()))
             .state_mutability(state_mutability.attribute(context.melior))
-            .body(body_region);
+            .body(body);
         operation_builder = match dispatch {
             FunctionDispatch::Identifier(identifier) => {
                 operation_builder.id(IntegerAttribute::new(
@@ -105,14 +87,8 @@ impl<'context> Function<'context> {
             operation_builder =
                 operation_builder.orig_fn_type(TypeAttribute::new(function_type.into()));
         }
-        let operation = contract_body.append_operation(operation_builder.build().into());
-        Block::from(
-            operation
-                .region(0)
-                .expect("func has one region")
-                .first_block()
-                .expect("func body has entry block"),
-        )
+        contract_body.append_operation(operation_builder.build().into());
+        entry
     }
 
     /// Emits the internal function pointer to this function (`sol.func_constant`).
