@@ -825,6 +825,9 @@ impl Project {
         let mut stack_too_deep_retries = 0;
         loop {
             match pool.execute(job) {
+                // TODO: a retry re-parses and re-translates the MLIR text because the job
+                // carries it and the worker died with the error. Return the unoptimized
+                // bitcode with the reply instead, so a retry is only O3 + backend.
                 Err(Error::StackTooDeep(stack_too_deep)) => {
                     if stack_too_deep.is_size_fallback
                         && !job.optimizer_settings.is_fallback_to_size_active()

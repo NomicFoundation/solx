@@ -178,11 +178,9 @@ impl<'ctx> Context<'ctx> {
             self.optimizer.settings(),
         );
         let spill_area_size = self.optimizer.settings().spill_area_size();
-        let target_machine = TargetMachine::new(
-            self.optimizer.settings(),
-            self.llvm_options.as_slice(),
-            spill_area_size.map(|size| (self.memory_guard, size)),
-        )?;
+        self.describe_stack_region(spill_area_size.unwrap_or_default());
+        let target_machine =
+            TargetMachine::new(self.optimizer.settings(), self.llvm_options.as_slice())?;
         target_machine.set_target_data(self.module());
         target_machine.set_asm_verbosity(true);
 
@@ -419,6 +417,51 @@ impl<'ctx> Context<'ctx> {
     ///
     pub fn set_memory_guard(&mut self, offset: u64) {
         self.memory_guard = offset;
+    }
+
+    ///
+    /// Sets the spill region module flags read by the EVM backend.
+    ///
+    fn describe_stack_region(&self, size: u64) {
+        if self.module().get_flag("evm-memory-guard").is_none() {
+            self.set_module_flag("evm-memory-guard", self.memory_guard);
+        }
+        self.set_module_flag("evm-stack-region-size", size);
+    }
+
+    ///
+    /// Whether the `llvm.module.flags` triplet `flag` is named `key`.
+    ///
+    fn is_flag_named(flag: &inkwell::values::MetadataValue<'ctx>, key: &str) -> bool {
+        flag.get_node_values().get(1).is_some_and(|name| {
+            name.into_metadata_value()
+                .get_string_value()
+                .is_some_and(|name| name.to_bytes() == key.as_bytes())
+        })
+    }
+
+    ///
+    /// Adds the `key` module flag, or replaces its value if it is already there.
+    ///
+    fn set_module_flag(&self, key: &str, value: u64) {
+        use inkwell::values::AsValueRef;
+
+        let value = self.llvm().i64_type().const_int(value, false);
+        for flag in self.module().get_global_metadata("llvm.module.flags") {
+            if !Self::is_flag_named(&flag, key) {
+                continue;
+            }
+            unsafe {
+                inkwell::llvm_sys::core::LLVMReplaceMDNodeOperandWith(
+                    flag.as_value_ref(),
+                    2,
+                    inkwell::llvm_sys::core::LLVMValueAsMetadata(value.as_value_ref()),
+                );
+            }
+            return;
+        }
+        self.module()
+            .add_basic_value_flag(key, inkwell::module::FlagBehavior::Error, value);
     }
 
     ///
