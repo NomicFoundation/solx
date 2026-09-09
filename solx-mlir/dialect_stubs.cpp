@@ -19,12 +19,12 @@
 #include "mlir/CAPI/IR.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/SmallVector.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <optional>
-#include <vector>
 
 extern "C" {
 
@@ -125,13 +125,19 @@ MlirType solxCreateStructType(MlirContext ctx, const MlirType *member_types,
                               size_t member_count, uint32_t dataLocation) {
     if (dataLocation > 5) abort();
     auto *context = unwrap(ctx);
-    std::vector<mlir::Type> mems;
-    mems.reserve(member_count);
-    for (size_t i = 0; i < member_count; i++) {
-        mems.push_back(unwrap(member_types[i]));
-    }
+    llvm::SmallVector<mlir::Type> storage;
+    auto mems = unwrapList(member_count, member_types, storage);
     auto location = static_cast<mlir::sol::DataLocation>(dataLocation);
     return wrap(mlir::sol::StructType::get(context, mems, location));
+}
+
+MlirType solxCreateIdentifiedStructType(MlirContext ctx, const char *name_ptr,
+                                        size_t name_len, uint32_t dataLocation) {
+    if (dataLocation > 5) abort();
+    auto *context = unwrap(ctx);
+    llvm::StringRef name(name_ptr, name_len);
+    auto location = static_cast<mlir::sol::DataLocation>(dataLocation);
+    return wrap(mlir::sol::StructType::getIdentified(context, name, location));
 }
 
 MlirType solxCreateEnumType(MlirContext ctx, uint32_t max) {
@@ -150,6 +156,13 @@ MlirType solxCreateFuncRefType(MlirContext ctx, MlirType signature, uint32_t kin
     default:
         abort();
     }
+}
+
+void solxStructTypeSetBody(MlirType ty, const MlirType *member_types,
+                           size_t member_count) {
+    llvm::SmallVector<mlir::Type> storage;
+    auto mems = unwrapList(member_count, member_types, storage);
+    if (mlir::failed(mlir::cast<mlir::sol::StructType>(unwrap(ty)).setBody(mems))) abort();
 }
 
 MlirType solxCreateYulPtrType(MlirContext ctx) {
@@ -194,6 +207,10 @@ bool solxIsExtFuncRefType(MlirType ty) {
 
 bool solxIsScalarType(MlirType ty) {
     return mlir::sol::isScalar(unwrap(ty));
+}
+
+bool solxStructTypeIsOpaque(MlirType ty) {
+    return mlir::cast<mlir::sol::StructType>(unwrap(ty)).isOpaque();
 }
 
 bool solxIsPointerType(MlirType ty) {
