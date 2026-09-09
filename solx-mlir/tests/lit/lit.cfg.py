@@ -21,6 +21,9 @@ config.substitutions.append(
     ("%for_loop", os.path.join(solx_root, "tests", "solidity", "simple", "loop", "for").replace("\\", "/"))
 )
 config.substitutions.append(
+    ("%modifier_base_alias", os.path.join(solx_root, "tests", "solidity", "complex", "modifier_base_alias").replace("\\", "/"))
+)
+config.substitutions.append(
     ("%qualifier_module", os.path.join(solx_root, "tests", "solidity", "complex", "qualifier_module").replace("\\", "/"))
 )
 config.substitutions.append(

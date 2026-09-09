@@ -18,6 +18,7 @@ pub mod member;
 pub mod tuple;
 pub mod unary;
 
+use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::Number;
@@ -138,7 +139,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     }
 
     /// Emits an expression for its side effects, discarding the values. `new C;` denotes a creation
-    /// function rather than performing one, so it evaluates nothing.
+    /// function rather than performing one, so it evaluates nothing; a modifier's `_;` is the
+    /// placeholder the modified body expands at.
     pub fn expression_effect(&mut self, node: &Expression) {
         match node {
             Expression::FunctionCallExpression(call) => {
@@ -156,6 +158,14 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             Expression::TupleExpression(inner) => self.tuple_effect(inner),
             Expression::NewExpression(_) => {}
             Expression::ThisKeyword(_) | Expression::SuperKeyword(_) => {}
+            Expression::Identifier(inner)
+                if matches!(
+                    inner.resolve_to_built_in(),
+                    Some(BuiltIn::ModifierUnderscore)
+                ) =>
+            {
+                self.current_block().placeholder(self);
+            }
             Expression::Identifier(inner)
                 if matches!(
                     inner.resolve_to_definition(),
