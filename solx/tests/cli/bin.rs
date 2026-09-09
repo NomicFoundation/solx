@@ -238,3 +238,39 @@ fn interface_empty_yul() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[cfg(feature = "slang")]
+#[test]
+fn abstract_creation() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/AbstractCreation.sol"),
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.failure().stderr(predicate::str::contains(
+        "Error: Object `tests/data/contracts/solidity/AbstractCreation.sol:Abstract` required by `tests/data/contracts/solidity/AbstractCreation.sol:Creator_deployed` is not in the build",
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn object_cycle() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("yul/ErrorObjectCycle.yul"),
+        "--yul",
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.failure().stderr(predicate::str::contains(
+        "Error: Object `ErrorObjectCycle` and the objects it requires form a cycle",
+    ));
+
+    Ok(())
+}

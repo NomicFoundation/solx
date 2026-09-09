@@ -9,22 +9,21 @@ use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::StateVariableMutability;
 use slang_solidity_v2::ast::Type;
 
-use solx_mlir::FunctionDispatch;
-use solx_mlir::FunctionKind;
 use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
 
 use crate::contract::object::Object;
+use crate::scope::contract::Lookup;
 use crate::scope::function::FunctionScope;
 use crate::scope::source_unit::SourceUnitScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// A constant folds to its initializer; an immutable outside the constructor loads its linked
-    /// value (`sol.load_immutable`); a bare function name materialises its internal pointer
-    /// (`sol.func_constant`), defining the function in this module if absent; a library name is its
-    /// linked address (`sol.lib_addr`); every other identifier loads from its place.
-    pub fn identifier(&mut self, node: &Identifier) -> Value<'context> {
+    /// A constant folds to its initializer; an immutable outside a constructor loads its linked
+    /// value (`sol.load_immutable`); a function name materialises the internal pointer of the
+    /// function the object runs for it under `lookup`; a library name is its linked address
+    /// (`sol.lib_addr`); every other identifier loads from its place.
+    pub fn identifier(&mut self, node: &Identifier, lookup: &Lookup) -> Value<'context> {
         let definition = node.resolve_to_definition();
         if let Some(definition) = &definition
             && let Some((initializer, _)) = Self::constant_definition(definition)
@@ -35,7 +34,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             Some(Definition::StateVariable(state_variable))
                 if let StateVariableMutability::Immutable =
                     state_variable.attributes().mutability()
-                    && self.dispatch != FunctionDispatch::Kind(FunctionKind::Constructor) =>
+                    && !self.in_constructor =>
             {
                 let element_type = self.resolve_type(
                     &state_variable
@@ -50,11 +49,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 )
             }
             Some(Definition::Function(function)) => {
+                let function = self.contract.resolve(&function, lookup);
                 self.contract.function_definition(&function);
-                self.contract
-                    .source_unit
-                    .function_signature(&function)
-                    .pointer_constant(self)
+                self.contract.signature(&function).pointer_constant(self)
             }
             Some(Definition::Library(library)) => {
                 Value::library_address(Object::Library(library).identifier().as_str(), self)

@@ -5,6 +5,7 @@
 pub mod contract;
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -60,13 +61,31 @@ impl Build {
     ) -> Self {
         let ast_jsons = self.ast_jsons.take();
 
+        let all_objects = self.objects();
+        let identifiers: BTreeSet<&str> = all_objects
+            .iter()
+            .map(|object| object.identifier.as_str())
+            .collect();
+        for object in all_objects.iter() {
+            if let Some(dependency) = object
+                .dependencies
+                .into_iter()
+                .find(|dependency| !identifiers.contains(dependency.as_str()))
+            {
+                let error = solx_standard_json::OutputError::new_error_contract(
+                    Some(object.contract_name.path.as_str()),
+                    format!(
+                        "Object `{dependency}` required by `{}` is not in the build",
+                        object.identifier
+                    ),
+                );
+                return Self::failed(self.messages, ast_jsons, error);
+            }
+        }
+
         loop {
             let assembled_objects_data = {
-                let all_objects = self
-                    .contracts
-                    .values()
-                    .flat_map(|contract| contract.objects_ref())
-                    .collect::<Vec<&ContractObject>>();
+                let all_objects = self.objects();
                 let objects_by_id: BTreeMap<&str, &ContractObject> = all_objects
                     .iter()
                     .map(|object| (object.identifier.as_str(), *object))
@@ -79,13 +98,25 @@ impl Build {
                             && object.dependencies.into_iter().all(|dependency| {
                                 objects_by_id
                                     .get(dependency.as_str())
-                                    .map(|object| object.is_assembled)
-                                    .unwrap_or_default()
+                                    .expect("every dependency is an object of the build")
+                                    .is_assembled
                             })
                     })
                     .copied()
                     .collect::<Vec<_>>();
                 if assembleable_objects.is_empty() {
+                    // Every dependency is in the build, so an object left
+                    // unassembled sits on a cycle, which only Yul input admits.
+                    if let Some(object) = all_objects.iter().find(|object| !object.is_assembled) {
+                        let error = solx_standard_json::OutputError::new_error_contract(
+                            Some(object.contract_name.path.as_str()),
+                            format!(
+                                "Object `{}` and the objects it requires form a cycle",
+                                object.identifier
+                            ),
+                        );
+                        return Self::failed(self.messages, ast_jsons, error);
+                    }
                     break;
                 }
 
@@ -94,13 +125,11 @@ impl Build {
                     let assembled_object = match object.assemble(&objects_by_id) {
                         Ok(assembled_object) => assembled_object,
                         Err(error) => {
-                            self.messages.lock_sync().push(
-                                solx_standard_json::OutputError::new_error_contract(
-                                    Some(object.contract_name.path.as_str()),
-                                    &error,
-                                ),
+                            let error = solx_standard_json::OutputError::new_error_contract(
+                                Some(object.contract_name.path.as_str()),
+                                &error,
                             );
-                            return Self::new(BTreeMap::new(), ast_jsons, self.messages);
+                            return Self::failed(self.messages, ast_jsons, error);
                         }
                     };
                     assembled_objects_data.push((
@@ -140,13 +169,11 @@ impl Build {
         for contract in self.contracts.values_mut() {
             for object in contract.objects_mut().into_iter() {
                 if let Err(error) = object.link(&linker_symbols) {
-                    self.messages.lock_sync().push(
-                        solx_standard_json::OutputError::new_error_contract(
-                            Some(object.contract_name.path.as_str()),
-                            &error,
-                        ),
+                    let error = solx_standard_json::OutputError::new_error_contract(
+                        Some(object.contract_name.path.as_str()),
+                        &error,
                     );
-                    return Self::new(BTreeMap::new(), ast_jsons, self.messages);
+                    return Self::failed(self.messages, ast_jsons, error);
                 }
             }
         }
@@ -390,6 +417,28 @@ impl Build {
             standard_json.benchmarks.extend(benchmarks);
         }
         Ok(())
+    }
+
+    ///
+    /// The build an `error` leaves: no contracts, the error among `messages`, the ASTs kept.
+    ///
+    fn failed(
+        messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
+        ast_jsons: Option<BTreeMap<String, Option<serde_json::Value>>>,
+        error: solx_standard_json::OutputError,
+    ) -> Self {
+        messages.lock_sync().push(error);
+        Self::new(BTreeMap::new(), ast_jsons, messages)
+    }
+
+    ///
+    /// Every object of the build, across its contracts and code segments.
+    ///
+    fn objects(&self) -> Vec<&ContractObject> {
+        self.contracts
+            .values()
+            .flat_map(|contract| contract.objects_ref())
+            .collect()
     }
 }
 

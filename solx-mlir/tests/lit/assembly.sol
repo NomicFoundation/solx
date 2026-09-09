@@ -20,7 +20,8 @@
 // CHECK:     yul.exp
 // CHECK:     yul.addmod
 // CHECK:     yul.mulmod
-// CHECK:     yul.signextend
+// CHECK:     %[[BYTE_INDEX:.*]] = yul.constant 1
+// CHECK:     yul.signextend %[[BYTE_INDEX]], %{{.*}}
 
 // CHECK: sol.func @{{.*bitwise.*}}
 // CHECK:   sol.inline_asm {

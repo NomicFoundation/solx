@@ -27,6 +27,7 @@ use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
 
+use crate::scope::contract::Lookup;
 use crate::scope::function::FunctionScope;
 
 use self::call::Call;
@@ -46,7 +47,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             Expression::TrueKeyword(_) => self.boolean_literal(true),
             Expression::FalseKeyword(_) => self.boolean_literal(false),
             Expression::StringExpression(inner) => self.string_literal(inner),
-            Expression::Identifier(inner) => self.identifier(inner),
+            Expression::Identifier(inner) => self.identifier(inner, &Lookup::Virtual),
             Expression::ThisKeyword(_) => self.this_value(),
             Expression::AdditiveExpression(inner) => self.additive(inner),
             Expression::MultiplicativeExpression(inner) => self.multiplicative(inner),
@@ -111,23 +112,14 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// parenthesized place is a single-element tuple, peeled here; a multi-element tuple denotes
     /// several places, resolved by `expression_places`.
     pub fn expression_place(&mut self, node: &Expression) -> (Place<'context>, MlirType<'context>) {
-        match node {
+        match &Self::unparenthesized(node) {
             Expression::Identifier(inner) => self.identifier_place(inner),
             Expression::MemberAccessExpression(inner) => self.member_access_place(inner),
             Expression::IndexAccessExpression(inner) => self.index_access_place(inner),
             Expression::FunctionCallExpression(inner) => self.function_call_place(inner),
-            Expression::TupleExpression(inner) if inner.items().len() == 1 => {
-                let operand = inner
-                    .items()
-                    .iter()
-                    .next()
-                    .and_then(|item| item.expression())
-                    .expect("a parenthesized place wraps a single operand");
-                self.expression_place(&operand)
-            }
-            _ => unimplemented!(
+            other => unimplemented!(
                 "expression is not an assignable place: {:?}",
-                std::mem::discriminant(node)
+                std::mem::discriminant(other)
             ),
         }
     }
@@ -163,7 +155,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             }
             Expression::TupleExpression(inner) => self.tuple_effect(inner),
             Expression::NewExpression(_) => {}
-            Expression::ThisKeyword(_) => {}
+            Expression::ThisKeyword(_) | Expression::SuperKeyword(_) => {}
             Expression::Identifier(inner)
                 if matches!(
                     inner.resolve_to_definition(),
@@ -262,13 +254,26 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// The definition a bare (`E`) or namespace-qualified (`Lib.E`) name resolves to.
     pub fn resolved_definition(expression: &Expression) -> Option<Definition> {
-        match expression {
+        match Self::unparenthesized(expression) {
             Expression::Identifier(identifier) => identifier.resolve_to_definition(),
             Expression::MemberAccessExpression(access) => access.member().resolve_to_definition(),
-            Expression::TupleExpression(inner) if inner.items().len() == 1 => {
-                Self::resolved_definition(&inner.items().iter().next()?.expression()?)
-            }
             _ => None,
         }
+    }
+
+    /// The expression under the parentheses wrapping `expression`, if any: the binder types a
+    /// parenthesized expression as the one it wraps, so an arm classifying an operand by its shape
+    /// looks through them. The empty tuple `()` wraps nothing and is returned as it is.
+    pub fn unparenthesized(expression: &Expression) -> Expression {
+        if let Expression::TupleExpression(inner) = expression {
+            let items = inner.items();
+            let mut items = items.iter();
+            if let (Some(item), None) = (items.next(), items.next())
+                && let Some(operand) = item.expression()
+            {
+                return Self::unparenthesized(&operand);
+            }
+        }
+        expression.clone()
     }
 }
