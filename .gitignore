@@ -28,4 +28,5 @@
 # AI
 .mcp.json
 opencode.json
-.claude/
+.claude/*
+!.claude/skills/

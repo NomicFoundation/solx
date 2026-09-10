@@ -4,11 +4,10 @@
 
 # Optimizing Solidity Compiler
 
-**solx** is a new optimizing compiler for EVM developed by [Matter Labs](https://matter-labs.io/) and [Nomic Foundation](https://nomic.foundation/).
+**solx** is an optimizing Solidity compiler for EVM by [Nomic Foundation](https://nomic.foundation/). [Slang](https://github.com/NomicFoundation/slang) parses and binds the Solidity, the frontend lowers it to MLIR, and an LLVM backend with an EVM target produces the bytecode.
 
 > [!WARNING]  
-> The project is in beta and must be used with caution. Please use it only for testing and experimentation.
-> If you want to use it in production, make sure to test your contracts thoroughly, or [contact us](#contact-us) first.
+> The project is in development and is not ready for production use.
 
 **solx** passes multiple test suites, including:
 
@@ -22,10 +21,11 @@
 
 **solx** documentation is powered by [GitHub Pages](https://nomicfoundation.github.io/solx/latest/) and provided as an [mdBook](https://github.com/rust-lang/mdBook), while its Markdown sources can be found in [this directory](./docs/src/).
 To build the book, follow these [instructions](./docs/README.md).
+The design rules of the Slang frontend and the conventions for working on this repository with an agent are in [CLAUDE.md](./CLAUDE.md).
 
 See also:
 
-- [Solidity Documentation](https://docs.soliditylang.org/en/v0.8.34/)
+- [Solidity Documentation](https://docs.soliditylang.org/en/v0.8.36/)
 - [LLVM Documentation](https://llvm.org/docs/)
 
 ## Installation
@@ -73,7 +73,6 @@ For reference, see [llvm-sys](https://crates.io/crates/llvm-sys) and [Local LLVM
 - All other crates are licensed under the terms of either
   - Apache License, Version 2.0 ([LICENSE-APACHE](./solx-standard-json/LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
   - MIT license ([LICENSE-MIT](./solx-standard-json/LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
-- [`solx-solidity`](https://github.com/NomicFoundation/solx-solidity/) is licensed under [GNU General Public License v3.0](https://github.com/NomicFoundation/solx-solidity/blob/0.8.34/LICENSE.txt)
 - [`solx-llvm`](https://github.com/NomicFoundation/solx-llvm) is licensed under the terms of Apache License, Version 2.0 with LLVM Exceptions, ([LICENSE](https://github.com/NomicFoundation/solx-llvm/blob/main/LICENSE) or https://llvm.org/LICENSE.txt)
 
 Additionally, this repository vendors tests and test projects that preserve their original licenses:
@@ -86,6 +85,10 @@ Additionally, this repository vendors tests and test projects that preserve thei
 These projects are modified for the purposes of testing our compiler toolchain and are not used outside of this repository.
 
 Visit the project directories to discover the terms of each license in detail. These and other projects are licensed in either per-file or per-project manner.
+
+## Credits
+
+**solx** originated at [Matter Labs](https://matter-labs.io/), where its first pipeline and LLVM backend were built.
 
 ## Contact Us
 
