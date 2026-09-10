@@ -1,137 +1,143 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Project Overview
-
-**solx** is an optimizing Solidity compiler for EVM, developed by Matter Labs and Nomic Foundation. It uses a custom LLVM backend with an EVM target to generate optimized bytecode. The project is in beta.
+Human documentation starts at the [README](./README.md) and continues under [docs/src](./docs/src/). The [review skill](./.claude/skills/review/SKILL.md) reviews a change against this file.
 
 ## Architecture
 
-Three-repository structure via git submodules:
-- **solx** (this repo) — Rust workspace: CLI, compilation pipeline, LLVM IR generation
-- **solx-solidity** (submodule) — Fork of solc that emits Yul/EVM assembly
-- **solx-llvm** (submodule) — Fork of LLVM with an EVM target backend
+- **solx** (this repo) is the Rust workspace: the CLI, the Slang frontend, the dialect binding and codegen.
+- **Slang** is the parser and binder, a git dependency pinned by `rev` in [`Cargo.toml`](./Cargo.toml).
+- [**solx-llvm**](./solx-llvm/) (submodule) is a fork of LLVM with the Sol and Yul MLIR dialects and an EVM target backend.
+- [**solx-solidity**](./solx-solidity/) (submodule) is a fork of solc, kept for its [`test/libsolidity/semanticTests`](./solx-solidity/test/libsolidity/semanticTests/), which the tester runs.
 
-**Compilation pipeline:**
 ```
-Solidity → solc frontend (parse, analyze) → Yul/EVM assembly → LLVM IR → LLVM optimizer → EVM bytecode
-```
-
-Alternative pipeline via Slang (Rust-based frontend, WIP):
-```
-Solidity → Slang (parse, analyze) → MLIR → LLVM IR → EVM bytecode
+Solidity → Slang (parse, bind) → Sol-dialect MLIR → Sol→Yul→Standard passes → LLVM IR → LLVM optimizer → EVM bytecode
 ```
 
-### Workspace Crates (14 total)
+### Workspace Crates
 
 | Crate | Purpose |
 |---|---|
-| `solx` | CLI entry point, frontend dispatch |
-| `solx-core` | Pipeline orchestration (`standard_output_evm`, `standard_json_evm`, `yul_to_evm`, `llvm_ir_to_evm`) |
-| `solx-codegen-evm` | LLVM IR generation, optimization passes, bytecode assembly, linking |
-| `solx-slang` | Alternative Rust-based Slang frontend |
-| `solx-mlir` | MLIR-to-LLVM translation via melior |
-| `solx-yul` | Yul lexer/parser |
-| `solx-evm-assembly` | EVM assembly representation and ethereal IR |
-| `solx-standard-json` | solc-compatible JSON I/O protocol |
-| `solx-utils` | Shared types (contract names, EVM versions, hashing, CBOR metadata) |
-| `solx-dev` | Developer tool: builds LLVM, solc, runs project tests |
-| `solx-tester` | Integration test runner using REVM |
-| `solx-compiler-downloader` | Downloads/verifies compiler binaries |
-| `solx-benchmark-converter` | Benchmark analysis and comparison |
-| `solx-solc-test-adapter` | Adapter for upstream solc tests |
-
-**Important feature split:** `solx-slang` and `solx-mlir` use inkwell with `llvm21-1-no-llvm-linking`, while `solx-codegen-evm` uses `llvm21-1` (links LLVM). They are excluded from `default-members` to avoid Cargo feature unification conflicts. Use `cargo test-slang` to test them.
+| [`solx`](./solx/) | CLI entry point |
+| [`solx-core`](./solx-core/) | Pipeline orchestration |
+| [`solx-slang`](./solx-slang/) | Lowers the Slang AST to Sol-dialect MLIR |
+| [`solx-mlir`](./solx-mlir/) | The Sol and Yul dialect binding over melior: values, places, types, blocks |
+| [`solx-codegen-evm`](./solx-codegen-evm/) | LLVM IR to EVM bytecode: optimization, assembly, linking |
+| [`solx-standard-json`](./solx-standard-json/) | solc-compatible JSON I/O protocol |
+| [`solx-utils`](./solx-utils/) | Shared types: contract names, EVM versions, hashing, CBOR metadata |
+| [`solx-dev`](./solx-dev/) | Developer tool: builds LLVM, runs project tests |
+| [`solx-tester`](./solx-tester/) | Test runner over the REVM corpus |
+| [`solx-compiler-downloader`](./solx-compiler-downloader/) | Downloads and verifies compiler binaries |
+| [`solx-benchmark-converter`](./solx-benchmark-converter/) | Benchmark analysis and comparison |
 
 ## Build Commands
 
-### Prerequisites
-
-Build the `solx-dev` tool first, then use it to build LLVM and solc:
+Build `solx-dev`, then LLVM with MLIR, then solx:
 
 ```bash
 cargo build --release --bin solx-dev
-
-# Build LLVM (outputs to target-llvm/target-final/)
-./target/release/solx-dev llvm build --enable-mlir --enable-utils --build-type RelWithDebInfo
-
-# Build solc libraries (outputs to solx-solidity/build/)
-./target/release/solx-dev solc build
+./target/release/solx-dev llvm build --enable-mlir --enable-utils --build-type RelWithDebInfo   # target-llvm/target-final/
+cargo build-slang              # target/debug/solx
+cargo build-slang --release    # target/release/solx
 ```
-
-### Building solx
-
-```bash
-cargo build              # debug
-cargo build --release    # release (outputs to target/release/solx)
-```
-
-### Environment Variables (auto-set via .cargo/config.toml)
-
-- `LLVM_SYS_211_PREFIX` → `./target-llvm/target-final/`
-- `MLIR_SYS_210_PREFIX` → `./target-llvm/target-final/`
-- `TABLEGEN_210_PREFIX` → `./target-llvm/target-final/`
-- `SOLC_PREFIX` → `./solx-solidity/build/`
-- `BOOST_PREFIX` → `./solx-solidity/boost/lib/`
 
 ## Testing
 
-### Unit and CLI tests
-
 ```bash
-cargo test                              # all tests (unit + CLI)
-cargo test --lib                        # unit tests only
-cargo test --test mod                   # CLI integration tests only (target is `mod`)
-cargo test --test mod -- cli::bin::default  # specific test
+cargo test-slang                                        # unit and CLI tests of solx-slang, solx-mlir and solx
+cargo clippy-slang --all-targets
+cargo build-slang --release && cargo run-tester-slang   # the REVM corpus at -O M3B3 against target/release/solx
+cargo run-tester-slang --path tests/solidity/simple/default.sol   # one test
 ```
 
-### Slang/MLIR tests (cargo alias)
+LIT runs the fixtures under [`solx-mlir/tests/lit/`](./solx-mlir/tests/lit/) against `target/debug/solx`:
 
 ```bash
-cargo test-slang
-# expands to: cargo test -p solx-slang -p solx-mlir -p solx --no-default-features --features slang
+export PATH="$PWD/target-llvm/target-final/bin:$PWD/target/debug:$PATH"
+PYTHONPATH=solx-llvm/llvm/utils/lit python3 target-llvm/target-final/bin/llvm-lit solx-mlir/tests/lit/
 ```
 
-### Integration tests with solx-tester
+## Slang Frontend
 
-```bash
-cargo build --release
-./target/release/solx-tester --solidity-compiler ./target/release/solx
-./target/release/solx-tester --solidity-compiler ./target/release/solx --path tests/solidity/simple/default.sol
-./target/release/solx-tester --solidity-compiler ./target/release/solx --via-ir  # Yul pipeline only
-```
+`solx-slang` lowers the Slang AST to Sol-dialect MLIR through `solx-mlir`. The rules below are the design law of that frontend and the conventions a reviewer would otherwise repeat by hand.
 
-### Project tests (Foundry/Hardhat)
+### Ground truth
 
-```bash
-./target/release/solx-dev test foundry --test-config-path solx-dev/foundry-tests.toml
-./target/release/solx-dev test hardhat --test-config-path solx-dev/hardhat-tests.toml
-```
+1. Ground truth is legacy solc: `solc --asm`, `--bin` and `--storage-layout` define behavior. solx is never evidence about itself.
 
-## Code Conventions
+2. The compiler shapes the tests, never the reverse. No emission code exists to keep a fixture passing. A fixture that stops matching a correct change is rewritten.
 
-- Rust edition 2024, toolchain 1.97.1
-- `missing_docs` warning is enabled globally — all public items need doc comments
-- Release builds strip debug symbols (`strip = true`)
-- macOS minimum deployment target: 11.0
+### Validation and failure
 
-## Test File Format
+1. Codegen does no validation. Slang owns every check on the program. The frontend lowers whatever Slang accepts and never re-implements a solc rule.
 
-Tests live in `tests/solidity/`, `tests/yul/`, `tests/llvm-ir/`.
+2. Emission has no error path: no `Result`, no diagnostics. A construct not lowered yet is `unimplemented!`. Any other panic names the Slang guarantee that turned out broken. Input Slang accepts is never a panic site.
 
-- **Simple tests** (`tests/solidity/simple/`): single file with `//!` JSON metadata comments
-- **Complex tests** (`tests/solidity/complex/`): directory with `test.json` + source files
-- Test metadata includes: `cases`, `contracts`, `libraries`, `ignore`, `modes` (`Y` for Yul, `E` for EVMLA)
+3. Dispatch is decided up front. The handler for a construct is resolved and called. There is no try-this-then-that and no "not applicable" return value.
 
-## CI Labels
+### Slang as the source of truth
 
-- `ci:sanitizer` — enable address sanitizer tests
-- `ci:integration` — enable integration tests
+1. Slang is the single source of semantic truth. Types, selectors, signatures, layout, linearisation and name resolution come from its API and are never recomputed or approximated here, by the compiler or by the tester.
 
-## Renovate Config
+2. Type facts come from the dialect's own predicates, never from matching printed type text.
 
-When editing `renovate.json`, validate locally before pushing (CI runs the same checks via the `renovate-config-check` job in `test.yaml`):
+### Emission model
 
-- **Schema check:** `npx --yes --package renovate -- renovate-config-validator renovate.json`
-- **Full extraction dry-run:** `LOG_LEVEL=debug npx --yes renovate --platform=local --dry-run=full` — confirms each dep shows the expected `skipReason` / `updates`. Catches gotchas like `matchPackageNames` failing to match git-source cargo deps (where `packageName` is the git URL, not the `Cargo.toml` key — use `matchDepNames` for those, as the pinned-fork rule does for `inkwell`/`melior`/`slang_solidity`/`web3`).
+1. Codegen is one traversal. A definition is materialized the first time something names it, marked before its body is emitted, and nothing walks the program ahead of emission to collect or pre-register.
+
+2. A module defines at least what its bodies reference and the pass pipeline removes the excess. The frontend never computes "exactly what is needed".
+
+3. Caches are memos filled on first use, living on the object that owns the fact. A cache that must be complete before a phase is a hidden pre-pass.
+
+4. A fact the emitting context can derive from a relationship it already sees is derived there, never threaded down as a parameter.
+
+### Scopes and modules
+
+1. Lowering is methods on the scope that owns the mutable state of that level: source unit, contract, function, assembly block. The AST node is input, the scope is the receiver, and each level's derived facts are computed once when the scope opens.
+
+2. The lowering layer has no traits, macros, free functions or namespace types. One mechanism only.
+
+3. Modules mirror what a construct is, not how Slang's grammar spells it. A group of files has one obvious reason to exist.
+
+4. The dialect crate knows nothing about Slang, and vocabulary only the frontend uses lives in the frontend.
+
+### Ops and dialects
+
+1. Every dialect op has exactly one home: the entity whose operation it is. Values cast and compare, places load and store, blocks branch. Nothing builds an op outside its home.
+
+2. Solidity emits Sol ops, inline assembly emits Yul ops. A Sol value enters Yul only through the bridge ops, and emitting one dialect's operation with the other's op is wrong even when the result is equivalent.
+
+3. Conversion has three separate layers: raw op emitters that do one thing, value-level policy that decides which to call, and expression-level helpers that lower an expression to a target type. Every site that needs a typed expression goes through the helpers.
+
+### Domains
+
+1. A domain lands complete over the types that exist when it lands. Later domains extend the earlier mechanisms for the types they introduce, so every mechanism is designed once as an extension point.
+
+### Fixtures
+
+1. A LIT fixture pins op shape. A tester case under [`tests/solidity/`](./tests/solidity/) pins behavior.
+
+2. A fixture has one RUN line, `solx --emit-mlir=sol %s | FileCheck %s`, and no prose. The CHECKs are the whole statement.
+
+3. One fixture per construct. A new case joins the fixture that owns its construct.
+
+4. Every CHECK must fail when the input line it matches is deleted.
+
+5. Every fixture source line is observed by some CHECK.
+
+6. A base the fixture does not observe is `abstract`.
+
+### Naming and docs
+
+1. One concept has one name across the frontend.
+
+2. A lowering method is named after the node it lowers. The receiver already says which dialect.
+
+3. An imported type that clashes with a local one takes the prefix of the crate it came from.
+
+4. No contractions in names: `identifier`, not `id`; `message`, not `msg`; `context`, not `ctx`. Initialisms read as words stay short, such as `abi`, `mlir`, `ods`, `url`, `api`, and unit symbols such as `ms`.
+
+5. A doc says why the item exists or what is non-obvious, never its name again.
+
+6. A `//` comment carries only a constraint the code cannot express.
+
+### Pull requests
+
+1. A PR body is short and human-readable: one or two sentences saying what the PR delivers. Nothing else: no headings, lists, tables, file lists or narration.
