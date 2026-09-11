@@ -15,7 +15,6 @@ use rayon::iter::ParallelIterator;
 
 use crate::build::Build as EVMBuild;
 use crate::build::contract::Contract as EVMContractBuild;
-use crate::error::Error;
 use crate::process::job::Job as EVMProcessJob;
 use crate::process::output::Output as EVMProcessOutput;
 use crate::process::pool::Pool as EVMProcessPool;
@@ -52,9 +51,6 @@ pub struct Project {
 }
 
 impl Project {
-    /// The number of stack-too-deep retries allowed with the initial optimizer settings and, separately, with the size fallback.
-    const STACK_TOO_DEEP_RETRY_LIMIT: usize = 4;
-
     ///
     /// A shortcut constructor.
     ///
@@ -697,7 +693,7 @@ impl Project {
                         append_cbor,
                     );
 
-                    let mut job = EVMProcessJob::new(
+                    let job = EVMProcessJob::new(
                         contract_name.clone(),
                         runtime_code_ir,
                         solx_utils::CodeSegment::Runtime,
@@ -707,7 +703,7 @@ impl Project {
                         optimizer_settings.clone(),
                     );
 
-                    let result = Self::run_multi_pass_pipeline(&pool, &mut job);
+                    let result = pool.execute(&job);
                     (result, metadata)
                 };
 
@@ -716,7 +712,7 @@ impl Project {
                     .ok()
                     .and_then(|output| output.object.immutables.to_owned());
                 let deploy_object_result: crate::Result<EVMProcessOutput> = {
-                    let mut job = EVMProcessJob::new(
+                    let job = EVMProcessJob::new(
                         contract_name.clone(),
                         deploy_code_ir,
                         solx_utils::CodeSegment::Deploy,
@@ -726,7 +722,7 @@ impl Project {
                         optimizer_settings.clone(),
                     );
 
-                    Self::run_multi_pass_pipeline(&pool, &mut job)
+                    pool.execute(&job)
                 };
 
                 let build = EVMContractBuild::new(
@@ -812,43 +808,6 @@ impl Project {
             None => {
                 let cbor = solx_utils::CBOR::<'_, String>::new(None, cbor_data.0, cbor_data.1);
                 Some(cbor.to_vec())
-            }
-        }
-    }
-
-    ///
-    /// Runs the multi-pass compilation pipeline.
-    ///
-    /// Stack-too-deep errors are retried with the reported spill area size, up to
-    /// `STACK_TOO_DEEP_RETRY_LIMIT` times with the initial optimizer settings and as many
-    /// times again after switching to the size fallback to overcome the EVM bytecode size limit.
-    ///
-    fn run_multi_pass_pipeline(
-        pool: &EVMProcessPool,
-        job: &mut EVMProcessJob,
-    ) -> crate::Result<EVMProcessOutput> {
-        let mut stack_too_deep_retries = 0;
-        loop {
-            match pool.execute(job) {
-                Err(Error::StackTooDeep(stack_too_deep)) => {
-                    if stack_too_deep.is_size_fallback
-                        && !job.optimizer_settings.is_fallback_to_size_active()
-                    {
-                        job.optimizer_settings.switch_to_size_fallback();
-                        stack_too_deep_retries = 0;
-                    } else if stack_too_deep_retries == Self::STACK_TOO_DEEP_RETRY_LIMIT {
-                        break Err(solx_standard_json::OutputError::new_error_contract(
-                            Some(job.contract_name.path.as_str()),
-                            stack_too_deep,
-                        )
-                        .into());
-                    } else {
-                        stack_too_deep_retries += 1;
-                    }
-                    job.optimizer_settings
-                        .set_spill_area_size(stack_too_deep.spill_area_size);
-                }
-                result => break result,
             }
         }
     }

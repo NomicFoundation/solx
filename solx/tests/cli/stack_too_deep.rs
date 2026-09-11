@@ -109,9 +109,8 @@ fn stack_too_deep_recursive_standard_json() -> anyhow::Result<()> {
     Ok(())
 }
 
-// The reported spill area is underestimated under the pinned LLVM backend, so the
-// fixture compiles only through stack-too-deep retries in both the initial settings
-// and the size fallback.
+// The fixture requires stack spilling in both the initial settings and the size
+// fallback; the spill area is allocated by the backend in a single codegen run.
 #[cfg(feature = "solc")]
 #[test]
 fn stack_too_deep_size_fallback() -> anyhow::Result<()> {

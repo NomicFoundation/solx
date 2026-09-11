@@ -18,9 +18,9 @@ const POISON: &str = "lock is never poisoned because worker threads do not panic
 /// The pool of persistent worker subprocesses.
 ///
 /// A worker returns to the idle list after every job it survives — a success or a per-unit
-/// compile error alike — and is retired only by a transport failure or a `StackTooDeep` or
-/// LLVM-fatal reply, after which the child exits. The number of live workers never exceeds
-/// the number of dispatching threads.
+/// compile error alike — and is retired only by a transport failure or an LLVM-fatal reply,
+/// after which the child exits. The number of live workers never exceeds the number of
+/// dispatching threads.
 ///
 pub struct Pool {
     /// The worker executable path.
@@ -53,7 +53,7 @@ impl Pool {
     /// Compiles one translation unit on a pooled or freshly spawned worker.
     ///
     /// A worker that survives the job rejoins the pool, including after a per-unit compile error.
-    /// A transport failure or a `StackTooDeep` or LLVM-fatal reply retires it instead.
+    /// A transport failure or an LLVM-fatal reply retires it instead.
     ///
     pub fn execute(&self, job: &Job) -> crate::Result<EVMOutput> {
         let mut worker = match self.idle.lock().expect(POISON).pop() {
