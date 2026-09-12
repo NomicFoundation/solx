@@ -482,7 +482,7 @@ solx 'Simple.sol' 'Complex.sol' --bin
 solx 'Simple.sol' 'github.com/ethereum/dapp-bin/=/usr/local/lib/dapp-bin/' --bin
 ```
 
-**solx** does not handle remappings itself, but only passes them through to *solc*.
+**solx** applies remappings itself, following *solc*'s semantics.
 Visit [the **solc** documentation](https://docs.soliditylang.org/en/latest/using-the-compiler.html#base-path-and-import-remapping) to learn more about the processing of remappings.
 
 
@@ -503,7 +503,7 @@ solx 'Simple.sol' --bin --libraries 'Simple.sol:Simple=0x1234567890abcdef1234567
 
 ### `--base-path`, `--include-path`, `--allow-paths`
 
-These options are used to specify Solidity import resolution settings. They are not used by **solx** and only passed through to **solc** like import remappings.
+These options are used to specify Solidity import resolution settings. They are not used by **solx**, which resolves imports only against the sources it is given.
 
 Visit [the **solc** documentation](https://docs.soliditylang.org/en/latest/path-resolution.html) to learn more about the processing of these options.
 
