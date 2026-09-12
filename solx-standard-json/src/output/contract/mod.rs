@@ -41,13 +41,15 @@ pub struct Contract {
 
 impl Contract {
     ///
-    /// Wraps an MLIR pipeline output together with its ABI method identifiers.
+    /// Wraps an MLIR pipeline output together with its JSON ABI and ABI method identifiers.
     ///
     pub fn new_mlir(
         mlir: solx_mlir::MlirOutput,
+        abi: serde_json::Value,
         method_identifiers: std::collections::BTreeMap<String, String>,
     ) -> Self {
         Self {
+            abi: Some(abi),
             mlir: Some(mlir),
             evm: Some(EVM {
                 method_identifiers: Some(method_identifiers),

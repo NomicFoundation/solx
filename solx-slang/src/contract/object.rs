@@ -17,6 +17,7 @@ use slang_solidity_v2::ast::StateVariableDefinition;
 
 use solx_mlir::ContractKind;
 
+use crate::abi::Abi;
 use crate::contract::storage_slot::StorageSlot;
 
 /// The deployable object a module emits, each variant carrying the definition its kind
@@ -87,6 +88,15 @@ impl Object {
                 .collect(),
             Self::Library(_) => Vec::new(),
         }
+    }
+
+    /// The object's JSON ABI.
+    pub fn abi(&self) -> Abi {
+        let abi = match self {
+            Self::Contract(node) => node.compute_abi(),
+            Self::Library(node) => node.compute_abi(),
+        };
+        Abi::from(&abi.expect("slang admits an object whose ABI it cannot compute"))
     }
 
     /// A contract's functions over its hierarchy after resolving overrides and getter shadowing;

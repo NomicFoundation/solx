@@ -64,7 +64,10 @@ impl<'context> SourceUnitScope<'context> {
                 capture_sol_dialect(name.as_str()),
                 profiler,
             )?;
-            contracts.insert(name, Contract::new_mlir(mlir, method_identifiers));
+            contracts.insert(
+                name,
+                Contract::new_mlir(mlir, object.abi().into_value(), method_identifiers),
+            );
         }
         Ok(contracts)
     }

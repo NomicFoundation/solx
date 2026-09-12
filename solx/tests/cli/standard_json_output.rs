@@ -456,7 +456,6 @@ fn storage_layout_output() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "solx does not emit this output yet"]
 fn abi_only_output() -> anyhow::Result<()> {
     crate::common::setup()?;
 

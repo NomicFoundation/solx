@@ -7,6 +7,7 @@
 
 #![allow(clippy::too_many_arguments)]
 
+pub(crate) mod abi;
 pub(crate) mod contract;
 pub(crate) mod scope;
 pub(crate) mod slang;
