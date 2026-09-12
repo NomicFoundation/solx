@@ -5,7 +5,9 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractDefinition;
+use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
@@ -16,6 +18,7 @@ use slang_solidity_v2::ast::StateVariableDefinition;
 
 use solx_mlir::ContractKind;
 
+use crate::abi::Abi;
 use crate::contract::storage_slot::StorageSlot;
 
 /// The deployable object a module emits, each variant carrying the definition its kind
@@ -77,6 +80,34 @@ impl Object {
         match self {
             Self::Contract(node) => node.is_payable(),
             Self::Library(_) => false,
+        }
+    }
+
+    /// The object's JSON ABI. Slang computes a contract's whole; a library's is composed from the
+    /// entries Slang computes per member, since Slang has no library ABI.
+    pub fn abi(&self) -> Abi {
+        match self {
+            Self::Contract(node) => Abi::from(
+                &node
+                    .compute_abi()
+                    .expect("slang admits a contract whose ABI it cannot compute"),
+            ),
+            Self::Library(node) => {
+                let mut entries = node
+                    .members()
+                    .iter()
+                    .filter_map(|member| match member {
+                        ContractMember::FunctionDefinition(function) => {
+                            function.compute_abi_entry()
+                        }
+                        ContractMember::ErrorDefinition(error) => error.compute_abi_entry(),
+                        ContractMember::EventDefinition(event) => event.compute_abi_entry(),
+                        _ => None,
+                    })
+                    .collect::<Vec<AbiEntry>>();
+                entries.sort();
+                Abi::from(entries.as_slice())
+            }
         }
     }
 

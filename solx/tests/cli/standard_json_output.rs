@@ -417,7 +417,6 @@ fn storage_layout_output() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn abi_only_output() -> anyhow::Result<()> {
     crate::common::setup()?;

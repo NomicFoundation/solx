@@ -515,6 +515,12 @@ impl Arguments {
         if self.output_metadata {
             selectors.insert(solx_standard_json::InputSelector::Metadata);
         }
+        if self.output_abi {
+            selectors.insert(solx_standard_json::InputSelector::ABI);
+        }
+        if self.output_hashes {
+            selectors.insert(solx_standard_json::InputSelector::MethodIdentifiers);
+        }
 
         #[cfg(feature = "solc")]
         {
@@ -531,12 +537,6 @@ impl Arguments {
             }
             if self.output_debug_info_runtime {
                 selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo);
-            }
-            if self.output_abi {
-                selectors.insert(solx_standard_json::InputSelector::ABI);
-            }
-            if self.output_hashes {
-                selectors.insert(solx_standard_json::InputSelector::MethodIdentifiers);
             }
             if self.output_userdoc {
                 selectors.insert(solx_standard_json::InputSelector::UserDocumentation);
