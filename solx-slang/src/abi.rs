@@ -1,14 +1,22 @@
 //!
-//! The JSON ABI of a deployable object in solc's spelling. Slang computes every entry, its sort
-//! order and its getter flattening; this module only renders them.
+//! The JSON ABI of a contract, interface or library in solc's spelling. Slang computes every
+//! entry, its order and its getter flattening; this module only renders them.
 //!
+
+use std::collections::BTreeMap;
 
 use serde::Serialize;
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::abi::AbiMutability;
 use slang_solidity_v2::abi::AbiParameter;
 use slang_solidity_v2::abi::AbiType;
-use slang_solidity_v2::abi::ContractAbi;
+use slang_solidity_v2::ast::ContractDefinition;
+use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::FunctionKind;
+use slang_solidity_v2::ast::InterfaceDefinition;
+use slang_solidity_v2::ast::LibraryDefinition;
+use slang_solidity_v2::ast::StateVariableDefinition;
 
 /// The `abi` field of a standard-JSON contract: the entries in Slang's order, which is solc's.
 ///
@@ -22,17 +30,123 @@ impl Abi {
     pub fn into_value(self) -> serde_json::Value {
         serde_json::to_value(self).expect("the ABI only holds strings, booleans and lists")
     }
-}
 
-impl From<&[AbiEntry]> for Abi {
-    fn from(entries: &[AbiEntry]) -> Self {
+    /// Composes the ABI of a definition Slang has no whole ABI for from the entries it computes
+    /// per member, in Slang's order.
+    fn from_members(members: impl Iterator<Item = ContractMember>) -> Self {
+        let mut entries = members
+            .filter_map(|member| match member {
+                ContractMember::FunctionDefinition(function) => function.compute_abi_entry(),
+                ContractMember::ErrorDefinition(error) => error.compute_abi_entry(),
+                ContractMember::EventDefinition(event) => event.compute_abi_entry(),
+                _ => None,
+            })
+            .collect::<Vec<AbiEntry>>();
+        entries.sort();
         Self(entries.iter().map(Entry::from).collect())
     }
 }
 
-impl From<&ContractAbi> for Abi {
-    fn from(abi: &ContractAbi) -> Self {
-        Self::from(abi.entries())
+impl From<&ContractDefinition> for Abi {
+    fn from(contract: &ContractDefinition) -> Self {
+        let abi = contract
+            .compute_abi()
+            .expect("slang admits a contract whose ABI it cannot compute");
+        Self(abi.entries().iter().map(Entry::from).collect())
+    }
+}
+
+/// An interface's own members; Slang does not expose an interface's linearisation, so members
+/// inherited from base interfaces are not listed.
+impl From<&InterfaceDefinition> for Abi {
+    fn from(interface: &InterfaceDefinition) -> Self {
+        Self::from_members(interface.members().iter())
+    }
+}
+
+impl From<&LibraryDefinition> for Abi {
+    fn from(library: &LibraryDefinition) -> Self {
+        Self::from_members(library.members().iter())
+    }
+}
+
+/// The `evm.methodIdentifiers` map: each externally dispatchable function keyed by the signature
+/// its selector hashes, each public state variable by its canonical one, selectors in lower-case
+/// hex.
+pub struct MethodIdentifiers(BTreeMap<String, String>);
+
+impl MethodIdentifiers {
+    /// Maps the given functions and state variables; a function that is not a regular external
+    /// one, or a state variable that is not public, has no identifier and is skipped.
+    pub fn new(
+        functions: impl IntoIterator<Item = FunctionDefinition>,
+        state_variables: impl IntoIterator<Item = StateVariableDefinition>,
+    ) -> Self {
+        Self(
+            functions
+                .into_iter()
+                .filter(|function| {
+                    matches!(function.kind(), FunctionKind::Regular)
+                        && function.is_externally_visible()
+                })
+                .map(|function| {
+                    (
+                        function
+                            .compute_selector_signature()
+                            .expect("an externally visible function has a selector signature"),
+                        function
+                            .compute_selector()
+                            .expect("an externally visible function has a selector"),
+                    )
+                })
+                .chain(
+                    state_variables
+                        .into_iter()
+                        .filter(StateVariableDefinition::is_externally_visible)
+                        .map(|state_variable| {
+                            (
+                                state_variable
+                                    .compute_canonical_signature()
+                                    .expect("a public state variable has a canonical signature"),
+                                state_variable
+                                    .compute_selector()
+                                    .expect("a public state variable has a selector"),
+                            )
+                        }),
+                )
+                .map(|(signature, selector)| (signature, format!("{selector:08x}")))
+                .collect(),
+        )
+    }
+
+    /// The map the standard-JSON output stores.
+    pub fn into_map(self) -> BTreeMap<String, String> {
+        self.0
+    }
+}
+
+/// The whole hierarchy, as the ABI lists it.
+impl From<&ContractDefinition> for MethodIdentifiers {
+    fn from(contract: &ContractDefinition) -> Self {
+        Self::new(
+            contract.linearised_functions(),
+            contract.linearised_state_variables(),
+        )
+    }
+}
+
+impl From<&InterfaceDefinition> for MethodIdentifiers {
+    fn from(interface: &InterfaceDefinition) -> Self {
+        Self::new(
+            interface
+                .members()
+                .iter()
+                .filter_map(|member| match member {
+                    ContractMember::FunctionDefinition(function) => Some(function),
+                    _ => None,
+                }),
+            std::iter::empty(),
+        )
     }
 }
 

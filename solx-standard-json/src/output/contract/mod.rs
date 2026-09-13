@@ -65,6 +65,24 @@ impl Contract {
     }
 
     ///
+    /// Wraps the JSON ABI and ABI method identifiers of a definition that deploys nothing: an
+    /// interface or an abstract contract.
+    ///
+    pub fn new_abi(
+        abi: serde_json::Value,
+        method_identifiers: std::collections::BTreeMap<String, String>,
+    ) -> Self {
+        Self {
+            abi: Some(abi),
+            evm: Some(EVM {
+                method_identifiers: Some(method_identifiers),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    ///
     /// Checks if all fields are unset or empty.
     ///
     pub fn is_empty(&self) -> bool {

@@ -5,12 +5,9 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
-use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractDefinition;
-use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
-use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::LibraryDefinition;
 use slang_solidity_v2::ast::NodeId;
@@ -19,6 +16,7 @@ use slang_solidity_v2::ast::StateVariableDefinition;
 use solx_mlir::ContractKind;
 
 use crate::abi::Abi;
+use crate::abi::MethodIdentifiers;
 use crate::contract::storage_slot::StorageSlot;
 
 /// The deployable object a module emits, each variant carrying the definition its kind
@@ -83,31 +81,11 @@ impl Object {
         }
     }
 
-    /// The object's JSON ABI. Slang computes a contract's whole; a library's is composed from the
-    /// entries Slang computes per member, since Slang has no library ABI.
+    /// The object's JSON ABI.
     pub fn abi(&self) -> Abi {
         match self {
-            Self::Contract(node) => Abi::from(
-                &node
-                    .compute_abi()
-                    .expect("slang admits a contract whose ABI it cannot compute"),
-            ),
-            Self::Library(node) => {
-                let mut entries = node
-                    .members()
-                    .iter()
-                    .filter_map(|member| match member {
-                        ContractMember::FunctionDefinition(function) => {
-                            function.compute_abi_entry()
-                        }
-                        ContractMember::ErrorDefinition(error) => error.compute_abi_entry(),
-                        ContractMember::EventDefinition(event) => event.compute_abi_entry(),
-                        _ => None,
-                    })
-                    .collect::<Vec<AbiEntry>>();
-                entries.sort();
-                Abi::from(entries.as_slice())
-            }
+            Self::Contract(node) => Abi::from(node),
+            Self::Library(node) => Abi::from(node),
         }
     }
 
@@ -153,37 +131,9 @@ impl Object {
         }
     }
 
-    /// The ABI `method_identifiers` map (externally dispatchable signature to 4-byte selector,
-    /// lower-case hex): each function keyed by the signature its selector hashes, each public
-    /// state variable by its canonical one. `convert-sol-to-yul` builds the entry-point
-    /// dispatcher from the function selectors.
+    /// The ABI `method_identifiers` map of the object's own functions and public state variables.
+    /// `convert-sol-to-yul` builds the entry-point dispatcher from the function selectors.
     pub fn method_identifiers(&self) -> BTreeMap<String, String> {
-        self.functions()
-            .iter()
-            .filter(|function| {
-                matches!(function.kind(), FunctionKind::Regular) && function.is_externally_visible()
-            })
-            .map(|function| {
-                (
-                    function
-                        .compute_selector_signature()
-                        .expect("an externally visible function has a selector signature"),
-                    function
-                        .compute_selector()
-                        .expect("an externally visible function has a selector"),
-                )
-            })
-            .chain(self.public_state_variables().iter().map(|state_variable| {
-                (
-                    state_variable
-                        .compute_canonical_signature()
-                        .expect("a public state variable has a canonical signature"),
-                    state_variable
-                        .compute_selector()
-                        .expect("a public state variable has a selector"),
-                )
-            }))
-            .map(|(signature, selector)| (signature, format!("{selector:08x}")))
-            .collect()
+        MethodIdentifiers::new(self.functions(), self.public_state_variables()).into_map()
     }
 }
