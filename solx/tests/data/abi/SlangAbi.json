@@ -1,0 +1,432 @@
+{
+  "AbiBase": [
+    {
+      "inputs": [
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "name": "abstract_function",
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "AbiLibrary": [
+    {
+      "inputs": [
+        {
+          "name": "code",
+          "type": "uint256"
+        }
+      ],
+      "name": "LibraryError",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "LibraryEvent",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "name": "value",
+          "type": "uint256"
+        }
+      ],
+      "name": "external_function",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    }
+  ],
+  "IAbi": [
+    {
+      "inputs": [
+        {
+          "name": "value",
+          "type": "uint256"
+        }
+      ],
+      "name": "ping",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "SlangAbi": [
+    {
+      "inputs": [
+        {
+          "name": "initial",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "payable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "Empty",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "name": "code",
+          "type": "uint256"
+        },
+        {
+          "name": "reason",
+          "type": "string"
+        }
+      ],
+      "name": "Failed",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "Moved",
+      "type": "event"
+    },
+    {
+      "anonymous": true,
+      "inputs": [
+        {
+          "components": [
+            {
+              "name": "x",
+              "type": "uint256"
+            },
+            {
+              "name": "ys",
+              "type": "int128[]"
+            }
+          ],
+          "indexed": false,
+          "name": "point",
+          "type": "tuple"
+        }
+      ],
+      "name": "Traced",
+      "type": "event"
+    },
+    {
+      "stateMutability": "nonpayable",
+      "type": "fallback"
+    },
+    {
+      "inputs": [
+        {
+          "name": "value",
+          "type": "uint256"
+        }
+      ],
+      "name": "add",
+      "outputs": [
+        {
+          "name": "total",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "balances",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "count",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "components": [
+                {
+                  "name": "x",
+                  "type": "uint256"
+                },
+                {
+                  "name": "ys",
+                  "type": "int128[]"
+                }
+              ],
+              "name": "from",
+              "type": "tuple"
+            },
+            {
+              "components": [
+                {
+                  "name": "x",
+                  "type": "uint256"
+                },
+                {
+                  "name": "ys",
+                  "type": "int128[]"
+                }
+              ],
+              "name": "to",
+              "type": "tuple"
+            },
+            {
+              "name": "choice",
+              "type": "uint8"
+            }
+          ],
+          "name": "line",
+          "type": "tuple"
+        },
+        {
+          "name": "target",
+          "type": "address"
+        },
+        {
+          "name": "callee",
+          "type": "address"
+        },
+        {
+          "name": "choice",
+          "type": "uint8"
+        },
+        {
+          "name": "wad",
+          "type": "uint256"
+        }
+      ],
+      "name": "draw",
+      "outputs": [
+        {
+          "components": [
+            {
+              "name": "x",
+              "type": "uint256"
+            },
+            {
+              "name": "ys",
+              "type": "int128[]"
+            }
+          ],
+          "name": "",
+          "type": "tuple"
+        },
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "hashes",
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "components": [
+                {
+                  "name": "x",
+                  "type": "uint256"
+                },
+                {
+                  "name": "ys",
+                  "type": "int128[]"
+                }
+              ],
+              "name": "from",
+              "type": "tuple"
+            },
+            {
+              "components": [
+                {
+                  "name": "x",
+                  "type": "uint256"
+                },
+                {
+                  "name": "ys",
+                  "type": "int128[]"
+                }
+              ],
+              "name": "to",
+              "type": "tuple"
+            },
+            {
+              "name": "choice",
+              "type": "uint8"
+            }
+          ],
+          "name": "input",
+          "type": "tuple[]"
+        },
+        {
+          "components": [
+            {
+              "name": "x",
+              "type": "uint256"
+            },
+            {
+              "name": "ys",
+              "type": "int128[]"
+            }
+          ],
+          "name": "pair",
+          "type": "tuple[2]"
+        }
+      ],
+      "name": "lines",
+      "outputs": [
+        {
+          "components": [
+            {
+              "components": [
+                {
+                  "name": "x",
+                  "type": "uint256"
+                },
+                {
+                  "name": "ys",
+                  "type": "int128[]"
+                }
+              ],
+              "name": "from",
+              "type": "tuple"
+            },
+            {
+              "components": [
+                {
+                  "name": "x",
+                  "type": "uint256"
+                },
+                {
+                  "name": "ys",
+                  "type": "int128[]"
+                }
+              ],
+              "name": "to",
+              "type": "tuple"
+            },
+            {
+              "name": "choice",
+              "type": "uint8"
+            }
+          ],
+          "name": "",
+          "type": "tuple[]"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "name": "selector",
+          "type": "bytes4"
+        },
+        {
+          "name": "label",
+          "type": "string"
+        },
+        {
+          "name": "callback",
+          "type": "function"
+        }
+      ],
+      "name": "tag",
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes4"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "stateMutability": "payable",
+      "type": "receive"
+    }
+  ]
+}

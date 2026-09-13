@@ -1,0 +1,19 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A": {
+      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.8.0; interface I { function ping(uint256 value) external returns (uint256); } abstract contract B { function pong() external virtual; } contract C is I { function ping(uint256 value) external pure returns (uint256) { return value; } }"
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode.object",
+          "evm.methodIdentifiers"
+        ]
+      }
+    }
+  }
+}

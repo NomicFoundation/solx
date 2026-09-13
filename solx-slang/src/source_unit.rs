@@ -13,16 +13,18 @@ use solx_mlir::Context;
 use solx_standard_json::output::contract::Contract;
 use solx_utils::EVMVersion;
 
+use crate::abi::Abi;
+use crate::abi::MethodIdentifiers;
 use crate::contract::object::Object;
 use crate::scope::source_unit::SourceUnitScope;
 
 impl<'context> SourceUnitScope<'context> {
     /// Lowers every contract and library the unit deploys into standard-JSON contract outputs
     /// keyed by definition name, each in its own MLIR module off the file's melior context. An
-    /// abstract contract and an interface deploy nothing and produce no module. A contract with a
-    /// contract base is skipped because emission collects only the contract's own state and
-    /// functions: an interface base carries nothing to inherit, a contract base carries state and
-    /// bodies that would be silently dropped.
+    /// abstract contract and an interface deploy nothing and produce no module, only their ABI. A
+    /// contract with a contract base is skipped because emission collects only the contract's own
+    /// state and functions: an interface base carries nothing to inherit, a contract base carries
+    /// state and bodies that would be silently dropped.
     ///
     /// # Errors
     ///
@@ -38,12 +40,31 @@ impl<'context> SourceUnitScope<'context> {
         let mut contracts = BTreeMap::new();
         for member in unit.members().iter() {
             let object = match member {
+                SourceUnitMember::ContractDefinition(contract) if contract.is_abstract() => {
+                    contracts.insert(
+                        contract.name().name().to_owned(),
+                        Contract::new_abi(
+                            Abi::from(&contract).into_value(),
+                            MethodIdentifiers::from(&contract).into_map(),
+                        ),
+                    );
+                    continue;
+                }
+                SourceUnitMember::InterfaceDefinition(interface) => {
+                    contracts.insert(
+                        interface.name().name().to_owned(),
+                        Contract::new_abi(
+                            Abi::from(&interface).into_value(),
+                            MethodIdentifiers::from(&interface).into_map(),
+                        ),
+                    );
+                    continue;
+                }
                 SourceUnitMember::ContractDefinition(contract)
-                    if !contract.is_abstract()
-                        && !contract.direct_bases().iter().any(|base| match base {
-                            ContractBase::Contract(_) => true,
-                            ContractBase::Interface(_) => false,
-                        }) =>
+                    if !contract.direct_bases().iter().any(|base| match base {
+                        ContractBase::Contract(_) => true,
+                        ContractBase::Interface(_) => false,
+                    }) =>
                 {
                     Object::Contract(contract.clone())
                 }
@@ -57,7 +78,10 @@ impl<'context> SourceUnitScope<'context> {
                 object.identifier().as_str(),
                 capture_sol_dialect(name.as_str()),
             )?;
-            contracts.insert(name, Contract::new_mlir(mlir, method_identifiers));
+            contracts.insert(
+                name,
+                Contract::new_mlir(mlir, object.abi().into_value(), method_identifiers),
+            );
         }
         Ok(contracts)
     }
