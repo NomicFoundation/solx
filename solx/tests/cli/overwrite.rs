@@ -87,7 +87,7 @@ fn missing(flag: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-// `--metadata` is rejected by the Slang frontend, so these only run with `solc`.
+// Contracts without metadata abort the writer, so these only pass with `solc`.
 #[cfg(feature = "solc")]
 #[test]
 fn all() -> anyhow::Result<()> {
@@ -134,12 +134,13 @@ fn all_missing() -> anyhow::Result<()> {
 
     let output_directory = TempDir::with_prefix("solx_output")?;
 
-    #[cfg(feature = "solc")]
     let args = &[
         crate::common::TEST_SOLIDITY_CONTRACT,
         "--bin",
         "--bin-runtime",
         "--asm",
+        // `--metadata` is left out: the Slang frontend rejects it.
+        #[cfg(feature = "solc")]
         "--metadata",
         "--ast-json",
         "--abi",
@@ -154,20 +155,6 @@ fn all_missing() -> anyhow::Result<()> {
         "--emit-llvm-ir",
         "--evmla",
         "--ethir",
-        "--output-dir",
-        output_directory.path().to_str().unwrap(),
-    ];
-    // The outputs the Slang frontend does not produce are rejected, not written.
-    #[cfg(not(feature = "solc"))]
-    let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT,
-        "--bin",
-        "--bin-runtime",
-        "--asm",
-        "--ast-json",
-        "--hashes",
-        "--benchmarks",
-        "--emit-llvm-ir",
         "--output-dir",
         output_directory.path().to_str().unwrap(),
     ];

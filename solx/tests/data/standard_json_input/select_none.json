@@ -1,7 +1,9 @@
 {
   "language": "Solidity",
-  "sources": {
-    "A": {
+  "sources":
+  {
+    "A":
+    {
       "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.0; contract C {}"
     }
   },
@@ -22,6 +24,9 @@
         "": [],
         "*": []
       }
+    },
+    "metadata": {
+      "useLiteralContent": true
     }
   }
 }

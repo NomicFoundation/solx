@@ -16,6 +16,7 @@
           "ast"
         ],
         "*": [
+          "abi",
           "evm.methodIdentifiers",
           "evm.bytecode.object",
           "evm.deployedBytecode.object"

@@ -1,7 +1,9 @@
 {
   "language": "Solidity",
-  "sources": {
-    "A": {
+  "sources":
+  {
+    "A":
+    {
       "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.0; contract C { xxx }"
     }
   },
@@ -16,11 +18,15 @@
           "ast"
         ],
         "*": [
+          "abi",
           "evm.methodIdentifiers",
           "evm.bytecode.object",
           "evm.deployedBytecode.object"
         ]
       }
+    },
+    "metadata": {
+      "useLiteralContent": true
     }
   }
 }

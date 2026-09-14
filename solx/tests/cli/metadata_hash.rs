@@ -39,9 +39,7 @@ fn ipfs() -> anyhow::Result<()> {
     #[cfg(feature = "solc")]
     result.success().stdout(predicate::str::contains("a264"));
     #[cfg(not(feature = "solc"))]
-    result.failure().stderr(predicate::str::contains(
-        "Command line option --metadata-hash ipfs is not supported",
-    ));
+    result.success().stdout(predicate::str::contains("a164"));
 
     Ok(())
 }

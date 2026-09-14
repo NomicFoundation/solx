@@ -1,7 +1,9 @@
 {
   "language": "Solidity",
-  "sources": {
-    "SimpleContract": {
+  "sources":
+  {
+    "SimpleContract":
+    {
       "urls": [
         "tests/data/contracts/solidity/SimpleContract.sol"
       ]
@@ -16,6 +18,9 @@
           "evm.deployedBytecode.object"
         ]
       }
+    },
+    "metadata": {
+      "useLiteralContent": true
     }
   }
 }

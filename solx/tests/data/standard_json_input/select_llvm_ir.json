@@ -1,7 +1,9 @@
 {
   "language": "Solidity",
-  "sources": {
-    "A": {
+  "sources":
+  {
+    "A":
+    {
       "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.0; contract C { function f() public pure returns (uint256) { return 42; } }"
     }
   },
@@ -18,6 +20,9 @@
           "evm.deployedBytecode.llvmIr"
         ]
       }
+    },
+    "metadata": {
+      "useLiteralContent": true
     }
   }
 }

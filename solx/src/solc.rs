@@ -71,7 +71,6 @@ impl solx_core::Frontend for Solc {
                 unsupported_selectors: std::collections::BTreeSet::new(),
                 pipeline_selectors: std::collections::BTreeSet::new(),
                 disk_imports: true,
-                metadata: true,
                 solc_pipelines: true,
                 solc_optimizer: true,
             });

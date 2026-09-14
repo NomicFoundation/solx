@@ -11,18 +11,21 @@ use std::path::PathBuf;
 /// Requests outside of it are rejected before compilation instead of being dropped, so that a
 /// missing artifact is never the first sign that a flag or setting did nothing.
 ///
+
 #[derive(Debug)]
 pub struct Capabilities {
-    /// Output selectors the frontend does not produce yet, which are errors: the artifact is
-    /// meant to exist and whatever reads it would find the key missing.
+    /// Output selectors the frontend does not produce yet.
+    ///
+    /// Outputs under construction do not belong here: they come out missing, an `#[ignore]`d
+    /// test records what they should be, and nothing has to be deleted from this set when they
+    /// land. `Metadata` is the exception only because the writers still `expect` it.
+    /// TODO: drop it once the Slang frontend produces metadata.
     pub unsupported_selectors: BTreeSet<solx_standard_json::InputSelector>,
     /// Output selectors that are by-products of solc's codegen pipelines, which are warnings: a
     /// frontend without those pipelines has nothing to emit, and never will.
     pub pipeline_selectors: BTreeSet<solx_standard_json::InputSelector>,
     /// Whether the frontend reads imports from disk, that is `--base-path` and its family.
     pub disk_imports: bool,
-    /// Whether the frontend produces metadata, which `--metadata-literal` and ipfs hashing need.
-    pub metadata: bool,
     /// Whether the frontend has solc's codegen pipelines, that is `--via-ir` and legacy.
     pub solc_pipelines: bool,
     /// Whether the frontend honors solc's optimizer settings.
@@ -69,19 +72,6 @@ impl Capabilities {
                 )));
             }
         }
-        if !self.metadata {
-            if arguments.metadata_literal {
-                diagnostics.push(solx_standard_json::OutputError::new_error(format!(
-                    "Command line option --metadata-literal is not supported in {name}."
-                )));
-            }
-            if arguments.metadata_hash == Some(solx_utils::MetadataHashType::IPFS) {
-                diagnostics.push(solx_standard_json::OutputError::new_error(format!(
-                    "Command line option --metadata-hash ipfs is not supported in {name}."
-                )));
-            }
-        }
-
         for (option, is_requested, selector) in [
             (
                 "--abi",
@@ -205,11 +195,6 @@ impl Capabilities {
                     r#"Standard JSON option "optimizer.{option}" is ignored in {name}, which optimizes through LLVM: use "optimizer.mode" instead."#
                 )));
             }
-        }
-        if input.settings.metadata.use_literal_content && !self.metadata {
-            diagnostics.push(solx_standard_json::OutputError::new_error(format!(
-                r#"Standard JSON option "useLiteralContent" is not supported in {name}."#
-            )));
         }
         let selectors = input.settings.output_selection.selectors();
         for selector in selectors.iter() {

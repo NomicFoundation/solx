@@ -80,22 +80,9 @@ impl Frontend for Slang {
     fn capabilities(&self) -> &solx_core::Capabilities {
         static CAPABILITIES: std::sync::LazyLock<solx_core::Capabilities> =
             std::sync::LazyLock::new(|| solx_core::Capabilities {
-                unsupported_selectors: [
-                    // Outputs Slang does not produce yet.
-                    solx_standard_json::InputSelector::ABI,
-                    solx_standard_json::InputSelector::Metadata,
-                    solx_standard_json::InputSelector::DeveloperDocumentation,
-                    solx_standard_json::InputSelector::UserDocumentation,
-                    solx_standard_json::InputSelector::StorageLayout,
-                    solx_standard_json::InputSelector::TransientStorageLayout,
-                    solx_standard_json::InputSelector::GasEstimates,
-                    solx_standard_json::InputSelector::RuntimeBytecodeImmutableReferences,
-                    // DWARF is planned for this pipeline, unlike solc's source maps below.
-                    solx_standard_json::InputSelector::BytecodeDebugInfo,
-                    solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
-                ]
-                .into_iter()
-                .collect(),
+                unsupported_selectors: [solx_standard_json::InputSelector::Metadata]
+                    .into_iter()
+                    .collect(),
                 pipeline_selectors: [
                     solx_standard_json::InputSelector::EVMLegacyAssembly,
                     solx_standard_json::InputSelector::Yul,
@@ -113,7 +100,6 @@ impl Frontend for Slang {
                 .into_iter()
                 .collect(),
                 disk_imports: false,
-                metadata: false,
                 solc_pipelines: false,
                 solc_optimizer: false,
             });

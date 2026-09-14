@@ -1,7 +1,9 @@
 {
   "language": "Solidity",
-  "sources": {
-    "A": {
+  "sources":
+  {
+    "A":
+    {
       "urls": [
         "tests/data/contracts/solidity/Recursion.sol"
       ]

@@ -13,11 +13,14 @@
     "outputSelection": {
       "*": {
         "*": [
+          "abi",
           "evm.methodIdentifiers",
           "evm.bytecode.object",
           "evm.deployedBytecode.object",
           "evm.bytecode.opcodes",
-          "evm.deployedBytecode.opcodes"
+          "evm.bytecode.sourceMap",
+          "evm.deployedBytecode.opcodes",
+          "evm.deployedBytecode.sourceMap"
         ]
       }
     }

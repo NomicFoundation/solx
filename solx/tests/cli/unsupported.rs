@@ -11,10 +11,10 @@ fn command_line_options_are_aggregated() -> anyhow::Result<()> {
     let args = &[
         crate::common::TEST_SOLIDITY_CONTRACT,
         "--bin",
-        "--abi",
-        "--storage-layout",
+        "--metadata",
         "--base-path",
         ".",
+        "--ir",
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -22,14 +22,12 @@ fn command_line_options_are_aggregated() -> anyhow::Result<()> {
     result
         .failure()
         .stderr(predicate::str::contains(
-            "Command line option --abi is not supported in Slang.",
+            "Command line option --metadata is not supported in Slang.",
         ))
         .stderr(predicate::str::contains(
             "Command line option --base-path is not supported in Slang.",
         ))
-        .stderr(predicate::str::contains(
-            "Command line option --storage-layout is not supported in Slang.",
-        ));
+        .stderr(predicate::str::contains("--ir is ignored in Slang"));
 
     Ok(())
 }
@@ -73,25 +71,6 @@ fn solc_optimizer_settings_warn() -> anyhow::Result<()> {
 }
 
 #[test]
-fn metadata_literal() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT,
-        "--bin",
-        "--metadata-literal",
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-
-    result.failure().stderr(predicate::str::contains(
-        "Command line option --metadata-literal is not supported in Slang.",
-    ));
-
-    Ok(())
-}
-
-#[test]
 fn standard_json_settings_and_selections() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -108,7 +87,7 @@ fn standard_json_settings_and_selections() -> anyhow::Result<()> {
             r#"Standard JSON option \"viaIR\" is ignored in Slang"#,
         ))
         .stdout(predicate::str::contains(
-            r#"Standard JSON output selection \"abi\" is not supported in Slang."#,
+            r#"Standard JSON output selection \"metadata\" is not supported in Slang."#,
         ));
 
     Ok(())
@@ -194,14 +173,14 @@ fn unsupported_output_alone_does_not_repeat_itself() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     // An unimplemented output already errors, so the empty-output error stays out of the way.
-    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--abi"];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--metadata"];
 
     let result = crate::cli::execute_solx(args)?;
 
     result
         .failure()
         .stderr(predicate::str::contains(
-            "Command line option --abi is not supported in Slang.",
+            "Command line option --metadata is not supported in Slang.",
         ))
         .stderr(predicate::str::contains("Nothing would be produced").not());
 

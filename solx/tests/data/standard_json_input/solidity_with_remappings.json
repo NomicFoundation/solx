@@ -10,9 +10,7 @@
     "optimizer": {
       "mode": "3"
     },
-    "remappings": [
-      "oz=node_modules/@openzeppelin"
-    ],
+    "remappings": ["oz=node_modules/@openzeppelin"],
     "outputSelection": {
       "*": {
         "*": [

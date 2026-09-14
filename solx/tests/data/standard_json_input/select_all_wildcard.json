@@ -1,12 +1,13 @@
 {
   "language": "Solidity",
-  "sources": {
-    "A": {
+  "sources":
+  {
+    "A":
+    {
       "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.0; contract C {}"
     }
   },
   "settings": {
-    "viaIR": true,
     "optimizer": {
       "runs": 200,
       "details": {
@@ -27,6 +28,10 @@
           "*"
         ]
       }
+    },
+    "viaIR": true,
+    "metadata": {
+      "useLiteralContent": true
     }
   }
 }
