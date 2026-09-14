@@ -9,10 +9,7 @@ use tempfile::TempDir;
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        crate::common::contract!("solidity/caller/Main.sol"),
-        "--hashes",
-    ];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--hashes"];
 
     let result = crate::cli::execute_solx(args)?;
 

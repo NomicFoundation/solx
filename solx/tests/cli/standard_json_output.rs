@@ -417,7 +417,6 @@ fn storage_layout_output() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn abi_only_output() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -433,6 +432,38 @@ fn abi_only_output() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("\"abi\""))
         .stdout(predicate::str::contains("\"name\":\"foo\""))
         .stdout(predicate::str::contains("\"name\":\"Transfer\""));
+
+    Ok(())
+}
+
+/// An interface and an abstract contract carry an ABI and method identifiers but no bytecode.
+#[test]
+fn abi_without_bytecode() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("solidity_abi_interface.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    let output: serde_json::Value =
+        serde_json::from_slice(result.success().get_output().stdout.as_slice())?;
+    let contracts = &output["contracts"]["A"];
+
+    for name in ["I", "B"] {
+        let contract = &contracts[name];
+        assert!(contract["abi"].is_array(), "{name} has an ABI");
+        assert!(
+            contract["evm"]["methodIdentifiers"].is_object(),
+            "{name} has method identifiers"
+        );
+        assert!(
+            contract["evm"]["bytecode"].is_null(),
+            "{name} has no bytecode"
+        );
+    }
+    assert!(contracts["C"]["evm"]["bytecode"]["object"].is_string());
 
     Ok(())
 }
