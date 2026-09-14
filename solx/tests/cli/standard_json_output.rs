@@ -8,7 +8,6 @@
 use predicates::prelude::*;
 use test_case::test_case;
 
-#[cfg(feature = "solc")]
 #[test]
 fn method_identifiers() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -29,7 +28,6 @@ fn method_identifiers() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn multi_contract() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -531,7 +529,6 @@ fn select_wildcard_and_per_file_are_unioned() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn select_per_file_cross_file_dependency() -> anyhow::Result<()> {
     crate::common::setup()?;

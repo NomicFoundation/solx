@@ -4,6 +4,8 @@
 
 use predicates::prelude::*;
 
+// The flag is ignored by the Slang frontend, so the expectation only holds for `solc`.
+#[cfg(feature = "solc")]
 #[test]
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -74,6 +76,8 @@ fn standard_json() -> anyhow::Result<()> {
     Ok(())
 }
 
+// The flag is ignored by the Slang frontend, so the expectation only holds for `solc`.
+#[cfg(feature = "solc")]
 #[test]
 fn emit_llvm_ir() -> anyhow::Result<()> {
     crate::common::setup()?;

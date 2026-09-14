@@ -45,14 +45,12 @@ mod help;
 mod include_path;
 #[cfg(feature = "solc")]
 mod ir;
-#[cfg(feature = "solc")]
 mod libraries;
 mod llvm_ir;
 mod llvm_options;
 #[cfg(feature = "solc")]
 mod metadata;
 mod metadata_hash;
-#[cfg(feature = "solc")]
 mod metadata_literal;
 #[cfg(feature = "mlir")]
 mod mlir_dependencies;
@@ -77,11 +75,8 @@ mod transient_storage_layout;
 #[cfg(feature = "solc")]
 mod userdoc;
 mod version;
-#[cfg(feature = "solc")]
 mod via_ir;
-#[cfg(feature = "solc")]
 mod yul;
-#[cfg(feature = "solc")]
 mod yul_parser;
 
 ///

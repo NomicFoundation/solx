@@ -21,6 +21,8 @@ fn parser_coverage_bin() -> anyhow::Result<()> {
     Ok(())
 }
 
+// Yul validation in standard JSON mode is not supported by the Slang frontend.
+#[cfg(feature = "solc")]
 #[test]
 fn parser_coverage_standard_json() -> anyhow::Result<()> {
     crate::common::setup()?;

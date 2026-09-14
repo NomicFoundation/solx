@@ -19,7 +19,6 @@ fn default() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn deploy_time_linking() -> anyhow::Result<()> {
     crate::common::setup()?;

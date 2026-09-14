@@ -87,6 +87,7 @@ fn missing(flag: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+// Contracts without metadata abort the writer, so these only pass with `solc`.
 #[cfg(feature = "solc")]
 #[test]
 fn all() -> anyhow::Result<()> {
@@ -127,7 +128,6 @@ fn all() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn all_missing() -> anyhow::Result<()> {
     crate::common::setup()?;

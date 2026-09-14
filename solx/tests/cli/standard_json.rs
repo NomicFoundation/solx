@@ -67,7 +67,6 @@ fn stdin_hyphen() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn deploy_time_linking() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -317,7 +316,6 @@ fn metadata_hash_none_and_metadata() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn metadata_hash_none_no_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -433,7 +431,6 @@ fn select_evm_deployed_bytecode_link_references() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn select_single() -> anyhow::Result<()> {
     crate::common::setup()?;
