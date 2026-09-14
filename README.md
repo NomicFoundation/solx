@@ -9,13 +9,16 @@
 > [!WARNING]  
 > The project is in development and is not ready for production use.
 
-**solx** passes multiple test suites, including:
+The tester runs **solx** against:
 
-- [Foundry projects](./solx-dev/foundry-tests.toml)
-- [Hardhat projects](./solx-dev/hardhat-tests.toml)
+- [Semantic tests](./solx-solidity/test/libsolidity/semanticTests/) from the **solc** repository
 - [DeFi protocols](./tests/solidity/complex/defi): UniswapV2, UniswapV3, Mooniswap, StarkEx
-- [Semantic tests](https://github.com/NomicFoundation/solx-solidity/tree/0.8.34/test/libsolidity/semanticTests) from the **solc** repository
 - [Additional tests](./tests/solidity) written by the **solx** team
+
+Planned:
+
+- [Hardhat projects](./solx-dev/hardhat-tests.toml)
+- [Foundry projects](./solx-dev/foundry-tests.toml)
 
 ## Documentation
 

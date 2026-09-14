@@ -27,33 +27,6 @@ Solidity → Slang (parse, bind) → Sol-dialect MLIR → Sol→Yul→Standard p
 | [`solx-compiler-downloader`](./solx-compiler-downloader/) | Downloads and verifies compiler binaries |
 | [`solx-benchmark-converter`](./solx-benchmark-converter/) | Benchmark analysis and comparison |
 
-## Build Commands
-
-Build `solx-dev`, then LLVM with MLIR, then solx:
-
-```bash
-cargo build --release --bin solx-dev
-./target/release/solx-dev llvm build --enable-mlir --enable-utils --build-type RelWithDebInfo   # target-llvm/target-final/
-cargo build-slang              # target/debug/solx
-cargo build-slang --release    # target/release/solx
-```
-
-## Testing
-
-```bash
-cargo test-slang                                        # unit and CLI tests of solx-slang, solx-mlir and solx
-cargo clippy-slang --all-targets
-cargo build-slang --release && cargo run-tester-slang   # the REVM corpus at -O M3B3 against target/release/solx
-cargo run-tester-slang --path tests/solidity/simple/default.sol   # one test
-```
-
-LIT runs the fixtures under [`solx-mlir/tests/lit/`](./solx-mlir/tests/lit/) against `target/debug/solx`:
-
-```bash
-export PATH="$PWD/target-llvm/target-final/bin:$PWD/target/debug:$PATH"
-PYTHONPATH=solx-llvm/llvm/utils/lit python3 target-llvm/target-final/bin/llvm-lit solx-mlir/tests/lit/
-```
-
 ## Slang Frontend
 
 `solx-slang` lowers the Slang AST to Sol-dialect MLIR through `solx-mlir`. The rules below are the design law of that frontend and the conventions a reviewer would otherwise repeat by hand.
@@ -62,7 +35,7 @@ PYTHONPATH=solx-llvm/llvm/utils/lit python3 target-llvm/target-final/bin/llvm-li
 
 1. Ground truth is legacy solc: `solc --asm`, `--bin` and `--storage-layout` define behavior. solx is never evidence about itself.
 
-2. The compiler shapes the tests, never the reverse. No emission code exists to keep a fixture passing. A fixture that stops matching a correct change is rewritten.
+2. LIT fixtures follow the compiler: one that stops matching a correct change is rewritten, and no emission code exists to keep a fixture passing. The semantic tests are followed: they come from solc, and the compiler changes to pass them.
 
 ### Validation and failure
 
@@ -138,6 +111,46 @@ PYTHONPATH=solx-llvm/llvm/utils/lit python3 target-llvm/target-final/bin/llvm-li
 
 6. A `//` comment carries only a constraint the code cannot express.
 
-### Pull requests
+## Build Commands
 
-1. A PR body is short and human-readable: one or two sentences saying what the PR delivers. Nothing else: no headings, lists, tables, file lists or narration.
+Build `solx-dev`, then LLVM with MLIR, then solx:
+
+```bash
+cargo build --release --bin solx-dev
+./target/release/solx-dev llvm build --enable-mlir --enable-utils --build-type RelWithDebInfo   # target-llvm/target-final/
+cargo build-slang              # target/debug/solx
+cargo build-slang --release    # target/release/solx
+```
+
+The `-slang` aliases exist because `solx-slang` and `solx-mlir` take inkwell without LLVM linking while `solx-codegen-evm` links it. The two crates are excluded from `default-members`, since sharing a Cargo build with them unifies the two feature sets into a configuration that does not link.
+
+## Testing
+
+```bash
+cargo test-slang                                        # unit and CLI tests of solx-slang, solx-mlir and solx
+cargo clippy-slang --all-targets
+cargo build-slang --release && cargo run-tester-slang   # the REVM corpus at -O M3B3 against target/release/solx
+cargo run-tester-slang --path tests/solidity/simple/default.sol   # one test
+```
+
+LIT runs the fixtures under [`solx-mlir/tests/lit/`](./solx-mlir/tests/lit/) against `target/debug/solx`:
+
+```bash
+export PATH="$PWD/target-llvm/target-final/bin:$PWD/target/debug:$PATH"
+PYTHONPATH=solx-llvm/llvm/utils/lit python3 target-llvm/target-final/bin/llvm-lit solx-mlir/tests/lit/
+```
+
+## Pull requests
+
+A PR body is short and human-readable: one or two sentences saying what the PR delivers, with short bullets or a numbered list where they carry it. Nothing else: no headings, tables, file lists or narration.
+
+Two labels switch on optional CI: `ci:sanitizer` for the address sanitizer tests, `ci:integration` for the integration tests.
+
+A change to [`renovate.json`](./renovate.json) is validated before pushing, with the checks CI repeats in its `renovate-config-check` job:
+
+```bash
+npx --yes --package renovate -- renovate-config-validator renovate.json
+LOG_LEVEL=debug npx --yes renovate --platform=local --dry-run=full
+```
+
+The dry run is what catches `matchPackageNames` silently missing a git-source cargo dependency, whose `packageName` is the git URL rather than the `Cargo.toml` key. Those are matched by `matchDepNames`, as the pinned-fork rule does for `inkwell`, `melior`, `slang_solidity` and `web3`.
