@@ -1,11 +1,11 @@
 ---
 name: review
-description: Read-only code review against CLAUDE.md. Ambiguities reach the user as questions, then every finding as a report. Nothing is changed. Use when the code builds and passes its tests.
+description: Read-only code review against CLAUDE.md. Ambiguities reach the user as questions, then every finding as a report. No code is changed, and the report goes on the pull request only when the user asks. Use when the code builds and passes its tests.
 ---
 
 # Review
 
-The skill changes nothing. It reads, checks, asks, and reports.
+The skill changes no code. It reads, checks, asks, reports, and posts when the user asks.
 
 ## What is reviewed
 
@@ -34,4 +34,16 @@ A decision is anything the review cannot settle from the code and `CLAUDE.md`: a
 
 ## Report
 
-After the last decision is answered, every finding that survived checking, most consequential first. Each is a short paragraph: what is wrong, the evidence, what to do, and for a decided finding, the user's answer. Nothing is applied.
+After the last decision is answered, every finding that survived checking, most consequential first. Each is a short paragraph: what is wrong, the evidence, what to do, and for a decided finding, the user's answer.
+
+## Posting
+
+The report stays in the terminal. It goes on the pull request when the user asks for it.
+
+Every finding is a comment on the line it is about, and a finding that holds at several places is a comment at each of them.
+
+A comment anchors only to a line inside a diff hunk, so every anchor is checked against the hunk ranges before the review is submitted. When the subject is code the diff does not touch, the comment goes on the line in the diff whose correctness depends on it, and names the code it is really about.
+
+A comment starts with one sentence saying what is wrong.
+
+The review body carries the findings with no line of their own.
