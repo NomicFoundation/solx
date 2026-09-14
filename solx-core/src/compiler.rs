@@ -132,9 +132,8 @@ impl<'arguments> Compiler<'arguments> {
             let diagnostics = frontend
                 .capabilities()
                 .arguments_diagnostics(&self.arguments, frontend.name());
-            let errors = Self::collect_diagnostics(diagnostics, &messages);
-            if !errors.is_empty() {
-                anyhow::bail!(errors.join("\n"));
+            if Self::record_diagnostics(diagnostics, &messages) {
+                return Ok(());
             }
 
             self.standard_output_evm(
@@ -415,24 +414,18 @@ impl<'arguments> Compiler<'arguments> {
     }
 
     ///
-    /// Records the diagnostics in the message stream and returns the error texts, which the
-    /// caller reports as a compilation failure. Warnings travel with the rest of the messages.
+    /// Hands the diagnostics to the message stream, which the caller prints and turns into an
+    /// exit code, and reports whether any of them stops the run.
     ///
-    fn collect_diagnostics(
+    fn record_diagnostics(
         diagnostics: Vec<solx_standard_json::OutputError>,
         messages: &Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
-    ) -> Vec<String> {
-        let errors = diagnostics
+    ) -> bool {
+        let has_errors = diagnostics
             .iter()
-            .filter(|diagnostic| diagnostic.severity == "error")
-            .map(|diagnostic| diagnostic.message.to_owned())
-            .collect::<Vec<String>>();
-        solx_utils::SyncLock::lock_sync(messages.as_ref()).extend(
-            diagnostics
-                .into_iter()
-                .filter(|diagnostic| diagnostic.severity != "error"),
-        );
-        errors
+            .any(|diagnostic| diagnostic.severity == "error");
+        solx_utils::SyncLock::lock_sync(messages.as_ref()).extend(diagnostics);
+        has_errors
     }
 
     ///
@@ -471,11 +464,7 @@ impl<'arguments> Compiler<'arguments> {
             let diagnostics = frontend
                 .capabilities()
                 .standard_json_diagnostics(&solc_input, frontend.name());
-            let has_errors = diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.severity == "error");
-            solx_utils::SyncLock::lock_sync(messages.as_ref()).extend(diagnostics);
-            if has_errors {
+            if Self::record_diagnostics(diagnostics, &messages) {
                 solx_standard_json::Output::new_with_messages(messages)
                     .write_and_exit(&solc_input.settings.output_selection);
             }
