@@ -81,7 +81,7 @@ impl Frontend for Slang {
         static CAPABILITIES: std::sync::LazyLock<solx_core::Capabilities> =
             std::sync::LazyLock::new(|| solx_core::Capabilities {
                 unsupported_selectors: [
-                    // Frontend outputs Slang does not produce yet.
+                    // Outputs Slang does not produce yet.
                     solx_standard_json::InputSelector::ABI,
                     solx_standard_json::InputSelector::Metadata,
                     solx_standard_json::InputSelector::DeveloperDocumentation,
@@ -89,23 +89,26 @@ impl Frontend for Slang {
                     solx_standard_json::InputSelector::StorageLayout,
                     solx_standard_json::InputSelector::TransientStorageLayout,
                     solx_standard_json::InputSelector::GasEstimates,
-                    // Intermediate representations of the `solc` frontend pipeline.
+                    solx_standard_json::InputSelector::RuntimeBytecodeImmutableReferences,
+                    // DWARF is planned for this pipeline, unlike solc's source maps below.
+                    solx_standard_json::InputSelector::BytecodeDebugInfo,
+                    solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
+                ]
+                .into_iter()
+                .collect(),
+                pipeline_selectors: [
                     solx_standard_json::InputSelector::EVMLegacyAssembly,
                     solx_standard_json::InputSelector::Yul,
                     solx_standard_json::InputSelector::BytecodeEVMLA,
                     solx_standard_json::InputSelector::RuntimeBytecodeEVMLA,
                     solx_standard_json::InputSelector::BytecodeEthIR,
                     solx_standard_json::InputSelector::RuntimeBytecodeEthIR,
-                    solx_standard_json::InputSelector::BytecodeGeneratedSources,
-                    solx_standard_json::InputSelector::RuntimeBytecodeGeneratedSources,
-                    // Debug data, which this pipeline emits no DWARF for.
-                    solx_standard_json::InputSelector::BytecodeDebugInfo,
-                    solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
-                    solx_standard_json::InputSelector::BytecodeFunctionDebugData,
-                    solx_standard_json::InputSelector::RuntimeBytecodeFunctionDebugData,
                     solx_standard_json::InputSelector::BytecodeSourceMap,
                     solx_standard_json::InputSelector::RuntimeBytecodeSourceMap,
-                    solx_standard_json::InputSelector::RuntimeBytecodeImmutableReferences,
+                    solx_standard_json::InputSelector::BytecodeFunctionDebugData,
+                    solx_standard_json::InputSelector::RuntimeBytecodeFunctionDebugData,
+                    solx_standard_json::InputSelector::BytecodeGeneratedSources,
+                    solx_standard_json::InputSelector::RuntimeBytecodeGeneratedSources,
                 ]
                 .into_iter()
                 .collect(),

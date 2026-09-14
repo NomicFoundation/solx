@@ -13,9 +13,15 @@ fn default() -> anyhow::Result<()> {
 
     let result = crate::cli::execute_solx(args)?;
 
+    #[cfg(feature = "solc")]
     result
         .success()
         .stdout(predicate::str::contains("EVM assembly").count(1));
+    #[cfg(not(feature = "solc"))]
+    result
+        .failure()
+        .stderr(predicate::str::contains("--asm-solc-json is not honored"))
+        .stderr(predicate::str::contains("Nothing would be produced"));
 
     Ok(())
 }
@@ -52,9 +58,14 @@ fn output_dir() -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
+    #[cfg(feature = "solc")]
     result
         .success()
         .stderr(predicate::str::contains("Compiler run successful"));
+    #[cfg(not(feature = "solc"))]
+    result
+        .failure()
+        .stderr(predicate::str::contains("Nothing would be produced"));
 
     Ok(())
 }

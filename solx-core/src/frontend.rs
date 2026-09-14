@@ -13,8 +13,12 @@ use std::path::PathBuf;
 ///
 #[derive(Debug)]
 pub struct Capabilities {
-    /// Output selectors the frontend does not populate.
+    /// Output selectors the frontend does not produce yet, which are errors: the artifact is
+    /// meant to exist and whatever reads it would find the key missing.
     pub unsupported_selectors: BTreeSet<solx_standard_json::InputSelector>,
+    /// Output selectors that are by-products of solc's codegen pipelines, which are warnings: a
+    /// frontend without those pipelines has nothing to emit, and never will.
+    pub pipeline_selectors: BTreeSet<solx_standard_json::InputSelector>,
     /// Whether the frontend reads imports from disk, that is `--base-path` and its family.
     pub disk_imports: bool,
     /// Whether the frontend produces metadata, which `--metadata-literal` and ipfs hashing need.
@@ -145,12 +149,25 @@ impl Capabilities {
                 solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
             ),
         ] {
-            if is_requested && self.unsupported_selectors.contains(&selector) {
+            if !is_requested {
+                continue;
+            }
+            if self.unsupported_selectors.contains(&selector) {
                 diagnostics.push(solx_standard_json::OutputError::new_error(format!(
                     "Command line option {option} is not supported in {name}."
                 )));
+            } else if self.pipeline_selectors.contains(&selector) {
+                diagnostics.push(solx_standard_json::OutputError::new_warning(
+                    Self::describe_pipeline_output(option, name),
+                ));
             }
         }
+
+        self.push_empty_output_diagnostic(
+            &arguments.output_selection().selectors(),
+            name,
+            &mut diagnostics,
+        );
 
         diagnostics
     }
@@ -194,15 +211,61 @@ impl Capabilities {
                 r#"Standard JSON option "useLiteralContent" is not supported in {name}."#
             )));
         }
-        for selector in input.settings.output_selection.selectors() {
-            if self.unsupported_selectors.contains(&selector) {
+        let selectors = input.settings.output_selection.selectors();
+        for selector in selectors.iter() {
+            if self.unsupported_selectors.contains(selector) {
                 diagnostics.push(solx_standard_json::OutputError::new_error(format!(
                     r#"Standard JSON output selection "{selector}" is not supported in {name}."#
                 )));
+            } else if self.pipeline_selectors.contains(selector) {
+                diagnostics.push(solx_standard_json::OutputError::new_warning(
+                    Self::describe_pipeline_output(
+                        format!(r#"Standard JSON output selection "{selector}""#).as_str(),
+                        name,
+                    ),
+                ));
             }
         }
 
+        self.push_empty_output_diagnostic(&selectors, name, &mut diagnostics);
+
         diagnostics
+    }
+
+    ///
+    /// Errors when every requested output is unavailable, which per-request warnings alone would
+    /// leave as a successful run that produces nothing.
+    ///
+    fn push_empty_output_diagnostic(
+        &self,
+        selectors: &BTreeSet<solx_standard_json::InputSelector>,
+        name: &str,
+        diagnostics: &mut Vec<solx_standard_json::OutputError>,
+    ) {
+        if selectors.is_empty()
+            || diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.severity == "error")
+        {
+            return;
+        }
+        if selectors.iter().all(|selector| {
+            self.unsupported_selectors.contains(selector)
+                || self.pipeline_selectors.contains(selector)
+        }) {
+            diagnostics.push(solx_standard_json::OutputError::new_error(format!(
+                "Nothing would be produced: every requested output is unavailable in {name}."
+            )));
+        }
+    }
+
+    ///
+    /// The warning for an output that only solc's codegen pipelines produce.
+    ///
+    fn describe_pipeline_output(request: &str, name: &str) -> String {
+        format!(
+            "{request} is not honored in {name}: it names an artifact of solc's codegen pipelines, which {name} does not have."
+        )
     }
 
     ///

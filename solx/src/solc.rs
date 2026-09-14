@@ -69,6 +69,7 @@ impl solx_core::Frontend for Solc {
         static CAPABILITIES: std::sync::LazyLock<solx_core::Capabilities> =
             std::sync::LazyLock::new(|| solx_core::Capabilities {
                 unsupported_selectors: std::collections::BTreeSet::new(),
+                pipeline_selectors: std::collections::BTreeSet::new(),
                 disk_imports: true,
                 metadata: true,
                 solc_pipelines: true,

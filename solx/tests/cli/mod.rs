@@ -13,7 +13,6 @@ mod abi;
 #[cfg(feature = "solc")]
 mod allow_paths;
 mod asm;
-#[cfg(feature = "solc")]
 mod asm_solc_json;
 mod ast_json;
 #[cfg(feature = "solc")]
@@ -33,17 +32,14 @@ mod emit_llvm_ir;
 #[cfg(feature = "mlir")]
 mod emit_mlir;
 mod empty;
-#[cfg(feature = "solc")]
 mod ethir;
 mod evm_version;
-#[cfg(feature = "solc")]
 mod evmla;
 #[cfg(feature = "solc")]
 mod hashes;
 mod help;
 #[cfg(feature = "solc")]
 mod include_path;
-#[cfg(feature = "solc")]
 mod ir;
 mod libraries;
 mod llvm_ir;

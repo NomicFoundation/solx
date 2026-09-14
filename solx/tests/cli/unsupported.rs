@@ -134,3 +134,78 @@ fn standard_json_umbrella_selection_is_accepted() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn pipeline_output_warns_beside_bytecode() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--bin", "--ir"];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    result
+        .success()
+        .stdout(predicate::str::contains("Binary:"))
+        .stderr(predicate::str::contains(
+            "--ir is not honored in Slang: it names an artifact of solc's codegen pipelines",
+        ));
+
+    Ok(())
+}
+
+#[test]
+fn nothing_left_to_produce() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--ir", "--evmla"];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    // Warning per request, error because the run would produce nothing at all.
+    result
+        .failure()
+        .stderr(predicate::str::contains("--ir is not honored"))
+        .stderr(predicate::str::contains("--evmla is not honored"))
+        .stderr(predicate::str::contains(
+            "Nothing would be produced: every requested output is unavailable in Slang.",
+        ));
+
+    Ok(())
+}
+
+#[test]
+fn nothing_left_to_produce_in_standard_json() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("unsupported_pipeline_selection.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    result.success().stdout(predicate::str::contains(
+        "Nothing would be produced: every requested output is unavailable in Slang.",
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn unsupported_output_alone_does_not_repeat_itself() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    // An unimplemented output already errors, so the empty-output error stays out of the way.
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--abi"];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    result
+        .failure()
+        .stderr(predicate::str::contains(
+            "Command line option --abi is not supported in Slang.",
+        ))
+        .stderr(predicate::str::contains("Nothing would be produced").not());
+
+    Ok(())
+}
