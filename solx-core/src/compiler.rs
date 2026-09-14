@@ -423,7 +423,8 @@ impl<'arguments> Compiler<'arguments> {
     where
         F: Frontend,
     {
-        let mut solc_input = solx_standard_json::Input::try_from(json_path.as_deref())?;
+        let mut solc_input = solx_standard_json::Input::try_from(json_path.as_deref())
+            .map_err(|error| solx_standard_json::Input::describe_error(error, frontend.name()))?;
         let language = solc_input.language;
         let via_ir = solc_input.settings.via_ir;
         let linker_symbols = solc_input.settings.libraries.as_linker_symbols()?;

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 /// The `solc --standard-json` input source.
 ///
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Source {
     /// The source code file content.
     #[serde(skip_serializing_if = "Option::is_none")]

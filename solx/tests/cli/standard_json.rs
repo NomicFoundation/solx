@@ -194,6 +194,59 @@ fn invalid_utf8() -> anyhow::Result<()> {
 }
 
 #[test]
+fn unsupported_setting() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("unsupported_setting.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(
+        predicate::str::contains(r#"Standard JSON option \"modelChecker\" is not supported"#).and(
+            predicate::str::contains("Supported options: optimizer, libraries"),
+        ),
+    );
+
+    Ok(())
+}
+
+#[test]
+fn unsupported_source_key() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("unsupported_source_key.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains(
+        r#"Standard JSON option \"keccak256\" is not supported"#,
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn unsupported_selection() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("unsupported_selection.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains(
+        r#"Standard JSON value \"evm.bytecode.bogus\" is not supported"#,
+    ));
+
+    Ok(())
+}
+
+#[test]
 fn stdin_missing() -> anyhow::Result<()> {
     crate::common::setup()?;
 

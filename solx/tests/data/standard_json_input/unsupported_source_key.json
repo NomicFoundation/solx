@@ -1,0 +1,18 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A.sol": {
+      "keccak256": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.0; contract A {}"
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.bytecode.object"
+        ]
+      }
+    }
+  }
+}
