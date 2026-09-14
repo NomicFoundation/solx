@@ -50,7 +50,7 @@ impl Capabilities {
 
         if arguments.via_ir && !self.solc_pipelines {
             diagnostics.push(solx_standard_json::OutputError::new_warning(
-                Self::describe_pipeline(name),
+                Self::describe_pipeline("--via-ir", name),
             ));
         }
         if !self.disk_imports {
@@ -158,7 +158,7 @@ impl Capabilities {
                 )));
             } else if self.pipeline_selectors.contains(&selector) {
                 diagnostics.push(solx_standard_json::OutputError::new_warning(
-                    Self::describe_pipeline_output(option, name),
+                    Self::describe_pipeline_output(option, &selector, name),
                 ));
             }
         }
@@ -188,7 +188,7 @@ impl Capabilities {
 
         if input.settings.via_ir && !self.solc_pipelines {
             diagnostics.push(solx_standard_json::OutputError::new_warning(
-                Self::describe_pipeline(name),
+                Self::describe_pipeline(r#"Standard JSON option "viaIR""#, name),
             ));
         }
         if !self.solc_optimizer {
@@ -202,7 +202,7 @@ impl Capabilities {
             .flatten()
             {
                 diagnostics.push(solx_standard_json::OutputError::new_warning(format!(
-                    r#"Standard JSON option "optimizer.{option}" is not honored in {name}, which optimizes through LLVM: use "optimizer.mode" instead."#
+                    r#"Standard JSON option "optimizer.{option}" is ignored in {name}, which optimizes through LLVM: use "optimizer.mode" instead."#
                 )));
             }
         }
@@ -221,6 +221,7 @@ impl Capabilities {
                 diagnostics.push(solx_standard_json::OutputError::new_warning(
                     Self::describe_pipeline_output(
                         format!(r#"Standard JSON output selection "{selector}""#).as_str(),
+                        selector,
                         name,
                     ),
                 ));
@@ -262,18 +263,41 @@ impl Capabilities {
     ///
     /// The warning for an output that only solc's codegen pipelines produce.
     ///
-    fn describe_pipeline_output(request: &str, name: &str) -> String {
+    fn describe_pipeline_output(
+        request: &str,
+        selector: &solx_standard_json::InputSelector,
+        name: &str,
+    ) -> String {
+        let artifact = match selector {
+            solx_standard_json::InputSelector::Yul => "Yul IR",
+            solx_standard_json::InputSelector::EVMLegacyAssembly
+            | solx_standard_json::InputSelector::BytecodeEVMLA
+            | solx_standard_json::InputSelector::RuntimeBytecodeEVMLA => "EVM legacy assembly",
+            solx_standard_json::InputSelector::BytecodeEthIR
+            | solx_standard_json::InputSelector::RuntimeBytecodeEthIR => "Ethereal IR",
+            solx_standard_json::InputSelector::BytecodeSourceMap
+            | solx_standard_json::InputSelector::RuntimeBytecodeSourceMap => "source maps",
+            solx_standard_json::InputSelector::BytecodeFunctionDebugData
+            | solx_standard_json::InputSelector::RuntimeBytecodeFunctionDebugData => {
+                "function debug data"
+            }
+            solx_standard_json::InputSelector::BytecodeGeneratedSources
+            | solx_standard_json::InputSelector::RuntimeBytecodeGeneratedSources => {
+                "generated sources"
+            }
+            _ => "that output",
+        };
         format!(
-            "{request} is not honored in {name}: it names an artifact of solc's codegen pipelines, which {name} does not have."
+            "{request} is ignored in {name}, which does not have the solc codegen pipelines that produce {artifact}."
         )
     }
 
     ///
     /// The pipeline warning, which is the same on both input paths.
     ///
-    fn describe_pipeline(name: &str) -> String {
+    fn describe_pipeline(request: &str, name: &str) -> String {
         format!(
-            "Via IR codegen is not honored in {name}, which has a single pipeline that is neither solc's legacy codegen nor its IR codegen. Bytecode differs from both."
+            "{request} is ignored in {name}, which has a single pipeline that is neither solc's legacy codegen nor its IR codegen. Bytecode differs from both."
         )
     }
 }

@@ -20,7 +20,7 @@ fn default() -> anyhow::Result<()> {
     #[cfg(not(feature = "solc"))]
     result
         .failure()
-        .stderr(predicate::str::contains("--ir is not honored"))
+        .stderr(predicate::str::contains("--ir is ignored"))
         .stderr(predicate::str::contains("Nothing would be produced"));
 
     Ok(())

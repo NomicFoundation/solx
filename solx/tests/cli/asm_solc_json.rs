@@ -20,7 +20,7 @@ fn default() -> anyhow::Result<()> {
     #[cfg(not(feature = "solc"))]
     result
         .failure()
-        .stderr(predicate::str::contains("--asm-solc-json is not honored"))
+        .stderr(predicate::str::contains("--asm-solc-json is ignored"))
         .stderr(predicate::str::contains("Nothing would be produced"));
 
     Ok(())

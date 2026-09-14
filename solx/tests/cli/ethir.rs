@@ -29,7 +29,7 @@ fn default() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("Binary:"))
-        .stderr(predicate::str::contains("--ethir is not honored"));
+        .stderr(predicate::str::contains("--ethir is ignored"));
 
     Ok(())
 }

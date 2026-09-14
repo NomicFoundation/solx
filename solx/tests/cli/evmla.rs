@@ -22,7 +22,7 @@ fn default() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("Binary:"))
-        .stderr(predicate::str::contains("--evmla is not honored"));
+        .stderr(predicate::str::contains("--evmla is ignored"));
 
     Ok(())
 }

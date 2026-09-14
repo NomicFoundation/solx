@@ -45,9 +45,7 @@ fn via_ir_warns_and_compiles() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("Binary:"))
-        .stderr(predicate::str::contains(
-            "Via IR codegen is not honored in Slang",
-        ));
+        .stderr(predicate::str::contains("--via-ir is ignored in Slang"));
 
     Ok(())
 }
@@ -66,7 +64,7 @@ fn solc_optimizer_settings_warn() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains(
-            r#"Standard JSON option \"optimizer.enabled\" is not honored in Slang"#,
+            r#"Standard JSON option \"optimizer.enabled\" is ignored in Slang"#,
         ))
         .stdout(predicate::str::contains("\"severity\":\"warning\""))
         .stdout(predicate::str::contains("\"object\""));
@@ -107,7 +105,7 @@ fn standard_json_settings_and_selections() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains(
-            "Via IR codegen is not honored in Slang",
+            r#"Standard JSON option \"viaIR\" is ignored in Slang"#,
         ))
         .stdout(predicate::str::contains(
             r#"Standard JSON output selection \"abi\" is not supported in Slang."#,
@@ -147,7 +145,7 @@ fn pipeline_output_warns_beside_bytecode() -> anyhow::Result<()> {
         .success()
         .stdout(predicate::str::contains("Binary:"))
         .stderr(predicate::str::contains(
-            "--ir is not honored in Slang: it names an artifact of solc's codegen pipelines",
+            "--ir is ignored in Slang, which does not have the solc codegen pipelines that produce Yul IR.",
         ));
 
     Ok(())
@@ -164,8 +162,8 @@ fn nothing_left_to_produce() -> anyhow::Result<()> {
     // Warning per request, error because the run would produce nothing at all.
     result
         .failure()
-        .stderr(predicate::str::contains("--ir is not honored"))
-        .stderr(predicate::str::contains("--evmla is not honored"))
+        .stderr(predicate::str::contains("--ir is ignored"))
+        .stderr(predicate::str::contains("--evmla is ignored"))
         .stderr(predicate::str::contains(
             "Nothing would be produced: every requested output is unavailable in Slang.",
         ));
