@@ -28,6 +28,9 @@ pub struct Optimizer {
     /// optimizes at the LLVM level, driven by `mode`. Never forwarded to `solc`.
     #[serde(default, skip_serializing)]
     pub runs: Option<u64>,
+    /// The `solc` optimizer step settings, accepted and unused for the same reason as `runs`.
+    #[serde(default, skip_serializing)]
+    pub details: Option<serde_json::Value>,
 }
 
 impl Default for Optimizer {
@@ -37,6 +40,7 @@ impl Default for Optimizer {
             mode: Self::default_mode(),
             size_fallback: Self::default_size_fallback(),
             runs: None,
+            details: None,
         }
     }
 }

@@ -129,6 +129,14 @@ impl<'arguments> Compiler<'arguments> {
                 output_config,
             );
         } else {
+            let diagnostics = frontend
+                .capabilities()
+                .arguments_diagnostics(&self.arguments, frontend.name());
+            let errors = Self::collect_diagnostics(diagnostics, &messages);
+            if !errors.is_empty() {
+                anyhow::bail!(errors.join("\n"));
+            }
+
             self.standard_output_evm(
                 frontend,
                 input_files.as_slice(),
@@ -407,6 +415,27 @@ impl<'arguments> Compiler<'arguments> {
     }
 
     ///
+    /// Records the diagnostics in the message stream and returns the error texts, which the
+    /// caller reports as a compilation failure. Warnings travel with the rest of the messages.
+    ///
+    fn collect_diagnostics(
+        diagnostics: Vec<solx_standard_json::OutputError>,
+        messages: &Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
+    ) -> Vec<String> {
+        let errors = diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.severity == "error")
+            .map(|diagnostic| diagnostic.message.to_owned())
+            .collect::<Vec<String>>();
+        solx_utils::SyncLock::lock_sync(messages.as_ref()).extend(
+            diagnostics
+                .into_iter()
+                .filter(|diagnostic| diagnostic.severity != "error"),
+        );
+        errors
+    }
+
+    ///
     /// Runs the standard JSON mode for the EVM target.
     ///
     pub fn standard_json_evm<F>(
@@ -437,6 +466,20 @@ impl<'arguments> Compiler<'arguments> {
 
         let metadata_hash_type = solc_input.settings.metadata.bytecode_hash;
         let append_cbor = solc_input.settings.metadata.append_cbor;
+
+        if language == solx_standard_json::InputLanguage::Solidity {
+            let diagnostics = frontend
+                .capabilities()
+                .standard_json_diagnostics(&solc_input, frontend.name());
+            let has_errors = diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.severity == "error");
+            solx_utils::SyncLock::lock_sync(messages.as_ref()).extend(diagnostics);
+            if has_errors {
+                solx_standard_json::Output::new_with_messages(messages)
+                    .write_and_exit(&solc_input.settings.output_selection);
+            }
+        }
 
         let mut profiler = solx_codegen_evm::Profiler::default();
         let (mut solc_output, project) = match language {

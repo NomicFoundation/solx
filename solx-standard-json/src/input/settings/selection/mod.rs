@@ -162,6 +162,18 @@ impl Selection {
     }
 
     ///
+    /// Returns every selector spelled out in the selection, without expanding umbrella ones.
+    ///
+    pub fn selectors(&self) -> BTreeSet<Selector> {
+        self.inner
+            .values()
+            .flat_map(|file| file.values())
+            .flatten()
+            .copied()
+            .collect()
+    }
+
+    ///
     /// Normalizes the selection by converting multi-item selectors into single-item selectors.
     ///
     pub fn normalize(&mut self) {

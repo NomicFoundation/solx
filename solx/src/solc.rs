@@ -65,6 +65,18 @@ impl solx_core::Frontend for Solc {
         "solc"
     }
 
+    fn capabilities(&self) -> &solx_core::Capabilities {
+        static CAPABILITIES: std::sync::LazyLock<solx_core::Capabilities> =
+            std::sync::LazyLock::new(|| solx_core::Capabilities {
+                unsupported_selectors: std::collections::BTreeSet::new(),
+                disk_imports: true,
+                metadata: true,
+                solc_pipelines: true,
+                solc_optimizer: true,
+            });
+        &CAPABILITIES
+    }
+
     fn standard_json(
         &self,
         input_json: &mut solx_standard_json::Input,

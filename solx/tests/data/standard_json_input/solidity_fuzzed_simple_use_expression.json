@@ -9,8 +9,8 @@
     "mode": "z"
   },
   "settings": {
-    "evmVersion": "cancun",
     "viaIR": true,
+    "evmVersion": "cancun",
     "outputSelection": {
       "*": {
         "*": [

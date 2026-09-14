@@ -42,11 +42,16 @@ fn ipfs_solidity() -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
+    #[cfg(feature = "solc")]
     result
         .success()
         .stdout(predicate::str::contains("Binary"))
         .stdout(predicate::str::contains("a264").not())
         .stdout(predicate::str::ends_with("0055").not());
+    #[cfg(not(feature = "solc"))]
+    result.failure().stderr(predicate::str::contains(
+        "Command line option --metadata-hash ipfs is not supported",
+    ));
 
     Ok(())
 }

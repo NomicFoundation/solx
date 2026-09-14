@@ -72,6 +72,9 @@ mod storage_layout;
 mod threads;
 #[cfg(feature = "solc")]
 mod transient_storage_layout;
+// The Slang frontend is the only one that rejects requests, so these expectations are its own.
+#[cfg(not(feature = "solc"))]
+mod unsupported;
 #[cfg(feature = "solc")]
 mod userdoc;
 mod version;

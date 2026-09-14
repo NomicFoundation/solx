@@ -77,6 +77,46 @@ impl Frontend for Slang {
         Self::NAME
     }
 
+    fn capabilities(&self) -> &solx_core::Capabilities {
+        static CAPABILITIES: std::sync::LazyLock<solx_core::Capabilities> =
+            std::sync::LazyLock::new(|| solx_core::Capabilities {
+                unsupported_selectors: [
+                    // Frontend outputs Slang does not produce yet.
+                    solx_standard_json::InputSelector::ABI,
+                    solx_standard_json::InputSelector::Metadata,
+                    solx_standard_json::InputSelector::DeveloperDocumentation,
+                    solx_standard_json::InputSelector::UserDocumentation,
+                    solx_standard_json::InputSelector::StorageLayout,
+                    solx_standard_json::InputSelector::TransientStorageLayout,
+                    solx_standard_json::InputSelector::GasEstimates,
+                    // Intermediate representations of the `solc` frontend pipeline.
+                    solx_standard_json::InputSelector::EVMLegacyAssembly,
+                    solx_standard_json::InputSelector::Yul,
+                    solx_standard_json::InputSelector::BytecodeEVMLA,
+                    solx_standard_json::InputSelector::RuntimeBytecodeEVMLA,
+                    solx_standard_json::InputSelector::BytecodeEthIR,
+                    solx_standard_json::InputSelector::RuntimeBytecodeEthIR,
+                    solx_standard_json::InputSelector::BytecodeGeneratedSources,
+                    solx_standard_json::InputSelector::RuntimeBytecodeGeneratedSources,
+                    // Debug data, which this pipeline emits no DWARF for.
+                    solx_standard_json::InputSelector::BytecodeDebugInfo,
+                    solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
+                    solx_standard_json::InputSelector::BytecodeFunctionDebugData,
+                    solx_standard_json::InputSelector::RuntimeBytecodeFunctionDebugData,
+                    solx_standard_json::InputSelector::BytecodeSourceMap,
+                    solx_standard_json::InputSelector::RuntimeBytecodeSourceMap,
+                    solx_standard_json::InputSelector::RuntimeBytecodeImmutableReferences,
+                ]
+                .into_iter()
+                .collect(),
+                disk_imports: false,
+                metadata: false,
+                solc_pipelines: false,
+                solc_optimizer: false,
+            });
+        &CAPABILITIES
+    }
+
     fn standard_json(
         &self,
         input_json: &mut solx_standard_json::Input,

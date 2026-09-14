@@ -17,9 +17,6 @@
           "evm.deployedBytecode.object"
         ]
       }
-    },
-    "metadata": {
-      "useLiteralContent": true
     }
   }
 }

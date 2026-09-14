@@ -6,7 +6,6 @@
     }
   },
   "settings": {
-    "viaIR": true,
     "optimizer": {
       "mode": "3"
     },
@@ -17,7 +16,9 @@
           "evm.bytecode.object",
           "evm.deployedBytecode.object",
           "evm.bytecode.opcodes",
-          "evm.deployedBytecode.opcodes"
+          "evm.deployedBytecode.opcodes",
+          "evm.bytecode.sourceMap",
+          "evm.deployedBytecode.sourceMap"
         ]
       }
     }

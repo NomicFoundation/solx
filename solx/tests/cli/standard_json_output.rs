@@ -61,12 +61,32 @@ fn multi_contract_bytecodes() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("\"bytecode\""))
-        .stdout(predicate::str::contains("\"deployedBytecode\""))
+        .stdout(predicate::str::contains("\"deployedBytecode\""));
+
+    Ok(())
+}
+
+// Source maps come from solc, so the fixture requesting them is the solc build's own.
+#[cfg(feature = "solc")]
+#[test]
+fn multi_contract_source_maps() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("solidity_multi_contract_source_maps.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
         .stdout(predicate::str::contains("\"sourceMap\""));
 
     Ok(())
 }
 
+// Gas estimates come out empty under the Slang frontend, which now rejects the selection.
+#[cfg(feature = "solc")]
 #[test]
 fn gas_estimates() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -454,12 +474,14 @@ fn devdoc_userdoc_output() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test_case(crate::common::standard_json!("solidity_via_ir.json"))]
+// The `cfg_attr`-ed inputs request outputs the Slang frontend does not produce, which it
+// rejects; `unsupported.rs` covers that side.
+#[cfg_attr(feature = "solc", test_case(crate::common::standard_json!("solidity_via_ir.json")))]
 #[test_case(crate::common::standard_json!("solidity_with_remappings.json"))]
 #[test_case(crate::common::standard_json!("solidity_with_evm_version.json"))]
-#[test_case(crate::common::standard_json!("solidity_storage_layout.json"))]
-#[test_case(crate::common::standard_json!("solidity_abi_only.json"))]
-#[test_case(crate::common::standard_json!("solidity_devdoc_userdoc.json"))]
+#[cfg_attr(feature = "solc", test_case(crate::common::standard_json!("solidity_storage_layout.json")))]
+#[cfg_attr(feature = "solc", test_case(crate::common::standard_json!("solidity_abi_only.json")))]
+#[cfg_attr(feature = "solc", test_case(crate::common::standard_json!("solidity_devdoc_userdoc.json")))]
 fn additional_outputs_no_errors(path: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -473,7 +495,7 @@ fn additional_outputs_no_errors(path: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test_case(crate::common::standard_json!("solidity_via_ir.json"))]
+#[cfg_attr(feature = "solc", test_case(crate::common::standard_json!("solidity_via_ir.json")))]
 #[test_case(crate::common::standard_json!("solidity_with_remappings.json"))]
 #[test_case(crate::common::standard_json!("solidity_with_evm_version.json"))]
 fn additional_outputs_via_stdin(path: &str) -> anyhow::Result<()> {
