@@ -1,5 +1,5 @@
 //!
-//! The Matter Labs compiler tests directory.
+//! The solx compiler tests directory.
 //!
 
 pub mod test;
@@ -12,15 +12,15 @@ use crate::directories::Collection;
 use crate::filters::Filters;
 use crate::summary::Summary;
 
-use self::test::MatterLabsTest;
+use self::test::SolxTest;
 
 ///
-/// The Matter Labs compiler tests directory.
+/// The solx compiler tests directory.
 ///
-pub struct MatterLabsDirectory;
+pub struct SolxDirectory;
 
-impl Collection for MatterLabsDirectory {
-    type Test = MatterLabsTest;
+impl Collection for SolxDirectory {
+    type Test = SolxTest;
 
     fn read_all(
         directory_path: &Path,
@@ -60,7 +60,7 @@ impl Collection for MatterLabsDirectory {
                 continue;
             }
 
-            if let Some(test) = MatterLabsTest::new(path, summary.clone(), filters) {
+            if let Some(test) = SolxTest::new(path, summary.clone(), filters) {
                 tests.push(test);
             }
         }

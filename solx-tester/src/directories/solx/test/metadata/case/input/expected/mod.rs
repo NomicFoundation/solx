@@ -1,5 +1,5 @@
 //!
-//! The Matter Labs compiler test metadata expected data variant.
+//! The solx compiler test metadata expected data variant.
 //!
 
 pub mod variant;
@@ -12,7 +12,7 @@ use self::variant::Variant;
 use self::variant::extended::Extended;
 
 ///
-/// The Matter Labs compiler test metadata expected data variant.
+/// The solx compiler test metadata expected data variant.
 ///
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]

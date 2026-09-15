@@ -1,5 +1,5 @@
 //!
-//! The Matter Labs compiler test.
+//! The solx compiler test.
 //!
 
 pub mod metadata;
@@ -53,10 +53,10 @@ pub fn default_caller_address() -> String {
 }
 
 ///
-/// The Matter Labs compiler test.
+/// The solx compiler test.
 ///
 #[derive(Debug)]
-pub struct MatterLabsTest {
+pub struct SolxTest {
     /// The test path.
     path: PathBuf,
     /// The test selector.
@@ -67,7 +67,7 @@ pub struct MatterLabsTest {
     sources: Vec<(String, String)>,
 }
 
-impl MatterLabsTest {
+impl SolxTest {
     ///
     /// Try to create new test.
     ///
@@ -274,7 +274,7 @@ impl MatterLabsTest {
     }
 }
 
-impl Buildable for MatterLabsTest {
+impl Buildable for SolxTest {
     fn build_for_evm(
         &self,
         mode: Mode,
@@ -299,28 +299,14 @@ impl Buildable for MatterLabsTest {
             selector: self.selector.clone(),
         };
 
-        let test_params = match self.metadata.revert_strings.as_deref() {
-            Some(value) => {
-                match solx_solc_test_adapter::Params::try_from(
-                    format!("revertStrings: {value}").as_str(),
-                ) {
-                    Ok(params) => Some(params),
-                    Err(error) => {
-                        Summary::invalid(summary, test_description, error);
-                        return None;
-                    }
-                }
-            }
-            None => None,
-        };
-
         let evm_input = match compiler
             .compile_for_evm(
                 self.selector.path.to_string(),
                 sources,
                 libraries,
                 &mode,
-                test_params.as_ref(),
+                None,
+                self.metadata.revert_strings,
                 vec![],
                 debug_config,
             )
@@ -366,20 +352,16 @@ impl Buildable for MatterLabsTest {
             }
 
             let case_name = case.name.to_owned();
-            let case = match Case::try_from_matter_labs(
-                case,
-                &mode,
-                &instances,
-                &evm_input.method_identifiers,
-            )
-            .map_err(|error| anyhow::anyhow!("Case `{case_name}` is invalid: {error}"))
-            {
-                Ok(case) => case,
-                Err(error) => {
-                    Summary::invalid(summary, test_description, error);
-                    return None;
-                }
-            };
+            let case =
+                match Case::try_from_solx(case, &mode, &instances, &evm_input.method_identifiers)
+                    .map_err(|error| anyhow::anyhow!("Case `{case_name}` is invalid: {error}"))
+                {
+                    Ok(case) => case,
+                    Err(error) => {
+                        Summary::invalid(summary, test_description, error);
+                        return None;
+                    }
+                };
 
             cases.push(case);
         }

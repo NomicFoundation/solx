@@ -1,5 +1,5 @@
 //!
-//! The Matter Labs compiler test metadata.
+//! The solx compiler test metadata.
 //!
 
 pub mod case;
@@ -10,7 +10,7 @@ use std::str::FromStr;
 use self::case::Case;
 
 ///
-/// The Matter Labs compiler test metadata.
+/// The solx compiler test metadata.
 ///
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Metadata {
@@ -28,13 +28,12 @@ pub struct Metadata {
     /// The test libraries for linking.
     #[serde(default)]
     pub libraries: BTreeMap<String, BTreeMap<String, String>>,
+    /// The revert strings mode.
+    #[serde(default)]
+    pub revert_strings: Option<solx_utils::RevertStrings>,
     /// If the entire test file must be ignored.
     #[serde(default)]
     pub ignore: bool,
-    /// The revert strings mode: `debug` compiles internal reverts with verbose
-    /// messages, letting expectations assert them.
-    #[serde(default)]
-    pub revert_strings: Option<String>,
 }
 
 impl FromStr for Metadata {

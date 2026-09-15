@@ -8,9 +8,9 @@ use std::str::FromStr;
 use revm::primitives::Address;
 use revm::primitives::U256;
 
-use crate::directories::matter_labs::test::metadata::case::input::expected::variant::extended::event::Event as MatterLabsTestExpectedEvent;
-use crate::test::instance::Instance;
+use crate::directories::solx::test::metadata::case::input::expected::variant::extended::event::Event as SolxTestExpectedEvent;
 use crate::test::case::input::value::Value;
+use crate::test::instance::Instance;
 
 ///
 /// The compiler test outcome event.
@@ -38,15 +38,15 @@ impl Event {
     }
 
     ///
-    /// Try convert from Matter Labs compiler test metadata expected event.
+    /// Try convert from solx compiler test metadata expected event.
     ///
-    pub fn try_from_matter_labs(
-        event: MatterLabsTestExpectedEvent,
+    pub fn try_from_solx(
+        event: SolxTestExpectedEvent,
         instances: &BTreeMap<String, Instance>,
     ) -> anyhow::Result<Self> {
-        let topics = Value::try_from_vec_matter_labs(event.topics, instances)
+        let topics = Value::try_from_vec_solx(event.topics, instances)
             .map_err(|error| anyhow::anyhow!("Invalid topics: {error}"))?;
-        let values = Value::try_from_vec_matter_labs(event.values, instances)
+        let values = Value::try_from_vec_solx(event.values, instances)
             .map_err(|error| anyhow::anyhow!("Invalid values: {error}"))?;
 
         let address = match event.address {

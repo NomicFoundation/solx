@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 
+use crate::input::settings::debug::Debug as InputSettingsDebug;
 use crate::input::settings::metadata::Metadata as InputSettingsMetadata;
 use crate::input::settings::optimizer::Optimizer as InputSettingsOptimizer;
 use crate::input::settings::selection::Selection as InputSettingsSelection;
@@ -104,6 +105,7 @@ impl Input {
             via_ir,
             output_selection,
             metadata,
+            None,
             llvm_options,
         )
     }
@@ -120,6 +122,7 @@ impl Input {
         via_ir: bool,
         output_selection: &InputSettingsSelection,
         metadata: InputSettingsMetadata,
+        debug: Option<InputSettingsDebug>,
         llvm_options: Vec<String>,
     ) -> anyhow::Result<Self> {
         Ok(Self {
@@ -133,7 +136,7 @@ impl Input {
                 via_ir,
                 output_selection.to_owned(),
                 metadata,
-                None,
+                debug,
                 llvm_options,
             ),
         })

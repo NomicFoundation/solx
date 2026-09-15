@@ -1,11 +1,11 @@
 //!
-//! The Matter Labs compiler test metadata expected event.
+//! The solx compiler test metadata expected event.
 //!
 
 use serde::Deserialize;
 
 ///
-/// The Matter Labs compiler test metadata expected event.
+/// The solx compiler test metadata expected event.
 ///
 #[derive(Debug, Clone, Deserialize)]
 pub struct Event {

@@ -1,5 +1,5 @@
 //!
-//! The Matter Labs compiler test metadata case.
+//! The solx compiler test metadata case.
 //!
 
 pub mod input;
@@ -17,7 +17,7 @@ use self::input::Input;
 use self::input::expected::Expected;
 
 ///
-/// The Matter Labs compiler test metadata case.
+/// The solx compiler test metadata case.
 ///
 #[derive(Debug, Clone, Deserialize)]
 pub struct Case {
@@ -136,7 +136,7 @@ impl Case {
                 continue;
             }
 
-            let caller = match Value::try_from_matter_labs(input.caller.as_str(), instances)
+            let caller = match Value::try_from_solx(input.caller.as_str(), instances)
                 .map_err(|error| anyhow::anyhow!("Invalid caller `{}`: {error}", input.caller))?
             {
                 Value::Known(value) => crate::utils::u256_to_address(&value),

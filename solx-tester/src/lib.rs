@@ -33,7 +33,7 @@ pub use crate::directories::Buildable;
 pub use crate::directories::Collection;
 pub use crate::directories::ethereum::EthereumDirectory;
 pub use crate::directories::ethereum::test::EthereumTest;
-pub use crate::directories::matter_labs::MatterLabsDirectory;
+pub use crate::directories::solx::SolxDirectory;
 pub use crate::filters::Filters;
 pub use crate::revm::REVM;
 pub use crate::summary::Summary;
@@ -149,12 +149,12 @@ impl<'a> SolxTester<'a> {
 
         let mut tests = Vec::with_capacity(16384);
 
-        tests.extend(self.directory::<MatterLabsDirectory>(
+        tests.extend(self.directory::<SolxDirectory>(
             Self::SOLIDITY_SIMPLE,
             solx_utils::EXTENSION_SOLIDITY,
             solidity_compiler.clone(),
         )?);
-        tests.extend(self.directory::<MatterLabsDirectory>(
+        tests.extend(self.directory::<SolxDirectory>(
             Self::SOLIDITY_COMPLEX,
             solx_utils::EXTENSION_JSON,
             solidity_compiler.clone(),
@@ -166,13 +166,13 @@ impl<'a> SolxTester<'a> {
         )?);
 
         #[cfg(not(feature = "slang-ast"))]
-        tests.extend(self.directory::<MatterLabsDirectory>(
+        tests.extend(self.directory::<SolxDirectory>(
             Self::YUL_SIMPLE,
             solx_utils::EXTENSION_YUL,
             yul_compiler,
         )?);
 
-        tests.extend(self.directory::<MatterLabsDirectory>(
+        tests.extend(self.directory::<SolxDirectory>(
             Self::LLVM_IR_SIMPLE,
             solx_utils::EXTENSION_LLVM_SOURCE,
             llvm_ir_compiler,

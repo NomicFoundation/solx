@@ -123,7 +123,8 @@ impl Compiler for LLVMIRCompiler {
         sources: Vec<(String, String)>,
         libraries: solx_utils::Libraries,
         mode: &Mode,
-        _test_params: Option<&solx_solc_test_adapter::Params>,
+        _evm_version: Option<solx_utils::EVMVersion>,
+        _revert_strings: Option<solx_utils::RevertStrings>,
         llvm_options: Vec<String>,
         debug_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<EVMInput> {

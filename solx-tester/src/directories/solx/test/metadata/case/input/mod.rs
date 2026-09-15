@@ -1,5 +1,5 @@
 //!
-//! The Matter Labs compiler test metadata case input.
+//! The solx compiler test metadata case input.
 //!
 
 pub mod calldata;
@@ -8,15 +8,15 @@ pub mod storage;
 
 use std::collections::HashMap;
 
-use crate::directories::matter_labs::test::default_caller_address;
-use crate::directories::matter_labs::test::simple_tests_instance;
+use crate::directories::solx::test::default_caller_address;
+use crate::directories::solx::test::simple_tests_instance;
 
 use self::calldata::Calldata;
 use self::expected::Expected;
 use self::storage::Storage;
 
 ///
-/// The Matter Labs compiler test metadata case input.
+/// The solx compiler test metadata case input.
 ///
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Input {

@@ -1,5 +1,5 @@
 //!
-//! The Matter Labs compiler test metadata extended expected data.
+//! The solx compiler test metadata extended expected data.
 //!
 
 pub mod event;
@@ -9,7 +9,7 @@ use serde::Deserialize;
 use self::event::Event;
 
 ///
-/// The Matter Labs compiler test metadata extended expected data.
+/// The solx compiler test metadata extended expected data.
 ///
 #[derive(Debug, Default, Clone, Deserialize)]
 pub struct Extended {

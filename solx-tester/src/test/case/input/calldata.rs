@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::directories::matter_labs::test::metadata::case::input::calldata::Calldata as MatterLabsTestInputCalldata;
+use crate::directories::solx::test::metadata::case::input::calldata::Calldata as SolxTestInputCalldata;
 use crate::test::case::input::value::Value;
 use crate::test::instance::Instance;
 
@@ -19,14 +19,14 @@ pub struct Calldata {
 
 impl Calldata {
     ///
-    /// Try convert from Matter Labs compiler test storage data.
+    /// Try convert from solx compiler test storage data.
     ///
-    pub fn try_from_matter_labs(
-        calldata: MatterLabsTestInputCalldata,
+    pub fn try_from_solx(
+        calldata: SolxTestInputCalldata,
         instances: &BTreeMap<String, Instance>,
     ) -> anyhow::Result<Self> {
         let calldata = match calldata {
-            MatterLabsTestInputCalldata::Value(value) => {
+            SolxTestInputCalldata::Value(value) => {
                 let hex = value.strip_prefix("0x").ok_or_else(|| {
                     anyhow::anyhow!("Expected a hexadecimal starting with `0x`, found `{value}`")
                 })?;
@@ -35,9 +35,9 @@ impl Calldata {
                     anyhow::anyhow!("Hexadecimal value `{value}` decoding error: {error}")
                 })?
             }
-            MatterLabsTestInputCalldata::List(values) => {
+            SolxTestInputCalldata::List(values) => {
                 let mut result = Vec::with_capacity(values.len());
-                let calldata = Value::try_from_vec_matter_labs(values, instances)?;
+                let calldata = Value::try_from_vec_solx(values, instances)?;
                 for value in calldata.into_iter() {
                     let value = match value {
                         Value::Known(value) => value,

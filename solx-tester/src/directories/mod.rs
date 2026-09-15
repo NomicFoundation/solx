@@ -3,7 +3,7 @@
 //!
 
 pub mod ethereum;
-pub mod matter_labs;
+pub mod solx;
 
 use std::path::Path;
 use std::sync::Arc;

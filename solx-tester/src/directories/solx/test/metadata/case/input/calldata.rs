@@ -1,11 +1,11 @@
 //!
-//! The Matter Labs compiler test metadata case input calldata.
+//! The solx compiler test metadata case input calldata.
 //!
 
 use serde::Deserialize;
 
 ///
-/// The Matter Labs compiler test metadata case input calldata.
+/// The solx compiler test metadata case input calldata.
 ///
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]

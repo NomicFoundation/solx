@@ -1,11 +1,11 @@
 //!
-//! The Matter Labs compiler test metadata case input contract storage.
+//! The solx compiler test metadata case input contract storage.
 //!
 
 use std::collections::HashMap;
 
 ///
-/// The Matter Labs compiler test metadata case input contract storage.
+/// The solx compiler test metadata case input contract storage.
 ///
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(untagged)]

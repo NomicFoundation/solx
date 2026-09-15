@@ -204,7 +204,8 @@ impl SolidityCompiler {
         sources: &[(String, String)],
         libraries: &solx_utils::Libraries,
         mode: &SolidityMode,
-        test_params: Option<&solx_solc_test_adapter::Params>,
+        evm_version: Option<solx_utils::EVMVersion>,
+        revert_strings: Option<solx_utils::RevertStrings>,
         llvm_options: Vec<String>,
     ) -> anyhow::Result<solx_standard_json::Input> {
         let llvm_settings = mode
@@ -225,8 +226,6 @@ impl SolidityCompiler {
             })
             .collect();
 
-        let evm_version = test_params.map(|params| params.evm_version.newest_matching());
-
         let mut selectors = BTreeSet::new();
         selectors.insert(solx_standard_json::InputSelector::Bytecode);
         selectors.insert(solx_standard_json::InputSelector::RuntimeBytecode);
@@ -239,7 +238,7 @@ impl SolidityCompiler {
             solx_standard_json::InputSelector::EVMLegacyAssembly
         });
 
-        let mut input = solx_standard_json::Input::try_from_solidity_sources(
+        solx_standard_json::Input::try_from_solidity_sources(
             sources_json,
             libraries.clone(),
             BTreeSet::new(),
@@ -252,13 +251,10 @@ impl SolidityCompiler {
             mode.via_ir,
             &solx_standard_json::InputSelection::new(selectors),
             solx_standard_json::InputMetadata::default(),
+            revert_strings.map(solx_standard_json::InputDebug::from),
             llvm_options,
         )
-        .map_err(|error| anyhow::anyhow!("Solidity standard JSON I/O error: {error}"))?;
-        input.settings.debug = test_params.map(|params| solx_standard_json::InputDebug {
-            revert_strings: Some(params.revert_strings.to_string()),
-        });
-        Ok(input)
+        .map_err(|error| anyhow::anyhow!("Solidity standard JSON I/O error: {error}"))
     }
 
     ///
@@ -318,7 +314,8 @@ impl SolidityCompiler {
         sources: &[(String, String)],
         libraries: &solx_utils::Libraries,
         mode: &Mode,
-        test_params: Option<&solx_solc_test_adapter::Params>,
+        evm_version: Option<solx_utils::EVMVersion>,
+        revert_strings: Option<solx_utils::RevertStrings>,
     ) -> solx_standard_json::Input {
         let (via_ir, optimizer_enabled) = match mode {
             Mode::Solidity(mode) => (mode.via_ir, mode.solc_optimize.unwrap_or(false)),
@@ -329,14 +326,10 @@ impl SolidityCompiler {
         let output_selection = crate::compilers::input_ext::selection_required_for_testing(via_ir);
 
         let evm_version = match mode {
-            Mode::Solidity(_) => test_params.map(|params| params.evm_version.newest_matching()),
+            Mode::Solidity(_) => evm_version,
             Mode::Yul(_) => Some(solx_utils::EVMVersion::default()),
             _ => None,
         };
-
-        let debug = test_params.map(|test_params| solx_standard_json::InputDebug {
-            revert_strings: Some(test_params.revert_strings.to_string()),
-        });
 
         crate::compilers::input_ext::new_input_for_solc(
             language,
@@ -347,7 +340,7 @@ impl SolidityCompiler {
             via_ir,
             output_selection,
             optimizer_enabled,
-            debug,
+            revert_strings.map(solx_standard_json::InputDebug::from),
         )
     }
 
@@ -360,7 +353,8 @@ impl SolidityCompiler {
         sources: &[(String, String)],
         libraries: &solx_utils::Libraries,
         mode: &Mode,
-        test_params: Option<&solx_solc_test_adapter::Params>,
+        evm_version: Option<solx_utils::EVMVersion>,
+        revert_strings: Option<solx_utils::RevertStrings>,
     ) -> anyhow::Result<solx_standard_json::Output> {
         let cache_key = match mode {
             Mode::Solidity(mode) => CacheKey::new(
@@ -386,8 +380,14 @@ impl SolidityCompiler {
         };
 
         if !self.cache.contains(&cache_key) {
-            let input =
-                Self::create_solc_input(self.language, sources, libraries, mode, test_params);
+            let input = Self::create_solc_input(
+                self.language,
+                sources,
+                libraries,
+                mode,
+                evm_version,
+                revert_strings,
+            );
 
             let allow_paths = Path::new(Self::ALLOW_PATHS)
                 .canonicalize()
@@ -411,7 +411,8 @@ impl SolidityCompiler {
         sources: Vec<(String, String)>,
         libraries: solx_utils::Libraries,
         mode: &Mode,
-        test_params: Option<&solx_solc_test_adapter::Params>,
+        evm_version: Option<solx_utils::EVMVersion>,
+        revert_strings: Option<solx_utils::RevertStrings>,
         llvm_options: Vec<String>,
         debug_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<EVMInput> {
@@ -428,7 +429,8 @@ impl SolidityCompiler {
                     &sources,
                     &libraries,
                     solidity_mode,
-                    test_params,
+                    evm_version,
+                    revert_strings,
                     llvm_options,
                 )?;
 
@@ -505,10 +507,17 @@ impl SolidityCompiler {
         sources: Vec<(String, String)>,
         libraries: solx_utils::Libraries,
         mode: &Mode,
-        test_params: Option<&solx_solc_test_adapter::Params>,
+        evm_version: Option<solx_utils::EVMVersion>,
+        revert_strings: Option<solx_utils::RevertStrings>,
     ) -> anyhow::Result<EVMInput> {
-        let output =
-            self.compile_solc_cached(test_path, &sources, &libraries, mode, test_params)?;
+        let output = self.compile_solc_cached(
+            test_path,
+            &sources,
+            &libraries,
+            mode,
+            evm_version,
+            revert_strings,
+        )?;
 
         if let Some(errors) = crate::compilers::output_ext::errors_opt(&output) {
             let mut has_errors = false;
@@ -570,7 +579,8 @@ impl Compiler for SolidityCompiler {
         sources: Vec<(String, String)>,
         libraries: solx_utils::Libraries,
         mode: &Mode,
-        test_params: Option<&solx_solc_test_adapter::Params>,
+        evm_version: Option<solx_utils::EVMVersion>,
+        revert_strings: Option<solx_utils::RevertStrings>,
         llvm_options: Vec<String>,
         debug_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<EVMInput> {
@@ -579,13 +589,19 @@ impl Compiler for SolidityCompiler {
                 sources,
                 libraries,
                 mode,
-                test_params,
+                evm_version,
+                revert_strings,
                 llvm_options,
                 debug_config,
             ),
-            Toolchain::Solc => {
-                self.compile_solc_for_evm(test_path, sources, libraries, mode, test_params)
-            }
+            Toolchain::Solc => self.compile_solc_for_evm(
+                test_path,
+                sources,
+                libraries,
+                mode,
+                evm_version,
+                revert_strings,
+            ),
         }
     }
 

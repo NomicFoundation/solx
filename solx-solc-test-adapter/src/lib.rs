@@ -19,7 +19,6 @@ pub use self::test::params::Params;
 pub use self::test::params::abi_encoder_v1_only::ABIEncoderV1Only;
 pub use self::test::params::compile_via_yul::CompileViaYul;
 pub use self::test::params::evm_version::EVMVersion;
-pub use self::test::params::revert_strings::RevertStrings;
 
 /// The default contract address.
 pub const DEFAULT_CONTRACT_ADDRESS: &str = "c06afe3a8444fc0004668591e8306bfb9968e79e";

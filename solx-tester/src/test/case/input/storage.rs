@@ -9,7 +9,7 @@ use std::str::FromStr;
 use revm::primitives::Address;
 use revm::primitives::U256;
 
-use crate::directories::matter_labs::test::metadata::case::input::storage::Storage as MatterLabsTestContractStorage;
+use crate::directories::solx::test::metadata::case::input::storage::Storage as SolxTestContractStorage;
 use crate::test::case::input::value::Value;
 use crate::test::instance::Instance;
 
@@ -24,10 +24,10 @@ pub struct Storage {
 
 impl Storage {
     ///
-    /// Try convert from Matter Labs compiler test storage data.
+    /// Try convert from solx compiler test storage data.
     ///
-    pub fn try_from_matter_labs(
-        storage: HashMap<String, MatterLabsTestContractStorage>,
+    pub fn try_from_solx(
+        storage: HashMap<String, SolxTestContractStorage>,
         instances: &BTreeMap<String, Instance>,
     ) -> anyhow::Result<Self> {
         let mut result = HashMap::new();
@@ -49,23 +49,23 @@ impl Storage {
             .map_err(|error| anyhow::anyhow!("Invalid storage address: {error}"))?;
 
             let contract_storage = match contract_storage {
-                MatterLabsTestContractStorage::List(list) => list
+                SolxTestContractStorage::List(list) => list
                     .into_iter()
                     .enumerate()
                     .map(|(key, value)| (key.to_string(), value))
                     .collect(),
-                MatterLabsTestContractStorage::Map(map) => map.clone(),
+                SolxTestContractStorage::Map(map) => map.clone(),
             };
             let mut contract_storage_values = HashMap::new();
             for (key, value) in contract_storage.into_iter() {
-                let key = match Value::try_from_matter_labs(key.as_str(), instances)
+                let key = match Value::try_from_solx(key.as_str(), instances)
                     .map_err(|error| anyhow::anyhow!("Invalid storage key: {error}"))?
                 {
                     Value::Known(value) => value,
                     Value::Any => anyhow::bail!("Storage key can not be `*`"),
                 };
 
-                let value = match Value::try_from_matter_labs(value.as_str(), instances)
+                let value = match Value::try_from_solx(value.as_str(), instances)
                     .map_err(|error| anyhow::anyhow!("Invalid storage value: {error}"))?
                 {
                     Value::Known(value) => value,

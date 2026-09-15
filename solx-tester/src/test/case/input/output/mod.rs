@@ -7,8 +7,8 @@ pub mod event;
 use std::collections::BTreeMap;
 
 use crate::compilers::mode::Mode;
-use crate::directories::matter_labs::test::metadata::case::input::expected::Expected as MatterLabsTestExpected;
-use crate::directories::matter_labs::test::metadata::case::input::expected::variant::Variant as MatterLabsTestExpectedVariant;
+use crate::directories::solx::test::metadata::case::input::expected::Expected as SolxTestExpected;
+use crate::directories::solx::test::metadata::case::input::expected::variant::Variant as SolxTestExpectedVariant;
 use crate::revm::revm_type_conversions::revm_bytes_to_vec_value;
 use crate::revm::revm_type_conversions::revm_topics_to_vec_value;
 use crate::test::case::input::value::Value;
@@ -42,25 +42,23 @@ impl Output {
     }
 
     ///
-    /// Try convert from Matter Labs compiler test metadata expected.
+    /// Try convert from solx compiler test metadata expected.
     ///
-    pub fn try_from_matter_labs_expected(
-        expected: MatterLabsTestExpected,
+    pub fn try_from_solx_expected(
+        expected: SolxTestExpected,
         mode: &Mode,
         instances: &BTreeMap<String, Instance>,
     ) -> anyhow::Result<Self> {
         let variants = match expected {
-            MatterLabsTestExpected::Single(variant) => vec![variant],
-            MatterLabsTestExpected::Multiple(variants) => variants.into_iter().collect(),
+            SolxTestExpected::Single(variant) => vec![variant],
+            SolxTestExpected::Multiple(variants) => variants.into_iter().collect(),
         };
         let variant = variants
             .into_iter()
             .find(|variant| {
                 let version = match variant {
-                    MatterLabsTestExpectedVariant::Simple(_) => None,
-                    MatterLabsTestExpectedVariant::Extended(inner) => {
-                        inner.compiler_version.as_ref()
-                    }
+                    SolxTestExpectedVariant::Simple(_) => None,
+                    SolxTestExpectedVariant::Extended(inner) => inner.compiler_version.as_ref(),
                 };
                 match version {
                     Some(version) => mode.check_version(version),
@@ -70,8 +68,8 @@ impl Output {
             .ok_or_else(|| anyhow::anyhow!("Version not covered"))?;
 
         let (return_data, exception, events) = match variant {
-            MatterLabsTestExpectedVariant::Simple(return_data) => (return_data, false, Vec::new()),
-            MatterLabsTestExpectedVariant::Extended(expected) => {
+            SolxTestExpectedVariant::Simple(return_data) => (return_data, false, Vec::new()),
+            SolxTestExpectedVariant::Extended(expected) => {
                 let return_data = expected.return_data;
                 let exception = expected.exception;
                 let events = expected
@@ -79,7 +77,7 @@ impl Output {
                     .into_iter()
                     .enumerate()
                     .map(|(index, event)| {
-                        Event::try_from_matter_labs(event, instances)
+                        Event::try_from_solx(event, instances)
                             .map_err(|error| anyhow::anyhow!("Event #{index} is invalid: {error}"))
                     })
                     .collect::<anyhow::Result<Vec<Event>>>()
@@ -87,7 +85,7 @@ impl Output {
                 (return_data, exception, events)
             }
         };
-        let return_data = Value::try_from_vec_matter_labs(return_data, instances)
+        let return_data = Value::try_from_vec_solx(return_data, instances)
             .map_err(|error| anyhow::anyhow!("Invalid return data: {error}"))?;
 
         Ok(Self {
