@@ -20,18 +20,26 @@ pub struct SourceImportResolver<'a> {
 
 impl SourceImportResolver<'_> {
     ///
-    /// Resolves a relative import against the importing file as solc's
-    /// `util::absolutePath` does: the parent of the source identifier is taken
-    /// as a string and the import's components are appended to it. Rebuilding
-    /// from path components instead would collapse the `//` in URL identifiers
-    /// such as `https://github.com/...` and drop leading `..` segments, both of
-    /// which occur in verified contracts.
+    /// solc's `util::absolutePath` (`libsolutil/CommonIO.cpp`): the import's components are
+    /// appended to the importing file's identifier with its filename removed, `..` taking the
+    /// boost `parent_path` at each step. Identifiers are `/`-separated strings handled as the
+    /// POSIX flavour of `boost::filesystem::path` (v3, boost 1.83) does, so `\\` is an ordinary
+    /// character and the `//` in URL identifiers survives.
     ///
     fn resolve_relative(source_file_id: &str, import_path: &str) -> String {
-        let mut resolved = Self::parent_path(source_file_id);
+        // `absolutePath` skips `remove_filename` when the filename is the root directory itself.
+        let mut resolved = if Self::ends_with_root_separator(source_file_id) {
+            source_file_id.to_owned()
+        } else {
+            Self::parent_path(source_file_id).to_owned()
+        };
+        // boost's path iterator yields `.` for a trailing separator and skips repeated ones.
         for component in import_path.split('/') {
             match component {
-                ".." => resolved = Self::parent_path(resolved.as_str()),
+                ".." => {
+                    let parent_length = Self::parent_path(resolved.as_str()).len();
+                    resolved.truncate(parent_length);
+                }
                 "." | "" => {}
                 component => {
                     if !resolved.is_empty() && !resolved.ends_with('/') {
@@ -45,22 +53,77 @@ impl SourceImportResolver<'_> {
     }
 
     ///
-    /// Drops the last component and the separators before it, as
-    /// `boost::filesystem::path::parent_path` does; a root `/` is kept and
-    /// the parent of a single component is empty.
+    /// The root of a POSIX boost path as `(root_name_size, root_dir_pos)`, from
+    /// `find_root_directory_start` (`libs/filesystem/src/path.cpp`): `//name` is a root name up to
+    /// the next separator, one or three-plus leading `/` are a root directory at 0, and
+    /// `root_dir_pos == len` means there is none.
     ///
-    fn parent_path(path: &str) -> String {
-        match path.rfind('/') {
-            None => String::new(),
-            Some(index) => {
-                let parent = path[..index].trim_end_matches('/');
-                if parent.is_empty() {
-                    "/".to_owned()
-                } else {
-                    parent.to_owned()
+    fn root(path: &str) -> (usize, usize) {
+        let bytes = path.as_bytes();
+        match bytes {
+            [] => (0, 0),
+            [b'/', b'/'] => (2, 2),
+            [b'/', b'/', b'/', ..] => (0, 0),
+            [b'/', b'/', ..] => {
+                let root_name_size = bytes[2..]
+                    .iter()
+                    .position(|byte| *byte == b'/')
+                    .map_or(bytes.len(), |index| index + 2);
+                (root_name_size, root_name_size)
+            }
+            [b'/', ..] => (0, 0),
+            _ => (0, bytes.len()),
+        }
+    }
+
+    ///
+    /// `find_parent_path_size` from the same file: drops the filename and the separators before
+    /// it, keeping a root directory only when a filename followed it, and a root name whole.
+    ///
+    fn parent_path(path: &str) -> &str {
+        let bytes = path.as_bytes();
+        let (root_name_size, root_dir_pos) = Self::root(path);
+        let filename_size = bytes[root_name_size..]
+            .iter()
+            .rev()
+            .take_while(|byte| **byte != b'/')
+            .count();
+        let mut end_pos = bytes.len() - filename_size;
+        loop {
+            if end_pos <= root_name_size {
+                if filename_size == 0 {
+                    end_pos = 0;
                 }
+                break;
+            }
+            end_pos -= 1;
+            if bytes[end_pos] != b'/' {
+                end_pos += 1;
+                break;
+            }
+            if end_pos == root_dir_pos {
+                end_pos += usize::from(filename_size > 0);
+                break;
             }
         }
+        &path[..end_pos]
+    }
+
+    ///
+    /// Whether boost's `filename()` is the root directory (`filename_v3`, `is_root_separator`):
+    /// the path ends with a separator that, past duplicates, is the root directory's.
+    ///
+    fn ends_with_root_separator(path: &str) -> bool {
+        let bytes = path.as_bytes();
+        let (_, root_dir_pos) = Self::root(path);
+        if root_dir_pos >= bytes.len() || bytes.last() != Some(&b'/') {
+            return false;
+        }
+        let mut pos = bytes.len() - 1;
+        while pos > root_dir_pos && bytes[pos - 1] == b'/' {
+            pos -= 1;
+        }
+        pos == root_dir_pos
     }
 
     ///
@@ -315,6 +378,66 @@ mod tests {
                 "../utils/Context.sol"
             ),
             Some("../../lib/oz/contracts/utils/Context.sol".to_owned())
+        );
+    }
+
+    /// solc 0.8.34: `Source "x.sol" not found`, so a `..` out of the root directory yields a bare
+    /// identifier, not `/x.sol`.
+    #[test]
+    fn climbing_out_of_the_root_directory_drops_it() {
+        let (sources, remappings) = config(&["/a.sol", "/a/b.sol", "x.sol"], &[]);
+        assert_eq!(
+            resolve(&sources, &remappings, "/a.sol", "../x.sol"),
+            Some("x.sol".to_owned())
+        );
+        assert_eq!(
+            resolve(&sources, &remappings, "/a/b.sol", "../../x.sol"),
+            Some("x.sol".to_owned())
+        );
+    }
+
+    #[test]
+    fn root_directory_is_kept_below_it() {
+        let (sources, remappings) = config(&["/Main.sol", "/Dep.sol"], &[]);
+        assert_eq!(
+            resolve(&sources, &remappings, "/Main.sol", "./Dep.sol"),
+            Some("/Dep.sol".to_owned())
+        );
+    }
+
+    /// boost treats a leading `//name` as a root name that `..` cannot climb out of.
+    #[test]
+    fn network_root_name_is_kept_whole() {
+        let (sources, remappings) = config(&["//a/b.sol", "//a/x.sol"], &[]);
+        assert_eq!(
+            resolve(&sources, &remappings, "//a/b.sol", "../x.sol"),
+            Some("//a/x.sol".to_owned())
+        );
+    }
+
+    /// Each `..` drops one component together with the run of separators before it, so the
+    /// `//` after the URL scheme is stepped over in one move.
+    #[test]
+    fn climbing_through_a_double_slash_counts_it_once() {
+        let (sources, remappings) = config(&["https://github.com/o/c/A.sol", "x.sol"], &[]);
+        assert_eq!(
+            resolve(
+                &sources,
+                &remappings,
+                "https://github.com/o/c/A.sol",
+                "../../../../x.sol"
+            ),
+            Some("x.sol".to_owned())
+        );
+    }
+
+    /// A trailing separator is boost's implicit `.` element and adds nothing.
+    #[test]
+    fn trailing_separator_import_resolves_to_the_directory() {
+        let (sources, remappings) = config(&["a/b/c.sol", "a"], &[]);
+        assert_eq!(
+            resolve(&sources, &remappings, "a/b/c.sol", "../"),
+            Some("a".to_owned())
         );
     }
 
