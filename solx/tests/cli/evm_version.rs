@@ -124,7 +124,7 @@ fn standard_json_too_old() -> anyhow::Result<()> {
 
     let result = crate::cli::execute_solx(args)?;
     result.success().stdout(predicate::str::contains(
-        "Standard JSON parsing: unknown variant",
+        r#"Standard JSON value \"byzantium\" is not supported"#,
     ));
 
     Ok(())

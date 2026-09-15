@@ -5,7 +5,6 @@
 use predicates::prelude::*;
 use solx_utils::MetadataHashType;
 
-#[cfg(feature = "solc")]
 #[test]
 fn none() -> anyhow::Result<()> {
     let _ = crate::common::setup();
@@ -52,7 +51,6 @@ fn ipfs_solidity() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn ipfs_yul() -> anyhow::Result<()> {
     let _ = crate::common::setup();
@@ -101,7 +99,6 @@ fn ipfs_llvm_ir() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn standard_json() -> anyhow::Result<()> {
     crate::common::setup()?;

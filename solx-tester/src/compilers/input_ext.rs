@@ -62,6 +62,8 @@ pub fn new_input_for_solc(
                 enabled: Some(optimizer_enabled),
                 mode: None,
                 size_fallback: None,
+                runs: None,
+                details: None,
             },
             libraries,
             remappings: remappings.unwrap_or_default(),

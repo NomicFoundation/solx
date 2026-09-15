@@ -22,7 +22,7 @@ fn mode_produces_bytecode(path: &str) -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("\"object\""))
-        .stdout(predicate::str::contains("\"errors\"").not());
+        .stdout(predicate::str::contains("\"severity\":\"error\"").not());
 
     Ok(())
 }
@@ -57,7 +57,7 @@ fn default_optimizer_produces_bytecode() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("\"object\""))
-        .stdout(predicate::str::contains("\"errors\"").not());
+        .stdout(predicate::str::contains("\"severity\":\"error\"").not());
 
     Ok(())
 }
@@ -75,7 +75,7 @@ fn solc_enabled_flag_produces_bytecode() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("\"object\""))
-        .stdout(predicate::str::contains("\"errors\"").not());
+        .stdout(predicate::str::contains("\"severity\":\"error\"").not());
 
     Ok(())
 }
@@ -93,7 +93,7 @@ fn size_fallback_false_produces_bytecode() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("\"object\""))
-        .stdout(predicate::str::contains("\"errors\"").not());
+        .stdout(predicate::str::contains("\"severity\":\"error\"").not());
 
     Ok(())
 }
@@ -111,7 +111,7 @@ fn size_fallback_true_produces_bytecode() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("\"object\""))
-        .stdout(predicate::str::contains("\"errors\"").not());
+        .stdout(predicate::str::contains("\"severity\":\"error\"").not());
 
     Ok(())
 }
@@ -217,7 +217,7 @@ fn mode_via_stdin(path: &str) -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("\"object\""))
-        .stdout(predicate::str::contains("\"errors\"").not());
+        .stdout(predicate::str::contains("\"severity\":\"error\"").not());
 
     Ok(())
 }

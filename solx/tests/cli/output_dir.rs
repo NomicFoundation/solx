@@ -80,6 +80,7 @@ fn yul(extension: String) -> anyhow::Result<()> {
     Ok(())
 }
 
+// `--metadata` is rejected by the Slang frontend, so these only run with `solc`.
 #[cfg(feature = "solc")]
 #[test]
 fn unusual_path_characters() -> anyhow::Result<()> {
@@ -125,6 +126,7 @@ fn standard_json() -> anyhow::Result<()> {
     Ok(())
 }
 
+// `--metadata` is rejected by the Slang frontend, so these only run with `solc`.
 #[cfg(feature = "solc")]
 #[test]
 fn multiple_outputs() -> anyhow::Result<()> {
@@ -150,6 +152,7 @@ fn multiple_outputs() -> anyhow::Result<()> {
     Ok(())
 }
 
+// `--metadata` is rejected by the Slang frontend, so these only run with `solc`.
 #[cfg(feature = "solc")]
 #[test]
 fn multiple_outputs_simple_contract() -> anyhow::Result<()> {

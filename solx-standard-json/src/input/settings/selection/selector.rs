@@ -313,3 +313,11 @@ impl From<bool> for Selector {
         }
     }
 }
+
+impl std::fmt::Display for Selector {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // The serde representation is the one users write in the input, so it is the one to print.
+        let value = serde_json::to_value(self).map_err(|_| std::fmt::Error)?;
+        write!(formatter, "{}", value.as_str().ok_or(std::fmt::Error)?)
+    }
+}

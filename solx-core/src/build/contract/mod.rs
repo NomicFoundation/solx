@@ -972,6 +972,9 @@ impl Contract {
         }) {
             evm.legacy_assembly = Some(value.into());
         }
+        // TODO: leave this `None` when nothing was computed, here and for the source map,
+        // function debug data and generated sources below, so that an absent output is absent
+        // rather than an empty value claiming it was produced.
         if output_selection.check_selection(
             self.name.path.as_str(),
             self.name.name.as_deref(),
