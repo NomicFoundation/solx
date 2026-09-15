@@ -114,3 +114,54 @@ fn unresolved_import_without_remapping() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[cfg(feature = "slang")]
+#[test]
+fn standard_json_context_remapping_resolves() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let result = crate::cli::execute_solx_with_stdin(
+        &["--standard-json"],
+        crate::common::standard_json!("solidity_with_context_remapping.json"),
+    )?;
+
+    result.success().stdout(
+        predicate::str::contains("\"npm/dep@1.0.0/Dep.sol\"")
+            .and(predicate::str::contains("\"object\"")),
+    );
+
+    Ok(())
+}
+
+#[cfg(feature = "slang")]
+#[test]
+fn standard_json_equals_sign_in_target() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let result = crate::cli::execute_solx_with_stdin(
+        &["--standard-json"],
+        crate::common::standard_json!("solidity_with_equals_sign_in_remapping_target.json"),
+    )?;
+
+    result.success().stdout(
+        predicate::str::contains("\"b=c/Dep.sol\"").and(predicate::str::contains("\"object\"")),
+    );
+
+    Ok(())
+}
+
+#[test]
+fn standard_json_invalid_remapping() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let result = crate::cli::execute_solx_with_stdin(
+        &["--standard-json"],
+        crate::common::standard_json!("solidity_with_invalid_remapping.json"),
+    )?;
+
+    result.success().stdout(predicate::str::contains(
+        "Remapping `=missing-prefix/` prefix is missing.",
+    ));
+
+    Ok(())
+}

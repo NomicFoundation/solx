@@ -12,7 +12,6 @@
     }
   },
   "settings": {
-    "optimizer": { "mode": "3" },
     "remappings": ["project/:@dep/=npm/dep@1.0.0/"],
     "outputSelection": {
       "*": {
