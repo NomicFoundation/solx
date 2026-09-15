@@ -34,7 +34,7 @@ which = "8.0"
 ron = "0.12"
 rlp = "0.6"
 once_cell = "1.21"
-revm = "41.0"
+revm = "42.0"
 
 slang_solidity_v2 = { workspace = true, optional = true }
 
