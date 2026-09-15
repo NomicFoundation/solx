@@ -128,6 +128,7 @@ Tests live in `tests/solidity/`, `tests/yul/`, `tests/llvm-ir/`.
 
 - `ci:sanitizer` — enable address sanitizer tests
 - `ci:integration` — enable integration tests
+- `ci:cross-os` — run the solx-tester suite on macOS/Windows runners (also runs weekly on main)
 
 ## Renovate Config
 
