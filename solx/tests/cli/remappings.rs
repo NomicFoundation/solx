@@ -109,7 +109,7 @@ fn unresolved_import_without_remapping() -> anyhow::Result<()> {
 
     let result = crate::cli::execute_solx(args)?;
     result.failure().stderr(predicate::str::contains(
-        "failed to resolve import virt/Dep.sol",
+        "Imported file is missing: virt/Dep.sol",
     ));
 
     Ok(())

@@ -2,19 +2,16 @@
 //! Import resolution for the Slang frontend.
 //!
 
-use std::collections::BTreeMap;
-
 use slang_solidity_v2::compilation::FileId;
 use slang_solidity_v2::compilation::ImportResolver;
 use slang_solidity_v2::diagnostics::kinds::compilation::UnresolvedImport;
 
 use solx_utils::Remapping;
 
-/// Resolves import paths to the source files provided to the compilation.
+/// Resolves import paths to source identifiers as solc does; Slang reports a resolved identifier
+/// that is not among the compilation's sources as `MissingImportedFile`.
 pub struct SourceImportResolver<'a> {
-    /// The source files keyed by identifier; an import resolves only to one of them.
-    pub sources: &'a BTreeMap<FileId, &'a str>,
-    /// Import remappings applied to resolved import paths, as in solc.
+    /// Import remappings applied to resolved import paths, in input order.
     pub remappings: &'a [Remapping],
 }
 
@@ -167,30 +164,21 @@ impl ImportResolver for SourceImportResolver<'_> {
         source_file_id: &FileId,
         import_path: &str,
     ) -> Result<FileId, UnresolvedImport> {
-        // solc semantics (`CompilerStack::resolveImports`): an import with a leading
-        // `.` or `..` component resolves against the importing file first; any other
-        // path is taken verbatim; remappings then rewrite the result.
+        // `CompilerStack::resolveImports`: `applyRemapping(util::absolutePath(path, context))`.
         let resolved = if matches!(import_path.split('/').next(), Some("." | "..")) {
             Self::resolve_relative(source_file_id.as_str(), import_path)
         } else {
             import_path.to_owned()
         };
-        let remapped = self.apply_remappings(source_file_id.as_str(), resolved.as_str());
-        let key = FileId::from(remapped.as_str());
-        if self.sources.contains_key(&key) {
-            return Ok(key);
-        }
-
-        Err(UnresolvedImport {
-            reason: format!("failed to resolve import {import_path} in {source_file_id}"),
-        })
+        Ok(FileId::from(
+            self.apply_remappings(source_file_id.as_str(), resolved.as_str())
+                .as_str(),
+        ))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
     use slang_solidity_v2::compilation::FileId;
     use slang_solidity_v2::compilation::ImportResolver;
 
@@ -198,186 +186,115 @@ mod tests {
 
     use super::SourceImportResolver;
 
-    /// Builds empty sources under the given identifiers, with the given remappings parsed.
-    fn config(
-        source_ids: &[&'static str],
-        remappings: &[&str],
-    ) -> (BTreeMap<FileId, &'static str>, Vec<Remapping>) {
-        let sources = source_ids
-            .iter()
-            .map(|source_id| (FileId::from(*source_id), ""))
-            .collect();
-        let remappings = remappings
+    fn remappings(remappings: &[&str]) -> Vec<Remapping> {
+        remappings
             .iter()
             .map(|remapping| remapping.parse().expect("valid remapping"))
-            .collect();
-        (sources, remappings)
+            .collect()
     }
 
-    /// Resolves an import and returns the resulting identifier, if any.
-    fn resolve(
-        sources: &BTreeMap<FileId, &str>,
-        remappings: &[Remapping],
-        from: &str,
-        import: &str,
-    ) -> Option<String> {
-        SourceImportResolver {
-            sources,
-            remappings,
-        }
-        .resolve_import(&FileId::from(from), import)
-        .ok()
-        .map(|file_id| file_id.to_string())
+    fn resolve(remappings: &[Remapping], from: &str, import: &str) -> String {
+        SourceImportResolver { remappings }
+            .resolve_import(&FileId::from(from), import)
+            .expect("resolution is infallible")
+            .to_string()
     }
 
     #[test]
     fn direct_import_remapped() {
-        let (sources, remappings) = config(
-            &["project/Main.sol", "npm/oz@1.0.0/A.sol"],
-            &["@oz/=npm/oz@1.0.0/"],
-        );
+        let remappings = remappings(&["@oz/=npm/oz@1.0.0/"]);
         assert_eq!(
-            resolve(&sources, &remappings, "project/Main.sol", "@oz/A.sol"),
-            Some("npm/oz@1.0.0/A.sol".to_owned())
+            resolve(&remappings, "project/Main.sol", "@oz/A.sol"),
+            "npm/oz@1.0.0/A.sol"
         );
     }
 
     #[test]
     fn context_scopes_remapping() {
-        let (sources, remappings) = config(
-            &[
-                "project/Main.sol",
-                "npm/dep@1.0.0/Main.sol",
-                "npm/oz@1.0.0/A.sol",
-            ],
-            &["project/:@oz/=npm/oz@1.0.0/"],
+        let remappings = remappings(&["project/:@oz/=npm/oz@1.0.0/"]);
+        assert_eq!(
+            resolve(&remappings, "project/Main.sol", "@oz/A.sol"),
+            "npm/oz@1.0.0/A.sol"
         );
         assert_eq!(
-            resolve(&sources, &remappings, "project/Main.sol", "@oz/A.sol"),
-            Some("npm/oz@1.0.0/A.sol".to_owned())
-        );
-        assert_eq!(
-            resolve(&sources, &remappings, "npm/dep@1.0.0/Main.sol", "@oz/A.sol"),
-            None
+            resolve(&remappings, "npm/dep@1.0.0/Main.sol", "@oz/A.sol"),
+            "@oz/A.sol"
         );
     }
 
     #[test]
     fn longest_context_beats_longer_prefix() {
-        let (sources, remappings) = config(
-            &[
-                "project/Main.sol",
-                "generic/lib/sub/A.sol",
-                "scoped/sub/A.sol",
-            ],
-            &["lib/sub/=generic/lib/sub/", "project/:lib/=scoped/"],
-        );
+        let remappings = remappings(&["lib/sub/=generic/lib/sub/", "project/:lib/=scoped/"]);
         assert_eq!(
-            resolve(&sources, &remappings, "project/Main.sol", "lib/sub/A.sol"),
-            Some("scoped/sub/A.sol".to_owned())
+            resolve(&remappings, "project/Main.sol", "lib/sub/A.sol"),
+            "scoped/sub/A.sol"
         );
     }
 
     #[test]
     fn longest_prefix_wins_within_context() {
-        let (sources, remappings) = config(
-            &["Main.sol", "specific/A.sol", "generic/sub/A.sol"],
-            &["lib/=generic/", "lib/sub/=specific/"],
-        );
+        let remappings = remappings(&["lib/=generic/", "lib/sub/=specific/"]);
         assert_eq!(
-            resolve(&sources, &remappings, "Main.sol", "lib/sub/A.sol"),
-            Some("specific/A.sol".to_owned())
+            resolve(&remappings, "Main.sol", "lib/sub/A.sol"),
+            "specific/A.sol"
         );
     }
 
     #[test]
     fn later_remapping_wins_ties() {
-        let (sources, remappings) = config(
-            &["Main.sol", "second/A.sol"],
-            &["lib/=first/", "lib/=second/"],
-        );
+        let remappings = remappings(&["lib/=first/", "lib/=second/"]);
         assert_eq!(
-            resolve(&sources, &remappings, "Main.sol", "lib/A.sol"),
-            Some("second/A.sol".to_owned())
+            resolve(&remappings, "Main.sol", "lib/A.sol"),
+            "second/A.sol"
         );
     }
 
+    /// solc 0.8.34 resolves `./A.sol` from `contracts/B.sol` to `contracts/A.sol` and only then
+    /// applies `contracts/=lib/`.
     #[test]
     fn relative_import_remapped_after_resolution() {
-        // `./A.sol` from `contracts/B.sol` resolves to `contracts/A.sol`, which the
-        // remapping then rewrites.
-        let (sources, remappings) = config(&["contracts/B.sol", "lib/A.sol"], &["contracts/=lib/"]);
+        let remappings = remappings(&["contracts/=lib/"]);
         assert_eq!(
-            resolve(&sources, &remappings, "contracts/B.sol", "./A.sol"),
-            Some("lib/A.sol".to_owned())
+            resolve(&remappings, "contracts/B.sol", "./A.sol"),
+            "lib/A.sol"
         );
     }
 
     #[test]
     fn relative_import_without_remappings() {
-        let (sources, remappings) = config(&["a/b.sol", "a/m.sol", "x.sol"], &[]);
-        assert_eq!(
-            resolve(&sources, &remappings, "a/b.sol", "./m.sol"),
-            Some("a/m.sol".to_owned())
-        );
-        assert_eq!(
-            resolve(&sources, &remappings, "a/b.sol", "../x.sol"),
-            Some("x.sol".to_owned())
-        );
-        assert_eq!(
-            resolve(&sources, &remappings, "x.sol", "../x.sol"),
-            Some("x.sol".to_owned())
-        );
+        assert_eq!(resolve(&[], "a/b.sol", "./m.sol"), "a/m.sol");
+        assert_eq!(resolve(&[], "a/b.sol", "../x.sol"), "x.sol");
+        assert_eq!(resolve(&[], "x.sol", "../x.sol"), "x.sol");
     }
 
     #[test]
     fn bare_filename_direct_import() {
-        let (sources, remappings) = config(&["Factory.sol", "Storage.sol"], &[]);
-        assert_eq!(
-            resolve(&sources, &remappings, "Factory.sol", "Storage.sol"),
-            Some("Storage.sol".to_owned())
-        );
+        assert_eq!(resolve(&[], "Factory.sol", "Storage.sol"), "Storage.sol");
     }
 
+    /// Sourcify stores Remix-style sources under their GitHub URLs.
     #[test]
     fn url_source_identifiers_keep_their_double_slash() {
-        // Sourcify stores Remix-style sources under their GitHub URLs.
-        let (sources, remappings) = config(
-            &[
-                "https://github.com/oz/contracts/access/Ownable.sol",
-                "https://github.com/oz/contracts/utils/Context.sol",
-            ],
-            &[],
-        );
         assert_eq!(
             resolve(
-                &sources,
-                &remappings,
+                &[],
                 "https://github.com/oz/contracts/access/Ownable.sol",
                 "../utils/Context.sol"
             ),
-            Some("https://github.com/oz/contracts/utils/Context.sol".to_owned())
+            "https://github.com/oz/contracts/utils/Context.sol"
         );
     }
 
+    /// Foundry projects verified from a subdirectory key their libraries this way.
     #[test]
     fn source_identifiers_keep_leading_parent_dirs() {
-        // Foundry projects verified from a subdirectory key their libraries this way.
-        let (sources, remappings) = config(
-            &[
-                "../../lib/oz/contracts/access/Ownable.sol",
-                "../../lib/oz/contracts/utils/Context.sol",
-            ],
-            &[],
-        );
         assert_eq!(
             resolve(
-                &sources,
-                &remappings,
+                &[],
                 "../../lib/oz/contracts/access/Ownable.sol",
                 "../utils/Context.sol"
             ),
-            Some("../../lib/oz/contracts/utils/Context.sol".to_owned())
+            "../../lib/oz/contracts/utils/Context.sol"
         );
     }
 
@@ -385,98 +302,52 @@ mod tests {
     /// identifier, not `/x.sol`.
     #[test]
     fn climbing_out_of_the_root_directory_drops_it() {
-        let (sources, remappings) = config(&["/a.sol", "/a/b.sol", "x.sol"], &[]);
-        assert_eq!(
-            resolve(&sources, &remappings, "/a.sol", "../x.sol"),
-            Some("x.sol".to_owned())
-        );
-        assert_eq!(
-            resolve(&sources, &remappings, "/a/b.sol", "../../x.sol"),
-            Some("x.sol".to_owned())
-        );
+        assert_eq!(resolve(&[], "/a.sol", "../x.sol"), "x.sol");
+        assert_eq!(resolve(&[], "/a/b.sol", "../../x.sol"), "x.sol");
     }
 
     #[test]
     fn root_directory_is_kept_below_it() {
-        let (sources, remappings) = config(&["/Main.sol", "/Dep.sol"], &[]);
-        assert_eq!(
-            resolve(&sources, &remappings, "/Main.sol", "./Dep.sol"),
-            Some("/Dep.sol".to_owned())
-        );
+        assert_eq!(resolve(&[], "/Main.sol", "./Dep.sol"), "/Dep.sol");
     }
 
     /// boost treats a leading `//name` as a root name that `..` cannot climb out of.
     #[test]
     fn network_root_name_is_kept_whole() {
-        let (sources, remappings) = config(&["//a/b.sol", "//a/x.sol"], &[]);
-        assert_eq!(
-            resolve(&sources, &remappings, "//a/b.sol", "../x.sol"),
-            Some("//a/x.sol".to_owned())
-        );
+        assert_eq!(resolve(&[], "//a/b.sol", "../x.sol"), "//a/x.sol");
     }
 
     /// Each `..` drops one component together with the run of separators before it, so the
     /// `//` after the URL scheme is stepped over in one move.
     #[test]
     fn climbing_through_a_double_slash_counts_it_once() {
-        let (sources, remappings) = config(&["https://github.com/o/c/A.sol", "x.sol"], &[]);
         assert_eq!(
-            resolve(
-                &sources,
-                &remappings,
-                "https://github.com/o/c/A.sol",
-                "../../../../x.sol"
-            ),
-            Some("x.sol".to_owned())
+            resolve(&[], "https://github.com/o/c/A.sol", "../../../../x.sol"),
+            "x.sol"
         );
     }
 
     /// A trailing separator is boost's implicit `.` element and adds nothing.
     #[test]
     fn trailing_separator_import_resolves_to_the_directory() {
-        let (sources, remappings) = config(&["a/b/c.sol", "a"], &[]);
-        assert_eq!(
-            resolve(&sources, &remappings, "a/b/c.sol", "../"),
-            Some("a".to_owned())
-        );
+        assert_eq!(resolve(&[], "a/b/c.sol", "../"), "a");
     }
 
     #[test]
     fn non_relative_import_does_not_resolve_against_importing_directory() {
-        let (sources, remappings) = config(&["dir/B.sol", "dir/A.sol"], &[]);
-        assert_eq!(resolve(&sources, &remappings, "dir/B.sol", "A.sol"), None);
+        assert_eq!(resolve(&[], "dir/B.sol", "A.sol"), "A.sol");
     }
 
+    /// CLI input paths become source identifiers verbatim, so `solx ./b.sol ./a.sol` registers
+    /// `./b.sol` and `./a.sol`.
     #[test]
     fn dot_prefixed_source_identifiers_resolve_directly() {
-        // CLI input paths become source identifiers verbatim, so `solx ./b.sol ./a.sol`
-        // registers `./b.sol` and `./a.sol`.
-        let (sources, remappings) = config(&["./b.sol", "./a.sol"], &[]);
-        assert_eq!(
-            resolve(&sources, &remappings, "./b.sol", "./a.sol"),
-            Some("./a.sol".to_owned())
-        );
+        assert_eq!(resolve(&[], "./b.sol", "./a.sol"), "./a.sol");
     }
 
     #[test]
     fn remapped_import_does_not_fall_back_to_its_original_path() {
-        let (sources, remappings) = config(&["Main.sol", "lib/A.sol"], &["lib/=x/"]);
-        assert_eq!(
-            resolve(&sources, &remappings, "Main.sol", "lib/A.sol"),
-            None
-        );
-    }
-
-    #[test]
-    fn unresolved_import() {
-        let (sources, remappings) = config(&["Main.sol"], &["@oz/=npm/oz@1.0.0/"]);
-        assert_eq!(
-            resolve(&sources, &remappings, "Main.sol", "@oz/A.sol"),
-            None
-        );
-        assert_eq!(
-            resolve(&sources, &remappings, "Main.sol", "missing.sol"),
-            None
-        );
+        let remappings = remappings(&["lib/=x/"]);
+        assert_eq!(resolve(&remappings, "Main.sol", "lib/A.sol"), "x/A.sol");
     }
 }

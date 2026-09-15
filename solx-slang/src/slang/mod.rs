@@ -73,10 +73,7 @@ impl Slang {
             sources: sources
                 .iter()
                 .map(|(file_id, content)| (file_id.clone(), *content)),
-            resolver: SourceImportResolver {
-                sources,
-                remappings,
-            },
+            resolver: SourceImportResolver { remappings },
         }))
     }
 }
