@@ -1,11 +1,11 @@
 ---
 name: review
-description: Read-only code review against CLAUDE.md. Ambiguities reach the user as questions, then every finding as a report. No code is changed, and the report goes on the pull request only when the user asks. Use when the code builds and passes its tests.
+description: Read-only code review against CLAUDE.md. Use when the code builds and passes its tests.
 ---
 
 # Review
 
-The skill changes no code. It reads, checks, asks, reports, and posts when the user asks.
+The skill changes no code. It reads, checks, asks, reports, and posts when the user asks. Everything it writes follows the repository's writing conventions.
 
 Every question prompts the user with a fixed set of options, never free prose: AskUserQuestion under Claude Code, its equivalent under another harness. Readers run on the model the invocation names, otherwise Opus under Claude Code and the configured model elsewhere.
 
@@ -21,14 +21,14 @@ What the user names when invoking: a diff range, a branch, a path or a file. If 
 
 Launch a reader per lens. Each reader reads this repository's [`CLAUDE.md`](../../../CLAUDE.md) in full, then the whole change, and asks its question of every clause the change adds or alters.
 
-1. Removal: what fails if this clause is deleted? A clause nothing fails without is the finding.
+1. Removal: delete this clause and the code that only served it. A clause that breaks no build, fails no test and changes no output is the finding, and why none of the three can happen is the evidence.
 2. Trust: what does this clause check, derive or own that a lower layer already guarantees? The guarantee, read in that layer's code, is the evidence.
 3. Foreignness: where does the repository already do this another way? The sibling that does it is the evidence.
-4. Pinning: which claim of the change has no test that fails when the code is wrong? The mutation that leaves the test green is the evidence.
+4. Pinning: which claim of the change has no test that fails when the code is wrong? The mutation that leaves the test green is the evidence. A clause whose deletion changes the output while every test stays green is a missing test.
 
 The invocation may add lenses. Each added lens is its own question and its own reader.
 
-A reader writes nothing in the repository. Pinning argues the mutation from the test, and may run it on a scratch copy.
+A reader changes no tracked file. Any change it needs for its evidence, it makes outside the working tree.
 
 It reports each finding with:
 
@@ -47,6 +47,7 @@ Every finding is re-read against the code before it goes further.
 - One whose evidence does not hold is dropped.
 - One whose fix a repository lint would undo does not hold either.
 - The same finding from several readers is reported once.
+- When two readers contradict on the same line, ask the user.
 
 ## Decisions
 
