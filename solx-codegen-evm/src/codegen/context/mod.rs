@@ -105,6 +105,11 @@ impl<'ctx> Context<'ctx> {
     /// memory-safe.
     const UNSAFE_ASM_FLAG: &'static str = "evm-unsafe-asm";
 
+    /// The module flag naming the memory guard, the base of the spill region.
+    const MEMORY_GUARD_FLAG: &'static str = "evm-memory-guard";
+
+    /// The module flag holding the size of the spill region.
+    const STACK_REGION_SIZE_FLAG: &'static str = "evm-stack-region-size";
 
     ///
     /// Initializes a new LLVM context.
@@ -191,7 +196,26 @@ impl<'ctx> Context<'ctx> {
         {
             anyhow::bail!(solx_utils::ERROR_UNSAFE_MEMORY_ASM_STACK_TOO_DEEP);
         }
-        self.describe_stack_region(spill_area_size.unwrap_or_default());
+        // The MLIR front end emits its own guard; only it knows where its
+        // static allocations end.
+        if self.module().get_flag(Self::MEMORY_GUARD_FLAG).is_none() {
+            let memory_guard = self.llvm().i64_type().const_int(self.memory_guard, false);
+            self.module().add_basic_value_flag(
+                Self::MEMORY_GUARD_FLAG,
+                inkwell::module::FlagBehavior::Error,
+                memory_guard,
+            );
+        }
+        // The MLIR front end emits the flag at zero.
+        let stack_region_size = self
+            .llvm()
+            .i64_type()
+            .const_int(spill_area_size.unwrap_or_default(), false);
+        self.module().set_basic_value_flag(
+            Self::STACK_REGION_SIZE_FLAG,
+            inkwell::module::FlagBehavior::Error,
+            stack_region_size,
+        );
         let target_machine =
             TargetMachine::new(self.optimizer.settings(), self.llvm_options.as_slice())?;
         target_machine.set_target_data(self.module());
@@ -424,51 +448,6 @@ impl<'ctx> Context<'ctx> {
     ///
     pub fn set_memory_guard(&mut self, offset: u64) {
         self.memory_guard = offset;
-    }
-
-    ///
-    /// Sets the spill region module flags read by the EVM backend.
-    ///
-    fn describe_stack_region(&self, size: u64) {
-        if self.module().get_flag("evm-memory-guard").is_none() {
-            self.set_module_flag("evm-memory-guard", self.memory_guard);
-        }
-        self.set_module_flag("evm-stack-region-size", size);
-    }
-
-    ///
-    /// Whether the `llvm.module.flags` triplet `flag` is named `key`.
-    ///
-    fn is_flag_named(flag: &inkwell::values::MetadataValue<'ctx>, key: &str) -> bool {
-        flag.get_node_values().get(1).is_some_and(|name| {
-            name.into_metadata_value()
-                .get_string_value()
-                .is_some_and(|name| name.to_bytes() == key.as_bytes())
-        })
-    }
-
-    ///
-    /// Adds the `key` module flag, or replaces its value if it is already there.
-    ///
-    fn set_module_flag(&self, key: &str, value: u64) {
-        use inkwell::values::AsValueRef;
-
-        let value = self.llvm().i64_type().const_int(value, false);
-        for flag in self.module().get_global_metadata("llvm.module.flags") {
-            if !Self::is_flag_named(&flag, key) {
-                continue;
-            }
-            unsafe {
-                inkwell::llvm_sys::core::LLVMReplaceMDNodeOperandWith(
-                    flag.as_value_ref(),
-                    2,
-                    inkwell::llvm_sys::core::LLVMValueAsMetadata(value.as_value_ref()),
-                );
-            }
-            return;
-        }
-        self.module()
-            .add_basic_value_flag(key, inkwell::module::FlagBehavior::Error, value);
     }
 
     ///
