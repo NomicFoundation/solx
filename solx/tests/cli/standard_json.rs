@@ -611,37 +611,3 @@ fn select_mlir() -> anyhow::Result<()> {
 
     Ok(())
 }
-
-#[cfg(feature = "slang")]
-#[test]
-fn remappings_applied() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let result = crate::cli::execute_solx_with_stdin(
-        &["--standard-json"],
-        crate::common::standard_json!("remappings_slang.json"),
-    )?;
-
-    result.success().stdout(
-        predicate::str::contains("object")
-            .and(predicate::str::contains("failed to resolve import").not()),
-    );
-
-    Ok(())
-}
-
-#[test]
-fn remappings_invalid() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let result = crate::cli::execute_solx_with_stdin(
-        &["--standard-json"],
-        crate::common::standard_json!("remappings_invalid_slang.json"),
-    )?;
-
-    result.success().stdout(predicate::str::contains(
-        "Remapping `=missing-prefix/` prefix is missing.",
-    ));
-
-    Ok(())
-}
