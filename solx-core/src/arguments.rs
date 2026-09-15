@@ -2,7 +2,6 @@
 //! Solidity compiler arguments.
 //!
 
-use std::collections::BTreeSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -442,23 +441,14 @@ impl Arguments {
     ///
     pub fn split_input_files_and_remappings(
         &self,
-    ) -> anyhow::Result<(Vec<PathBuf>, BTreeSet<String>)> {
+    ) -> anyhow::Result<(Vec<PathBuf>, Vec<solx_utils::Remapping>)> {
         let mut input_files = Vec::with_capacity(self.inputs.len());
-        let mut remappings = BTreeSet::new();
+        let mut remappings = Vec::new();
 
         for input in self.inputs.iter() {
             if input.contains('=') {
-                let mut remapping = solx_utils::Remapping::try_from(input.trim())?;
-                for part in [
-                    &mut remapping.context,
-                    &mut remapping.prefix,
-                    &mut remapping.target,
-                ] {
-                    *part = Self::path_to_posix(Path::new(part.as_str()))?
-                        .to_string_lossy()
-                        .to_string();
-                }
-                remappings.insert(remapping.to_string());
+                // Only separators are normalized, as solc's `sanitizePath` does on Windows.
+                remappings.push(input.trim().replace('\\', "/").parse()?);
             } else {
                 let path = PathBuf::from(input.trim());
                 let path = Self::path_to_posix(path.as_path())?;

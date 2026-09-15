@@ -112,19 +112,6 @@ impl Frontend for Slang {
             return Ok(output);
         }
 
-        let mut remappings = Vec::with_capacity(input_json.settings.remappings.len());
-        for remapping in input_json.settings.remappings.iter() {
-            match Remapping::try_from(remapping.as_str()) {
-                Ok(remapping) => remappings.push(remapping),
-                Err(error) => output
-                    .errors
-                    .push(solx_standard_json::OutputError::new_error(error)),
-            }
-        }
-        if output.has_errors() {
-            return Ok(output);
-        }
-
         let mut sources = BTreeMap::new();
         for (path, source) in input_json.sources.iter() {
             let Some(source_code) = source.content() else {
@@ -146,7 +133,7 @@ impl Frontend for Slang {
             sources.insert(path.as_str().into(), source_code);
         }
 
-        let unit = self.compile(&sources, &remappings)?;
+        let unit = self.compile(&sources, &input_json.settings.remappings)?;
 
         output
             .errors

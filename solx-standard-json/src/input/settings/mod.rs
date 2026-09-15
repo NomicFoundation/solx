@@ -7,8 +7,6 @@ pub mod metadata;
 pub mod optimizer;
 pub mod selection;
 
-use std::collections::BTreeSet;
-
 use self::debug::Debug;
 use self::metadata::Metadata;
 use self::optimizer::Optimizer;
@@ -27,9 +25,9 @@ pub struct Settings {
     /// The linker library addresses.
     #[serde(default, skip_serializing_if = "solx_utils::Libraries::is_empty")]
     pub libraries: solx_utils::Libraries,
-    /// The sorted list of remappings.
-    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub remappings: BTreeSet<String>,
+    /// The import remappings, in input order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub remappings: Vec<solx_utils::Remapping>,
 
     /// The target EVM version.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -66,7 +64,7 @@ impl Settings {
         optimizer: Optimizer,
 
         libraries: solx_utils::Libraries,
-        remappings: BTreeSet<String>,
+        remappings: Vec<solx_utils::Remapping>,
 
         evm_version: Option<solx_utils::EVMVersion>,
         via_ir: bool,

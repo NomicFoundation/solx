@@ -52,7 +52,7 @@ fn missing_prefix() -> anyhow::Result<()> {
 
     let result = crate::cli::execute_solx(args)?;
     result.failure().stderr(predicate::str::contains(
-        "Invalid remapping: \"=./path/to/2.sol\"",
+        "Remapping `=./path/to/2.sol` prefix is missing.",
     ));
 
     Ok(())
