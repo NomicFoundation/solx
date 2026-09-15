@@ -6,15 +6,15 @@ pub mod abi_encoder_v1_only;
 pub mod allow_non_existing_functions;
 pub mod compile_via_yul;
 pub mod evm_version;
-pub mod revert_strings;
 
 use regex::Regex;
+
+use solx_utils::RevertStrings;
 
 use self::abi_encoder_v1_only::ABIEncoderV1Only;
 use self::allow_non_existing_functions::AllowNonExistingFunctions;
 use self::compile_via_yul::CompileViaYul;
 use self::evm_version::EVMVersion;
-use self::revert_strings::RevertStrings;
 
 ///
 /// The test file params.
@@ -81,7 +81,7 @@ impl TryFrom<&str> for Params {
                 }
                 "revertStrings" => {
                     revert_strings = value
-                        .try_into()
+                        .parse()
                         .map_err(|error| anyhow::anyhow!("{} on line {}", error, index + 1))?;
                 }
                 "allowNonExistingFunctions" => {

@@ -20,7 +20,7 @@ use std::sync::Mutex;
 use solx_utils::ContractName;
 
 use crate::compilers::mode::Mode;
-use crate::directories::matter_labs::test::metadata::case::input::Input as MatterLabsTestInput;
+use crate::directories::solx::test::metadata::case::input::Input as SolxTestInput;
 use crate::revm::REVM;
 use crate::summary::Summary;
 use crate::test::InputContext;
@@ -52,15 +52,15 @@ pub enum Input {
 
 impl Input {
     ///
-    /// Try convert from Matter Labs compiler test metadata input.
+    /// Try convert from solx compiler test metadata input.
     ///
-    pub fn try_from_matter_labs(
-        input: MatterLabsTestInput,
+    pub fn try_from_solx(
+        input: SolxTestInput,
         mode: &Mode,
         instances: &BTreeMap<String, Instance>,
         method_identifiers: &Option<BTreeMap<String, BTreeMap<String, u32>>>,
     ) -> anyhow::Result<Self> {
-        let caller = match Value::try_from_matter_labs(input.caller.as_str(), instances)
+        let caller = match Value::try_from_solx(input.caller.as_str(), instances)
             .map_err(|error| anyhow::anyhow!("Invalid caller `{}`: {error}", input.caller))?
         {
             Value::Known(value) => crate::utils::u256_to_address(&value),
@@ -84,16 +84,16 @@ impl Input {
             None => None,
         };
 
-        let mut calldata = Calldata::try_from_matter_labs(input.calldata, instances)
+        let mut calldata = Calldata::try_from_solx(input.calldata, instances)
             .map_err(|error| anyhow::anyhow!("Invalid calldata: {error}"))?;
 
         let expected = match input.expected {
-            Some(expected) => Output::try_from_matter_labs_expected(expected, mode, instances)
+            Some(expected) => Output::try_from_solx_expected(expected, mode, instances)
                 .map_err(|error| anyhow::anyhow!("Invalid expected metadata: {error}"))?,
             None => Output::default(),
         };
 
-        let storage = Storage::try_from_matter_labs(input.storage, instances)
+        let storage = Storage::try_from_solx(input.storage, instances)
             .map_err(|error| anyhow::anyhow!("Invalid storage: {error}"))?;
 
         let instance = instances
@@ -128,6 +128,7 @@ impl Input {
                     expected,
                 ))
             }
+            "#storage_empty" => Input::StorageEmpty(StorageEmpty::new(true)),
             entry => {
                 let address = instance.address().ok_or_else(|| {
                     anyhow::anyhow!(

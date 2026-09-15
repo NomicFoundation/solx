@@ -26,9 +26,9 @@ pub enum Value {
 
 impl Value {
     ///
-    /// Try convert from Matter Labs compiler test metadata value.
+    /// Try convert from solx compiler test metadata value.
     ///
-    pub fn try_from_matter_labs(
+    pub fn try_from_solx(
         value: &str,
         instances: &BTreeMap<String, Instance>,
     ) -> anyhow::Result<Self> {
@@ -107,9 +107,9 @@ impl Value {
     }
 
     ///
-    /// Try convert into vec of self from vec of Matter Labs compiler test metadata values.
+    /// Try convert into vec of self from vec of solx compiler test metadata values.
     ///
-    pub fn try_from_vec_matter_labs(
+    pub fn try_from_vec_solx(
         values: Vec<String>,
         instances: &BTreeMap<String, Instance>,
     ) -> anyhow::Result<Vec<Self>> {
@@ -117,7 +117,7 @@ impl Value {
             .into_iter()
             .enumerate()
             .map(|(index, value)| {
-                Self::try_from_matter_labs(value.as_str(), instances)
+                Self::try_from_solx(value.as_str(), instances)
                     .map_err(|error| anyhow::anyhow!("Value {index} is invalid: {error}"))
             })
             .collect::<anyhow::Result<Vec<Self>>>()

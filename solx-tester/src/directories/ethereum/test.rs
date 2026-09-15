@@ -243,7 +243,8 @@ impl Buildable for EthereumTest {
                 self.test.sources.clone(),
                 libraries,
                 &mode,
-                Some(&self.test.params),
+                Some(self.test.params.evm_version.newest_matching()),
+                Some(self.test.params.revert_strings),
                 vec![],
                 debug_config,
             )

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use crate::compilers::mode::Mode;
-use crate::directories::matter_labs::test::metadata::case::Case as MatterLabsTestCase;
+use crate::directories::solx::test::metadata::case::Case as SolxTestCase;
 use crate::revm::REVM;
 use crate::summary::Summary;
 use crate::test::context::case::CaseContext;
@@ -38,10 +38,10 @@ impl Case {
     }
 
     ///
-    /// Try convert from Matter Labs compiler test metadata case.
+    /// Try convert from solx compiler test metadata case.
     ///
-    pub fn try_from_matter_labs(
-        case: MatterLabsTestCase,
+    pub fn try_from_solx(
+        case: SolxTestCase,
         mode: &Mode,
         instances: &BTreeMap<String, Instance>,
         method_identifiers: &Option<BTreeMap<String, BTreeMap<String, u32>>>,
@@ -49,7 +49,7 @@ impl Case {
         let mut inputs = Vec::with_capacity(case.inputs.len());
 
         for (index, input) in case.inputs.into_iter().enumerate() {
-            let input = Input::try_from_matter_labs(input, mode, instances, method_identifiers)
+            let input = Input::try_from_solx(input, mode, instances, method_identifiers)
                 .map_err(|error| anyhow::anyhow!("Input #{index} is invalid: {error}"))?;
             inputs.push(input);
         }

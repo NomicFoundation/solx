@@ -27,7 +27,8 @@ pub trait Compiler: Send + Sync + 'static {
         sources: Vec<(String, String)>,
         libraries: solx_utils::Libraries,
         mode: &Mode,
-        test_params: Option<&solx_solc_test_adapter::Params>,
+        evm_version: Option<solx_utils::EVMVersion>,
+        revert_strings: Option<solx_utils::RevertStrings>,
         llvm_options: Vec<String>,
         debug_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<EVMInput>;
