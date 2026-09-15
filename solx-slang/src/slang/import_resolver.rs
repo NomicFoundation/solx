@@ -69,9 +69,6 @@ impl SourceImportResolver<'_> {
     /// longest matching prefix; on ties the later remapping wins. Without a
     /// match the path is returned unchanged.
     ///
-    /// `settings.remappings` is a sorted set, so "later" means lexicographically
-    /// greater rather than later in the input, unlike solc.
-    ///
     fn apply_remappings(&self, context: &str, path: &str) -> String {
         let mut longest_context = 0;
         let mut longest_prefix = 0;
@@ -149,7 +146,7 @@ mod tests {
             .collect();
         let remappings = remappings
             .iter()
-            .map(|remapping| Remapping::try_from(*remapping).expect("valid remapping"))
+            .map(|remapping| remapping.parse().expect("valid remapping"))
             .collect();
         (sources, remappings)
     }

@@ -630,7 +630,6 @@ fn remappings_applied() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "slang")]
 #[test]
 fn remappings_invalid() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -640,10 +639,9 @@ fn remappings_invalid() -> anyhow::Result<()> {
         crate::common::standard_json!("remappings_invalid_slang.json"),
     )?;
 
-    result.success().stdout(
-        predicate::str::contains("Invalid remapping")
-            .and(predicate::str::contains("=missing-prefix/")),
-    );
+    result.success().stdout(predicate::str::contains(
+        "Remapping `=missing-prefix/` prefix is missing.",
+    ));
 
     Ok(())
 }

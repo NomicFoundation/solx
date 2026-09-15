@@ -32,7 +32,7 @@ pub fn new_input_for_solc(
     language: solx_standard_json::InputLanguage,
     sources: BTreeMap<String, String>,
     libraries: solx_utils::Libraries,
-    remappings: Option<BTreeSet<String>>,
+    remappings: Option<Vec<solx_utils::Remapping>>,
     evm_version: Option<solx_utils::EVMVersion>,
     via_ir: bool,
     mut output_selection: solx_standard_json::InputSelection,
@@ -92,7 +92,7 @@ pub fn new_input_from_llvm_ir_sources(
         settings: solx_standard_json::InputSettings::new(
             optimizer,
             libraries,
-            BTreeSet::new(),
+            Vec::new(),
             None,
             false,
             output_selection.to_owned(),
