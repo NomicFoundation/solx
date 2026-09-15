@@ -124,20 +124,17 @@ impl SourceImportResolver<'_> {
     }
 
     ///
-    /// Applies the best matching remapping to `path`, mirroring solc's
-    /// `ImportRemapper::apply`: the longest matching context wins, then the
-    /// longest matching prefix; on ties the later remapping wins. Without a
-    /// match the path is returned unchanged.
+    /// solc's `ImportRemapper::apply` (`libsolidity/interface/ImportRemapper.cpp`).
     ///
-    fn apply_remappings(&self, context: &str, path: &str) -> String {
+    fn apply_remappings(&self, source_file_id: &str, path: &str) -> String {
         let mut longest_context = 0;
         let mut longest_prefix = 0;
-        let mut best_target = None;
+        let mut best_target = "";
         for remapping in self.remappings.iter() {
             if remapping.context.len() < longest_context {
                 continue;
             }
-            if !context.starts_with(remapping.context.as_str()) {
+            if !source_file_id.starts_with(remapping.context.as_str()) {
                 continue;
             }
             if remapping.prefix.len() < longest_prefix && remapping.context.len() == longest_context
@@ -149,12 +146,9 @@ impl SourceImportResolver<'_> {
             }
             longest_context = remapping.context.len();
             longest_prefix = remapping.prefix.len();
-            best_target = Some(remapping.target.as_str());
+            best_target = remapping.target.as_str();
         }
-        match best_target {
-            Some(target) => format!("{target}{}", &path[longest_prefix..]),
-            None => path.to_owned(),
-        }
+        format!("{best_target}{}", &path[longest_prefix..])
     }
 }
 
@@ -223,29 +217,55 @@ mod tests {
     }
 
     #[test]
+    fn unmatched_prefix_leaves_the_path() {
+        let remappings = remappings(&["@oz/=npm/oz/"]);
+        assert_eq!(resolve(&remappings, "Main.sol", "Other.sol"), "Other.sol");
+    }
+
+    #[test]
     fn longest_context_beats_longer_prefix() {
-        let remappings = remappings(&["lib/sub/=generic/lib/sub/", "project/:lib/=scoped/"]);
-        assert_eq!(
-            resolve(&remappings, "project/Main.sol", "lib/sub/A.sol"),
-            "scoped/sub/A.sol"
-        );
+        for order in [
+            ["lib/sub/=generic/lib/sub/", "project/:lib/=scoped/"],
+            ["project/:lib/=scoped/", "lib/sub/=generic/lib/sub/"],
+        ] {
+            assert_eq!(
+                resolve(&remappings(&order), "project/Main.sol", "lib/sub/A.sol"),
+                "scoped/sub/A.sol"
+            );
+        }
     }
 
     #[test]
     fn longest_prefix_wins_within_context() {
-        let remappings = remappings(&["lib/=generic/", "lib/sub/=specific/"]);
-        assert_eq!(
-            resolve(&remappings, "Main.sol", "lib/sub/A.sol"),
-            "specific/A.sol"
-        );
+        for order in [
+            ["lib/=generic/", "lib/sub/=specific/"],
+            ["lib/sub/=specific/", "lib/=generic/"],
+        ] {
+            assert_eq!(
+                resolve(&remappings(&order), "Main.sol", "lib/sub/A.sol"),
+                "specific/A.sol"
+            );
+        }
     }
 
+    /// solc 0.8.34 with `["lib/=second/", "lib/=first/"]` compiles only when `first/A.sol` exists.
     #[test]
     fn later_remapping_wins_ties() {
-        let remappings = remappings(&["lib/=first/", "lib/=second/"]);
         assert_eq!(
-            resolve(&remappings, "Main.sol", "lib/A.sol"),
+            resolve(
+                &remappings(&["lib/=first/", "lib/=second/"]),
+                "Main.sol",
+                "lib/A.sol"
+            ),
             "second/A.sol"
+        );
+        assert_eq!(
+            resolve(
+                &remappings(&["lib/=second/", "lib/=first/"]),
+                "Main.sol",
+                "lib/A.sol"
+            ),
+            "first/A.sol"
         );
     }
 
