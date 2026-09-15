@@ -1149,7 +1149,7 @@ impl Contract {
                 object_result
                     .as_mut()
                     .and_then(|result| result.as_mut().ok())
-                    .map(|object| object.benchmarks.drain(..).collect())
+                    .map(|object| std::mem::take(&mut object.benchmarks))
                     .unwrap_or_default()
             } else {
                 vec![]

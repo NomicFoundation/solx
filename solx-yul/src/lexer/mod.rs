@@ -99,7 +99,7 @@ impl<'a> Lexer<'a> {
 
             if let Some(mut token) = StringLiteral::parse(input) {
                 token.location = self.location;
-                token.set_comments(self.comments.drain(..).collect());
+                token.set_comments(std::mem::take(&mut self.comments));
 
                 self.offset += token.length;
                 self.location.shift_right(token.length);
@@ -108,7 +108,7 @@ impl<'a> Lexer<'a> {
 
             if let Some(mut token) = IntegerLiteral::parse(input) {
                 token.location = self.location;
-                token.set_comments(self.comments.drain(..).collect());
+                token.set_comments(std::mem::take(&mut self.comments));
 
                 self.offset += token.length;
                 self.location.shift_right(token.length);
@@ -117,7 +117,7 @@ impl<'a> Lexer<'a> {
 
             if let Some(mut token) = Identifier::parse(input) {
                 token.location = self.location;
-                token.set_comments(self.comments.drain(..).collect());
+                token.set_comments(std::mem::take(&mut self.comments));
 
                 self.offset += token.length;
                 self.location.shift_right(token.length);
@@ -126,7 +126,7 @@ impl<'a> Lexer<'a> {
 
             if let Some(mut token) = Symbol::parse(input) {
                 token.location = self.location;
-                token.set_comments(self.comments.drain(..).collect());
+                token.set_comments(std::mem::take(&mut self.comments));
 
                 self.offset += token.length;
                 self.location.shift_right(token.length);
@@ -143,7 +143,7 @@ impl<'a> Lexer<'a> {
         }
 
         let mut token = Token::new(self.location, Lexeme::EndOfFile, 0);
-        token.set_comments(self.comments.drain(..).collect());
+        token.set_comments(std::mem::take(&mut self.comments));
         Ok(token)
     }
 
