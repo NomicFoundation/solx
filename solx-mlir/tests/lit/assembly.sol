@@ -1,79 +1,78 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
+// CHECK: sol.func @{{.*}} attributes {{{.*}}kind = #Constructor
+// CHECK:   sol.inline_asm {
+// CHECK:     yul.sstore %{{.*}}, %c9_i256
+
 // CHECK: sol.func @{{.*arithmetic.*}}
 // CHECK:   sol.inline_asm {
-// This file asserts which ops a builtin lowers to; assembly_evaluation_order.sol asserts the
-// order its arguments are evaluated in.
-// CHECK-DAG:     sol.yul_ptr_cast %{{.*}} : !sol.ptr<ui256, Stack> -> !yul.ptr
-// CHECK-DAG:     yul.load %{{.*}} : !yul.ptr -> i256
-// CHECK-DAG:     yul.constant 1
-// CHECK:     %[[SUM:.*]] = yul.add
-// CHECK:     %[[SLOT:.*]] = yul.alloca : !yul.ptr
-// CHECK:     yul.store %[[SUM]], %[[SLOT]] : i256, !yul.ptr
-// CHECK:     yul.mul
-// CHECK:     yul.sub
-// CHECK:     yul.div
-// CHECK:     yul.sdiv
-// CHECK:     yul.mod
-// CHECK:     yul.smod
-// CHECK:     yul.exp
-// CHECK:     yul.addmod
-// CHECK:     yul.mulmod
-// CHECK:     yul.signextend
+// CHECK:     %[[X:.*]] = yul.load %{{.*}} : !yul.ptr -> i256
+// CHECK:     %[[SUM:.*]] = yul.add %[[X]], %c3_i256
+// CHECK:     %[[V:.*]] = yul.alloca : !yul.ptr
+// CHECK:     yul.store %[[SUM]], %[[V]] : i256, !yul.ptr
+// CHECK:     yul.mul %{{.*}}, %c5_i256
+// CHECK:     yul.sub %{{.*}}, %c7_i256
+// CHECK:     yul.div %{{.*}}, %c11_i256
+// CHECK:     yul.sdiv %{{.*}}, %c13_i256
+// CHECK:     yul.mod %{{.*}}, %c17_i256
+// CHECK:     yul.smod %{{.*}}, %c19_i256
+// CHECK:     yul.exp %{{.*}}, %c23_i256
+// CHECK:     yul.addmod %{{.*}}, %c29_i256, %c31_i256
+// CHECK:     yul.mulmod %{{.*}}, %c37_i256, %c41_i256
+// CHECK:     yul.signextend %c2_i256, %{{.*}}
 
 // CHECK: sol.func @{{.*bitwise.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     yul.and
-// CHECK:     yul.or
-// CHECK:     yul.xor
-// CHECK:     yul.not
-// CHECK:     yul.shl
-// CHECK:     yul.shr
-// CHECK:     yul.sar
-// CHECK:     yul.byte
-// CHECK:     yul.clz
+// CHECK:     yul.and %{{.*}}, %c3_i256
+// CHECK:     yul.or %{{.*}}, %c5_i256
+// CHECK:     yul.xor %{{.*}}, %c7_i256
+// CHECK:     yul.not %{{.*}}
+// CHECK:     yul.shl %c11_i256, %{{.*}}
+// CHECK:     yul.shr %c13_i256, %{{.*}}
+// CHECK:     yul.sar %c17_i256, %{{.*}}
+// CHECK:     yul.byte %c19_i256, %{{.*}}
+// CHECK:     yul.clz %{{.*}}
 
 // CHECK: sol.func @{{.*comparison.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     yul.cmp ult
-// CHECK:     yul.cmp ugt
-// CHECK:     yul.cmp slt
-// CHECK:     yul.cmp sgt
-// CHECK:     yul.cmp eq
-// The `iszero` builtin has no op of its own: it compares against zero.
+// CHECK:     yul.cmp ult, %c1_i256, %c2_i256
+// CHECK:     yul.cmp ugt, %c3_i256, %c5_i256
+// CHECK:     yul.cmp slt, %c7_i256, %c11_i256
+// CHECK:     yul.cmp sgt, %c13_i256, %c17_i256
+// CHECK:     yul.cmp eq, %c19_i256, %c23_i256
 // CHECK:     %[[ZERO:.*]] = yul.constant 0
-// CHECK:     yul.cmp eq, %{{.*}}, %[[ZERO]]
+// CHECK:     yul.cmp eq, %c29_i256, %[[ZERO]]
 
-// CHECK: sol.func @{{.*memory.*}}
+// CHECK: sol.func @{{.*memory_ops.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     yul.mload
-// CHECK:     yul.mstore
-// CHECK:     yul.mstore8
-// CHECK:     yul.mcopy
+// CHECK:     yul.mload %c1_i256
+// CHECK:     yul.mstore %c11_i256, %c12_i256
+// CHECK:     yul.mstore8 %c21_i256, %c22_i256
+// CHECK:     yul.mcopy %c31_i256, %c32_i256, %c33_i256
 // CHECK:     yul.msize
-// CHECK:     yul.keccak256
+// CHECK:     yul.keccak256 %c41_i256, %c42_i256
 
-// CHECK: sol.func @{{.*storage.*}}
+// CHECK: sol.func @{{.*storage_ops.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     yul.sload
-// CHECK:     yul.sstore
+// CHECK:     yul.sstore %{{.*}}, %c7_i256
 // CHECK:     yul.tload
-// CHECK:     yul.tstore
+// CHECK:     yul.tstore %{{.*}}, %c11_i256
 
 // CHECK: sol.func @{{.*calls.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     yul.call
-// CHECK:     yul.callcode
-// CHECK:     yul.static_call
-// CHECK:     yul.delegate_call
-// CHECK:     yul.create
-// CHECK:     yul.create2
+// CHECK:     yul.call %c1_i256, %c2_i256, %c3_i256, %c4_i256, %c5_i256, %c6_i256, %c7_i256
+// CHECK:     yul.callcode %c11_i256, %c12_i256, %c13_i256, %c14_i256, %c15_i256, %c16_i256, %c17_i256
+// CHECK:     yul.static_call %c21_i256, %c22_i256, %c23_i256, %c24_i256, %c25_i256, %c26_i256
+// CHECK:     yul.delegate_call %c31_i256, %c32_i256, %c33_i256, %c34_i256, %c35_i256, %c36_i256
+// CHECK:     yul.create %c41_i256, %c42_i256, %c43_i256
+// CHECK:     yul.create2 %c51_i256, %c52_i256, %c53_i256, %c54_i256
 
 // CHECK: sol.func @{{.*context.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     yul.address
-// CHECK:     yul.balance
+// CHECK:     yul.balance %c1_i256
 // CHECK:     yul.selfbalance
 // CHECK:     yul.caller
 // CHECK:     yul.callvalue
@@ -88,37 +87,37 @@
 // CHECK:     yul.timestamp
 // CHECK:     yul.number
 // CHECK:     yul.prevrandao
-// CHECK:     yul.blockhash
-// CHECK:     yul.blobhash
+// CHECK:     yul.blockhash %c2_i256
+// CHECK:     yul.blobhash %c3_i256
 
-// CHECK: sol.func @{{.*data.*}}
+// CHECK: sol.func @{{.*data_ops.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     yul.calldataload
+// CHECK:     yul.calldataload %c1_i256
 // CHECK:     yul.calldatasize
-// CHECK:     yul.calldatacopy
+// CHECK:     yul.calldatacopy %c11_i256, %c12_i256, %c13_i256
 // CHECK:     yul.returndatasize
-// CHECK:     yul.returndatacopy
+// CHECK:     yul.returndatacopy %c21_i256, %c22_i256, %c23_i256
 // CHECK:     yul.codesize
-// CHECK:     yul.codecopy
-// CHECK:     yul.extcodesize
-// CHECK:     yul.extcodehash
-// CHECK:     yul.extcodecopy
+// CHECK:     yul.codecopy %c31_i256, %c32_i256, %c33_i256
+// CHECK:     yul.extcodesize %c41_i256
+// CHECK:     yul.extcodehash %c43_i256
+// CHECK:     yul.extcodecopy %c51_i256, %c52_i256, %c53_i256, %c54_i256
 
 // CHECK: sol.func @{{.*logs.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     yul.log %{{.*}}, %{{.*}}{{$}}
-// CHECK:     yul.log %{{.*}}, %{{.*}} topics(%{{.*}})
-// CHECK:     yul.log %{{.*}}, %{{.*}} topics(%{{.*}}, %{{.*}})
-// CHECK:     yul.log %{{.*}}, %{{.*}} topics(%{{.*}}, %{{.*}}, %{{.*}})
-// CHECK:     yul.log %{{.*}}, %{{.*}} topics(%{{.*}}, %{{.*}}, %{{.*}}, %{{.*}})
+// CHECK:     yul.log %c1_i256, %c2_i256{{$}}
+// CHECK:     yul.log %c11_i256, %c12_i256 topics(%c13_i256)
+// CHECK:     yul.log %c21_i256, %c22_i256 topics(%c23_i256, %c24_i256)
+// CHECK:     yul.log %c31_i256, %c32_i256 topics(%c33_i256, %c34_i256, %c35_i256)
+// CHECK:     yul.log %c41_i256, %c42_i256 topics(%c43_i256, %c44_i256, %c45_i256, %c46_i256)
 
 // CHECK: sol.func @{{.*halting.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     yul.selfdestruct
+// CHECK:     yul.selfdestruct %c101_i256
 // CHECK:     yul.invalid
 // CHECK:     yul.stop
-// CHECK:     yul.revert
-// CHECK:     yul.return
+// CHECK:     yul.revert %c102_i256, %c103_i256
+// CHECK:     yul.return %c104_i256, %c105_i256
 
 // CHECK: sol.func @{{.*memory_safe.*}}
 // CHECK:   sol.inline_asm attributes {memory_safe} {
@@ -127,82 +126,88 @@ contract C {
     uint256 slot0;
     uint256 transient slot1;
 
-    function arithmetic(uint256 x, uint256 y) public pure returns (uint256 r) {
+    constructor() {
         assembly {
-            let a := add(x, 1)
-            r := mul(a, y)
-            r := sub(r, y)
-            r := div(r, y)
-            r := sdiv(r, y)
-            r := mod(r, y)
-            r := smod(r, y)
-            r := exp(r, y)
-            r := addmod(r, y, a)
-            r := mulmod(r, y, a)
-            r := signextend(1, r)
+            sstore(slot0.slot, 9)
         }
     }
 
-    function bitwise(uint256 x, uint256 y) public pure returns (uint256 r) {
+    function arithmetic(uint256 x) public pure returns (uint256 r) {
         assembly {
-            r := and(x, y)
-            r := or(r, y)
-            r := xor(r, y)
-            r := not(r)
-            r := shl(1, r)
-            r := shr(1, r)
-            r := sar(1, r)
-            r := byte(0, r)
-            r := clz(r)
+            let v := add(x, 3)
+            v := mul(v, 5)
+            v := sub(v, 7)
+            v := div(v, 11)
+            v := sdiv(v, 13)
+            v := mod(v, 17)
+            v := smod(v, 19)
+            v := exp(v, 23)
+            v := addmod(v, 29, 31)
+            v := mulmod(v, 37, 41)
+            r := signextend(2, v)
         }
     }
 
-    function comparison(uint256 x, uint256 y) public pure returns (uint256 r) {
+    function bitwise(uint256 x) public pure returns (uint256 r) {
         assembly {
-            r := lt(x, y)
-            r := gt(x, y)
-            r := slt(x, y)
-            r := sgt(x, y)
-            r := eq(x, y)
-            r := iszero(x)
+            let v := and(x, 3)
+            v := or(v, 5)
+            v := xor(v, 7)
+            v := not(v)
+            v := shl(11, v)
+            v := shr(13, v)
+            v := sar(17, v)
+            v := byte(19, v)
+            r := clz(v)
         }
     }
 
-    function memory_ops(uint256 x) public pure returns (uint256 r) {
+    function comparison() public pure returns (uint256 r) {
         assembly {
-            r := mload(x)
-            mstore(x, r)
-            mstore8(x, r)
-            mcopy(x, x, 32)
+            r := lt(1, 2)
+            r := gt(3, 5)
+            r := slt(7, 11)
+            r := sgt(13, 17)
+            r := eq(19, 23)
+            r := iszero(29)
+        }
+    }
+
+    function memory_ops() public pure returns (uint256 r) {
+        assembly {
+            r := mload(1)
+            mstore(11, 12)
+            mstore8(21, 22)
+            mcopy(31, 32, 33)
             r := msize()
-            r := keccak256(x, 32)
+            r := keccak256(41, 42)
         }
     }
 
-    function storage_ops(uint256 x) public returns (uint256 r) {
+    function storage_ops() public returns (uint256 r) {
         assembly {
             r := sload(slot0.slot)
-            sstore(slot0.slot, x)
+            sstore(slot0.slot, 7)
             r := tload(slot1.slot)
-            tstore(slot1.slot, x)
+            tstore(slot1.slot, 11)
         }
     }
 
-    function calls(uint256 x) public returns (uint256 r) {
+    function calls() public returns (uint256 r) {
         assembly {
-            r := call(x, x, x, x, x, x, x)
-            r := callcode(x, x, x, x, x, x, x)
-            r := staticcall(x, x, x, x, x, x)
-            r := delegatecall(x, x, x, x, x, x)
-            r := create(x, x, x)
-            r := create2(x, x, x, x)
+            r := call(1, 2, 3, 4, 5, 6, 7)
+            r := callcode(11, 12, 13, 14, 15, 16, 17)
+            r := staticcall(21, 22, 23, 24, 25, 26)
+            r := delegatecall(31, 32, 33, 34, 35, 36)
+            r := create(41, 42, 43)
+            r := create2(51, 52, 53, 54)
         }
     }
 
-    function context(uint256 x) public view returns (uint256 r) {
+    function context() public view returns (uint256 r) {
         assembly {
             r := address()
-            r := balance(x)
+            r := balance(1)
             r := selfbalance()
             r := caller()
             r := callvalue()
@@ -217,43 +222,43 @@ contract C {
             r := timestamp()
             r := number()
             r := prevrandao()
-            r := blockhash(x)
-            r := blobhash(x)
+            r := blockhash(2)
+            r := blobhash(3)
         }
     }
 
-    function data(uint256 x) public view returns (uint256 r) {
+    function data_ops() public view returns (uint256 r) {
         assembly {
-            r := calldataload(x)
+            r := calldataload(1)
             r := calldatasize()
-            calldatacopy(x, x, x)
+            calldatacopy(11, 12, 13)
             r := returndatasize()
-            returndatacopy(x, x, x)
+            returndatacopy(21, 22, 23)
             r := codesize()
-            codecopy(x, x, x)
-            r := extcodesize(x)
-            r := extcodehash(x)
-            extcodecopy(x, x, x, x)
+            codecopy(31, 32, 33)
+            r := extcodesize(41)
+            r := extcodehash(43)
+            extcodecopy(51, 52, 53, 54)
         }
     }
 
-    function logs(uint256 x) public {
+    function logs() public {
         assembly {
-            log0(0, 32)
-            log1(0, 32, x)
-            log2(0, 32, x, x)
-            log3(0, 32, x, x, x)
-            log4(0, 32, x, x, x, x)
+            log0(1, 2)
+            log1(11, 12, 13)
+            log2(21, 22, 23, 24)
+            log3(31, 32, 33, 34, 35)
+            log4(41, 42, 43, 44, 45, 46)
         }
     }
 
     function halting(uint256 x) public {
         assembly {
-            if eq(x, 1) { selfdestruct(x) }
+            if eq(x, 1) { selfdestruct(101) }
             if eq(x, 2) { invalid() }
             if eq(x, 3) { stop() }
-            if eq(x, 4) { revert(0, 0) }
-            return(0, 32)
+            if eq(x, 4) { revert(102, 103) }
+            return(104, 105)
         }
     }
 

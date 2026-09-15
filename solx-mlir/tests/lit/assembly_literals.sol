@@ -1,30 +1,22 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Every Yul literal reaches the dialect as a signless i256 word: a bool is 1 or 0, and a
-// string or `hex"..."` literal is left-aligned in the word rather than zero-extended.
-
 // CHECK: sol.func @{{.*numbers.*}}
 // CHECK:   sol.inline_asm {
-// CHECK-DAG:     yul.constant 42
-// CHECK-DAG:     yul.constant 255
-// CHECK:     yul.add
-// A word of all ones prints signed.
-// CHECK:     yul.constant -1
-// CHECK:     yul.add
+// CHECK:     yul.add %c42_i256, %c255_i256
+// CHECK:     yul.add %{{.*}}, %c-1_i256
 
 // CHECK: sol.func @{{.*booleans.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     %[[TRUE:.*]] = yul.constant 1
-// CHECK:     yul.if %[[TRUE]] {
-// CHECK:     yul.cmp eq, %{{.*}}, %{{.*}}
+// CHECK:     yul.if %c1_i256 {
+// CHECK:     %[[FALSE:.*]] = yul.constant 0
+// CHECK:     %[[ZERO:.*]] = yul.constant 0
+// CHECK:     yul.cmp eq, %[[FALSE]], %[[ZERO]]
 // CHECK:     yul.if
 
 // CHECK: sol.func @{{.*words.*}}
 // CHECK:   sol.inline_asm {
-// CHECK-DAG:     yul.constant 44048180597813453602326562734351324025098966208897425494240603688123167145984
-// CHECK-DAG:     yul.constant 7749391226117993669552342838258440610419344371696464750321364798869430337536
-// CHECK:     yul.add
+// CHECK:     yul.add %c44048180597813453602326562734351324025098966208897425494240603688123167145984_i256, %c7749391226117993669552342838258440610419344371696464750321364798869430337536_i256
 
 contract C {
     function numbers() public pure returns (uint256 r) {

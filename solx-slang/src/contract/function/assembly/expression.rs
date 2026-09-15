@@ -239,11 +239,7 @@ impl<'function, 'contract, 'source_unit, 'context>
             BuiltIn::YulPrevrandao => vec![Word::prevrandao(self)],
             BuiltIn::YulBlockhash => vec![Word::blockhash(arguments[0], self)],
             BuiltIn::YulBlobhash => vec![Word::blobhash(arguments[0], self)],
-            // Opcode 0x44 was renamed `prevrandao` at Paris and `difficulty` retired with it.
-            // solx admits builtins at `EvmTarget::LATEST`, so slang rejects this one whatever
-            // `--evm-version` says.
-            BuiltIn::YulDifficulty => unreachable!("`difficulty` was deprecated in Paris"),
-            built_in => unreachable!("{built_in:?} is not a Yul builtin"),
+            built_in => unreachable!("{built_in:?} is not a Yul builtin here"),
         }
     }
 

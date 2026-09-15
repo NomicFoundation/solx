@@ -1,11 +1,23 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck %s --check-prefix=SOLX
 
-// An internal library function carries its assembly into the calling contract's module.
-// CHECK: sol.func @{{.*twice.*}}
-// CHECK:   sol.inline_asm {
-// CHECK:     yul.constant 2
-// CHECK:     yul.mul
+// CHECK: sol.inline_asm {
+// CHECK:   yul.mul %{{.*}}, %c2_i256
+
+// solx emits the contract module first and lands the copy at its first reference, print-init
+// emits the library module first, so the RUN line above cannot check the framing.
+// SOLX: sol.contract @{{.*}}C{{.*}} {
+// SOLX:   sol.func @{{.*use.*}}
+// SOLX:   sol.func @{{.*twice.*}}
+// SOLX:     sol.inline_asm {
+// SOLX:       yul.mul %{{.*}}, %c2_i256
+// SOLX: } {kind = #Contract}
+// SOLX: sol.contract @{{.*}}L{{.*}} {
+// SOLX:   sol.func @{{.*twice.*}}
+// SOLX:     sol.inline_asm {
+// SOLX:       yul.mul %{{.*}}, %c2_i256
+// SOLX: } {kind = #Library}
 
 library L {
     function twice(uint256 x) internal pure returns (uint256 r) {

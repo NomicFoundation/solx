@@ -1,24 +1,27 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Yul has no `else`, so the op's else region stays blockless.
 // CHECK: sol.func @{{.*if_statement.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     yul.if %{{.*}} {
-// CHECK:       yul.store
-// CHECK:       yul.yield
-// CHECK:     } else {
+// CHECK:       yul.store %c3_i256
+// CHECK-NEXT:  yul.yield
+// CHECK-NEXT: } else {
 // CHECK-NEXT: }
 
-// A Yul `for` initializer declares into the enclosing block, not into a region.
 // CHECK: sol.func @{{.*for_statement.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     %[[I:.*]] = yul.alloca : !yul.ptr
+// CHECK:     yul.store %c5_i256, %[[I]] : i256, !yul.ptr
 // CHECK:     yul.for cond {
+// CHECK:       yul.cmp ult
 // CHECK:       yul.condition
 // CHECK:     } body {
+// CHECK:       yul.add %{{.*}}, %c7_i256
 // CHECK:       yul.yield
 // CHECK:     } step {
+// CHECK:       yul.add %{{.*}}, %c11_i256
+// CHECK:       yul.store %{{.*}}, %[[I]] : i256, !yul.ptr
 // CHECK:       yul.yield
 // CHECK:     }
 
@@ -28,55 +31,75 @@
 // CHECK:       %[[ONE:.*]] = yul.constant 1
 // CHECK:       yul.condition %[[ONE]]
 // CHECK:     } body {
-// CHECK:       yul.break
+// CHECK-NEXT:  yul.break
 // CHECK:     } step {
-// CHECK:       yul.yield
-// CHECK:     }
+// CHECK-NEXT:  yul.yield
+// CHECK-NEXT: }
 
 // CHECK: sol.func @{{.*continue_statement.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:       yul.continue
+// CHECK:     yul.for cond {
+// CHECK:     } body {
+// CHECK:       yul.if %{{.*}} {
+// CHECK-NEXT:    yul.continue
+// CHECK:       } else {
+// CHECK-NEXT:  }
+// CHECK:       yul.add %{{.*}}, %c13_i256
+// CHECK:       yul.yield
+// CHECK:     } step {
 
 // CHECK: sol.func @{{.*switch_statement.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     yul.switch %{{.*}} : i256
 // CHECK:     case 0 {
-// CHECK:       yul.yield
-// CHECK:     }
+// CHECK:       yul.store %c17_i256
+// CHECK-NEXT:  yul.yield
+// CHECK-NEXT: }
 // CHECK:     case 1 {
-// CHECK:       yul.yield
-// CHECK:     }
+// CHECK:       yul.store %c19_i256
+// CHECK-NEXT:  yul.yield
+// CHECK-NEXT: }
 // CHECK:     default {
-// CHECK:       yul.yield
-// CHECK:     }
+// CHECK:       yul.store %c23_i256
+// CHECK-NEXT:  yul.yield
+// CHECK-NEXT: }
 
-// A switch with no default still gets the op's mandatory default region, empty.
 // CHECK: sol.func @{{.*switch_no_default.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     yul.switch %{{.*}} : i256
 // CHECK:     case 7 {
-// CHECK:       yul.store
-// CHECK:       yul.yield
-// CHECK:     }
+// CHECK:       yul.store %c29_i256
+// CHECK-NEXT:  yul.yield
+// CHECK-NEXT: }
 // CHECK:     default {
 // CHECK-NEXT:  yul.yield
 // CHECK-NEXT: }
 
-// A switch with only a default is no switch at all: the argument is evaluated for its
-// effects and the body emitted inline.
 // CHECK: sol.func @{{.*switch_only_default.*}}
 // CHECK:   sol.inline_asm {
 // CHECK-NOT: yul.switch
-// CHECK:     yul.store
+// CHECK:     yul.store %c31_i256
 // CHECK:   }
 
-// Every Yul function is emitted ahead of the body it is written in.
+// CHECK: sol.func @{{.*terminator_in_case.*}}
+// CHECK:   sol.inline_asm {
+// CHECK:     yul.for cond {
+// CHECK:     } body {
+// CHECK:       yul.switch %{{.*}} : i256
+// CHECK:       case 0 {
+// CHECK-NEXT:    yul.break
+// CHECK:       default {
+// CHECK-NEXT:    yul.continue
+
 // CHECK: sol.func @{{.*yul_functions.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     yul.func @{{.*double.*}} : (i256) -> i256 {
 // CHECK:       %[[PARAM:.*]] = yul.alloca : !yul.ptr
 // CHECK:       yul.store %{{.*}}, %[[PARAM]] : i256, !yul.ptr
 // CHECK:       %[[RESULT:.*]] = yul.alloca : !yul.ptr
+// CHECK-NEXT:  %[[ZERO:.*]] = yul.constant 0
+// CHECK-NEXT:  yul.store %[[ZERO]], %[[RESULT]] : i256, !yul.ptr
+// CHECK:       yul.mul %{{.*}}, %c2_i256
 // CHECK:       yul.func_return
 // CHECK:     }
 // CHECK:     yul.func @{{.*pair.*}} : (i256) -> (i256, i256) {
@@ -86,38 +109,39 @@
 // CHECK:       yul.func_return{{$}}
 // CHECK:     }
 // CHECK:     yul.func @{{.*early.*}} : (i256) -> i256 {
-// A `leave` is an early func_return carrying the return variables as they stand.
 // CHECK:       yul.func_return %{{.*}} : i256
 // CHECK:     }
 // CHECK:     %[[TWO:.*]]:2 = yul.func_call @{{.*pair.*}}(%{{.*}}) : (i256) -> (i256, i256)
+// CHECK:     %[[P:.*]] = yul.alloca : !yul.ptr
+// CHECK-NEXT: yul.store %[[TWO]]#0, %[[P]] : i256, !yul.ptr
+// CHECK:     %[[Q:.*]] = yul.alloca : !yul.ptr
+// CHECK-NEXT: yul.store %[[TWO]]#1, %[[Q]] : i256, !yul.ptr
 // CHECK:     yul.func_call @{{.*effect_only.*}}(%{{.*}}) : (i256) -> ()
-// The two calls feeding `add` are asserted orderlessly; evaluation order is pinned in
-// assembly_evaluation_order.sol.
-// CHECK-DAG:     yul.func_call @{{.*double.*}}(%{{.*}}) : (i256) -> i256
-// CHECK-DAG:     yul.func_call @{{.*early.*}}(%{{.*}}) : (i256) -> i256
+// CHECK:     yul.func_call @{{.*}} : (i256) -> i256
+// CHECK:     yul.func_call @{{.*}} : (i256) -> i256
+// CHECK:     yul.add
 
-// A call may name a function defined after it.
 // CHECK: sol.func @{{.*forward_reference.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     yul.func @{{.*later.*}}
-// CHECK:     yul.func_call @{{.*later.*}}
+// CHECK:     yul.func @[[LATER:.*later.*]] : (i256) -> i256 {
+// CHECK:     yul.func_call @[[LATER]]
 
-// A Yul function may call itself.
 // CHECK: sol.func @{{.*recursion.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     yul.func @[[FACT:.*]] : (i256) -> i256 {
 // CHECK:       yul.func_call @[[FACT]](%{{.*}}) : (i256) -> i256
 // CHECK:     yul.func_call @[[FACT]](%{{.*}}) : (i256) -> i256
 
-// A function declared in an `if` / `for` / `switch` body is scoped to that body, and all of
-// them hoist to the top of the region in pre-order.
 // CHECK: sol.func @{{.*nested_definitions.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     yul.func @[[IN_IF:.*in_if.*]] : (i256) -> i256 {
+// CHECK:       yul.add %{{.*}}, %c11_i256
 // CHECK:     yul.func @[[IN_FOR:.*in_for.*]] : (i256) -> i256 {
-// A function declared in a case body hoists ahead of one declared in the default body.
+// CHECK:       yul.add %{{.*}}, %c13_i256
 // CHECK:     yul.func @[[IN_SWITCH:.*in_switch.*]] : (i256) -> i256 {
+// CHECK:       yul.add %{{.*}}, %c17_i256
 // CHECK:     yul.func @[[IN_DEFAULT:.*in_default.*]] : (i256) -> i256 {
+// CHECK:       yul.add %{{.*}}, %c19_i256
 // CHECK:     yul.func_call @[[IN_IF]]
 // CHECK:     yul.func_call @[[IN_FOR]]
 // CHECK:     yul.func_call @[[IN_SWITCH]]
@@ -126,13 +150,13 @@
 contract C {
     function if_statement(uint256 n) public pure returns (uint256 r) {
         assembly {
-            if n { r := 1 }
+            if n { r := 3 }
         }
     }
 
     function for_statement(uint256 n) public pure returns (uint256 r) {
         assembly {
-            for { let i := 0 } lt(i, n) { i := add(i, 1) } { r := add(r, i) }
+            for { let i := 5 } lt(i, n) { i := add(i, 11) } { r := add(r, 7) }
         }
     }
 
@@ -146,7 +170,7 @@ contract C {
         assembly {
             for { let i := 0 } lt(i, n) { i := add(i, 1) } {
                 if eq(i, 1) { continue }
-                r := add(r, i)
+                r := add(r, 13)
             }
         }
     }
@@ -154,23 +178,33 @@ contract C {
     function switch_statement(uint256 n) public pure returns (uint256 r) {
         assembly {
             switch n
-            case 0 { r := 10 }
-            case 1 { r := 11 }
-            default { r := 12 }
+            case 0 { r := 17 }
+            case 1 { r := 19 }
+            default { r := 23 }
         }
     }
 
     function switch_no_default(uint256 n) public pure returns (uint256 r) {
         assembly {
             switch n
-            case 7 { r := 13 }
+            case 7 { r := 29 }
         }
     }
 
     function switch_only_default(uint256 n) public pure returns (uint256 r) {
         assembly {
             switch n
-            default { r := 14 }
+            default { r := 31 }
+        }
+    }
+
+    function terminator_in_case(uint256 n) public pure returns (uint256 r) {
+        assembly {
+            for {} 1 {} {
+                switch n
+                case 0 { break }
+                default { continue }
+            }
         }
     }
 
@@ -210,20 +244,20 @@ contract C {
     function nested_definitions(uint256 n) public pure returns (uint256 r) {
         assembly {
             if 1 {
-                function in_if(x) -> y { y := add(x, 1) }
+                function in_if(x) -> y { y := add(x, 11) }
                 r := in_if(n)
             }
             for { let i := 0 } lt(i, 1) { i := add(i, 1) } {
-                function in_for(x) -> y { y := add(x, 2) }
+                function in_for(x) -> y { y := add(x, 13) }
                 r := add(r, in_for(n))
             }
             switch n
             case 0 {
-                function in_switch(x) -> y { y := add(x, 3) }
+                function in_switch(x) -> y { y := add(x, 17) }
                 r := add(r, in_switch(n))
             }
             default {
-                function in_default(x) -> y { y := add(x, 4) }
+                function in_default(x) -> y { y := add(x, 19) }
                 r := add(r, in_default(n))
             }
         }

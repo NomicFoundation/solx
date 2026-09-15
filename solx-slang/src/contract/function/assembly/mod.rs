@@ -10,8 +10,6 @@ pub mod statement;
 use slang_solidity_v2::ast::AssemblyStatement;
 use slang_solidity_v2::ast::YulFunctionDefinition;
 
-use solx_mlir::Pointer;
-use solx_mlir::Word;
 use solx_mlir::YulFunction;
 
 use crate::scope::assembly::AssemblyScope;
@@ -53,23 +51,16 @@ impl<'function, 'contract, 'source_unit, 'context>
                 let argument = entry.argument(index);
                 scope.bind(parameter.node_id(), argument);
             }
-            let returns: Vec<Pointer> = match definition.returns() {
-                Some(names) => names
-                    .iter()
-                    .map(|name| {
-                        let zero = Word::zero(scope);
-                        scope.bind(name.node_id(), zero)
-                    })
-                    .collect(),
-                None => Vec::new(),
-            };
-
-            scope.in_function(returns, |scope| {
-                scope.statements(&definition.body());
-                if !scope.current_block().is_terminated() {
-                    scope.function_return();
+            if let Some(names) = definition.returns() {
+                for name in names.iter() {
+                    scope.bind_return(name.node_id());
                 }
-            });
+            }
+
+            scope.statements(&definition.body());
+            if !scope.current_block().is_terminated() {
+                scope.function_return();
+            }
         });
         signature
     }
@@ -78,7 +69,7 @@ impl<'function, 'contract, 'source_unit, 'context>
     /// variables.
     pub fn function_return(&self) {
         let operands: Vec<_> = self
-            .returns
+            .returns()
             .iter()
             .map(|pointer| pointer.load(self))
             .collect();

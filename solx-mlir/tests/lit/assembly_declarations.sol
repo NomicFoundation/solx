@@ -1,15 +1,12 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// An uninitialized `let` defaults to zero.
 // CHECK: sol.func @{{.*uninitialized.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     %[[Z:.*]] = yul.constant 0
 // CHECK:     %[[X:.*]] = yul.alloca : !yul.ptr
 // CHECK:     yul.store %[[Z]], %[[X]] : i256, !yul.ptr
 
-// A multi-variable `let` materializes every value before allocating any slot, so both
-// zeroes precede both allocas.
 // CHECK: sol.func @{{.*uninitialized_tuple.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     %[[Z1:.*]] = yul.constant 0
@@ -19,8 +16,6 @@
 // CHECK:     %[[Y:.*]] = yul.alloca : !yul.ptr
 // CHECK:     yul.store %[[Z2]], %[[Y]] : i256, !yul.ptr
 
-// A multi-return call binds one slot per result, and assigning to several paths at once
-// writes each through its own store.
 // CHECK: sol.func @{{.*tuple_assignment.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     %[[FIRST:.*]]:2 = yul.func_call @{{.*pair.*}}
@@ -32,8 +27,6 @@
 // CHECK:     yul.store %[[SECOND]]#0, %[[P]] : i256, !yul.ptr
 // CHECK:     yul.store %[[SECOND]]#1, %[[Q]] : i256, !yul.ptr
 
-// A nested block opens no region: Yul's block scoping is already resolved per declaration,
-// so a name reused in a sibling block is simply a second slot.
 // CHECK: sol.func @{{.*nested_blocks.*}}
 // CHECK:   sol.inline_asm {
 // CHECK-NOT: yul.scope

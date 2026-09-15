@@ -41,7 +41,7 @@ impl<'context> YulReference<'context> {
 }
 
 /// The field a suffixed Yul path projects out of a Solidity declaration.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum YulField {
     /// `.slot` of a storage reference or state variable.
     Slot,
