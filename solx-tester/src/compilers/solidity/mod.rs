@@ -241,7 +241,7 @@ impl SolidityCompiler {
         solx_standard_json::Input::try_from_solidity_sources(
             sources_json,
             libraries.clone(),
-            BTreeSet::new(),
+            Vec::new(),
             solx_standard_json::InputOptimizer {
                 enabled: None,
                 mode: Some(llvm_settings.middle_end_as_char()),

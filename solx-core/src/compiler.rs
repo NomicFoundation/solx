@@ -1,6 +1,5 @@
 //! Compilation pipeline entry points.
 
-use std::collections::BTreeSet;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -313,7 +312,7 @@ impl<'arguments> Compiler<'arguments> {
         include_paths: Vec<String>,
         allow_paths: Option<String>,
         use_import_callback: bool,
-        remappings: BTreeSet<String>,
+        remappings: Vec<solx_utils::Remapping>,
         optimizer_settings: solx_codegen_evm::OptimizerSettings,
         llvm_options: Vec<String>,
         output_config: Option<solx_codegen_evm::OutputConfig>,

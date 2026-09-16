@@ -2,7 +2,6 @@
 //! Solidity compiler arguments.
 //!
 
-use std::collections::BTreeSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -257,9 +256,6 @@ impl Arguments {
     /// Expected argument count for `--version` (binary name + flag).
     const VERSION_MAX_ARGS: usize = 2;
 
-    /// Expected number of parts in a remapping (key=value).
-    const REMAPPING_PART_COUNT: usize = 2;
-
     ///
     /// Validates the arguments.
     ///
@@ -445,27 +441,20 @@ impl Arguments {
     ///
     pub fn split_input_files_and_remappings(
         &self,
-    ) -> anyhow::Result<(Vec<PathBuf>, BTreeSet<String>)> {
+    ) -> anyhow::Result<(Vec<PathBuf>, Vec<solx_utils::Remapping>)> {
         let mut input_files = Vec::with_capacity(self.inputs.len());
-        let mut remappings = BTreeSet::new();
+        let mut remappings = Vec::new();
 
         for input in self.inputs.iter() {
             if input.contains('=') {
-                let mut parts = Vec::with_capacity(2);
-                for path in input.trim().split('=') {
-                    let path = PathBuf::from(path);
-                    parts.push(
-                        Self::path_to_posix(path.as_path())?
-                            .to_string_lossy()
-                            .to_string(),
-                    );
-                }
-                if parts.len() != Self::REMAPPING_PART_COUNT {
-                    anyhow::bail!(
-                        "Invalid remapping `{input}`: expected two parts separated by '='."
-                    );
-                }
-                remappings.insert(parts.join("="));
+                let remapping = input.trim();
+                // `Path` would drop a trailing `/`; solc's `sanitizePath` is the identity on POSIX.
+                let remapping = if cfg!(windows) {
+                    remapping.replace('\\', "/")
+                } else {
+                    remapping.to_owned()
+                };
+                remappings.push(remapping.parse()?);
             } else {
                 let path = PathBuf::from(input.trim());
                 let path = Self::path_to_posix(path.as_path())?;

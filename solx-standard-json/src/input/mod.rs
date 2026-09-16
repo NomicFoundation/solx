@@ -69,7 +69,7 @@ impl Input {
     pub fn try_from_solidity_paths(
         paths: &[PathBuf],
         libraries: &[String],
-        remappings: BTreeSet<String>,
+        remappings: Vec<solx_utils::Remapping>,
         optimizer: InputSettingsOptimizer,
         evm_version: Option<solx_utils::EVMVersion>,
         via_ir: bool,
@@ -116,7 +116,7 @@ impl Input {
     pub fn try_from_solidity_sources(
         sources: BTreeMap<String, Source>,
         libraries: solx_utils::Libraries,
-        remappings: BTreeSet<String>,
+        remappings: Vec<solx_utils::Remapping>,
         optimizer: InputSettingsOptimizer,
         evm_version: Option<solx_utils::EVMVersion>,
         via_ir: bool,
@@ -190,7 +190,7 @@ impl Input {
             settings: Settings::new(
                 optimizer,
                 libraries,
-                BTreeSet::new(),
+                Vec::new(),
                 None,
                 false,
                 output_selection.to_owned(),
@@ -202,7 +202,7 @@ impl Input {
     }
 
     ///
-    /// Resolves the sources by applying library links and remappings.
+    /// Loads the sources given by URL from the file system.
     ///
     pub fn resolve_sources(&mut self) -> anyhow::Result<()> {
         for source in self.sources.values_mut() {
