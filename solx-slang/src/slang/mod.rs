@@ -45,8 +45,7 @@ impl Slang {
     pub const NAME: &'static str = "Slang";
 
     /// Builds a Slang compilation unit from the given source files, parsing every source and
-    /// resolving imports. Import paths are resolved against the source map with the given
-    /// remappings applied, following solc's semantics.
+    /// resolving imports with the given remappings, following solc's semantics.
     ///
     /// Every EVM built-in is admitted (`EvmTarget::LATEST`): Slang gates built-in availability on
     /// the target, whereas solx handles EVM-version targeting downstream.

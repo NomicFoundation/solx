@@ -85,7 +85,8 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
       "sizeFallback": false
     },
 
-    // Optional: Sorted list of remappings.
+    // Optional: List of remappings.
+    // When two remap the same prefix in the same context, the later one wins.
     // Important: Only used with Solidity input.
     "remappings": [ ":g=/dir" ],
     // Optional: Addresses of the libraries.
