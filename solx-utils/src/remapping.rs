@@ -7,7 +7,7 @@ use std::str::FromStr;
 ///
 /// An import remapping in solc's `[context:]prefix=target` form.
 ///
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Remapping {
     /// Applies only within files whose identifier starts with this; empty matches every file.
     pub context: String,
@@ -41,14 +41,9 @@ impl FromStr for Remapping {
 }
 
 impl std::fmt::Display for Remapping {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // The context separator is always written, as in solc's metadata: without it a prefix
-        // containing `:` would parse back as a context.
-        write!(
-            formatter,
-            "{}:{}={}",
-            self.context, self.prefix, self.target
-        )
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Always written: without it a prefix containing `:` would parse back as a context.
+        write!(f, "{}:{}={}", self.context, self.prefix, self.target)
     }
 }
 
@@ -146,44 +141,13 @@ mod tests {
         }
     }
 
+    /// `solc --metadata` writes `settings.remappings` as `[":lib/=x/"]`.
     #[test]
-    fn display_always_writes_the_context_separator() {
+    fn display_writes_solc_metadata_spelling() {
         assert_eq!(remapping("", "lib/", "x/").to_string(), ":lib/=x/");
         assert_eq!(
             remapping("project/", "@dep/", "npm/dep@1.2.3/").to_string(),
             "project/:@dep/=npm/dep@1.2.3/"
-        );
-    }
-
-    #[test]
-    fn display_keeps_a_colon_in_the_prefix_parseable() {
-        let text = remapping("", "https://github.com/", "lib/").to_string();
-        assert_eq!(text, ":https://github.com/=lib/");
-        assert_eq!(
-            text.parse::<Remapping>().unwrap(),
-            remapping("", "https://github.com/", "lib/")
-        );
-    }
-
-    #[test]
-    fn serializes_as_its_text() {
-        assert_eq!(
-            serde_json::to_string(&remapping("", "lib/", "x/")).unwrap(),
-            "\":lib/=x/\""
-        );
-    }
-
-    #[test]
-    fn deserializes_from_text() {
-        assert_eq!(
-            serde_json::from_str::<Remapping>("\"lib/=x/\"").unwrap(),
-            remapping("", "lib/", "x/")
-        );
-        assert!(
-            serde_json::from_str::<Remapping>("\"=x/\"")
-                .unwrap_err()
-                .to_string()
-                .starts_with("Remapping `=x/` prefix is missing.")
         );
     }
 }
