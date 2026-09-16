@@ -447,8 +447,14 @@ impl Arguments {
 
         for input in self.inputs.iter() {
             if input.contains('=') {
-                // Only separators are normalized, as solc's `sanitizePath` does on Windows.
-                remappings.push(input.trim().replace('\\', "/").parse()?);
+                let remapping = input.trim();
+                // `Path` would drop a trailing `/`; solc's `sanitizePath` is the identity on POSIX.
+                let remapping = if cfg!(windows) {
+                    remapping.replace('\\', "/")
+                } else {
+                    remapping.to_owned()
+                };
+                remappings.push(remapping.parse()?);
             } else {
                 let path = PathBuf::from(input.trim());
                 let path = Self::path_to_posix(path.as_path())?;

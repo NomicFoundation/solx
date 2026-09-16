@@ -58,6 +58,25 @@ fn missing_prefix() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(not(windows))]
+#[test]
+fn backslash_is_an_ordinary_character() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT,
+        "=.\\path\\to\\2.sol",
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.failure().stderr(predicate::str::contains(
+        "Remapping `=.\\path\\to\\2.sol` prefix is missing.",
+    ));
+
+    Ok(())
+}
+
 #[test]
 fn standard_json() -> anyhow::Result<()> {
     crate::common::setup()?;
