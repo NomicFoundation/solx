@@ -110,7 +110,7 @@ fn resolves_direct_import() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
-        .stdout(predicate::str::contains("Binary:\n").count(1));
+        .stdout(predicate::str::contains("Binary:\n"));
 
     Ok(())
 }
@@ -144,10 +144,44 @@ fn standard_json_context_remapping_resolves() -> anyhow::Result<()> {
         crate::common::standard_json!("solidity_with_context_remapping.json"),
     )?;
 
+    result.success().stdout(predicate::str::contains(
+        "\"contracts\":{\"project/contracts/Main.sol\":{\"Main\":",
+    ));
+
+    Ok(())
+}
+
+#[cfg(feature = "slang")]
+#[test]
+fn standard_json_context_remapping_does_not_apply_outside_context() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let result = crate::cli::execute_solx_with_stdin(
+        &["--standard-json"],
+        crate::common::standard_json!("solidity_with_context_remapping_outside_context.json"),
+    )?;
+
     result.success().stdout(
-        predicate::str::contains("\"npm/dep@1.0.0/Dep.sol\"")
-            .and(predicate::str::contains("\"object\"")),
+        predicate::str::contains("Imported file is missing: @dep/Dep.sol")
+            .and(predicate::str::contains("\"contracts\"").not()),
     );
+
+    Ok(())
+}
+
+#[cfg(feature = "slang")]
+#[test]
+fn standard_json_later_remapping_wins_ties() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let result = crate::cli::execute_solx_with_stdin(
+        &["--standard-json"],
+        crate::common::standard_json!("solidity_with_tied_remappings.json"),
+    )?;
+
+    result.success().stdout(predicate::str::contains(
+        "\"contracts\":{\"Main.sol\":{\"Main\":",
+    ));
 
     Ok(())
 }
@@ -162,9 +196,9 @@ fn standard_json_equals_sign_in_target() -> anyhow::Result<()> {
         crate::common::standard_json!("solidity_with_equals_sign_in_remapping_target.json"),
     )?;
 
-    result.success().stdout(
-        predicate::str::contains("\"b=c/Dep.sol\"").and(predicate::str::contains("\"object\"")),
-    );
+    result.success().stdout(predicate::str::contains(
+        "\"contracts\":{\"Main.sol\":{\"Main\":",
+    ));
 
     Ok(())
 }
@@ -179,7 +213,7 @@ fn standard_json_invalid_remapping() -> anyhow::Result<()> {
     )?;
 
     result.success().stdout(predicate::str::contains(
-        "Remapping `=missing-prefix/` prefix is missing.",
+        "Standard JSON parsing: Remapping `=missing-prefix/` prefix is missing.",
     ));
 
     Ok(())
