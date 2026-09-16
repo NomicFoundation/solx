@@ -102,6 +102,12 @@ impl<'ctx> Context<'ctx> {
     /// The loop stack default capacity.
     const LOOP_STACK_INITIAL_CAPACITY: usize = 16;
 
+    /// The module flag naming the memory guard, the base of the spill region.
+    const MEMORY_GUARD_FLAG: &'static str = "evm-memory-guard";
+
+    /// The module flag holding the size of the spill region.
+    const STACK_REGION_SIZE_FLAG: &'static str = "evm-stack-region-size";
+
     ///
     /// Initializes a new LLVM context.
     ///
@@ -178,11 +184,28 @@ impl<'ctx> Context<'ctx> {
             self.optimizer.settings(),
         );
         let spill_area_size = self.optimizer.settings().spill_area_size();
-        let target_machine = TargetMachine::new(
-            self.optimizer.settings(),
-            self.llvm_options.as_slice(),
-            spill_area_size.map(|size| (self.memory_guard, size)),
-        )?;
+        // The MLIR pipeline emits the guard itself and owns its value; only the
+        // Yul/EVMLA pipeline, whose module reaches here bare, takes it from here.
+        if self.module().get_flag(Self::MEMORY_GUARD_FLAG).is_none() {
+            let memory_guard = self.llvm().i64_type().const_int(self.memory_guard, false);
+            self.module().add_basic_value_flag(
+                Self::MEMORY_GUARD_FLAG,
+                inkwell::module::FlagBehavior::Error,
+                memory_guard,
+            );
+        }
+        // A retry re-enters with the flag already on the module, so replace it.
+        let stack_region_size = self
+            .llvm()
+            .i64_type()
+            .const_int(spill_area_size.unwrap_or_default(), false);
+        self.module().set_basic_value_flag(
+            Self::STACK_REGION_SIZE_FLAG,
+            inkwell::module::FlagBehavior::Error,
+            stack_region_size,
+        );
+        let target_machine =
+            TargetMachine::new(self.optimizer.settings(), self.llvm_options.as_slice())?;
         target_machine.set_target_data(self.module());
         target_machine.set_asm_verbosity(true);
 
