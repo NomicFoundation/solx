@@ -301,6 +301,37 @@ mod tests {
     #[test]
     fn root_directory_is_kept_below_it() {
         assert_eq!(resolve(&[], "/Main.sol", "./Dep.sol"), "/Dep.sol");
+        assert_eq!(resolve(&[], "/a", "./b"), "/b");
+    }
+
+    /// solc 0.8.34 resolves `./a.sol` from `/` to `/a.sol` and from `///` to `///a.sol`:
+    /// `absolutePath` skips `remove_filename` when the filename is the root directory.
+    #[test]
+    fn source_identifier_that_is_the_root_directory_keeps_it() {
+        assert_eq!(resolve(&[], "/", "./a.sol"), "/a.sol");
+        assert_eq!(resolve(&[], "///", "./a.sol"), "///a.sol");
+    }
+
+    /// solc 0.8.34: `Source "a/x.sol" not found` from `a/b/`, so a trailing separator that is not
+    /// the root directory's goes the way of a filename.
+    #[test]
+    fn trailing_separator_source_identifier_is_removed_like_a_filename() {
+        assert_eq!(resolve(&[], "a/b/", "../x.sol"), "a/x.sol");
+    }
+
+    /// solc 0.8.34: `Source "x.sol" not found` from `///` and `/x.sol` from `///a/b.sol`, where a
+    /// `//` root name would have kept `//` and `///` respectively.
+    #[test]
+    fn three_leading_separators_are_a_root_directory_not_a_root_name() {
+        assert_eq!(resolve(&[], "///", "../x.sol"), "x.sol");
+        assert_eq!(resolve(&[], "///a/b.sol", "../x.sol"), "/x.sol");
+    }
+
+    /// solc 0.8.34: `Source "a.sol" not found`, so a root name with nothing after it is not kept
+    /// as the parent.
+    #[test]
+    fn bare_root_name_has_no_parent() {
+        assert_eq!(resolve(&[], "//server", "./a.sol"), "a.sol");
     }
 
     /// boost treats a leading `//name` as a root name that `..` cannot climb out of.
@@ -328,6 +359,12 @@ mod tests {
     #[test]
     fn non_relative_import_does_not_resolve_against_importing_directory() {
         assert_eq!(resolve(&[], "dir/B.sol", "A.sol"), "A.sol");
+    }
+
+    /// `util::absolutePath` compares the first component with `.` and `..`, not its first byte.
+    #[test]
+    fn dot_prefixed_first_component_is_not_relative() {
+        assert_eq!(resolve(&[], "dir/B.sol", ".hidden/A.sol"), ".hidden/A.sol");
     }
 
     /// CLI input paths become source identifiers verbatim, so `solx ./b.sol ./a.sol` registers
