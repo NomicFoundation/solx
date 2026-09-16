@@ -17,6 +17,19 @@ pub struct Remapping {
     pub target: String,
 }
 
+impl Remapping {
+    ///
+    /// A shortcut constructor.
+    ///
+    pub fn new(context: &str, prefix: &str, target: &str) -> Self {
+        Self {
+            context: context.to_owned(),
+            prefix: prefix.to_owned(),
+            target: target.to_owned(),
+        }
+    }
+}
+
 impl FromStr for Remapping {
     type Err = anyhow::Error;
 
@@ -32,11 +45,7 @@ impl FromStr for Remapping {
         if prefix.is_empty() {
             anyhow::bail!("Remapping `{remapping}` prefix is missing.");
         }
-        Ok(Self {
-            context: context.to_owned(),
-            prefix: prefix.to_owned(),
-            target: target.to_owned(),
-        })
+        Ok(Self::new(context, prefix, target))
     }
 }
 
@@ -70,19 +79,11 @@ impl<'de> serde::Deserialize<'de> for Remapping {
 mod tests {
     use super::Remapping;
 
-    fn remapping(context: &str, prefix: &str, target: &str) -> Remapping {
-        Remapping {
-            context: context.to_owned(),
-            prefix: prefix.to_owned(),
-            target: target.to_owned(),
-        }
-    }
-
     #[test]
     fn parses_prefix_and_target() {
         assert_eq!(
             "@oz/=npm/oz@1.0.0/".parse::<Remapping>().unwrap(),
-            remapping("", "@oz/", "npm/oz@1.0.0/")
+            Remapping::new("", "@oz/", "npm/oz@1.0.0/")
         );
     }
 
@@ -92,7 +93,7 @@ mod tests {
             "project/:@dep/=npm/dep@1.2.3/"
                 .parse::<Remapping>()
                 .unwrap(),
-            remapping("project/", "@dep/", "npm/dep@1.2.3/")
+            Remapping::new("project/", "@dep/", "npm/dep@1.2.3/")
         );
     }
 
@@ -100,7 +101,7 @@ mod tests {
     fn splits_context_at_the_first_colon() {
         assert_eq!(
             "a:b:c=d".parse::<Remapping>().unwrap(),
-            remapping("a", "b:c", "d")
+            Remapping::new("a", "b:c", "d")
         );
     }
 
@@ -108,7 +109,7 @@ mod tests {
     fn splits_target_at_the_first_equals_sign() {
         assert_eq!(
             "a=b=c".parse::<Remapping>().unwrap(),
-            remapping("", "a", "b=c")
+            Remapping::new("", "a", "b=c")
         );
     }
 
@@ -116,7 +117,7 @@ mod tests {
     fn accepts_empty_target() {
         assert_eq!(
             "lib/=".parse::<Remapping>().unwrap(),
-            remapping("", "lib/", "")
+            Remapping::new("", "lib/", "")
         );
     }
 
@@ -144,9 +145,9 @@ mod tests {
     /// `solc --metadata` writes `settings.remappings` as `[":lib/=x/"]`.
     #[test]
     fn display_writes_solc_metadata_spelling() {
-        assert_eq!(remapping("", "lib/", "x/").to_string(), ":lib/=x/");
+        assert_eq!(Remapping::new("", "lib/", "x/").to_string(), ":lib/=x/");
         assert_eq!(
-            remapping("project/", "@dep/", "npm/dep@1.2.3/").to_string(),
+            Remapping::new("project/", "@dep/", "npm/dep@1.2.3/").to_string(),
             "project/:@dep/=npm/dep@1.2.3/"
         );
     }
