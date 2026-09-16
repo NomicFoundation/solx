@@ -11,7 +11,7 @@ Everything written for this repository is short and human-readable.
 - No hedging: a claim that is not verified is not made.
 - No sycophancy, no emoji, and no sentence that only introduces the next one.
 - No tombstones: what was removed leaves no trace.
-- No negative claims: what a thing is not stays unwritten.
+- No negative definitions: what a thing is not stays unwritten.
 
 ## Architecture
 
