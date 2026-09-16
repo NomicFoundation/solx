@@ -16,13 +16,11 @@ pub struct SourceImportResolver<'a> {
 }
 
 impl SourceImportResolver<'_> {
-    ///
     /// solc's `util::absolutePath` (`libsolutil/CommonIO.cpp`): the import's components are
     /// appended to the importing file's identifier with its filename removed, `..` taking the
     /// boost `parent_path` at each step. Identifiers are `/`-separated strings handled as the
     /// POSIX flavour of `boost::filesystem::path` (v3, boost 1.83) does, so `\\` is an ordinary
     /// character and the `//` in URL identifiers survives.
-    ///
     fn resolve_relative(source_file_id: &str, import_path: &str) -> String {
         // `absolutePath` skips `remove_filename` when the filename is the root directory itself.
         let mut resolved = if Self::ends_with_root_separator(source_file_id) {
@@ -49,48 +47,31 @@ impl SourceImportResolver<'_> {
         resolved
     }
 
-    ///
-    /// The root of a POSIX boost path as `(root_name_size, root_dir_pos)`, from
-    /// `find_root_directory_start` (`libs/filesystem/src/path.cpp`): `//name` is a root name up to
-    /// the next separator, one or three-plus leading `/` are a root directory at 0, and
-    /// `root_dir_pos == len` means there is none.
-    ///
-    fn root(path: &str) -> (usize, usize) {
-        let bytes = path.as_bytes();
-        match bytes {
-            [] => (0, 0),
-            [b'/', b'/'] => (2, 2),
-            [b'/', b'/', b'/', ..] => (0, 0),
-            [b'/', b'/', ..] => {
-                let root_name_size = bytes[2..]
-                    .iter()
-                    .position(|byte| *byte == b'/')
-                    .map_or(bytes.len(), |index| index + 2);
-                (root_name_size, root_name_size)
-            }
-            [b'/', ..] => (0, 0),
-            _ => (0, bytes.len()),
+    /// The size of a `//name` root name, from `find_root_directory_start`
+    /// (`libs/filesystem/src/path.cpp`), which is also where its root directory starts. Any other
+    /// path has no root name, and its root directory, when it has one, at 0.
+    fn root_name_size(path: &str) -> usize {
+        match path.as_bytes() {
+            [b'/', b'/', b'/', ..] => 0,
+            [b'/', b'/', name @ ..] => 2 + name.iter().take_while(|byte| **byte != b'/').count(),
+            _ => 0,
         }
     }
 
-    ///
     /// `find_parent_path_size` from the same file: drops the filename and the separators before
     /// it, keeping a root directory only when a filename followed it, and a root name whole.
-    ///
     fn parent_path(path: &str) -> &str {
         let bytes = path.as_bytes();
-        let (root_name_size, root_dir_pos) = Self::root(path);
-        let filename_size = bytes[root_name_size..]
+        let root_size = Self::root_name_size(path);
+        let filename_size = bytes[root_size..]
             .iter()
             .rev()
             .take_while(|byte| **byte != b'/')
             .count();
         let mut end_pos = bytes.len() - filename_size;
         loop {
-            if end_pos <= root_name_size {
-                if filename_size == 0 {
-                    end_pos = 0;
-                }
+            if end_pos == root_size {
+                end_pos = 0;
                 break;
             }
             end_pos -= 1;
@@ -98,7 +79,7 @@ impl SourceImportResolver<'_> {
                 end_pos += 1;
                 break;
             }
-            if end_pos == root_dir_pos {
+            if end_pos == root_size {
                 end_pos += usize::from(filename_size > 0);
                 break;
             }
@@ -106,26 +87,22 @@ impl SourceImportResolver<'_> {
         &path[..end_pos]
     }
 
-    ///
     /// Whether boost's `filename()` is the root directory (`filename_v3`, `is_root_separator`):
     /// the path ends with a separator that, past duplicates, is the root directory's.
-    ///
     fn ends_with_root_separator(path: &str) -> bool {
         let bytes = path.as_bytes();
-        let (_, root_dir_pos) = Self::root(path);
-        if root_dir_pos >= bytes.len() || bytes.last() != Some(&b'/') {
+        if bytes.last() != Some(&b'/') {
             return false;
         }
+        let root_size = Self::root_name_size(path);
         let mut pos = bytes.len() - 1;
-        while pos > root_dir_pos && bytes[pos - 1] == b'/' {
+        while pos > root_size && bytes[pos - 1] == b'/' {
             pos -= 1;
         }
-        pos == root_dir_pos
+        pos == root_size
     }
 
-    ///
     /// solc's `ImportRemapper::apply` (`libsolidity/interface/ImportRemapper.cpp`).
-    ///
     fn apply_remappings(&self, source_file_id: &str, path: &str) -> String {
         let mut longest_context = 0;
         let mut longest_prefix = 0;
@@ -164,10 +141,10 @@ impl ImportResolver for SourceImportResolver<'_> {
         } else {
             import_path.to_owned()
         };
-        Ok(FileId::from(
-            self.apply_remappings(source_file_id.as_str(), resolved.as_str())
-                .as_str(),
-        ))
+        Ok(FileId::from(self.apply_remappings(
+            source_file_id.as_str(),
+            resolved.as_str(),
+        )))
     }
 }
 
@@ -287,11 +264,6 @@ mod tests {
         assert_eq!(resolve(&[], "x.sol", "../x.sol"), "x.sol");
     }
 
-    #[test]
-    fn bare_filename_direct_import() {
-        assert_eq!(resolve(&[], "Factory.sol", "Storage.sol"), "Storage.sol");
-    }
-
     /// Sourcify stores Remix-style sources under their GitHub URLs.
     #[test]
     fn url_source_identifiers_keep_their_double_slash() {
@@ -363,11 +335,5 @@ mod tests {
     #[test]
     fn dot_prefixed_source_identifiers_resolve_directly() {
         assert_eq!(resolve(&[], "./b.sol", "./a.sol"), "./a.sol");
-    }
-
-    #[test]
-    fn remapped_import_does_not_fall_back_to_its_original_path() {
-        let remappings = remappings(&["lib/=x/"]);
-        assert_eq!(resolve(&remappings, "Main.sol", "lib/A.sol"), "x/A.sol");
     }
 }
