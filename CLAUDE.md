@@ -1,5 +1,18 @@
 Human documentation starts at the [README](./README.md) and continues under [docs/src](./docs/src/). The [review skill](./.claude/skills/review/SKILL.md) reviews a change against this file.
 
+## Writing
+
+Everything written for this repository is short and human-readable.
+
+- No headings, bold labels or numbered scaffolding where a paragraph is enough.
+- No lead that summarizes what follows, and no closing that repeats it.
+- No restatement of what the reader can already see.
+- No account of how the work was done, and no approval of what is already correct.
+- No hedging: a claim that is not verified is not made.
+- No sycophancy, no emoji, and no sentence that only introduces the next one.
+- No tombstones: what was removed leaves no trace.
+- No negative definitions: what a thing is not stays unwritten.
+
 ## Architecture
 
 - **solx** (this repo) is the Rust workspace: the CLI, the Slang frontend, the dialect binding and codegen.
@@ -142,7 +155,7 @@ PYTHONPATH=solx-llvm/llvm/utils/lit python3 target-llvm/target-final/bin/llvm-li
 
 ## Pull requests
 
-A PR body is short and human-readable: one or two sentences saying what the PR delivers, with short bullets or a numbered list where they carry it. Nothing else: no headings, tables, file lists or narration.
+A PR body is one or two sentences saying what the PR delivers, with short bullets or a numbered list where they help.
 
 Two labels switch on optional CI: `ci:sanitizer` for the address sanitizer tests, `ci:integration` for the integration tests.
 
