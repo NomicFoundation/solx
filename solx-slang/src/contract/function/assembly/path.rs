@@ -3,6 +3,7 @@
 //! it reaches through the `sol.yul_*` bridge ops.
 //!
 
+use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::Identifier;
@@ -14,7 +15,6 @@ use solx_mlir::Value;
 use solx_mlir::Word;
 use solx_utils::DataLocation;
 
-use crate::contract::function::assembly::reference::YulField;
 use crate::contract::function::assembly::reference::YulReference;
 use crate::contract::object::Object;
 use crate::scope::assembly::AssemblyScope;
@@ -33,10 +33,9 @@ impl<'function, 'contract, 'source_unit, 'context>
             .next()
             .expect("a Yul path names at least one identifier");
         let suffix = identifiers.next().map(|member| {
-            let field = member.resolve_to_built_in().unwrap_or_else(|| {
+            member.resolve_to_built_in().unwrap_or_else(|| {
                 unreachable!("{} carries no field named {}", base.name(), member.name())
-            });
-            YulField::from(field)
+            })
         });
 
         match (base.resolve_to_definition(), suffix) {
@@ -51,11 +50,11 @@ impl<'function, 'contract, 'source_unit, 'context>
                 Some(Definition::YulVariable(declaration) | Definition::YulParameter(declaration)),
                 None,
             ) => YulReference::Pointer(self.variable(declaration.node_id())),
-            (Some(Definition::StateVariable(state_variable)), Some(YulField::Slot)) => {
+            (Some(Definition::StateVariable(state_variable)), Some(BuiltIn::YulSlot)) => {
                 let symbol = SourceUnitScope::state_variable_symbol(&state_variable);
                 YulReference::Word(Word::state_variable_slot(symbol.as_str(), self))
             }
-            (Some(Definition::StateVariable(state_variable)), Some(YulField::Offset)) => {
+            (Some(Definition::StateVariable(state_variable)), Some(BuiltIn::YulOffset)) => {
                 let symbol = SourceUnitScope::state_variable_symbol(&state_variable);
                 YulReference::Word(Word::state_variable_offset(symbol.as_str(), self))
             }
@@ -84,7 +83,7 @@ impl<'function, 'contract, 'source_unit, 'context>
     fn local_reference(
         &mut self,
         base: &Identifier,
-        suffix: Option<YulField>,
+        suffix: Option<BuiltIn>,
     ) -> YulReference<'context> {
         if let YulFrame::Function(_) = self.frame {
             unimplemented!(
@@ -96,22 +95,22 @@ impl<'function, 'contract, 'source_unit, 'context>
         let (place, element_type) = self.function.identifier_place(base);
         match (suffix, element_type.data_location()) {
             (None, _) => YulReference::Pointer(place.yul_pointer(self)),
-            (Some(YulField::Slot), DataLocation::Storage | DataLocation::Transient) => {
+            (Some(BuiltIn::YulSlot), DataLocation::Storage | DataLocation::Transient) => {
                 YulReference::Pointer(place.yul_storage_slot(self))
             }
-            (Some(YulField::Offset), DataLocation::Storage | DataLocation::Transient) => {
+            (Some(BuiltIn::YulOffset), DataLocation::Storage | DataLocation::Transient) => {
                 YulReference::Word(place.yul_storage_offset(self))
             }
-            (Some(YulField::Offset), DataLocation::CallData) => {
+            (Some(BuiltIn::YulOffset), DataLocation::CallData) => {
                 YulReference::Pointer(place.yul_calldata_offset(self))
             }
-            (Some(YulField::Length), DataLocation::CallData) => {
+            (Some(BuiltIn::YulLengthField), DataLocation::CallData) => {
                 YulReference::Pointer(place.yul_calldata_length(self))
             }
-            (Some(YulField::Selector), DataLocation::Stack) => {
+            (Some(BuiltIn::YulSelector), DataLocation::Stack) => {
                 YulReference::Pointer(place.yul_selector(self))
             }
-            (Some(YulField::Address), DataLocation::Stack) => {
+            (Some(BuiltIn::YulAddressField), DataLocation::Stack) => {
                 YulReference::Pointer(place.yul_function_address(self))
             }
             (suffix, location) => unreachable!(

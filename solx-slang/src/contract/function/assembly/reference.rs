@@ -1,9 +1,6 @@
 //!
-//! What a Yul path denotes: a pointer to read and write, or a read-only word, and the field a
-//! suffixed path projects out of a Solidity declaration.
+//! What a Yul path denotes: a pointer to read and write, or a read-only word.
 //!
-
-use slang_solidity_v2::ast::BuiltIn;
 
 use solx_mlir::Context;
 use solx_mlir::Pointer;
@@ -36,34 +33,6 @@ impl<'context> YulReference<'context> {
             Self::Word(_) => {
                 unreachable!("slang rejects assigning to a compile-time Yul reference")
             }
-        }
-    }
-}
-
-/// The field a suffixed Yul path projects out of a Solidity declaration.
-#[derive(Clone, Copy, Debug)]
-pub enum YulField {
-    /// `.slot` of a storage reference or state variable.
-    Slot,
-    /// `.offset` of a storage or calldata reference.
-    Offset,
-    /// `.length` of a calldata reference.
-    Length,
-    /// `.selector` of an external function pointer.
-    Selector,
-    /// `.address` of an external function pointer.
-    Address,
-}
-
-impl From<BuiltIn> for YulField {
-    fn from(built_in: BuiltIn) -> Self {
-        match built_in {
-            BuiltIn::YulSlot => Self::Slot,
-            BuiltIn::YulOffset => Self::Offset,
-            BuiltIn::YulLengthField => Self::Length,
-            BuiltIn::YulSelector => Self::Selector,
-            BuiltIn::YulAddressField => Self::Address,
-            built_in => unreachable!("{built_in:?} is not a Yul path suffix"),
         }
     }
 }
