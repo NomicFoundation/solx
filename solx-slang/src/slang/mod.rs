@@ -11,11 +11,13 @@ use slang_solidity_v2::compilation::CompilationUnit;
 use slang_solidity_v2::compilation::Configuration;
 use slang_solidity_v2::compilation::FileId;
 use slang_solidity_v2::diagnostics::DiagnosticExtensions;
+use slang_solidity_v2::diagnostics::DiagnosticSeverity;
 use slang_solidity_v2::utils::EvmTarget;
 use slang_solidity_v2::utils::LanguageVersion;
 
 use solx_core::Frontend;
 use solx_standard_json::CollectableError;
+use solx_standard_json::OutputError;
 use solx_standard_json::output::error::source_location::SourceLocation;
 use solx_utils::Remapping;
 
@@ -93,37 +95,31 @@ impl Frontend for Slang {
         let mut output = solx_standard_json::Output::new(&input_json.sources);
 
         if input_json.language != solx_standard_json::InputLanguage::Solidity {
-            output
-                .errors
-                .push(solx_standard_json::OutputError::new_error(
-                    "Slang frontend only supports Solidity sources.",
-                ));
+            output.errors.push(OutputError::new_error(
+                "Slang frontend only supports Solidity sources.",
+            ));
             return Ok(output);
         }
 
         if let Err(error) = input_json.resolve_sources() {
-            output
-                .errors
-                .push(solx_standard_json::OutputError::new_error(error));
+            output.errors.push(OutputError::new_error(error));
             return Ok(output);
         }
 
         let mut sources = BTreeMap::new();
         for (path, source) in input_json.sources.iter() {
             let Some(source_code) = source.content() else {
-                output
-                    .errors
-                    .push(solx_standard_json::OutputError::new_error_with_data(
-                        Some(path.as_str()),
-                        None,
-                        "Source content is unavailable.",
-                        Some(SourceLocation::new(
-                            path.to_owned(),
-                            SourceLocation::UNKNOWN_OFFSET,
-                            SourceLocation::UNKNOWN_OFFSET,
-                        )),
-                        Some(&input_json.sources),
-                    ));
+                output.errors.push(OutputError::new_error_with_data(
+                    Some(path.as_str()),
+                    None,
+                    "Source content is unavailable.",
+                    Some(SourceLocation::new(
+                        path.to_owned(),
+                        SourceLocation::UNKNOWN_OFFSET,
+                        SourceLocation::UNKNOWN_OFFSET,
+                    )),
+                    Some(&input_json.sources),
+                ));
                 continue;
             };
             sources.insert(path.as_str().into(), source_code);
@@ -136,9 +132,13 @@ impl Frontend for Slang {
             .extend(unit.diagnostics().iter().map(|diagnostic| {
                 let file_id = diagnostic.file_id();
                 let text_range = diagnostic.text_range();
-                solx_standard_json::OutputError::new_error_with_data(
+                let new_with_data = match diagnostic.severity() {
+                    DiagnosticSeverity::Error => OutputError::new_error_with_data,
+                    DiagnosticSeverity::Warning => OutputError::new_warning_with_data,
+                };
+                new_with_data(
                     Some(file_id.as_str()),
-                    None,
+                    Some(diagnostic.code()),
                     diagnostic.message(),
                     Some(SourceLocation::new(
                         file_id.to_string(),
@@ -206,11 +206,9 @@ impl Frontend for Slang {
         solc_input: &mut solx_standard_json::Input,
     ) -> anyhow::Result<solx_standard_json::Output> {
         let mut output = solx_standard_json::Output::new(&solc_input.sources);
-        output
-            .errors
-            .push(solx_standard_json::OutputError::new_error(
-                "Yul validation is not supported by the Slang frontend.",
-            ));
+        output.errors.push(OutputError::new_error(
+            "Yul validation is not supported by the Slang frontend.",
+        ));
         Ok(output)
     }
 

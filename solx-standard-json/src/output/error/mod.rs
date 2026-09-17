@@ -41,11 +41,14 @@ pub struct Error {
 }
 
 impl Error {
-    /// The list of ignored `solc` warnings. 3860 (initcode size) and 5574 (code size) are
-    /// measured on the bytecode `solc` itself would have emitted, which solx discards in favor
-    /// of the LLVM backend output. 6417 (`type(...).runtimeCode` with an assembly constructor)
-    /// applies to solx output as well and may deserve un-ignoring.
-    pub const IGNORED_WARNING_CODES: [&'static str; 3] = ["3860", "5574", "6417"];
+    /// The list of ignored `solc` warnings. The code size warnings are measured on the bytecode
+    /// `solc` itself would have emitted, which solx discards in favor of the LLVM backend output.
+    /// The assembly constructor warning applies to solx output as well and may deserve un-ignoring.
+    pub const IGNORED_WARNING_CODES: [&'static str; 3] = [
+        solx_utils::Warning::CODE_DEPLOY_CODE_SIZE,
+        solx_utils::Warning::CODE_RUNTIME_CODE_SIZE,
+        solx_utils::Warning::CODE_RUNTIME_CODE_ASSEMBLY_CONSTRUCTOR,
+    ];
 
     ///
     /// A shortcut constructor.
@@ -53,7 +56,7 @@ impl Error {
     pub fn new<S>(
         path: Option<&str>,
         r#type: &str,
-        error_code: Option<isize>,
+        error_code: Option<&str>,
         message: S,
         source_location: Option<SourceLocation>,
         sources: Option<&BTreeMap<String, InputSource>>,
@@ -86,7 +89,7 @@ impl Error {
 
         Self {
             component: "general".to_owned(),
-            error_code: error_code.map(|code| code.to_string()),
+            error_code: error_code.map(str::to_owned),
             formatted_message,
             message,
             severity: r#type.to_lowercase(),
@@ -138,7 +141,7 @@ impl Error {
     ///
     pub fn new_error_with_data<S>(
         path: Option<&str>,
-        error_code: Option<isize>,
+        error_code: Option<&str>,
         message: S,
         source_location: Option<SourceLocation>,
         sources: Option<&BTreeMap<String, InputSource>>,
@@ -154,7 +157,7 @@ impl Error {
     ///
     pub fn new_warning_with_data<S>(
         path: Option<&str>,
-        error_code: Option<isize>,
+        error_code: Option<&str>,
         message: S,
         source_location: Option<SourceLocation>,
         sources: Option<&BTreeMap<String, InputSource>>,

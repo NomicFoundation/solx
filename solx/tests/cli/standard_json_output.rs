@@ -273,6 +273,28 @@ fn warning_output_has_correct_severity() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg_attr(not(feature = "solc"), test_case("syntax/missing-version-pragma"))]
+#[cfg_attr(feature = "solc", test_case("3420"))]
+fn warning_output_has_error_code_and_contracts(error_code: &str) -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("solidity_missing_version_pragma.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains(format!(
+            "\"errorCode\":\"{error_code}\""
+        )))
+        .stdout(predicate::str::contains("\"severity\":\"warning\""))
+        .stdout(predicate::str::contains("\"bytecode\""));
+
+    Ok(())
+}
+
 #[test]
 fn select_none_produces_empty_contracts() -> anyhow::Result<()> {
     crate::common::setup()?;

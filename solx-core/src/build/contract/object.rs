@@ -5,6 +5,8 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use solx_standard_json::OutputError;
+
 ///
 /// Bytecode object.
 ///
@@ -53,7 +55,7 @@ pub struct Object {
     /// Whether the size fallback was activated during the compilation.
     pub is_size_fallback: bool,
     /// Compilation warnings.
-    pub warnings: Vec<solx_codegen_evm::Warning>,
+    pub warnings: Vec<solx_utils::Warning>,
     /// Compilation pipeline benchmarks.
     pub benchmarks: Vec<(String, u64)>,
 }
@@ -81,7 +83,7 @@ impl Object {
         metadata_bytes: Option<Vec<u8>>,
         dependencies: solx_utils::Dependencies,
         is_size_fallback: bool,
-        warnings: Vec<solx_codegen_evm::Warning>,
+        warnings: Vec<solx_utils::Warning>,
         benchmarks: Vec<(String, u64)>,
     ) -> Self {
         let bytecode_hex = bytecode.as_ref().map(hex::encode);
@@ -238,11 +240,11 @@ impl Object {
     ///
     /// Extracts warnings in standard JSON format.
     ///
-    pub fn take_warnings_standard_json(&mut self) -> Vec<solx_standard_json::OutputError> {
+    pub fn take_warnings_standard_json(&mut self) -> Vec<OutputError> {
         self.warnings
             .drain(..)
             .map(|warning| {
-                solx_standard_json::OutputError::new_warning_with_data(
+                OutputError::new_warning_with_data(
                     Some(self.contract_name.path.as_str()),
                     warning.code(),
                     warning.to_string(),
@@ -250,6 +252,6 @@ impl Object {
                     None,
                 )
             })
-            .collect::<Vec<solx_standard_json::OutputError>>()
+            .collect::<Vec<OutputError>>()
     }
 }

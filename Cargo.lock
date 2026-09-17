@@ -4606,8 +4606,8 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "slang_solidity_v2"
-version = "1.3.8"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=b34370a00d5ff963f93af6b142ea77436b1760bb#b34370a00d5ff963f93af6b142ea77436b1760bb"
+version = "1.3.9"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=9a5a78c3ba6672dc0c2fbc17584b342a8b55542a#9a5a78c3ba6672dc0c2fbc17584b342a8b55542a"
 dependencies = [
  "rayon",
  "slang_solidity_v2_ast",
@@ -4620,8 +4620,8 @@ dependencies = [
 
 [[package]]
 name = "slang_solidity_v2_ast"
-version = "1.3.8"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=b34370a00d5ff963f93af6b142ea77436b1760bb#b34370a00d5ff963f93af6b142ea77436b1760bb"
+version = "1.3.9"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=9a5a78c3ba6672dc0c2fbc17584b342a8b55542a#9a5a78c3ba6672dc0c2fbc17584b342a8b55542a"
 dependencies = [
  "itertools 0.15.0",
  "num-bigint",
@@ -4637,8 +4637,8 @@ dependencies = [
 
 [[package]]
 name = "slang_solidity_v2_common"
-version = "1.3.8"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=b34370a00d5ff963f93af6b142ea77436b1760bb#b34370a00d5ff963f93af6b142ea77436b1760bb"
+version = "1.3.9"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=9a5a78c3ba6672dc0c2fbc17584b342a8b55542a#9a5a78c3ba6672dc0c2fbc17584b342a8b55542a"
 dependencies = [
  "fxhash",
  "indexmap 2.14.2",
@@ -4651,13 +4651,13 @@ dependencies = [
 
 [[package]]
 name = "slang_solidity_v2_cst"
-version = "1.3.8"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=b34370a00d5ff963f93af6b142ea77436b1760bb#b34370a00d5ff963f93af6b142ea77436b1760bb"
+version = "1.3.9"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=9a5a78c3ba6672dc0c2fbc17584b342a8b55542a#9a5a78c3ba6672dc0c2fbc17584b342a8b55542a"
 
 [[package]]
 name = "slang_solidity_v2_ir"
-version = "1.3.8"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=b34370a00d5ff963f93af6b142ea77436b1760bb#b34370a00d5ff963f93af6b142ea77436b1760bb"
+version = "1.3.9"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=9a5a78c3ba6672dc0c2fbc17584b342a8b55542a#9a5a78c3ba6672dc0c2fbc17584b342a8b55542a"
 dependencies = [
  "semver 1.0.28",
  "slang_solidity_v2_common",
@@ -4666,8 +4666,8 @@ dependencies = [
 
 [[package]]
 name = "slang_solidity_v2_parser"
-version = "1.3.8"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=b34370a00d5ff963f93af6b142ea77436b1760bb#b34370a00d5ff963f93af6b142ea77436b1760bb"
+version = "1.3.9"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=9a5a78c3ba6672dc0c2fbc17584b342a8b55542a#9a5a78c3ba6672dc0c2fbc17584b342a8b55542a"
 dependencies = [
  "lalrpop",
  "lalrpop-util",
@@ -4679,8 +4679,8 @@ dependencies = [
 
 [[package]]
 name = "slang_solidity_v2_semantic"
-version = "1.3.8"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=b34370a00d5ff963f93af6b142ea77436b1760bb#b34370a00d5ff963f93af6b142ea77436b1760bb"
+version = "1.3.9"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=9a5a78c3ba6672dc0c2fbc17584b342a8b55542a#9a5a78c3ba6672dc0c2fbc17584b342a8b55542a"
 dependencies = [
  "num-bigint",
  "num-integer",
@@ -4994,6 +4994,7 @@ dependencies = [
  "serde_stacker",
  "sha3 0.12.0",
  "slang_solidity_v2",
+ "thiserror",
 ]
 
 [[package]]

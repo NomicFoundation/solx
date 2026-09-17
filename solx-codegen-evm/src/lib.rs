@@ -46,7 +46,6 @@ pub use self::codegen::link;
 pub use self::codegen::minimal_deploy_code;
 pub use self::codegen::profiler::Profiler;
 pub use self::codegen::profiler::run::Run;
-pub use self::codegen::warning::Warning;
 pub use self::r#const::*;
 pub use self::context::IContext;
 pub use self::context::attribute::Attribute;
