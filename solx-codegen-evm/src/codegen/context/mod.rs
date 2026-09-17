@@ -13,10 +13,10 @@ use std::rc::Rc;
 
 use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
+use solx_utils::Profiler;
 
 use crate::ISolidityData;
 use crate::codegen::build::Build as EVMBuild;
-use crate::codegen::profiler::Profiler;
 use crate::context::IContext;
 use crate::context::attribute::Attribute;
 use crate::context::debug_info::DebugInfo;
@@ -169,14 +169,16 @@ impl<'ctx> Context<'ctx> {
         profiler: &mut Profiler,
     ) -> anyhow::Result<EVMBuild> {
         let contract_path = self.module.get_name().to_str().expect("Always valid");
+        let optimizer_mode = self.optimizer.settings().to_string();
+        let spill_area_size = self.optimizer.settings().spill_area_size();
 
         let run_init_verify = profiler.start_evm_translation_unit(
             contract_path,
             self.code_segment,
             "InitVerify",
-            self.optimizer.settings(),
+            optimizer_mode.as_str(),
+            spill_area_size,
         );
-        let spill_area_size = self.optimizer.settings().spill_area_size();
         let target_machine = TargetMachine::new(
             self.optimizer.settings(),
             self.llvm_options.as_slice(),
@@ -221,7 +223,8 @@ impl<'ctx> Context<'ctx> {
             contract_path,
             self.code_segment,
             "OptimizeVerify",
-            self.optimizer.settings(),
+            optimizer_mode.as_str(),
+            spill_area_size,
         );
         self.optimizer
             .run(&target_machine, self.module())
@@ -260,7 +263,8 @@ impl<'ctx> Context<'ctx> {
                 contract_path,
                 self.code_segment,
                 "EmitLLVMAssembly",
-                self.optimizer.settings(),
+                optimizer_mode.as_str(),
+                spill_area_size,
             );
             let module_assembly_emitter = self.module.clone();
             let assembly_buffer = target_machine
@@ -293,7 +297,8 @@ impl<'ctx> Context<'ctx> {
                 contract_path,
                 self.code_segment,
                 "EmitBytecode",
-                self.optimizer.settings(),
+                optimizer_mode.as_str(),
+                spill_area_size,
             );
             let (bytecode_buffer, debug_info_buffer) = if self.debug_info.is_some() {
                 let (bytecode_buffer, debug_info_buffer) = target_machine

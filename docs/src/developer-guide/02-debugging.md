@@ -43,7 +43,7 @@ The `--benchmarks` flag prints timing information for each pipeline stage:
 solx contract.sol --benchmarks
 ```
 
-Output includes per-contract compilation timing in milliseconds.
+Output includes per-contract compilation timing in microseconds.
 
 ## LLVM Diagnostics
 

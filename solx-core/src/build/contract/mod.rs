@@ -466,14 +466,14 @@ impl Contract {
                 .benchmarks
                 .into_iter()
             {
-                writeln!(std::io::stdout(), "    {name}: {value}ms")?;
+                writeln!(std::io::stdout(), "    {name}: {value}us")?;
             }
             for (name, value) in runtime_object_result
                 .expect("Always exists")
                 .benchmarks
                 .into_iter()
             {
-                writeln!(std::io::stdout(), "    {name}: {value}ms")?;
+                writeln!(std::io::stdout(), "    {name}: {value}us")?;
             }
         }
 
@@ -852,7 +852,7 @@ impl Contract {
                 .benchmarks
                 .iter()
             {
-                output.push_str(format!("{name}: {value}ms\n").as_str());
+                output.push_str(format!("{name}: {value}us\n").as_str());
             }
             for (name, value) in runtime_object_result
                 .as_ref()
@@ -860,7 +860,7 @@ impl Contract {
                 .benchmarks
                 .iter()
             {
-                output.push_str(format!("{name}: {value}ms\n").as_str());
+                output.push_str(format!("{name}: {value}us\n").as_str());
             }
             Self::write_to_file(output_path.as_path(), output, overwrite)?;
         }

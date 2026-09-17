@@ -203,7 +203,7 @@ impl Build {
         ) {
             writeln!(std::io::stdout(), "Benchmarks:")?;
             for (name, value) in self.benchmarks.iter() {
-                writeln!(std::io::stdout(), "{name}: {value}ms")?;
+                writeln!(std::io::stdout(), "{name}: {value}us")?;
             }
         }
 
@@ -269,7 +269,7 @@ impl Build {
             let mut output = String::with_capacity(self.benchmarks.len() * 256);
             output.push_str("Benchmarks:\n");
             for (name, value) in self.benchmarks.iter() {
-                output.push_str(format!("{name}: {value}ms\n").as_str());
+                output.push_str(format!("{name}: {value}us\n").as_str());
             }
             Contract::write_to_file(output_path.as_path(), output, overwrite)?;
         }

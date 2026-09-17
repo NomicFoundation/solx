@@ -18,6 +18,7 @@ serde_json = { workspace = true, features = ["unbounded_depth"] }
 semver.workspace = true
 hex.workspace = true
 sha3.workspace = true
+indexmap = "2.14"
 serde_stacker = "0.1"
 serde_arrays = "0.2"
 ipfs-hasher = "0.13"

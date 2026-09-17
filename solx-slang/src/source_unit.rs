@@ -12,6 +12,7 @@ use slang_solidity_v2::ast::SourceUnitMember;
 use solx_mlir::Context;
 use solx_standard_json::output::contract::Contract;
 use solx_utils::EVMVersion;
+use solx_utils::Profiler;
 
 use crate::contract::object::Object;
 use crate::scope::source_unit::SourceUnitScope;
@@ -33,8 +34,13 @@ impl<'context> SourceUnitScope<'context> {
         unit: &SourceUnit,
         evm_version: EVMVersion,
         capture_sol_dialect: impl Fn(&str) -> bool,
+        profiler: &mut Profiler,
     ) -> anyhow::Result<BTreeMap<String, Contract>> {
+        let run_context_creation = profiler.start_pipeline_element(
+            format!("solx_CreateMLIRContext:{}", unit.get_file_id()).as_str(),
+        );
         let melior = Context::create_melior_context();
+        run_context_creation.borrow_mut().finish();
         let mut contracts = BTreeMap::new();
         for member in unit.members().iter() {
             let object = match member {
@@ -50,12 +56,17 @@ impl<'context> SourceUnitScope<'context> {
                 SourceUnitMember::LibraryDefinition(library) => Object::Library(library.clone()),
                 _ => continue,
             };
+            let identifier = object.identifier();
             let mut scope = SourceUnitScope::new(Context::new(&melior, evm_version));
+            let run_emission =
+                profiler.start_pipeline_element(format!("solx_EmitSol:{identifier}").as_str());
             let method_identifiers = scope.object_definition(&object);
+            run_emission.borrow_mut().finish();
             let name = object.name().name().to_owned();
             let mlir = Context::from(scope).finalize_module(
-                object.identifier().as_str(),
+                identifier.as_str(),
                 capture_sol_dialect(name.as_str()),
+                profiler,
             )?;
             contracts.insert(name, Contract::new_mlir(mlir, method_identifiers));
         }

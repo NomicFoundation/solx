@@ -157,6 +157,8 @@ PYTHONPATH=solx-llvm/llvm/utils/lit python3 target-llvm/target-final/bin/llvm-li
 
 A PR body is one or two sentences saying what the PR delivers, with short bullets or a numbered list where they help.
 
+It is forbidden to post low-level code changes, the process of how the work was done, or anything derivable from the PR diff.
+
 Two labels switch on optional CI: `ci:sanitizer` for the address sanitizer tests, `ci:integration` for the integration tests.
 
 A change to [`renovate.json`](./renovate.json) is validated before pushing, with the checks CI repeats in its `renovate-config-check` job:

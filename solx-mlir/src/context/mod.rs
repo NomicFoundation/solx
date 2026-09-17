@@ -26,6 +26,7 @@ use melior::ir::operation::OperationRef;
 use melior::ir::operation::WalkOrder;
 use melior::ir::operation::WalkResult;
 use melior::pass::PassManager;
+use solx_utils::Profiler;
 
 use crate::Block;
 use crate::Type;
@@ -237,13 +238,19 @@ impl<'context> Context<'context> {
         self,
         code_identifier: &str,
         capture_sol: bool,
+        profiler: &mut Profiler,
     ) -> anyhow::Result<crate::output::MlirOutput> {
         let mut module = self.module;
 
         let sol_source = capture_sol.then(|| module.as_operation().to_string());
 
+        let run_sol_passes = profiler
+            .start_pipeline_element(format!("solx_RunSolPasses:{code_identifier}").as_str());
         Self::run_sol_passes(self.melior, &mut module)?;
+        run_sol_passes.borrow_mut().finish();
 
+        let run_object_extraction = profiler
+            .start_pipeline_element(format!("solx_ExtractMLIRObjects:{code_identifier}").as_str());
         let runtime_code_identifier = format!(
             "{code_identifier}{}",
             solx_utils::Dependencies::DEPLOYED_OBJECT_SUFFIX
@@ -256,6 +263,7 @@ impl<'context> Context<'context> {
             Some(runtime_code_identifier),
         );
         let deploy_llvm = module.as_operation().to_string();
+        run_object_extraction.borrow_mut().finish();
 
         Ok(crate::output::MlirOutput {
             sol_source,
@@ -266,21 +274,15 @@ impl<'context> Context<'context> {
         })
     }
 
-    /// Translate MLIR source text (LLVM dialect) to raw LLVM pointers.
-    ///
-    /// Parses the source, verifies it, lowers each `llvm.setimmutable` into heap stores at its
-    /// id's `immutables` offsets, and translates to LLVM IR.
-    /// Returns owned `(LLVMContextRef, LLVMModuleRef)`.
+    /// Parses MLIR source text (LLVM dialect) into a verified module.
     ///
     /// # Errors
     ///
-    /// Returns an error if the source cannot be parsed, fails verification,
-    /// or cannot be translated to LLVM IR.
-    pub fn translate_source_to_llvm(
-        melior: &melior::Context,
+    /// Returns an error if the source cannot be parsed or fails verification.
+    pub fn parse_source<'melior>(
+        melior: &'melior melior::Context,
         source: &str,
-        immutables: &BTreeMap<String, BTreeSet<u64>>,
-    ) -> anyhow::Result<RawLlvmModule> {
+    ) -> anyhow::Result<Module<'melior>> {
         let module = Module::parse(melior, source)
             .ok_or_else(|| anyhow::anyhow!("failed to parse MLIR source text"))?;
 
@@ -288,6 +290,22 @@ impl<'context> Context<'context> {
             anyhow::bail!("MLIR module verification failed");
         }
 
+        Ok(module)
+    }
+
+    /// Translates a parsed LLVM-dialect module to raw LLVM pointers.
+    ///
+    /// Lowers each `llvm.setimmutable` into heap stores at its id's `immutables` offsets, then
+    /// translates to LLVM IR. The module is consumed because the lowering erases the
+    /// `llvm.setimmutable` operations it reads, and the translation copies everything it needs.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the module cannot be translated to LLVM IR.
+    pub fn translate_module_to_llvm(
+        module: Module,
+        immutables: &BTreeMap<String, BTreeSet<u64>>,
+    ) -> anyhow::Result<RawLlvmModule> {
         let ids: Vec<CString> = immutables
             .keys()
             .map(|id| CString::new(id.as_str()).expect("an immutable id carries no NUL byte"))

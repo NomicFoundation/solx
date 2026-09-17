@@ -451,18 +451,20 @@ Emits benchmarks of the **solx** LLVM-based pipeline and its underlying call to 
 ```console
 $ solx 'Simple.sol' --benchmarks
 Benchmarks:
-solc_Solidity_Standard_JSON: [..]ms
-solx_Solidity_IR_Analysis: [..]ms
-solx_Compilation: [..]ms
+solc_RunStandardJSON: [..]us
+solx_BuildProject: [..]us
+solx_Compile: [..]us
 
 ======= Simple.sol:Simple =======
 Benchmarks:
-    Simple.sol:Simple:deploy/EVMAssemblyToLLVMIR/M3B3/SpillArea(0): [..]ms
-    Simple.sol:Simple:deploy/InitVerify/M3B3/SpillArea(0): [..]ms
-    Simple.sol:Simple:deploy/OptimizeVerify/M3B3/SpillArea(0): [..]ms
-    Simple.sol:Simple:runtime/EVMAssemblyToLLVMIR/M3B3/SpillArea(0): [..]ms
-    Simple.sol:Simple.runtime:runtime/InitVerify/M3B3/SpillArea(0): [..]ms
-    Simple.sol:Simple.runtime:runtime/OptimizeVerify/M3B3/SpillArea(0): [..]ms
+    Simple.sol:Simple:deploy/EVMAssemblyToLLVMIR/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple:deploy/InitVerify/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple:deploy/OptimizeVerify/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple:deploy/WorkerRoundtrip(0)/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple:runtime/EVMAssemblyToLLVMIR/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple.runtime:runtime/InitVerify/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple.runtime:runtime/OptimizeVerify/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple:runtime/WorkerRoundtrip(0)/M3B3/SpillArea(0): [..]us
 
 ```
 

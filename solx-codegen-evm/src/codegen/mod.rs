@@ -6,7 +6,6 @@ pub mod attribute;
 pub mod build;
 pub mod context;
 pub mod instructions;
-pub mod profiler;
 
 use std::collections::BTreeMap;
 use std::sync::atomic::AtomicBool;
