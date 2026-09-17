@@ -1,0 +1,19 @@
+{
+  "language": "Solidity",
+  "sources":
+  {
+    "A":
+    {
+      "content": "// SPDX-License-Identifier: Unlicensed\ncontract C {}"
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.bytecode"
+        ]
+      }
+    }
+  }
+}

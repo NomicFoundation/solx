@@ -27,6 +27,7 @@ pub(crate) mod remapping;
 pub(crate) mod revert_strings;
 pub(crate) mod sync_lock;
 pub(crate) mod target;
+pub(crate) mod warning;
 
 pub use self::address_space::*;
 pub use self::base::*;
@@ -63,3 +64,4 @@ pub use self::revert_strings::RevertStrings;
 pub use self::sync_lock::SyncLock;
 pub use self::sync_lock::SyncRwLock;
 pub use self::target::Target;
+pub use self::warning::Warning;

@@ -5,8 +5,6 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use crate::codegen::warning::Warning;
-
 ///
 /// The LLVM module build.
 ///
@@ -31,7 +29,7 @@ pub struct Build {
     /// Whether the size fallback has been activated.
     pub is_size_fallback: bool,
     /// Warnings produced during compilation.
-    pub warnings: Vec<Warning>,
+    pub warnings: Vec<solx_utils::Warning>,
 }
 
 impl Build {
@@ -48,7 +46,7 @@ impl Build {
         llvm_ir: Option<String>,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
         is_size_fallback: bool,
-        warnings: Vec<Warning>,
+        warnings: Vec<solx_utils::Warning>,
     ) -> Self {
         Self {
             bytecode,

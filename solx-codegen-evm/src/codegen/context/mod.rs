@@ -17,7 +17,6 @@ use inkwell::values::BasicValue;
 use crate::ISolidityData;
 use crate::codegen::build::Build as EVMBuild;
 use crate::codegen::profiler::Profiler;
-use crate::codegen::warning::Warning;
 use crate::context::IContext;
 use crate::context::attribute::Attribute;
 use crate::context::debug_info::DebugInfo;
@@ -324,14 +323,9 @@ impl<'ctx> Context<'ctx> {
                 solx_utils::CodeSegment::Runtime => Some(bytecode_buffer.get_immutables_evm()),
             };
 
-            let bytecode_size_limit = match self.code_segment {
-                solx_utils::CodeSegment::Deploy => crate::r#const::DEPLOY_CODE_SIZE_LIMIT,
-                solx_utils::CodeSegment::Runtime => crate::r#const::RUNTIME_CODE_SIZE_LIMIT,
-            };
-
             let mut warnings = Vec::with_capacity(1);
             let bytecode_size = bytecode_buffer.as_slice().len();
-            if bytecode_size > bytecode_size_limit {
+            if bytecode_size > self.code_segment.size_limit() {
                 if needs_size_fallback {
                     crate::codegen::IS_SIZE_FALLBACK
                         .store(true, std::sync::atomic::Ordering::Relaxed);
@@ -345,14 +339,10 @@ impl<'ctx> Context<'ctx> {
                     }
                     return self.build(output_assembly, output_bytecode, true, profiler);
                 } else {
-                    warnings.push(match self.code_segment {
-                        solx_utils::CodeSegment::Deploy => Warning::DeployCodeSize {
-                            found: bytecode_size,
-                        },
-                        solx_utils::CodeSegment::Runtime => Warning::RuntimeCodeSize {
-                            found: bytecode_size,
-                        },
-                    })
+                    warnings.push(solx_utils::Warning::code_size(
+                        self.code_segment,
+                        bytecode_size,
+                    ))
                 };
             }
             // Only capture EVMLA/EthIR if not writing to files
