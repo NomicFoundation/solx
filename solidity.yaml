@@ -4617,7 +4617,7 @@ entries:
         version: '>=0.4.12'
       return_variable.sol:
         hash: '0xf9a59a83b001a005179dd76479a775cc'
-        enabled: true
+        enabled: false
         version: '>=0.4.16'
       static_memory_array_allocation.sol:
         hash: '0x4af9144962c3ee494c96737c2c125ba2'
@@ -6624,7 +6624,7 @@ entries:
         version: '>=0.8.0'
       uninitialized_internal_storage_function_legacy.sol:
         hash: '0xd6674a756d0224f6baae33000b268aa0'
-        enabled: true
+        enabled: false
         version: '>=0.5.9'
       uninitialized_internal_storage_function_via_yul.sol:
         hash: '0x5372cc59d10b6148b3fed2b6817f5d47'

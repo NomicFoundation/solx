@@ -658,14 +658,14 @@ impl Call {
             BuiltIn::Addmod => Some(scope.modular(arguments, Value::addmod)),
             BuiltIn::Mulmod => Some(scope.modular(arguments, Value::mulmod)),
             BuiltIn::Blockhash => {
-                let field = MlirType::field(scope.melior);
+                let word = MlirType::word(scope.melior);
                 let values = scope.positional_arguments(arguments);
-                Some(Value::blockhash(values[0].convert(field, scope), scope))
+                Some(Value::blockhash(values[0].convert(word, scope), scope))
             }
             BuiltIn::Blobhash => {
-                let field = MlirType::field(scope.melior);
+                let word = MlirType::word(scope.melior);
                 let values = scope.positional_arguments(arguments);
-                Some(Value::blobhash(values[0].convert(field, scope), scope))
+                Some(Value::blobhash(values[0].convert(word, scope), scope))
             }
             BuiltIn::Selfdestruct => {
                 let values = scope.positional_arguments(arguments);
@@ -813,7 +813,7 @@ impl Call {
         is_guarded: bool,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> (Value<'context>, Vec<Value<'context>>) {
-        let selector = Value::selector(selector, MlirType::field(scope.melior), scope);
+        let selector = Value::selector(selector, MlirType::word(scope.melior), scope);
         let gas = options.gas(scope);
         let amount = options.amount(scope);
         Function::external_call(
@@ -872,13 +872,13 @@ impl Call {
             Some(BuiltIn::AddressSend) => {
                 let address =
                     scope.converted(&access.operand(), MlirType::address(scope.melior, false));
-                let amount = scope.converted(&arguments[0], MlirType::field(scope.melior));
+                let amount = scope.converted(&arguments[0], MlirType::word(scope.melior));
                 vec![Value::send(address, amount, scope)]
             }
             Some(BuiltIn::AddressTransfer) => {
                 let address =
                     scope.converted(&access.operand(), MlirType::address(scope.melior, false));
-                let amount = scope.converted(&arguments[0], MlirType::field(scope.melior));
+                let amount = scope.converted(&arguments[0], MlirType::word(scope.melior));
                 Value::transfer(address, amount, scope);
                 Vec::new()
             }

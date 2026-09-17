@@ -29,22 +29,22 @@ impl<'context> Options<'context> {
         let Some(options) = options else {
             return Self::default();
         };
-        let field = MlirType::field(scope.melior);
+        let word = MlirType::word(scope.melior);
         let mut forwarded = Self::default();
         for option in options.iter() {
             match option.name().resolve_to_built_in() {
                 Some(BuiltIn::CallOptionGas) => {
-                    forwarded.gas = Some(scope.converted(&option.value(), field));
+                    forwarded.gas = Some(scope.converted(&option.value(), word));
                 }
                 Some(BuiltIn::CallOptionValue) => {
-                    forwarded.amount = Some(scope.converted(&option.value(), field));
+                    forwarded.amount = Some(scope.converted(&option.value(), word));
                 }
                 Some(BuiltIn::CallOptionSalt) => {
                     let salt = scope.converted(
                         &option.value(),
                         MlirType::fixed_bytes(scope.melior, solx_utils::BYTE_LENGTH_FIELD),
                     );
-                    forwarded.salt = Some(salt.bytes_cast(field, scope));
+                    forwarded.salt = Some(salt.bytes_cast(word, scope));
                 }
                 _ => unreachable!("slang admits gas, value and salt as the only call options"),
             }
@@ -60,7 +60,7 @@ impl<'context> Options<'context> {
     /// The value operand, zero where the call transfers none.
     pub fn amount(&self, scope: &mut FunctionScope<'_, '_, 'context>) -> Value<'context> {
         self.amount
-            .unwrap_or_else(|| Value::zero(MlirType::field(scope.melior), scope))
+            .unwrap_or_else(|| Value::zero(MlirType::word(scope.melior), scope))
     }
 
     /// The salt operand, absent where a creation derives its address through `CREATE`.

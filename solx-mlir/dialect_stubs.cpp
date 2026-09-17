@@ -1,15 +1,17 @@
 /*
- * C wrappers for Sol dialect attribute and type creation and inspection.
+ * C wrappers for Sol and Yul dialect attribute and type creation and
+ * inspection.
  *
  * The Sol dialect's C API (mlir-c/Dialect/Sol.h) does not expose
  * constructors for several attributes (e.g. ContractKindAttr,
  * StateMutabilityAttr) or types (e.g. PointerType, AddressType,
- * ContractType), nor kind predicates and accessors over them. These
- * thin wrappers call the generated C++ methods via extern "C" linkage
- * so Rust can reach them through FFI.
+ * ContractType) or the Yul dialect's PtrType, nor kind predicates and
+ * accessors over them. These thin wrappers call the generated C++
+ * methods via extern "C" linkage so Rust can reach them through FFI.
  */
 
 #include "mlir/Dialect/Sol/Sol.h"
+#include "mlir/Dialect/Yul/Yul.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir-c/BuiltinAttributes.h"
@@ -148,6 +150,10 @@ MlirType solxCreateFuncRefType(MlirContext ctx, MlirType signature, uint32_t kin
     default:
         abort();
     }
+}
+
+MlirType solxCreateYulPtrType(MlirContext ctx) {
+    return wrap(mlir::yul::PtrType::get(unwrap(ctx)));
 }
 
 bool solxIsAddressType(MlirType ty) {

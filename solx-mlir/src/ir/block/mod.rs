@@ -44,6 +44,15 @@ impl<'context> Block<'context> {
         self.inner.append_operation(operation)
     }
 
+    /// Inserts `operation` at `position` in this block, returning its reference.
+    pub fn insert_operation(
+        self,
+        position: usize,
+        operation: Operation<'context>,
+    ) -> OperationRef<'context, 'context> {
+        self.inner.insert_operation(position, operation)
+    }
+
     /// Opens `sol.try` on `status` and hands back the entry block of every declared region. An
     /// omitted clause leaves its region blockless, which is how the pass tells an absent handler
     /// from one with an empty body: an absent fallback forwards the revert on, an empty one
@@ -75,7 +84,7 @@ impl<'context> Block<'context> {
                 .status(status.into_mlir())
                 .success_region(entry(&[]))
                 .panic_region(if panic {
-                    entry(&[Type::field(context.melior)])
+                    entry(&[Type::word(context.melior)])
                 } else {
                     Region::new()
                 })

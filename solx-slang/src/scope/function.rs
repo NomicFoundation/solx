@@ -16,6 +16,7 @@ use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
 
+use crate::scope::assembly::AssemblyScope;
 use crate::scope::contract::ContractScope;
 
 /// The function scope: the enclosing contract scope, the dispatch of the `sol.func` being emitted,
@@ -79,6 +80,19 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         self.environment.enter_scope();
         emit(self);
         self.environment.exit_scope();
+    }
+
+    /// Opens the assembly scope around `emit`: the Yul bindings an inline-assembly block
+    /// introduces, with the MLIR cursor on `body` - the `sol.inline_asm` region, which is also the
+    /// symbol table its Yul functions are emitted into - for the block's duration.
+    pub fn assembly(
+        &mut self,
+        body: Block<'context>,
+        emit: impl FnOnce(&mut AssemblyScope<'_, '_, '_, 'context>),
+    ) {
+        let enclosing = self.contract.source_unit.mlir.current_block.replace(body);
+        emit(&mut AssemblyScope::new(self, body));
+        self.contract.source_unit.mlir.current_block = enclosing;
     }
 
     /// Emits into `block`, appends the implicit `sol.yield` if the emitted code did not terminate

@@ -53,9 +53,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         base.exponentiate(exponent, self.checked, self)
     }
 
-    /// The shared `addmod`/`mulmod` lowering: the three operands widened to the field width the
-    /// built-in works at rather than their own narrower types, evaluated right-to-left to match
-    /// legacy, then combined by `operator`.
+    /// The shared `addmod`/`mulmod` lowering: the three operands widened to the word width the
+    /// built-in works at rather than their own narrower types, evaluated right to left, then
+    /// combined by `operator`.
     pub fn modular(
         &mut self,
         arguments: &[Expression],
@@ -66,10 +66,10 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             &Context<'context>,
         ) -> Value<'context>,
     ) -> Value<'context> {
-        let field = MlirType::field(self.melior);
-        let modulus = self.converted(&arguments[2], field);
-        let right = self.converted(&arguments[1], field);
-        let left = self.converted(&arguments[0], field);
+        let word = MlirType::word(self.melior);
+        let modulus = self.converted(&arguments[2], word);
+        let right = self.converted(&arguments[1], word);
+        let left = self.converted(&arguments[0], word);
         operator(left, right, modulus, self)
     }
 }
