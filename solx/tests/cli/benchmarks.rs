@@ -25,7 +25,11 @@ fn default() -> anyhow::Result<()> {
 fn records_every_pipeline_stage() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--benchmarks"];
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT,
+        "--benchmarks",
+        "--bin",
+    ];
 
     let result = crate::cli::execute_solx(args)?;
 
@@ -38,6 +42,12 @@ fn records_every_pipeline_stage() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("solx_EmitSol:"))
         .stdout(predicate::str::contains("solx_RunSolPasses:"))
         .stdout(predicate::str::contains("solx_ExtractMLIRObjects:"))
+        .stdout(predicate::str::contains("solx_BuildProject"))
+        .stdout(predicate::str::contains("solx_Compile"))
+        .stdout(predicate::str::contains("solx_Link"))
+        .stdout(predicate::str::contains("/InitVerify/"))
+        .stdout(predicate::str::contains("/OptimizeVerify/"))
+        .stdout(predicate::str::contains("/EmitBytecode/"))
         .stdout(predicate::str::contains(":deploy/CreateMLIRContext/"))
         .stdout(predicate::str::contains(":runtime/CreateMLIRContext/"))
         .stdout(predicate::str::contains(":deploy/ParseMLIR/"))
@@ -46,6 +56,7 @@ fn records_every_pipeline_stage() -> anyhow::Result<()> {
         .stdout(predicate::str::contains(":runtime/MLIRToLLVMIR/"))
         .stdout(predicate::str::contains(":deploy/WorkerRoundtrip(0)/"))
         .stdout(predicate::str::contains(":runtime/WorkerRoundtrip(0)/"))
+        .stdout(predicate::str::contains("us\n"))
         .stdout(predicate::str::contains("ms").not());
 
     Ok(())
