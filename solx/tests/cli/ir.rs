@@ -13,9 +13,15 @@ fn default() -> anyhow::Result<()> {
 
     let result = crate::cli::execute_solx(args)?;
 
+    #[cfg(feature = "solc")]
     result
         .success()
         .stdout(predicate::str::contains("IR").count(1));
+    #[cfg(not(feature = "solc"))]
+    result
+        .failure()
+        .stderr(predicate::str::contains("--ir is ignored"))
+        .stderr(predicate::str::contains("Nothing would be produced"));
 
     Ok(())
 }
@@ -45,7 +51,12 @@ fn via_ir_to_terminal() -> anyhow::Result<()> {
     let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--ir", "--via-ir"];
 
     let result = crate::cli::execute_solx(args)?;
+    #[cfg(feature = "solc")]
     result.success().stdout(predicate::str::contains("IR:"));
+    #[cfg(not(feature = "solc"))]
+    result
+        .failure()
+        .stderr(predicate::str::contains("Nothing would be produced"));
 
     Ok(())
 }
@@ -65,9 +76,14 @@ fn via_ir_output_dir() -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
+    #[cfg(feature = "solc")]
     result
         .success()
         .stderr(predicate::str::contains("Compiler run successful"));
+    #[cfg(not(feature = "solc"))]
+    result
+        .failure()
+        .stderr(predicate::str::contains("Nothing would be produced"));
 
     Ok(())
 }

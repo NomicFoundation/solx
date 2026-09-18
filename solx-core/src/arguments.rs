@@ -505,46 +505,43 @@ impl Arguments {
             selectors.insert(solx_standard_json::InputSelector::Metadata);
         }
 
-        #[cfg(feature = "solc")]
-        {
-            if self.output_evmla {
-                selectors.insert(solx_standard_json::InputSelector::BytecodeEVMLA);
-                selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEVMLA);
-            }
-            if self.output_ethir {
-                selectors.insert(solx_standard_json::InputSelector::BytecodeEthIR);
-                selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEthIR);
-            }
-            if self.output_debug_info {
-                selectors.insert(solx_standard_json::InputSelector::BytecodeDebugInfo);
-            }
-            if self.output_debug_info_runtime {
-                selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo);
-            }
-            if self.output_abi {
-                selectors.insert(solx_standard_json::InputSelector::ABI);
-            }
-            if self.output_hashes {
-                selectors.insert(solx_standard_json::InputSelector::MethodIdentifiers);
-            }
-            if self.output_userdoc {
-                selectors.insert(solx_standard_json::InputSelector::UserDocumentation);
-            }
-            if self.output_devdoc {
-                selectors.insert(solx_standard_json::InputSelector::DeveloperDocumentation);
-            }
-            if self.output_storage_layout {
-                selectors.insert(solx_standard_json::InputSelector::StorageLayout);
-            }
-            if self.output_transient_storage_layout {
-                selectors.insert(solx_standard_json::InputSelector::TransientStorageLayout);
-            }
-            if self.output_asm_solc_json {
-                selectors.insert(solx_standard_json::InputSelector::EVMLegacyAssembly);
-            }
-            if self.output_ir {
-                selectors.insert(solx_standard_json::InputSelector::Yul);
-            }
+        if self.output_evmla {
+            selectors.insert(solx_standard_json::InputSelector::BytecodeEVMLA);
+            selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEVMLA);
+        }
+        if self.output_ethir {
+            selectors.insert(solx_standard_json::InputSelector::BytecodeEthIR);
+            selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEthIR);
+        }
+        if self.output_debug_info {
+            selectors.insert(solx_standard_json::InputSelector::BytecodeDebugInfo);
+        }
+        if self.output_debug_info_runtime {
+            selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo);
+        }
+        if self.output_abi {
+            selectors.insert(solx_standard_json::InputSelector::ABI);
+        }
+        if self.output_hashes {
+            selectors.insert(solx_standard_json::InputSelector::MethodIdentifiers);
+        }
+        if self.output_userdoc {
+            selectors.insert(solx_standard_json::InputSelector::UserDocumentation);
+        }
+        if self.output_devdoc {
+            selectors.insert(solx_standard_json::InputSelector::DeveloperDocumentation);
+        }
+        if self.output_storage_layout {
+            selectors.insert(solx_standard_json::InputSelector::StorageLayout);
+        }
+        if self.output_transient_storage_layout {
+            selectors.insert(solx_standard_json::InputSelector::TransientStorageLayout);
+        }
+        if self.output_asm_solc_json {
+            selectors.insert(solx_standard_json::InputSelector::EVMLegacyAssembly);
+        }
+        if self.output_ir {
+            selectors.insert(solx_standard_json::InputSelector::Yul);
         }
 
         solx_standard_json::InputSelection::new(selectors)

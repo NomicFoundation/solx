@@ -27,7 +27,7 @@ use self::source::Source;
 /// The `solc --standard-json` input.
 ///
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Input {
     /// The input language.
     pub language: Language,
@@ -38,6 +38,40 @@ pub struct Input {
 }
 
 impl Input {
+    ///
+    /// Rewrites serde's `unknown field` and `unknown variant` messages, which are the ones
+    /// users hit for settings and output selections solx does not accept, into solx wording
+    /// naming the frontend. Any other error is passed through unchanged.
+    ///
+    pub fn describe_error(error: anyhow::Error, frontend: &str) -> anyhow::Error {
+        let message = error.to_string();
+        let (subject, tail) = match (
+            message.split_once("unknown field `"),
+            message.split_once("unknown variant `"),
+        ) {
+            (Some((_, tail)), _) => ("option", tail),
+            (_, Some((_, tail))) => ("value", tail),
+            _ => return error,
+        };
+        let Some((name, tail)) = tail.split_once('`') else {
+            return error;
+        };
+
+        // serde lists the accepted names in backticks: "expected one of `a`, `b` at line 1 ...".
+        let supported: Vec<&str> = match tail.split_once("expected ") {
+            Some((_, list)) => list.split('`').skip(1).step_by(2).collect(),
+            None => vec![],
+        };
+
+        let mut description =
+            format!("Standard JSON {subject} \"{name}\" is not supported in {frontend}.");
+        if !supported.is_empty() {
+            description
+                .push_str(format!(" Supported {subject}s: {}.", supported.join(", ")).as_str());
+        }
+        anyhow::anyhow!(description)
+    }
+
     ///
     /// A shortcut constructor.
     ///

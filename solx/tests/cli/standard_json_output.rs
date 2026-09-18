@@ -8,7 +8,6 @@
 use predicates::prelude::*;
 use test_case::test_case;
 
-#[cfg(feature = "solc")]
 #[test]
 fn method_identifiers() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -29,7 +28,6 @@ fn method_identifiers() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn multi_contract() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -478,7 +476,10 @@ fn devdoc_userdoc_output() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test_case(crate::common::standard_json!("solidity_via_ir.json"))]
+#[cfg_attr(
+    feature = "solc",
+    test_case(crate::common::standard_json!("solidity_via_ir.json"))
+)]
 #[test_case(crate::common::standard_json!("solidity_with_remappings.json"))]
 #[test_case(crate::common::standard_json!("solidity_with_evm_version.json"))]
 #[test_case(crate::common::standard_json!("solidity_storage_layout.json"))]
@@ -497,7 +498,10 @@ fn additional_outputs_no_errors(path: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test_case(crate::common::standard_json!("solidity_via_ir.json"))]
+#[cfg_attr(
+    feature = "solc",
+    test_case(crate::common::standard_json!("solidity_via_ir.json"))
+)]
 #[test_case(crate::common::standard_json!("solidity_with_remappings.json"))]
 #[test_case(crate::common::standard_json!("solidity_with_evm_version.json"))]
 fn additional_outputs_via_stdin(path: &str) -> anyhow::Result<()> {
@@ -553,7 +557,6 @@ fn select_wildcard_and_per_file_are_unioned() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn select_per_file_cross_file_dependency() -> anyhow::Result<()> {
     crate::common::setup()?;

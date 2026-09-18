@@ -1,0 +1,18 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A.sol": {
+      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.0; contract A {}"
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "*": {
+        "*": [
+          "ir",
+          "evm.bytecode.sourceMap"
+        ]
+      }
+    }
+  }
+}

@@ -128,6 +128,13 @@ impl<'arguments> Compiler<'arguments> {
                 output_config,
             );
         } else {
+            let diagnostics = frontend
+                .capabilities()
+                .arguments_diagnostics(&self.arguments, frontend.name());
+            if Self::record_diagnostics(diagnostics, &messages) {
+                return Ok(());
+            }
+
             self.standard_output_evm(
                 frontend,
                 input_files.as_slice(),
@@ -406,6 +413,21 @@ impl<'arguments> Compiler<'arguments> {
     }
 
     ///
+    /// Hands the diagnostics to the message stream, which the caller prints and turns into an
+    /// exit code, and reports whether any of them stops the run.
+    ///
+    fn record_diagnostics(
+        diagnostics: Vec<solx_standard_json::OutputError>,
+        messages: &Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
+    ) -> bool {
+        let has_errors = diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == "error");
+        solx_utils::SyncLock::lock_sync(messages.as_ref()).extend(diagnostics);
+        has_errors
+    }
+
+    ///
     /// Runs the standard JSON mode for the EVM target.
     ///
     pub fn standard_json_evm<F>(
@@ -422,7 +444,8 @@ impl<'arguments> Compiler<'arguments> {
     where
         F: Frontend,
     {
-        let mut solc_input = solx_standard_json::Input::try_from(json_path.as_deref())?;
+        let mut solc_input = solx_standard_json::Input::try_from(json_path.as_deref())
+            .map_err(|error| solx_standard_json::Input::describe_error(error, frontend.name()))?;
         let language = solc_input.language;
         let via_ir = solc_input.settings.via_ir;
         let linker_symbols = solc_input.settings.libraries.as_linker_symbols()?;
@@ -435,6 +458,16 @@ impl<'arguments> Compiler<'arguments> {
 
         let metadata_hash_type = solc_input.settings.metadata.bytecode_hash;
         let append_cbor = solc_input.settings.metadata.append_cbor;
+
+        if language == solx_standard_json::InputLanguage::Solidity {
+            let diagnostics = frontend
+                .capabilities()
+                .standard_json_diagnostics(&solc_input, frontend.name());
+            if Self::record_diagnostics(diagnostics, &messages) {
+                solx_standard_json::Output::new_with_messages(messages)
+                    .write_and_exit(&solc_input.settings.output_selection);
+            }
+        }
 
         let mut profiler = solx_codegen_evm::Profiler::default();
         let (mut solc_output, project) = match language {

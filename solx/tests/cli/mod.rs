@@ -13,7 +13,6 @@ mod abi;
 #[cfg(feature = "solc")]
 mod allow_paths;
 mod asm;
-#[cfg(feature = "solc")]
 mod asm_solc_json;
 mod ast_json;
 #[cfg(feature = "solc")]
@@ -33,26 +32,21 @@ mod emit_llvm_ir;
 #[cfg(feature = "mlir")]
 mod emit_mlir;
 mod empty;
-#[cfg(feature = "solc")]
 mod ethir;
 mod evm_version;
-#[cfg(feature = "solc")]
 mod evmla;
 #[cfg(feature = "solc")]
 mod hashes;
 mod help;
 #[cfg(feature = "solc")]
 mod include_path;
-#[cfg(feature = "solc")]
 mod ir;
-#[cfg(feature = "solc")]
 mod libraries;
 mod llvm_ir;
 mod llvm_options;
 #[cfg(feature = "solc")]
 mod metadata;
 mod metadata_hash;
-#[cfg(feature = "solc")]
 mod metadata_literal;
 #[cfg(feature = "mlir")]
 mod mlir_dependencies;
@@ -74,14 +68,14 @@ mod storage_layout;
 mod threads;
 #[cfg(feature = "solc")]
 mod transient_storage_layout;
+// The Slang frontend is the only one that rejects requests, so these expectations are its own.
+#[cfg(not(feature = "solc"))]
+mod unsupported;
 #[cfg(feature = "solc")]
 mod userdoc;
 mod version;
-#[cfg(feature = "solc")]
 mod via_ir;
-#[cfg(feature = "solc")]
 mod yul;
-#[cfg(feature = "solc")]
 mod yul_parser;
 
 ///

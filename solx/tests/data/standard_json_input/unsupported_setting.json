@@ -1,0 +1,20 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A.sol": {
+      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.0; contract A {}"
+    }
+  },
+  "settings": {
+    "modelChecker": {
+      "engine": "chc"
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.bytecode.object"
+        ]
+      }
+    }
+  }
+}

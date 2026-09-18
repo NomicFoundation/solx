@@ -14,6 +14,7 @@ fn default() -> anyhow::Result<()> {
 
     // Guard the structure of the Ethereal IR dump: both segments, entry-function
     // and per-segment block recovery, the stack-usage line, and rendered stacks.
+    #[cfg(feature = "solc")]
     result
         .success()
         .stdout(predicate::str::contains("Deploy Ethereal IR:"))
@@ -24,6 +25,11 @@ fn default() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("block_rt_"))
         .stdout(predicate::str::contains(" - ["))
         .stdout(predicate::str::contains(" + ["));
+    #[cfg(not(feature = "solc"))]
+    result
+        .success()
+        .stdout(predicate::str::contains("Binary:"))
+        .stderr(predicate::str::contains("--ethir is ignored"));
 
     Ok(())
 }

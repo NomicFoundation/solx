@@ -143,6 +143,8 @@ fn invalid_standard_json() -> anyhow::Result<()> {
     Ok(())
 }
 
+// Yul validation in standard JSON mode is not supported by the Slang frontend.
+#[cfg(feature = "solc")]
 #[test]
 fn standard_json_default() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -158,6 +160,7 @@ fn standard_json_default() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn standard_json_default_urls() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -176,6 +179,7 @@ fn standard_json_default_urls() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn standard_json_default_urls_invalid() -> anyhow::Result<()> {
     crate::common::setup()?;
