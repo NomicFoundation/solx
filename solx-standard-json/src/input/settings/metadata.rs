@@ -13,14 +13,11 @@ pub struct Metadata {
     pub use_literal_content: bool,
 
     /// Whether to append CBOR metadata.
-    #[serde(
-        rename = "appendCBOR",
-        default = "Metadata::default_append_cbor",
-        skip_serializing
-    )]
+    #[serde(rename = "appendCBOR", default = "Metadata::default_append_cbor")]
     pub append_cbor: bool,
 
     /// The metadata hash type.
+    // Not sent to solc, which rejects `appendCBOR: false` with any `bytecodeHash` but `none`.
     #[serde(default = "Metadata::default_bytecode_hash", skip_serializing)]
     pub bytecode_hash: solx_utils::MetadataHashType,
 }

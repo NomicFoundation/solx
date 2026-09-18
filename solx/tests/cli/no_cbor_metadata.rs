@@ -103,6 +103,26 @@ fn ipfs_llvm_ir() -> anyhow::Result<()> {
 
 #[cfg(feature = "solc")]
 #[test]
+fn ir() -> anyhow::Result<()> {
+    let _ = crate::common::setup();
+
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT,
+        "--no-cbor-metadata",
+        "--via-ir",
+        "--ir",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("data \".metadata\" hex\"\""));
+
+    Ok(())
+}
+
+#[cfg(feature = "solc")]
+#[test]
 fn standard_json() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -114,6 +134,9 @@ fn standard_json() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
+        .stdout(predicate::str::contains(
+            "data \\\".metadata\\\" hex\\\"\\\"",
+        ))
         .stdout(predicate::str::contains("a264").not())
         .stdout(predicate::str::ends_with("0055").not());
 
