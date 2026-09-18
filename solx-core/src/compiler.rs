@@ -320,7 +320,7 @@ impl<'arguments> Compiler<'arguments> {
     where
         F: Frontend,
     {
-        let mut profiler = solx_codegen_evm::Profiler::default();
+        let mut profiler = solx_utils::Profiler::default();
 
         let mut solc_input = solx_standard_json::Input::try_from_solidity_paths(
             paths,
@@ -338,7 +338,8 @@ impl<'arguments> Compiler<'arguments> {
             llvm_options.clone(),
         )?;
 
-        let run_solc_standard_json = profiler.start_pipeline_element("solc_Solidity_Standard_JSON");
+        let run_frontend_standard_json = profiler
+            .start_pipeline_element(format!("{}_RunStandardJSON", frontend.name()).as_str());
         let mut solc_output = frontend.standard_json(
             &mut solc_input,
             use_import_callback,
@@ -346,7 +347,7 @@ impl<'arguments> Compiler<'arguments> {
             include_paths.as_slice(),
             allow_paths,
         )?;
-        run_solc_standard_json.borrow_mut().finish();
+        run_frontend_standard_json.borrow_mut().finish();
         solc_output.take_and_write_warnings();
         solc_output.check_errors()?;
 
@@ -358,7 +359,7 @@ impl<'arguments> Compiler<'arguments> {
             None
         };
 
-        let run_solx_project = profiler.start_pipeline_element("solx_Solidity_IR_Analysis");
+        let run_solx_project = profiler.start_pipeline_element("solx_BuildProject");
         let project = Project::try_from_solidity_output(
             frontend.version(),
             solc_input.settings.libraries.clone(),
@@ -372,7 +373,7 @@ impl<'arguments> Compiler<'arguments> {
         solc_output.take_and_write_warnings();
         solc_output.check_errors()?;
 
-        let run_solx_compile = profiler.start_pipeline_element("solx_Compilation");
+        let run_solx_compile = profiler.start_pipeline_element("solx_Compile");
         let mut build = project.compile_to_evm(
             messages,
             &solc_input.settings.output_selection,
@@ -392,7 +393,7 @@ impl<'arguments> Compiler<'arguments> {
             .output_selection
             .is_bytecode_set_for_any()
         {
-            let run_solx_link = profiler.start_pipeline_element("solx_Linking");
+            let run_solx_link = profiler.start_pipeline_element("solx_Link");
             let mut build = build.link(linker_symbols);
             run_solx_link.borrow_mut().finish();
             build.take_and_write_warnings();
@@ -402,6 +403,9 @@ impl<'arguments> Compiler<'arguments> {
             build
         };
         build.benchmarks = profiler.to_vec();
+        build
+            .benchmarks
+            .extend(std::mem::take(&mut solc_output.benchmarks));
         Ok(build)
     }
 
@@ -436,11 +440,12 @@ impl<'arguments> Compiler<'arguments> {
         let metadata_hash_type = solc_input.settings.metadata.bytecode_hash;
         let append_cbor = solc_input.settings.metadata.append_cbor;
 
-        let mut profiler = solx_codegen_evm::Profiler::default();
+        let mut profiler = solx_utils::Profiler::default();
         let (mut solc_output, project) = match language {
             solx_standard_json::InputLanguage::Solidity => {
-                let run_solc_standard_json =
-                    profiler.start_pipeline_element("solc_Solidity_Standard_JSON");
+                let run_frontend_standard_json = profiler.start_pipeline_element(
+                    format!("{}_RunStandardJSON", frontend.name()).as_str(),
+                );
                 let mut solc_output = frontend.standard_json(
                     &mut solc_input,
                     use_import_callback,
@@ -448,7 +453,7 @@ impl<'arguments> Compiler<'arguments> {
                     include_paths.as_slice(),
                     allow_paths,
                 )?;
-                run_solc_standard_json.borrow_mut().finish();
+                run_frontend_standard_json.borrow_mut().finish();
 
                 solc_input.resolve_sources()?;
                 let debug_info = if solc_input
@@ -469,7 +474,7 @@ impl<'arguments> Compiler<'arguments> {
                     .expect("lock is never poisoned because worker threads do not panic")
                     .extend(solc_output.errors.drain(..));
 
-                let run_solx_project = profiler.start_pipeline_element("solx_Solidity_IR_Analysis");
+                let run_solx_project = profiler.start_pipeline_element("solx_BuildProject");
                 let project = Project::try_from_solidity_output(
                     frontend.version(),
                     solc_input.settings.libraries.clone(),
@@ -497,14 +502,15 @@ impl<'arguments> Compiler<'arguments> {
                     ));
                 }
 
-                let run_solc_validate_yul = profiler.start_pipeline_element("solc_Yul_Validation");
+                let run_frontend_validate_yul = profiler
+                    .start_pipeline_element(format!("{}_ValidateYul", frontend.name()).as_str());
                 let mut solc_output = frontend.validate_yul_standard_json(&mut solc_input)?;
-                run_solc_validate_yul.borrow_mut().finish();
+                run_frontend_validate_yul.borrow_mut().finish();
                 if solc_output.has_errors() {
                     solc_output.write_and_exit(&solc_input.settings.output_selection);
                 }
 
-                let run_solx_yul_project = profiler.start_pipeline_element("solx_Yul_IR_Analysis");
+                let run_solx_yul_project = profiler.start_pipeline_element("solx_BuildProject");
                 let project = Project::try_from_yul_sources(
                     frontend.version(),
                     solc_input.sources,
@@ -533,8 +539,7 @@ impl<'arguments> Compiler<'arguments> {
 
                 let mut solc_output = solx_standard_json::Output::new(&solc_input.sources);
 
-                let run_solx_llvm_ir_project =
-                    profiler.start_pipeline_element("solx_LLVM_IR_Analysis");
+                let run_solx_llvm_ir_project = profiler.start_pipeline_element("solx_BuildProject");
                 let project = Project::try_from_llvm_ir_sources(
                     solc_input.sources,
                     solc_input.settings.libraries.clone(),
@@ -550,7 +555,7 @@ impl<'arguments> Compiler<'arguments> {
             }
         };
 
-        let run_solx_compile = profiler.start_pipeline_element("solx_Compilation");
+        let run_solx_compile = profiler.start_pipeline_element("solx_Compile");
         let build = project.compile_to_evm(
             messages,
             &solc_input.settings.output_selection,
@@ -573,7 +578,7 @@ impl<'arguments> Compiler<'arguments> {
             solc_output.write_and_exit(&solc_input.settings.output_selection);
         }
         let build = if output_selection.is_bytecode_set_for_any() {
-            let run_solx_link = profiler.start_pipeline_element("solx_Linking");
+            let run_solx_link = profiler.start_pipeline_element("solx_Link");
             let build = build.link(linker_symbols);
             run_solx_link.borrow_mut().finish();
             build

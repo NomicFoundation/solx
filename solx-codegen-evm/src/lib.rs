@@ -44,8 +44,6 @@ pub use self::codegen::instructions::return_data;
 pub use self::codegen::instructions::storage;
 pub use self::codegen::link;
 pub use self::codegen::minimal_deploy_code;
-pub use self::codegen::profiler::Profiler;
-pub use self::codegen::profiler::run::Run;
 pub use self::r#const::*;
 pub use self::context::IContext;
 pub use self::context::attribute::Attribute;

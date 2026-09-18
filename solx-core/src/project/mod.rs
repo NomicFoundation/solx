@@ -822,9 +822,22 @@ impl Project {
         pool: &EVMProcessPool,
         job: &mut EVMProcessJob,
     ) -> crate::Result<EVMProcessOutput> {
+        let mut profiler = solx_utils::Profiler::default();
         let mut stack_too_deep_retries = 0;
-        loop {
-            match pool.execute(job) {
+        let mut attempt = 0;
+        let mut result = loop {
+            let run_roundtrip = profiler.start_evm_translation_unit(
+                job.contract_name.full_path.as_str(),
+                job.code_segment,
+                format!("WorkerRoundtrip({attempt})").as_str(),
+                job.optimizer_settings.to_string().as_str(),
+                job.optimizer_settings.spill_area_size(),
+            );
+            let attempt_result = pool.execute(job);
+            run_roundtrip.borrow_mut().finish();
+            attempt += 1;
+
+            match attempt_result {
                 Err(Error::StackTooDeep(stack_too_deep)) => {
                     if stack_too_deep.is_size_fallback
                         && !job.optimizer_settings.is_fallback_to_size_active()
@@ -845,6 +858,10 @@ impl Project {
                 }
                 result => break result,
             }
+        };
+        if let Ok(output) = result.as_mut() {
+            output.object.benchmarks.extend(profiler.to_vec());
         }
+        result
     }
 }

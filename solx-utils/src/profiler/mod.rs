@@ -9,7 +9,7 @@ use std::rc::Rc;
 
 use indexmap::IndexMap;
 
-use crate::optimizer::settings::Settings as OptimizerSettings;
+use crate::CodeSegment;
 
 use self::run::Run;
 
@@ -27,13 +27,7 @@ impl Profiler {
     /// Starts a new run for a generic part of the pipeline.
     ///
     pub fn start_pipeline_element(&mut self, description: &str) -> Rc<RefCell<Run>> {
-        let run_name = description.to_owned();
-        assert!(
-            !self.timings.contains_key(run_name.as_str()),
-            "Translation unit run `{run_name}` already exists"
-        );
-
-        self.start_run(run_name)
+        self.start_run(description.to_owned())
     }
 
     ///
@@ -42,23 +36,15 @@ impl Profiler {
     pub fn start_evm_translation_unit(
         &mut self,
         full_path: &str,
-        code_segment: solx_utils::CodeSegment,
+        code_segment: CodeSegment,
         description: &str,
-        optimizer_settings: &OptimizerSettings,
+        optimizer_mode: &str,
+        spill_area_size: Option<u64>,
     ) -> Rc<RefCell<Run>> {
-        let spill_area_description = format!(
-            "SpillArea({})",
-            optimizer_settings.spill_area_size().unwrap_or_default()
-        );
-        let run_name = format!(
-            "{full_path}:{code_segment}/{description}/{optimizer_settings}/{spill_area_description}",
-        );
-        assert!(
-            !self.timings.contains_key(run_name.as_str()),
-            "Translation unit run `{run_name}` already exists"
-        );
-
-        self.start_run(run_name)
+        self.start_run(format!(
+            "{full_path}:{code_segment}/{description}/{optimizer_mode}/SpillArea({})",
+            spill_area_size.unwrap_or_default()
+        ))
     }
 
     ///
@@ -71,7 +57,7 @@ impl Profiler {
                 let run = run.borrow();
                 (
                     name.clone(),
-                    run.duration.expect("Always exists").as_millis() as u64,
+                    run.duration.expect("Always exists").as_micros() as u64,
                 )
             })
             .collect()

@@ -466,7 +466,8 @@ fn select_none() -> anyhow::Result<()> {
         .success()
         .stdout(predicate::str::contains("\"evm\"").not())
         .stdout(predicate::str::contains("\"bytecode\"").not())
-        .stdout(predicate::str::contains("\"deployedBytecode\"").not());
+        .stdout(predicate::str::contains("\"deployedBytecode\"").not())
+        .stdout(predicate::str::contains("\"benchmarks\"").not());
 
     Ok(())
 }

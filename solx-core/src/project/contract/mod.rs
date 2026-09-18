@@ -134,12 +134,14 @@ impl Contract {
         output_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> Result<EVMContractObject, Error> {
         use solx_codegen_evm::WriteLLVM;
-        let mut profiler = solx_codegen_evm::Profiler::default();
+        let mut profiler = solx_utils::Profiler::default();
 
         if let Some(metadata_bytes) = metadata_bytes.as_ref() {
             optimizer_settings.set_metadata_size(metadata_bytes.len() as u64);
         }
         let optimizer = solx_codegen_evm::Optimizer::new(optimizer_settings.clone());
+        let optimizer_mode = optimizer_settings.to_string();
+        let spill_area_size = optimizer_settings.spill_area_size();
 
         let output_bytecode = output_selection.is_bytecode_set_for_any();
         match (contract_ir, code_segment) {
@@ -206,7 +208,8 @@ impl Contract {
                     contract_name.full_path.as_str(),
                     code_segment,
                     "YulToLLVMIR",
-                    &optimizer_settings,
+                    optimizer_mode.as_str(),
+                    spill_area_size,
                 );
                 yul.object.declare(&mut context)?;
                 yul.object.into_llvm(&mut context).map_err(|error| {
@@ -354,7 +357,8 @@ impl Contract {
                     contract_name.full_path.as_str(),
                     code_segment,
                     "EVMAssemblyToLLVMIR",
-                    &optimizer_settings,
+                    optimizer_mode.as_str(),
+                    spill_area_size,
                 );
                 code.assembly.declare(&mut context)?;
                 code.assembly.into_llvm(&mut context).map_err(|error| {
@@ -514,7 +518,15 @@ impl Contract {
                     ),
                 };
 
+                let run_context_creation = profiler.start_evm_translation_unit(
+                    contract_name.full_path.as_str(),
+                    code_segment,
+                    "CreateMLIRContext",
+                    optimizer_mode.as_str(),
+                    spill_area_size,
+                );
                 let melior = solx_mlir::Context::create_melior_context();
+                run_context_creation.borrow_mut().finish();
                 let immutables = match code_segment {
                     solx_utils::CodeSegment::Deploy => immutables.unwrap_or_else(|| {
                         BTreeMap::from([(
@@ -524,12 +536,28 @@ impl Contract {
                     }),
                     solx_utils::CodeSegment::Runtime => BTreeMap::new(),
                 };
-                let raw_llvm = solx_mlir::Context::translate_source_to_llvm(
-                    &melior,
-                    &mlir.source,
-                    &immutables,
-                )
-                .context("MLIR translation")?;
+                let run_mlir_parsing = profiler.start_evm_translation_unit(
+                    contract_name.full_path.as_str(),
+                    code_segment,
+                    "ParseMLIR",
+                    optimizer_mode.as_str(),
+                    spill_area_size,
+                );
+                let mlir_module = solx_mlir::Context::parse_source(&melior, &mlir.source)
+                    .context("MLIR translation")?;
+                run_mlir_parsing.borrow_mut().finish();
+
+                let run_mlir_translation = profiler.start_evm_translation_unit(
+                    contract_name.full_path.as_str(),
+                    code_segment,
+                    "MLIRToLLVMIR",
+                    optimizer_mode.as_str(),
+                    spill_area_size,
+                );
+                let raw_llvm =
+                    solx_mlir::Context::translate_module_to_llvm(mlir_module, &immutables)
+                        .context("MLIR translation")?;
+                run_mlir_translation.borrow_mut().finish();
                 let context = unsafe { inkwell::context::Context::new(raw_llvm.context) };
                 let module = unsafe { inkwell::module::Module::new(raw_llvm.module) };
                 module.set_name(code_identifier.as_str());

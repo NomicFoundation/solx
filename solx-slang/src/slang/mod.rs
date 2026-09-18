@@ -19,6 +19,7 @@ use solx_core::Frontend;
 use solx_standard_json::CollectableError;
 use solx_standard_json::OutputError;
 use solx_standard_json::output::error::source_location::SourceLocation;
+use solx_utils::Profiler;
 use solx_utils::Remapping;
 
 use crate::scope::source_unit::SourceUnitScope;
@@ -43,7 +44,7 @@ impl Default for Slang {
 }
 
 impl Slang {
-    /// The name of the Slang frontend, used in error messages and output metadata.
+    /// The frontend name the compiler reports and prefixes its pipeline benchmarks with.
     pub const NAME: &'static str = "Slang";
 
     /// Builds a Slang compilation unit from the given source files, parsing every source and
@@ -92,6 +93,7 @@ impl Frontend for Slang {
         _include_paths: &[String],
         _allow_paths: Option<String>,
     ) -> anyhow::Result<solx_standard_json::Output> {
+        let mut profiler = Profiler::default();
         let mut output = solx_standard_json::Output::new(&input_json.sources);
 
         if input_json.language != solx_standard_json::InputLanguage::Solidity {
@@ -125,7 +127,10 @@ impl Frontend for Slang {
             sources.insert(path.as_str().into(), source_code);
         }
 
+        let run_analysis =
+            profiler.start_pipeline_element(format!("{}_ParseAndBind", Self::NAME).as_str());
         let unit = self.compile(&sources, &input_json.settings.remappings)?;
+        run_analysis.borrow_mut().finish();
 
         output
             .errors
@@ -152,10 +157,14 @@ impl Frontend for Slang {
         for file in unit.files() {
             let file_id = file.id();
             if let Some(output_source) = output.sources.get_mut(file_id.as_str()) {
+                let run_ast_serialization = profiler.start_pipeline_element(
+                    format!("{}_SerializeAST:{file_id}", Self::NAME).as_str(),
+                );
                 output_source.ast = Some(
                     serde_json::to_value(file.ast())
                         .map_err(|error| anyhow::anyhow!("AST serialization: {error}"))?,
                 );
+                run_ast_serialization.borrow_mut().finish();
             }
         }
 
@@ -166,19 +175,31 @@ impl Frontend for Slang {
         let evm_version = input_json.settings.evm_version.unwrap_or_default();
         for file in unit.files() {
             let file_id = file.id();
-            let contracts =
-                SourceUnitScope::source_unit(&file.ast(), evm_version, |contract_name| {
+            let contracts = SourceUnitScope::source_unit(
+                &file.ast(),
+                evm_version,
+                |contract_name| {
                     input_json.settings.output_selection.check_selection(
                         file_id.as_str(),
                         Some(contract_name),
                         solx_standard_json::InputSelector::MLIR,
                     )
-                })?;
+                },
+                &mut profiler,
+            )?;
             output
                 .contracts
                 .entry(file_id.to_string())
                 .or_default()
                 .extend(contracts);
+        }
+
+        if input_json.settings.output_selection.check_selection(
+            solx_standard_json::InputSelection::WILDCARD,
+            Some(solx_standard_json::InputSelection::ANY_CONTRACT),
+            solx_standard_json::InputSelector::Benchmarks,
+        ) {
+            output.benchmarks = profiler.to_vec();
         }
 
         Ok(output)
