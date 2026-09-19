@@ -109,7 +109,9 @@ fn stack_too_deep_recursive_standard_json() -> anyhow::Result<()> {
     Ok(())
 }
 
-// Chain 97 0xe8426cf4a7fb9f73eba08edc6dd7f20bb2f8aff5; rejected at modes 1 to 3, compiles at s and z.
+// Chain 97 0xe8426cf4a7fb9f73eba08edc6dd7f20bb2f8aff5; was rejected at modes 1 to 3
+// ("Stackification failed for '_createAndPlaceSlot'") until the reentrant-call spill
+// improvements in solx-llvm 68a58712; compiles at all modes since.
 #[cfg(feature = "solc")]
 #[test]
 fn recursive_stack_too_deep_slot_placement() -> anyhow::Result<()> {
@@ -124,16 +126,17 @@ fn recursive_stack_too_deep_slot_placement() -> anyhow::Result<()> {
 
     result
         .success()
-        .stdout(predicate::str::contains(
-            "Stackification failed for '_createAndPlaceSlot",
-        ))
-        .stdout(predicate::str::contains("xqore/XQoreBTC.sol"));
+        .stdout(predicate::str::contains("Stackification failed").not())
+        .stdout(predicate::str::contains("xqore/XQoreBTC.sol"))
+        .stdout(predicate::str::contains("bytecode"));
 
     Ok(())
 }
 
-// Chain 97 0x5ff2c60b164c928038cbeb51464c2f36a009b586; rejected only at mode 1. The named wrapper
-// has its callee inlined; the cycle is _autoFlushQueue -> _closeIfNeeded -> _autoFlushQueue.
+// Chain 97 0x5ff2c60b164c928038cbeb51464c2f36a009b586; the cycle is
+// _autoFlushQueue -> _closeIfNeeded -> _autoFlushQueue. Was rejected at mode 1
+// ("Stackification failed for '_autoFlushQueue'") until the reentrant-call spill
+// improvements in solx-llvm 68a58712; compiles since.
 #[cfg(feature = "solc")]
 #[test]
 fn recursive_stack_too_deep_queue_flush() -> anyhow::Result<()> {
@@ -148,16 +151,16 @@ fn recursive_stack_too_deep_queue_flush() -> anyhow::Result<()> {
 
     result
         .success()
-        .stdout(predicate::str::contains(
-            "Stackification failed for '_autoFlushQueue",
-        ))
-        .stdout(predicate::str::contains("contracts/VaultExCore.sol"));
+        .stdout(predicate::str::contains("Stackification failed").not())
+        .stdout(predicate::str::contains("contracts/VaultExCore.sol"))
+        .stdout(predicate::str::contains("bytecode"));
 
     Ok(())
 }
 
-// Chain 97 0x1a9ea54ad1cf25ee0489c0c9996d5d8db166f524; rejected from mode 2 up. Mode 1 was rejected
-// before recursive spills and compiles since.
+// Chain 97 0x1a9ea54ad1cf25ee0489c0c9996d5d8db166f524; was rejected from mode 2 up
+// ("Stackification failed for '_placeInLevelMatrix'") until the reentrant-call spill
+// improvements in solx-llvm 68a58712; compiles at all modes since.
 #[cfg(feature = "solc")]
 #[test]
 fn recursive_stack_too_deep_level_matrix() -> anyhow::Result<()> {
@@ -172,15 +175,16 @@ fn recursive_stack_too_deep_level_matrix() -> anyhow::Result<()> {
 
     result
         .success()
-        .stdout(predicate::str::contains(
-            "Stackification failed for '_placeInLevelMatrix",
-        ))
-        .stdout(predicate::str::contains("contracts/DualMatrixSystem.sol"));
+        .stdout(predicate::str::contains("Stackification failed").not())
+        .stdout(predicate::str::contains("contracts/DualMatrixSystem.sol"))
+        .stdout(predicate::str::contains("bytecode"));
 
     Ok(())
 }
 
-// Chain 56 0x699a152689c193ac9c6297afdd66785fff9f7aef; rejected only at mode 1.
+// Chain 56 0x699a152689c193ac9c6297afdd66785fff9f7aef; was rejected at mode 1
+// ("Stackification failed for '_takePairTax'") until the reentrant-call spill
+// improvements in solx-llvm 68a58712; compiles since.
 #[cfg(feature = "solc")]
 #[test]
 fn recursive_stack_too_deep_pair_tax() -> anyhow::Result<()> {
@@ -195,10 +199,9 @@ fn recursive_stack_too_deep_pair_tax() -> anyhow::Result<()> {
 
     result
         .success()
-        .stdout(predicate::str::contains(
-            "Stackification failed for '_takePairTax",
-        ))
-        .stdout(predicate::str::contains("2026/BscLpHoldingTaxToken.sol"));
+        .stdout(predicate::str::contains("Stackification failed").not())
+        .stdout(predicate::str::contains("2026/BscLpHoldingTaxToken.sol"))
+        .stdout(predicate::str::contains("bytecode"));
 
     Ok(())
 }
