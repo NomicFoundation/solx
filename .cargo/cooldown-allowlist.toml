@@ -4,3 +4,8 @@
 [[allow.exact]]
 crate = "ruint"
 version = "1.20.0"
+
+# RUSTSEC-2026-0285: rustls 0.23.45 is the fix, published 2026-09-14.
+[[allow.exact]]
+crate = "rustls"
+version = "0.23.45"
