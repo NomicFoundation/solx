@@ -109,6 +109,103 @@ fn stack_too_deep_recursive_standard_json() -> anyhow::Result<()> {
     Ok(())
 }
 
+// Chain 97 0xe8426cf4a7fb9f73eba08edc6dd7f20bb2f8aff5; was rejected at modes 1 to 3
+// ("Stackification failed for '_createAndPlaceSlot'") until the reentrant-call spill
+// improvements in solx-llvm 68a58712; compiles at all modes since.
+#[cfg(feature = "solc")]
+#[test]
+fn recursive_stack_too_deep_slot_placement() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("recursive_stack_too_deep_slot_placement.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    result
+        .success()
+        .stdout(predicate::str::contains("Stackification failed").not())
+        .stdout(predicate::str::contains("xqore/XQoreBTC.sol"))
+        .stdout(predicate::str::contains("bytecode"));
+
+    Ok(())
+}
+
+// Chain 97 0x5ff2c60b164c928038cbeb51464c2f36a009b586; the cycle is
+// _autoFlushQueue -> _closeIfNeeded -> _autoFlushQueue. Was rejected at mode 1
+// ("Stackification failed for '_autoFlushQueue'") until the reentrant-call spill
+// improvements in solx-llvm 68a58712; compiles since.
+#[cfg(feature = "solc")]
+#[test]
+fn recursive_stack_too_deep_queue_flush() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("recursive_stack_too_deep_queue_flush.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    result
+        .success()
+        .stdout(predicate::str::contains("Stackification failed").not())
+        .stdout(predicate::str::contains("contracts/VaultExCore.sol"))
+        .stdout(predicate::str::contains("bytecode"));
+
+    Ok(())
+}
+
+// Chain 97 0x1a9ea54ad1cf25ee0489c0c9996d5d8db166f524; was rejected from mode 2 up
+// ("Stackification failed for '_placeInLevelMatrix'") until the reentrant-call spill
+// improvements in solx-llvm 68a58712; compiles at all modes since.
+#[cfg(feature = "solc")]
+#[test]
+fn recursive_stack_too_deep_level_matrix() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("recursive_stack_too_deep_level_matrix.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    result
+        .success()
+        .stdout(predicate::str::contains("Stackification failed").not())
+        .stdout(predicate::str::contains("contracts/DualMatrixSystem.sol"))
+        .stdout(predicate::str::contains("bytecode"));
+
+    Ok(())
+}
+
+// Chain 56 0x699a152689c193ac9c6297afdd66785fff9f7aef; was rejected at mode 1
+// ("Stackification failed for '_takePairTax'") until the reentrant-call spill
+// improvements in solx-llvm 68a58712; compiles since.
+#[cfg(feature = "solc")]
+#[test]
+fn recursive_stack_too_deep_pair_tax() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("recursive_stack_too_deep_pair_tax.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    result
+        .success()
+        .stdout(predicate::str::contains("Stackification failed").not())
+        .stdout(predicate::str::contains("2026/BscLpHoldingTaxToken.sol"))
+        .stdout(predicate::str::contains("bytecode"));
+
+    Ok(())
+}
+
 // The reported spill area is underestimated under the pinned LLVM backend, so the
 // fixture compiles only through stack-too-deep retries in both the initial settings
 // and the size fallback.

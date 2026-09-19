@@ -263,3 +263,20 @@ EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 url = "https://github.com/hedgar2017/WTF-gas-optimization"
 commit = "1a2b0ca46d0ae04ffbd57cdbfe9f603ecdd61c25"
 description = "WTF Solidity gas optimization techniques"
+
+# Pinned at the last commit with the function-table dispatch; the next one
+# replaces it with a single dispatch pointer and the recursion changes shape.
+# Legacy is red on every toolchain: solc is stack-too-deep, solx rejects the
+# recursive runLoop. Via-IR needs recursive spills (solx-llvm 9c855c01).
+# Expected via-IR test failure: TWAPSwapTest.test_TWAP_CumulativeSoldTracking_Multiple_Swaps
+# caches block.timestamp across vm.warp; solc via-IR re-reads TIMESTAMP and
+# the test is tuned to that. Once legacy builds (upstream HEAD does), expect
+# NativePaymentTest.test_NativePayment_CustomReceiver_ReceivesWeth to fail on
+# solx and solc legacy alike: solidity-utils' SafeERC20 writes
+# address(uint160(traits)) into calldata from assembly and legacy codegen does
+# not clean the flag bits above bit 160. Via-IR does.
+[projects.swap-vm]
+url = "https://github.com/1inch/swap-vm"
+commit = "585f0541cfbf9a043b4a7b25b6b4c7d752915469"
+description = "1inch SwapVM: opcode dispatch loop that re-enters itself through instruction handlers"
+requires_yarn = true
