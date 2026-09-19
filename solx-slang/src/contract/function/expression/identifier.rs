@@ -9,8 +9,6 @@ use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::StateVariableMutability;
 use slang_solidity_v2::ast::Type;
 
-use solx_mlir::FunctionDispatch;
-use solx_mlir::FunctionKind;
 use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
@@ -21,11 +19,10 @@ use crate::scope::source_unit::SourceUnitScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// A constant folds to its initializer converted to the declared type, since the initializer
-    /// alone may carry another (a string literal initializing a `bytesN`); an immutable outside
-    /// the constructor loads its linked value (`sol.load_immutable`); a bare function name
-    /// materialises its internal pointer
-    /// (`sol.func_constant`), defining the function in this module if absent; a library name is its
-    /// linked address (`sol.lib_addr`); every other identifier loads from its place.
+    /// alone may carry another (a string literal initializing a `bytesN`); an immutable outside a
+    /// constructor loads its linked value (`sol.load_immutable`); a function name materialises the
+    /// internal pointer of the function the object runs for it; a library name is
+    /// its linked address (`sol.lib_addr`); every other identifier loads from its place.
     pub fn identifier(&mut self, node: &Identifier) -> Value<'context> {
         let definition = node.resolve_to_definition();
         if let Some(definition) = &definition
@@ -40,7 +37,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             Some(Definition::StateVariable(state_variable))
                 if let StateVariableMutability::Immutable =
                     state_variable.attributes().mutability()
-                    && self.dispatch != FunctionDispatch::Kind(FunctionKind::Constructor) =>
+                    && !self.is_constructor =>
             {
                 let element_type = self.resolve_type(
                     &state_variable
@@ -55,10 +52,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 )
             }
             Some(Definition::Function(function)) => {
-                self.contract.function_definition(&function);
+                let function = self.contract.virtual_function(&function);
                 self.contract
-                    .source_unit
-                    .function_signature(&function)
+                    .function_definition(&function)
                     .pointer_constant(self)
             }
             Some(Definition::Library(library)) => {

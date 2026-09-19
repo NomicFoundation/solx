@@ -4,7 +4,9 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
+use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
@@ -34,14 +36,6 @@ impl Object {
             Definition::Contract(contract) => Some(Self::Contract(contract)),
             Definition::Library(library) => Some(Self::Library(library)),
             _ => None,
-        }
-    }
-
-    /// The object's definition id.
-    pub fn node_id(&self) -> NodeId {
-        match self {
-            Self::Contract(node) => node.node_id(),
-            Self::Library(node) => node.node_id(),
         }
     }
 
@@ -80,45 +74,48 @@ impl Object {
         }
     }
 
-    /// The object's own functions.
+    /// The contracts of the object's linearisation, itself first: an interface base declares
+    /// nothing an object runs, and a library is in no linearisation.
+    pub fn contracts(&self) -> Vec<ContractDefinition> {
+        match self {
+            Self::Contract(node) => node
+                .linearised_bases()
+                .into_iter()
+                .filter_map(|base| match base {
+                    ContractBase::Contract(base) => Some(base),
+                    ContractBase::Interface(_) => None,
+                })
+                .collect(),
+            Self::Library(_) => Vec::new(),
+        }
+    }
+
+    /// The functions the object dispatches and defines: a contract's resolved hierarchy, where an
+    /// overridden or getter-shadowed function has given way to its override, listed in declaration
+    /// order per contract of its linearisation, as print-init emits them; a library's own.
     pub fn functions(&self) -> Vec<FunctionDefinition> {
         match self {
-            Self::Contract(node) => node.functions(),
+            Self::Contract(node) => {
+                let resolved: HashSet<NodeId> = node
+                    .linearised_functions()
+                    .iter()
+                    .map(|function| function.node_id())
+                    .collect();
+                self.contracts()
+                    .iter()
+                    .flat_map(|base| base.functions())
+                    .filter(|function| resolved.contains(&function.node_id()))
+                    .collect()
+            }
             Self::Library(node) => node.functions(),
         }
     }
 
-    /// The object's state variable declarations in source order.
+    /// The state variables the object declares over its hierarchy, in storage order.
     pub fn state_variables(&self) -> Vec<StateVariableDefinition> {
         match self {
-            Self::Contract(node) => node.state_variables(),
+            Self::Contract(node) => node.linearised_state_variables(),
             Self::Library(node) => node.state_variables(),
-        }
-    }
-
-    /// The state variables a getter dispatches to.
-    pub fn public_state_variables(&self) -> Vec<StateVariableDefinition> {
-        self.state_variables()
-            .into_iter()
-            .filter(|state_variable| state_variable.is_externally_visible())
-            .collect()
-    }
-
-    /// The storage slot of each state variable the object stores, persistent and transient in one
-    /// map keyed by definition id. A library declares only constants, which occupy no slot.
-    pub fn storage_layout(&self) -> HashMap<NodeId, StorageSlot> {
-        match self {
-            Self::Contract(node) => node
-                .compute_abi()
-                .map(|abi| {
-                    abi.storage_layout()
-                        .iter()
-                        .chain(abi.transient_storage_layout().iter())
-                        .map(|item| (item.node_id(), StorageSlot::from(item)))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            Self::Library(_) => HashMap::new(),
         }
     }
 
@@ -142,17 +139,40 @@ impl Object {
                         .expect("an externally visible function has a selector"),
                 )
             })
-            .chain(self.public_state_variables().iter().map(|state_variable| {
-                (
-                    state_variable
-                        .compute_canonical_signature()
-                        .expect("a public state variable has a canonical signature"),
-                    state_variable
-                        .compute_selector()
-                        .expect("a public state variable has a selector"),
-                )
-            }))
+            .chain(
+                self.state_variables()
+                    .iter()
+                    .filter(|state_variable| state_variable.is_externally_visible())
+                    .map(|state_variable| {
+                        (
+                            state_variable
+                                .compute_canonical_signature()
+                                .expect("a public state variable has a canonical signature"),
+                            state_variable
+                                .compute_selector()
+                                .expect("a public state variable has a selector"),
+                        )
+                    }),
+            )
             .map(|(signature, selector)| (signature, format!("{selector:08x}")))
             .collect()
+    }
+
+    /// The storage slot of each state variable the object stores, persistent and transient in one
+    /// map keyed by definition id. A library declares only constants, which occupy no slot.
+    pub fn storage_layout(&self) -> HashMap<NodeId, StorageSlot> {
+        match self {
+            Self::Contract(node) => {
+                let abi = node
+                    .compute_abi()
+                    .expect("slang admits a contract whose ABI it cannot compute");
+                abi.storage_layout()
+                    .iter()
+                    .chain(abi.transient_storage_layout().iter())
+                    .map(|item| (item.node_id(), StorageSlot::from(item)))
+                    .collect()
+            }
+            Self::Library(_) => HashMap::new(),
+        }
     }
 }

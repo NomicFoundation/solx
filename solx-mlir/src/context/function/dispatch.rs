@@ -16,14 +16,19 @@ pub enum FunctionDispatch {
     Identifier(NodeId),
     /// The dialect kind of a constructor, fallback or receive function.
     Kind(FunctionKind),
-    /// A synthesized state-variable getter, dispatched by its ABI selector alone.
-    Getter,
+    /// A synthesized state-variable getter or a base constructor, reached by its symbol alone.
+    Symbol,
 }
 
-impl From<&FunctionDefinition> for FunctionDispatch {
-    fn from(function: &FunctionDefinition) -> Self {
+impl FunctionDispatch {
+    /// Only the most derived constructor of a hierarchy is the object's creation entry point; every
+    /// base constructor is reached by the call the chain emits.
+    pub fn new(function: &FunctionDefinition, is_most_derived: bool) -> Self {
         match function.kind() {
-            SlangFunctionKind::Constructor => Self::Kind(FunctionKind::Constructor),
+            SlangFunctionKind::Constructor if is_most_derived => {
+                Self::Kind(FunctionKind::Constructor)
+            }
+            SlangFunctionKind::Constructor => Self::Symbol,
             SlangFunctionKind::Fallback => Self::Kind(FunctionKind::Fallback),
             SlangFunctionKind::Receive => Self::Kind(FunctionKind::Receive),
             SlangFunctionKind::Regular => Self::Identifier(function.node_id()),
