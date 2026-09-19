@@ -72,12 +72,6 @@ pub struct Context<'ctx> {
     /// The output configuration telling whether to dump the needed IRs.
     output_config: Option<OutputConfig>,
 
-    /// The unit's `memoryguard` base offset, above which the spill area is placed so it never
-    /// overlaps solc's statically allocated memory below the guard, such as the immutable
-    /// staging slots of deploy code. Defaults to the free-memory start and is refined when a
-    /// `MEMORYGUARD` sets the reserved-memory boundary.
-    memory_guard: u64,
-
     /// The Solidity data.
     solidity_data: Option<SolidityData>,
     /// The EVM legacy assembly data.
@@ -146,8 +140,6 @@ impl<'ctx> Context<'ctx> {
             debug_info,
             output_config,
 
-            memory_guard: crate::r#const::SOLC_USER_MEMORY_OFFSET,
-
             solidity_data,
             evmla_data: None,
 
@@ -177,12 +169,8 @@ impl<'ctx> Context<'ctx> {
             "InitVerify",
             self.optimizer.settings(),
         );
-        let spill_area_size = self.optimizer.settings().spill_area_size();
-        let target_machine = TargetMachine::new(
-            self.optimizer.settings(),
-            self.llvm_options.as_slice(),
-            spill_area_size.map(|size| (self.memory_guard, size)),
-        )?;
+        let target_machine =
+            TargetMachine::new(self.optimizer.settings(), self.llvm_options.as_slice())?;
         target_machine.set_target_data(self.module());
         target_machine.set_asm_verbosity(true);
 
@@ -196,7 +184,6 @@ impl<'ctx> Context<'ctx> {
                 contract_path,
                 self.module(),
                 is_size_fallback,
-                spill_area_size,
             )?;
         }
 
@@ -228,12 +215,7 @@ impl<'ctx> Context<'ctx> {
             .run(&target_machine, self.module())
             .map_err(|error| anyhow::anyhow!("{} code optimizing: {error}", self.code_segment))?;
         if let Some(output_config) = self.output_config.as_ref() {
-            output_config.dump_llvm_ir_optimized(
-                contract_path,
-                self.module(),
-                is_size_fallback,
-                spill_area_size,
-            )?;
+            output_config.dump_llvm_ir_optimized(contract_path, self.module(), is_size_fallback)?;
         }
 
         // Capture optimized LLVM IR for output if requested and not writing to files
@@ -250,6 +232,9 @@ impl<'ctx> Context<'ctx> {
             )
         })?;
         run_optimize_verify.borrow_mut().finish();
+
+        // The spill area (offset, size) reported by the LLVM backend during code emission.
+        let mut spill_area: Option<(u64, u64)> = None;
 
         let assembly_buffer = if output_assembly
             || self
@@ -270,6 +255,7 @@ impl<'ctx> Context<'ctx> {
                     inkwell::targets::FileType::Assembly,
                 )
                 .map_err(|error| anyhow::anyhow!("assembly emitting: {error}"))?;
+            spill_area = Self::read_spill_area(&module_assembly_emitter);
 
             if let Some(output_config) = self.output_config.as_ref() {
                 let assembly_text = String::from_utf8_lossy(assembly_buffer.as_slice());
@@ -277,7 +263,6 @@ impl<'ctx> Context<'ctx> {
                     contract_path,
                     assembly_text.as_ref(),
                     is_size_fallback,
-                    spill_area_size,
                 )?;
             }
 
@@ -319,6 +304,14 @@ impl<'ctx> Context<'ctx> {
             };
             run_emit_bytecode.borrow_mut().finish();
 
+            spill_area = Self::read_spill_area(self.module()).or(spill_area);
+            self.check_unsafe_asm_with_spills(spill_area)?;
+            if let (Some(output_config), Some((offset, size))) =
+                (self.output_config.as_ref(), spill_area)
+            {
+                output_config.mark_spills(contract_path, is_size_fallback, offset, size)?;
+            }
+
             let immutables = match self.code_segment {
                 solx_utils::CodeSegment::Deploy => None,
                 solx_utils::CodeSegment::Runtime => Some(bytecode_buffer.get_immutables_evm()),
@@ -333,8 +326,6 @@ impl<'ctx> Context<'ctx> {
             let bytecode_size = bytecode_buffer.as_slice().len();
             if bytecode_size > bytecode_size_limit {
                 if needs_size_fallback {
-                    crate::codegen::IS_SIZE_FALLBACK
-                        .store(true, std::sync::atomic::Ordering::Relaxed);
                     let mut size_fallback_settings = OptimizerSettings::size();
                     size_fallback_settings.metadata_size = self.optimizer.settings().metadata_size;
                     self.optimizer = Optimizer::new(size_fallback_settings);
@@ -379,6 +370,12 @@ impl<'ctx> Context<'ctx> {
                 warnings,
             ))
         } else {
+            self.check_unsafe_asm_with_spills(spill_area)?;
+            if let (Some(output_config), Some((offset, size))) =
+                (self.output_config.as_ref(), spill_area)
+            {
+                output_config.mark_spills(contract_path, is_size_fallback, offset, size)?;
+            }
             // Only capture EVMLA/EthIR if not writing to files
             let captured_evmla = if self.output_config.is_none() {
                 self.captured_evmla.take()
@@ -406,19 +403,61 @@ impl<'ctx> Context<'ctx> {
     }
 
     ///
+    /// Rejects the translation unit if the LLVM backend generated stack spills while the
+    /// module contains memory-unsafe assembly, unless the check is explicitly disabled.
+    ///
+    /// Spilled values are placed in the memory region starting at the `memoryguard` value,
+    /// which memory-unsafe assembly that ignores the free memory pointer convention may
+    /// clobber. The unsafe-assembly marker metadata is attached by the frontends; the spill
+    /// area is reported back by the backend during code emission.
+    ///
+    fn check_unsafe_asm_with_spills(&self, spill_area: Option<(u64, u64)>) -> anyhow::Result<()> {
+        if spill_area.is_some()
+            && !self
+                .module()
+                .get_global_metadata(solx_utils::UNSAFE_ASM_METADATA_KEY)
+                .is_empty()
+            && std::env::var(solx_utils::ENV_DISABLE_UNSAFE_MEMORY_ASM_STACK_TOO_DEEP_CHECK)
+                .is_err()
+        {
+            anyhow::bail!(solx_utils::ERROR_UNSAFE_MEMORY_ASM_STACK_TOO_DEEP);
+        }
+        Ok(())
+    }
+
+    ///
+    /// Reads the spill area (offset, size) reported by the LLVM backend via module metadata.
+    ///
+    /// The metadata is attached by the EVM stack frame finalization pass during code
+    /// emission, so it is only present after the module has gone through an emission
+    /// call, and only when the unit required stack spilling.
+    ///
+    fn read_spill_area(module: &inkwell::module::Module<'ctx>) -> Option<(u64, u64)> {
+        let offset = Self::read_u64_metadata(module, solx_utils::SPILL_AREA_OFFSET_METADATA_KEY)?;
+        let size = Self::read_u64_metadata(module, solx_utils::SPILL_AREA_SIZE_METADATA_KEY)?;
+        Some((offset, size))
+    }
+
+    ///
+    /// Reads a single `u64` value from the named module metadata `key`.
+    ///
+    fn read_u64_metadata(module: &inkwell::module::Module<'ctx>, key: &str) -> Option<u64> {
+        let node = module.get_global_metadata(key).first().copied()?;
+        match node.get_node_values().first()? {
+            inkwell::values::BasicMetadataValueEnum::IntValue(value) => {
+                value.get_zero_extended_constant()
+            }
+            _ => None,
+        }
+    }
+
+    ///
     /// Verifies the current LLVM IR module.
     ///
     pub fn verify(&self) -> anyhow::Result<()> {
         self.module()
             .verify()
             .map_err(|error| anyhow::anyhow!(error.to_string()))
-    }
-
-    ///
-    /// Sets the memory guard base offset, above which the spill area is placed.
-    ///
-    pub fn set_memory_guard(&mut self, offset: u64) {
-        self.memory_guard = offset;
     }
 
     ///

@@ -457,12 +457,12 @@ solx_Compilation: [..]ms
 
 ======= Simple.sol:Simple =======
 Benchmarks:
-    Simple.sol:Simple:deploy/EVMAssemblyToLLVMIR/M3B3/SpillArea(0): [..]ms
-    Simple.sol:Simple:deploy/InitVerify/M3B3/SpillArea(0): [..]ms
-    Simple.sol:Simple:deploy/OptimizeVerify/M3B3/SpillArea(0): [..]ms
-    Simple.sol:Simple:runtime/EVMAssemblyToLLVMIR/M3B3/SpillArea(0): [..]ms
-    Simple.sol:Simple.runtime:runtime/InitVerify/M3B3/SpillArea(0): [..]ms
-    Simple.sol:Simple.runtime:runtime/OptimizeVerify/M3B3/SpillArea(0): [..]ms
+    Simple.sol:Simple:deploy/EVMAssemblyToLLVMIR/M3B3: [..]ms
+    Simple.sol:Simple:deploy/InitVerify/M3B3: [..]ms
+    Simple.sol:Simple:deploy/OptimizeVerify/M3B3: [..]ms
+    Simple.sol:Simple:runtime/EVMAssemblyToLLVMIR/M3B3: [..]ms
+    Simple.sol:Simple.runtime:runtime/InitVerify/M3B3: [..]ms
+    Simple.sol:Simple.runtime:runtime/OptimizeVerify/M3B3: [..]ms
 
 ```
 

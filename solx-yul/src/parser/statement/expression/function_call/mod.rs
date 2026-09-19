@@ -780,18 +780,11 @@ impl FunctionCall {
                     .ok_or_else(|| {
                         anyhow::anyhow!("{location} `memoryguard` argument must be a literal")
                     })?;
-                context.set_memory_guard(guard);
-                let spill_area = context
-                    .optimizer()
-                    .settings()
-                    .spill_area_size()
-                    .unwrap_or_default();
-                solx_codegen_evm::arithmetic::addition(
-                    context,
-                    arguments[0].value.into_int_value(),
-                    context.field_const(spill_area),
+                context.build_call(
+                    context.intrinsics().memoryguard,
+                    &[context.field_const(guard).into()],
+                    "memory_guard",
                 )
-                .map(Some)
             }
 
             Name::Address => context.build_call(context.intrinsics().address, &[], "address"),
@@ -844,13 +837,6 @@ impl FunctionCall {
                                 .into()]),
                         )
                         .expect("Always valid");
-                }
-
-                if context.optimizer().settings().spill_area_size().is_some()
-                    && std::env::var(solx_utils::ENV_DISABLE_UNSAFE_MEMORY_ASM_STACK_TOO_DEEP_CHECK)
-                        .is_err()
-                {
-                    anyhow::bail!(solx_utils::ERROR_UNSAFE_MEMORY_ASM_STACK_TOO_DEEP);
                 }
 
                 Ok(None)

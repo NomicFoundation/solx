@@ -25,7 +25,6 @@ pub use self::build::contract::Contract as EVMContractBuild;
 pub use self::compiler::Compiler;
 pub use self::r#const::*;
 pub use self::error::Error;
-pub use self::error::stack_too_deep::StackTooDeep as StackTooDeepError;
 pub use self::frontend::Frontend;
 pub use self::process::EXECUTABLE;
 pub use self::process::child::run as run_subprocess;

@@ -46,13 +46,7 @@ impl Profiler {
         description: &str,
         optimizer_settings: &OptimizerSettings,
     ) -> Rc<RefCell<Run>> {
-        let spill_area_description = format!(
-            "SpillArea({})",
-            optimizer_settings.spill_area_size().unwrap_or_default()
-        );
-        let run_name = format!(
-            "{full_path}:{code_segment}/{description}/{optimizer_settings}/{spill_area_description}",
-        );
+        let run_name = format!("{full_path}:{code_segment}/{description}/{optimizer_settings}",);
         assert!(
             !self.timings.contains_key(run_name.as_str()),
             "Translation unit run `{run_name}` already exists"

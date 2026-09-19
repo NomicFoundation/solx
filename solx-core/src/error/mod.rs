@@ -2,18 +2,11 @@
 //! Compilation error.
 //!
 
-pub mod stack_too_deep;
-
-use self::stack_too_deep::StackTooDeep;
-
 ///
 /// Compilation error.
 ///
 #[derive(Debug, thiserror::Error, serde::Serialize, serde::Deserialize)]
 pub enum Error {
-    /// The stack-too-deep error.
-    #[error("{0}")]
-    StackTooDeep(StackTooDeep),
     /// Standard JSON error.
     #[error("{0}")]
     StandardJson(solx_standard_json::OutputError),
@@ -23,16 +16,6 @@ pub enum Error {
 }
 
 impl Error {
-    ///
-    /// A shortcut constructor for a `StackTooDeep` error.
-    ///
-    pub fn stack_too_deep(spill_area_size: u64, is_size_fallback: bool) -> Self {
-        Error::StackTooDeep(StackTooDeep {
-            spill_area_size,
-            is_size_fallback,
-        })
-    }
-
     ///
     /// Converts the error into a standard JSON output error.
     ///

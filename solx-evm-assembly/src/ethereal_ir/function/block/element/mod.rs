@@ -183,25 +183,14 @@ impl solx_codegen_evm::WriteLLVM for Element {
             ),
             InstructionName::MEMORYGUARD => {
                 let arguments = self.pop_arguments_llvm(context)?;
-                let StackElement::Constant(guard) = &self.stack_input.elements[0] else {
+                let StackElement::Constant(_) = &self.stack_input.elements[0] else {
                     unreachable!("`MEMORYGUARD` is always preceded by a constant memory offset")
                 };
-                context.set_memory_guard(
-                    guard
-                        .to_u64()
-                        .expect("Memory guard offset always fits in 64 bits"),
-                );
-                let spill_area = context
-                    .optimizer()
-                    .settings()
-                    .spill_area_size()
-                    .unwrap_or_default();
-                solx_codegen_evm::arithmetic::addition(
-                    context,
-                    arguments[0].into_int_value(),
-                    context.field_const(spill_area),
+                context.build_call(
+                    context.intrinsics().memoryguard,
+                    &[arguments[0]],
+                    "memory_guard",
                 )
-                .map(Some)
             }
 
             InstructionName::DUP1 => {
@@ -1066,12 +1055,6 @@ impl solx_codegen_evm::WriteLLVM for Element {
                         .expect("Always valid");
                 }
 
-                if context.optimizer().settings().spill_area_size().is_some()
-                    && std::env::var(solx_utils::ENV_DISABLE_UNSAFE_MEMORY_ASM_STACK_TOO_DEEP_CHECK)
-                        .is_err()
-                {
-                    anyhow::bail!(solx_utils::ERROR_UNSAFE_MEMORY_ASM_STACK_TOO_DEEP);
-                }
                 Ok(None)
             }
 
