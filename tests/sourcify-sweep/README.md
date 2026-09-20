@@ -2,8 +2,9 @@
 
 Compiles real-world Sourcify-verified contracts through `solx --standard-json`
 and reports what fails, and how. Built for the Slang frontend: the corpus is
-every verified solc 0.8.34 contract with evmVersion >= cancun (112,587
-contracts, extracted from Sourcify's BigQuery dataset 2026-08-18), so the
+every verified solc 0.8.34 and 0.8.36 contract with evmVersion >= cancun
+(119,117 contracts, extracted from Sourcify's BigQuery dataset 2026-08-18 and
+2026-09-20), so the
 failure census is a ranked list of the frontend's remaining gaps on deployed
 code. Runs in CI behind the `ci:sourcify-sweep` PR label
 (`.github/workflows/sourcify-sweep.yaml`) and posts the report as a PR comment.
@@ -71,8 +72,8 @@ evmVersion).
 
 `corpus-pin.txt` pins the corpus release (URL + sha256); bump it to sweep a
 new corpus. The tarball unpacks to `./corpus.json` + `./contracts/*.json`; the
-CI shards extract only their slice of the sorted contract list (~200 MB each)
-rather than the full 4.7 GB. The extraction query and provenance live with the
+CI shards extract only their slice of the sorted contract list (~230 MB each)
+rather than the full 5.5 GB. The extraction query and provenance live with the
 hardhat-slang-solx sweep (NomicFoundation/hardhat#8538), which sweeps the same
 corpus end to end through Hardhat and the solc-frontend solx.
 
