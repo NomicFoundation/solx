@@ -158,6 +158,47 @@ impl<'context> SourceUnitScope<'context> {
         }
     }
 
+    /// The Sol dialect type an ABI-encoded value of a Slang type is materialized at. The encoder
+    /// reads a reference out of memory, whatever location the declaration spells.
+    pub fn encoding(&self, node: &Type) -> MlirType<'context> {
+        let memory = solx_utils::DataLocation::Memory;
+        match node {
+            Type::String(_) | Type::Bytes(_) => MlirType::string(self.melior, memory),
+            Type::Array(array_type) => MlirType::array(
+                self.melior,
+                ArraySize::Dynamic,
+                self.encoding(&array_type.element_type()),
+                memory,
+            ),
+            Type::FixedSizeArray(fixed_array_type) => MlirType::array(
+                self.melior,
+                ArraySize::Fixed(
+                    u64::try_from(fixed_array_type.size()).expect("fixed array size fits u64"),
+                ),
+                self.encoding(&fixed_array_type.element_type()),
+                memory,
+            ),
+            Type::Struct(struct_type) => {
+                let Definition::Struct(struct_definition) = struct_type.definition() else {
+                    unreachable!("Slang StructType always references a Struct definition");
+                };
+                let member_types: Vec<MlirType<'context>> = struct_definition
+                    .members()
+                    .iter()
+                    .map(|member| {
+                        self.encoding(
+                            &member
+                                .get_type()
+                                .expect("struct member type resolved by semantic analysis"),
+                        )
+                    })
+                    .collect();
+                MlirType::structure(self.melior, &member_types, memory)
+            }
+            value_type => self.resolve(value_type, None),
+        }
+    }
+
     /// Resolves a function type's MLIR signature from the binder's type, so a callee naming no
     /// definition to look a registered signature up by resolves here.
     pub fn function_type(&self, function_type: &SlangFunctionType) -> FunctionType<'context> {

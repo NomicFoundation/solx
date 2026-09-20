@@ -45,9 +45,24 @@
 // CHECK:   %[[WIDE:.*]] = sol.cast %[[NARROW]] : ui8 to ui256
 // CHECK:   sol.encode selector(%{{.*}}) %[[WIDE]] : !sol.fixedbytes<4> ui256 : !sol.string<Memory>
 
-// TODO: pin abi.encodeCall on a reference parameter. solc encodes from memory, but the parameter
-// type reachable from `I.f` keeps its declared `calldata` location — slang normalizes it only on an
-// instance-qualified `i.f` — so a memory or storage argument emits an unlegalizable cast.
+// CHECK: sol.func @{{.*encodeCallMemory.*}}
+// CHECK:   %[[MEM:.*]] = sol.constant 4152292210 : ui32
+// CHECK:   %[[MEMSEL:.*]] = sol.bytes_cast %[[MEM]] : ui32 to !sol.fixedbytes<4>
+// CHECK:   sol.encode selector(%[[MEMSEL]]) %{{.*}} : !sol.fixedbytes<4> !sol.string<Memory> : !sol.string<Memory>
+
+// CHECK: sol.func @{{.*encodeCallStorage.*}}
+// CHECK:   %[[SLOT:.*]] = sol.addr_of @{{.*}} : !sol.string<Storage>
+// CHECK:   %[[LOADED:.*]] = sol.data_loc_cast %[[SLOT]] : !sol.string<Storage>, !sol.string<Memory>
+// CHECK:   sol.encode selector(%{{.*}}) %[[LOADED]] : !sol.fixedbytes<4> !sol.string<Memory> : !sol.string<Memory>
+
+// CHECK: sol.func @{{.*encodeCallCalldata.*}}
+// CHECK:   %[[COPIED:.*]] = sol.data_loc_cast %{{.*}} : !sol.string<CallData>, !sol.string<Memory>
+// CHECK:   sol.encode selector(%{{.*}}) %[[COPIED]] : !sol.fixedbytes<4> !sol.string<Memory> : !sol.string<Memory>
+
+// CHECK: sol.func @{{.*encodeCallArray.*}}
+// CHECK:   %[[ARRAY:.*]] = sol.constant 3580528309 : ui32
+// CHECK:   %[[ARRAYSEL:.*]] = sol.bytes_cast %[[ARRAY]] : ui32 to !sol.fixedbytes<4>
+// CHECK:   sol.encode selector(%[[ARRAYSEL]]) %{{.*}} : !sol.fixedbytes<4> !sol.array<? x !sol.string<Memory>, Memory> : !sol.string<Memory>
 
 // CHECK: sol.func @{{.*encodeCallEmpty.*}}
 // CHECK:   %[[EMPTY:.*]] = sol.constant 777180678 : ui32
@@ -103,6 +118,14 @@ contract C {
 
     function encodeCallWidened(uint8 x) public pure returns (bytes memory) { return abi.encodeCall(I.f, (x)); }
 
+    function encodeCallMemory(bytes memory data) public pure returns (bytes memory) { return abi.encodeCall(I.withBytes, (data)); }
+
+    function encodeCallStorage() public view returns (bytes memory) { return abi.encodeCall(I.withBytes, (stored)); }
+
+    function encodeCallCalldata(bytes calldata data) public pure returns (bytes memory) { return abi.encodeCall(I.withBytes, (data)); }
+
+    function encodeCallArray(bytes[] memory data) public pure returns (bytes memory) { return abi.encodeCall(I.withBytesArray, (data)); }
+
     function encodeCallEmpty() public pure returns (bytes memory) { return abi.encodeCall(I.n, ()); }
 
     function encodeCallPointer(function(uint256) external returns (uint256) p, uint256 x) public pure returns (bytes memory) { return abi.encodeCall(p, (x)); }
@@ -124,6 +147,10 @@ interface I {
     function f(uint256 a) external returns (uint256);
 
     function n() external returns (uint256);
+
+    function withBytes(bytes calldata data) external returns (uint256);
+
+    function withBytesArray(bytes[] calldata data) external returns (uint256);
 }
 
 library Lib {}
