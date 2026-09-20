@@ -160,7 +160,8 @@ jobs:
             --out "${RUNNER_TEMP}/results-shard-${SHARD}.jsonl" \
             --concurrency 4 \
             --timeout 300 \
-            --memory-limit-mb 6144
+            --memory-limit-mb 6144 \
+            --rewrite-pragmas
 
       - name: Upload shard results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

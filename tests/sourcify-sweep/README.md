@@ -37,6 +37,13 @@ does not implement are deliberately not stripped: the same input must be
 valid for the baseline leg, and a resulting failure (an unresolved import
 that a remapping would have fixed, say) is a real gap, not a harness artifact.
 
+The one edit is the version pragma. The Slang frontend checks pragmas against
+Slang's latest language version (0.8.36) while the baseline is a 0.8.34
+compiler, so an exact pin fails one of the two legs before parsing. With
+`--rewrite-pragmas` (on in CI) each leg gets the source with every
+`pragma solidity …;` replaced by the version its own `--version` reports;
+the corpus itself stays the verbatim Sourcify record.
+
 ## Outcomes
 
 | outcome | meaning |
