@@ -17,7 +17,7 @@ use solx_mlir::Context;
 use solx_mlir::Contract;
 use solx_mlir::Function;
 
-use crate::contract::constructor_chain::ConstructorChain;
+use crate::contract::constructor::Constructor;
 use crate::contract::object::Object;
 use crate::contract::storage_slot::StorageSlot;
 use crate::scope::function::FunctionScope;
@@ -36,10 +36,8 @@ pub struct ContractScope<'source_unit, 'context> {
     pub defined_functions: HashSet<NodeId>,
     /// The state-variable slots keyed by definition id.
     pub storage_layout: HashMap<NodeId, StorageSlot>,
-    /// The constructors the object's creation runs and the argument lists they pass along.
-    pub chain: &'source_unit ConstructorChain,
-    /// The definition ids a selector is emitted for.
-    pub dispatched_functions: HashSet<NodeId>,
+    /// The constructors and arguments emitted for the object's creation.
+    pub constructor: Constructor<'context>,
 }
 
 impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
@@ -48,7 +46,6 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         source_unit: &'source_unit mut SourceUnitScope<'context>,
         contract: Contract<'context>,
         object: &'source_unit Object,
-        chain: &'source_unit ConstructorChain,
     ) -> Self {
         Self {
             source_unit,
@@ -56,17 +53,12 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             object,
             defined_functions: HashSet::new(),
             storage_layout: object.storage_layout(),
-            chain,
-            dispatched_functions: object
-                .functions()
-                .iter()
-                .map(|function| function.node_id())
-                .collect(),
+            constructor: Constructor::new(object.contracts()),
         }
     }
 
-    /// Opens the function scope around `emit`: where the frame sits in the constructor chain, a
-    /// fresh variable environment, the declared return types a `return` converts to, and checked
+    /// Opens the function scope around `emit`: whether the frame is a constructor, a fresh
+    /// variable environment, the declared return types a `return` converts to, and checked
     /// arithmetic, with the MLIR cursor on `entry` for the body's duration.
     pub fn function(
         &mut self,

@@ -2,7 +2,7 @@
 //! Contract and library definition emission to Sol dialect MLIR.
 //!
 
-pub mod constructor_chain;
+pub mod constructor;
 pub mod function;
 pub mod getter;
 pub mod object;
@@ -17,7 +17,6 @@ use solx_mlir::Block;
 use solx_mlir::Contract;
 use solx_mlir::Type as MlirType;
 
-use crate::contract::constructor_chain::ConstructorChain;
 use crate::contract::object::Object;
 use crate::scope::contract::ContractScope;
 use crate::scope::source_unit::SourceUnitScope;
@@ -35,7 +34,6 @@ impl<'context> SourceUnitScope<'context> {
                 Block::from(self.module.body()),
             ),
             object,
-            &ConstructorChain::new(object.contracts()),
             |scope| scope.members(),
         );
         object.method_identifiers()

@@ -14,7 +14,6 @@ use solx_mlir::Contract;
 use solx_mlir::Function;
 use solx_mlir::Type as MlirType;
 
-use crate::contract::constructor_chain::ConstructorChain;
 use crate::contract::object::Object;
 use crate::scope::contract::ContractScope;
 
@@ -43,11 +42,10 @@ impl<'context> SourceUnitScope<'context> {
         contract_type: MlirType<'context>,
         contract: Contract<'context>,
         object: &Object,
-        chain: &ConstructorChain,
         emit: impl FnOnce(&mut ContractScope<'_, 'context>),
     ) {
         self.mlir.current_contract_type = Some(contract_type);
-        emit(&mut ContractScope::new(self, contract, object, chain));
+        emit(&mut ContractScope::new(self, contract, object));
         self.mlir.current_contract_type = None;
     }
 

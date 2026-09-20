@@ -6,16 +6,17 @@ pub mod assembly;
 pub mod expression;
 pub mod statement;
 
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::FunctionKind;
+use slang_solidity_v2::ast::VirtualTarget;
 
 use solx_mlir::Function;
 use solx_mlir::FunctionDispatch;
-use solx_mlir::FunctionKind as MlirFunctionKind;
 use solx_mlir::Place;
 use solx_mlir::StateMutability;
 use solx_mlir::Value;
 
-use crate::contract::constructor_chain::ConstructorChain;
 use crate::contract::object::Object;
 use crate::scope::contract::ContractScope;
 use crate::scope::source_unit::SourceUnitScope;
@@ -28,45 +29,51 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             return self.source_unit.function_signature(function);
         }
 
-        let position = self.chain.positions.get(&function.node_id()).copied();
+        let is_constructor = matches!(function.kind(), FunctionKind::Constructor);
+        let is_most_derived = is_constructor
+            && matches!(self.object, Object::Contract(contract) if contract
+                .constructor()
+                .is_some_and(|constructor| constructor.node_id() == function.node_id()));
         let body = function
             .body()
             .expect("slang admits a call naming a function declaration nothing implements");
-        let selector = self
-            .dispatched_functions
-            .contains(&function.node_id())
-            .then(|| function.compute_selector())
-            .flatten();
+        let selector = match (self.object, function.enclosing_definition()) {
+            (Object::Contract(contract), Some(Definition::Contract(_)))
+                if matches!(contract.resolve_virtual(function), VirtualTarget::Function(resolved)
+                    if resolved.node_id() == function.node_id()) =>
+            {
+                function.compute_selector()
+            }
+            (Object::Library(library), Some(Definition::Library(enclosing)))
+                if library.node_id() == enclosing.node_id() =>
+            {
+                function.compute_selector()
+            }
+            _ => None,
+        };
 
         let mut signature = self.source_unit.function_signature(function);
-        if let Some(position) = position {
-            for parameter_position in self
-                .chain
-                .parameter_positions(position)
-                .filter(|parameter_position| *parameter_position != position)
-            {
-                signature.function_type.parameters.extend(
-                    self.source_unit
-                        .function_signature(
-                            self.chain.constructors[parameter_position]
-                                .as_ref()
-                                .expect("every position the chain threads holds a constructor"),
-                        )
-                        .function_type
-                        .parameters,
-                );
-            }
+        if is_constructor {
+            signature
+                .function_type
+                .parameters
+                .extend(self.constructor.parameter_types());
         }
 
         let entry = signature.define(
             selector,
-            FunctionDispatch::new(function, position == Some(ConstructorChain::MOST_DERIVED)),
+            FunctionDispatch::new(function, is_most_derived),
             StateMutability::from(function.attributes().mutability()),
             self,
             self.contract.body,
         );
 
-        self.function(entry, position.is_some(), &signature, |scope| {
+        if is_constructor {
+            self.constructor.current = Some(function.node_id());
+            self.constructor.bind_parameters(function, entry);
+        }
+
+        self.function(entry, is_constructor, &signature, |scope| {
             for (index, parameter) in function.parameters().iter().enumerate() {
                 let Some(identifier) = parameter.name() else {
                     continue;
@@ -95,11 +102,11 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 })
                 .unwrap_or_default();
 
-            if let Some(position) = position {
-                if position == ConstructorChain::MOST_DERIVED {
+            if is_constructor {
+                if is_most_derived {
                     scope.state_variable_initializers();
                 }
-                scope.base_constructor_call(position, entry);
+                scope.base_constructor_call();
             }
 
             scope.statements(&body.statements());
@@ -122,33 +129,6 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             }
         });
         signature
-    }
-
-    /// Emits the object's own constructor: the declared one, or a synthesized `constructor()` that
-    /// still runs the state variable initializers and the base constructors.
-    pub fn constructor(&mut self) {
-        let Object::Contract(_) = &self.object else {
-            return;
-        };
-        if let Some(constructor) = self.chain.constructors[ConstructorChain::MOST_DERIVED].as_ref()
-        {
-            self.function_definition(constructor);
-            return;
-        }
-
-        let entry = Function::constructor().define(
-            None,
-            FunctionDispatch::Kind(MlirFunctionKind::Constructor),
-            StateMutability::NonPayable,
-            self,
-            self.contract.body,
-        );
-
-        self.function(entry, true, &Function::constructor(), |scope| {
-            scope.state_variable_initializers();
-            scope.base_constructor_call(ConstructorChain::MOST_DERIVED, entry);
-            scope.current_block().r#return(&[], scope);
-        });
     }
 }
 

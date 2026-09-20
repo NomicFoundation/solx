@@ -1,7 +1,7 @@
 //!
-//! The function scope: the enclosing contract scope, where the frame sits in the constructor
-//! chain, the lexical variable environment, the declared return types, and the checked-arithmetic
-//! flag, together with the frame combinators every lowering threads through.
+//! The function scope: the enclosing contract scope, whether the frame is a constructor, the
+//! lexical variable environment, the declared return types, and the checked-arithmetic flag,
+//! together with the frame combinators every lowering threads through.
 //!
 
 use std::ops::Deref;
@@ -18,9 +18,9 @@ use solx_mlir::Value;
 use crate::scope::assembly::AssemblyScope;
 use crate::scope::contract::ContractScope;
 
-/// The function scope: the enclosing contract scope, where the frame sits in the constructor
-/// chain, the lexical variable environment, the declared return types a `return` converts to, and
-/// whether arithmetic is checked at the current position.
+/// The function scope: the enclosing contract scope, whether the frame is a constructor, the
+/// lexical variable environment, the declared return types a `return` converts to, and whether
+/// arithmetic is checked at the current position.
 pub struct FunctionScope<'contract, 'source_unit, 'context> {
     /// The contract scope this function body is lowered within.
     pub contract: &'contract mut ContractScope<'source_unit, 'context>,
