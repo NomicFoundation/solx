@@ -34,6 +34,7 @@ OUTPUT_SELECTION = {"*": {"*": ["evm.bytecode.object", "evm.deployedBytecode.obj
 PASSTHROUGH_SETTINGS = ("evmVersion", "libraries", "remappings", "viaIR")
 STDERR_TAIL = 2000
 MAX_MESSAGES = 5
+VERSION_PRAGMA = re.compile(r"pragma\s+solidity\s+[^;]+;")
 
 
 def standard_json_input(record: dict) -> dict:
@@ -47,6 +48,17 @@ def standard_json_input(record: dict) -> dict:
         "language": "Solidity",
         "sources": {path: {"content": content} for path, content in record["sources"].items()},
         "settings": settings,
+    }
+
+
+def with_pragmas(stdjson: dict, version: str) -> dict:
+    """The same input with every version pragma replaced by `pragma solidity <version>;`."""
+    return {
+        **stdjson,
+        "sources": {
+            path: {"content": VERSION_PRAGMA.sub(f"pragma solidity {version};", source["content"])}
+            for path, source in stdjson["sources"].items()
+        },
     }
 
 
@@ -153,13 +165,15 @@ def sweep_one(args, path: pathlib.Path) -> dict:
     record = json.loads(path.read_text())
     stdjson = standard_json_input(record)
     result = {"id": path.stem, "chain_id": record.get("chain_id"), "target": record["target"], "traits": traits(record)}
-    result["solx"] = compile_once(args.bin, stdjson, record["target"], args.timeout, args.memory_limit_mb)
+    candidate_input = with_pragmas(stdjson, args.bin_version) if args.rewrite_pragmas else stdjson
+    result["solx"] = compile_once(args.bin, candidate_input, record["target"], args.timeout, args.memory_limit_mb)
     if result["solx"]["kind"] == "ok":
         result["outcome"] = "ok"
     elif result["solx"]["kind"] == "timeout":
         result["outcome"] = "timeout"
     elif args.baseline:
-        result["baseline"] = compile_once(args.baseline, stdjson, record["target"], args.timeout, args.memory_limit_mb)
+        baseline_input = with_pragmas(stdjson, args.baseline_version) if args.rewrite_pragmas else stdjson
+        result["baseline"] = compile_once(args.baseline, baseline_input, record["target"], args.timeout, args.memory_limit_mb)
         result["outcome"] = "solx-fail" if result["baseline"]["kind"] == "ok" else "both-fail"
     else:
         result["outcome"] = "solx-fail"
@@ -168,6 +182,15 @@ def sweep_one(args, path: pathlib.Path) -> dict:
 
 def version_of(binary: str) -> str:
     return subprocess.run([binary, "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[0]
+
+
+def language_version(binary: str) -> str:
+    """The `Version: X.Y.Z` line of `--version`: the version the frontend checks pragmas against."""
+    banner = subprocess.run([binary, "--version"], capture_output=True, text=True, check=True).stdout
+    match = re.search(r"^Version:\s*(\d+\.\d+\.\d+)", banner, re.MULTILINE)
+    if not match:
+        sys.exit(f"{binary} --version prints no 'Version:' line:\n{banner}")
+    return match.group(1)
 
 
 def select_paths(args) -> list:
@@ -196,12 +219,17 @@ def main() -> int:
     parser.add_argument("--concurrency", type=int, default=os.cpu_count() or 1)
     parser.add_argument("--timeout", type=float, default=300, help="per-leg timeout in seconds [default: 300]")
     parser.add_argument("--memory-limit-mb", type=int, default=0, help="address-space cap per compiler process (0 = none)")
+    parser.add_argument("--rewrite-pragmas", action="store_true",
+                        help="replace every version pragma with each leg's own language version (from `--version`)")
     parser.add_argument("--sample", type=int, default=0, help="random subset size (after sharding)")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--limit", type=int, default=0, help="stop after this many contracts")
     args = parser.parse_args()
     if not 0 <= args.shard_index < args.shard_count:
         parser.error("--shard-index must be in [0, --shard-count)")
+
+    args.bin_version = language_version(args.bin) if args.rewrite_pragmas else None
+    args.baseline_version = language_version(args.baseline) if args.rewrite_pragmas and args.baseline else None
 
     paths = select_paths(args)
     done = set()
@@ -219,6 +247,8 @@ def main() -> int:
             meta = {"solx": version_of(args.bin)}
             if args.baseline:
                 meta["baseline"] = version_of(args.baseline)
+            if args.rewrite_pragmas:
+                meta["pragmas_rewritten_to"] = {"solx": args.bin_version, "baseline": args.baseline_version}
             out.write(json.dumps({"meta": meta}) + "\n")
         with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrency) as pool:
             for result in pool.map(lambda path: sweep_one(args, path), pending):
