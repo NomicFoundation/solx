@@ -1,7 +1,7 @@
 name: Sourcify Sweep
 
-# Compiles the pinned Sourcify corpus (every verified solc 0.8.34 contract with
-# evmVersion >= cancun, 112k contracts) through the Slang-frontend solx build
+# Compiles the pinned Sourcify corpus (every verified solc 0.8.34 and 0.8.36
+# contract with evmVersion >= cancun, 119k contracts) through the Slang-frontend solx build
 # of the PR, re-runs each failure with the released solc-frontend solx as a
 # baseline, and reports the outcome table plus the ranked failure census.
 # Expensive (24 shards x ~1h), so it only runs when asked for: label the PR
@@ -136,7 +136,7 @@ jobs:
           "${RUNNER_TEMP}/solx-baseline" --version
 
       # Extract only this shard's round-robin slice of the sorted contract
-      # list (~200 MB of the 4.7 GB corpus); run.py then sweeps the slice whole.
+      # list (~230 MB of the 5.5 GB corpus); run.py then sweeps the slice whole.
       - name: Download the pinned corpus slice
         run: |
           url=$(sed -n 's/^url=//p' tests/sourcify-sweep/corpus-pin.txt)
