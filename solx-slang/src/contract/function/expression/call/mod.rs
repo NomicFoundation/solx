@@ -956,17 +956,23 @@ impl Call {
                     Some(Definition::Function(function_definition)) => function_definition
                         .parameters()
                         .iter()
-                        .map(|parameter| scope.typing(parameter.get_type()))
+                        .map(|parameter| {
+                            scope.encoding_type(
+                                &parameter
+                                    .get_type()
+                                    .expect("slang types every function parameter"),
+                            )
+                        })
                         .collect(),
                     _ => {
                         let Some(Type::Function(function_type)) = callee.get_type() else {
                             unreachable!("abi.encodeCall dispatches on an external function");
                         };
-                        scope
-                            .contract
-                            .source_unit
-                            .function_type(&function_type)
-                            .parameters
+                        function_type
+                            .parameter_types()
+                            .iter()
+                            .map(|parameter_type| scope.encoding_type(parameter_type))
+                            .collect()
                     }
                 };
                 let selector = scope.external_selector(callee);
