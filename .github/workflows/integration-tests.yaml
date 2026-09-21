@@ -235,7 +235,7 @@ jobs:
         with:
           # Pinning the action digest alone still floats the frontend: this input defaults to `stable`.
           # renovate: datasource=github-releases depName=foundry-rs/foundry
-          version: v1.7.1
+          version: v1.8.1
 
       # Some projects might use hardcoded ssh URLs: force git to use https instead.
       - name: Git https settings
