@@ -8,7 +8,6 @@ use std::process::Command;
 use assert_cmd::assert::Assert;
 use assert_cmd::assert::OutputAssertExt;
 
-#[cfg(feature = "solc")]
 mod abi;
 #[cfg(feature = "solc")]
 mod allow_paths;
@@ -38,7 +37,6 @@ mod ethir;
 mod evm_version;
 #[cfg(feature = "solc")]
 mod evmla;
-#[cfg(feature = "solc")]
 mod hashes;
 mod help;
 #[cfg(feature = "solc")]

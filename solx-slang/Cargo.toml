@@ -14,6 +14,7 @@ anyhow.workspace = true
 num.workspace = true
 num-traits = "0.2"
 ruint.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 semver.workspace = true
 
