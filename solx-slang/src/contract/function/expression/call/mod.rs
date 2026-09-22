@@ -250,11 +250,7 @@ impl Call {
         }
     }
 
-    /// Classifies `call`'s callee into the single kind that emits it. A type conversion is probed
-    /// before the callee's shape, since its callee may be an elementary type or `payable` keyword
-    /// as well as a named type. The lookup of a named function is the callee's shape: a bare name is virtual,
-    /// a `super` member resolves after its enclosing contract, and a contract-qualified name names its
-    /// declaration.
+    /// Classifies the call by its callee.
     fn from_call(call: &FunctionCallExpression, callee: Expression) -> Self {
         if let Some(Definition::Struct(struct_definition)) =
             FunctionScope::resolved_definition(&callee)

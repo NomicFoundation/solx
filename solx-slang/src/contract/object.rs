@@ -90,9 +90,9 @@ impl Object {
         }
     }
 
-    /// The functions the object dispatches and defines: a contract's resolved hierarchy, where an
-    /// overridden or getter-shadowed function has given way to its override, listed in declaration
-    /// order per contract of its linearisation, as print-init emits them; a library's own.
+    /// A contract's functions after resolving overrides and getter shadowing, in declaration
+    /// order within each contract of its linearisation, most derived first; a library's own
+    /// functions in declaration order.
     pub fn functions(&self) -> Vec<FunctionDefinition> {
         match self {
             Self::Contract(node) => {

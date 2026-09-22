@@ -30,7 +30,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         }
 
         let is_constructor = matches!(function.kind(), FunctionKind::Constructor);
-        let is_most_derived = is_constructor
+        let is_most_derived_constructor = is_constructor
             && matches!(self.object, Object::Contract(contract) if contract
                 .constructor()
                 .is_some_and(|constructor| constructor.node_id() == function.node_id()));
@@ -62,7 +62,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
 
         let entry = signature.define(
             selector,
-            FunctionDispatch::new(function, is_most_derived),
+            FunctionDispatch::new(function, is_most_derived_constructor),
             StateMutability::from(function.attributes().mutability()),
             self,
             self.contract.body,
@@ -102,10 +102,10 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 })
                 .unwrap_or_default();
 
+            if is_most_derived_constructor {
+                scope.state_variable_initializers();
+            }
             if is_constructor {
-                if is_most_derived {
-                    scope.state_variable_initializers();
-                }
                 scope.base_constructor_call();
             }
 

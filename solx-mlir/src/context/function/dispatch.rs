@@ -23,9 +23,9 @@ pub enum FunctionDispatch {
 impl FunctionDispatch {
     /// Only the most derived constructor of a hierarchy is the object's creation entry point; every
     /// base constructor is reached by the call the chain emits.
-    pub fn new(function: &FunctionDefinition, is_most_derived: bool) -> Self {
+    pub fn new(function: &FunctionDefinition, is_most_derived_constructor: bool) -> Self {
         match function.kind() {
-            SlangFunctionKind::Constructor if is_most_derived => {
+            SlangFunctionKind::Constructor if is_most_derived_constructor => {
                 Self::Kind(FunctionKind::Constructor)
             }
             SlangFunctionKind::Constructor => Self::Symbol,
