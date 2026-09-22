@@ -23,17 +23,38 @@ use solx_mlir::Value;
 use crate::scope::contract::ContractScope;
 use crate::scope::function::FunctionScope;
 
-/// The constructors and arguments emitted for the object's creation.
-pub struct Constructor<'context> {
+/// Mutable state shared while emitting the object's constructor chain.
+///
+/// Constructor calls follow Slang's linearisation from derived to base. Each constructor
+/// calls the next before executing its body, so bodies execute from base to derived.
+///
+/// Arguments supplied for a later base travel through intermediate constructors as extra
+/// MLIR parameters. For a chain Leaf → Middle → Root, where Leaf supplies
+/// `Middle(seed + 1)` and `Root(seed)`, Middle receives its declared argument and an extra
+/// parameter carrying `seed`, which it passes to Root.
+///
+/// The builder advances through the contracts as calls are emitted, collecting their base
+/// argument expressions. Each constructor evaluates the expressions supplied in its scope.
+/// Arguments for the next constructor become its declared operands; the remaining values
+/// become extra operands and parameters. On entry, those forwarded values are rebound to
+/// the new block's arguments.
+///
+/// As in legacy solc, the creation entry point runs state variable initializers across the
+/// hierarchy in base-to-derived order before evaluating base constructor arguments or
+/// executing constructor bodies. This applies to both declared and synthesized entry points.
+pub struct ConstructorBuilder<'context> {
     /// The contracts of the object's linearisation, consumed in call order.
     pub contracts: IntoIter<ContractDefinition>,
-    /// The argument lists supplied for bases, keyed by the provider's definition id.
+    /// Base constructor argument expressions grouped by the constructor that supplies them.
+    /// `Some(node_id)` identifies that constructor's definition. `None` groups inheritance
+    /// arguments from contracts without a declared constructor.
     pub arguments: HashMap<Option<NodeId>, Vec<Arguments>>,
-    /// The evaluated arguments awaiting delivery to base constructors, in linearisation order.
+    /// Evaluated arguments grouped by their destination constructor, carried through
+    /// intermediate constructors as extra parameters until their destination is reached.
     pub forwarded: Vec<(NodeId, Vec<Value<'context>>)>,
     /// The linearisation index of each contract by definition id.
     pub positions: HashMap<NodeId, usize>,
-    /// The constructor definition id currently being emitted.
+    /// The declared constructor being emitted, or `None` for the synthesized creation entry point.
     pub current: Option<NodeId>,
 }
 
@@ -45,7 +66,7 @@ pub struct Arguments {
     pub arguments: ArgumentsDeclaration,
 }
 
-impl<'context> Constructor<'context> {
+impl<'context> ConstructorBuilder<'context> {
     /// Creates a constructor sequence for the contracts of an object's linearisation.
     pub fn new(contracts: Vec<ContractDefinition>) -> Self {
         let positions = contracts

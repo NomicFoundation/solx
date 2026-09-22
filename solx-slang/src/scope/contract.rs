@@ -17,7 +17,7 @@ use solx_mlir::Context;
 use solx_mlir::Contract;
 use solx_mlir::Function;
 
-use crate::contract::constructor::Constructor;
+use crate::contract::constructor::ConstructorBuilder;
 use crate::contract::object::Object;
 use crate::contract::storage_slot::StorageSlot;
 use crate::scope::function::FunctionScope;
@@ -36,8 +36,8 @@ pub struct ContractScope<'source_unit, 'context> {
     pub defined_functions: HashSet<NodeId>,
     /// The state-variable slots keyed by definition id.
     pub storage_layout: HashMap<NodeId, StorageSlot>,
-    /// The constructors and arguments emitted for the object's creation.
-    pub constructor: Constructor<'context>,
+    /// Mutable state for emitting the object's constructor chain.
+    pub constructor: ConstructorBuilder<'context>,
 }
 
 impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
@@ -53,7 +53,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             object,
             defined_functions: HashSet::new(),
             storage_layout: object.storage_layout(),
-            constructor: Constructor::new(object.contracts()),
+            constructor: ConstructorBuilder::new(object.contracts()),
         }
     }
 
