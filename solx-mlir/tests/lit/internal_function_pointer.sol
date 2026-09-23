@@ -4,7 +4,7 @@
 // CHECK: sol.state_var @{{.*functionPointerState.*}} slot 0 offset 0 : !sol.func_ref<() -> ui256>
 // CHECK: sol.state_var @{{.*functionPointerField.*}} slot 1 offset 0 : !sol.struct<(!sol.func_ref<() -> ui256>), Storage>
 
-// CHECK: sol.func @{{.*g.*}}() -> ui256 attributes {{.*}}id = {{[0-9]+}}
+// CHECK: sol.func {{(private )?}}@{{.*g.*}}() -> ui256 attributes {{.*}}id = {{[0-9]+}}
 
 // CHECK: sol.func @{{.*run.*}}
 // CHECK:   %[[G:.*]] = sol.func_constant @{{.*g.*}} : !sol.func_ref<() -> ui256>
@@ -21,7 +21,7 @@
 // CHECK:   %[[POINTER:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.func_ref<(ui256) -> ui256>, Stack>, !sol.func_ref<(ui256) -> ui256>
 // CHECK:   sol.icall %[[POINTER]](%[[ARGUMENT]]) : !sol.func_ref<(ui256) -> ui256>, (ui256) -> ui256
 
-// CHECK: sol.func @{{.*invoke.*}}(%[[ARGUMENT:.*]]: !sol.func_ref<() -> ui256>) -> ui256
+// CHECK: sol.func {{(private )?}}@{{.*invoke.*}}(%[[ARGUMENT:.*]]: !sol.func_ref<() -> ui256>) -> ui256
 // CHECK:   sol.store %[[ARGUMENT]], %[[SLOT:.*]] : !sol.func_ref<() -> ui256>, !sol.ptr<!sol.func_ref<() -> ui256>, Stack>
 // CHECK:   %[[POINTER:.*]] = sol.load %[[SLOT]] : !sol.ptr<!sol.func_ref<() -> ui256>, Stack>, !sol.func_ref<() -> ui256>
 // CHECK:   sol.icall %[[POINTER]]() : !sol.func_ref<() -> ui256>, () -> ui256
@@ -68,7 +68,7 @@
 // CHECK:   sol.icall %[[POINTER]](%{{.*}}, %{{.*}}) : !sol.func_ref<(ui256, ui256) -> (ui256, ui256)>, (ui256, ui256) -> (ui256, ui256)
 
 // CHECK: sol.contract @{{.*Lib.*}} {
-// CHECK: sol.func @{{.*run_library.*}}
+// CHECK: sol.func {{(private )?}}@{{.*run_library.*}}
 // CHECK:   sol.func_constant @{{.*double.*}} : !sol.func_ref<(ui256) -> ui256>
 // CHECK:   sol.icall %{{[0-9]+}}(%{{.*}}) : !sol.func_ref<(ui256) -> ui256>, (ui256) -> ui256
 // CHECK: } {kind = #Library}

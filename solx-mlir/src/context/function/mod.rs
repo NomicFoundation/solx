@@ -101,6 +101,10 @@ impl<'context> Function<'context> {
             operation_builder = operation_builder
                 .selector(Type::selector_attribute(selector_value, context.melior));
         }
+        if selector.is_none() && !matches!(dispatch, FunctionDispatch::Kind(_)) {
+            operation_builder =
+                operation_builder.sym_visibility(StringAttribute::new(context.melior, "private"));
+        }
         if selector.is_some()
             || matches!(dispatch, FunctionDispatch::Kind(FunctionKind::Constructor))
         {

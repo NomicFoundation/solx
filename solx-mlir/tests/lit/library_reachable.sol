@@ -6,17 +6,17 @@
 // CHECK: sol.contract @{{.*User.*}} {
 // CHECK: sol.func @{{.*}} attributes {{.*}}kind = #Constructor
 // CHECK:   sol.call @{{.*seed.*}}(%{{.*}}) : (ui256) -> ui256
-// CHECK: sol.func @{{.*seed.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #Pure}
+// CHECK: sol.func private @{{.*seed.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #Pure}
 // CHECK:   sol.call @{{.*step.*}}(%{{.*}}) : (ui256) -> ui256
 // CHECK: sol.func @{{.*consume.*}}
 // CHECK:   sol.call @{{.*calls_public_sibling.*}}(%{{.*}}) : (ui256) -> ui256
-// CHECK: sol.func @{{.*calls_public_sibling.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #Pure}
+// CHECK: sol.func private @{{.*calls_public_sibling.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #Pure}
 // CHECK:   sol.call @{{.*public_sibling.*}}(%{{.*}}) : (ui256) -> ui256
-// CHECK: sol.func @{{.*public_sibling.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #Pure}
+// CHECK: sol.func private @{{.*public_sibling.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #Pure}
 // CHECK:   sol.call @{{.*bare.*}}(%{{.*}}) : (ui256) -> ui256
 // CHECK: sol.func @{{.*total.*}}
 // CHECK:   sol.call @"operator_add({{[^"]*}}"
-// CHECK: sol.func @"operator_add({{[^"]*}}"
+// CHECK: sol.func private @"operator_add({{[^"]*}}"
 // CHECK: sol.func @{{.*planted.*}}()
 // CHECK: } {kind = #Contract}
 
