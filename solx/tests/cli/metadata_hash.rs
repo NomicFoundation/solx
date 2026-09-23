@@ -45,6 +45,41 @@ fn ipfs() -> anyhow::Result<()> {
 }
 
 #[test]
+fn ipfs_hashes_printed_metadata() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::TEST_YUL_CONTRACT,
+        "--yul",
+        "--metadata",
+        "--bin-runtime",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    let stdout = String::from_utf8(result.success().get_output().stdout.clone())?;
+    let line_after = |header: &str| {
+        stdout
+            .lines()
+            .skip_while(|line| *line != header)
+            .nth(1)
+            .unwrap_or_else(|| panic!("`{header}` is followed by its value"))
+    };
+    let runtime = line_after("Binary of the runtime part:");
+    let metadata = line_after("Metadata:");
+
+    // A two-entry CBOR map whose first entry is `ipfs` with a 34-byte value.
+    let (_, hash) = runtime
+        .rsplit_once("a264697066735822")
+        .expect("the runtime code ends with an IPFS metadata hash");
+    assert_eq!(
+        &hash[..68],
+        solx_utils::IPFSHash::from_slice(metadata.as_bytes()).to_string()
+    );
+
+    Ok(())
+}
+
+#[test]
 fn standard_json_cli_excess_arg() -> anyhow::Result<()> {
     crate::common::setup()?;
 

@@ -551,7 +551,14 @@ impl Project {
             .map(|(path, mut contract)| {
                 let contract_name = contract.name.clone();
 
-                let metadata = contract.metadata.take();
+                let metadata = contract.metadata.take().map(|metadata| {
+                    ContractMetadata::new(
+                        solc_version.as_ref(),
+                        optimizer_settings.clone(),
+                        llvm_options.as_slice(),
+                    )
+                    .insert_into(metadata.as_str())
+                });
                 let abi = contract.abi.take();
                 let method_identifiers = contract.method_identifiers.take();
                 let userdoc = contract.userdoc.take();
@@ -686,8 +693,6 @@ impl Project {
                     let metadata_bytes = Self::cbor_metadata(
                         metadata.as_deref(),
                         solc_version.as_ref(),
-                        &optimizer_settings,
-                        llvm_options.as_slice(),
                         metadata_hash_type,
                         append_cbor,
                     );
@@ -755,8 +760,6 @@ impl Project {
     fn cbor_metadata(
         metadata: Option<&str>,
         solc_version: Option<&solx_standard_json::Version>,
-        optimizer_settings: &solx_codegen_evm::OptimizerSettings,
-        llvm_options: &[String],
         metadata_hash_type: solx_utils::MetadataHashType,
         append_cbor: bool,
     ) -> Option<Vec<u8>> {
@@ -764,18 +767,12 @@ impl Project {
             return None;
         }
 
-        let metadata = metadata.map(|metadata| {
-            ContractMetadata::new(solc_version, optimizer_settings.clone(), llvm_options)
-                .insert_into(metadata)
+        let metadata_hash = metadata.and_then(|metadata| match metadata_hash_type {
+            solx_utils::MetadataHashType::None => None,
+            solx_utils::MetadataHashType::IPFS => {
+                Some(solx_utils::IPFSHash::from_slice(metadata.as_bytes()).to_vec())
+            }
         });
-        let metadata_hash = metadata
-            .as_ref()
-            .and_then(|metadata| match metadata_hash_type {
-                solx_utils::MetadataHashType::None => None,
-                solx_utils::MetadataHashType::IPFS => {
-                    Some(solx_utils::IPFSHash::from_slice(metadata.as_bytes()).to_vec())
-                }
-            });
 
         let mut cbor_version_parts = Vec::with_capacity(2);
         cbor_version_parts.push((

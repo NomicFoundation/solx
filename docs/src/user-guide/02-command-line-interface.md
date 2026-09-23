@@ -106,11 +106,11 @@ __entry:                                ; @__entry
 
 Emits the contract metadata. The metadata is a JSON object that contains information about the contract, such as its name, source code hash, the list of dependencies, compiler versions, and so on.
 
-The **solx** metadata format is compatible with the [Solidity metadata format](https://docs.soliditylang.org/en/latest/metadata.html#contract-metadata). This means that the metadata output can be used with other tools that support Solidity metadata. The metadata that is hashed into [the CBOR trailer of the bytecode](#--metadata-hash) additionally carries extra **solx** data inserted into the **solc** metadata with this JSON object:
+The **solx** metadata format is compatible with the [Solidity metadata format](https://docs.soliditylang.org/en/latest/metadata.html#contract-metadata). This means that the metadata output can be used with other tools that support Solidity metadata. It additionally carries extra **solx** data inserted into the **solc** metadata, and this combined JSON is what is hashed into [the CBOR trailer of the bytecode](#--metadata-hash):
 
 ```javascript
 {
-  "solx": {
+  "solx-core": {
     "llvm_options": [],
     "optimizer_settings": {
       "is_debug_logging_enabled": false,
@@ -118,7 +118,9 @@ The **solx** metadata format is compatible with the [Solidity metadata format](h
       "is_verify_each_enabled": false,
       "level_back_end": "Aggressive",
       "level_middle_end": "Aggressive",
-      "level_middle_end_size": "Zero"
+      "level_middle_end_size": "Zero",
+      "metadata_size": null,
+      "spill_area_size": null
     },
     // Optional: only set for Solidity and Yul contracts.
     "solc_version": "0.8.34",
@@ -135,7 +137,7 @@ $ solx 'Simple.sol' --metadata
 
 ======= Simple.sol:Simple =======
 Metadata:
-{"compiler":{"version":"0.8.34+commit.[..]"},"language":"Solidity","output":{"abi":[{"inputs":[],"name":"first","outputs":[{"internalType":"uint64","name":"","type":"uint64"}],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"second","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"pure","type":"function"}],"devdoc":{"kind":"dev","methods":{},"version":1},"userdoc":{"kind":"user","methods":{},"version":1}},"settings":{"compilationTarget":{"Simple.sol":"Simple"},"evmVersion":"osaka","libraries":{},"metadata":{"bytecodeHash":"ipfs"},"optimizer":{"enabled":false,"runs":200},"remappings":[]},"sources":{"Simple.sol":{"keccak256":"0x402fe0b38cc9d81e8c9f6d07854cca27fbb307f06d8a129998026907a10c7ca1","license":"MIT","urls":["bzz-raw://04714cab56c1f931e3cc1ddae4c7ff0c8832d0849e23966c6326028f6783d45a","dweb:/ipfs/QmehmUFKCtytG8WcWQ676KvqwURfkVYK89VHZEvSzyLc2Z"]}},"version":1}
+{"compiler":{"version":"0.8.34+commit.[..]"},"language":"Solidity","output":{"abi":[{"inputs":[],"name":"first","outputs":[{"internalType":"uint64","name":"","type":"uint64"}],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"second","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"pure","type":"function"}],"devdoc":{"kind":"dev","methods":{},"version":1},"userdoc":{"kind":"user","methods":{},"version":1}},"settings":{"compilationTarget":{"Simple.sol":"Simple"},"evmVersion":"osaka","libraries":{},"metadata":{"bytecodeHash":"ipfs"},"optimizer":{"enabled":false,"runs":200},"remappings":[]},"solx-core":{[..]},"sources":{"Simple.sol":{"keccak256":"0x402fe0b38cc9d81e8c9f6d07854cca27fbb307f06d8a129998026907a10c7ca1","license":"MIT","urls":["bzz-raw://04714cab56c1f931e3cc1ddae4c7ff0c8832d0849e23966c6326028f6783d45a","dweb:/ipfs/QmehmUFKCtytG8WcWQ676KvqwURfkVYK89VHZEvSzyLc2Z"]}},"version":1}
 
 ```
 
