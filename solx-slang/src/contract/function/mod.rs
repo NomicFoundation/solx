@@ -39,7 +39,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             .expect("slang admits a call naming a function declaration nothing implements");
         let selector = match (self.object, function.enclosing_definition()) {
             (Object::Contract(contract), Some(Definition::Contract(_)))
-                if matches!(contract.resolve_virtual(function), VirtualTarget::Function(resolved)
+                if matches!(contract.resolve_virtual(function), Some(VirtualTarget::Function(resolved))
                     if resolved.node_id() == function.node_id()) =>
             {
                 function.compute_selector()

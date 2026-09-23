@@ -76,17 +76,18 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         self.source_unit.mlir.current_block = enclosing;
     }
 
-    /// The function a bare name runs in this object: the most-derived override of its hierarchy.
-    /// A library's functions are never overridden.
+    /// The function a bare name runs in this object: the most-derived override of its hierarchy,
+    /// or the function itself when it is free or a library's, which nothing overrides.
     pub fn virtual_function(&self, function: &FunctionDefinition) -> FunctionDefinition {
         let Object::Contract(node) = &self.object else {
             return function.clone();
         };
         match node.resolve_virtual(function) {
-            VirtualTarget::Function(function) => function,
-            VirtualTarget::Getter(_) => {
+            Some(VirtualTarget::Function(function)) => function,
+            Some(VirtualTarget::Getter(_)) => {
                 unreachable!("a getter overrides an external function, which no bare name calls")
             }
+            None => function.clone(),
         }
     }
 
@@ -101,6 +102,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             unreachable!("`super` is written in a contract alone");
         };
         node.resolve_super(function, enclosing_contract)
+            .expect("a `super` call resolves to an implemented base function")
     }
 }
 
