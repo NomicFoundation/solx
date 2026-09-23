@@ -45,13 +45,37 @@ fn ipfs() -> anyhow::Result<()> {
 }
 
 #[test]
-fn ipfs_hashes_printed_metadata() -> anyhow::Result<()> {
+fn none_prints_solx_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 
+    let hash_type = MetadataHashType::None.to_string();
     let args = &[
         crate::common::TEST_YUL_CONTRACT,
         "--yul",
         "--metadata",
+        "--metadata-hash",
+        hash_type.as_str(),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("\"solx-core\":{"));
+
+    Ok(())
+}
+
+#[test]
+fn ipfs_hashes_printed_metadata() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let hash_type = MetadataHashType::IPFS.to_string();
+    let args = &[
+        crate::common::TEST_YUL_CONTRACT,
+        "--yul",
+        "--metadata",
+        "--metadata-hash",
+        hash_type.as_str(),
         "--bin-runtime",
     ];
 

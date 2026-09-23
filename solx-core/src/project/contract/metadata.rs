@@ -5,7 +5,7 @@
 ///
 /// The contract metadata.
 ///
-/// Is used to append the metadata hash to the contract bytecode.
+/// Is inserted into the solc metadata that is output and hashed into the contract bytecode.
 ///
 #[derive(Debug, serde::Serialize)]
 pub struct Metadata<'a> {
