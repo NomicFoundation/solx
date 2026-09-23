@@ -63,9 +63,22 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             .collect()
     }
 
-    /// The arguments of an external dispatch, which the callee ABI-decodes from the call data
-    /// rather than reading in place: a reference-typed argument is encoded out of the data location
-    /// it already lives in, so only a scalar converts to its parameter type.
+    /// An argument the callee ABI-decodes from the call data rather than reading in place, be it
+    /// of an external dispatch or of `abi.encodeCall`: a reference-typed argument is encoded out
+    /// of the data location it already lives in, so only a scalar converts to its parameter type.
+    pub fn external_argument(
+        &mut self,
+        argument: &Expression,
+        parameter_type: MlirType<'context>,
+    ) -> Value<'context> {
+        if parameter_type.is_scalar() {
+            self.converted(argument, parameter_type)
+        } else {
+            self.expression(argument)
+        }
+    }
+
+    /// The arguments of an external dispatch, each lowered as `external_argument`.
     pub fn external_arguments(
         &mut self,
         arguments: &[Expression],
@@ -74,13 +87,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         arguments
             .iter()
             .zip(parameters)
-            .map(|(argument, &parameter_type)| {
-                if parameter_type.is_scalar() {
-                    self.converted(argument, parameter_type)
-                } else {
-                    self.expression(argument)
-                }
-            })
+            .map(|(argument, &parameter_type)| self.external_argument(argument, parameter_type))
             .collect()
     }
 

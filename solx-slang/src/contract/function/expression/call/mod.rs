@@ -957,7 +957,7 @@ impl Call {
                             .into_iter()
                             .zip(tuple.items().iter())
                             .map(|(parameter_type, item)| {
-                                scope.converted(
+                                scope.external_argument(
                                     &item.expression().expect("slang validates tuple elements"),
                                     parameter_type,
                                 )
@@ -967,7 +967,7 @@ impl Call {
                             let [parameter_type] = parameters[..] else {
                                 unreachable!("an untupled argument list names one parameter");
                             };
-                            vec![scope.converted(argument, parameter_type)]
+                            vec![scope.external_argument(argument, parameter_type)]
                         }
                     };
                 vec![Value::encode(&values, Some(selector), scope)]
