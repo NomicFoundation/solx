@@ -12,7 +12,7 @@
 // CHECK:     %[[ARGUMENT:.*]] = sol.load %[[X]]
 // CHECK:     sol.yield %[[ARGUMENT]] : ui256
 
-// CHECK: sol.func @[[BASE_CONSTRUCTOR]](%arg0: ui256) attributes {state_mutability
+// CHECK: sol.func private @[[BASE_CONSTRUCTOR]](%arg0: ui256) attributes {state_mutability
 // CHECK:   sol.modifier_invocation @[[OVERRIDE]] {
 
 // CHECK: sol.modifier @[[OVERRIDE]](%arg0: ui256) {
@@ -34,7 +34,7 @@
 // CHECK: sol.func @{{.*}}attached{{.*}}(%arg0: ui256) -> ui256
 // CHECK:   sol.call @[[LIBRARY_FUNCTION:.*]](%{{.*}}) : (ui256) -> ui256
 
-// CHECK: sol.func @[[LIBRARY_FUNCTION]](%arg0: ui256) -> ui256
+// CHECK: sol.func private @[[LIBRARY_FUNCTION]](%arg0: ui256) -> ui256
 // CHECK:   sol.modifier_invocation @[[LIBRARY_MODIFIER]] {
 
 // CHECK: sol.modifier @[[LIBRARY_MODIFIER]]() {

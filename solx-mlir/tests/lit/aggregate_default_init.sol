@@ -39,7 +39,7 @@
 // CHECK:   %[[ADDR:.*]] = sol.address_cast %[[ZERO]] : ui160 to !sol.address
 // CHECK:   sol.address_cast %[[ADDR]] : !sol.address to !sol.contract<{{.*I.*}}>
 
-// CHECK: sol.func @{{.*named_storage.*}}
+// CHECK: sol.func private @{{.*named_storage.*}}
 // CHECK:   sol.default_storage : !sol.array<? x ui256, Storage>
 
 // CHECK: sol.func @{{.*unnamed_array.*}}

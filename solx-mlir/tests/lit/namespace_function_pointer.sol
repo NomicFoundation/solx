@@ -1,7 +1,7 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.contract @{{.*C.*}} {
-// CHECK: sol.func @{{.*g.*}}() -> ui256 attributes {{.*}}id = {{[0-9]+}}
+// CHECK: sol.func private @{{.*g.*}}() -> ui256 attributes {{.*}}id = {{[0-9]+}}
 // CHECK: sol.func @{{.*parenthesized.*}}
 // CHECK:   sol.func_constant @{{.*g.*}} : !sol.func_ref<() -> ui256>
 // CHECK:   sol.icall %{{[0-9]+}}() : !sol.func_ref<() -> ui256>, () -> ui256
@@ -14,7 +14,7 @@
 // CHECK: } {kind = #Contract}
 
 // CHECK: sol.contract @{{.*Lib.*}} {
-// CHECK: sol.func @{{.*taker.*}}
+// CHECK: sol.func private @{{.*taker.*}}
 // CHECK:   sol.func_constant @{{.*pick.*}} : !sol.func_ref<() -> ui256>
 // CHECK:   sol.icall %{{[0-9]+}}() : !sol.func_ref<() -> ui256>, () -> ui256
 // CHECK: } {kind = #Library}

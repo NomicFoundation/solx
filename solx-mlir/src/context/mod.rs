@@ -167,6 +167,10 @@ impl<'context> Context<'context> {
 
     /// Run the Sol-to-LLVM conversion pass pipeline on a module in-place.
     ///
+    /// The first `symbol-dce` removes the functions unreachable in the contract before anything
+    /// walks them. Splitting the contract into a creation and a runtime object can leave a
+    /// function unreachable in the runtime object; the second takes care of that.
+    ///
     /// # Errors
     ///
     /// Returns an error if any pass in the pipeline fails or the resulting module fails
@@ -177,13 +181,19 @@ impl<'context> Context<'context> {
 
         unsafe {
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateTransformsCanonicalizer(),
+                crate::ffi::mlirCreateTransformsSymbolDCE(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateSolModifierInliningPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
+                crate::ffi::mlirCreateTransformsCanonicalizer(),
+            ));
+            pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionConvertSolToYulPass(),
+            ));
+            pass_manager.add_pass(melior::pass::Pass::from_raw(
+                crate::ffi::mlirCreateTransformsSymbolDCE(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionConvertYulToStandardPass(),

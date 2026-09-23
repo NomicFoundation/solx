@@ -7,7 +7,7 @@
 // CHECK:   sol.call @[[HELPER:.*]]() : () -> ()
 // CHECK:   sol.placeholder
 
-// CHECK: sol.func @[[HELPER]]()
+// CHECK: sol.func private @[[HELPER]]()
 // CHECK:   sol.modifier_invocation @[[REACHING]] {
 // CHECK-NOT: sol.modifier @[[REACHING]](
 // CHECK: } {kind = #Contract}
