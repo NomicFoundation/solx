@@ -157,16 +157,22 @@ impl<'context> Context<'context> {
     /// Run the Sol-to-LLVM conversion pass pipeline on a module in-place.
     ///
     /// The pass pipeline is:
-    /// 1. `canonicalize`
+    /// 1. `symbol-dce`
     /// 2. `sol-inline-modifiers`
-    /// 3. `convert-sol-to-yul`: Sol → Yul
-    /// 4. `convert-yul-to-std`: Yul → func/arith/scf/cf/LLVM
-    /// 5. `canonicalize`
-    /// 6. `convert-scf-to-cf`
-    /// 7. `convert-func-to-llvm`
-    /// 8. `convert-arith-to-llvm`
-    /// 9. `convert-cf-to-llvm`
-    /// 10. `reconcile-unrealized-casts`
+    /// 3. `canonicalize`
+    /// 4. `convert-sol-to-yul`: Sol → Yul
+    /// 5. `symbol-dce`
+    /// 6. `convert-yul-to-std`: Yul → func/arith/scf/cf/LLVM
+    /// 7. `canonicalize`
+    /// 8. `convert-scf-to-cf`
+    /// 9. `convert-func-to-llvm`
+    /// 10. `convert-arith-to-llvm`
+    /// 11. `convert-cf-to-llvm`
+    /// 12. `reconcile-unrealized-casts`
+    ///
+    /// The first `symbol-dce` removes the functions unreachable in the contract before anything
+    /// walks them. Splitting the contract into a creation and a runtime object can leave a
+    /// function unreachable in the runtime object; the second takes care of that.
     ///
     /// `sol-licm` is not yet in the pipeline.
     ///
@@ -179,13 +185,19 @@ impl<'context> Context<'context> {
 
         unsafe {
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateTransformsCanonicalizer(),
+                crate::ffi::mlirCreateTransformsSymbolDCE(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateSolModifierInliningPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
+                crate::ffi::mlirCreateTransformsCanonicalizer(),
+            ));
+            pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionConvertSolToYulPass(),
+            ));
+            pass_manager.add_pass(melior::pass::Pass::from_raw(
+                crate::ffi::mlirCreateTransformsSymbolDCE(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionConvertYulToStandardPass(),

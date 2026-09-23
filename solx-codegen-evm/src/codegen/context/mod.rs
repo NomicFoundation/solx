@@ -74,8 +74,10 @@ pub struct Context<'ctx> {
     /// The unit's `memoryguard` base offset, above which the spill area is placed so it never
     /// overlaps solc's statically allocated memory below the guard, such as the immutable
     /// staging slots of deploy code. Defaults to the free-memory start and is refined when a
-    /// `MEMORYGUARD` sets the reserved-memory boundary.
-    memory_guard: u64,
+    /// `MEMORYGUARD` sets the reserved-memory boundary. `None` when the module brought its own
+    /// guard: the MLIR pipeline emits one for every object whose inline assembly is memory-safe
+    /// and withholds it otherwise.
+    memory_guard: Option<u64>,
 
     /// The Solidity data.
     solidity_data: Option<SolidityData>,
@@ -151,7 +153,7 @@ impl<'ctx> Context<'ctx> {
             debug_info,
             output_config,
 
-            memory_guard: crate::r#const::SOLC_USER_MEMORY_OFFSET,
+            memory_guard: Some(crate::r#const::SOLC_USER_MEMORY_OFFSET),
 
             solidity_data,
             evmla_data: None,
@@ -186,10 +188,19 @@ impl<'ctx> Context<'ctx> {
             spill_area_size,
         );
         if let Some(spill_area_size) = spill_area_size {
-            // The MLIR front end emits its own guard; only it knows where its
-            // static allocations end.
             if self.module().get_flag(Self::MEMORY_GUARD_FLAG).is_none() {
-                let memory_guard = self.llvm().i64_type().const_int(self.memory_guard, false);
+                // A module that owns its guard and has none holds memory-unsafe assembly: there
+                // is nowhere to spill.
+                if self.memory_guard.is_none()
+                    && std::env::var(solx_utils::ENV_DISABLE_UNSAFE_MEMORY_ASM_STACK_TOO_DEEP_CHECK)
+                        .is_err()
+                {
+                    anyhow::bail!(solx_utils::ERROR_UNSAFE_MEMORY_ASM_STACK_TOO_DEEP);
+                }
+                let memory_guard = self
+                    .memory_guard
+                    .unwrap_or(crate::r#const::SOLC_USER_MEMORY_OFFSET);
+                let memory_guard = self.llvm().i64_type().const_int(memory_guard, false);
                 self.module().add_basic_value_flag(
                     Self::MEMORY_GUARD_FLAG,
                     inkwell::module::FlagBehavior::Error,
@@ -434,7 +445,15 @@ impl<'ctx> Context<'ctx> {
     /// Sets the memory guard base offset, above which the spill area is placed.
     ///
     pub fn set_memory_guard(&mut self, offset: u64) {
-        self.memory_guard = offset;
+        self.memory_guard = Some(offset);
+    }
+
+    ///
+    /// Leaves the memory guard to the module: the MLIR pipeline emits one for every object whose
+    /// inline assembly is memory-safe and withholds it otherwise.
+    ///
+    pub fn set_module_memory_guard(&mut self) {
+        self.memory_guard = None;
     }
 
     ///

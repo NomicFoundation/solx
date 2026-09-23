@@ -588,6 +588,7 @@ impl Contract {
                     None,
                     output_config,
                 );
+                context.set_module_memory_guard();
                 if output_selection.check_selection(
                     contract_name.path.as_str(),
                     contract_name.name.as_deref(),

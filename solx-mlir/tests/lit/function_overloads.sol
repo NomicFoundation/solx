@@ -1,16 +1,16 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @{{.*pick.*}}(%{{.*}}: ui256) -> ui256
-// CHECK: sol.func @{{.*pick.*}}(%{{.*}}: i1) -> i1
+// CHECK: sol.func {{(private )?}}@{{.*pick.*}}(%{{.*}}: ui256) -> ui256
+// CHECK: sol.func {{(private )?}}@{{.*pick.*}}(%{{.*}}: i1) -> i1
 
 // CHECK: sol.func @{{.*pick_named.*}}
 // CHECK:   sol.call @{{.*pick.*}}(%{{.*}}) : (ui256) -> ui256
 // CHECK: sol.func @{{.*pick_named_bool.*}}
 // CHECK:   sol.call @{{.*pick.*}}(%{{.*}}) : (i1) -> i1
 
-// CHECK: sol.func @{{.*sum.*}}(%{{.*}}: ui256) -> ui256
-// CHECK: sol.func @{{.*sum.*}}(%{{.*}}: ui256, %{{.*}}: ui256) -> ui256
+// CHECK: sol.func {{(private )?}}@{{.*sum.*}}(%{{.*}}: ui256) -> ui256
+// CHECK: sol.func {{(private )?}}@{{.*sum.*}}(%{{.*}}: ui256, %{{.*}}: ui256) -> ui256
 
 // CHECK: sol.func @{{.*run_nested.*}}
 // CHECK:   %[[INNER:.*]] = sol.call @{{.*sum.*}}(%{{.*}}) : (ui256) -> ui256
@@ -19,9 +19,9 @@
 // CHECK: sol.func @{{.*get.*}}(%{{.*}}: ui256) -> ui256 attributes {{.*}}selector = -1794649190
 // CHECK: sol.func @{{.*get.*}}(%{{.*}}: i1) -> i1 attributes {{.*}}selector = -1044471942
 
-// CHECK: sol.func @{{.*apply_pointer.*}}(%{{.*}}: !sol.func_ref<(ui256) -> ui256>) -> ui256
+// CHECK: sol.func {{(private )?}}@{{.*apply_pointer.*}}(%{{.*}}: !sol.func_ref<(ui256) -> ui256>) -> ui256
 // CHECK:   sol.icall %{{[0-9]+}}(%{{.*}}) : !sol.func_ref<(ui256) -> ui256>, (ui256) -> ui256
-// CHECK: sol.func @{{.*apply_pointer.*}}(%{{.*}}: !sol.func_ref<(i1) -> i1>) -> i1
+// CHECK: sol.func {{(private )?}}@{{.*apply_pointer.*}}(%{{.*}}: !sol.func_ref<(i1) -> i1>) -> i1
 // CHECK:   sol.icall %{{[0-9]+}}(%{{.*}}) : !sol.func_ref<(i1) -> i1>, (i1) -> i1
 
 // CHECK: sol.func @{{.*run.*}}
