@@ -87,7 +87,7 @@ impl<'context> Function<'context> {
             FunctionDispatch::Identifier(identifier) => {
                 operation_builder.id(IntegerAttribute::new(
                     IntegerType::new(context.melior, solx_utils::BIT_LENGTH_X64 as u32).into(),
-                    usize::from(identifier) as i64,
+                    u64::from(identifier) as i64,
                 ))
             }
             FunctionDispatch::Kind(function_kind) => {
