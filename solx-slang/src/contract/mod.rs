@@ -2,6 +2,7 @@
 //! Contract and library definition emission to Sol dialect MLIR.
 //!
 
+pub mod constructor;
 pub mod function;
 pub mod getter;
 pub mod object;
@@ -24,28 +25,26 @@ impl<'context> SourceUnitScope<'context> {
     /// Emits `object`'s `sol.contract` and returns its ABI `method_identifiers` map.
     pub fn object_definition(&mut self, object: &Object) -> BTreeMap<String, String> {
         let identifier = object.identifier();
-        let contract = Contract::define(
-            identifier.as_str(),
-            object.kind(),
-            self,
-            Block::from(self.module.body()),
-        );
         self.contract(
             MlirType::contract(self.melior, identifier.as_str(), object.is_payable()),
-            contract,
+            Contract::define(
+                identifier.as_str(),
+                object.kind(),
+                self,
+                Block::from(self.module.body()),
+            ),
             object,
-            |scope| scope.members(object),
+            |scope| scope.members(),
         );
-
         object.method_identifiers()
     }
 }
 
 impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
-    /// Emits the object's members: the state-variable declarations, the contract's constructor,
-    /// the functions, and the getters.
-    fn members(&mut self, object: &Object) {
-        for state_variable in self.state_variables.iter() {
+    /// Emits the object's members: the state-variable declarations, the constructor, the
+    /// functions of its resolved hierarchy, and the getters of its public state variables.
+    fn members(&mut self) {
+        for state_variable in self.object.state_variables().iter() {
             match state_variable.attributes().mutability() {
                 StateVariableMutability::Mutable | StateVariableMutability::Transient => {
                     let slot = self
@@ -86,13 +85,16 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 StateVariableMutability::Constant => {}
             }
         }
-        if let Object::Contract(node) = object {
-            self.constructor(node);
+        self.constructor();
+        for function in self.object.functions() {
+            self.function_definition(&function);
         }
-        for function in object.functions().iter() {
-            self.function_definition(function);
-        }
-        for state_variable in object.public_state_variables() {
+        for state_variable in self
+            .object
+            .state_variables()
+            .into_iter()
+            .filter(|state_variable| state_variable.is_externally_visible())
+        {
             self.state_variable_getter(&state_variable);
         }
     }

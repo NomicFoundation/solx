@@ -35,8 +35,8 @@ impl<'context> SourceUnitScope<'context> {
     }
 
     /// Opens the contract scope around `emit`: the `sol.contract` an enclosed member is defined
-    /// into, the state variables and storage layout it resolves against, with the `this` type
-    /// installed on the MLIR context for its duration.
+    /// into and the object whose hierarchy it resolves against, with the `this` type installed on
+    /// the MLIR context for its duration.
     pub fn contract(
         &mut self,
         contract_type: MlirType<'context>,

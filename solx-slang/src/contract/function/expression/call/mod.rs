@@ -63,8 +63,14 @@ pub enum Call {
     /// at emission, so a member resolving to no built-in or to one not lowered yet is rejected in
     /// one place rather than at both classification and emission.
     Member(MemberAccessExpression),
-    /// A direct call to a named function.
+    /// A bare name: the object runs the most-derived override its hierarchy resolves.
     Function(FunctionDefinition),
+    /// A `super` member: the nearest implemented override after the contract the keyword is
+    /// written in, which it carries.
+    Super(FunctionDefinition, ContractDefinition),
+    /// A name qualified by the contract or library declaring it (`C.f()`), which pins that
+    /// function rather than the override the object would resolve.
+    Qualified(FunctionDefinition),
     /// An attached call to a selectorless library or free function: the receiver leads the
     /// argument list of an internal `sol.call`.
     Attached(Expression, FunctionDefinition),
@@ -141,7 +147,17 @@ impl Call {
             Self::Member(access) => {
                 Self::member(&access, node, &arguments, options.as_ref(), scope)
             }
-            Self::Function(function_definition) => scope.call(&function_definition, &arguments),
+            Self::Function(function_definition) => {
+                let function = scope.contract.virtual_function(&function_definition);
+                scope.call(&function, &arguments)
+            }
+            Self::Super(function_definition, enclosing_contract) => {
+                let function = scope
+                    .contract
+                    .super_function(&function_definition, &enclosing_contract);
+                scope.call(&function, &arguments)
+            }
+            Self::Qualified(function_definition) => scope.call(&function_definition, &arguments),
             Self::Attached(receiver, function_definition) => {
                 let operands: Vec<Expression> =
                     std::iter::once(receiver).chain(arguments).collect();
@@ -225,27 +241,23 @@ impl Call {
             | Self::Allocation
             | Self::TypeConversion
             | Self::Builtin(_)
-            | Self::Function(_)
+            | Self::Function(..)
+            | Self::Super(..)
+            | Self::Qualified(..)
             | Self::Attached(..) => {
                 unreachable!("a guarded call dispatches externally or creates a contract")
             }
         }
     }
 
-    /// Classifies `call`'s callee into the single kind that emits it. A type conversion is probed
-    /// before the callee's shape, its callee may be an elementary type or `payable` keyword as well
-    /// as a named type, and its one-argument arity is part of the classification, per the variant's
-    /// definition.
+    /// Classifies the call by its callee.
     fn from_call(call: &FunctionCallExpression, callee: Expression) -> Self {
         if let Some(Definition::Struct(struct_definition)) =
             FunctionScope::resolved_definition(&callee)
         {
             return Self::StructConstruction(struct_definition);
         }
-        if call.is_type_conversion()
-            && let ArgumentsDeclaration::PositionalArguments(arguments) = &call.arguments()
-            && arguments.len() == 1
-        {
+        if call.is_type_conversion() {
             return Self::TypeConversion;
         }
         match callee {
@@ -281,17 +293,22 @@ impl Call {
                 if let Some(Definition::Function(function_definition)) =
                     access.member().resolve_to_definition()
                 {
+                    if let Some(enclosing_contract) =
+                        FunctionScope::super_contract(&access.operand())
+                    {
+                        return Self::Super(function_definition, enclosing_contract);
+                    }
                     match (
                         FunctionScope::resolved_definition(&access.operand()),
                         function_definition.enclosing_definition(),
                     ) {
                         (Some(Definition::Contract(_) | Definition::Import(_)), _) => {
-                            return Self::Function(function_definition);
+                            return Self::Qualified(function_definition);
                         }
                         (Some(Definition::Library(_)), _) => {
                             return match function_definition.compute_selector() {
                                 Some(selector) => Self::Library(function_definition, selector),
-                                None => Self::Function(function_definition),
+                                None => Self::Qualified(function_definition),
                             };
                         }
                         (_, Some(Definition::Library(_))) => {
@@ -384,6 +401,8 @@ impl Call {
                 Self::Creation(_, Some(function_definition))
                 | Self::External(_, ExternalCallee::Function(function_definition, _), _)
                 | Self::Function(function_definition)
+                | Self::Super(function_definition, _)
+                | Self::Qualified(function_definition)
                 | Self::Library(function_definition, _) => FunctionScope::named_arguments(
                     &named,
                     function_definition
@@ -1174,11 +1193,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         function_definition: &FunctionDefinition,
         arguments: &[Expression],
     ) -> Vec<Value<'context>> {
-        self.contract.function_definition(function_definition);
-        let signature = self
-            .contract
-            .source_unit
-            .function_signature(function_definition);
+        let signature = self.contract.function_definition(function_definition);
         let converted = self.converted_arguments(arguments, &signature.function_type.parameters);
         Function::call(&signature, &converted, self)
     }

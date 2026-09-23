@@ -1,6 +1,6 @@
 //!
-//! The function scope: the enclosing contract scope, the dispatch of the function being emitted,
-//! the lexical variable environment, the declared return types, and the checked-arithmetic flag,
+//! The function scope: the enclosing contract scope, whether the frame is a constructor, the
+//! lexical variable environment, the declared return types, and the checked-arithmetic flag,
 //! together with the frame combinators every lowering threads through.
 //!
 
@@ -11,7 +11,6 @@ use slang_solidity_v2::ast::Type;
 use solx_mlir::Block;
 use solx_mlir::Context;
 use solx_mlir::Environment;
-use solx_mlir::FunctionDispatch;
 use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
@@ -19,14 +18,15 @@ use solx_mlir::Value;
 use crate::scope::assembly::AssemblyScope;
 use crate::scope::contract::ContractScope;
 
-/// The function scope: the enclosing contract scope, the dispatch of the `sol.func` being emitted,
-/// the lexical variable environment, the declared return types a `return` converts to, and whether
+/// The function scope: the enclosing contract scope, whether the frame is a constructor, the
+/// lexical variable environment, the declared return types a `return` converts to, and whether
 /// arithmetic is checked at the current position.
 pub struct FunctionScope<'contract, 'source_unit, 'context> {
     /// The contract scope this function body is lowered within.
     pub contract: &'contract mut ContractScope<'source_unit, 'context>,
-    /// The dispatch of the `sol.func` being emitted.
-    pub dispatch: FunctionDispatch,
+    /// Whether this frame is a constructor, which reads an immutable through its creation cell
+    /// rather than from the linked code.
+    pub is_constructor: bool,
     /// The lexically scoped variable bindings.
     pub environment: Environment<'context>,
     /// The declared return types a `return` converts to.
@@ -36,18 +36,17 @@ pub struct FunctionScope<'contract, 'source_unit, 'context> {
 }
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// Opens a function scope within `contract` for the dispatched function with the given
-    /// declared return types.
+    /// Opens a function scope within `contract` with the given declared return types.
     pub fn new(
         contract: &'contract mut ContractScope<'source_unit, 'context>,
-        dispatch: FunctionDispatch,
-        return_types: Vec<MlirType<'context>>,
+        is_constructor: bool,
+        return_types: &[MlirType<'context>],
     ) -> Self {
         Self {
             contract,
-            dispatch,
+            is_constructor,
             environment: Environment::new(),
-            return_types,
+            return_types: return_types.to_vec(),
             checked: true,
         }
     }
@@ -76,10 +75,11 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     }
 
     /// Runs `emit` in a nested lexical scope, discarding the bindings it introduces.
-    pub fn nested(&mut self, emit: impl FnOnce(&mut Self)) {
+    pub fn nested<R>(&mut self, emit: impl FnOnce(&mut Self) -> R) -> R {
         self.environment.enter_scope();
-        emit(self);
+        let result = emit(self);
         self.environment.exit_scope();
+        result
     }
 
     /// Opens the assembly scope around `emit`: the Yul bindings an inline-assembly block

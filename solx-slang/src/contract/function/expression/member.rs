@@ -4,6 +4,7 @@
 
 use num::BigInt;
 use slang_solidity_v2::ast::BuiltIn;
+use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::Identifier;
@@ -21,9 +22,11 @@ use crate::contract::object::Object;
 use crate::scope::function::FunctionScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// A struct field loads from its place; an enum member is its ordinal; an externally visible
-    /// function reached through a contract instance or `this` is the pointer dispatching it; every
-    /// other member access is an environment or EVM intrinsic.
+    /// A struct field loads from its place; an enum member is its ordinal; a `super` member is the
+    /// internal pointer of the override the object runs after the enclosing contract; an
+    /// externally visible function reached through a contract instance or `this` is the pointer
+    /// dispatching it; a qualified member resolves as the name it qualifies, a function among them
+    /// by its declaration; every other member access is an environment or EVM intrinsic.
     pub fn member_access(&mut self, node: &MemberAccessExpression) -> Value<'context> {
         let operand = node.operand();
 
@@ -49,6 +52,16 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             return Value::constant_from_bigint(&BigInt::from(ordinal), enum_type, self);
         }
 
+        if let Some(enclosing_contract) = Self::super_contract(&operand)
+            && let Some(Definition::Function(function)) = node.member().resolve_to_definition()
+        {
+            let function = self.contract.super_function(&function, &enclosing_contract);
+            return self
+                .contract
+                .function_definition(&function)
+                .pointer_constant(self);
+        }
+
         if let Some(Type::Function(function_type)) = node.get_type()
             && FunctionReferenceKind::from(function_type.visibility())
                 == FunctionReferenceKind::External
@@ -68,8 +81,14 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             );
         }
 
-        if Self::is_namespace_member(&operand, &node.member()) {
-            return self.identifier(&node.member());
+        if Self::is_qualified_member(&operand, &node.member()) {
+            let Some(Definition::Function(function)) = node.member().resolve_to_definition() else {
+                return self.identifier(&node.member());
+            };
+            return self
+                .contract
+                .function_definition(&function)
+                .pointer_constant(self);
         }
 
         match node.member().resolve_to_built_in() {
@@ -179,7 +198,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         node: &MemberAccessExpression,
     ) -> (Place<'context>, MlirType<'context>) {
         let base = node.operand();
-        if Self::is_namespace_member(&base, &node.member()) {
+        if Self::is_qualified_member(&base, &node.member()) {
             return self.identifier_place(&node.member());
         }
         let Some(Type::Struct(struct_type)) = base.get_type() else {
@@ -221,10 +240,25 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         self.expression(operand).external_function_selector(self)
     }
 
-    /// Whether the member access qualifies a namespace and so resolves through its member: a
+    /// The contract a `super` operand resolves after: the one the keyword is written in.
+    pub fn super_contract(operand: &Expression) -> Option<ContractDefinition> {
+        match operand {
+            Expression::SuperKeyword(keyword) => Some(
+                keyword
+                    .enclosing_contract()
+                    .expect("slang resolves `super` in the contract it is written in"),
+            ),
+            Expression::TupleExpression(inner) => {
+                Self::super_contract(&inner.items().iter().next()?.expression()?)
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether the member access qualifies a scope and so resolves through its member: a
     /// contract, a library, or an alias chain of any depth. A selector-bearing library function
     /// is dispatched as an external callee instead.
-    fn is_namespace_member(operand: &Expression, member: &Identifier) -> bool {
+    fn is_qualified_member(operand: &Expression, member: &Identifier) -> bool {
         match Self::resolved_definition(operand) {
             Some(Definition::Contract(_) | Definition::Import(_)) => true,
             Some(Definition::Library(_)) => match member.resolve_to_definition() {
