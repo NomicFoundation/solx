@@ -45,7 +45,7 @@ fn ipfs() -> anyhow::Result<()> {
 }
 
 #[test]
-fn none_prints_solx_metadata() -> anyhow::Result<()> {
+fn none_prints_compiler_section() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let hash_type = MetadataHashType::None.to_string();
@@ -58,9 +58,14 @@ fn none_prints_solx_metadata() -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
+    #[cfg(feature = "solc")]
     result
         .success()
-        .stdout(predicate::str::contains("\"solx-core\":{"));
+        .stdout(predicate::str::contains("\"solx\":{"));
+    #[cfg(not(feature = "solc"))]
+    result
+        .success()
+        .stdout(predicate::str::contains("\"slang\":{"));
 
     Ok(())
 }
