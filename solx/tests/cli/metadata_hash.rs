@@ -5,6 +5,16 @@
 use predicates::prelude::*;
 use solx_utils::MetadataHashType;
 
+/// A two-entry CBOR map whose first entry is `ipfs` with a 34-byte value.
+const CBOR_IPFS_HASH_PREFIX: &str = "a264697066735822";
+
+/// The key of the compiler's own section in the metadata.
+#[cfg(feature = "solc")]
+const SECTION_KEY: &str = "\"solx\":{";
+/// The key of the compiler's own section in the metadata.
+#[cfg(not(feature = "solc"))]
+const SECTION_KEY: &str = "\"slang\":{";
+
 #[test]
 fn none() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -55,17 +65,14 @@ fn none_prints_compiler_section() -> anyhow::Result<()> {
         "--metadata",
         "--metadata-hash",
         hash_type.as_str(),
+        "--bin-runtime",
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    #[cfg(feature = "solc")]
     result
         .success()
-        .stdout(predicate::str::contains("\"solx\":{"));
-    #[cfg(not(feature = "solc"))]
-    result
-        .success()
-        .stdout(predicate::str::contains("\"slang\":{"));
+        .stdout(predicate::str::contains(SECTION_KEY))
+        .stdout(predicate::str::contains(CBOR_IPFS_HASH_PREFIX).not());
 
     Ok(())
 }
@@ -96,9 +103,48 @@ fn ipfs_hashes_printed_metadata() -> anyhow::Result<()> {
     let runtime = line_after("Binary of the runtime part:");
     let metadata = line_after("Metadata:");
 
-    // A two-entry CBOR map whose first entry is `ipfs` with a 34-byte value.
     let (_, hash) = runtime
-        .rsplit_once("a264697066735822")
+        .rsplit_once(CBOR_IPFS_HASH_PREFIX)
+        .expect("the runtime code ends with an IPFS metadata hash");
+    assert_eq!(
+        &hash[..68],
+        solx_utils::IPFSHash::from_slice(metadata.as_bytes()).to_string()
+    );
+
+    Ok(())
+}
+
+#[test]
+fn ipfs_hashes_standard_json_metadata() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("llvm_ir_metadata.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    let output = solx_utils::deserialize_from_slice::<solx_standard_json::Output>(
+        result.success().get_output().stdout.as_slice(),
+    )?;
+    let contract = &output.contracts["Test"]["Test"];
+    let metadata = contract
+        .metadata
+        .as_deref()
+        .expect("the metadata is selected");
+    let runtime = contract
+        .evm
+        .as_ref()
+        .and_then(|evm| evm.deployed_bytecode.as_ref())
+        .and_then(|bytecode| bytecode.object.as_deref())
+        .expect("the runtime bytecode is selected");
+
+    assert!(
+        metadata.contains(SECTION_KEY),
+        "the metadata carries the compiler's own section"
+    );
+    let (_, hash) = runtime
+        .rsplit_once(CBOR_IPFS_HASH_PREFIX)
         .expect("the runtime code ends with an IPFS metadata hash");
     assert_eq!(
         &hash[..68],
