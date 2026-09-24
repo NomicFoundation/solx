@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: MIT
+
+pragma solidity >=0.8.0;
+
+interface Marker {}
+
+contract Base {
+    uint256 seed;
+
+    constructor(uint256 x) {
+        seed = x;
+    }
+
+    function planted() public view returns (uint256) {
+        return seed;
+    }
+}
