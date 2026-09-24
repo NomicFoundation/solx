@@ -32,5 +32,5 @@ run-tester = "run --bin solx-tester -- --solidity-compiler ./target/release/solx
 
 clippy-slang = "clippy -p solx-slang -p solx-mlir -p solx --no-default-features --features slang"
 build-slang = "build -p solx-slang -p solx-mlir -p solx --no-default-features --features slang"
-test-slang = "test -p solx-slang -p solx-mlir -p solx --no-default-features --features slang"
+test-slang = "test -p solx-slang -p solx-mlir -p solx -p solx-utils --no-default-features --features slang"
 run-tester-slang = "run --bin solx-tester --no-default-features --features slang-ast -- --solidity-compiler ./target/release/solx -O M3B3"
