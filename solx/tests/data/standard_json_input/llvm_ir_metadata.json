@@ -1,0 +1,27 @@
+{
+  "language": "LLVM IR",
+  "sources": {
+    "Test": {
+      "urls": [
+        "tests/data/contracts/llvm_ir/Test.ll"
+      ]
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": true
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "metadata",
+          "evm.deployedBytecode.object"
+        ]
+      }
+    },
+    "libraries": {},
+    "metadata": {
+      "bytecodeHash": "ipfs"
+    }
+  }
+}

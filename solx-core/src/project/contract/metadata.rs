@@ -5,7 +5,7 @@
 ///
 /// The contract metadata.
 ///
-/// Is used to append the metadata hash to the contract bytecode.
+/// Is inserted into the solc metadata that is output and hashed into the contract bytecode.
 ///
 #[derive(Debug, serde::Serialize)]
 pub struct Metadata<'a> {
@@ -45,7 +45,7 @@ impl<'a> Metadata<'a> {
         let mut object: serde_json::Value =
             serde_json::from_str(metadata_string).expect("Always valid");
         object.as_object_mut().expect("Always valid").insert(
-            env!("CARGO_PKG_NAME").to_owned(),
+            crate::r#const::METADATA_SECTION_KEY.to_owned(),
             serde_json::to_value(self).expect("Always valid"),
         );
         serde_json::to_string(&object).expect("Always valid")
