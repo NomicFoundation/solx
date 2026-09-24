@@ -28,7 +28,7 @@ impl IPFS {
         let mut written = 0;
         while written < preimage.len() {
             let (blocks, pushed) = adder.push(&preimage[written..]);
-            root = blocks.last().map(|(cid, _)| cid).or(root);
+            root = blocks.last().map(|(cid, _)| cid);
             written += pushed;
         }
         // An input of exactly one chunk emits its root from `push`, leaving `finish` empty.
