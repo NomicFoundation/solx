@@ -6,9 +6,11 @@ pub mod assembly;
 pub mod expression;
 pub mod statement;
 
+use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
+use slang_solidity_v2::ast::ModifierInvocations;
 use slang_solidity_v2::ast::VirtualTarget;
 
 use solx_mlir::Function;
@@ -19,11 +21,12 @@ use solx_mlir::Value;
 
 use crate::contract::object::Object;
 use crate::scope::contract::ContractScope;
+use crate::scope::function::FunctionScope;
 use crate::scope::source_unit::SourceUnitScope;
 
 impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
-    /// Defines `function`'s `sol.func` in the contract body at its first naming, binding
-    /// parameters and named-return pointers into a fresh function frame.
+    /// Defines `function`'s `sol.func`, or a modifier's `sol.modifier`, in the contract body at
+    /// its first naming, binding parameters and named-return pointers into a fresh function frame.
     pub fn function_definition(&mut self, function: &FunctionDefinition) -> Function<'context> {
         if !self.defined_functions.insert(function.node_id()) {
             return self.source_unit.function_signature(function);
@@ -108,6 +111,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             if is_constructor {
                 scope.base_constructor_call();
             }
+            scope.modifier_invocations(&function.attributes().modifier_invocations());
 
             scope.statements(&body.statements());
 
@@ -129,6 +133,37 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             }
         });
         signature
+    }
+}
+
+impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
+    /// Emits the modifier invocations in source order, each a `sol.modifier_invocation` whose
+    /// region evaluates the arguments and yields them. An entry naming a base is a
+    /// base-constructor call, which the constructor chain consumes.
+    pub fn modifier_invocations(&mut self, node: &ModifierInvocations) {
+        for invocation in node.iter() {
+            let declaration = match invocation.name().resolve_to_definition() {
+                Some(Definition::Modifier(declaration)) => declaration,
+                Some(Definition::Contract(_) | Definition::Interface(_)) => continue,
+                _ => unreachable!("a modifier-list entry names a modifier or a base"),
+            };
+            let definition = self.contract.invoked_modifier(&invocation, declaration);
+            let modifier = self.contract.function_definition(&definition);
+            let arguments_block = self.current_block().modifier_invocation(&modifier, self);
+            self.region(arguments_block, |scope| {
+                if let Some(arguments) = invocation.arguments() {
+                    let values: Vec<_> = scope
+                        .arguments_declaration(
+                            &ArgumentsDeclaration::PositionalArguments(arguments),
+                            &definition.parameters(),
+                        )
+                        .into_iter()
+                        .map(|(_, value)| value)
+                        .collect();
+                    scope.current_block().r#yield(&values, scope);
+                }
+            });
+        }
     }
 }
 
