@@ -58,6 +58,8 @@ impl<'context> Context<'context> {
     const TARGET_TRIPLE: &'static str = "llvm.target_triple";
     /// The EVM version the `convert-sol-to-yul` pass reads off the module.
     const EVM_VERSION: &'static str = "sol.evm_version";
+    /// The revert-string policy the `convert-sol-to-yul` pass reads off the module.
+    const REVERT_STRINGS: &'static str = "sol.revert_strings";
     /// The attribute a `builtin.module` carries its own identifier in.
     const MODULE_SYMBOL: &'static str = "sym_name";
 
@@ -108,9 +110,13 @@ impl<'context> Context<'context> {
 
     /// Creates a new MLIR state with an empty module.
     ///
-    /// Sets the `sol.evm_version` module attribute required by the
-    /// `convert-sol-to-yul` pass.
-    pub fn new(melior: &'context melior::Context, evm_version: solx_utils::EVMVersion) -> Self {
+    /// Sets the `sol.evm_version` and `sol.revert_strings` module attributes the
+    /// `convert-sol-to-yul` pass reads.
+    pub fn new(
+        melior: &'context melior::Context,
+        evm_version: solx_utils::EVMVersion,
+        revert_strings: solx_utils::RevertStrings,
+    ) -> Self {
         let location = Location::unknown(melior);
         let mut module = Module::new(location);
 
@@ -120,9 +126,16 @@ impl<'context> Context<'context> {
                 evm_version.into_sol_dialect_identifier(),
             ))
         };
+        let revert_strings_attribute = unsafe {
+            Attribute::from_raw(crate::ffi::solxCreateRevertStringsAttr(
+                melior.to_raw(),
+                revert_strings as u32,
+            ))
+        };
         let target = solx_utils::Target::EVM;
         let mut operation = module.as_operation_mut();
         operation.set_attribute(Self::EVM_VERSION, evm_version_attribute);
+        operation.set_attribute(Self::REVERT_STRINGS, revert_strings_attribute);
         operation.set_attribute(
             Self::DATA_LAYOUT,
             StringAttribute::new(melior, target.data_layout()).into(),

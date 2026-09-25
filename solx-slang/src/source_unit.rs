@@ -12,6 +12,7 @@ use solx_mlir::Context;
 use solx_standard_json::output::contract::Contract;
 use solx_utils::EVMVersion;
 use solx_utils::Profiler;
+use solx_utils::RevertStrings;
 
 use crate::contract::object::Object;
 use crate::scope::source_unit::SourceUnitScope;
@@ -27,6 +28,7 @@ impl<'context> SourceUnitScope<'context> {
     pub fn source_unit(
         unit: &SourceUnit,
         evm_version: EVMVersion,
+        revert_strings: RevertStrings,
         capture_sol_dialect: impl Fn(&str) -> bool,
         profiler: &mut Profiler,
     ) -> anyhow::Result<BTreeMap<String, Contract>> {
@@ -45,7 +47,8 @@ impl<'context> SourceUnitScope<'context> {
                 _ => continue,
             };
             let identifier = object.identifier();
-            let mut scope = SourceUnitScope::new(Context::new(&melior, evm_version));
+            let mut scope =
+                SourceUnitScope::new(Context::new(&melior, evm_version, revert_strings));
             let run_emission =
                 profiler.start_pipeline_element(format!("solx_EmitSol:{identifier}").as_str());
             let method_identifiers = scope.object_definition(&object);
