@@ -60,6 +60,14 @@ MlirAttribute solxCreateEvmVersionAttr(MlirContext ctx, uint32_t version) {
     return wrap(attr);
 }
 
+MlirAttribute solxCreateRevertStringsAttr(MlirContext ctx, uint32_t revertStrings) {
+    if (revertStrings > 3) abort();
+    auto *context = unwrap(ctx);
+    auto attr = mlir::sol::RevertStringsAttr::get(
+        context, static_cast<mlir::sol::RevertStrings>(revertStrings));
+    return wrap(attr);
+}
+
 MlirAttribute solxCreateIntegerAttr(MlirType ty, bool isNegative,
                                     size_t numWords, const uint64_t *magnitude) {
     unsigned bitWidth = unwrap(ty).getIntOrFloatBitWidth();

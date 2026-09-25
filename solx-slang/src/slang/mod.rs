@@ -21,6 +21,7 @@ use solx_standard_json::OutputError;
 use solx_standard_json::output::error::source_location::SourceLocation;
 use solx_utils::Profiler;
 use solx_utils::Remapping;
+use solx_utils::RevertStrings;
 
 use crate::scope::source_unit::SourceUnitScope;
 
@@ -173,11 +174,18 @@ impl Frontend for Slang {
         }
 
         let evm_version = input_json.settings.evm_version.unwrap_or_default();
+        let revert_strings = input_json
+            .settings
+            .debug
+            .as_ref()
+            .and_then(|debug| debug.revert_strings)
+            .unwrap_or(RevertStrings::Default);
         for file in unit.files() {
             let file_id = file.id();
             let contracts = SourceUnitScope::source_unit(
                 &file.ast(),
                 evm_version,
+                revert_strings,
                 |contract_name| {
                     input_json.settings.output_selection.check_selection(
                         file_id.as_str(),
