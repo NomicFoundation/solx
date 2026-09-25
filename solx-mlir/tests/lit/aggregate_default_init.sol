@@ -27,7 +27,7 @@
 // CHECK: sol.func @{{.*local_struct_with_array.*}}
 // CHECK:   sol.malloc zero_init : !sol.struct<(ui256, !sol.array<? x ui256, Memory>), Memory>
 
-// CHECK: sol.func @{{.*named_storage.*}}
+// CHECK: sol.func {{(private )?}}@{{.*named_storage.*}}
 // CHECK:   sol.default_storage : !sol.array<? x ui256, Storage>
 
 // CHECK: sol.func @{{.*named_calldata.*}}

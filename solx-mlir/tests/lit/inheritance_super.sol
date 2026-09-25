@@ -4,13 +4,13 @@
 // CHECK: sol.func @{{.*}}f{{.*}}() -> ui256 attributes {id = {{.*}}, orig_fn_type = () -> ui256, selector
 // CHECK:   sol.constant 1000
 // CHECK:   sol.call @[[RIGHT:.*]]() : () -> ui256
-// CHECK: sol.func @[[RIGHT]]() -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability
+// CHECK: sol.func private @[[RIGHT]]() -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability
 // CHECK:   sol.constant 100
 // CHECK:   sol.call @[[LEFT:.*]]() : () -> ui256
-// CHECK: sol.func @[[LEFT]]() -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability
+// CHECK: sol.func private @[[LEFT]]() -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability
 // CHECK:   sol.constant 10
 // CHECK:   sol.call @[[ROOT:.*]]() : () -> ui256
-// CHECK: sol.func @[[ROOT]]() -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability
+// CHECK: sol.func private @[[ROOT]]() -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability
 // CHECK:   sol.constant 1
 // CHECK: sol.func @{{.*}}pointer{{.*}}
 // CHECK:   sol.func_constant @[[RIGHT]] : !sol.func_ref<() -> ui256>

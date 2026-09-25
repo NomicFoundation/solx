@@ -5,9 +5,9 @@
 
 // CHECK: sol.func @{{.*}}f{{.*}}(%{{.*}}: si32, %{{.*}}: si32) -> si32
 // CHECK:   sol.call @"add(T,T)_[[ADD:[0-9]+]]"(%{{.*}}, %{{.*}}) : (si32, si32) -> si32
-// CHECK: sol.func @"add(T,T)_[[ADD]]"(%{{.*}}: si32, %{{.*}}: si32) -> si32
+// CHECK: sol.func {{(private )?}}@"add(T,T)_[[ADD]]"(%{{.*}}: si32, %{{.*}}: si32) -> si32
 // CHECK:   sol.call @"helper(T)_[[HELPER:[0-9]+]]"(%{{.*}}) : (si32) -> si32
-// CHECK: sol.func @"helper(T)_[[HELPER]]"(%{{.*}}: si32) -> si32
+// CHECK: sol.func {{(private )?}}@"helper(T)_[[HELPER]]"(%{{.*}}: si32) -> si32
 
 type T is int32;
 using {add as +} for T global;

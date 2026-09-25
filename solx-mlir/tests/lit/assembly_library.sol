@@ -9,12 +9,12 @@
 // emits the library module first, so the RUN line above cannot check the framing.
 // SOLX: sol.contract @{{.*}}C{{.*}} {
 // SOLX:   sol.func @{{.*use.*}}
-// SOLX:   sol.func @{{.*twice.*}}
+// SOLX:   sol.func private @{{.*twice.*}}
 // SOLX:     sol.inline_asm {
 // SOLX:       yul.mul %{{.*}}, %c2_i256
 // SOLX: } {kind = #Contract}
 // SOLX: sol.contract @{{.*}}L{{.*}} {
-// SOLX:   sol.func @{{.*twice.*}}
+// SOLX:   sol.func private @{{.*twice.*}}
 // SOLX:     sol.inline_asm {
 // SOLX:       yul.mul %{{.*}}, %c2_i256
 // SOLX: } {kind = #Library}
