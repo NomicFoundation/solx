@@ -96,7 +96,6 @@ jobs:
         with:
           build-type: Release
           enable-assertions: 'false'
-          enable-mlir: 'true'
 
       - name: Build LLVM (main)
         uses: ./.github/actions/build-llvm
@@ -106,16 +105,15 @@ jobs:
           mirror-key: ${{ steps.build-llvm-pr.outputs.cache-key }}
           build-type: Release
           enable-assertions: 'false'
-          enable-mlir: 'true'
 
       - name: Fetch dependencies (PR)
         run: ${SFW_PREFIX:-} cargo fetch --locked
 
       - name: Build solx (PR)
-        run: ${SFW_PREFIX:-} cargo build-slang --frozen --release
+        run: ${SFW_PREFIX:-} cargo build --frozen --release
 
       - name: Build solx-dev and solx-tester (PR)
-        run: ${SFW_PREFIX:-} cargo build --frozen --release -p solx-dev -p solx-tester --features solx-tester/slang-ast
+        run: ${SFW_PREFIX:-} cargo build --frozen --release -p solx-dev -p solx-tester
 
       - name: Fetch dependencies (main)
         working-directory: temp-solx-main
@@ -125,12 +123,12 @@ jobs:
       - name: Build solx (main)
         working-directory: temp-solx-main
         continue-on-error: true
-        run: ${SFW_PREFIX:-} cargo build-slang --frozen --release
+        run: ${SFW_PREFIX:-} cargo build --frozen --release
 
       - name: Build solx-dev and solx-tester (main)
         working-directory: temp-solx-main
         continue-on-error: true
-        run: ${SFW_PREFIX:-} cargo build --frozen --release -p solx-dev -p solx-tester --features solx-tester/slang-ast
+        run: ${SFW_PREFIX:-} cargo build --frozen --release -p solx-dev -p solx-tester
 
       - name: Run solx-tester tests (PR)
         id: solx_tester_tests

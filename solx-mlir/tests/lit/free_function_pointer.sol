@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func @{{.*invoke.*}}(%{{.*}}: !sol.func_ref<(ui256) -> ui256>, %{{.*}}: ui256) -> ui256
 // CHECK: sol.func @{{.*run.*}}(%{{.*}}: ui256) -> ui256 attributes {{.*}}selector = -1538984471 : i32

@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func {{.*}}identity_color{{.*}}!sol.enum<2>{{.*}}!sol.enum<2>
 // CHECK: sol.func {{.*}}identity_iface{{.*}}!sol.contract<"{{[^"]*}}IFoo{{[^"]*}}">{{.*}}!sol.contract<"{{[^"]*}}IFoo{{[^"]*}}">

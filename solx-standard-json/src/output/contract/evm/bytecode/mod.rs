@@ -17,12 +17,6 @@ pub struct Bytecode {
     /// Bytecode object.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub object: Option<String>,
-    /// EVM legacy assembly IR (solx internal representation).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub evmla: Option<String>,
-    /// Ethereal IR (solx internal representation).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ethir: Option<String>,
     /// Unoptimized LLVM IR (solx internal representation).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub llvm_ir_unoptimized: Option<String>,
@@ -65,8 +59,6 @@ impl Bytecode {
     ///
     pub fn new(
         object: Option<String>,
-        evmla: Option<String>,
-        ethir: Option<String>,
         llvm_ir_unoptimized: Option<String>,
         llvm_ir: Option<String>,
         llvm_assembly: Option<String>,
@@ -103,8 +95,6 @@ impl Bytecode {
 
         Self {
             object,
-            evmla,
-            ethir,
             llvm_ir_unoptimized,
             llvm_ir,
             llvm_assembly,
@@ -127,9 +117,7 @@ impl Bytecode {
         (match self.object.as_ref() {
             Some(object) => object.is_empty(),
             None => true,
-        }) && self.evmla.is_none()
-            && self.ethir.is_none()
-            && self.llvm_ir_unoptimized.is_none()
+        }) && self.llvm_ir_unoptimized.is_none()
             && self.llvm_ir.is_none()
             && self.llvm_assembly.is_none()
             && (match self.debug_info.as_ref() {

@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func @{{.*uint8_arith.*}}(%{{.*}}: ui8, %{{.*}}: ui8) -> ui8
 // CHECK:   sol.cadd %{{.*}}, %{{.*}} : ui8

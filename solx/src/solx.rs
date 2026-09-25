@@ -6,23 +6,6 @@ use std::io::Write;
 
 use clap::Parser;
 
-#[cfg(not(any(feature = "solc", feature = "slang")))]
-compile_error!(
-    "No Solidity frontend is enabled. Please enable exactly one: --features solc or --features slang."
-);
-#[cfg(all(feature = "solc", feature = "slang"))]
-compile_error!(
-    "Multiple Solidity frontends are enabled. Please enable exactly one: --features solc or --features slang."
-);
-#[cfg(all(feature = "mlir", not(any(feature = "slang", feature = "solc"))))]
-compile_error!(
-    "Feature `mlir` requires a frontend. Enable `solc` (for C++ MLIR) or `slang` (for Rust MLIR via solx-mlir)."
-);
-#[cfg(all(feature = "slang", not(feature = "mlir")))]
-compile_error!(
-    "Feature `slang` requires `mlir`. This should be automatic -- check that `slang` includes `mlir` in its feature list."
-);
-
 ///
 /// The application entry point.
 ///
@@ -60,10 +43,7 @@ fn main() -> anyhow::Result<()> {
                 )
                 .expect("Stderr writing error");
         }
-        #[cfg(feature = "slang")]
         let frontend = solx_slang::Slang::default();
-        #[cfg(not(feature = "slang"))]
-        let frontend = solx::Solc::default();
 
         let compiler = solx_core::Compiler::new(&arguments);
         let result = if arguments.version {

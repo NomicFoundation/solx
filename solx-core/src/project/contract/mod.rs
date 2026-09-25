@@ -8,9 +8,7 @@ pub mod metadata;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-#[cfg(feature = "mlir")]
 use anyhow::Context as _;
-use solx_codegen_evm::IContext;
 
 use crate::build::contract::object::Object as EVMContractObject;
 use crate::error::Error;
@@ -40,12 +38,7 @@ pub struct Contract {
     pub storage_layout: Option<serde_json::Value>,
     /// solc transient storage layout.
     pub transient_storage_layout: Option<serde_json::Value>,
-    /// solc EVM legacy assembly.
-    pub legacy_assembly: Option<solx_evm_assembly::Assembly>,
-    /// solc Yul IR.
-    pub yul: Option<String>,
     /// MLIR pipeline output.
-    #[cfg(feature = "mlir")]
     pub mlir: Option<solx_mlir::MlirOutput>,
 }
 
@@ -63,9 +56,7 @@ impl Contract {
         devdoc: Option<serde_json::Value>,
         storage_layout: Option<serde_json::Value>,
         transient_storage_layout: Option<serde_json::Value>,
-        legacy_assembly: Option<solx_evm_assembly::Assembly>,
-        yul: Option<String>,
-        #[cfg(feature = "mlir")] mlir: Option<solx_mlir::MlirOutput>,
+        mlir: Option<solx_mlir::MlirOutput>,
     ) -> Self {
         Self {
             name,
@@ -77,9 +68,6 @@ impl Contract {
             devdoc,
             storage_layout,
             transient_storage_layout,
-            legacy_assembly,
-            yul,
-            #[cfg(feature = "mlir")]
             mlir,
         }
     }
@@ -92,18 +80,7 @@ impl Contract {
     ///
     pub fn estimated_compilation_cost(&self) -> usize {
         match &self.ir {
-            Some(IR::Yul(_)) => self.yul.as_ref().map_or(0, String::len),
-            Some(IR::EVMLegacyAssembly(evmla)) => {
-                let deploy = evmla.assembly.code.as_ref().map_or(0, Vec::len);
-                let runtime = evmla
-                    .runtime_code
-                    .as_ref()
-                    .and_then(|runtime| runtime.assembly.code.as_ref())
-                    .map_or(0, Vec::len);
-                deploy + runtime
-            }
             Some(IR::LLVMIR(llvm_ir)) => llvm_ir.source.len(),
-            #[cfg(feature = "mlir")]
             Some(IR::MLIR(mlir)) => {
                 mlir.source.len()
                     + mlir
@@ -119,13 +96,9 @@ impl Contract {
     /// Compiles the specified contract to EVM, returning its build artifacts.
     ///
     pub fn compile_to_evm(
-        language: solx_standard_json::InputLanguage,
-        solc_version: Option<solx_standard_json::Version>,
         contract_name: solx_utils::ContractName,
         contract_ir: IR,
         code_segment: solx_utils::CodeSegment,
-        evm_version: Option<solx_utils::EVMVersion>,
-        debug_info: Option<solx_utils::DebugInfo>,
         output_selection: &solx_standard_json::InputSelection,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
         metadata_bytes: Option<Vec<u8>>,
@@ -133,7 +106,6 @@ impl Contract {
         llvm_options: Vec<String>,
         output_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> Result<EVMContractObject, Error> {
-        use solx_codegen_evm::WriteLLVM;
         let mut profiler = solx_utils::Profiler::default();
 
         if let Some(metadata_bytes) = metadata_bytes.as_ref() {
@@ -145,278 +117,6 @@ impl Contract {
 
         let output_bytecode = output_selection.is_bytecode_set_for_any();
         match (contract_ir, code_segment) {
-            (IR::Yul(mut yul), code_segment) => {
-                let (
-                    selector_debug_info,
-                    selector_llvm_ir_unoptimized,
-                    selector_llvm_ir,
-                    selector_llvm_assembly,
-                ) = match code_segment {
-                    solx_utils::CodeSegment::Deploy => (
-                        solx_standard_json::InputSelector::BytecodeDebugInfo,
-                        solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
-                        solx_standard_json::InputSelector::BytecodeLLVMIR,
-                        solx_standard_json::InputSelector::BytecodeLLVMAssembly,
-                    ),
-                    solx_utils::CodeSegment::Runtime => (
-                        solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
-                        solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
-                        solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
-                        solx_standard_json::InputSelector::RuntimeBytecodeLLVMAssembly,
-                    ),
-                };
-
-                let output_debug_info = language == solx_standard_json::InputLanguage::Solidity
-                    && output_selection.check_selection(
-                        contract_name.path.as_str(),
-                        contract_name.name.as_deref(),
-                        selector_debug_info,
-                    );
-                let solidity_data = if language == solx_standard_json::InputLanguage::Solidity {
-                    Some(solx_codegen_evm::ContextSolidityData::new(
-                        immutables,
-                        yul.object.sources.clone(),
-                        debug_info,
-                    ))
-                } else {
-                    None
-                };
-
-                let code_identifier = yul.object.identifier.clone();
-                let module_name = match code_segment {
-                    solx_utils::CodeSegment::Deploy => contract_name.full_path.to_owned(),
-                    solx_utils::CodeSegment::Runtime => {
-                        format!("{}.{code_segment}", contract_name.full_path)
-                    }
-                };
-
-                let llvm = inkwell::context::Context::create();
-                let module = llvm.create_module(module_name.as_str());
-                let mut context = solx_codegen_evm::Context::new(
-                    &llvm,
-                    module,
-                    llvm_options,
-                    contract_name.clone(),
-                    code_segment,
-                    evm_version,
-                    optimizer,
-                    output_debug_info,
-                    solidity_data,
-                    output_config,
-                );
-                let run_yul_lowering = profiler.start_evm_translation_unit(
-                    contract_name.full_path.as_str(),
-                    code_segment,
-                    "YulToLLVMIR",
-                    optimizer_mode.as_str(),
-                    spill_area_size,
-                );
-                yul.object.declare(&mut context)?;
-                yul.object.into_llvm(&mut context).map_err(|error| {
-                    anyhow::anyhow!("{code_segment} code LLVM IR generator: {error}")
-                })?;
-                run_yul_lowering.borrow_mut().finish();
-                if output_selection.check_selection(
-                    contract_name.path.as_str(),
-                    contract_name.name.as_deref(),
-                    selector_llvm_ir_unoptimized,
-                ) || output_selection.check_selection(
-                    contract_name.path.as_str(),
-                    contract_name.name.as_deref(),
-                    selector_llvm_ir,
-                ) {
-                    context.set_capture_llvm_ir(true);
-                }
-                let build = context.build(
-                    output_selection.check_selection(
-                        contract_name.path.as_str(),
-                        contract_name.name.as_deref(),
-                        selector_llvm_assembly,
-                    ),
-                    output_bytecode,
-                    optimizer_settings.is_fallback_to_size_active(),
-                    &mut profiler,
-                )?;
-                let (immutables_out, metadata_out) = match code_segment {
-                    solx_utils::CodeSegment::Deploy => (None, None),
-                    solx_utils::CodeSegment::Runtime => {
-                        (Some(build.immutables.unwrap_or_default()), metadata_bytes)
-                    }
-                };
-                let object = EVMContractObject::new(
-                    code_identifier,
-                    contract_name.clone(),
-                    build.assembly,
-                    build.bytecode,
-                    build.debug_info,
-                    build.evmla,
-                    build.ethir,
-                    build.llvm_ir_unoptimized,
-                    build.llvm_ir,
-                    true,
-                    code_segment,
-                    immutables_out,
-                    metadata_out,
-                    yul.dependencies,
-                    build.is_size_fallback,
-                    build.warnings,
-                    profiler.to_vec(),
-                );
-                Ok(object)
-            }
-            (IR::EVMLegacyAssembly(mut code), code_segment) => {
-                let (
-                    selector_evmla,
-                    selector_ethir,
-                    selector_debug_info,
-                    selector_llvm_ir_unoptimized,
-                    selector_llvm_ir,
-                    selector_llvm_assembly,
-                ) = match code_segment {
-                    solx_utils::CodeSegment::Deploy => (
-                        solx_standard_json::InputSelector::BytecodeEVMLA,
-                        solx_standard_json::InputSelector::BytecodeEthIR,
-                        solx_standard_json::InputSelector::BytecodeDebugInfo,
-                        solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
-                        solx_standard_json::InputSelector::BytecodeLLVMIR,
-                        solx_standard_json::InputSelector::BytecodeLLVMAssembly,
-                    ),
-                    solx_utils::CodeSegment::Runtime => (
-                        solx_standard_json::InputSelector::RuntimeBytecodeEVMLA,
-                        solx_standard_json::InputSelector::RuntimeBytecodeEthIR,
-                        solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
-                        solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
-                        solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
-                        solx_standard_json::InputSelector::RuntimeBytecodeLLVMAssembly,
-                    ),
-                };
-
-                let output_debug_info = language == solx_standard_json::InputLanguage::Solidity
-                    && output_selection.check_selection(
-                        contract_name.path.as_str(),
-                        contract_name.name.as_deref(),
-                        selector_debug_info,
-                    );
-                let source_ids = debug_info
-                    .as_ref()
-                    .map(|info| info.source_ids.clone())
-                    .unwrap_or_default();
-                let solidity_data = if language == solx_standard_json::InputLanguage::Solidity {
-                    Some(solx_codegen_evm::ContextSolidityData::new(
-                        immutables, source_ids, debug_info,
-                    ))
-                } else {
-                    None
-                };
-
-                let code_identifier = match code_segment {
-                    solx_utils::CodeSegment::Deploy => contract_name.full_path.to_owned(),
-                    solx_utils::CodeSegment::Runtime => {
-                        format!("{}.{code_segment}", contract_name.full_path)
-                    }
-                };
-                let evmla_data = solx_codegen_evm::ContextEVMLAData::new(
-                    solc_version.expect("Always exists").default,
-                );
-
-                let mut accumulated_dependencies = solx_utils::Dependencies::new(
-                    code_identifier.as_str(),
-                    code.dependencies.runtime.clone(),
-                );
-                if matches!(code_segment, solx_utils::CodeSegment::Deploy) {
-                    code.assembly
-                        .accumulate_evm_dependencies(&mut accumulated_dependencies);
-                }
-
-                let llvm = inkwell::context::Context::create();
-                let module = llvm.create_module(code_identifier.as_str());
-                let mut context = solx_codegen_evm::Context::new(
-                    &llvm,
-                    module,
-                    llvm_options,
-                    contract_name.clone(),
-                    code_segment,
-                    evm_version,
-                    optimizer,
-                    output_debug_info,
-                    solidity_data,
-                    output_config,
-                );
-                context.set_evmla_data(evmla_data);
-                context.set_capture_evmla(output_selection.check_selection(
-                    contract_name.path.as_str(),
-                    contract_name.name.as_deref(),
-                    selector_evmla,
-                ));
-                context.set_capture_ethir(output_selection.check_selection(
-                    contract_name.path.as_str(),
-                    contract_name.name.as_deref(),
-                    selector_ethir,
-                ));
-                let run_evm_assembly_lowering = profiler.start_evm_translation_unit(
-                    contract_name.full_path.as_str(),
-                    code_segment,
-                    "EVMAssemblyToLLVMIR",
-                    optimizer_mode.as_str(),
-                    spill_area_size,
-                );
-                code.assembly.declare(&mut context)?;
-                code.assembly.into_llvm(&mut context).map_err(|error| {
-                    anyhow::anyhow!("{code_segment} code LLVM IR generator: {error}")
-                })?;
-                run_evm_assembly_lowering.borrow_mut().finish();
-                if output_selection.check_selection(
-                    contract_name.path.as_str(),
-                    contract_name.name.as_deref(),
-                    selector_llvm_ir_unoptimized,
-                ) || output_selection.check_selection(
-                    contract_name.path.as_str(),
-                    contract_name.name.as_deref(),
-                    selector_llvm_ir,
-                ) {
-                    context.set_capture_llvm_ir(true);
-                }
-                let build = context.build(
-                    output_selection.check_selection(
-                        contract_name.path.as_str(),
-                        contract_name.name.as_deref(),
-                        selector_llvm_assembly,
-                    ),
-                    output_bytecode,
-                    optimizer_settings.is_fallback_to_size_active(),
-                    &mut profiler,
-                )?;
-                let dependencies = match code_segment {
-                    solx_utils::CodeSegment::Deploy => accumulated_dependencies,
-                    solx_utils::CodeSegment::Runtime => code.dependencies,
-                };
-                let (immutables_out, metadata_out) = match code_segment {
-                    solx_utils::CodeSegment::Deploy => (None, None),
-                    solx_utils::CodeSegment::Runtime => {
-                        (Some(build.immutables.unwrap_or_default()), metadata_bytes)
-                    }
-                };
-                let object = EVMContractObject::new(
-                    code_identifier,
-                    contract_name.clone(),
-                    build.assembly,
-                    build.bytecode,
-                    build.debug_info,
-                    build.evmla,
-                    build.ethir,
-                    build.llvm_ir_unoptimized,
-                    build.llvm_ir,
-                    false,
-                    code_segment,
-                    immutables_out,
-                    metadata_out,
-                    dependencies,
-                    build.is_size_fallback,
-                    build.warnings,
-                    profiler.to_vec(),
-                );
-                Ok(object)
-            }
             (IR::LLVMIR(llvm_ir), code_segment) => {
                 let code_identifier = match code_segment {
                     solx_utils::CodeSegment::Deploy => contract_name.full_path.to_owned(),
@@ -453,12 +153,8 @@ impl Contract {
                     &llvm,
                     module,
                     llvm_options,
-                    contract_name.clone(),
                     code_segment,
-                    evm_version,
                     optimizer,
-                    false,
-                    None,
                     output_config,
                 );
                 if output_selection.check_selection(
@@ -491,12 +187,8 @@ impl Contract {
                     contract_name.clone(),
                     build.assembly,
                     build.bytecode,
-                    build.debug_info,
-                    build.evmla,
-                    build.ethir,
                     build.llvm_ir_unoptimized,
                     build.llvm_ir,
-                    false,
                     code_segment,
                     immutables_out,
                     metadata_out,
@@ -507,7 +199,6 @@ impl Contract {
                 );
                 Ok(object)
             }
-            #[cfg(feature = "mlir")]
             (IR::MLIR(mlir), code_segment) => {
                 let code_identifier = match code_segment {
                     solx_utils::CodeSegment::Deploy => contract_name.full_path.to_owned(),
@@ -580,12 +271,8 @@ impl Contract {
                     &context,
                     module,
                     llvm_options,
-                    contract_name.clone(),
                     code_segment,
-                    evm_version,
                     optimizer,
-                    false,
-                    None,
                     output_config,
                 );
                 if output_selection.check_selection(
@@ -620,12 +307,8 @@ impl Contract {
                     contract_name.clone(),
                     build.assembly,
                     build.bytecode,
-                    build.debug_info,
-                    build.evmla,
-                    build.ethir,
                     build.llvm_ir_unoptimized,
                     build.llvm_ir,
-                    false,
                     code_segment,
                     immutables_out,
                     metadata_out,

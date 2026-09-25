@@ -84,8 +84,7 @@ impl Runtime {
             },
         );
 
-        if test.selector.path == "solx-solidity/test/libsolidity/semanticTests/state/tx_origin.sol"
-        {
+        if test.selector.path == "solidity/test/libsolidity/semanticTests/state/tx_origin.sol" {
             self.caller = Address::from_str(REVM::TX_ORIGIN).unwrap();
         }
         let tx = REVM::new_runtime_transaction(

@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func @{{.*pure_fn.*}}{{.*}} state_mutability = #{{.*}}Pure
 // CHECK: sol.func @{{.*view_fn.*}}{{.*}} state_mutability = #{{.*}}View

@@ -11,7 +11,7 @@
 
 The tester runs **solx** against:
 
-- [Semantic tests](./solx-solidity/test/libsolidity/semanticTests/) from the **solc** repository
+- [Semantic tests](./solidity/test/libsolidity/semanticTests/) from the **solc** repository
 - [DeFi protocols](./tests/solidity/complex/defi): UniswapV2, UniswapV3, Mooniswap, StarkEx
 - [Additional tests](./tests/solidity) written by the **solx** team
 

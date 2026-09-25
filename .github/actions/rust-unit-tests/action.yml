@@ -25,10 +25,6 @@ inputs:
     description: 'GitHub check name for published test results.'
     required: false
     default: 'Unit Tests Results'
-  cargo-test-command:
-    description: 'Cargo test command or alias to run (e.g., test, test-slang).'
-    required: false
-    default: 'test'
 
 
 runs:
@@ -66,19 +62,16 @@ runs:
         RUSTC_BOOTSTRAP: 1
       if: inputs.sanitizer == ''
       run: |
-        TEST_COMMAND="${{ inputs.cargo-test-command }}"
         if [ '${{ inputs.enable-coverage }}' = 'true' ]; then
           export LLVM_COV=$(which llvm-cov)
           export LLVM_PROFDATA=$(which llvm-profdata)
-          TEST_COMMAND="llvm-cov --all-features --workspace --lcov --output-path lcov.info"
         fi
         # Use LLD on Windows to properly link with libstdc++.
         if [[ ${RUNNER_OS} = Windows ]] || [[ ${RUNNER_OS} = Linux ]]; then
           export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
         fi
         set -o pipefail
-        if [ "${TEST_COMMAND}" = "test" ]; then ${SFW_PREFIX:-} cargo build --frozen; fi
-        ${SFW_PREFIX:-} cargo ${TEST_COMMAND} --frozen --release ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
+        ${SFW_PREFIX:-} cargo test --frozen --release ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
           --format json | tee -a release-results.json || CARGO_EXIT=$?
         cargo2junit < release-results.json > "release-${{ inputs.results-xml }}" || true
         if [ -n "${CARGO_EXIT}" ]; then exit "${CARGO_EXIT}"; fi
@@ -134,8 +127,7 @@ runs:
           export CARGO_BIN_EXE_SOLX="./target/${{ inputs.target }}/debug/solx"
         fi
         set -o pipefail
-        if [ "${{ inputs.cargo-test-command }}" = "test" ]; then ${SFW_PREFIX:-} cargo build --frozen ${{ steps.build-target.outputs.target }}; fi
-        ${SFW_PREFIX:-} cargo ${{ inputs.cargo-test-command }} --frozen ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
+        ${SFW_PREFIX:-} cargo test --frozen ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
           --format json | tee -a debug-results.json || CARGO_EXIT=$?
         cargo2junit < debug-results.json > "debug-${{ inputs.results-xml }}" || true
         if [ -n "${CARGO_EXIT}" ]; then exit "${CARGO_EXIT}"; fi

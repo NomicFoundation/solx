@@ -38,11 +38,6 @@ The table below outlines the supported platforms and architectures:
 
 ## Versioning
 
-The **solx** version consists of two parts:
-
-1. **solx** version itself.
-2. Version of **solc** libraries **solx** is statically linked with.
-
 > We recommend always using the latest version of **solx** to benefit from the latest features and bug fixes.
 
 
@@ -112,12 +107,6 @@ This repository maintains intuitive and stable naming for the executables and pr
    ```shell
    git clone https://github.com/NomicFoundation/solx --recursive
    ```
-
-   By default, submodules checkout is disabled to prevent cloning large repositories via `cargo`.
-   If you're building locally, ensure all submodules are checked out with:
-   ```shell
-   git submodule update --recursive --checkout
-   ```
     
 4. Build the development tools.
 
@@ -128,24 +117,14 @@ This repository maintains intuitive and stable naming for the executables and pr
 5. Build the LLVM framework using **solx-dev**.
 
    ```shell
-   ./target/release/solx-dev llvm build --enable-mlir
+   ./target/release/solx-dev llvm build
    ```
 
    This builds LLVM with the EVM target, MLIR, and LLD projects enabled. The build artifacts will be placed in `target-llvm/`.
 
    For more information and available build options, run `./target/release/solx-dev llvm build --help`.
 
-6. Build the **solc** libraries using **solx-dev**.
-
-   ```shell
-   ./target/release/solx-dev solc build
-   ```
-
-   This will configure and build the solc libraries in `solx-solidity/build/`. The command automatically detects MLIR and LLD paths if LLVM was built with those projects.
-
-   For more options, run `./target/release/solx-dev solc build --help`.
-
-7. Build the **solx** executable.
+6. Build the **solx** executable.
 
     ```shell
     cargo build --release
@@ -160,7 +139,6 @@ This repository maintains intuitive and stable naming for the executables and pr
 ## Tuning the LLVM build
 
 * For more information and available build options, run `./target/release/solx-dev llvm build --help`.
-* The `--enable-mlir` flag enables MLIR support in the LLVM build (required for MLIR-based optimizations). LLD is always built.
 * Use the `--ccache-variant ccache` option to speed up the build process if you have [ccache](https://ccache.dev) installed.
 
 ### Building LLVM manually

@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func @{{.*pick.*}}(%{{.*}}: ui256) -> ui256
 // CHECK: sol.func @{{.*pick.*}}(%{{.*}}: i1) -> i1

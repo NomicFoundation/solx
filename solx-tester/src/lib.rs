@@ -68,11 +68,7 @@ impl<'a> SolxTester<'a> {
     /// The Solidity complex tests directory.
     const SOLIDITY_COMPLEX: &'static str = "tests/solidity/complex";
     /// The Solidity upstream tests directory.
-    const SOLIDITY_UPSTREAM: &'static str = "solx-solidity/test/libsolidity/semanticTests";
-
-    /// The Yul simple tests directory.
-    #[cfg(not(feature = "slang-ast"))]
-    const YUL_SIMPLE: &'static str = "tests/yul";
+    const SOLIDITY_UPSTREAM: &'static str = "solidity/test/libsolidity/semanticTests";
 
     /// The LLVM IR simple tests directory.
     const LLVM_IR_SIMPLE: &'static str = "tests/llvm-ir";
@@ -130,17 +126,8 @@ impl<'a> SolxTester<'a> {
     /// Returns all tests from all directories.
     ///
     fn all_tests(&self, solidity_compiler_path: PathBuf) -> anyhow::Result<Vec<Test>> {
-        let solidity_compiler = Arc::new(SolidityCompiler::new(
-            solidity_compiler_path.clone(),
-            solx_standard_json::InputLanguage::Solidity,
-        )?);
+        let solidity_compiler = Arc::new(SolidityCompiler::new(solidity_compiler_path.clone())?);
         let toolchain = solidity_compiler.toolchain();
-
-        #[cfg(not(feature = "slang-ast"))]
-        let yul_compiler = Arc::new(SolidityCompiler::new(
-            solidity_compiler_path.clone(),
-            solx_standard_json::InputLanguage::Yul,
-        )?);
 
         let llvm_ir_compiler: Arc<dyn Compiler> = match toolchain {
             Toolchain::Solx => Arc::new(LLVMIRCompiler::new(solidity_compiler_path)),
@@ -163,13 +150,6 @@ impl<'a> SolxTester<'a> {
             Self::SOLIDITY_UPSTREAM,
             solx_utils::EXTENSION_SOLIDITY,
             solidity_compiler.clone(),
-        )?);
-
-        #[cfg(not(feature = "slang-ast"))]
-        tests.extend(self.directory::<SolxDirectory>(
-            Self::YUL_SIMPLE,
-            solx_utils::EXTENSION_YUL,
-            yul_compiler,
         )?);
 
         tests.extend(self.directory::<SolxDirectory>(

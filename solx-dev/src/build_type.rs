@@ -5,7 +5,7 @@
 ///
 /// CMake build type.
 ///
-/// Used for both LLVM and solc builds.
+/// Used for LLVM builds.
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BuildType {

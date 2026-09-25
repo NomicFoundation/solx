@@ -31,29 +31,6 @@ fn default(evm_version: solx_utils::EVMVersion) -> anyhow::Result<()> {
 #[test_case(solx_utils::EVMVersion::Cancun)]
 #[test_case(solx_utils::EVMVersion::Prague)]
 #[test_case(solx_utils::EVMVersion::Osaka)]
-fn yul(evm_version: solx_utils::EVMVersion) -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let evm_version = evm_version.to_string();
-    let args = &[
-        "--evm-version",
-        evm_version.as_str(),
-        "--yul",
-        "--bin",
-        crate::common::TEST_YUL_CONTRACT,
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result.failure().stderr(predicate::str::contains(
-        "EVM version is only allowed in Solidity mode",
-    ));
-
-    Ok(())
-}
-
-#[test_case(solx_utils::EVMVersion::Cancun)]
-#[test_case(solx_utils::EVMVersion::Prague)]
-#[test_case(solx_utils::EVMVersion::Osaka)]
 fn llvm_ir(evm_version: solx_utils::EVMVersion) -> anyhow::Result<()> {
     crate::common::setup()?;
 

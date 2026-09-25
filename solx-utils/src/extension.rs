@@ -11,15 +11,6 @@ pub static EXTENSION_JSON: &str = "json";
 /// The ABI file extension.
 pub static EXTENSION_ABI: &str = "abi";
 
-/// The Yul IR file extension.
-pub static EXTENSION_YUL: &str = "yul";
-
-/// The EVM legacy assembly IR file extension.
-pub static EXTENSION_EVMLA: &str = "evmla";
-
-/// The Ethereal IR file extension.
-pub static EXTENSION_ETHIR: &str = "ethir";
-
 /// The EVM file extension.
 pub static EXTENSION_EVM: &str = "evm";
 

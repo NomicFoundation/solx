@@ -12,7 +12,6 @@ fn default() -> anyhow::Result<()> {
         crate::common::TEST_SOLIDITY_CONTRACT,
         "--emit-llvm-ir",
         "--bin",
-        "--via-ir",
     ];
 
     let result = crate::cli::execute_solx(args)?;

@@ -2,14 +2,11 @@
 //! CLI tests for the eponymous option.
 //!
 
-use std::path::PathBuf;
-
 use predicates::prelude::*;
 use tempfile::TempDir;
-use test_case::test_case;
 
-#[cfg(feature = "solc")]
 #[test]
+#[ignore = "the Slang frontend does not emit this output yet"]
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -28,8 +25,6 @@ fn default() -> anyhow::Result<()> {
         "--devdoc",
         "--storage-layout",
         "--transient-storage-layout",
-        "--asm-solc-json",
-        "--ir",
         "--benchmarks",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),
@@ -44,44 +39,8 @@ fn default() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test_case(format!(".{}", solx_utils::EXTENSION_EVM_BINARY))]
-#[test_case(format!("_llvm.{}", solx_utils::EXTENSION_EVM_ASSEMBLY))]
-#[test_case(format!("_meta.{}", solx_utils::EXTENSION_JSON))]
-fn yul(extension: String) -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let input_path = PathBuf::from(crate::common::TEST_YUL_CONTRACT);
-    let output_directory = TempDir::with_prefix("solx_output")?;
-    let mut output_file = input_path
-        .join("Return")
-        .to_string_lossy()
-        .replace(['\\', '/', '.'], "_");
-    output_file.push_str(extension.as_str());
-
-    let args = &[
-        input_path.to_str().expect("Always valid"),
-        "--yul",
-        "--bin",
-        "--bin-runtime",
-        "--asm",
-        "--metadata",
-        "--output-dir",
-        output_directory.path().to_str().expect("Always valid"),
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stderr(predicate::str::contains("Compiler run successful"));
-
-    assert!(output_directory.path().exists());
-    assert!(output_directory.path().join(output_file.as_str()).exists());
-
-    Ok(())
-}
-
-#[cfg(feature = "solc")]
 #[test]
+#[ignore = "the Slang frontend does not emit this output yet"]
 fn unusual_path_characters() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -125,8 +84,8 @@ fn standard_json() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
+#[ignore = "the Slang frontend does not emit this output yet"]
 fn multiple_outputs() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -150,8 +109,8 @@ fn multiple_outputs() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
+#[ignore = "the Slang frontend does not emit this output yet"]
 fn multiple_outputs_simple_contract() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -200,65 +159,6 @@ fn emit_llvm_ir() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
-#[test]
-fn evmla() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let output_directory = TempDir::with_prefix("solx_output")?;
-
-    let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT,
-        "--evmla",
-        "--output-dir",
-        output_directory.path().to_str().expect("Always valid"),
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stderr(predicate::str::contains("Compiler run successful"));
-
-    let entries: Vec<_> = std::fs::read_dir(output_directory.path())?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "evmla"))
-        .collect();
-
-    assert!(!entries.is_empty(), "Expected .evmla files to be created");
-
-    Ok(())
-}
-
-#[cfg(feature = "solc")]
-#[test]
-fn ethir() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let output_directory = TempDir::with_prefix("solx_output")?;
-
-    let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT,
-        "--ethir",
-        "--output-dir",
-        output_directory.path().to_str().expect("Always valid"),
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stderr(predicate::str::contains("Compiler run successful"));
-
-    let entries: Vec<_> = std::fs::read_dir(output_directory.path())?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "ethir"))
-        .collect();
-
-    assert!(!entries.is_empty(), "Expected .ethir files to be created");
-
-    Ok(())
-}
-
-#[cfg(feature = "mlir")]
 #[test]
 fn emit_mlir() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -311,7 +211,6 @@ fn emit_mlir() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "mlir")]
 #[test]
 fn emit_mlir_filter_sol() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -356,7 +255,6 @@ fn emit_mlir_filter_sol() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn multiple_ir_outputs() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -366,8 +264,6 @@ fn multiple_ir_outputs() -> anyhow::Result<()> {
     let args = &[
         crate::common::TEST_SOLIDITY_CONTRACT,
         "--emit-llvm-ir",
-        "--evmla",
-        "--ethir",
         "--asm",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),
@@ -383,36 +279,17 @@ fn multiple_ir_outputs() -> anyhow::Result<()> {
         .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "ll"))
         .collect();
 
-    let evmla_files: Vec<_> = std::fs::read_dir(output_directory.path())?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "evmla"))
-        .collect();
-
-    let ethir_files: Vec<_> = std::fs::read_dir(output_directory.path())?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "ethir"))
-        .collect();
-
     let asm_files: Vec<_> = std::fs::read_dir(output_directory.path())?
         .filter_map(|entry| entry.ok())
         .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "asm"))
         .collect();
 
     assert!(!ll_files.is_empty(), "Expected .ll files to be created");
-    assert!(
-        !evmla_files.is_empty(),
-        "Expected .evmla files to be created"
-    );
-    assert!(
-        !ethir_files.is_empty(),
-        "Expected .ethir files to be created"
-    );
     assert!(!asm_files.is_empty(), "Expected .asm files to be created");
 
     Ok(())
 }
 
-#[cfg(feature = "mlir")]
 #[test]
 fn emit_mlir_and_llvm_ir() -> anyhow::Result<()> {
     crate::common::setup()?;

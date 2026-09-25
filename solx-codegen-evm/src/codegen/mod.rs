@@ -2,15 +2,11 @@
 //! The LLVM EVM context library.
 //!
 
-pub mod attribute;
 pub mod build;
 pub mod context;
-pub mod instructions;
 
 use std::collections::BTreeMap;
 use std::sync::atomic::AtomicBool;
-
-use self::context::Context;
 
 ///
 /// Initializes the EVM target machine.
@@ -115,34 +111,4 @@ attributes #3 = {{ nofree noreturn null_pointer_is_valid }}
 !0 = !{{!"{runtime_code_identifier}"}}
 "#
     )
-}
-
-///
-/// Implemented by items which are translated into LLVM IR.
-///
-pub trait WriteLLVM {
-    ///
-    /// Declares the entity in the LLVM IR.
-    /// Is usually performed in order to use the item before defining it.
-    ///
-    fn declare(&mut self, _context: &mut Context) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    ///
-    /// Translates the entity into LLVM IR.
-    ///
-    fn into_llvm(self, context: &mut Context) -> anyhow::Result<()>;
-}
-
-///
-/// The dummy LLVM writable entity.
-///
-#[derive(Debug, Default, Clone)]
-pub struct DummyLLVMWritable {}
-
-impl WriteLLVM for DummyLLVMWritable {
-    fn into_llvm(self, _context: &mut Context) -> anyhow::Result<()> {
-        Ok(())
-    }
 }

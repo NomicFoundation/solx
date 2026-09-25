@@ -5,6 +5,7 @@
 use predicates::prelude::*;
 
 #[test]
+#[ignore = "the Slang frontend does not emit this output yet"]
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -27,9 +28,9 @@ fn invalid_input() -> anyhow::Result<()> {
 
     let result = crate::cli::execute_solx(args)?;
 
-    result.failure().stderr(predicate::str::contains(
-        "Expected identifier but got 'StringLiteral'",
-    ));
+    result
+        .failure()
+        .stderr(predicate::str::contains("Unexpected StringLiteral"));
 
     Ok(())
 }

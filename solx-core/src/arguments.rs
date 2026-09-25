@@ -132,27 +132,9 @@ pub struct Arguments {
     #[arg(long = "ast-json", help_heading = "Output Selection")]
     pub output_ast_json: bool,
 
-    /// Emit solc's EVM assembly of the compiled project.
-    #[arg(long = "asm-solc-json", help_heading = "Output Selection")]
-    pub output_asm_solc_json: bool,
-
-    /// Emit solc's Yul IR of the compiled project.
-    #[arg(long = "ir", alias = "ir-optimized", help_heading = "Output Selection")]
-    pub output_ir: bool,
-
     /// Emit solx's compilation pipeline benchmarks.
     #[arg(long = "benchmarks", help_heading = "Output Selection")]
     pub output_benchmarks: bool,
-
-    /// Emit EVM legacy assembly (intermediate representation from solc).
-    /// Can be used with --output-dir to write .evmla files.
-    #[arg(long = "evmla", help_heading = "Output Selection")]
-    pub output_evmla: bool,
-
-    /// Emit Ethereal IR (intermediate representation between EVM assembly and LLVM IR).
-    /// Can be used with --output-dir to write .ethir files.
-    #[arg(long = "ethir", help_heading = "Output Selection")]
-    pub output_ethir: bool,
 
     /// Emit LLVM IR (both unoptimized and optimized).
     /// Can be used with --output-dir to write .ll files.
@@ -163,7 +145,6 @@ pub struct Arguments {
     /// Without a value (`--emit-mlir`), prints every dialect in pipeline
     /// order. Pass `--emit-mlir=sol` or `--emit-mlir=llvm` to print one
     /// dialect. Can be used with --output-dir to write .mlir files.
-    #[cfg(feature = "mlir")]
     #[arg(
         long = "emit-mlir",
         value_enum,
@@ -181,10 +162,6 @@ pub struct Arguments {
     /// The default is chosen by `solc`.
     #[arg(long, help_heading = "Compilation Settings")]
     pub evm_version: Option<solx_utils::EVMVersion>,
-
-    /// Enable the `solc` IR codegen.
-    #[arg(long, help_heading = "Compilation Settings")]
-    pub via_ir: bool,
 
     /// Sets the number of threads, where each thread compiles its own translation unit in a child process.
     #[arg(short, long, help_heading = "Compilation Settings")]
@@ -320,28 +297,19 @@ impl Arguments {
                 || self.output_storage_layout
                 || self.output_transient_storage_layout
                 || self.output_ast_json
-                || self.output_asm_solc_json
-                || self.output_ir
                 || self.output_debug_info
                 || self.output_debug_info_runtime
-                || self.output_benchmarks;
-            #[cfg(feature = "mlir")]
-            let solidity_only = solidity_only || self.output_mlir.is_some();
+                || self.output_benchmarks
+                || self.output_mlir.is_some();
             if solidity_only {
                 messages.push(solx_standard_json::OutputError::new_error(
-                    "ABI, hashes, userdoc, devdoc, storage layout, transient storage layout, AST, EVM assembly, Yul, MLIR, debug info, benchmarks can be only emitted for Solidity contracts.",
+                    "ABI, hashes, userdoc, devdoc, storage layout, transient storage layout, AST, MLIR, debug info, benchmarks can be only emitted for Solidity contracts.",
                 ));
             }
 
             if self.evm_version.is_some() {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "EVM version is only allowed in Solidity mode.",
-                ));
-            }
-
-            if self.via_ir {
-                messages.push(solx_standard_json::OutputError::new_error(
-                    "IR codegen settings are only available in Solidity mode.",
                 ));
             }
         }
@@ -360,14 +328,9 @@ impl Arguments {
                 || self.output_storage_layout
                 || self.output_transient_storage_layout
                 || self.output_ast_json
-                || self.output_asm_solc_json
-                || self.output_ir
                 || self.output_benchmarks
-                || self.output_evmla
-                || self.output_ethir
-                || self.output_llvm_ir;
-            #[cfg(feature = "mlir")]
-            let has_output_flags = has_output_flags || self.output_mlir.is_some();
+                || self.output_llvm_ir
+                || self.output_mlir.is_some();
             if has_output_flags {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "Cannot output data outside of JSON in standard JSON mode.",
@@ -385,11 +348,6 @@ impl Arguments {
                 ));
             }
 
-            if self.via_ir {
-                messages.push(solx_standard_json::OutputError::new_error(
-                    "IR codegen must be passed via standard JSON input.",
-                ));
-            }
             if self.evm_version.is_some() {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "EVM version must be passed via standard JSON input.",
@@ -468,8 +426,7 @@ impl Arguments {
     ///
     /// Builds an `InputSelection` from CLI output flags.
     ///
-    /// Only flags supported by the current feature set are included.
-    /// Flags behind `#[cfg(feature = "solc")]` require the solc frontend.
+    /// Flags for outputs the Slang frontend does not produce yet select nothing.
     ///
     pub fn output_selection(&self) -> solx_standard_json::InputSelection {
         let mut selectors = std::collections::BTreeSet::new();
@@ -493,7 +450,6 @@ impl Arguments {
         if self.output_benchmarks {
             selectors.insert(solx_standard_json::InputSelector::Benchmarks);
         }
-        #[cfg(feature = "mlir")]
         if self.output_mlir.is_some() {
             selectors.insert(solx_standard_json::InputSelector::MLIR);
         }
@@ -505,48 +461,6 @@ impl Arguments {
             selectors.insert(solx_standard_json::InputSelector::Metadata);
         }
 
-        #[cfg(feature = "solc")]
-        {
-            if self.output_evmla {
-                selectors.insert(solx_standard_json::InputSelector::BytecodeEVMLA);
-                selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEVMLA);
-            }
-            if self.output_ethir {
-                selectors.insert(solx_standard_json::InputSelector::BytecodeEthIR);
-                selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEthIR);
-            }
-            if self.output_debug_info {
-                selectors.insert(solx_standard_json::InputSelector::BytecodeDebugInfo);
-            }
-            if self.output_debug_info_runtime {
-                selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo);
-            }
-            if self.output_abi {
-                selectors.insert(solx_standard_json::InputSelector::ABI);
-            }
-            if self.output_hashes {
-                selectors.insert(solx_standard_json::InputSelector::MethodIdentifiers);
-            }
-            if self.output_userdoc {
-                selectors.insert(solx_standard_json::InputSelector::UserDocumentation);
-            }
-            if self.output_devdoc {
-                selectors.insert(solx_standard_json::InputSelector::DeveloperDocumentation);
-            }
-            if self.output_storage_layout {
-                selectors.insert(solx_standard_json::InputSelector::StorageLayout);
-            }
-            if self.output_transient_storage_layout {
-                selectors.insert(solx_standard_json::InputSelector::TransientStorageLayout);
-            }
-            if self.output_asm_solc_json {
-                selectors.insert(solx_standard_json::InputSelector::EVMLegacyAssembly);
-            }
-            if self.output_ir {
-                selectors.insert(solx_standard_json::InputSelector::Yul);
-            }
-        }
-
         solx_standard_json::InputSelection::new(selectors)
     }
 
@@ -556,7 +470,6 @@ impl Arguments {
     /// Returns `None` for an absent flag and for the bare form
     /// (`--emit-mlir`); both leave every captured stage in place.
     ///
-    #[cfg(feature = "mlir")]
     pub fn mlir_dialect_filter(&self) -> Option<solx_mlir::Dialect> {
         self.output_mlir
             .as_ref()
@@ -595,14 +508,7 @@ impl Arguments {
             return Ok(None);
         };
 
-        let has_ir_flags = self.output_ir
-            || self.output_evmla
-            || self.output_ethir
-            || self.output_llvm_ir
-            || self.output_assembly;
-        #[cfg(feature = "mlir")]
-        let has_ir_flags = has_ir_flags || self.output_mlir.is_some();
-        if !has_ir_flags {
+        if !(self.output_llvm_ir || self.output_assembly || self.output_mlir.is_some()) {
             return Ok(None);
         }
 
@@ -610,9 +516,6 @@ impl Arguments {
         Ok(Some(solx_codegen_evm::OutputConfig::new(
             output_directory.to_owned(),
             self.overwrite,
-            self.output_ir,
-            self.output_evmla,
-            self.output_ethir,
             self.output_llvm_ir,
             self.output_assembly,
         )))

@@ -9,21 +9,17 @@ use test_case::test_case;
 #[test_case("--bin")]
 #[test_case("--bin-runtime")]
 #[test_case("--asm")]
-#[cfg_attr(feature = "solc", test_case("--metadata"))]
+#[test_case("--metadata" => ignore["the Slang frontend does not emit this output yet"])]
 #[test_case("--ast-json")]
-#[cfg_attr(feature = "solc", test_case("--abi"))]
-#[cfg_attr(feature = "solc", test_case("--hashes"))]
-#[cfg_attr(feature = "solc", test_case("--userdoc"))]
-#[cfg_attr(feature = "solc", test_case("--devdoc"))]
-#[cfg_attr(feature = "solc", test_case("--storage-layout"))]
-#[cfg_attr(feature = "solc", test_case("--transient-storage-layout"))]
-#[cfg_attr(feature = "solc", test_case("--asm-solc-json"))]
-#[cfg_attr(feature = "solc", test_case("--ir"))]
+#[test_case("--abi" => ignore["the Slang frontend does not emit this output yet"])]
+#[test_case("--hashes" => ignore["the Slang frontend does not emit this output yet"])]
+#[test_case("--userdoc" => ignore["the Slang frontend does not emit this output yet"])]
+#[test_case("--devdoc" => ignore["the Slang frontend does not emit this output yet"])]
+#[test_case("--storage-layout" => ignore["the Slang frontend does not emit this output yet"])]
+#[test_case("--transient-storage-layout" => ignore["the Slang frontend does not emit this output yet"])]
 #[test_case("--benchmarks")]
 #[test_case("--emit-llvm-ir")]
-#[cfg_attr(feature = "solc", test_case("--evmla"))]
-#[cfg_attr(feature = "solc", test_case("--ethir"))]
-#[cfg_attr(feature = "mlir", test_case("--emit-mlir"))]
+#[test_case("--emit-mlir")]
 fn default(flag: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -50,21 +46,17 @@ fn default(flag: &str) -> anyhow::Result<()> {
 #[test_case("--bin")]
 #[test_case("--bin-runtime")]
 #[test_case("--asm")]
-#[cfg_attr(feature = "solc", test_case("--metadata"))]
+#[test_case("--metadata" => ignore["the Slang frontend does not emit this output yet"])]
 #[test_case("--ast-json")]
-#[cfg_attr(feature = "solc", test_case("--abi"))]
-#[cfg_attr(feature = "solc", test_case("--hashes"))]
-#[cfg_attr(feature = "solc", test_case("--userdoc"))]
-#[cfg_attr(feature = "solc", test_case("--devdoc"))]
-#[cfg_attr(feature = "solc", test_case("--storage-layout"))]
-#[cfg_attr(feature = "solc", test_case("--transient-storage-layout"))]
-#[cfg_attr(feature = "solc", test_case("--asm-solc-json"))]
-#[cfg_attr(feature = "solc", test_case("--ir"))]
+#[test_case("--abi" => ignore["the Slang frontend does not emit this output yet"])]
+#[test_case("--hashes" => ignore["the Slang frontend does not emit this output yet"])]
+#[test_case("--userdoc" => ignore["the Slang frontend does not emit this output yet"])]
+#[test_case("--devdoc" => ignore["the Slang frontend does not emit this output yet"])]
+#[test_case("--storage-layout" => ignore["the Slang frontend does not emit this output yet"])]
+#[test_case("--transient-storage-layout" => ignore["the Slang frontend does not emit this output yet"])]
 #[test_case("--benchmarks")]
 #[test_case("--emit-llvm-ir")]
-#[cfg_attr(feature = "solc", test_case("--evmla"))]
-#[cfg_attr(feature = "solc", test_case("--ethir"))]
-#[cfg_attr(feature = "mlir", test_case("--emit-mlir"))]
+#[test_case("--emit-mlir")]
 fn missing(flag: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -87,8 +79,8 @@ fn missing(flag: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
+#[ignore = "the Slang frontend does not emit this output yet"]
 fn all() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -106,12 +98,8 @@ fn all() -> anyhow::Result<()> {
         "--devdoc",
         "--storage-layout",
         "--transient-storage-layout",
-        "--asm-solc-json",
-        "--ir",
         "--benchmarks",
         "--emit-llvm-ir",
-        "--evmla",
-        "--ethir",
         "--output-dir",
         output_directory.path().to_str().unwrap(),
         "--overwrite",
@@ -127,7 +115,6 @@ fn all() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn all_missing() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -147,12 +134,8 @@ fn all_missing() -> anyhow::Result<()> {
         "--devdoc",
         "--storage-layout",
         "--transient-storage-layout",
-        "--asm-solc-json",
-        "--ir",
         "--benchmarks",
         "--emit-llvm-ir",
-        "--evmla",
-        "--ethir",
         "--output-dir",
         output_directory.path().to_str().unwrap(),
     ];

@@ -9,10 +9,6 @@ use solx_utils::MetadataHashType;
 const CBOR_IPFS_HASH_PREFIX: &str = "a264697066735822";
 
 /// The key of the compiler's own section in the metadata.
-#[cfg(feature = "solc")]
-const SECTION_KEY: &str = "\"solx\":{";
-/// The key of the compiler's own section in the metadata.
-#[cfg(not(feature = "solc"))]
 const SECTION_KEY: &str = "\"slang\":{";
 
 #[test]
@@ -46,9 +42,6 @@ fn ipfs() -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    #[cfg(feature = "solc")]
-    result.success().stdout(predicate::str::contains("a264"));
-    #[cfg(not(feature = "solc"))]
     result.success().stdout(predicate::str::contains("a164"));
 
     Ok(())
@@ -60,8 +53,8 @@ fn none_prints_compiler_section() -> anyhow::Result<()> {
 
     let hash_type = MetadataHashType::None.to_string();
     let args = &[
-        crate::common::TEST_YUL_CONTRACT,
-        "--yul",
+        crate::common::TEST_LLVM_IR_CONTRACT,
+        "--llvm-ir",
         "--metadata",
         "--metadata-hash",
         hash_type.as_str(),
@@ -83,8 +76,8 @@ fn ipfs_hashes_printed_metadata() -> anyhow::Result<()> {
 
     let hash_type = MetadataHashType::IPFS.to_string();
     let args = &[
-        crate::common::TEST_YUL_CONTRACT,
-        "--yul",
+        crate::common::TEST_LLVM_IR_CONTRACT,
+        "--llvm-ir",
         "--metadata",
         "--metadata-hash",
         hash_type.as_str(),

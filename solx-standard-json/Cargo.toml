@@ -17,14 +17,9 @@ semver.workspace = true
 num.workspace = true
 rayon.workspace = true
 hex.workspace = true
-boolinator = "2.4"
 
-solx-evm-assembly = { path = "../solx-evm-assembly" }
-solx-mlir = { path = "../solx-mlir", optional = true }
+solx-mlir = { path = "../solx-mlir" }
 solx-utils = { path = "../solx-utils" }
-
-[features]
-mlir = ["dep:solx-mlir"]
 
 [dev-dependencies]
 serde_json.workspace = true

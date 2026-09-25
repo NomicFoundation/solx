@@ -4,19 +4,15 @@
 
 use predicates::prelude::*;
 use tempfile::TempDir;
-use test_case::test_case;
 
-#[test_case(true ; "yul")]
-#[test_case(false ; "evmla")]
-fn default(via_ir: bool) -> anyhow::Result<()> {
+#[test]
+#[ignore = "the Slang frontend does not emit this output yet"]
+fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let mut args = vec![crate::common::TEST_SOLIDITY_CONTRACT, "--debug-info"];
-    if via_ir {
-        args.push("--via-ir");
-    }
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--debug-info"];
 
-    let result = crate::cli::execute_solx(&args)?;
+    let result = crate::cli::execute_solx(args)?;
 
     result
         .success()
@@ -44,6 +40,7 @@ fn standard_json() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "the Slang frontend does not emit this output yet"]
 fn output_dir() -> anyhow::Result<()> {
     crate::common::setup()?;
 

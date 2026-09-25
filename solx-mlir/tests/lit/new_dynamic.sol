@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func @{{.*array.*}}
 // CHECK:   %[[SIZE:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256

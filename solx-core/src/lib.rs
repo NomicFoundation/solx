@@ -15,7 +15,6 @@ pub mod build;
 pub mod compiler;
 pub mod r#const;
 pub mod error;
-pub mod frontend;
 pub mod process;
 pub mod project;
 
@@ -26,7 +25,6 @@ pub use self::compiler::Compiler;
 pub use self::r#const::*;
 pub use self::error::Error;
 pub use self::error::stack_too_deep::StackTooDeep as StackTooDeepError;
-pub use self::frontend::Frontend;
 pub use self::process::EXECUTABLE;
 pub use self::process::child::run as run_subprocess;
 pub use self::process::job::Job as EVMProcessJob;

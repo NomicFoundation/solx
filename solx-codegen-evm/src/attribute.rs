@@ -2,8 +2,6 @@
 //! The LLVM attribute.
 //!
 
-pub mod memory;
-
 ///
 /// The LLVM attribute.
 ///
@@ -214,23 +212,4 @@ pub enum Attribute {
     Range,
     /// The eponymous LLVM attribute.
     Initializes = 99,
-}
-
-impl TryFrom<&str> for Attribute {
-    type Error = String;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
-            "AlwaysInline" => Ok(Attribute::AlwaysInline),
-            "Cold" => Ok(Attribute::Cold),
-            "Hot" => Ok(Attribute::Hot),
-            "MinSize" => Ok(Attribute::MinSize),
-            "OptimizeForSize" => Ok(Attribute::OptimizeForSize),
-            "NoInline" => Ok(Attribute::NoInline),
-            "WillReturn" => Ok(Attribute::WillReturn),
-            "NoReturn" => Ok(Attribute::NoReturn),
-            "MustProgress" => Ok(Attribute::MustProgress),
-            _ => Err(value.to_owned()),
-        }
-    }
 }

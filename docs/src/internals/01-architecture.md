@@ -6,9 +6,9 @@
 
 The compiler consists of three repositories:
 
-1. [solx](https://github.com/NomicFoundation/solx) — The main compiler executable and Rust crates that translate Yul and EVM assembly to LLVM IR.
-2. [solx-solidity](https://github.com/NomicFoundation/solx-solidity) — An LLVM-friendly fork of the Solidity compiler that emits Yul and EVM assembly.
-3. [solx-llvm](https://github.com/NomicFoundation/solx-llvm) — A fork of the LLVM framework with an EVM target backend.
+1. [solx](https://github.com/NomicFoundation/solx) — The main compiler executable and Rust crates that lower the Solidity AST to MLIR and drive the LLVM backend.
+2. [slang](https://github.com/NomicFoundation/slang) — The Solidity parser and binder.
+3. [solx-llvm](https://github.com/NomicFoundation/solx-llvm) — A fork of the LLVM framework with the Sol and Yul MLIR dialects and an EVM target backend.
 
 ## Compilation Pipeline
 
@@ -16,11 +16,11 @@ The compiler consists of three repositories:
                         ┌─────────────────────────────────────────────┐
                         │                  Frontend                   │
 ┌──────────┐            │  ┌────────────────┐       ┌──────────────┐  │
-│ Solidity │ ────────── │  │ solx-solidity  │ ───── │     solx     │  │
+│ Solidity │ ────────── │  │     Slang      │ ───── │     solx     │  │
 │  source  │            │  │                │       │              │  │
-└──────────┘            │  │ Parsing,       │ Yul / │ Yul & EVM    │  │
-                        │  │ semantic       │ EVM   │ assembly     │  │
-                        │  │ analysis       │ asm   │ translation  │  │
+└──────────┘            │  │ Parsing,       │ bound │ Sol-dialect  │  │
+                        │  │ binding        │ AST   │ MLIR, Sol→Yul│  │
+                        │  │                │       │ →LLVM passes │  │
                         │  └────────────────┘       └──────────────┘  │
                         └─────────────────────────────────────────────┘
                                                            │
@@ -59,8 +59,8 @@ The compiler consists of three repositories:
 
 The frontend transforms Solidity source code into LLVM IR:
 
-1. **solx-solidity** parses the Solidity source, performs semantic analysis, and emits either Yul or EVM assembly.
-2. **solx** reads the Yul or EVM assembly and translates it into LLVM IR.
+1. **Slang** parses and binds the Solidity source.
+2. **solx** lowers the bound AST to Sol-dialect MLIR, and the Sol→Yul→Standard passes translate it into LLVM IR.
 
 ### Middle-end
 
@@ -74,9 +74,3 @@ The **solx-llvm** EVM target converts optimized LLVM IR into EVM bytecode. This 
 - Register allocation (managing the EVM stack)
 - Stackification (converting register-based code to stack-based EVM operations)
 - Code emission (generating the final bytecode)
-
-## Why a Fork of solc?
-
-The **solx-solidity** fork includes modifications to make the Solidity compiler output compatible with LLVM IR generation. The upstream **solc** compiler is designed to emit EVM bytecode directly, but **solx** needs intermediate representations (Yul or EVM assembly) that can be translated to LLVM IR.
-
-The fork maintains compatibility with upstream **solc** and tracks its releases.

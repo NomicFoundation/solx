@@ -8,7 +8,6 @@
 use predicates::prelude::*;
 use test_case::test_case;
 
-#[cfg(feature = "solc")]
 #[test]
 fn method_identifiers() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -29,7 +28,6 @@ fn method_identifiers() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn multi_contract() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -103,50 +101,25 @@ fn output_has_no_errors(path: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
-fn yul_standard_json_output_has_contracts() -> anyhow::Result<()> {
+fn yul_standard_json_is_rejected() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &["--standard-json", crate::common::standard_json!("yul.json")];
 
     let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains("\"contracts\""))
-        .stdout(predicate::str::contains("\"object\""))
-        .stdout(predicate::str::contains("\"llvmAssembly\""));
+    result.success().stdout(predicate::str::contains(
+        "Slang frontend only supports Solidity sources.",
+    ));
 
     Ok(())
 }
 
-#[cfg(feature = "solc")]
-#[test]
-fn yul_bytecode_umbrella_selection_is_not_rejected() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let args = &[
-        "--standard-json",
-        crate::common::standard_json!("yul_bytecode_umbrella.json"),
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains("\"object\""))
-        .stdout(
-            predicate::str::contains("Debug info is only supported for Solidity source code input")
-                .not(),
-        );
-
-    Ok(())
-}
-
-#[cfg(feature = "solc")]
 #[test_case(crate::common::standard_json!("metadata_hash_ipfs_and_metadata.json"), true, true)]
 #[test_case(crate::common::standard_json!("metadata_hash_ipfs_no_metadata.json"), true, false)]
 #[test_case(crate::common::standard_json!("metadata_hash_none_and_metadata.json"), false, true)]
 #[test_case(crate::common::standard_json!("metadata_hash_none_no_metadata.json"), false, false)]
+#[ignore = "the Slang frontend does not emit this output yet"]
 fn metadata_hash_variants(
     path: &str,
     expect_ipfs_marker: bool,
@@ -172,7 +145,6 @@ fn metadata_hash_variants(
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn error_output_has_formatted_message() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -188,7 +160,7 @@ fn error_output_has_formatted_message() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("\"formattedMessage\""))
         .stdout(predicate::str::contains("\"severity\""))
         .stdout(predicate::str::contains("\"type\""))
-        .stdout(predicate::str::contains("ParserError"));
+        .stdout(predicate::str::contains("syntax/unexpected-terminal"));
 
     Ok(())
 }
@@ -230,18 +202,7 @@ fn error_output_component_is_general() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg_attr(
-    not(feature = "solc"),
-    test_case(crate::common::standard_json!("solidity_missing_sources.json"), "missing field `sources`")
-)]
-#[cfg_attr(
-    feature = "solc",
-    test_case(crate::common::standard_json!("solidity_empty_sources.json"), "No input sources specified")
-)]
-#[cfg_attr(
-    feature = "solc",
-    test_case(crate::common::standard_json!("solidity_missing_sources.json"), "missing field `sources`")
-)]
+#[test_case(crate::common::standard_json!("solidity_missing_sources.json"), "missing field `sources`")]
 fn error_messages(path: &str, expected_message: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -273,8 +234,7 @@ fn warning_output_has_correct_severity() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "solc"), test_case("syntax/missing-version-pragma"))]
-#[cfg_attr(feature = "solc", test_case("3420"))]
+#[test_case("syntax/missing-version-pragma")]
 fn warning_output_has_error_code_and_contracts(error_code: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -329,9 +289,9 @@ fn select_specific_bytecode(path: &str, expected_key: &str) -> anyhow::Result<()
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test_case(crate::common::standard_json!("select_evm_bytecode_debug_info.json"), "bytecode")]
 #[test_case(crate::common::standard_json!("select_evm_deployed_bytecode_debug_info.json"), "deployedBytecode")]
+#[ignore = "the Slang frontend does not emit this output yet"]
 fn select_specific_debug_info(path: &str, expected_key: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -346,8 +306,8 @@ fn select_specific_debug_info(path: &str, expected_key: &str) -> anyhow::Result<
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
+#[ignore = "the Slang frontend does not emit this output yet"]
 fn via_ir_output_structure() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -420,8 +380,8 @@ fn evm_version_in_standard_json() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
+#[ignore = "the Slang frontend does not emit this output yet"]
 fn storage_layout_output() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -439,8 +399,8 @@ fn storage_layout_output() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
+#[ignore = "the Slang frontend does not emit this output yet"]
 fn abi_only_output() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -459,8 +419,8 @@ fn abi_only_output() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
+#[ignore = "the Slang frontend does not emit this output yet"]
 fn devdoc_userdoc_output() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -534,8 +494,8 @@ fn select_ast_only() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
+#[ignore = "the Slang frontend does not emit this output yet"]
 fn select_wildcard_and_per_file_are_unioned() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -553,7 +513,6 @@ fn select_wildcard_and_per_file_are_unioned() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn select_per_file_cross_file_dependency() -> anyhow::Result<()> {
     crate::common::setup()?;

@@ -5,7 +5,6 @@
 use predicates::prelude::*;
 use solx_utils::MetadataHashType;
 
-#[cfg(feature = "solc")]
 #[test]
 fn none() -> anyhow::Result<()> {
     let _ = crate::common::setup();
@@ -52,31 +51,6 @@ fn ipfs_solidity() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
-#[test]
-fn ipfs_yul() -> anyhow::Result<()> {
-    let _ = crate::common::setup();
-
-    let hash_type = MetadataHashType::IPFS.to_string();
-    let args = &[
-        "--yul",
-        crate::common::TEST_YUL_CONTRACT,
-        "--metadata-hash",
-        hash_type.as_str(),
-        "--no-cbor-metadata",
-        "--bin",
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains("Binary"))
-        .stdout(predicate::str::contains("a264").not())
-        .stdout(predicate::str::ends_with("003e").not());
-
-    Ok(())
-}
-
 #[test]
 fn ipfs_llvm_ir() -> anyhow::Result<()> {
     let _ = crate::common::setup();
@@ -101,7 +75,6 @@ fn ipfs_llvm_ir() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn standard_json() -> anyhow::Result<()> {
     crate::common::setup()?;

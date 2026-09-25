@@ -19,7 +19,6 @@ semver.workspace = true
 
 slang_solidity_v2.workspace = true
 
-solx-core = { path = "../solx-core", features = ["mlir"] }
 solx-mlir = { path = "../solx-mlir" }
-solx-standard-json = { path = "../solx-standard-json", features = ["mlir"] }
+solx-standard-json = { path = "../solx-standard-json" }
 solx-utils = { path = "../solx-utils" }

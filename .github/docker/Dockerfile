@@ -6,7 +6,7 @@
 # source in every CI job via the build-llvm composite action.
 #
 # Three stages, all from public sources:
-#   base — what a developer needs to build solx/LLVM/solc. Keep the split
+#   base — what a developer needs to build solx/LLVM. Keep the split
 #          honest and don't add dev-relevant tools to the `ci` stage.
 #   dev  — devcontainer additions on base (non-root user, shared rustup).
 #          Built locally by .devcontainer/devcontainer.json (`target: dev`),

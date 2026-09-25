@@ -34,9 +34,7 @@
           "storageLayout",
           "transientStorageLayout",
           "evm.methodIdentifiers",
-          "evm.legacyAssembly",
           "evm.gasEstimates",
-          "ir",
           "evm"
         ]
       }

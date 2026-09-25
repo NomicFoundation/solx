@@ -70,6 +70,7 @@ fn llvm_ir() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "the Slang frontend does not resolve import paths yet"]
 fn base_path_missing() -> anyhow::Result<()> {
     crate::common::setup()?;
 

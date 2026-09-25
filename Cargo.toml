@@ -4,8 +4,6 @@ members = [
     "solx-slang",
     "solx-core",
     "solx-standard-json",
-    "solx-evm-assembly",
-    "solx-yul",
     "solx-codegen-evm",
     "solx-utils",
     "solx-dev",
@@ -14,25 +12,6 @@ members = [
     "solx-solc-test-adapter",
     "solx-compiler-downloader",
     "solx-mlir",
-]
-# IMPORTANT: solx-slang and solx-mlir are intentionally excluded from
-# default-members. They depend on inkwell with `llvm21-1-no-llvm-linking`,
-# while solx-codegen-evm uses inkwell with `llvm21-1` (links LLVM). Cargo
-# feature unification would merge these into one inkwell with conflicting
-# features, causing linker failures. Use `cargo test-slang` to test them.
-default-members = [
-    "solx",
-    "solx-core",
-    "solx-standard-json",
-    "solx-evm-assembly",
-    "solx-yul",
-    "solx-codegen-evm",
-    "solx-utils",
-    "solx-dev",
-    "solx-tester",
-    "solx-benchmark-converter",
-    "solx-solc-test-adapter",
-    "solx-compiler-downloader",
 ]
 resolver = "3"
 
@@ -72,7 +51,6 @@ object = "0.40"
 regex = "1.12"
 glob = "0.3"
 itertools = "0.15"
-sha2 = "0.11"
 sha3 = "0.12"
 md5 = "0.8"
 ruint = "1.17"

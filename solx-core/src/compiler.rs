@@ -5,13 +5,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use solx_slang::Slang;
 use solx_standard_json::CollectableError;
 
 use crate::Arguments;
 use crate::DEFAULT_EXECUTABLE_NAME;
 use crate::DEFAULT_PACKAGE_DESCRIPTION;
 use crate::EVMBuild;
-use crate::Frontend;
 use crate::Project;
 use crate::WORKER_THREAD_STACK_SIZE;
 
@@ -62,14 +62,11 @@ impl<'arguments> Compiler<'arguments> {
     ///
     /// The `main` function that implements the core CLI application logic.
     ///
-    pub fn run<F>(
+    pub fn run(
         &self,
-        frontend: F,
+        frontend: Slang,
         messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
-    ) -> anyhow::Result<()>
-    where
-        F: Frontend,
-    {
+    ) -> anyhow::Result<()> {
         if self.initialize()? {
             return Ok(());
         }
@@ -87,23 +84,8 @@ impl<'arguments> Compiler<'arguments> {
             .metadata_hash
             .unwrap_or(solx_utils::MetadataHashType::IPFS);
         let append_cbor = !self.arguments.no_cbor_metadata;
-        let use_import_callback = !self.arguments.no_import_callback;
 
-        let build = if self.arguments.yul {
-            self.yul_to_evm(
-                &frontend,
-                input_files.as_slice(),
-                self.arguments.libraries.as_slice(),
-                &output_selection,
-                messages,
-                self.arguments.evm_version,
-                metadata_hash_type,
-                append_cbor,
-                optimizer_settings,
-                llvm_options,
-                output_config,
-            )
-        } else if self.arguments.llvm_ir {
+        let build = if self.arguments.llvm_ir {
             self.llvm_ir_to_evm(
                 input_files.as_slice(),
                 self.arguments.libraries.as_slice(),
@@ -121,28 +103,25 @@ impl<'arguments> Compiler<'arguments> {
                 frontend,
                 standard_json.as_ref().map(PathBuf::from),
                 messages,
-                self.arguments.base_path.clone(),
-                self.arguments.include_path.clone(),
-                self.arguments.allow_paths.clone(),
-                use_import_callback,
                 output_config,
             );
         } else {
+            let language = if self.arguments.yul {
+                solx_standard_json::InputLanguage::Yul
+            } else {
+                solx_standard_json::InputLanguage::Solidity
+            };
             self.standard_output_evm(
                 frontend,
+                language,
                 input_files.as_slice(),
                 self.arguments.libraries.as_slice(),
                 &output_selection,
                 messages,
                 self.arguments.evm_version,
-                self.arguments.via_ir,
                 metadata_hash_type,
                 self.arguments.metadata_literal,
                 append_cbor,
-                self.arguments.base_path.clone(),
-                self.arguments.include_path.clone(),
-                self.arguments.allow_paths.clone(),
-                use_import_callback,
                 remappings,
                 optimizer_settings,
                 llvm_options,
@@ -158,14 +137,10 @@ impl<'arguments> Compiler<'arguments> {
             return Ok(());
         }
 
-        #[cfg(feature = "mlir")]
-        let build = {
-            let mut build = build;
-            if let Some(dialect) = self.arguments.mlir_dialect_filter() {
-                build.retain_mlir_dialect(dialect);
-            }
-            build
-        };
+        let mut build = build;
+        if let Some(dialect) = self.arguments.mlir_dialect_filter() {
+            build.retain_mlir_dialect(dialect);
+        }
 
         if let Some(ref output_directory) = self.arguments.output_dir {
             build.write_to_directory(
@@ -178,69 +153,6 @@ impl<'arguments> Compiler<'arguments> {
         }
 
         Ok(())
-    }
-
-    ///
-    /// Runs the Yul mode for the EVM target.
-    ///
-    pub fn yul_to_evm<F>(
-        &self,
-        frontend: &F,
-        paths: &[PathBuf],
-        libraries: &[String],
-        output_selection: &solx_standard_json::InputSelection,
-        messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
-        evm_version: Option<solx_utils::EVMVersion>,
-        metadata_hash_type: solx_utils::MetadataHashType,
-        append_cbor: bool,
-        optimizer_settings: solx_codegen_evm::OptimizerSettings,
-        llvm_options: Vec<String>,
-        output_config: Option<solx_codegen_evm::OutputConfig>,
-    ) -> anyhow::Result<EVMBuild>
-    where
-        F: Frontend,
-    {
-        if output_selection.is_debug_info_set_for_any() {
-            anyhow::bail!(solx_standard_json::OutputError::new_error(
-                "Debug info is only supported for Solidity source code input."
-            ));
-        }
-
-        let libraries = solx_utils::Libraries::try_from(libraries)?;
-        let linker_symbols = libraries.as_linker_symbols()?;
-
-        frontend.validate_yul_paths(paths, libraries.clone())?;
-
-        let project = Project::try_from_yul_paths(
-            frontend.version(),
-            paths,
-            libraries,
-            output_selection,
-            None,
-            output_config.as_ref(),
-        )?;
-
-        let mut build = project.compile_to_evm(
-            messages,
-            output_selection,
-            evm_version,
-            metadata_hash_type,
-            append_cbor,
-            optimizer_settings,
-            llvm_options,
-            output_config,
-        )?;
-        build.take_and_write_warnings();
-        build.check_errors()?;
-
-        Ok(if output_selection.is_bytecode_set_for_any() {
-            let mut build = build.link(linker_symbols);
-            build.take_and_write_warnings();
-            build.check_errors()?;
-            build
-        } else {
-            build
-        })
     }
 
     ///
@@ -296,39 +208,32 @@ impl<'arguments> Compiler<'arguments> {
     ///
     /// Runs the standard output mode for the EVM target.
     ///
-    pub fn standard_output_evm<F>(
+    pub fn standard_output_evm(
         &self,
-        frontend: F,
+        frontend: Slang,
+        language: solx_standard_json::InputLanguage,
         paths: &[PathBuf],
         libraries: &[String],
         output_selection: &solx_standard_json::InputSelection,
         messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
         evm_version: Option<solx_utils::EVMVersion>,
-        via_ir: bool,
         metadata_hash_type: solx_utils::MetadataHashType,
         metadata_literal: bool,
         append_cbor: bool,
-        base_path: Option<String>,
-        include_paths: Vec<String>,
-        allow_paths: Option<String>,
-        use_import_callback: bool,
         remappings: Vec<solx_utils::Remapping>,
         optimizer_settings: solx_codegen_evm::OptimizerSettings,
         llvm_options: Vec<String>,
         output_config: Option<solx_codegen_evm::OutputConfig>,
-    ) -> anyhow::Result<EVMBuild>
-    where
-        F: Frontend,
-    {
+    ) -> anyhow::Result<EVMBuild> {
         let mut profiler = solx_utils::Profiler::default();
 
-        let mut solc_input = solx_standard_json::Input::try_from_solidity_paths(
+        let mut solc_input = solx_standard_json::Input::try_from_paths(
+            language,
             paths,
             libraries,
             remappings,
             solx_standard_json::InputOptimizer::default(),
             evm_version,
-            via_ir,
             output_selection,
             solx_standard_json::InputMetadata::new(
                 metadata_literal,
@@ -338,36 +243,20 @@ impl<'arguments> Compiler<'arguments> {
             llvm_options.clone(),
         )?;
 
-        let run_frontend_standard_json = profiler
-            .start_pipeline_element(format!("{}_RunStandardJSON", frontend.name()).as_str());
-        let mut solc_output = frontend.standard_json(
-            &mut solc_input,
-            use_import_callback,
-            base_path.as_deref(),
-            include_paths.as_slice(),
-            allow_paths,
-        )?;
+        let run_frontend_standard_json =
+            profiler.start_pipeline_element(format!("{}_RunStandardJSON", Slang::NAME).as_str());
+        let mut solc_output = frontend.standard_json(&mut solc_input)?;
         run_frontend_standard_json.borrow_mut().finish();
         solc_output.take_and_write_warnings();
         solc_output.check_errors()?;
 
         let linker_symbols = solc_input.settings.libraries.as_linker_symbols()?;
-        solc_input.resolve_sources()?;
-        let debug_info = if output_selection.is_debug_info_emitted_for_any() {
-            Some(solc_output.get_debug_info(&solc_input.sources))
-        } else {
-            None
-        };
 
         let run_solx_project = profiler.start_pipeline_element("solx_BuildProject");
         let project = Project::try_from_solidity_output(
-            frontend.version(),
+            &frontend.version,
             solc_input.settings.libraries.clone(),
-            via_ir,
             &mut solc_output,
-            debug_info,
-            &solc_input.settings.output_selection,
-            output_config.as_ref(),
         )?;
         run_solx_project.borrow_mut().finish();
         solc_output.take_and_write_warnings();
@@ -412,23 +301,14 @@ impl<'arguments> Compiler<'arguments> {
     ///
     /// Runs the standard JSON mode for the EVM target.
     ///
-    pub fn standard_json_evm<F>(
+    pub fn standard_json_evm(
         &self,
-        frontend: F,
+        frontend: Slang,
         json_path: Option<PathBuf>,
         messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
-        base_path: Option<String>,
-        include_paths: Vec<String>,
-        allow_paths: Option<String>,
-        use_import_callback: bool,
         output_config: Option<solx_codegen_evm::OutputConfig>,
-    ) -> anyhow::Result<()>
-    where
-        F: Frontend,
-    {
+    ) -> anyhow::Result<()> {
         let mut solc_input = solx_standard_json::Input::try_from(json_path.as_deref())?;
-        let language = solc_input.language;
-        let via_ir = solc_input.settings.via_ir;
         let linker_symbols = solc_input.settings.libraries.as_linker_symbols()?;
 
         let optimizer_settings = solx_codegen_evm::OptimizerSettings::try_from_mode(
@@ -441,30 +321,13 @@ impl<'arguments> Compiler<'arguments> {
         let append_cbor = solc_input.settings.metadata.append_cbor;
 
         let mut profiler = solx_utils::Profiler::default();
-        let (mut solc_output, project) = match language {
-            solx_standard_json::InputLanguage::Solidity => {
-                let run_frontend_standard_json = profiler.start_pipeline_element(
-                    format!("{}_RunStandardJSON", frontend.name()).as_str(),
-                );
-                let mut solc_output = frontend.standard_json(
-                    &mut solc_input,
-                    use_import_callback,
-                    base_path.as_deref(),
-                    include_paths.as_slice(),
-                    allow_paths,
-                )?;
+        let (mut solc_output, project) = match solc_input.language {
+            solx_standard_json::InputLanguage::Solidity
+            | solx_standard_json::InputLanguage::Yul => {
+                let run_frontend_standard_json = profiler
+                    .start_pipeline_element(format!("{}_RunStandardJSON", Slang::NAME).as_str());
+                let mut solc_output = frontend.standard_json(&mut solc_input)?;
                 run_frontend_standard_json.borrow_mut().finish();
-
-                solc_input.resolve_sources()?;
-                let debug_info = if solc_input
-                    .settings
-                    .output_selection
-                    .is_debug_info_emitted_for_any()
-                {
-                    Some(solc_output.get_debug_info(&solc_input.sources))
-                } else {
-                    None
-                };
 
                 if solc_output.has_errors() {
                     solc_output.write_and_exit(&solc_input.settings.output_selection);
@@ -476,50 +339,11 @@ impl<'arguments> Compiler<'arguments> {
 
                 let run_solx_project = profiler.start_pipeline_element("solx_BuildProject");
                 let project = Project::try_from_solidity_output(
-                    frontend.version(),
+                    &frontend.version,
                     solc_input.settings.libraries.clone(),
-                    via_ir,
                     &mut solc_output,
-                    debug_info,
-                    &solc_input.settings.output_selection,
-                    output_config.as_ref(),
                 )?;
                 run_solx_project.borrow_mut().finish();
-                if solc_output.has_errors() {
-                    solc_output.write_and_exit(&solc_input.settings.output_selection);
-                }
-
-                (solc_output, project)
-            }
-            solx_standard_json::InputLanguage::Yul => {
-                if solc_input
-                    .settings
-                    .output_selection
-                    .is_debug_info_set_for_any()
-                {
-                    anyhow::bail!(solx_standard_json::OutputError::new_error(
-                        "Debug info is only supported for Solidity source code input."
-                    ));
-                }
-
-                let run_frontend_validate_yul = profiler
-                    .start_pipeline_element(format!("{}_ValidateYul", frontend.name()).as_str());
-                let mut solc_output = frontend.validate_yul_standard_json(&mut solc_input)?;
-                run_frontend_validate_yul.borrow_mut().finish();
-                if solc_output.has_errors() {
-                    solc_output.write_and_exit(&solc_input.settings.output_selection);
-                }
-
-                let run_solx_yul_project = profiler.start_pipeline_element("solx_BuildProject");
-                let project = Project::try_from_yul_sources(
-                    frontend.version(),
-                    solc_input.sources,
-                    solc_input.settings.libraries.clone(),
-                    &solc_input.settings.output_selection,
-                    Some(&mut solc_output),
-                    output_config.as_ref(),
-                )?;
-                run_solx_yul_project.borrow_mut().finish();
                 if solc_output.has_errors() {
                     solc_output.write_and_exit(&solc_input.settings.output_selection);
                 }
@@ -597,18 +421,15 @@ impl<'arguments> Compiler<'arguments> {
     ///
     /// Prints the compiler version information to stdout.
     ///
-    pub fn print_version<F>(&self, frontend: &F) -> anyhow::Result<()>
-    where
-        F: Frontend,
-    {
+    pub fn print_version(&self, frontend: &Slang) -> anyhow::Result<()> {
         writeln!(
             std::io::stdout(),
             "{DEFAULT_EXECUTABLE_NAME} v{}, {DEFAULT_PACKAGE_DESCRIPTION}, Front end: {}, LLVM build: {}",
             Self::version(),
-            frontend.name(),
+            Slang::NAME,
             inkwell::support::get_commit_id().to_string(),
         )?;
-        writeln!(std::io::stdout(), "Version: {}", frontend.version().long)?;
+        writeln!(std::io::stdout(), "Version: {}", frontend.version.long)?;
         Ok(())
     }
 

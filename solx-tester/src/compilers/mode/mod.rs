@@ -12,7 +12,6 @@ use self::imode::mode_to_string_aux;
 
 use crate::compilers::llvm_ir::mode::Mode as LLVMMode;
 use crate::compilers::solidity::mode::Mode as SolidityMode;
-use crate::compilers::yul::mode::Mode as YulMode;
 
 ///
 /// The compiler mode.
@@ -22,8 +21,6 @@ use crate::compilers::yul::mode::Mode as YulMode;
 pub enum Mode {
     /// Solidity compilation mode (works with both solx and solc toolchains).
     Solidity(SolidityMode),
-    /// Yul compilation mode (works with both solx and solc toolchains).
-    Yul(YulMode),
     /// LLVM IR compilation mode (solx only).
     LLVM(LLVMMode),
 }
@@ -93,11 +90,6 @@ impl Mode {
     pub fn check_version(&self, versions: &semver::VersionReq) -> bool {
         match self {
             Mode::Solidity(mode) => versions.matches(&mode.solc_version),
-            Mode::Yul(mode) => mode
-                .solc_version
-                .as_ref()
-                .map(|v| versions.matches(v))
-                .unwrap_or(false),
             Mode::LLVM(_) => false,
         }
     }
@@ -128,7 +120,6 @@ impl Mode {
     pub fn llvm_optimizer_settings(&self) -> Option<&solx_codegen_evm::OptimizerSettings> {
         match self {
             Mode::Solidity(mode) => mode.llvm_optimizer_settings.as_ref(),
-            Mode::Yul(mode) => mode.llvm_optimizer_settings.as_ref(),
             Mode::LLVM(mode) => Some(&mode.llvm_optimizer_settings),
         }
     }
@@ -139,13 +130,6 @@ impl Mode {
     pub fn toolchain(&self) -> &'static str {
         match self {
             Mode::Solidity(mode) => {
-                if mode.is_solx() {
-                    "solx"
-                } else {
-                    "solc"
-                }
-            }
-            Mode::Yul(mode) => {
                 if mode.is_solx() {
                     "solx"
                 } else {
@@ -200,13 +184,7 @@ impl Mode {
                         .replace_all(current.as_str(), "^")
                         .to_string();
                 }
-                Self::Yul(mode) if !mode.is_solx() => {
-                    current = regex::Regex::new("[+]")
-                        .expect("Always valid")
-                        .replace_all(current.as_str(), "^")
-                        .to_string();
-                }
-                Self::Yul(_) | Self::LLVM(_) => {
+                Self::LLVM(_) => {
                     current = regex::Regex::new(".*M")
                         .expect("Always valid")
                         .replace_all(current.as_str(), "^M")
@@ -226,12 +204,6 @@ impl From<SolidityMode> for Mode {
     }
 }
 
-impl From<YulMode> for Mode {
-    fn from(inner: YulMode) -> Self {
-        Self::Yul(inner)
-    }
-}
-
 impl From<LLVMMode> for Mode {
     fn from(inner: LLVMMode) -> Self {
         Self::LLVM(inner)
@@ -242,7 +214,6 @@ impl IMode for Mode {
     fn optimizations(&self) -> Option<String> {
         match self {
             Mode::Solidity(mode) => mode.optimizations(),
-            Mode::Yul(mode) => mode.optimizations(),
             Mode::LLVM(mode) => mode.optimizations(),
         }
     }
@@ -250,7 +221,6 @@ impl IMode for Mode {
     fn codegen(&self) -> Option<String> {
         match self {
             Mode::Solidity(mode) => mode.codegen(),
-            Mode::Yul(mode) => mode.codegen(),
             Mode::LLVM(mode) => mode.codegen(),
         }
     }
@@ -258,7 +228,6 @@ impl IMode for Mode {
     fn version(&self) -> Option<String> {
         match self {
             Mode::Solidity(mode) => mode.version(),
-            Mode::Yul(mode) => mode.version(),
             Mode::LLVM(mode) => mode.version(),
         }
     }
