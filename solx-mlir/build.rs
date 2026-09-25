@@ -57,11 +57,14 @@ fn main() {
         .file("mlir_execution_engine_stubs.c")
         .compile("mlir_execution_engine_stubs");
 
-    // Compile the C wrappers in dialect_stubs.cpp; see its header for why they exist.
+    // Compile the C wrappers in dialect_stubs.cpp and pass_timing.cpp; see their
+    // headers for why they exist.
     println!("cargo:rerun-if-changed=dialect_stubs.cpp");
+    println!("cargo:rerun-if-changed=pass_timing.cpp");
     cc::Build::new()
         .cpp(true)
         .file("dialect_stubs.cpp")
+        .file("pass_timing.cpp")
         .flag(format!("-isystem{}", include_path.display()))
         .flag("-std=c++17")
         .compile("dialect_stubs");
