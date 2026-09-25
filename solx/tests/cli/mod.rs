@@ -51,7 +51,9 @@ mod threads;
 mod transient_storage_layout;
 mod userdoc;
 mod version;
+mod via_ir;
 mod yul;
+mod yul_parser;
 
 ///
 /// Execute `solx` with the given arguments and assert the result.

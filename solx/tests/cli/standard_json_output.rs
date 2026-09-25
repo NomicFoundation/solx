@@ -115,6 +115,45 @@ fn yul_standard_json_is_rejected() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test]
+#[ignore = "the Slang frontend does not lower Yul yet"]
+fn yul_standard_json_output_has_contracts() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &["--standard-json", crate::common::standard_json!("yul.json")];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("\"contracts\""))
+        .stdout(predicate::str::contains("\"object\""))
+        .stdout(predicate::str::contains("\"llvmAssembly\""));
+
+    Ok(())
+}
+
+#[test]
+#[ignore = "the Slang frontend does not lower Yul yet"]
+fn yul_bytecode_umbrella_selection_is_not_rejected() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("yul_bytecode_umbrella.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("\"object\""))
+        .stdout(
+            predicate::str::contains("Debug info is only supported for Solidity source code input")
+                .not(),
+        );
+
+    Ok(())
+}
+
 #[test_case(crate::common::standard_json!("metadata_hash_ipfs_and_metadata.json"), true, true)]
 #[test_case(crate::common::standard_json!("metadata_hash_ipfs_no_metadata.json"), true, false)]
 #[test_case(crate::common::standard_json!("metadata_hash_none_and_metadata.json"), false, true)]
@@ -328,6 +367,23 @@ fn via_ir_output_structure() -> anyhow::Result<()> {
 }
 
 #[test]
+fn via_ir_is_rejected() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("solidity_via_ir.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains(
+        "Slang frontend does not support viaIR.",
+    ));
+
+    Ok(())
+}
+
+#[test]
 fn both_content_and_urls_error() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -438,7 +494,7 @@ fn devdoc_userdoc_output() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test_case(crate::common::standard_json!("solidity_via_ir.json"))]
+#[test_case(crate::common::standard_json!("solidity_via_ir.json") => ignore["the Slang frontend does not support viaIR yet"])]
 #[test_case(crate::common::standard_json!("solidity_with_remappings.json"))]
 #[test_case(crate::common::standard_json!("solidity_with_evm_version.json"))]
 #[test_case(crate::common::standard_json!("solidity_storage_layout.json"))]
@@ -457,7 +513,7 @@ fn additional_outputs_no_errors(path: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test_case(crate::common::standard_json!("solidity_via_ir.json"))]
+#[test_case(crate::common::standard_json!("solidity_via_ir.json") => ignore["the Slang frontend does not support viaIR yet"])]
 #[test_case(crate::common::standard_json!("solidity_with_remappings.json"))]
 #[test_case(crate::common::standard_json!("solidity_with_evm_version.json"))]
 fn additional_outputs_via_stdin(path: &str) -> anyhow::Result<()> {

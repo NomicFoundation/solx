@@ -1,0 +1,112 @@
+//!
+//! CLI tests for the eponymous option.
+//!
+
+use predicates::prelude::*;
+
+#[test]
+#[ignore = "the Slang frontend does not support viaIR yet"]
+fn default() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &["--via-ir", "--bin", crate::common::TEST_SOLIDITY_CONTRACT];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("Binary:\n"));
+
+    Ok(())
+}
+
+#[test]
+fn rejected() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &["--via-ir", "--bin", crate::common::TEST_SOLIDITY_CONTRACT];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.failure().stderr(predicate::str::contains(
+        "Slang frontend does not support viaIR.",
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn yul() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--yul",
+        "--via-ir",
+        "--bin",
+        crate::common::TEST_YUL_CONTRACT,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.failure().stderr(predicate::str::contains(
+        "Error: IR codegen settings are only available in Solidity mode.",
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn llvm_ir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--llvm-ir",
+        "--via-ir",
+        "--bin",
+        crate::common::TEST_LLVM_IR_CONTRACT,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.failure().stderr(predicate::str::contains(
+        "Error: IR codegen settings are only available in Solidity mode.",
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn standard_json() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--via-ir",
+        "--standard-json",
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains(
+        "IR codegen must be passed via standard JSON input.",
+    ));
+
+    Ok(())
+}
+
+#[test]
+#[ignore = "the Slang frontend does not support viaIR yet"]
+fn emit_llvm_ir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT,
+        "--via-ir",
+        "--emit-llvm-ir",
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("Deploy LLVM IR:"))
+        .stdout(predicate::str::contains("Runtime LLVM IR:"))
+        .stdout(predicate::str::contains("target datalayout"));
+
+    Ok(())
+}

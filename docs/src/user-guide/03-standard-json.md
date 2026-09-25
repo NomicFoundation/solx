@@ -202,6 +202,9 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
       // Default: true.
       "appendCBOR": true
     },
+    // Optional: Enables the IR codegen. Currently not supported.
+    "viaIR": true,
+
     // Optional, solx-only: Extra LLVM settings.
     "llvmOptions": [
       "-key", "value"

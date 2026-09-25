@@ -99,6 +99,13 @@ impl Slang {
             return Ok(output);
         }
 
+        if input_json.settings.via_ir {
+            output.errors.push(OutputError::new_error(
+                "Slang frontend does not support viaIR.",
+            ));
+            return Ok(output);
+        }
+
         if let Err(error) = input_json.resolve_sources() {
             output.errors.push(OutputError::new_error(error));
             return Ok(output);

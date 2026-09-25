@@ -119,6 +119,7 @@ impl<'arguments> Compiler<'arguments> {
                 &output_selection,
                 messages,
                 self.arguments.evm_version,
+                self.arguments.via_ir,
                 metadata_hash_type,
                 self.arguments.metadata_literal,
                 append_cbor,
@@ -217,6 +218,7 @@ impl<'arguments> Compiler<'arguments> {
         output_selection: &solx_standard_json::InputSelection,
         messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
         evm_version: Option<solx_utils::EVMVersion>,
+        via_ir: bool,
         metadata_hash_type: solx_utils::MetadataHashType,
         metadata_literal: bool,
         append_cbor: bool,
@@ -234,6 +236,7 @@ impl<'arguments> Compiler<'arguments> {
             remappings,
             solx_standard_json::InputOptimizer::default(),
             evm_version,
+            via_ir,
             output_selection,
             solx_standard_json::InputMetadata::new(
                 metadata_literal,

@@ -39,6 +39,7 @@ pub struct Settings {
         skip_serializing_if = "Settings::is_via_ir_default"
     )]
     pub via_ir: bool,
+
     /// The output selection filters.
     #[serde(default, skip_serializing_if = "Selection::is_empty")]
     pub output_selection: Selection,
@@ -66,6 +67,7 @@ impl Settings {
         remappings: Vec<solx_utils::Remapping>,
 
         evm_version: Option<solx_utils::EVMVersion>,
+        via_ir: bool,
 
         output_selection: Selection,
         metadata: Metadata,
@@ -80,7 +82,7 @@ impl Settings {
             remappings,
 
             evm_version,
-            via_ir: false,
+            via_ir,
 
             output_selection,
             metadata,

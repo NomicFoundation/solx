@@ -5,6 +5,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+use solx_standard_json::InputLanguage;
 use solx_standard_json::Output;
 use solx_standard_json::OutputError;
 use solx_standard_json::output::source::Source;
@@ -48,24 +49,54 @@ pub fn get_method_identifiers(
 ///
 /// Gets the last contract from the output for the given language.
 ///
-pub fn get_last_contract(output: &Output, sources: &[(String, String)]) -> anyhow::Result<String> {
-    if output.sources.is_empty() {
-        anyhow::bail!("The sources are empty. Found errors: {:?}", output.errors);
-    }
-    for (path, _source) in sources.iter().rev() {
-        let Some(source) = output.sources.get(path) else {
-            continue;
-        };
-        if let Ok(name) = last_contract_name(source) {
-            return Ok(ContractName::full_path(path, name.as_str()));
+pub fn get_last_contract(
+    output: &Output,
+    language: InputLanguage,
+    sources: &[(String, String)],
+) -> anyhow::Result<String> {
+    match language {
+        InputLanguage::Solidity => {
+            let output_sources = if output.sources.is_empty() {
+                anyhow::bail!("The sources are empty. Found errors: {:?}", output.errors);
+            } else {
+                &output.sources
+            };
+            for (path, _source) in sources.iter().rev() {
+                let Some(source) = output_sources.get(path) else {
+                    continue;
+                };
+                match last_contract_name(source) {
+                    Ok(name) => return Ok(ContractName::full_path(path, name.as_str())),
+                    Err(_error) => continue,
+                }
+            }
+
+            if let Some(full_path) = SlangAst::parse(sources).last_deployable(&output.contracts) {
+                return Ok(full_path);
+            }
+
+            anyhow::bail!("The last contract not found in the output")
+        }
+        InputLanguage::Yul => {
+            if output.contracts.is_empty() {
+                anyhow::bail!("The sources are empty. Found errors: {:?}", output.errors);
+            }
+            output
+                .contracts
+                .first_key_value()
+                .and_then(|(path, contracts)| {
+                    contracts
+                        .first_key_value()
+                        .map(|(name, _contract)| ContractName::full_path(path, name))
+                })
+                .ok_or_else(|| {
+                    anyhow::anyhow!("The sources are empty. Found errors: {:?}", output.errors)
+                })
+        }
+        InputLanguage::LLVMIR => {
+            anyhow::bail!("LLVM IR language is not supported")
         }
     }
-
-    if let Some(full_path) = SlangAst::parse(sources).last_deployable(&output.contracts) {
-        return Ok(full_path);
-    }
-
-    anyhow::bail!("The last contract not found in the output")
 }
 
 ///

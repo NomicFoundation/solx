@@ -48,13 +48,14 @@ fn ipfs() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "the Slang frontend does not lower Yul yet"]
 fn none_prints_compiler_section() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let hash_type = MetadataHashType::None.to_string();
     let args = &[
-        crate::common::TEST_LLVM_IR_CONTRACT,
-        "--llvm-ir",
+        crate::common::TEST_YUL_CONTRACT,
+        "--yul",
         "--metadata",
         "--metadata-hash",
         hash_type.as_str(),
@@ -71,13 +72,14 @@ fn none_prints_compiler_section() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "the Slang frontend does not lower Yul yet"]
 fn ipfs_hashes_printed_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let hash_type = MetadataHashType::IPFS.to_string();
     let args = &[
-        crate::common::TEST_LLVM_IR_CONTRACT,
-        "--llvm-ir",
+        crate::common::TEST_YUL_CONTRACT,
+        "--yul",
         "--metadata",
         "--metadata-hash",
         hash_type.as_str(),

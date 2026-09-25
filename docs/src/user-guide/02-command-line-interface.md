@@ -128,7 +128,7 @@ The **solx** metadata format is compatible with the [Solidity metadata format](h
 }
 ```
 
-Not emitted by the Slang frontend yet. Usage:
+Currently not supported. Usage:
 
 ```bash
 solx 'Simple.sol' --metadata
@@ -159,7 +159,7 @@ The AST body is abbreviated here; it spans several thousand characters even for 
 
 Emits the contract ABI specification.
 
-Not emitted by the Slang frontend yet. Usage:
+Currently not supported. Usage:
 
 ```bash
 solx 'Simple.sol' --abi
@@ -171,7 +171,7 @@ solx 'Simple.sol' --abi
 
 Emits the contract function signatures.
 
-Not emitted by the Slang frontend yet. Usage:
+Currently not supported. Usage:
 
 ```bash
 solx 'Simple.sol' --hashes
@@ -183,7 +183,7 @@ solx 'Simple.sol' --hashes
 
 Emits the contract storage layout.
 
-Not emitted by the Slang frontend yet. Usage:
+Currently not supported. Usage:
 
 ```bash
 solx 'Simple.sol' --storage-layout
@@ -195,7 +195,7 @@ solx 'Simple.sol' --storage-layout
 
 Emits the contract transient storage layout.
 
-Not emitted by the Slang frontend yet. Usage:
+Currently not supported. Usage:
 
 ```bash
 solx 'Simple.sol' --transient-storage-layout
@@ -207,7 +207,7 @@ solx 'Simple.sol' --transient-storage-layout
 
 Emits the contract user documentation.
 
-Not emitted by the Slang frontend yet. Usage:
+Currently not supported. Usage:
 
 ```bash
 solx 'Simple.sol' --userdoc
@@ -219,7 +219,7 @@ solx 'Simple.sol' --userdoc
 
 Emits the contract developer documentation.
 
-Not emitted by the Slang frontend yet. Usage:
+Currently not supported. Usage:
 
 ```bash
 solx 'Simple.sol' --devdoc
@@ -231,7 +231,7 @@ solx 'Simple.sol' --devdoc
 
 Emits the ELF-wrapped DWARF debug info of the deploy code.
 
-Not emitted by the Slang frontend yet. Usage:
+Currently not supported. Usage:
 
 ```bash
 solx 'Simple.sol' --debug-info
@@ -243,7 +243,7 @@ solx 'Simple.sol' --debug-info
 
 Emits the ELF-wrapped DWARF debug info of the runtime code.
 
-Not emitted by the Slang frontend yet. Usage:
+Currently not supported. Usage:
 
 ```bash
 solx 'Simple.sol' --debug-info-runtime
@@ -360,7 +360,7 @@ solx 'Simple.sol' --bin --libraries 'Simple.sol:Simple=0x1234567890abcdef1234567
 
 ### `--base-path`, `--include-path`, `--allow-paths`
 
-These options are accepted for **solc** compatibility. The **Slang** frontend ignores them and resolves imports only against the sources it is given.
+These options are accepted for **solc** compatibility. **solx** ignores them and resolves imports only against the sources it is given.
 
 Visit [the **solc** documentation](https://docs.soliditylang.org/en/latest/path-resolution.html) to learn more about the processing of these options.
 
@@ -602,9 +602,24 @@ solx 'Simple.sol' --bin --llvm-options='-key=value'
 
 
 
-## Frontend Settings
+## **solc** Compilation Settings
 
-The options in this section configure the **Slang** frontend.
+The options in this section mirror the **solc** options of the same name.
+
+
+
+### `--via-ir`
+
+Switches the codegen to Yul a.k.a. IR. Currently not supported.
+
+Usage:
+
+```console
+$ solx 'Simple.sol' --bin --via-ir
+? 1
+Error: Slang frontend does not support viaIR.
+
+```
 
 
 
@@ -670,7 +685,7 @@ Enables the Yul mode. In this mode, input is expected to be in the Yul language.
 
 Yul input is optimized through LLVM and is not emitted as a verbatim EVM opcode sequence. See [Optimizer and Assembly Semantics](./04-limitations.md#optimizer-and-assembly-semantics).
 
-The **Slang** frontend does not accept Yul input yet, so the mode reports an error. The example passes this Yul object, `Simple.yul`:
+Yul input is currently not supported. The example passes this Yul object, `Simple.yul`:
 
 ```yul
 {{#include 02-command-line-interface.in/Simple.yul}}

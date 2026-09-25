@@ -8,6 +8,7 @@ pub mod llvm_ir;
 pub mod mode;
 pub mod output_ext;
 pub mod solidity;
+pub mod yul;
 
 use crate::revm::input::Input as EVMInput;
 

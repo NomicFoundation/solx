@@ -163,6 +163,10 @@ pub struct Arguments {
     #[arg(long, help_heading = "Compilation Settings")]
     pub evm_version: Option<solx_utils::EVMVersion>,
 
+    /// Enable the `solc` IR codegen.
+    #[arg(long, help_heading = "Compilation Settings")]
+    pub via_ir: bool,
+
     /// Sets the number of threads, where each thread compiles its own translation unit in a child process.
     #[arg(short, long, help_heading = "Compilation Settings")]
     pub threads: Option<usize>,
@@ -312,6 +316,12 @@ impl Arguments {
                     "EVM version is only allowed in Solidity mode.",
                 ));
             }
+
+            if self.via_ir {
+                messages.push(solx_standard_json::OutputError::new_error(
+                    "IR codegen settings are only available in Solidity mode.",
+                ));
+            }
         }
 
         if self.standard_json.is_some() {
@@ -348,6 +358,11 @@ impl Arguments {
                 ));
             }
 
+            if self.via_ir {
+                messages.push(solx_standard_json::OutputError::new_error(
+                    "IR codegen must be passed via standard JSON input.",
+                ));
+            }
             if self.evm_version.is_some() {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "EVM version must be passed via standard JSON input.",

@@ -21,6 +21,7 @@ pub fn selection_required_for_testing() -> solx_standard_json::InputSelection {
 /// Creates an Input for solc toolchain compilation.
 ///
 pub fn new_input_for_solc(
+    language: solx_standard_json::InputLanguage,
     sources: BTreeMap<String, String>,
     libraries: solx_utils::Libraries,
     remappings: Option<Vec<solx_utils::Remapping>>,
@@ -44,7 +45,7 @@ pub fn new_input_for_solc(
         .collect();
 
     solx_standard_json::Input {
-        language: solx_standard_json::InputLanguage::Solidity,
+        language,
         sources,
         settings: solx_standard_json::InputSettings {
             optimizer: solx_standard_json::InputOptimizer {
@@ -83,6 +84,7 @@ pub fn new_input_from_llvm_ir_sources(
             libraries,
             Vec::new(),
             None,
+            false,
             output_selection.to_owned(),
             metadata,
             None,

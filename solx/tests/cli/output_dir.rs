@@ -2,8 +2,11 @@
 //! CLI tests for the eponymous option.
 //!
 
+use std::path::PathBuf;
+
 use predicates::prelude::*;
 use tempfile::TempDir;
+use test_case::test_case;
 
 #[test]
 #[ignore = "the Slang frontend does not emit this output yet"]
@@ -35,6 +38,43 @@ fn default() -> anyhow::Result<()> {
         .success()
         .stderr(predicate::str::contains("Compiler run successful"));
     assert!(output_directory.path().exists());
+
+    Ok(())
+}
+
+#[test_case(format!(".{}", solx_utils::EXTENSION_EVM_BINARY))]
+#[test_case(format!("_llvm.{}", solx_utils::EXTENSION_EVM_ASSEMBLY))]
+#[test_case(format!("_meta.{}", solx_utils::EXTENSION_JSON))]
+#[ignore = "the Slang frontend does not lower Yul yet"]
+fn yul(extension: String) -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let input_path = PathBuf::from(crate::common::TEST_YUL_CONTRACT);
+    let output_directory = TempDir::with_prefix("solx_output")?;
+    let mut output_file = input_path
+        .join("Return")
+        .to_string_lossy()
+        .replace(['\\', '/', '.'], "_");
+    output_file.push_str(extension.as_str());
+
+    let args = &[
+        input_path.to_str().expect("Always valid"),
+        "--yul",
+        "--bin",
+        "--bin-runtime",
+        "--asm",
+        "--metadata",
+        "--output-dir",
+        output_directory.path().to_str().expect("Always valid"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stderr(predicate::str::contains("Compiler run successful"));
+
+    assert!(output_directory.path().exists());
+    assert!(output_directory.path().join(output_file.as_str()).exists());
 
     Ok(())
 }

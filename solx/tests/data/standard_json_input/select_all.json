@@ -8,7 +8,6 @@
     }
   },
   "settings": {
-    "viaIR": true,
     "optimizer": {
       "runs": 200,
       "details": {

@@ -6,7 +6,6 @@
     }
   },
   "settings": {
-    "viaIR": true,
     "optimizer": {
       "mode": "0"
     },

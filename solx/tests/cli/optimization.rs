@@ -136,6 +136,25 @@ fn standard_json_invalid_env_var() -> anyhow::Result<()> {
 
 #[test_case('s')]
 #[test_case('z')]
+#[ignore = "the Slang frontend does not lower Yul yet"]
+fn yul(level: char) -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::TEST_YUL_CONTRACT,
+        "--yul",
+        &format!("-O{level}"),
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains("Binary"));
+
+    Ok(())
+}
+
+#[test_case('s')]
+#[test_case('z')]
 fn llvm_ir(level: char) -> anyhow::Result<()> {
     crate::common::setup()?;
 
