@@ -53,6 +53,11 @@
 // CHECK:   %[[PTRSEL:.*]] = sol.ext_func_selector %[[PTR]] : !sol.ext_func_ref<(ui256) -> ui256> -> !sol.fixedbytes<4>
 // CHECK:   sol.encode selector(%[[PTRSEL]]) %{{.*}} : !sol.fixedbytes<4> ui256 : !sol.string<Memory>
 
+// CHECK: sol.func @{{.*encodeCallPointerEmpty.*}}
+// CHECK:   %[[EPTR:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.ext_func_ref<() -> ()>, Stack>, !sol.ext_func_ref<() -> ()>
+// CHECK:   %[[EPTRSEL:.*]] = sol.ext_func_selector %[[EPTR]] : !sol.ext_func_ref<() -> ()> -> !sol.fixedbytes<4>
+// CHECK:   sol.encode selector(%[[EPTRSEL]]) : !sol.fixedbytes<4>  : !sol.string<Memory>
+
 // CHECK: sol.func @{{.*encodeCallStorage.*}}
 // CHECK:   %[[SLOT:.*]] = sol.addr_of @{{.*}} : !sol.string<Storage>
 // CHECK:   %[[LOADED:.*]] = sol.data_loc_cast %[[SLOT]] : !sol.string<Storage>, !sol.string<Memory>
@@ -128,6 +133,8 @@ contract C {
     function encodeCallEmpty() public pure returns (bytes memory) { return abi.encodeCall(I.n, ()); }
 
     function encodeCallPointer(function(uint256) external returns (uint256) p, uint256 x) public pure returns (bytes memory) { return abi.encodeCall(p, (x)); }
+
+    function encodeCallPointerEmpty(function() external p) public pure returns (bytes memory) { return abi.encodeCall(p, ()); }
 
     function decode(bytes memory data) public pure returns (uint256) { return abi.decode(data, (uint256)); }
 
