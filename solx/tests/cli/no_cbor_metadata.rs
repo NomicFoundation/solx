@@ -52,7 +52,7 @@ fn ipfs_solidity() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn ipfs_yul() -> anyhow::Result<()> {
     let _ = crate::common::setup();
 

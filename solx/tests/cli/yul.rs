@@ -13,15 +13,15 @@ fn unsupported() -> anyhow::Result<()> {
     let args = &[crate::common::TEST_YUL_CONTRACT, "--yul", "--bin"];
 
     let result = crate::cli::execute_solx(args)?;
-    result.failure().stderr(predicate::str::contains(
-        "Slang frontend only supports Solidity sources.",
-    ));
+    result
+        .failure()
+        .stderr(predicate::str::contains("Yul is not supported yet."));
 
     Ok(())
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn bin() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -34,7 +34,7 @@ fn bin() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn stdin() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -54,7 +54,7 @@ fn stdin() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn asm() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -69,7 +69,7 @@ fn asm() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -104,7 +104,7 @@ fn unavailable(flag: &str) -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn object_naming() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -121,7 +121,7 @@ fn object_naming() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn solc() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -134,7 +134,7 @@ fn solc() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn invalid_input() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -163,7 +163,7 @@ fn invalid_standard_json() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn standard_json_default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -179,7 +179,7 @@ fn standard_json_default() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn standard_json_default_urls() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -198,7 +198,7 @@ fn standard_json_default_urls() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn standard_json_default_urls_invalid() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -216,7 +216,7 @@ fn standard_json_default_urls_invalid() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn standard_json_default_urls_debug_info() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -234,7 +234,7 @@ fn standard_json_default_urls_debug_info() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn bin_runtime() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -253,7 +253,7 @@ fn bin_runtime() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn asm_parser_coverage() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -272,7 +272,7 @@ fn asm_parser_coverage() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn emit_llvm_ir() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -293,7 +293,7 @@ fn emit_llvm_ir() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn output_dir() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -316,7 +316,7 @@ fn output_dir() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn output_dir_multiple() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -341,7 +341,7 @@ fn output_dir_multiple() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn opcode_coverage_bin() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -358,7 +358,7 @@ fn opcode_coverage_bin() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn opcode_coverage_bin_runtime() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -377,7 +377,7 @@ fn opcode_coverage_bin_runtime() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn external_calls_bin() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -394,7 +394,7 @@ fn external_calls_bin() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn external_calls_bin_runtime() -> anyhow::Result<()> {
     crate::common::setup()?;
 

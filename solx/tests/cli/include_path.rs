@@ -70,7 +70,7 @@ fn llvm_ir() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend ignores --base-path and --include-path"]
+#[ignore = "solx ignores --base-path and --include-path"]
 fn base_path_missing() -> anyhow::Result<()> {
     crate::common::setup()?;
 

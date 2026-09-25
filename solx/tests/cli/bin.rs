@@ -158,7 +158,7 @@ fn multiple_files() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not emit this output yet"]
+#[ignore = "solx does not emit this output yet"]
 fn all_terminal_outputs() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -194,7 +194,7 @@ fn all_terminal_outputs() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not emit this output yet"]
+#[ignore = "solx does not emit this output yet"]
 fn combined_terminal_outputs() -> anyhow::Result<()> {
     crate::common::setup()?;
 

@@ -213,7 +213,7 @@ fn stdin_hyphen_missing() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not emit this output yet"]
+#[ignore = "solx does not emit this output yet"]
 fn empty_sources() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -248,7 +248,7 @@ fn missing_sources() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not emit this output yet"]
+#[ignore = "solx does not emit this output yet"]
 fn metadata_hash_ipfs_and_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -267,7 +267,7 @@ fn metadata_hash_ipfs_and_metadata() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not emit this output yet"]
+#[ignore = "solx does not emit this output yet"]
 fn metadata_hash_ipfs_no_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -286,7 +286,7 @@ fn metadata_hash_ipfs_no_metadata() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not emit this output yet"]
+#[ignore = "solx does not emit this output yet"]
 fn metadata_hash_none_and_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -457,7 +457,7 @@ fn select_none() -> anyhow::Result<()> {
 
 #[test_case(crate::common::standard_json!("select_all.json"))]
 #[test_case(crate::common::standard_json!("select_all_wildcard.json"))]
-#[ignore = "the Slang frontend does not emit this output yet"]
+#[ignore = "solx does not emit this output yet"]
 fn select_all(path: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 

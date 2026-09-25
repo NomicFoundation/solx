@@ -48,7 +48,7 @@ fn ipfs() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn none_prints_compiler_section() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -72,7 +72,7 @@ fn none_prints_compiler_section() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn ipfs_hashes_printed_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 

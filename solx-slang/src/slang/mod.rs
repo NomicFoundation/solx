@@ -25,7 +25,7 @@ use crate::scope::source_unit::SourceUnitScope;
 
 use self::import_resolver::SourceImportResolver;
 
-/// The Slang frontend implementation.
+/// Parses and binds Solidity with Slang and lowers it to Sol-dialect MLIR.
 #[derive(Debug)]
 pub struct Slang {
     /// The Slang compiler latest supported version.
@@ -93,16 +93,16 @@ impl Slang {
         let mut output = solx_standard_json::Output::new(&input_json.sources);
 
         if input_json.language != solx_standard_json::InputLanguage::Solidity {
-            output.errors.push(OutputError::new_error(
-                "Slang frontend only supports Solidity sources.",
-            ));
+            output
+                .errors
+                .push(OutputError::new_error("Yul is not supported yet."));
             return Ok(output);
         }
 
         if input_json.settings.via_ir {
-            output.errors.push(OutputError::new_error(
-                "Slang frontend does not support viaIR.",
-            ));
+            output
+                .errors
+                .push(OutputError::new_error("viaIR is not supported yet."));
             return Ok(output);
         }
 

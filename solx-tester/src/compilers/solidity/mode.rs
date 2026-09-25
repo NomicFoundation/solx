@@ -76,8 +76,8 @@ impl Mode {
     }
 
     ///
-    /// Checks if the mode is compatible with the source code pragmas. Under the Slang frontend,
-    /// tests pinned to `pragma abicoder v1` are incompatible.
+    /// Checks if the mode is compatible with the source code pragmas. Tests pinned to
+    /// `pragma abicoder v1` are incompatible.
     ///
     pub fn check_pragmas(&self, sources: &[(String, String)]) -> bool {
         if SlangAst::parse(sources).is_abi_encoder_v1_pinned() {

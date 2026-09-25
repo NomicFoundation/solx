@@ -23,7 +23,7 @@ fn stack_too_deep_solc() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not warn about memory-unsafe assembly yet"]
+#[ignore = "solx does not warn about memory-unsafe assembly yet"]
 fn stack_too_deep_llvm() -> anyhow::Result<()> {
     crate::common::setup()?;
 

@@ -441,7 +441,7 @@ impl Arguments {
     ///
     /// Builds an `InputSelection` from CLI output flags.
     ///
-    /// Flags for outputs the Slang frontend does not produce yet select nothing.
+    /// Flags for outputs that are not supported yet select nothing.
     ///
     pub fn output_selection(&self) -> solx_standard_json::InputSelection {
         let mut selectors = std::collections::BTreeSet::new();

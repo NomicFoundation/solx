@@ -617,7 +617,7 @@ Usage:
 ```console
 $ solx 'Simple.sol' --bin --via-ir
 ? 1
-Error: Slang frontend does not support viaIR.
+Error: viaIR is not supported yet.
 
 ```
 
@@ -696,7 +696,7 @@ Usage:
 ```console
 $ solx --yul 'Simple.yul' --bin
 ? 1
-Error: Slang frontend only supports Solidity sources.
+Error: Yul is not supported yet.
 
 ```
 

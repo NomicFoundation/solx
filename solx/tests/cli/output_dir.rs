@@ -9,7 +9,7 @@ use tempfile::TempDir;
 use test_case::test_case;
 
 #[test]
-#[ignore = "the Slang frontend does not emit this output yet"]
+#[ignore = "solx does not emit this output yet"]
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -45,7 +45,7 @@ fn default() -> anyhow::Result<()> {
 #[test_case(format!(".{}", solx_utils::EXTENSION_EVM_BINARY))]
 #[test_case(format!("_llvm.{}", solx_utils::EXTENSION_EVM_ASSEMBLY))]
 #[test_case(format!("_meta.{}", solx_utils::EXTENSION_JSON))]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn yul(extension: String) -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -80,7 +80,7 @@ fn yul(extension: String) -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not emit this output yet"]
+#[ignore = "solx does not emit this output yet"]
 fn unusual_path_characters() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -125,7 +125,7 @@ fn standard_json() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not emit this output yet"]
+#[ignore = "solx does not emit this output yet"]
 fn multiple_outputs() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -150,7 +150,7 @@ fn multiple_outputs() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not emit this output yet"]
+#[ignore = "solx does not emit this output yet"]
 fn multiple_outputs_simple_contract() -> anyhow::Result<()> {
     crate::common::setup()?;
 

@@ -36,7 +36,7 @@ pub enum Selector {
     /// The compilation pipeline benchmarks.
     #[serde(rename = "benchmarks")]
     Benchmarks,
-    /// The MLIR source code (LLVM dialect, Slang frontend intermediate representation).
+    /// The MLIR source code (LLVM dialect, solx intermediate representation).
     #[serde(rename = "mlir")]
     MLIR,
 

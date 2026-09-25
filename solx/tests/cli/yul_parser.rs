@@ -6,7 +6,7 @@ use predicates::prelude::*;
 use test_case::test_case;
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn parser_coverage_bin() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -23,7 +23,7 @@ fn parser_coverage_bin() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn parser_coverage_standard_json() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -42,7 +42,7 @@ fn parser_coverage_standard_json() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn syntax_error() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -160,7 +160,7 @@ fn syntax_error() -> anyhow::Result<()> {
     r#"found: "case""#;
     "statement_keyword_case"
 )]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn parser_error(path: &str, error_type: &str, error_context: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -176,7 +176,7 @@ fn parser_error(path: &str, error_type: &str, error_context: &str) -> anyhow::Re
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn unsupported_callcode() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -195,7 +195,7 @@ fn unsupported_callcode() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn unsupported_pc() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -214,7 +214,7 @@ fn unsupported_pc() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn selfdestruct() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -231,7 +231,7 @@ fn selfdestruct() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn selfdestruct_deploy_code() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -248,7 +248,7 @@ fn selfdestruct_deploy_code() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn blobhash() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -265,7 +265,7 @@ fn blobhash() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn blobbasefee() -> anyhow::Result<()> {
     crate::common::setup()?;
 

@@ -136,7 +136,7 @@ fn standard_json_invalid_env_var() -> anyhow::Result<()> {
 
 #[test_case('s')]
 #[test_case('z')]
-#[ignore = "the Slang frontend does not lower Yul yet"]
+#[ignore = "solx does not lower Yul yet"]
 fn yul(level: char) -> anyhow::Result<()> {
     crate::common::setup()?;
 

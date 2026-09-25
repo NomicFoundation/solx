@@ -606,7 +606,6 @@ impl Compiler for SolidityCompiler {
     fn all_modes(&self) -> Vec<Mode> {
         match (self.language, self.toolchain) {
             (solx_standard_json::InputLanguage::Solidity, Toolchain::Solx) => {
-                // The Slang frontend rejects viaIR.
                 let codegen_versions = vec![(false, self.version.to_owned())];
 
                 super::optimizer_combinations()
@@ -618,17 +617,14 @@ impl Compiler for SolidityCompiler {
                     .collect::<Vec<Mode>>()
             }
             (solx_standard_json::InputLanguage::Solidity, Toolchain::Solc) => {
-                // Generate modes for both via_ir settings with the single solc version
                 let mut modes = Vec::new();
                 for via_ir in [false, true] {
                     modes.push(SolidityMode::new_solc(self.version.clone(), via_ir, true).into());
                 }
                 modes
             }
-            // The Slang frontend does not lower Yul yet.
             (solx_standard_json::InputLanguage::Yul, Toolchain::Solx) => Vec::new(),
             (solx_standard_json::InputLanguage::Yul, Toolchain::Solc) => {
-                // Single mode for the single solc version
                 vec![YulMode::new_solc(self.version.clone(), true).into()]
             }
             (solx_standard_json::InputLanguage::LLVMIR, _) => Vec::new(),
