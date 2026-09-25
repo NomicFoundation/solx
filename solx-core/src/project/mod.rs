@@ -835,6 +835,8 @@ impl Project {
             attempt += 1;
 
             match attempt_result {
+                // TODO: return the unoptimized bitcode so a retry skips the MLIR
+                // parse and translation.
                 Err(Error::StackTooDeep(stack_too_deep)) => {
                     if stack_too_deep.is_size_fallback
                         && !job.optimizer_settings.is_fallback_to_size_active()
