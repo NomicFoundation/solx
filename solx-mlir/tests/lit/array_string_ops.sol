@@ -1,7 +1,39 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// CHECK: sol.func {{.*}}pushValue
+// CHECK: sol.func {{.*}}makeLiteral{{.*}}-> !sol.array<3 x ui256, Memory>
+// CHECK:   sol.array_lit %{{.*}}, %{{.*}}, %{{.*}} : (ui256, ui256, ui256) -> !sol.array<3 x ui256, Memory>
+
+// CHECK: sol.func {{.*}}popByte
+// CHECK:   sol.pop %{{.*}} : !sol.string<Storage>
+
+// CHECK: sol.func {{.*}}popEmptyBraces
+// CHECK:   sol.pop %{{.*}} : !sol.array<? x ui256, Storage>
+
+// CHECK: sol.func {{.*}}popLast
+// CHECK:   sol.pop %{{.*}} : !sol.array<? x ui256, Storage>
+
+// CHECK: sol.func {{.*}}pushAssign
 // CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
+// CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
+
+// CHECK: sol.func {{.*}}pushByte
+// CHECK:   sol.push_string %{{.*}}, %{{.*}} : <Storage>, !sol.fixedbytes<1>
+
+// CHECK: sol.func {{.*}}pushByteEmpty
+// CHECK:   sol.push %{{.*}} : !sol.string<Storage> -> !sol.ptr<!sol.byte, Storage>
+
+// CHECK: sol.func {{.*}}pushByteHexLit
+// CHECK:   %[[PHL:.*]] = sol.push %{{.*}} : !sol.string<Storage> -> !sol.ptr<!sol.byte, Storage>
+// CHECK:   sol.store %{{.*}}, %[[PHL]] : !sol.byte, !sol.ptr<!sol.byte, Storage>
+
+// CHECK: sol.func {{.*}}pushByteStrLit
+// CHECK:   %[[PSL:.*]] = sol.push %{{.*}} : !sol.string<Storage> -> !sol.ptr<!sol.byte, Storage>
+// CHECK:   sol.store %{{.*}}, %[[PSL]] : !sol.byte, !sol.ptr<!sol.byte, Storage>
+
+// CHECK: sol.func {{.*}}pushCompound
+// CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
+// CHECK:   sol.load %{{.*}} : !sol.ptr<ui256, Storage>, ui256
+// CHECK:   sol.cadd %{{.*}}, %{{.*}} : ui256
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
 
 // CHECK: sol.func {{.*}}pushEmpty
@@ -12,14 +44,9 @@
 // CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
 // CHECK-NOT: sol.store
 
-// CHECK: sol.func {{.*}}pushAssign
+// CHECK: sol.func {{.*}}pushNested
+// CHECK:   sol.push %{{.*}} : !sol.array<? x !sol.array<? x ui256, Storage>, Storage> -> !sol.array<? x ui256, Storage>
 // CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
-// CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
-
-// CHECK: sol.func {{.*}}pushCompound
-// CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
-// CHECK:   sol.load %{{.*}} : !sol.ptr<ui256, Storage>, ui256
-// CHECK:   sol.cadd %{{.*}}, %{{.*}} : ui256
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
 
 // CHECK: sol.func {{.*}}pushStructMember
@@ -31,36 +58,9 @@
 // CHECK:   sol.push %{{.*}} : !sol.array<? x !sol.struct<(ui256, ui256), Storage>, Storage> -> !sol.struct<(ui256, ui256), Storage>
 // CHECK:   sol.copy %{{.*}}, %{{.*}} : !sol.struct<(ui256, ui256), Memory>, !sol.struct<(ui256, ui256), Storage>
 
-// CHECK: sol.func {{.*}}pushNested
-// CHECK:   sol.push %{{.*}} : !sol.array<? x !sol.array<? x ui256, Storage>, Storage> -> !sol.array<? x ui256, Storage>
+// CHECK: sol.func {{.*}}pushValue
 // CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
-
-// CHECK: sol.func {{.*}}pushByte
-// CHECK:   sol.push_string %{{.*}}, %{{.*}} : <Storage>, !sol.fixedbytes<1>
-
-// CHECK: sol.func {{.*}}pushByteEmpty
-// CHECK:   sol.push %{{.*}} : !sol.string<Storage> -> !sol.ptr<!sol.byte, Storage>
-
-// CHECK: sol.func {{.*}}pushByteStrLit
-// CHECK:   %[[PSL:.*]] = sol.push %{{.*}} : !sol.string<Storage> -> !sol.ptr<!sol.byte, Storage>
-// CHECK:   sol.store %{{.*}}, %[[PSL]] : !sol.byte, !sol.ptr<!sol.byte, Storage>
-
-// CHECK: sol.func {{.*}}pushByteHexLit
-// CHECK:   %[[PHL:.*]] = sol.push %{{.*}} : !sol.string<Storage> -> !sol.ptr<!sol.byte, Storage>
-// CHECK:   sol.store %{{.*}}, %[[PHL]] : !sol.byte, !sol.ptr<!sol.byte, Storage>
-
-// CHECK: sol.func {{.*}}popLast
-// CHECK:   sol.pop %{{.*}} : !sol.array<? x ui256, Storage>
-
-// CHECK: sol.func {{.*}}popEmptyBraces
-// CHECK:   sol.pop %{{.*}} : !sol.array<? x ui256, Storage>
-
-// CHECK: sol.func {{.*}}popByte
-// CHECK:   sol.pop %{{.*}} : !sol.string<Storage>
-
-// CHECK: sol.func {{.*}}makeLiteral{{.*}}-> !sol.array<3 x ui256, Memory>
-// CHECK:   sol.array_lit %{{.*}}, %{{.*}}, %{{.*}} : (ui256, ui256, ui256) -> !sol.array<3 x ui256, Memory>
 
 contract C {
     struct Y {

@@ -2,14 +2,14 @@
 
 // CHECK: sol.func @{{.*add.*}}(%{{.*}}: ui256, %{{.*}}: ui256) -> ui256
 
+// CHECK: sol.func @{{.*f.*}}() -> ui256
+// CHECK:   sol.call @{{.*f.*}}() : () -> ui256
+
 // CHECK: sol.func @{{.*plus.*}}(%{{.*}}: ui256, %{{.*}}: ui256) -> ui256
 // CHECK:   sol.call @{{.*add.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
 
 // CHECK: sol.func @{{.*sum.*}}(%{{.*}}: ui256, %{{.*}}: ui256) -> ui256
 // CHECK:   sol.call @{{.*add.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
-
-// CHECK: sol.func @{{.*f.*}}() -> ui256
-// CHECK:   sol.call @{{.*f.*}}() : () -> ui256
 
 type T is uint256;
 

@@ -4,10 +4,6 @@
 // CHECK:   %[[COND:.*]] = sol.cmp gt
 // CHECK:   sol.require %[[COND]]()
 
-// CHECK: sol.func @{{.*check_msg.*}}
-// CHECK:   %[[COND:.*]] = sol.cmp gt
-// CHECK:   sol.require %[[COND]], "must be positive"()
-
 // CHECK: sol.func @{{.*check_error.*}}
 // CHECK:   %[[COND:.*]] = sol.cmp gt
 // CHECK:   sol.require %[[COND]], "MyError(uint256)"(%{{.*}}) {call}
@@ -15,6 +11,10 @@
 // CHECK: sol.func @{{.*check_library_error.*}}
 // CHECK:   %[[COND:.*]] = sol.cmp gt
 // CHECK:   sol.require %[[COND]], "LibraryError(uint256)"(%{{.*}}) {call}
+
+// CHECK: sol.func @{{.*check_msg.*}}
+// CHECK:   %[[COND:.*]] = sol.cmp gt
+// CHECK:   sol.require %[[COND]], "must be positive"()
 
 // CHECK: sol.func @{{.*check_named_arguments.*}}
 // CHECK:   sol.require %{{.*}}, "MyErr(uint256,uint256)"(%{{.*}}, %{{.*}}) {call}

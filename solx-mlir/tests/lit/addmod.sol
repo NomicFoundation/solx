@@ -1,12 +1,12 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// CHECK: sol.func @{{.*variables.*}}
-// CHECK:   sol.addmod {{.*}} : ui256
-
 // CHECK: sol.func @{{.*literals.*}}
 // CHECK:   sol.cast %{{.*}} : ui8 to ui256
 // CHECK:   sol.cast %{{.*}} : ui8 to ui256
 // CHECK:   sol.cast %{{.*}} : ui8 to ui256
+// CHECK:   sol.addmod {{.*}} : ui256
+
+// CHECK: sol.func @{{.*variables.*}}
 // CHECK:   sol.addmod {{.*}} : ui256
 
 contract C {

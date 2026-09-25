@@ -4,12 +4,6 @@
 // CHECK:   sol.constant 2004384122 : ui32
 // CHECK:   sol.bytes_cast %{{.*}} : ui32 to !sol.fixedbytes<4>
 
-// CHECK: sol.func @{{.*two_constants.*}}
-// CHECK: sol.return %{{.*}}, %{{.*}}
-
-// CHECK: sol.func @{{.*widened_elements.*}}
-// CHECK: sol.return %{{.*}}, %{{.*}} : ui256, i1
-
 // CHECK: sol.func @{{.*string_and_constant.*}}
 // CHECK:   sol.constant 1633837924 : ui32
 // CHECK:   sol.bytes_cast %{{.*}} : ui32 to !sol.fixedbytes<4>
@@ -19,6 +13,9 @@
 // CHECK:   sol.constant 1633837924 : ui32
 // CHECK:   sol.bytes_cast %{{.*}} : ui32 to !sol.fixedbytes<4>
 // CHECK:   sol.return %{{.*}}, %{{.*}} : !sol.fixedbytes<4>, ui256
+
+// CHECK: sol.func @{{.*two_constants.*}}
+// CHECK: sol.return %{{.*}}, %{{.*}}
 
 // CHECK: sol.func @{{.*via_call.*}}
 // CHECK: %[[R:[0-9]+]]:2 = sol.call @{{.*two_constants.*}}() : () -> (ui256, ui256)
@@ -39,6 +36,9 @@
 // CHECK: sol.func @{{.*via_nested_conditional.*}}
 // CHECK: sol.if
 // CHECK: sol.return %{{.*}}, %{{.*}} : ui256, ui256
+
+// CHECK: sol.func @{{.*widened_elements.*}}
+// CHECK: sol.return %{{.*}}, %{{.*}} : ui256, i1
 
 contract C {
     function single_element_tuple() public pure returns (bytes4) {

@@ -8,20 +8,12 @@
 // CHECK:   sol.cadd %[[OLD]], %[[RHS]]
 // CHECK:   sol.store %{{.*}}, %[[XPTR]]
 
-// CHECK: sol.func @{{.*sub_assign.*}}
+// CHECK: sol.func @{{.*and_assign.*}}
 // CHECK:   sol.store %arg0, %[[XPTR:.*]] :
 // CHECK:   sol.store %arg1, %[[YPTR:.*]] :
 // CHECK:   %[[RHS:.*]] = sol.load %[[YPTR]]
 // CHECK:   %[[OLD:.*]] = sol.load %[[XPTR]]
-// CHECK:   sol.csub %[[OLD]], %[[RHS]]
-// CHECK:   sol.store %{{.*}}, %[[XPTR]]
-
-// CHECK: sol.func @{{.*mul_assign.*}}
-// CHECK:   sol.store %arg0, %[[XPTR:.*]] :
-// CHECK:   sol.store %arg1, %[[YPTR:.*]] :
-// CHECK:   %[[RHS:.*]] = sol.load %[[YPTR]]
-// CHECK:   %[[OLD:.*]] = sol.load %[[XPTR]]
-// CHECK:   sol.cmul %[[OLD]], %[[RHS]]
+// CHECK:   sol.and %[[OLD]], %[[RHS]]
 // CHECK:   sol.store %{{.*}}, %[[XPTR]]
 
 // CHECK: sol.func @{{.*div_assign.*}}
@@ -40,12 +32,12 @@
 // CHECK:   sol.mod %[[OLD]], %[[RHS]]
 // CHECK:   sol.store %{{.*}}, %[[XPTR]]
 
-// CHECK: sol.func @{{.*and_assign.*}}
+// CHECK: sol.func @{{.*mul_assign.*}}
 // CHECK:   sol.store %arg0, %[[XPTR:.*]] :
 // CHECK:   sol.store %arg1, %[[YPTR:.*]] :
 // CHECK:   %[[RHS:.*]] = sol.load %[[YPTR]]
 // CHECK:   %[[OLD:.*]] = sol.load %[[XPTR]]
-// CHECK:   sol.and %[[OLD]], %[[RHS]]
+// CHECK:   sol.cmul %[[OLD]], %[[RHS]]
 // CHECK:   sol.store %{{.*}}, %[[XPTR]]
 
 // CHECK: sol.func @{{.*or_assign.*}}
@@ -56,28 +48,12 @@
 // CHECK:   sol.or %[[OLD]], %[[RHS]]
 // CHECK:   sol.store %{{.*}}, %[[XPTR]]
 
-// CHECK: sol.func @{{.*xor_assign.*}}
-// CHECK:   sol.store %arg0, %[[XPTR:.*]] :
-// CHECK:   sol.store %arg1, %[[YPTR:.*]] :
-// CHECK:   %[[RHS:.*]] = sol.load %[[YPTR]]
-// CHECK:   %[[OLD:.*]] = sol.load %[[XPTR]]
-// CHECK:   sol.xor %[[OLD]], %[[RHS]]
-// CHECK:   sol.store %{{.*}}, %[[XPTR]]
-
 // CHECK: sol.func @{{.*shl_assign.*}}
 // CHECK:   sol.store %arg0, %[[XPTR:.*]] :
 // CHECK:   sol.store %arg1, %[[YPTR:.*]] :
 // CHECK:   %[[RHS:.*]] = sol.load %[[YPTR]]
 // CHECK:   %[[OLD:.*]] = sol.load %[[XPTR]]
 // CHECK:   sol.shl %[[OLD]], %[[RHS]]
-// CHECK:   sol.store %{{.*}}, %[[XPTR]]
-
-// CHECK: sol.func @{{.*shr_assign.*}}
-// CHECK:   sol.store %arg0, %[[XPTR:.*]] :
-// CHECK:   sol.store %arg1, %[[YPTR:.*]] :
-// CHECK:   %[[RHS:.*]] = sol.load %[[YPTR]]
-// CHECK:   %[[OLD:.*]] = sol.load %[[XPTR]]
-// CHECK:   sol.shr %[[OLD]], %[[RHS]]
 // CHECK:   sol.store %{{.*}}, %[[XPTR]]
 
 // CHECK: sol.func @{{.*shl_assign_mixed.*}}
@@ -88,12 +64,36 @@
 // CHECK:   sol.shl %[[OLD]], %[[RHS]] : ui256, ui8
 // CHECK:   sol.store %{{.*}}, %[[XPTR]]
 
+// CHECK: sol.func @{{.*shr_assign.*}}
+// CHECK:   sol.store %arg0, %[[XPTR:.*]] :
+// CHECK:   sol.store %arg1, %[[YPTR:.*]] :
+// CHECK:   %[[RHS:.*]] = sol.load %[[YPTR]]
+// CHECK:   %[[OLD:.*]] = sol.load %[[XPTR]]
+// CHECK:   sol.shr %[[OLD]], %[[RHS]]
+// CHECK:   sol.store %{{.*}}, %[[XPTR]]
+
 // CHECK: sol.func @{{.*shr_assign_mixed.*}}
 // CHECK:   sol.store %arg0, %[[XPTR:.*]] :
 // CHECK:   sol.store %arg1, %[[YPTR:.*]] :
 // CHECK:   %[[RHS:.*]] = sol.load %[[YPTR]]
 // CHECK:   %[[OLD:.*]] = sol.load %[[XPTR]]
 // CHECK:   sol.shr %[[OLD]], %[[RHS]] : ui256, ui8
+// CHECK:   sol.store %{{.*}}, %[[XPTR]]
+
+// CHECK: sol.func @{{.*sub_assign.*}}
+// CHECK:   sol.store %arg0, %[[XPTR:.*]] :
+// CHECK:   sol.store %arg1, %[[YPTR:.*]] :
+// CHECK:   %[[RHS:.*]] = sol.load %[[YPTR]]
+// CHECK:   %[[OLD:.*]] = sol.load %[[XPTR]]
+// CHECK:   sol.csub %[[OLD]], %[[RHS]]
+// CHECK:   sol.store %{{.*}}, %[[XPTR]]
+
+// CHECK: sol.func @{{.*xor_assign.*}}
+// CHECK:   sol.store %arg0, %[[XPTR:.*]] :
+// CHECK:   sol.store %arg1, %[[YPTR:.*]] :
+// CHECK:   %[[RHS:.*]] = sol.load %[[YPTR]]
+// CHECK:   %[[OLD:.*]] = sol.load %[[XPTR]]
+// CHECK:   sol.xor %[[OLD]], %[[RHS]]
 // CHECK:   sol.store %{{.*}}, %[[XPTR]]
 
 contract C {

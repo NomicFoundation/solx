@@ -3,29 +3,15 @@
 // CHECK: sol.func @{{.*delete_array.*}}
 // CHECK:   sol.delete %{{.*}} : !sol.array<? x ui256, Storage>
 
-// CHECK: sol.func @{{.*delete_scalar.*}}
-// CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
-
 // CHECK: sol.func @{{.*delete_bytes.*}}
 // CHECK:   sol.store %{{.*}}, %{{.*}} : !sol.fixedbytes<32>, !sol.ptr<!sol.fixedbytes<32>, Storage>
-
-// CHECK: sol.func @{{.*delete_map_entry.*}}
-// CHECK:   %[[ENTRY:.*]] = sol.map %{{.*}}, %{{.*}} : !sol.mapping<ui256, ui256>, ui256, !sol.ptr<ui256, Storage>
-// CHECK:   sol.store %{{.*}}, %[[ENTRY]] : ui256, !sol.ptr<ui256, Storage>
-
-// CHECK: sol.func @{{.*delete_struct.*}}
-// CHECK:   sol.delete %{{.*}} : !sol.struct<(ui256, ui256), Storage>
-
-// CHECK: sol.func @{{.*delete_struct_field.*}}
-// CHECK:   %[[FIELD:.*]] = sol.gep %{{.*}}, %{{.*}} : !sol.struct<(ui256, ui256), Storage>, ui64, !sol.ptr<ui256, Storage>
-// CHECK:   sol.store %{{.*}}, %[[FIELD]] : ui256, !sol.ptr<ui256, Storage>
 
 // CHECK: sol.func @{{.*delete_local.*}}
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Stack>
 
-// CHECK: sol.func @{{.*delete_memory_struct.*}}
-// CHECK:   sol.malloc zero_init : !sol.struct<(ui256, ui256), Memory>
-// CHECK:   sol.store %{{.*}}, %{{.*}} : !sol.struct<(ui256, ui256), Memory>, !sol.ptr<!sol.struct<(ui256, ui256), Memory>, Stack>
+// CHECK: sol.func @{{.*delete_map_entry.*}}
+// CHECK:   %[[ENTRY:.*]] = sol.map %{{.*}}, %{{.*}} : !sol.mapping<ui256, ui256>, ui256, !sol.ptr<ui256, Storage>
+// CHECK:   sol.store %{{.*}}, %[[ENTRY]] : ui256, !sol.ptr<ui256, Storage>
 
 // CHECK: sol.func @{{.*delete_memory_array.*}}
 // CHECK:   sol.malloc zero_init : !sol.array<? x ui256, Memory>
@@ -34,6 +20,20 @@
 // CHECK: sol.func @{{.*delete_memory_string.*}}
 // CHECK:   sol.malloc : !sol.string<Memory>
 // CHECK:   sol.store %{{.*}}, %{{.*}} : !sol.string<Memory>, !sol.ptr<!sol.string<Memory>, Stack>
+
+// CHECK: sol.func @{{.*delete_memory_struct.*}}
+// CHECK:   sol.malloc zero_init : !sol.struct<(ui256, ui256), Memory>
+// CHECK:   sol.store %{{.*}}, %{{.*}} : !sol.struct<(ui256, ui256), Memory>, !sol.ptr<!sol.struct<(ui256, ui256), Memory>, Stack>
+
+// CHECK: sol.func @{{.*delete_scalar.*}}
+// CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
+
+// CHECK: sol.func @{{.*delete_struct.*}}
+// CHECK:   sol.delete %{{.*}} : !sol.struct<(ui256, ui256), Storage>
+
+// CHECK: sol.func @{{.*delete_struct_field.*}}
+// CHECK:   %[[FIELD:.*]] = sol.gep %{{.*}}, %{{.*}} : !sol.struct<(ui256, ui256), Storage>, ui64, !sol.ptr<ui256, Storage>
+// CHECK:   sol.store %{{.*}}, %[[FIELD]] : ui256, !sol.ptr<ui256, Storage>
 
 contract C {
     uint256 scalar;

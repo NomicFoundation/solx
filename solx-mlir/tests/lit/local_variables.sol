@@ -1,16 +1,16 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// CHECK: sol.func @{{.*default_uint.*}}
-// CHECK:   sol.constant 0 : ui256
-
 // CHECK: sol.func @{{.*default_address.*}}
 // CHECK:   sol.address_cast %{{.*}} : ui160 to !sol.address
+
+// CHECK: sol.func @{{.*default_bool.*}}
+// CHECK:   sol.constant false
 
 // CHECK: sol.func @{{.*default_bytes.*}}
 // CHECK:   sol.bytes_cast %{{.*}} : ui256 to !sol.fixedbytes<32>
 
-// CHECK: sol.func @{{.*default_bool.*}}
-// CHECK:   sol.constant false
+// CHECK: sol.func @{{.*default_uint.*}}
+// CHECK:   sol.constant 0 : ui256
 
 // CHECK: sol.func @{{.*explicit_initialize.*}}
 // CHECK:   sol.constant 42

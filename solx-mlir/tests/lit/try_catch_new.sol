@@ -13,13 +13,13 @@
 // CHECK:   } fallback {
 // CHECK-NEXT:   sol.constant 1 : ui8
 
-// CHECK: sol.func @{{.*value_and_salt.*}}
-// CHECK:   sol.new "{{[^"]*}}Child{{[^"]*}}" value = %{{.*}} salt = %{{.*}} ctor(%{{.*}} : ui256) try : !sol.contract<"{{[^"]*}}Child{{[^"]*}}">
-
 // CHECK: sol.func @{{.*named.*}}
 // CHECK:   %[[FIRST:.*]] = sol.cast %c3_ui8
 // CHECK:   %[[SECOND:.*]] = sol.cast %c4_ui8
 // CHECK:   sol.new "{{[^"]*}}Pair{{[^"]*}}" value = %{{.*}} ctor(%[[FIRST]], %[[SECOND]] : ui256, ui256) try : !sol.contract<"{{[^"]*}}Pair{{[^"]*}}">
+
+// CHECK: sol.func @{{.*value_and_salt.*}}
+// CHECK:   sol.new "{{[^"]*}}Child{{[^"]*}}" value = %{{.*}} salt = %{{.*}} ctor(%{{.*}} : ui256) try : !sol.contract<"{{[^"]*}}Child{{[^"]*}}">
 
 contract C {
     function guarded() public returns (address) {

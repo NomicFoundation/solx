@@ -1,5 +1,10 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
+// CHECK:      sol.func @{{.*getDouble.*}}() -> ui8
+// CHECK-DAG:    sol.constant 42 : ui8
+// CHECK-DAG:    sol.constant 2 : ui8
+// CHECK:        sol.cmul %{{.*}}, %{{.*}} : ui8
+
 // CHECK: sol.func @{{.*read.*}}() -> ui256
 // CHECK:   %{{.*}} = sol.constant 42 : ui8
 // CHECK:   %{{.*}} = sol.cast %{{.*}} : ui8 to ui256
@@ -10,11 +15,6 @@
 // CHECK-DAG:    sol.constant 42 : ui8
 // CHECK:        sol.cadd %{{.*}}, %{{.*}} : ui256
 // CHECK:        sol.return %{{.*}} : ui256
-
-// CHECK:      sol.func @{{.*getDouble.*}}() -> ui8
-// CHECK-DAG:    sol.constant 42 : ui8
-// CHECK-DAG:    sol.constant 2 : ui8
-// CHECK:        sol.cmul %{{.*}}, %{{.*}} : ui8
 
 contract C {
     uint256 constant FOO = 42;

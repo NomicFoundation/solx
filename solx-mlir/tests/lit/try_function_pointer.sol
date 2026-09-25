@@ -1,5 +1,11 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
+// CHECK: sol.func @{{.*guarded.*}}
+// CHECK:   sol.ext_icall %{{.*}}(%{{.*}}) gas %{{.*}} value %{{.*}} {try_call} : <(ui256) -> ui256>, (ui256) -> (i1, ui256)
+
+// CHECK: sol.func @{{.*guarded_view.*}}
+// CHECK:   sol.ext_icall %{{.*}}(%{{.*}}) gas %{{.*}} value %{{.*}} {static_call, try_call} : <(ui256) -> ui256>, (ui256) -> (i1, ui256)
+
 // CHECK: sol.func @{{.*state_pointer.*}}
 // CHECK:   %[[CALL:.*]]:2 = sol.ext_icall %{{.*}}() gas %{{.*}} value %{{.*}} {try_call} : <() -> ui256>, () -> (i1, ui256)
 // CHECK:   sol.try %[[CALL]]#0 {
@@ -7,12 +13,6 @@
 // CHECK-NEXT: } error {
 // CHECK-NEXT: } fallback {
 // CHECK-NEXT:   sol.constant 0 : ui8
-
-// CHECK: sol.func @{{.*guarded.*}}
-// CHECK:   sol.ext_icall %{{.*}}(%{{.*}}) gas %{{.*}} value %{{.*}} {try_call} : <(ui256) -> ui256>, (ui256) -> (i1, ui256)
-
-// CHECK: sol.func @{{.*guarded_view.*}}
-// CHECK:   sol.ext_icall %{{.*}}(%{{.*}}) gas %{{.*}} value %{{.*}} {static_call, try_call} : <(ui256) -> ui256>, (ui256) -> (i1, ui256)
 
 contract C {
     function() external returns (uint256) stored;

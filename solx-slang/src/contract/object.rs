@@ -4,7 +4,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
@@ -90,23 +89,11 @@ impl Object {
         }
     }
 
-    /// A contract's functions after resolving overrides and getter shadowing, in declaration
-    /// order within each contract of its linearisation, most derived first; a library's own
-    /// functions in declaration order.
+    /// A contract's functions over its hierarchy after resolving overrides and getter shadowing;
+    /// a library's own functions.
     pub fn functions(&self) -> Vec<FunctionDefinition> {
         match self {
-            Self::Contract(node) => {
-                let resolved: HashSet<NodeId> = node
-                    .linearised_functions()
-                    .iter()
-                    .map(|function| function.node_id())
-                    .collect();
-                self.contracts()
-                    .iter()
-                    .flat_map(|base| base.functions())
-                    .filter(|function| resolved.contains(&function.node_id()))
-                    .collect()
-            }
+            Self::Contract(node) => node.linearised_functions(),
             Self::Library(node) => node.functions(),
         }
     }
