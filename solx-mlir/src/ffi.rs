@@ -155,8 +155,7 @@ unsafe extern "C" {
     ) -> mlir_sys::MlirType;
 
     /// Gets or creates the identified `sol::StructType` of `name` at `data_location`, opaque
-    /// until `solxStructTypeSetBody` fills it in; re-fetching the same name and location returns
-    /// the same type, which is what closes a self-reference.
+    /// until `solxStructTypeSetBody` fills it in.
     pub fn solxCreateIdentifiedStructType(
         context: MlirContext,
         name_ptr: *const std::ffi::c_char,
@@ -226,7 +225,7 @@ unsafe extern "C" {
     /// address-like, or bytes-like.
     pub fn solxIsScalarType(ty: mlir_sys::MlirType) -> bool;
 
-    /// Whether a `sol::StructType` has no body yet, which only an identified one may lack.
+    /// Whether an identified `sol::StructType` still awaits its body.
     pub fn solxStructTypeIsOpaque(ty: mlir_sys::MlirType) -> bool;
 
     /// Whether the type is a `sol::PointerType`, as opposed to a reference type that is its

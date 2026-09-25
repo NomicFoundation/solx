@@ -13,9 +13,8 @@
 
 // SPDX-License-Identifier: MIT
 
-// Each struct names the next one twice, so a type walk that does not remember the structs it has
-// entered visits the last one once per path through the chain: 2^30 times. The MLIR printer spells
-// a literal struct's body at every occurrence and so takes as long, which keeps this a tester case.
+// Each struct names the next one twice and the last one reaches back to the first, so a type walk
+// that rebuilds a completed struct visits the last one once per path through the chain: 2^30 times.
 
 pragma solidity >=0.8.0;
 
@@ -171,6 +170,7 @@ contract Test {
     }
 
     struct S30 {
+        S0[] back;
         uint256 tail;
     }
 
@@ -179,7 +179,7 @@ contract Test {
     function run() public returns (uint256 stored) {
         chain.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.tail = 7;
         assembly {
-            stored := sload(30)
+            stored := sload(31)
         }
     }
 }

@@ -7,6 +7,13 @@
 //!             "expected": []
 //!         },
 //!         {
+//!             "method": "tagSlot",
+//!             "calldata": [],
+//!             "expected": [
+//!                 "7"
+//!             ]
+//!         },
+//!         {
 //!             "method": "copy",
 //!             "calldata": [],
 //!             "expected": [
@@ -47,6 +54,12 @@ contract Test {
 
     function store() public {
         stored.tag = 7;
+    }
+
+    function tagSlot() public view returns (uint256 tag) {
+        assembly {
+            tag := sload(1)
+        }
     }
 
     function copy() public view returns (uint256) {

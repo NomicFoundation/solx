@@ -5,22 +5,20 @@
 // nothing, while legacy compiles the file; this is solx-only.
 
 // CHECK: sol.contract @{{.*}}C
-// CHECK:   sol.state_var @{{.*}}closure{{.*}} slot 0 offset 0 : !sol.struct<"Closure_{{[0-9]+}}", Storage, (!sol.func_ref<(!sol.struct<"Closure_{{[0-9]+}}", Memory, (!sol.func_ref<(!sol.struct<"Closure_{{[0-9]+}}", Memory>) -> ui256>)>) -> ui256>)>
-// CHECK:   sol.state_var @{{.*}}first{{.*}} slot 1 offset 0 : !sol.struct<"ArrayIntoFunctionCycle_{{[0-9]+}}", Storage, (!sol.array<? x !sol.struct<"FunctionBackToArray_{{[0-9]+}}", Storage, (!sol.func_ref<(!sol.struct<"ArrayIntoFunctionCycle_{{[0-9]+}}", Memory, {{.*}}) -> ()>)>, Storage>)>
-// CHECK:   sol.state_var @{{.*}}second{{.*}} slot 2 offset 0 : !sol.struct<"FunctionBackToArray_{{[0-9]+}}", Storage, (!sol.func_ref<(!sol.struct<"ArrayIntoFunctionCycle_{{[0-9]+}}", Memory, {{.*}}) -> ()>)>
-// CHECK:   sol.state_var @{{.*}}third{{.*}} slot 3 offset 0 : !sol.struct<(!sol.struct<"ArrayIntoFunctionCycle_{{[0-9]+}}", Storage, {{.*}}>), Storage>
-// CHECK:   sol.state_var @{{.*}}multi{{.*}} slot 4 offset 0 : !sol.struct<"Multi_{{[0-9]+}}", Storage, (!sol.func_ref<() -> (!sol.struct<"Multi_{{[0-9]+}}", Memory, {{.*}}>, ui256)>)>
-// CHECK:   sol.state_var @{{.*}}single{{.*}} slot 5 offset 0 : !sol.struct<"Single_{{[0-9]+}}", Storage, (!sol.func_ref<() -> !sol.struct<"Single_{{[0-9]+}}", Memory, {{.*}}>>)>
-// A struct on a function cycle through a recursive struct stays literal, since that struct already
-// breaks the cycle.
-// CHECK:   sol.state_var @{{.*}}recursive{{.*}} slot 6 offset 0 : !sol.struct<"ArrayRecursive_{{[0-9]+}}", Storage, (!sol.array<? x !sol.struct<"ArrayRecursive_{{[0-9]+}}", Storage>, Storage>, !sol.func_ref<(!sol.struct<(!sol.func_ref<(!sol.struct<"ArrayRecursive_{{[0-9]+}}", Memory, {{.*}}>) -> ()>), Memory>) -> ()>, ui256)>
-// CHECK:   sol.state_var @{{.*}}onCycle{{.*}} slot 9 offset 0 : !sol.struct<(!sol.func_ref<(!sol.struct<"ArrayRecursive_{{[0-9]+}}", Memory, {{.*}}>) -> ()>), Storage>
+// CHECK:   sol.state_var @{{.*}}closure{{.*}} slot 0 offset 0 : !sol.struct<"Closure_[[CLOSURE:[0-9]+]]", Storage, (!sol.func_ref<(!sol.struct<"Closure_[[CLOSURE]]", Memory, (!sol.func_ref<(!sol.struct<"Closure_[[CLOSURE]]", Memory>) -> ui256>)>) -> ui256>)>
+// CHECK:   sol.state_var @{{.*}}first{{.*}} slot 1 offset 0 : !sol.struct<"ArrayIntoFunctionCycle_[[ARRAY_INTO_FUNCTION_CYCLE:[0-9]+]]", Storage, (!sol.array<? x !sol.struct<"FunctionBackToArray_[[FUNCTION_BACK_TO_ARRAY:[0-9]+]]", Storage, (!sol.func_ref<(!sol.struct<"ArrayIntoFunctionCycle_[[ARRAY_INTO_FUNCTION_CYCLE]]", Memory, (!sol.array<? x !sol.struct<"FunctionBackToArray_[[FUNCTION_BACK_TO_ARRAY]]", Memory, (!sol.func_ref<(!sol.struct<"ArrayIntoFunctionCycle_[[ARRAY_INTO_FUNCTION_CYCLE]]", Memory>) -> ()>)>, Memory>)>) -> ()>)>, Storage>)>
+// CHECK:   sol.state_var @{{.*}}second{{.*}} slot 2 offset 0 : !sol.struct<"FunctionBackToArray_[[FUNCTION_BACK_TO_ARRAY]]", Storage, (!sol.func_ref<(!sol.struct<"ArrayIntoFunctionCycle_[[ARRAY_INTO_FUNCTION_CYCLE]]", Memory, (!sol.array<? x !sol.struct<"FunctionBackToArray_[[FUNCTION_BACK_TO_ARRAY]]", Memory, (!sol.func_ref<(!sol.struct<"ArrayIntoFunctionCycle_[[ARRAY_INTO_FUNCTION_CYCLE]]", Memory>) -> ()>)>, Memory>)>) -> ()>)>
+// CHECK:   sol.state_var @{{.*}}third{{.*}} slot 3 offset 0 : !sol.struct<(!sol.struct<"ArrayIntoFunctionCycle_[[ARRAY_INTO_FUNCTION_CYCLE]]", Storage, {{.*}}>), Storage>
+// CHECK:   sol.state_var @{{.*}}multi{{.*}} slot 4 offset 0 : !sol.struct<"Multi_[[MULTI:[0-9]+]]", Storage, (!sol.func_ref<() -> (!sol.struct<"Multi_[[MULTI]]", Memory, (!sol.func_ref<() -> (!sol.struct<"Multi_[[MULTI]]", Memory>, ui256)>)>, ui256)>)>
+// CHECK:   sol.state_var @{{.*}}single{{.*}} slot 5 offset 0 : !sol.struct<"Single_[[SINGLE:[0-9]+]]", Storage, (!sol.func_ref<() -> !sol.struct<"Single_[[SINGLE]]", Memory, (!sol.func_ref<() -> !sol.struct<"Single_[[SINGLE]]", Memory>>)>>)>
+// CHECK:   sol.state_var @{{.*}}recursive{{.*}} slot 6 offset 0 : !sol.struct<"ArrayRecursive_[[ARRAY_RECURSIVE:[0-9]+]]", Storage, (!sol.array<? x !sol.struct<"ArrayRecursive_[[ARRAY_RECURSIVE]]", Storage>, Storage>, !sol.func_ref<(!sol.struct<(!sol.func_ref<(!sol.struct<"ArrayRecursive_[[ARRAY_RECURSIVE]]", Memory, (!sol.array<? x !sol.struct<"ArrayRecursive_[[ARRAY_RECURSIVE]]", Memory>, Memory>, !sol.func_ref<(!sol.struct<(!sol.func_ref<(!sol.struct<"ArrayRecursive_[[ARRAY_RECURSIVE]]", Memory>) -> ()>), Memory>) -> ()>, ui256)>) -> ()>), Memory>) -> ()>, ui256)>
+// CHECK:   sol.state_var @{{.*}}onCycle{{.*}} slot 9 offset 0 : !sol.struct<(!sol.func_ref<(!sol.struct<"ArrayRecursive_[[ARRAY_RECURSIVE]]", Memory, {{.*}}>) -> ()>), Storage>
 // CHECK:   sol.state_var @{{.*}}tail{{.*}} slot 10 offset 0 : ui256
 
-// CHECK:   sol.func @{{.*}}run{{.*}}(%arg0: !sol.struct<"Closure_{{[0-9]+}}", Memory, {{.*}}) -> ui256
-// CHECK:     %[[FIELD:.*]] = sol.gep %{{.*}}, %{{.*}} : !sol.struct<"Closure_{{[0-9]+}}", Memory, {{.*}}>, ui64, !sol.ptr<!sol.func_ref<(!sol.struct<"Closure_{{[0-9]+}}", Memory, {{.*}}>) -> ui256>, Memory>
-// CHECK:     %[[CALLEE:.*]] = sol.load %[[FIELD]] : !sol.ptr<!sol.func_ref<{{.*}}>, Memory>, !sol.func_ref<(!sol.struct<"Closure_{{[0-9]+}}", Memory, {{.*}}>) -> ui256>
-// CHECK:     sol.icall %[[CALLEE]](%{{.*}}) : !sol.func_ref<(!sol.struct<"Closure_{{[0-9]+}}", Memory, {{.*}}>) -> ui256>, (!sol.struct<"Closure_{{[0-9]+}}", Memory, {{.*}}>) -> ui256
+// CHECK:   sol.func @{{.*}}run{{.*}}(%arg0: !sol.struct<"Closure_[[CLOSURE]]", Memory, (!sol.func_ref<(!sol.struct<"Closure_[[CLOSURE]]", Memory>) -> ui256>)>) -> ui256
+// CHECK:     %[[FIELD:.*]] = sol.gep %{{.*}}, %{{.*}} : !sol.struct<"Closure_[[CLOSURE]]", Memory, {{.*}}>, ui64, !sol.ptr<!sol.func_ref<(!sol.struct<"Closure_[[CLOSURE]]", Memory, {{.*}}>) -> ui256>, Memory>
+// CHECK:     %[[CALLEE:.*]] = sol.load %[[FIELD]] : !sol.ptr<!sol.func_ref<{{.*}}>, Memory>, !sol.func_ref<(!sol.struct<"Closure_[[CLOSURE]]", Memory, {{.*}}>) -> ui256>
+// CHECK:     sol.icall %[[CALLEE]](%{{.*}}) : !sol.func_ref<(!sol.struct<"Closure_[[CLOSURE]]", Memory, {{.*}}>) -> ui256>, (!sol.struct<"Closure_[[CLOSURE]]", Memory, {{.*}}>) -> ui256
 
 struct Closure {
     function(Closure memory) internal pure returns (uint256) call;

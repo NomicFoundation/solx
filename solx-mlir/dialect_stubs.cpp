@@ -19,12 +19,12 @@
 #include "mlir/CAPI/IR.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/SmallVector.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <optional>
+#include <vector>
 
 extern "C" {
 
@@ -125,8 +125,11 @@ MlirType solxCreateStructType(MlirContext ctx, const MlirType *member_types,
                               size_t member_count, uint32_t dataLocation) {
     if (dataLocation > 5) abort();
     auto *context = unwrap(ctx);
-    llvm::SmallVector<mlir::Type> storage;
-    auto mems = unwrapList(member_count, member_types, storage);
+    std::vector<mlir::Type> mems;
+    mems.reserve(member_count);
+    for (size_t i = 0; i < member_count; i++) {
+        mems.push_back(unwrap(member_types[i]));
+    }
     auto location = static_cast<mlir::sol::DataLocation>(dataLocation);
     return wrap(mlir::sol::StructType::get(context, mems, location));
 }
@@ -160,8 +163,11 @@ MlirType solxCreateFuncRefType(MlirContext ctx, MlirType signature, uint32_t kin
 
 void solxStructTypeSetBody(MlirType ty, const MlirType *member_types,
                            size_t member_count) {
-    llvm::SmallVector<mlir::Type> storage;
-    auto mems = unwrapList(member_count, member_types, storage);
+    std::vector<mlir::Type> mems;
+    mems.reserve(member_count);
+    for (size_t i = 0; i < member_count; i++) {
+        mems.push_back(unwrap(member_types[i]));
+    }
     if (mlir::failed(mlir::cast<mlir::sol::StructType>(unwrap(ty)).setBody(mems))) abort();
 }
 

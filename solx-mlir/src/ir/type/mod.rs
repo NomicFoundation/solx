@@ -216,9 +216,8 @@ impl<'context> Type<'context> {
         })
     }
 
-    /// The identified `sol::StructType` of `name` at `location`, uniqued by both and created
-    /// opaque, which a self-reference through a dynamic array, a mapping or a function type embeds
-    /// before [`Self::set_body`] fills it in.
+    /// The identified `sol::StructType` of `name` at `location`, opaque until
+    /// [`Self::set_members`] fills it in.
     pub fn identified_structure(
         context: &'context melior::Context,
         name: &str,
@@ -240,9 +239,8 @@ impl<'context> Type<'context> {
         Self::new(unsafe { MlirType::from_raw(ffi::solxCreateEnumType(context.to_raw(), max)) })
     }
 
-    /// Fills in the members of this identified struct type. Giving the same body again is a
-    /// no-op; a differing one aborts.
-    pub fn set_body(self, member_types: &[Self]) {
+    /// Fills in the members of this identified struct type; the same members again are a no-op.
+    pub fn set_members(self, member_types: &[Self]) {
         let raw_types: Vec<mlir_sys::MlirType> = member_types
             .iter()
             .map(|member_type| member_type.inner.to_raw())
@@ -323,9 +321,7 @@ impl<'context> Type<'context> {
         unsafe { ffi::solxIsScalarType(self.inner.to_raw()) }
     }
 
-    /// Whether this struct type still awaits its body, as an identified one does between
-    /// [`Self::identified_structure`] and [`Self::set_body`] and a literal one never does; the
-    /// classification is the caller's, which holds a struct handle.
+    /// Whether this identified struct type still awaits its members.
     pub fn structure_is_opaque(self) -> bool {
         unsafe { ffi::solxStructTypeIsOpaque(self.inner.to_raw()) }
     }

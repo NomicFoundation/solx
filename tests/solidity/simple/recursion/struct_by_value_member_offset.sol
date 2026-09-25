@@ -12,7 +12,8 @@
 //!         "1",
 //!         "9",
 //!         "3",
-//!         "5"
+//!         "5",
+//!         "1"
 //!     ]
 //! } ] }
 
@@ -75,7 +76,8 @@ contract Test {
             uint256 framedLength,
             uint256 framedTail,
             uint256 chainLength,
-            uint256 chainTail
+            uint256 chainTail,
+            uint256 chainItems
         )
     {
         second.inner.items.push();
@@ -92,8 +94,10 @@ contract Test {
         sixth.b.c.bs.push();
         sixth.b.c.bs.push();
         sixth.b.c.bs.push();
+        sixth.b.items.push();
         sixth.tail = 5;
         chainLength = sixth.b.c.bs.length;
         chainTail = sixth.tail;
+        chainItems = sixth.b.items.length;
     }
 }
