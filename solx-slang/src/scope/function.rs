@@ -164,12 +164,6 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         self.contract.source_unit.typing(slang_type)
     }
 
-    /// The type an ABI-encoded value of this Slang type is materialized at, resolved through the
-    /// source unit scope.
-    pub fn encoding_type(&self, node: &Type) -> MlirType<'context> {
-        self.contract.source_unit.encoding(node)
-    }
-
     /// The MLIR pointer type for a value of this Slang type through the source unit scope.
     pub fn pointer_type(
         &self,
