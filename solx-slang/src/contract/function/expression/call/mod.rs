@@ -946,35 +946,14 @@ impl Call {
             Some(BuiltIn::AbiEncodeCall) => {
                 let mut iter = arguments.iter();
                 let callee = iter.next().expect("slang validates the callee argument");
-                let callee_definition = match callee {
-                    Expression::MemberAccessExpression(access) => {
-                        access.member().resolve_to_definition()
-                    }
-                    _ => None,
+                let Some(Type::Function(function_type)) = call.encode_call_callee_type() else {
+                    unreachable!("abi.encodeCall dispatches on an external function");
                 };
-                let parameters: Vec<MlirType<'context>> = match callee_definition {
-                    Some(Definition::Function(function_definition)) => function_definition
-                        .parameters()
-                        .iter()
-                        .map(|parameter| {
-                            scope.encoding_type(
-                                &parameter
-                                    .get_type()
-                                    .expect("slang types every function parameter"),
-                            )
-                        })
-                        .collect(),
-                    _ => {
-                        let Some(Type::Function(function_type)) = callee.get_type() else {
-                            unreachable!("abi.encodeCall dispatches on an external function");
-                        };
-                        function_type
-                            .parameter_types()
-                            .iter()
-                            .map(|parameter_type| scope.encoding_type(parameter_type))
-                            .collect()
-                    }
-                };
+                let parameters = scope
+                    .contract
+                    .source_unit
+                    .function_type(&function_type)
+                    .parameters;
                 let selector = scope.external_selector(callee);
                 let values: Vec<Value<'context>> =
                     match iter.next().expect("slang validates the argument list") {
