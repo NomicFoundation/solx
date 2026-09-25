@@ -1,7 +1,5 @@
 // RUN: solx --emit-mlir=sol %evaluation_order/assignment.sol | FileCheck %s
 
-// solc print-init evaluates an assignment's place before its value, unlike legacy, so this is solx-only.
-
 // CHECK: sol.func @{{.*scalar.*}}
 // CHECK:   sol.call @{{.*rightValue.*}}
 // CHECK:   sol.call @{{.*leftIndex.*}}

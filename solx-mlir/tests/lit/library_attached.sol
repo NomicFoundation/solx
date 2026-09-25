@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// Attached internal calls: solc's print-init drops the receiver from the argument list, so this
-// is solx-only.
-
 // CHECK: sol.func @{{.*plain.*}}
 // CHECK:   %[[RECEIVER:.*]] = sol.load
 // CHECK:   %[[ARG:.*]] = sol.cast

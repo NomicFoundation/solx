@@ -69,23 +69,23 @@ impl Project {
     pub fn try_from_solidity_output(
         solc_version: &solx_standard_json::Version,
         libraries: solx_utils::Libraries,
-        solc_output: &mut solx_standard_json::Output,
+        output: &mut solx_standard_json::Output,
     ) -> anyhow::Result<Self> {
-        let ast_jsons = solc_output
+        let ast_jsons = output
             .sources
             .iter_mut()
             .map(|(path, source)| (path.to_owned(), source.ast.take()))
             .collect::<BTreeMap<String, Option<serde_json::Value>>>();
 
-        let mut input_contracts = Vec::with_capacity(solc_output.contracts.len());
-        for path in solc_output
+        let mut input_contracts = Vec::with_capacity(output.contracts.len());
+        for path in output
             .contracts
             .keys()
             .cloned()
             .collect::<Vec<_>>()
             .into_iter()
         {
-            let file = solc_output
+            let file = output
                 .contracts
                 .remove(path.as_str())
                 .expect("Always exists");
@@ -143,7 +143,7 @@ impl Project {
                 Ok(contract) => {
                     contracts.insert(contract_name.full_path, contract);
                 }
-                Err(error) => solc_output.push_error(contract_name.path.as_str(), error),
+                Err(error) => output.push_error(contract_name.path.as_str(), error),
             }
         }
         Ok(Project::new(
@@ -161,7 +161,7 @@ impl Project {
         paths: &[PathBuf],
         libraries: solx_utils::Libraries,
         output_selection: &solx_standard_json::InputSelection,
-        solc_output: Option<&mut solx_standard_json::Output>,
+        output: Option<&mut solx_standard_json::Output>,
     ) -> anyhow::Result<Self> {
         let sources = paths
             .iter()
@@ -178,7 +178,7 @@ impl Project {
             })
             .collect::<anyhow::Result<BTreeMap<String, solx_standard_json::InputSource>>>()?;
 
-        Self::try_from_llvm_ir_sources(sources, libraries, output_selection, solc_output)
+        Self::try_from_llvm_ir_sources(sources, libraries, output_selection, output)
     }
 
     ///
@@ -188,7 +188,7 @@ impl Project {
         sources: BTreeMap<String, solx_standard_json::InputSource>,
         libraries: solx_utils::Libraries,
         output_selection: &solx_standard_json::InputSelection,
-        mut solc_output: Option<&mut solx_standard_json::Output>,
+        mut output: Option<&mut solx_standard_json::Output>,
     ) -> anyhow::Result<Self> {
         let results = sources
             .into_par_iter()
@@ -253,8 +253,8 @@ impl Project {
                 Ok(contract) => {
                     contracts.insert(contract_name.full_path, contract);
                 }
-                Err(error) => match solc_output.as_mut() {
-                    Some(solc_output) => solc_output.push_error(contract_name.path.as_str(), error),
+                Err(error) => match output.as_mut() {
+                    Some(output) => output.push_error(contract_name.path.as_str(), error),
                     None => anyhow::bail!(error),
                 },
             }

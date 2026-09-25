@@ -1,7 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// solc emits operands in the different order, so this test is solx-only.
-
 // CHECK: sol.func @{{.*add.*}}() -> ui256
 // CHECK:   %{{.*}} = sol.constant 5 : ui8
 // CHECK:   %{{.*}} = sol.cast %{{.*}} : ui8 to ui256

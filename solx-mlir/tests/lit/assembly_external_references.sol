@@ -67,7 +67,6 @@
 // CHECK:     sol.yul_val_cast %{{.*}} -> i256
 // CHECK:     sol.yul_val_cast %{{.*}} : !sol.fixedbytes<32> -> i256
 
-// print-init lands a `sol.string_lit` on this one, so the RUN line above cannot check it.
 // CHECK: sol.func @{{.*chained_string_constant.*}}
 // CHECK:   sol.inline_asm {
 // CHECK-NOT: sol.string_lit

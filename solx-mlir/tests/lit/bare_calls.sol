@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// solc print-init evaluates a call's options before its receiver, unlike legacy, so this is
-// solx-only.
-
 // CHECK: sol.func @{{.*bare_call.*}}
 // CHECK:   sol.bare_call %{{.*}} gas %{{.*}} value %{{.*}} input %{{.*}} : !sol.address, ui256, ui256, !sol.string<Memory> -> i1, !sol.string<Memory>
 

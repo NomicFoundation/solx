@@ -44,10 +44,6 @@
 // CHECK:   %[[WIDE:.*]] = sol.cast %[[NARROW]] : ui8 to ui256
 // CHECK:   sol.encode selector(%{{.*}}) %[[WIDE]] : !sol.fixedbytes<4> ui256 : !sol.string<Memory>
 
-// TODO: pin abi.encodeCall on a reference parameter. solc encodes from memory, but the parameter
-// type reachable from `I.f` keeps its declared `calldata` location — slang normalizes it only on an
-// instance-qualified `i.f` — so a memory or storage argument emits an unlegalizable cast.
-
 // CHECK: sol.func @{{.*encodeCallEmpty.*}}
 // CHECK:   %[[EMPTY:.*]] = sol.constant 777180678 : ui32
 // CHECK:   %[[EMPTYSEL:.*]] = sol.bytes_cast %[[EMPTY]] : ui32 to !sol.fixedbytes<4>

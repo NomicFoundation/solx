@@ -1,7 +1,5 @@
 // RUN: solx --emit-mlir=sol %evaluation_order/nested_assignment.sol | FileCheck %s
 
-// solc print-init resolves an assignment place before its value while solx is value-first to match legacy.
-
 // CHECK: sol.func @{{.*binary.*}}
 // CHECK:   sol.constant 3 : ui8
 // CHECK:   sol.call @"t(uint256)_{{[0-9]+}}"

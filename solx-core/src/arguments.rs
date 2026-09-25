@@ -28,18 +28,18 @@ pub struct Arguments {
     // Input Options
     //
     /// Set the given path as the root of the source tree instead of the root of the filesystem.
-    /// Passed to `solc` without changes.
+    /// Accepted for `solc` compatibility and ignored.
     #[arg(long, help_heading = "Input Options")]
     pub base_path: Option<String>,
 
     /// Make an additional source directory available to the default import callback.
-    /// Can be used multiple times. Can only be used if the base path has a non-empty value.
-    /// Passed to `solc` without changes.
+    /// Can be used multiple times.
+    /// Accepted for `solc` compatibility and ignored.
     #[arg(long, num_args = 1.., help_heading = "Input Options")]
     pub include_path: Vec<String>,
 
     /// Allow a given path for imports. A list of paths can be supplied by separating them with a comma.
-    /// Passed to `solc` without changes.
+    /// Accepted for `solc` compatibility and ignored.
     #[arg(long, help_heading = "Input Options")]
     pub allow_paths: Option<String>,
 
@@ -158,12 +158,11 @@ pub struct Arguments {
     //
     // Compilation Settings
     //
-    /// EVM version `solc` will produce Yul or EVM assembly for.
-    /// The default is chosen by `solc`.
+    /// EVM version to produce bytecode for.
     #[arg(long, help_heading = "Compilation Settings")]
     pub evm_version: Option<solx_utils::EVMVersion>,
 
-    /// Enable the `solc` IR codegen.
+    /// Enable the IR codegen. Currently not supported.
     #[arg(long, help_heading = "Compilation Settings")]
     pub via_ir: bool,
 
@@ -207,7 +206,8 @@ pub struct Arguments {
     #[arg(long, help_heading = "Metadata")]
     pub no_cbor_metadata: bool,
 
-    /// Turn off the default `solc` import resolution callback.
+    /// Turn off the default import resolution callback.
+    /// Accepted for `solc` compatibility and ignored.
     #[arg(long, help_heading = "Metadata")]
     pub no_import_callback: bool,
 

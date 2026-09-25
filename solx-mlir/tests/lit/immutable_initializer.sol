@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// solc's print-init drops declaration-site immutable initializers while its legacy pipeline
-// emits them, so solx follows legacy and this is solx-only.
-
 // CHECK: sol.immutable @{{.*x.*}} : ui256
 
 // CHECK: sol.func @{{.*}}() attributes {{.*}}kind = #{{.*}}Constructor

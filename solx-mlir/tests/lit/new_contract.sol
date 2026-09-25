@@ -1,9 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// solc print-init evaluates a creation's constructor arguments before its options, unlike legacy,
-// and casts a string-typed salt straight to integer, failing module verification, so this is
-// solx-only.
-
 // CHECK: sol.func @{{.*plain.*}}
 // CHECK:   %[[FIRST:.*]] = sol.cast %{{.*}} : ui8 to ui256
 // CHECK:   %[[SECOND:.*]] = sol.cast %{{.*}} : ui8 to ui256

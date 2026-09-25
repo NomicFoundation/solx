@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// solc emits a getter before the functions and solx after them, so this test
-// is solx-only.
-
 // CHECK: sol.state_var @{{.*low.*}} slot 100 offset 0 : ui64
 // CHECK: sol.state_var @{{.*high.*}} slot 100 offset 8 : ui64
 

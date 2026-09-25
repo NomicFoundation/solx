@@ -655,7 +655,7 @@ solx 'Simple.sol' --bin --metadata --metadata-literal
 
 ### `--no-import-callback`
 
-Disables the default import resolution callback.
+Disables the default import resolution callback. Accepted for **solc** compatibility and ignored.
 
 > This parameter is used by some tooling that resolves all imports by itself, such as Hardhat.
 
