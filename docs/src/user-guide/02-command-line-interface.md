@@ -306,6 +306,21 @@ Slang_SerializeAST:Simple.sol: [..]us
 solx_CreateMLIRContext:Simple.sol: [..]us
 solx_EmitSol:Simple.sol:Simple: [..]us
 solx_RunSolPasses:Simple.sol:Simple: [..]us
+solx_RunSolPasses:Simple.sol:Simple/SymbolDCE: [..]us
+solx_RunSolPasses:Simple.sol:Simple/ModifierInliningPass: [..]us
+solx_RunSolPasses:Simple.sol:Simple/Canonicalizer: [..]us
+solx_RunSolPasses:Simple.sol:Simple/ConvertSolToYulPass: [..]us
+solx_RunSolPasses:Simple.sol:Simple/SymbolDCE #2: [..]us
+solx_RunSolPasses:Simple.sol:Simple/ConvertYulToStandardPass: [..]us
+solx_RunSolPasses:Simple.sol:Simple/Canonicalizer #2: [..]us
+solx_RunSolPasses:Simple.sol:Simple/SCFToControlFlowPass: [..]us
+solx_RunSolPasses:Simple.sol:Simple/ConvertFuncToLLVMPass: [..]us
+solx_RunSolPasses:Simple.sol:Simple/ConvertFuncToLLVMPass/(A) DataLayoutAnalysis: [..]us
+solx_RunSolPasses:Simple.sol:Simple/ArithToLLVMConversionPass: [..]us
+solx_RunSolPasses:Simple.sol:Simple/ConvertControlFlowToLLVMPass: [..]us
+solx_RunSolPasses:Simple.sol:Simple/ReconcileUnrealizedCastsPass: [..]us
+solx_RunSolPasses:Simple.sol:Simple/Rest: [..]us
+solx_RunSolPasses:Simple.sol:Simple/Total: [..]us
 solx_ExtractMLIRObjects:Simple.sol:Simple: [..]us
 
 ======= Simple.sol:Simple =======
