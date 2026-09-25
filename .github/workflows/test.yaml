@@ -123,8 +123,6 @@ jobs:
 
       - name: Build toolchain
         uses: ./.github/actions/build-toolchain
-        with:
-          solc: 'false'
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -250,7 +248,6 @@ jobs:
             target-llvm/target-final/bin/FileCheck${EXE} \
             target-llvm/target-final/bin/${LIT} \
             solx-llvm/llvm/utils/lit \
-            solx-solidity/build/solc/solc${EXE} \
             "${RUNNER_TEMP}/lit-tools/"
           echo "${RUNNER_TEMP}/lit-tools" >> "${GITHUB_PATH}"
           echo "PYTHONPATH=${RUNNER_TEMP}/lit-tools/lit" >> "${GITHUB_ENV}"
@@ -259,7 +256,7 @@ jobs:
         shell: bash
         run: |
           echo "Before cleanup:" && df -h .
-          rm -rf solx-llvm target-llvm/build-final target solx-solidity
+          rm -rf solx-llvm target-llvm/build-final target
           echo "After cleanup:" && df -h .
 
       - name: Cache cargo artifacts
@@ -273,7 +270,6 @@ jobs:
         uses: ./.github/actions/rust-unit-tests
         with:
           target: ${{ matrix.target || '' }}
-          cargo-test-command: 'test-slang'
 
       - name: Verify lit tools run outside MSYS2
         if: runner.os == 'Windows'
@@ -281,7 +277,6 @@ jobs:
         run: |
           ls -la "${RUNNER_TEMP}/lit-tools"
           FileCheck --version
-          solc --version
 
       - name: Run MLIR lit tests
         shell: bash

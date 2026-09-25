@@ -1,9 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// solc's print-init has no NewExpression case, so a discarded creation reference falls into its
-// NYI llvm_unreachable (SolidityToMLIR.cpp:2751), undefined behavior in its release build that
-// aborts on some platforms, emitting nothing, so this is solx-only.
-
 // CHECK: sol.func @{{.*discarded_creation.*}}
 // CHECK:   sol.new "{{[^"]*}}Child{{[^"]*}}"
 

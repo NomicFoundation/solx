@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func @{{.*}}fire{{.*}}(%arg0: !sol.address, %arg1: ui256)
 // CHECK:   %[[CALLER:.*]] = sol.caller

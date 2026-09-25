@@ -1,9 +1,5 @@
 // RUN: solx --emit-mlir=sol %evaluation_order/named_arguments.sol | FileCheck %s
 
-// solc print-init spells an internal callee `@t_28` rather than `@"t(uint256)_28"`, so the symbol
-// CHECKs are solx-only. The behavior is pinned against legacy by
-// tests/solidity/simple/evaluation_order/named_arguments.sol.
-
 // CHECK: sol.func @{{.*call.*}}
 // CHECK:   sol.constant 1 : ui8
 // CHECK:   %[[A:.*]] = sol.call @"t(uint256)_{{[0-9]+}}"

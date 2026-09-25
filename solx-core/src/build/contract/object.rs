@@ -25,19 +25,10 @@ pub struct Object {
     pub bytecode: Option<Vec<u8>>,
     /// Hexadecimal bytecode.
     pub bytecode_hex: Option<String>,
-    /// Debug info.
-    #[serde(with = "serde_bytes")]
-    pub debug_info: Option<Vec<u8>>,
-    /// EVM legacy assembly IR (solx internal representation).
-    pub evmla: Option<String>,
-    /// Ethereal IR (solx internal representation).
-    pub ethir: Option<String>,
     /// Unoptimized LLVM IR (solx internal representation).
     pub llvm_ir_unoptimized: Option<String>,
     /// Optimized LLVM IR (solx internal representation).
     pub llvm_ir: Option<String>,
-    /// Whether IR codegen is used.
-    pub via_ir: bool,
     /// Code segment.
     pub code_segment: solx_utils::CodeSegment,
     /// The metadata bytes. Only appended to runtime code.
@@ -72,12 +63,8 @@ impl Object {
         contract_name: solx_utils::ContractName,
         assembly: Option<String>,
         bytecode: Option<Vec<u8>>,
-        debug_info: Option<Vec<u8>>,
-        evmla: Option<String>,
-        ethir: Option<String>,
         llvm_ir_unoptimized: Option<String>,
         llvm_ir: Option<String>,
-        via_ir: bool,
         code_segment: solx_utils::CodeSegment,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
         metadata_bytes: Option<Vec<u8>>,
@@ -93,12 +80,8 @@ impl Object {
             assembly,
             bytecode,
             bytecode_hex,
-            debug_info,
-            evmla,
-            ethir,
             llvm_ir_unoptimized,
             llvm_ir,
-            via_ir,
             code_segment,
             immutables,
             metadata_bytes,

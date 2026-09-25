@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// Free functions reached only via a user-defined operator binding: solc's print-init calls
-// @add yet never lowers it or its helper, so this is solx-only.
-
 // CHECK: sol.func @{{.*}}f{{.*}}(%{{.*}}: si32, %{{.*}}: si32) -> si32
 // CHECK:   sol.call @"add(T,T)_[[ADD:[0-9]+]]"(%{{.*}}, %{{.*}}) : (si32, si32) -> si32
 // CHECK: sol.func @"add(T,T)_[[ADD]]"(%{{.*}}: si32, %{{.*}}: si32) -> si32

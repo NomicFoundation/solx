@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// No print-init RUN line: Yul evaluates an argument list right to left and the C++ frontend
-// emits it left to right.
-
 // CHECK: sol.func @{{.*two_calls.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     yul.func_call @{{.*right.*}}(

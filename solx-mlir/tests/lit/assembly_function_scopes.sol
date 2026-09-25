@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// No print-init RUN line: it names a Yul function by its bare name, and it splits a block after
-// a terminator into a predecessorless one.
-
 // CHECK: sol.func @{{.*sibling_scopes.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     yul.func @[[G1:g_[0-9]+]] : () -> i256 {

@@ -97,7 +97,6 @@ jobs:
         with:
           build-type: RelWithDebInfo
           enable-assertions: 'true'
-          enable-mlir: 'true'
           enable-utils: 'true'
 
       - name: Move TableGen LLVM aside
@@ -111,14 +110,12 @@ jobs:
           build-type: RelWithDebInfo
           sanitizer: ${{ env.LLVM_SANITIZER }}
           enable-assertions: 'true'
-          enable-mlir: 'true'
 
       - name: Run tests
         uses: ./.github/actions/rust-unit-tests
         with:
           target: ${{ env.TARGET }}
           sanitizer: ${{ env.RUST_SANITIZER }}
-          cargo-test-command: test-slang
 
   pr-checks:
     name: PR Checks (Sanitizer)

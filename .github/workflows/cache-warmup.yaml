@@ -1,6 +1,6 @@
 name: Cache Warmup
 
-# Proactively build and cache LLVM/solc artifacts so that downstream CI
+# Proactively build and cache LLVM artifacts so that downstream CI
 # workflows (test, sanitizer, coverage, integration-tests) hit warm caches
 # on the first run after a submodule bump.
 
@@ -10,7 +10,6 @@ on:
       - main
     paths:
       - 'solx-llvm'
-      - 'solx-solidity'
   schedule:
     # Daily safety net at 04:00 UTC — rebuilds any evicted caches
     - cron: '0 4 * * *'
@@ -71,8 +70,6 @@ jobs:
 
       - name: Build toolchain
         uses: ./.github/actions/build-toolchain
-        with:
-          solc: 'false'
 
       # When the artifact cache is warm, build-llvm skips ccache entirely,
       # so the ccache entry's LRU timer isn't refreshed. Touch it explicitly
@@ -87,59 +84,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-mlir-utils-end
-          fail-on-cache-miss: false
-          lookup-only: true
-
-  # ── solc: standard config (test.yaml / build-and-test) ──────────────
-  warm-solc:
-    needs: warm-llvm
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: "MacOS x86"
-            runner: macos-15-intel
-          - name: "MacOS arm64"
-            runner: macos-15
-          - name: "Linux x86 gnu"
-            runner: ubuntu-24.04
-            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
-          - name: "Linux ARM64 gnu"
-            runner: ubuntu-24.04-arm
-            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
-          - name: "Windows"
-            runner: windows-2025
-    runs-on: ${{ matrix.runner }}
-    container:
-      image: ${{ matrix.image || '' }}
-      # solc's build footprint (~3-5 GB) fits comfortably in container
-      # headroom today, so this cleanup isn't strictly required — but the
-      # ~30 s it costs is cheap insurance against future solc/boost growth
-      # hitting ENOSPC and killing a warmup run mid-flight.
-      volumes: *free-disk-volumes
-    name: "solc · ${{ matrix.name }}"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          submodules: true
-          persist-credentials: false
-
-      - name: Free disk space (Linux)
-        if: runner.os == 'Linux' && matrix.image != ''
-        uses: ./.github/actions/free-disk-space-linux
-
-      - name: Build toolchain
-        uses: ./.github/actions/build-toolchain
-
-      - name: Touch solc ccache
-        if: always()
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/ccache-solc
-          key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: solc-${{ runner.os }}-${{ runner.arch }}-Release-end
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-utils-end
           fail-on-cache-miss: false
           lookup-only: true
 
@@ -163,7 +108,7 @@ jobs:
       - name: Checkout submodules
         run: |
           git config --global --add safe.directory '*'
-          git submodule update --force --depth=1 --recursive --checkout
+          git submodule update --force --depth=1 --checkout
 
       - name: Setup SFW (optional)
         uses: ./.github/actions/setup-sfw
@@ -175,7 +120,6 @@ jobs:
         with:
           build-type: RelWithDebInfo
           enable-assertions: 'true'
-          enable-mlir: 'true'
           sanitizer: 'Address'
 
       - name: Touch LLVM ccache
@@ -184,7 +128,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-mlir-Address-end
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-Address-end
           fail-on-cache-miss: false
           lookup-only: true
 
@@ -208,7 +152,7 @@ jobs:
       - name: Checkout submodules
         run: |
           git config --global --add safe.directory '*'
-          git submodule update --force --depth=1 --recursive --checkout
+          git submodule update --force --depth=1 --checkout
 
       - name: Setup SFW (optional)
         uses: ./.github/actions/setup-sfw
@@ -221,7 +165,6 @@ jobs:
           build-type: RelWithDebInfo
           enable-assertions: 'false'
           enable-coverage: 'true'
-          enable-mlir: 'true'
 
       - name: Touch LLVM ccache
         if: always()
@@ -229,7 +172,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-mlir-coverage-no-assertions-end
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-coverage-no-assertions-end
           fail-on-cache-miss: false
           lookup-only: true
 
@@ -253,7 +196,7 @@ jobs:
       - name: Checkout submodules
         run: |
           git config --global --add safe.directory '*'
-          git submodule update --force --depth=1 --recursive --checkout
+          git submodule update --force --depth=1 --checkout
 
       - name: Setup SFW (optional)
         uses: ./.github/actions/setup-sfw
@@ -265,7 +208,6 @@ jobs:
         with:
           build-type: Release
           enable-assertions: 'false'
-          enable-mlir: 'true'
 
       - name: Touch LLVM ccache
         if: always()
@@ -273,6 +215,6 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-mlir-no-assertions-end
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-no-assertions-end
           fail-on-cache-miss: false
           lookup-only: true

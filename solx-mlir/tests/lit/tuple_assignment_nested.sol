@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// solc drops an inner element of a parenthesized or nested tuple assignment target, so these cases
-// are checked for solx only. TODO: add solc's RUN line once its MLIR backend stops dropping them.
-
 // CHECK: sol.func @{{.*parenthesized_swap.*}}
 // CHECK:   %[[B:.*]] = sol.load
 // CHECK:   %[[A:.*]] = sol.load

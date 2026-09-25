@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK-DAG: sol.state_var @{{.*}} slot 0 offset 0 : ui256
 // CHECK-DAG: sol.state_var @{{.*}} slot 1 offset 0 : ui256

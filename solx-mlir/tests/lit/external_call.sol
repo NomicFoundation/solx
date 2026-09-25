@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// solc print-init evaluates a call's options before its receiver, unlike legacy, so this is
-// solx-only.
-
 // CHECK: sol.func @{{.*plain.*}}
 // CHECK:   sol.address_cast %{{.*}} : !sol.contract<{{.*I.*}}> to !sol.address
 // CHECK:   %[[SELECTOR:.*]] = sol.constant 3017696395 : ui256

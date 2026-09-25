@@ -1,7 +1,5 @@
 // RUN: solx --emit-mlir=sol %evaluation_order/nested_ternary.sol | FileCheck %s
 
-// solc print-init orders binary operands left-first while solx is right-first to match legacy.
-
 // CHECK: sol.func @{{.*binary.*}}
 // CHECK:   sol.constant 1 : ui8
 // CHECK:   sol.call @"t(uint256)_{{[0-9]+}}"

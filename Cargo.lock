@@ -936,12 +936,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "boolinator"
-version = "2.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfa8873f51c92e232f9bac4065cddef41b714152812bfc5f7672ba16d6ef8cd9"
-
-[[package]]
 name = "borsh"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4770,7 +4764,6 @@ dependencies = [
  "anyhow",
  "indexmap 2.14.2",
  "inkwell",
- "num",
  "semver 1.0.28",
  "serde",
  "serde_json",
@@ -4807,11 +4800,10 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "solx-codegen-evm",
- "solx-evm-assembly",
  "solx-mlir",
+ "solx-slang",
  "solx-standard-json",
  "solx-utils",
- "solx-yul",
  "thiserror",
 ]
 
@@ -4831,30 +4823,10 @@ dependencies = [
  "sedregex",
  "serde",
  "serde_json",
- "sha2 0.11.0",
  "solx-benchmark-converter",
  "solx-compiler-downloader",
  "solx-utils",
  "toml",
-]
-
-[[package]]
-name = "solx-evm-assembly"
-version = "0.1.8"
-dependencies = [
- "anyhow",
- "ciborium",
- "hex",
- "inkwell",
- "num",
- "rayon",
- "rustc-hash",
- "semver 1.0.28",
- "serde",
- "serde_json",
- "solx-codegen-evm",
- "solx-utils",
- "twox-hash",
 ]
 
 [[package]]
@@ -4886,7 +4858,6 @@ dependencies = [
  "semver 1.0.28",
  "serde_json",
  "slang_solidity_v2",
- "solx-core",
  "solx-mlir",
  "solx-standard-json",
  "solx-utils",
@@ -4913,14 +4884,12 @@ name = "solx-standard-json"
 version = "0.1.8"
 dependencies = [
  "anyhow",
- "boolinator",
  "hex",
  "num",
  "rayon",
  "semver 1.0.28",
  "serde",
  "serde_json",
- "solx-evm-assembly",
  "solx-mlir",
  "solx-utils",
 ]
@@ -4932,12 +4901,10 @@ dependencies = [
  "anyhow",
  "clap",
  "colored",
- "gimli",
  "glob",
  "hex",
  "itertools 0.15.0",
  "md5",
- "object 0.40.0",
  "once_cell",
  "rayon",
  "regex",
@@ -4976,19 +4943,6 @@ dependencies = [
  "serde_stacker",
  "sha3 0.12.0",
  "slang_solidity_v2",
- "thiserror",
-]
-
-[[package]]
-name = "solx-yul"
-version = "0.1.8"
-dependencies = [
- "anyhow",
- "inkwell",
- "num",
- "serde",
- "solx-codegen-evm",
- "solx-utils",
  "thiserror",
 ]
 
@@ -5533,9 +5487,6 @@ name = "twox-hash"
 version = "2.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5283634e518fe9e82c7b20520bb4bc209009fd16c82077c802f8111ecbb0117a"
-dependencies = [
- "rand 0.10.2",
-]
 
 [[package]]
 name = "typed-arena"

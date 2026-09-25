@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// Assignment to a contract-qualified state variable (C.x = v): solc's
-// print-init crashes (SIGSEGV), so this is solx-only.
-
 // CHECK: sol.func @{{.*setNamespace.*}}
 // CHECK: %[[V:.*]] = sol.load %{{[0-9]+}} : !sol.ptr<ui256, Stack>, ui256
 // CHECK: %[[SLOT:.*]] = sol.addr_of @{{x.*}} : !sol.ptr<ui256, Storage>

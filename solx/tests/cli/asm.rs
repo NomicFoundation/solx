@@ -20,7 +20,6 @@ fn default() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn invalid_input() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -29,9 +28,9 @@ fn invalid_input() -> anyhow::Result<()> {
 
     let result = crate::cli::execute_solx(args)?;
 
-    result.failure().stderr(predicate::str::contains(
-        "Expected identifier but got 'StringLiteral'",
-    ));
+    result
+        .failure()
+        .stderr(predicate::str::contains("Unexpected StringLiteral"));
 
     Ok(())
 }

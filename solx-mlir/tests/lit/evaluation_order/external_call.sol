@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %evaluation_order/external_call.sol | FileCheck %s
 
-// solc print-init evaluates a call's options and a pointer call's arguments before the callee,
-// unlike legacy, so this is solx-only.
-
 // CHECK: sol.func @{{.*pointerCallee.*}}
 // CHECK:   %[[POINTER:.*]] = sol.call @"callee()_{{[0-9]+}}"
 // CHECK:   %[[POINTER_ARGUMENT:.*]] = sol.call @"t(uint256)_{{[0-9]+}}"

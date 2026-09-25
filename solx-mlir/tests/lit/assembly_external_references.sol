@@ -1,6 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
-// RUN: solx --emit-mlir=sol %s | FileCheck %s --check-prefix=SOLX
 
 // CHECK: sol.func @{{.*local.*}}
 // CHECK:   %[[X:.*]] = sol.alloca : !sol.ptr<ui256, Stack>
@@ -69,12 +67,11 @@
 // CHECK:     sol.yul_val_cast %{{.*}} -> i256
 // CHECK:     sol.yul_val_cast %{{.*}} : !sol.fixedbytes<32> -> i256
 
-// print-init lands a `sol.string_lit` on this one, so the RUN line above cannot check it.
-// SOLX: sol.func @{{.*chained_string_constant.*}}
-// SOLX:   sol.inline_asm {
-// SOLX-NOT: sol.string_lit
-// SOLX:     sol.yul_val_cast %{{.*}} : !sol.fixedbytes<32> -> i256
-// SOLX:   }
+// CHECK: sol.func @{{.*chained_string_constant.*}}
+// CHECK:   sol.inline_asm {
+// CHECK-NOT: sol.string_lit
+// CHECK:     sol.yul_val_cast %{{.*}} : !sol.fixedbytes<32> -> i256
+// CHECK:   }
 
 // CHECK: sol.func @{{.*constant_in_yul_function.*}}
 // CHECK:   sol.inline_asm {

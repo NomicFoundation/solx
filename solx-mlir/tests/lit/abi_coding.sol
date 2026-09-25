@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func @{{.*encode.*}}
 // CHECK:   sol.encode {{.*}} : ui256, !sol.address : !sol.string<Memory>
@@ -44,10 +43,6 @@
 // CHECK:   %[[NARROW:.*]] = sol.load %{{.*}} : !sol.ptr<ui8, Stack>, ui8
 // CHECK:   %[[WIDE:.*]] = sol.cast %[[NARROW]] : ui8 to ui256
 // CHECK:   sol.encode selector(%{{.*}}) %[[WIDE]] : !sol.fixedbytes<4> ui256 : !sol.string<Memory>
-
-// TODO: pin abi.encodeCall on a reference parameter. solc encodes from memory, but the parameter
-// type reachable from `I.f` keeps its declared `calldata` location — slang normalizes it only on an
-// instance-qualified `i.f` — so a memory or storage argument emits an unlegalizable cast.
 
 // CHECK: sol.func @{{.*encodeCallEmpty.*}}
 // CHECK:   %[[EMPTY:.*]] = sol.constant 777180678 : ui32

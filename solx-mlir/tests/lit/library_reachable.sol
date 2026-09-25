@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// Copies inside the consumer module: solc's print-init drops the consumer module when a bare
-// public sibling is reached, so this is solx-only.
-
 // CHECK: sol.contract @{{.*User.*}} {
 // CHECK: sol.func @{{.*}} attributes {{.*}}kind = #Constructor
 // CHECK:   sol.call @{{.*seed.*}}(%{{.*}}) : (ui256) -> ui256

@@ -18,7 +18,7 @@ Everything written for this repository is short and human-readable.
 - **solx** (this repo) is the Rust workspace: the CLI, the Slang frontend, the dialect binding and codegen.
 - **Slang** is the parser and binder, a git dependency pinned by `rev` in [`Cargo.toml`](./Cargo.toml).
 - [**solx-llvm**](./solx-llvm/) (submodule) is a fork of LLVM with the Sol and Yul MLIR dialects and an EVM target backend.
-- [**solx-solidity**](./solx-solidity/) (submodule) is a fork of solc, kept for its [`test/libsolidity/semanticTests`](./solx-solidity/test/libsolidity/semanticTests/), which the tester runs.
+- [**solidity**](./solidity/) (submodule) is upstream solc, kept for its [`test/libsolidity/semanticTests`](./solidity/test/libsolidity/semanticTests/), which the tester runs.
 
 ```
 Solidity → Slang (parse, bind) → Sol-dialect MLIR → Sol→Yul→Standard passes → LLVM IR → LLVM optimizer → EVM bytecode
@@ -130,20 +130,18 @@ Build `solx-dev`, then LLVM with MLIR, then solx:
 
 ```bash
 cargo build --release --bin solx-dev
-./target/release/solx-dev llvm build --enable-mlir --enable-utils --build-type RelWithDebInfo   # target-llvm/target-final/
-cargo build-slang              # target/debug/solx
-cargo build-slang --release    # target/release/solx
+./target/release/solx-dev llvm build --enable-utils --build-type RelWithDebInfo   # target-llvm/target-final/
+cargo build              # target/debug/solx
+cargo build --release    # target/release/solx
 ```
-
-The `-slang` aliases exist because `solx-slang` and `solx-mlir` take inkwell without LLVM linking while `solx-codegen-evm` links it. The two crates are excluded from `default-members`, since sharing a Cargo build with them unifies the two feature sets into a configuration that does not link.
 
 ## Testing
 
 ```bash
-cargo test-slang                                        # unit and CLI tests of solx-slang, solx-mlir and solx
-cargo clippy-slang --all-targets
-cargo build-slang --release && cargo run-tester-slang   # the REVM corpus at -O M3B3 against target/release/solx
-cargo run-tester-slang --path tests/solidity/simple/default.sol   # one test
+cargo test                                        # unit and CLI tests
+cargo clippy --all-targets
+cargo build --release && cargo run-tester         # the REVM corpus at -O M3B3 against target/release/solx
+cargo run-tester --path tests/solidity/simple/default.sol   # one test
 ```
 
 LIT runs the fixtures under [`solx-mlir/tests/lit/`](./solx-mlir/tests/lit/) against `target/debug/solx`:

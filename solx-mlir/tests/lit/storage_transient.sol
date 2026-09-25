@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.state_var @{{.*low.*}} transient slot 0 offset 0 : ui64
 // CHECK: sol.state_var @{{.*high.*}} transient slot 0 offset 8 : ui64

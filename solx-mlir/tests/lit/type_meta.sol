@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func @{{.*contract_creation_code.*}}() -> !sol.string<Memory>
 // CHECK:   sol.object_code "{{[^"]*}}Other{{[0-9_]*}}" : !sol.string<Memory>

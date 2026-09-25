@@ -34,13 +34,9 @@ pub fn run() -> anyhow::Result<()> {
                     Ordering::Relaxed,
                 );
                 let result = Contract::compile_to_evm(
-                    session.language,
-                    session.solc_version.clone(),
                     job.contract_name.clone(),
                     job.contract_ir,
                     job.code_segment,
-                    session.evm_version,
-                    job.debug_info,
                     &session.output_selection,
                     job.immutables,
                     job.metadata_bytes,

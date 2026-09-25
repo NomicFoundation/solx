@@ -59,7 +59,3 @@ that repo instead of a CI artifact.
   `fixtures/*/*.json`. The per-binary validation pass rejects fixtures that
   don't compile clean (the standard-JSON protocol reports errors inside the
   JSON with exit code 0, so hyperfine alone would silently time failures).
-- **Slang v2 pipeline**: add a second timed dimension by passing the Slang
-  frontend flag through an additional `--bin` entry once the pipeline accepts
-  the same standard-JSON input (the driver only assembles
-  `<binary> --standard-json <fixture>` command lines).

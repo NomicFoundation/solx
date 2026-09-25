@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// solc print-init evaluates a pointer call's arguments and options before its callee, unlike
-// legacy, so this is solx-only.
-
 // CHECK: sol.func @{{.*from_instance.*}}
 // CHECK:   %[[RECEIVER:.*]] = sol.address_cast %{{.*}} : !sol.contract<{{.*I.*}}> to !sol.address
 // CHECK:   sol.ext_func_constant %[[RECEIVER]] {selector = -1277270901 : i32} : !sol.address -> !sol.ext_func_ref<(ui256) -> ui256>

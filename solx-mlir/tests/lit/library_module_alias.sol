@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// A library qualified through a module alias: solc's print-init substitutes `sol.timestamp` for
-// the address, so this is solx-only.
-
 // CHECK: sol.func @{{.*alias_address.*}}() -> !sol.address
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
 // CHECK:   sol.return %[[ADDR]] : !sol.address

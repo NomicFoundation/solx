@@ -23,7 +23,7 @@ use solx_utils::ContractName;
 ///
 /// The tester parses sources itself because the AST JSON emitted by the compiler is
 /// serialize-only upstream and cannot be read back into typed nodes. Parsing at the
-/// latest language version and EVM target mirrors the Slang frontend pipeline.
+/// latest language version and EVM target mirrors solx.
 ///
 pub struct SlangAst {
     /// The parsed compilation unit.
@@ -56,7 +56,7 @@ impl SlangAst {
     /// Whether any source pins `pragma abicoder v1`.
     ///
     /// Slang always encodes with v2 semantics, so a v1-pinned test is not reproducible
-    /// under the Slang frontend.
+    /// by solx.
     ///
     pub fn is_abi_encoder_v1_pinned(&self) -> bool {
         for file in self.unit.files() {

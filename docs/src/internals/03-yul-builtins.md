@@ -8,7 +8,7 @@ Yul builtins are lowered through one of three strategies:
 
 - **Direct LLVM IR**: the builtin maps to native LLVM integer or memory operations on `i256`.
 - **LLVM intrinsic**: the builtin maps to an `llvm.evm.*` intrinsic that the EVM backend expands to opcodes.
-- **Address space access**: the builtin maps to a load or store in a typed LLVM address space (see [EVM Instructions: Address Space Model](./03-evm-instructions.md#address-space-model)).
+- **Address space access**: the builtin maps to a load or store in a typed LLVM address space (see [EVM Instructions: Address Space Model](./02-evm-instructions.md#address-space-model)).
 
 ## Arithmetic
 
@@ -113,7 +113,7 @@ Memory builtins are subject to LLVM memory optimizations. Operations that do not
 | `dataoffset` | Intrinsic `llvm.evm.dataoffset` | Offset of a named data object |
 | `datacopy` | Same as `codecopy` | Copy data to memory |
 
-These builtins are used by deploy stubs to reference embedded runtime and dependency objects. See [Binary Layout](./05-binary-layout.md#datasize--dataoffset-builtins) for details.
+These builtins are used by deploy stubs to reference embedded runtime and dependency objects. See [Binary Layout](./04-binary-layout.md#datasize--dataoffset-builtins) for details.
 
 ## Event Logging
 

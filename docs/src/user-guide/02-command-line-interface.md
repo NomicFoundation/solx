@@ -35,7 +35,7 @@ The examples use the following notation:
 - `...` on its own line elides a run of output lines.
 - `? failed` marks a command that exits with a non-zero code.
 
-All commands on this page run in one shared working directory, so sections that emit files use per-section output directories (`./build-evmla/`, `./build-ethir/`, …) to keep each listing scoped to its own artifacts.
+All commands on this page run in one shared working directory, so sections that emit files use per-section output directories (`./build-llvm-ir/`, `./build-asm/`, …) to keep each listing scoped to its own artifacts.
 
 
 
@@ -48,7 +48,7 @@ $ solx 'Simple.sol' --bin
 
 ======= Simple.sol:Simple =======
 Binary:
-34601557630000008480630000001a6080396080f35b5f5ffdfe34600b57600336116016575b5f5ffd5b5060016031565b5f3560e01c633df4ddf48114600f57635a8ac02d03600b5760025b60805260206080f3fea2646970667358221220[..]64736f6c637816736f6c783a302e312e383b736f6c633a302e382e33340047
+5b3460485763000000c38038036080601f19601f8301160191680100000000000000008310607f19601f8401101615604c5782604052608039630000005f908163000000648239f35b5f5ffd5b505050634e487b7160e01b5f52604160045260245ffdfe5b60043610603a575f3560e01c635a8ac02d8114602f57633df4ddf403603a5734603a5760015b60805260206080f35b5034603a5760026026565b5f5ffdfea164736f6c637816736f6c783a302e312e383b736f6c633a302e382e3337001e
 
 ```
 
@@ -63,7 +63,7 @@ $ solx 'Simple.sol' --bin-runtime
 
 ======= Simple.sol:Simple =======
 Binary of the runtime part:
-34600b57600336116016575b5f5ffd5b5060016031565b5f3560e01c633df4ddf48114600f57635a8ac02d03600b5760025b60805260206080f3fea2646970667358221220[..]64736f6c637816736f6c783a302e312e383b736f6c633a302e382e33340047
+5b60043610603a575f3560e01c635a8ac02d8114602f57633df4ddf403603a5734603a5760015b60805260206080f35b5034603a5760026026565b5f5ffdfea164736f6c637816736f6c783a302e312e383b736f6c633a302e382e3337001e
 
 ```
 
@@ -78,25 +78,25 @@ $ solx 'Simple.sol' --asm
 
 ======= Simple.sol:Simple =======
 Deploy LLVM EVM assembly:
-	.file	"Simple[..]"
+	.file	"LLVMDialectModule"
 	.text
 	.globl	__entry                         ; -- Begin function __entry
 __entry:                                ; @__entry
-; %bb.0:                                ; %entry
+; %bb.0:
+	JUMPDEST
 	CALLVALUE
-	PUSH4           @.BB0_2
-	JUMPI
+	PUSH4           @.BB0_3
 ...
 
 Runtime LLVM EVM assembly:
-	.file	"Simple[..]runtime"
+	.file	"LLVMDialectModule"
 	.text
 	.globl	__entry                         ; -- Begin function __entry
 __entry:                                ; @__entry
-; %bb.0:                                ; %entry
-	CALLVALUE
-	PUSH4           @.BB0_2
-	JUMPI
+; %bb.0:
+	JUMPDEST
+	PUSH1           0x4
+	CALLDATASIZE
 ...
 ```
 
@@ -106,11 +106,11 @@ __entry:                                ; @__entry
 
 Emits the contract metadata. The metadata is a JSON object that contains information about the contract, such as its name, source code hash, the list of dependencies, compiler versions, and so on.
 
-The **solx** metadata format is compatible with the [Solidity metadata format](https://docs.soliditylang.org/en/latest/metadata.html#contract-metadata). This means that the metadata output can be used with other tools that support Solidity metadata. The metadata that is hashed into [the CBOR trailer of the bytecode](#--metadata-hash) additionally carries extra **solx** data inserted into the **solc** metadata with this JSON object:
+The **solx** metadata format is compatible with the [Solidity metadata format](https://docs.soliditylang.org/en/latest/metadata.html#contract-metadata). This means that the metadata output can be used with other tools that support Solidity metadata. The metadata that is hashed into [the CBOR trailer of the bytecode](#--metadata-hash) additionally carries extra **solx** data inserted into the metadata with this JSON object:
 
 ```javascript
 {
-  "solx": {
+  "slang": {
     "llvm_options": [],
     "optimizer_settings": {
       "is_debug_logging_enabled": false,
@@ -120,23 +120,18 @@ The **solx** metadata format is compatible with the [Solidity metadata format](h
       "level_middle_end": "Aggressive",
       "level_middle_end_size": "Zero"
     },
-    // Optional: only set for Solidity and Yul contracts.
-    "solc_version": "0.8.34",
+    // Optional: the Solidity language version, only set for Solidity and Yul contracts.
+    "solc_version": "0.8.37",
     // Mandatory: current version of solx.
     "solx_version": "0.1.8"
   }
 }
 ```
 
-Usage:
+Currently not supported. Usage:
 
-```console
-$ solx 'Simple.sol' --metadata
-
-======= Simple.sol:Simple =======
-Metadata:
-{"compiler":{"version":"0.8.34+commit.[..]"},"language":"Solidity","output":{"abi":[{"inputs":[],"name":"first","outputs":[{"internalType":"uint64","name":"","type":"uint64"}],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"second","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"pure","type":"function"}],"devdoc":{"kind":"dev","methods":{},"version":1},"userdoc":{"kind":"user","methods":{},"version":1}},"settings":{"compilationTarget":{"Simple.sol":"Simple"},"evmVersion":"osaka","libraries":{},"metadata":{"bytecodeHash":"ipfs"},"optimizer":{"enabled":false,"runs":200},"remappings":[]},"solx":{[..]},"sources":{"Simple.sol":{"keccak256":"0x402fe0b38cc9d81e8c9f6d07854cca27fbb307f06d8a129998026907a10c7ca1","license":"MIT","urls":["bzz-raw://04714cab56c1f931e3cc1ddae4c7ff0c8832d0849e23966c6326028f6783d45a","dweb:/ipfs/QmehmUFKCtytG8WcWQ676KvqwURfkVYK89VHZEvSzyLc2Z"]}},"version":1}
-
+```bash
+solx 'Simple.sol' --metadata
 ```
 
 
@@ -150,15 +145,13 @@ $ solx 'Simple.sol' --ast-json
 
 ======= Simple.sol =======
 JSON AST:
-{"absolutePath":"Simple.sol","exportedSymbols":{"Simple":[24]},"id":25,"license":"MIT","nodeType":"SourceUnit","nodes":[[..]],"src":"32:288:0"}
+{"id":1,"type":"SourceUnit","range":{"start":32,"end":319},"file":"Simple.sol","members":[[..]]}
 
 ======= Simple.sol:Simple =======
 
 ```
 
-The `nodes` array — the AST body itself — is abbreviated here; it spans several thousand characters even for this small contract.
-
-> Since **solx** communicates with **solc** only via standard JSON under the hood, the full JSON AST is emitted instead of the compact one.
+The AST body is abbreviated here; it spans several thousand characters even for this small contract.
 
 
 
@@ -166,13 +159,10 @@ The `nodes` array — the AST body itself — is abbreviated here; it spans seve
 
 Emits the contract ABI specification.
 
-```console
-$ solx 'Simple.sol' --abi
+Currently not supported. Usage:
 
-======= Simple.sol:Simple =======
-Contract JSON ABI:
-[{"inputs":[],"name":"first","outputs":[{"internalType":"uint64","name":"","type":"uint64"}],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"second","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"pure","type":"function"}]
-
+```bash
+solx 'Simple.sol' --abi
 ```
 
 
@@ -181,14 +171,10 @@ Contract JSON ABI:
 
 Emits the contract function signatures.
 
-```console
-$ solx 'Simple.sol' --hashes
+Currently not supported. Usage:
 
-======= Simple.sol:Simple =======
-Function signatures:
-3df4ddf4: first()
-5a8ac02d: second()
-
+```bash
+solx 'Simple.sol' --hashes
 ```
 
 
@@ -197,13 +183,10 @@ Function signatures:
 
 Emits the contract storage layout.
 
-```console
-$ solx 'Simple.sol' --storage-layout
+Currently not supported. Usage:
 
-======= Simple.sol:Simple =======
-Contract Storage Layout:
-{"storage":[{"astId":3,"contract":"Simple.sol:Simple","label":"field_1","offset":0,"slot":"0","type":"t_uint256"},{"astId":5,"contract":"Simple.sol:Simple","label":"field_2","offset":0,"slot":"1","type":"t_uint256"},{"astId":7,"contract":"Simple.sol:Simple","label":"field_3","offset":0,"slot":"2","type":"t_uint256"}],"types":{"t_uint256":{"encoding":"inplace","label":"uint256","numberOfBytes":"32"}}}
-
+```bash
+solx 'Simple.sol' --storage-layout
 ```
 
 
@@ -212,13 +195,10 @@ Contract Storage Layout:
 
 Emits the contract transient storage layout.
 
-```console
-$ solx 'Simple.sol' --transient-storage-layout
+Currently not supported. Usage:
 
-======= Simple.sol:Simple =======
-Contract Transient Storage Layout:
-{"storage":[],"types":null}
-
+```bash
+solx 'Simple.sol' --transient-storage-layout
 ```
 
 
@@ -227,13 +207,10 @@ Contract Transient Storage Layout:
 
 Emits the contract user documentation.
 
-```console
-$ solx 'Simple.sol' --userdoc
+Currently not supported. Usage:
 
-======= Simple.sol:Simple =======
-User Documentation:
-{"kind":"user","methods":{},"version":1}
-
+```bash
+solx 'Simple.sol' --userdoc
 ```
 
 
@@ -242,67 +219,10 @@ User Documentation:
 
 Emits the contract developer documentation.
 
-```console
-$ solx 'Simple.sol' --devdoc
+Currently not supported. Usage:
 
-======= Simple.sol:Simple =======
-Developer Documentation:
-{"kind":"dev","methods":{},"version":1}
-
-```
-
-
-
-### `--asm-solc-json`
-
-Emits the **solc** EVM assembly parsed from solc's JSON output.
-
-```console
-$ solx 'Simple.sol' --asm-solc-json
-
-======= Simple.sol:Simple =======
-EVM assembly:
-000     PUSH                80
-001     MEMORYGUARD
-002     PUSH                40
-003     MSTORE
-...
-```
-
-> This is the **solc** EVM assembly output that is translated to LLVM IR by **solx**. For **solx**'s own EVM assembly output emitted by LLVM, use the [`--asm`](#--asm) option instead.
-
-
-
-### `--ir` (or `--ir-optimized`)
-
-Emits the **solc** Yul IR.
-
-> **solx** does not use the Yul optimizer anymore, so the Yul IR is always unoptimized, and it is not possible to emit solc-optimized Yul IR with **solx**.
-
-```console
-$ solx 'Simple.sol' --ir
-
-======= Simple.sol:Simple =======
-IR:
-
-/// @use-src 0:"Simple.sol"
-object "Simple_24" {
-    code {
-...
-    }
-    /// @use-src 0:"Simple.sol"
-    object "Simple_24_deployed" {
-        code {
-...
-        }
-
-        data ".metadata" hex"a2646970667358221220[..]64736f6c63430008220033"
-    }
-
-}
-
-
-
+```bash
+solx 'Simple.sol' --devdoc
 ```
 
 
@@ -311,15 +231,11 @@ object "Simple_24" {
 
 Emits the ELF-wrapped DWARF debug info of the deploy code.
 
-```console
-$ solx 'Simple.sol' --debug-info
+Currently not supported. Usage:
 
-======= Simple.sol:Simple =======
-Debug info:
-7f454c46010201ff[..]
+```bash
+solx 'Simple.sol' --debug-info
 ```
-
-Only the ELF magic is shown: the DWARF payload embeds the absolute build directory, so its bytes differ between machines and are not reproducible documentation material.
 
 
 
@@ -327,81 +243,10 @@ Only the ELF magic is shown: the DWARF payload embeds the absolute build directo
 
 Emits the ELF-wrapped DWARF debug info of the runtime code.
 
-```console
-$ solx 'Simple.sol' --debug-info-runtime
+Currently not supported. Usage:
 
-======= Simple.sol:Simple =======
-Debug info of the runtime part:
-7f454c46010201ff[..]
-```
-
-The payload is abbreviated for the same reason as in [`--debug-info`](#--debug-info).
-
-
-
-### `--evmla`
-
-Emits EVM legacy assembly (intermediate representation from solc).
-
-When used with `--output-dir`, writes `.evmla` files to the output directory. Without `--output-dir`, outputs to stdout.
-
-Usage with `--output-dir`:
-
-```console
-$ solx 'Simple.sol' --evmla --output-dir './build-evmla/'
-Compiler run successful. Artifact(s) can be found in directory "./build-evmla/".
-
-$ ls './build-evmla/'
-Simple_sol_Simple.evmla
-Simple_sol_Simple_runtime.evmla
-
-```
-
-Usage with stdout:
-
-```console
-$ solx 'Simple.sol' --evmla --bin
-
-======= Simple.sol:Simple =======
-Binary:
-...
-Deploy EVM legacy assembly:
-000     PUSH                80
-...
-```
-
-
-
-### `--ethir`
-
-Emits Ethereal IR (intermediate representation between EVM assembly and LLVM IR).
-
-When used with `--output-dir`, writes `.ethir` files to the output directory. Without `--output-dir`, outputs to stdout.
-
-Usage with `--output-dir`:
-
-```console
-$ solx 'Simple.sol' --ethir --output-dir './build-ethir/'
-Compiler run successful. Artifact(s) can be found in directory "./build-ethir/".
-
-$ ls './build-ethir/'
-Simple_sol_Simple.ethir
-Simple_sol_Simple_runtime.ethir
-
-```
-
-Usage with stdout:
-
-```console
-$ solx 'Simple.sol' --ethir --bin
-
-======= Simple.sol:Simple =======
-Binary:
-...
-Deploy Ethereal IR:
-function __entry {
-    stack_usage: 4
-...
+```bash
+solx 'Simple.sol' --debug-info-runtime
 ```
 
 
@@ -421,15 +266,15 @@ Compiler run successful. Artifact(s) can be found in directory "./build-llvm-ir/
 $ ls './build-llvm-ir/'
 Simple_sol_Simple.optimized.ll
 Simple_sol_Simple.unoptimized.ll
-Simple_sol_Simple_runtime.optimized.ll
-Simple_sol_Simple_runtime.unoptimized.ll
+Simple_sol_Simple_deployed.optimized.ll
+Simple_sol_Simple_deployed.unoptimized.ll
 
 ```
 
 Usage with stdout:
 
 ```console
-$ solx 'Simple.sol' --emit-llvm-ir --bin --via-ir
+$ solx 'Simple.sol' --emit-llvm-ir --bin
 
 ======= Simple.sol:Simple =======
 Binary:
@@ -446,24 +291,34 @@ Deploy LLVM IR:
 
 ### `--benchmarks`
 
-Emits benchmarks of the **solx** LLVM-based pipeline and its underlying call to **solc**.
+Emits benchmarks of the compilation pipeline.
 
 ```console
 $ solx 'Simple.sol' --benchmarks
 Benchmarks:
-solc_RunStandardJSON: [..]us
+Slang_RunStandardJSON: [..]us
 solx_BuildProject: [..]us
 solx_Compile: [..]us
+Slang_ParseAndBind: [..]us
+Slang_SerializeAST:Simple.sol: [..]us
+solx_CreateMLIRContext:Simple.sol: [..]us
+solx_EmitSol:Simple.sol:Simple: [..]us
+solx_RunSolPasses:Simple.sol:Simple: [..]us
+solx_ExtractMLIRObjects:Simple.sol:Simple: [..]us
 
 ======= Simple.sol:Simple =======
 Benchmarks:
-    Simple.sol:Simple:deploy/EVMAssemblyToLLVMIR/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple:deploy/CreateMLIRContext/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple:deploy/ParseMLIR/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple:deploy/MLIRToLLVMIR/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/InitVerify/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/OptimizeVerify/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/WorkerRoundtrip(0)/M3B3/SpillArea(0): [..]us
-    Simple.sol:Simple:runtime/EVMAssemblyToLLVMIR/M3B3/SpillArea(0): [..]us
-    Simple.sol:Simple.runtime:runtime/InitVerify/M3B3/SpillArea(0): [..]us
-    Simple.sol:Simple.runtime:runtime/OptimizeVerify/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple:runtime/CreateMLIRContext/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple:runtime/ParseMLIR/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple:runtime/MLIRToLLVMIR/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple_deployed:runtime/InitVerify/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple_deployed:runtime/OptimizeVerify/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:runtime/WorkerRoundtrip(0)/M3B3/SpillArea(0): [..]us
 
 ```
@@ -484,7 +339,7 @@ solx 'Simple.sol' 'Complex.sol' --bin
 solx 'Simple.sol' 'github.com/ethereum/dapp-bin/=/usr/local/lib/dapp-bin/' --bin
 ```
 
-With the default **solc** frontend, **solx** only passes remappings through to **solc**. With the **Slang** frontend, **solx** applies them itself, following **solc**'s semantics.
+**solx** applies remappings following **solc**'s semantics.
 Visit [the **solc** documentation](https://docs.soliditylang.org/en/latest/using-the-compiler.html#base-path-and-import-remapping) to learn more about the processing of remappings.
 
 
@@ -505,7 +360,7 @@ solx 'Simple.sol' --bin --libraries 'Simple.sol:Simple=0x1234567890abcdef1234567
 
 ### `--base-path`, `--include-path`, `--allow-paths`
 
-These options are used to specify Solidity import resolution settings. They are not used by **solx** and only passed through to **solc**. The **Slang** frontend ignores them and resolves imports only against the sources it is given.
+These options are accepted for **solc** compatibility. **solx** ignores them and resolves imports only against the sources it is given.
 
 Visit [the **solc** documentation](https://docs.soliditylang.org/en/latest/path-resolution.html) to learn more about the processing of these options.
 
@@ -518,16 +373,15 @@ Specifies the output directory for build artifacts. Can only be used in [basic C
 Usage in basic CLI mode:
 
 ```console
-$ solx 'Simple.sol' --bin --asm --metadata --output-dir './build/'
+$ solx 'Simple.sol' --bin --asm --output-dir './build/'
 Compiler run successful. Artifact(s) can be found in directory "./build/".
 
 $ ls './build/'
 Simple_sol_Simple.asm
 Simple_sol_Simple.bin
+Simple_sol_Simple_deployed.asm
 Simple_sol_Simple_llvm.asm
 Simple_sol_Simple_llvm.asm-runtime
-Simple_sol_Simple_meta.json
-Simple_sol_Simple_runtime.asm
 
 ```
 
@@ -605,7 +459,7 @@ For the standard JSON mode usage, see the [Standard JSON](./03-standard-json.md)
 
 ## **solx** Compilation Settings
 
-The options in this section are only configuring the **solx** compiler and do not affect the underlying **solc** compiler.
+The options in this section configure the **solx** compilation pipeline.
 
 
 
@@ -694,25 +548,25 @@ $ solx 'Simple.sol' --bin --metadata-hash 'ipfs'
 
 ======= Simple.sol:Simple =======
 Binary:
-34601557630000008480630000001a6080396080f35b5f5ffdfe34600b57600336116016575b5f5ffd5b5060016031565b5f3560e01c633df4ddf48114600f57635a8ac02d03600b5760025b60805260206080f3fea2646970667358221220[..]64736f6c637816736f6c783a302e312e383b736f6c633a302e382e33340047
+5b3460485763000000c38038036080601f19601f8301160191680100000000000000008310607f19601f8401101615604c5782604052608039630000005f908163000000648239f35b5f5ffd5b505050634e487b7160e01b5f52604160045260245ffdfe5b60043610603a575f3560e01c635a8ac02d8114602f57633df4ddf403603a5734603a5760015b60805260206080f35b5034603a5760026026565b5f5ffdfea164736f6c637816736f6c783a302e312e383b736f6c633a302e382e3337001e
 
 ```
 
-The byte array starting with `a2` at the end of the bytecode is a CBOR-encoded compiler version data and an optional metadata hash.
+The byte array starting with `a1` at the end of the bytecode is a CBOR-encoded compiler version data and, when the contract metadata is emitted, its hash.
 
-The last two bytes of the metadata (`0x0047`) are not a part of the CBOR payload, but the length of it, which must be known to correctly decode the payload.
+The last two bytes of the metadata (`0x001e`) are not a part of the CBOR payload, but the length of it, which must be known to correctly decode the payload.
 
 JSON representation of the CBOR payload:
 
 ```javascript
 {
-    // Optional: included if `--metadata-hash` is set to `ipfs`.
+    // Optional: included if `--metadata-hash` is set to `ipfs` and the contract metadata is emitted.
     "ipfs": "1220bec8fa0149a786c5810200ef5a436a154cff832af68ace5beeabcbb82166cb92",
 
     // Required: consists of semicolon-separated pairs of colon-separated compiler names and versions.
     // `solx:<version>` is always included.
-    // `solc:<version>` is only included for Solidity and Yul contracts, but not included for LLVM IR ones.
-    "solc": "solx:0.1.8;solc:0.8.34"
+    // `solc:<version>` is the Solidity language version and is only included for Solidity and Yul contracts, but not included for LLVM IR ones.
+    "solc": "solx:0.1.8;solc:0.8.37"
 }
 ```
 
@@ -750,18 +604,21 @@ solx 'Simple.sol' --bin --llvm-options='-key=value'
 
 ## **solc** Compilation Settings
 
-The options in this section are only configuring **solc**, so they are passed directly to its child process, and do not affect the **solx** compiler.
+The options in this section mirror the **solc** options of the same name.
 
 
 
 ### `--via-ir`
 
-Switches the **solc** codegen to Yul a.k.a. IR.
+Switches the codegen to Yul a.k.a. IR. Currently not supported.
 
 Usage:
 
-```bash
-solx 'Simple.sol' --bin --via-ir
+```console
+$ solx 'Simple.sol' --bin --via-ir
+? 1
+Error: viaIR is not supported yet.
+
 ```
 
 
@@ -786,9 +643,7 @@ solx 'Simple.sol' --bin --evm-version 'osaka'
 
 ### `--metadata-literal`
 
-Tells **solc** to store referenced sources as literal data in the metadata output.
-
-> This option only affects the contract metadata output produced by **solc**, and does not affect artifacts produced by **solx**.
+Stores referenced sources as literal data in the metadata output.
 
 Usage:
 
@@ -800,7 +655,7 @@ solx 'Simple.sol' --bin --metadata --metadata-literal
 
 ### `--no-import-callback`
 
-Disables the default import resolution callback in **solc**.
+Disables the default import resolution callback. Accepted for **solc** compatibility and ignored.
 
 > This parameter is used by some tooling that resolves all imports by itself, such as Hardhat.
 
@@ -830,7 +685,7 @@ Enables the Yul mode. In this mode, input is expected to be in the Yul language.
 
 Yul input is optimized through LLVM and is not emitted as a verbatim EVM opcode sequence. See [Optimizer and Assembly Semantics](./04-limitations.md#optimizer-and-assembly-semantics).
 
-The example compiles this Yul object, `Simple.yul`:
+Yul input is currently not supported. The example passes this Yul object, `Simple.yul`:
 
 ```yul
 {{#include 02-command-line-interface.in/Simple.yul}}
@@ -840,10 +695,8 @@ Usage:
 
 ```console
 $ solx --yul 'Simple.yul' --bin
-
-======= Simple.yul =======
-Binary:
-63000000298063000000105f395ff3fe602a5f5260205ff3fea164736f6c637816736f6c783a302e312e383b736f6c633a302e382e3334001e
+? 1
+Error: Yul is not supported yet.
 
 ```
 
@@ -880,8 +733,6 @@ Binary:
 
 For selective IR output, use the following flags with `--output-dir`:
 
-- [`--evmla`](#--evmla) - EVM legacy assembly
-- [`--ethir`](#--ethir) - Ethereal IR
 - [`--emit-llvm-ir`](#--emit-llvm-ir) - LLVM IR (unoptimized and optimized)
 - [`--asm`](#--asm) - LLVM EVM assembly
 
@@ -898,9 +749,6 @@ The intermediate build artifacts include:
 
 | Name          | Extension   |
 |:--------------|:------------|
-| EVM Assembly  | *evmla*     |
-| EthIR         | *ethir*     |
-| Yul           | *yul*       |
 | LLVM IR       | *ll*        |
 | LLVM Assembly | *asm*       |
 
@@ -911,15 +759,11 @@ $ SOLX_OUTPUT_DIR='./debug/' solx 'Simple.sol' --bin
 ...
 $ ls './debug/'
 Simple_sol_Simple.asm
-Simple_sol_Simple.ethir
-Simple_sol_Simple.evmla
 Simple_sol_Simple.optimized.ll
 Simple_sol_Simple.unoptimized.ll
-Simple_sol_Simple_runtime.asm
-Simple_sol_Simple_runtime.ethir
-Simple_sol_Simple_runtime.evmla
-Simple_sol_Simple_runtime.optimized.ll
-Simple_sol_Simple_runtime.unoptimized.ll
+Simple_sol_Simple_deployed.asm
+Simple_sol_Simple_deployed.optimized.ll
+Simple_sol_Simple_deployed.unoptimized.ll
 
 ```
 

@@ -33,17 +33,10 @@ pub enum Selector {
     /// The function signature hashes JSON.
     #[serde(rename = "evm.methodIdentifiers")]
     MethodIdentifiers,
-    /// The EVM legacy assembly JSON.
-    #[serde(rename = "evm.legacyAssembly")]
-    EVMLegacyAssembly,
-    /// The Yul IR.
-    #[serde(rename = "ir", alias = "irOptimized")]
-    Yul,
     /// The compilation pipeline benchmarks.
     #[serde(rename = "benchmarks")]
     Benchmarks,
-    /// The MLIR source code (LLVM dialect, Slang frontend intermediate representation).
-    #[cfg(feature = "mlir")]
+    /// The MLIR source code (LLVM dialect, solx intermediate representation).
     #[serde(rename = "mlir")]
     MLIR,
 
@@ -56,12 +49,6 @@ pub enum Selector {
     /// The deploy bytecode object.
     #[serde(rename = "evm.bytecode.object")]
     BytecodeObject,
-    /// The deploy EVM legacy assembly IR (solx internal representation).
-    #[serde(rename = "evm.bytecode.evmla")]
-    BytecodeEVMLA,
-    /// The deploy Ethereal IR (solx internal representation).
-    #[serde(rename = "evm.bytecode.ethir")]
-    BytecodeEthIR,
     /// The deploy unoptimized LLVM IR (solx internal representation).
     #[serde(rename = "evm.bytecode.llvmIrUnoptimized")]
     BytecodeLLVMIRUnoptimized,
@@ -95,12 +82,6 @@ pub enum Selector {
     /// The runtime bytecode object.
     #[serde(rename = "evm.deployedBytecode.object")]
     RuntimeBytecodeObject,
-    /// The runtime EVM legacy assembly IR (solx internal representation).
-    #[serde(rename = "evm.deployedBytecode.evmla")]
-    RuntimeBytecodeEVMLA,
-    /// The runtime Ethereal IR (solx internal representation).
-    #[serde(rename = "evm.deployedBytecode.ethir")]
-    RuntimeBytecodeEthIR,
     /// The runtime unoptimized LLVM IR (solx internal representation).
     #[serde(rename = "evm.deployedBytecode.llvmIrUnoptimized")]
     RuntimeBytecodeLLVMIRUnoptimized,
@@ -142,49 +123,6 @@ pub enum Selector {
 
 impl Selector {
     ///
-    /// Whether the data source is `solc`.
-    ///
-    pub fn is_received_from_solc(&self) -> bool {
-        #[cfg(feature = "mlir")]
-        if matches!(self, Self::MLIR) {
-            return false;
-        }
-        !matches!(
-            self,
-            Self::Benchmarks
-                | Self::EVM
-                | Self::Bytecode
-                | Self::BytecodeObject
-                | Self::BytecodeEVMLA
-                | Self::BytecodeEthIR
-                | Self::BytecodeLLVMIRUnoptimized
-                | Self::BytecodeLLVMIR
-                | Self::BytecodeLLVMAssembly
-                | Self::BytecodeLinkReferences
-                | Self::BytecodeOpcodes
-                | Self::BytecodeSourceMap
-                | Self::BytecodeDebugInfo
-                | Self::BytecodeFunctionDebugData
-                | Self::BytecodeGeneratedSources
-                | Self::RuntimeBytecode
-                | Self::RuntimeBytecodeObject
-                | Self::RuntimeBytecodeEVMLA
-                | Self::RuntimeBytecodeEthIR
-                | Self::RuntimeBytecodeLLVMIRUnoptimized
-                | Self::RuntimeBytecodeLLVMIR
-                | Self::RuntimeBytecodeLLVMAssembly
-                | Self::RuntimeBytecodeOpcodes
-                | Self::RuntimeBytecodeSourceMap
-                | Self::RuntimeBytecodeDebugInfo
-                | Self::RuntimeBytecodeFunctionDebugData
-                | Self::RuntimeBytecodeGeneratedSources
-                | Self::RuntimeBytecodeLinkReferences
-                | Self::RuntimeBytecodeImmutableReferences
-                | Self::GasEstimates
-        )
-    }
-
-    ///
     /// Converts a multi-item selector into a group of single-item selectors.
     ///
     pub fn into_single_selectors(self) -> Vec<Self> {
@@ -192,8 +130,6 @@ impl Selector {
             Self::EVM => vec![
                 Self::Bytecode,
                 Self::BytecodeObject,
-                Self::BytecodeEVMLA,
-                Self::BytecodeEthIR,
                 Self::BytecodeLLVMIRUnoptimized,
                 Self::BytecodeLLVMIR,
                 Self::BytecodeLLVMAssembly,
@@ -205,8 +141,6 @@ impl Selector {
                 Self::BytecodeGeneratedSources,
                 Self::RuntimeBytecode,
                 Self::RuntimeBytecodeObject,
-                Self::RuntimeBytecodeEVMLA,
-                Self::RuntimeBytecodeEthIR,
                 Self::RuntimeBytecodeLLVMIRUnoptimized,
                 Self::RuntimeBytecodeLLVMIR,
                 Self::RuntimeBytecodeLLVMAssembly,
@@ -221,8 +155,6 @@ impl Selector {
             ],
             Self::Bytecode => vec![
                 Self::BytecodeObject,
-                Self::BytecodeEVMLA,
-                Self::BytecodeEthIR,
                 Self::BytecodeLLVMIRUnoptimized,
                 Self::BytecodeLLVMIR,
                 Self::BytecodeLLVMAssembly,
@@ -235,8 +167,6 @@ impl Selector {
             ],
             Self::RuntimeBytecode => vec![
                 Self::RuntimeBytecodeObject,
-                Self::RuntimeBytecodeEVMLA,
-                Self::RuntimeBytecodeEthIR,
                 Self::RuntimeBytecodeLLVMIRUnoptimized,
                 Self::RuntimeBytecodeLLVMIR,
                 Self::RuntimeBytecodeLLVMAssembly,
@@ -249,7 +179,7 @@ impl Selector {
                 Self::RuntimeBytecodeGeneratedSources,
             ],
             Self::Any => {
-                let selectors = vec![
+                vec![
                     Self::AST,
                     Self::ABI,
                     Self::Metadata,
@@ -258,14 +188,10 @@ impl Selector {
                     Self::StorageLayout,
                     Self::TransientStorageLayout,
                     Self::MethodIdentifiers,
-                    Self::EVMLegacyAssembly,
-                    Self::Yul,
                     Self::Benchmarks,
                     Self::EVM,
                     Self::Bytecode,
                     Self::BytecodeObject,
-                    Self::BytecodeEVMLA,
-                    Self::BytecodeEthIR,
                     Self::BytecodeLLVMIRUnoptimized,
                     Self::BytecodeLLVMIR,
                     Self::BytecodeLLVMAssembly,
@@ -277,8 +203,6 @@ impl Selector {
                     Self::BytecodeGeneratedSources,
                     Self::RuntimeBytecode,
                     Self::RuntimeBytecodeObject,
-                    Self::RuntimeBytecodeEVMLA,
-                    Self::RuntimeBytecodeEthIR,
                     Self::RuntimeBytecodeLLVMIRUnoptimized,
                     Self::RuntimeBytecodeLLVMIR,
                     Self::RuntimeBytecodeLLVMAssembly,
@@ -290,26 +214,10 @@ impl Selector {
                     Self::RuntimeBytecodeFunctionDebugData,
                     Self::RuntimeBytecodeGeneratedSources,
                     Self::GasEstimates,
-                ];
-                #[cfg(feature = "mlir")]
-                let selectors = {
-                    let mut selectors = selectors;
-                    selectors.push(Self::MLIR);
-                    selectors
-                };
-                selectors
+                    Self::MLIR,
+                ]
             }
             selector => vec![selector],
-        }
-    }
-}
-
-impl From<bool> for Selector {
-    fn from(via_ir: bool) -> Self {
-        if via_ir {
-            Self::Yul
-        } else {
-            Self::EVMLegacyAssembly
         }
     }
 }

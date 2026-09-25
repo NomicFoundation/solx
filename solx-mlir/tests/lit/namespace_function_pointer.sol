@@ -1,9 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// A namespace-qualified internal function used as a value (C.g) is an internal
-// function pointer, like a bare g: solc's print-init crashes (SIGSEGV), so this
-// is solx-only.
-
 // CHECK: sol.contract @{{.*C.*}} {
 // CHECK: sol.func @{{.*g.*}}() -> ui256 attributes {{.*}}id = {{[0-9]+}}
 // CHECK: sol.func @{{.*run.*}}

@@ -57,7 +57,7 @@ jobs:
       OUTPUT_HTML_DIR: COVERAGE
       # ^/rustc/ = std sources monomorphized into our binaries; the remapped
       # path exists on no runner, so llvm-cov show errors trying to render it.
-      COVERAGE_IGNORE_REGEX: '/(solx-llvm|target-llvm|solx-solidity|\.cargo|cargo/registry)/|^/rustc/'
+      COVERAGE_IGNORE_REGEX: '/(solx-llvm|target-llvm|\.cargo|cargo/registry)/|^/rustc/'
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -89,7 +89,6 @@ jobs:
           build-type: 'RelWithDebInfo'
           enable-assertions: 'false'
           enable-coverage: 'true'
-          enable-mlir: 'true'
 
       - name: Build solx
         id: build-solx
@@ -103,7 +102,7 @@ jobs:
         env:
           RUSTC_BOOTSTRAP: 1
           RUSTFLAGS: '-C target-feature=+crt-static -C instrument-coverage -C link-arg=-fuse-ld=lld'
-        run: ${SFW_PREFIX:-} cargo build --frozen --release -p solx-dev -p solx-tester --features solx-tester/slang-ast --target x86_64-unknown-linux-gnu
+        run: ${SFW_PREFIX:-} cargo build --frozen --release -p solx-dev -p solx-tester --target x86_64-unknown-linux-gnu
 
       - name: Run integration tests
         env:
@@ -145,7 +144,7 @@ jobs:
           # pool of 4 files instead of leaving one profraw per process (CLI
           # tests spawn thousands of short-lived solx subprocesses).
           LLVM_PROFILE_FILE: 'unit-tests-%4m.profraw'
-        run: ${SFW_PREFIX:-} cargo test-slang --frozen --release --target x86_64-unknown-linux-gnu
+        run: ${SFW_PREFIX:-} cargo test --frozen --release --target x86_64-unknown-linux-gnu
 
       - name: Merge unit test profraw
         run: |

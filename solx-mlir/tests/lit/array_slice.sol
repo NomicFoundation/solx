@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func {{.*}}bounded{{.*}}-> !sol.array<? x ui256, CallData>
 // CHECK:   sol.slice %{{.*}}[%{{.*}} : %{{.*}}] : !sol.array<? x ui256, CallData>, ui256, ui256 -> !sol.array<? x ui256, CallData>

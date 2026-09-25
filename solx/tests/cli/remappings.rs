@@ -95,7 +95,6 @@ fn standard_json() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "slang")]
 #[test]
 fn resolves_direct_import() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -115,7 +114,6 @@ fn resolves_direct_import() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "slang")]
 #[test]
 fn unresolved_import_without_remapping() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -134,7 +132,6 @@ fn unresolved_import_without_remapping() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "slang")]
 #[test]
 fn standard_json_context_remapping_resolves() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -151,7 +148,6 @@ fn standard_json_context_remapping_resolves() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "slang")]
 #[test]
 fn standard_json_context_remapping_does_not_apply_outside_context() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -169,7 +165,6 @@ fn standard_json_context_remapping_does_not_apply_outside_context() -> anyhow::R
     Ok(())
 }
 
-#[cfg(feature = "slang")]
 #[test]
 fn standard_json_later_remapping_wins_ties() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -186,7 +181,6 @@ fn standard_json_later_remapping_wins_ties() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "slang")]
 #[test]
 fn standard_json_equals_sign_in_target() -> anyhow::Result<()> {
     crate::common::setup()?;

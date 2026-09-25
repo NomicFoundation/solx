@@ -1,6 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// No print-init RUN line: the C++ frontend asserts on a Yul path naming a library.
 // CHECK: sol.func @{{.*target.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     %[[ADDR:.*]] = sol.lib_addr "{{.*}}L" : !sol.address

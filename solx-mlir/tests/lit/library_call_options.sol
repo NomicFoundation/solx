@@ -1,9 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// solc rejects call options on library delegatecalls ("Function call options can only be set on
-// external function calls or contract creations"); slang admits them and solx honors the named
-// gas, so this is solx-only.
-
 // CHECK: sol.func @{{.*qualified_gas.*}}
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
 // CHECK:   %[[GAS:.*]] = sol.load

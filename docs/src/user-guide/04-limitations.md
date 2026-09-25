@@ -2,26 +2,9 @@
 
 This chapter summarizes where **solx** differs from upstream **solc**, and which limitations currently apply.
 
-## Compilation Modes
+## Compilation Pipeline
 
-**solx** supports two codegen pipelines:
-
-- **Yul pipeline**: enabled with `--via-ir` (matching solc's `--via-ir` flag).
-- **Legacy EVM assembly pipeline**: the default code generation path.
-
-The `--evmla` and `--ethir` debug flags are only available in the legacy (non-`via-ir`) pipeline.
-
-## solc Fork Modifications
-
-The **solx-solidity** fork includes the following changes relative to upstream **solc**:
-
-- **`extraMetadata` output**: emits user-defined function metadata (name, entry tag, input/output sizes, AST IDs) used during LLVM lowering.
-- **`DUPX` / `SWAPX` instructions**: extends stack access beyond depth 16 to avoid classic "stack too deep" failures.
-- **`spillAreaSize` setting**: configures a memory spill region for values that cannot remain on stack.
-- **Function pointer dispatch tables**: uses static dispatch through `FuncPtrTracker` instead of dynamic jump-based dispatch.
-- **Simplified `try/catch` in legacy mode**: reduces control-flow complexity for translator compatibility.
-- **Bypassed EVM bytecode generation**: solx does not use solc's EVM bytecode output; final bytecode is produced by the LLVM backend.
-- **Disabled optimizer**: the solc optimizer is turned off to preserve function boundaries and metadata validity. All optimization is handled by the LLVM backend.
+For now **solx** only supports the MLIR pipeline, which mirrors the behavior of the **solc** legacy pipeline: [Slang](https://github.com/NomicFoundation/slang) parses and binds the Solidity source, **solx** lowers it to MLIR, and the LLVM backend produces the bytecode. `viaIR` is currently not supported.
 
 ## Behavioral Differences
 
@@ -66,9 +49,8 @@ If stack spilling is required in a contract that contains memory-unsafe assembly
 
 - `CALLCODE` is rejected at compile time. Use `DELEGATECALL` instead.
 - `PC` (program counter) is not supported.
-- `solc` optimizer settings are ignored since the solc optimizer is disabled.
+- `solc` optimizer settings are ignored; all optimization is handled by the LLVM backend.
 
 ## Version Support
 
-- The **solx-solidity** fork tracks upstream **solc** releases.
-- The minimum supported Solidity version matches the forked solc version.
+The supported Solidity version is the latest language version supported by **Slang**.

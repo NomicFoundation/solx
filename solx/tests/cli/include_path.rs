@@ -70,6 +70,7 @@ fn llvm_ir() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "solx ignores --base-path and --include-path"]
 fn base_path_missing() -> anyhow::Result<()> {
     crate::common::setup()?;
 

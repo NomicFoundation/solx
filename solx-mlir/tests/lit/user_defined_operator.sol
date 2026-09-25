@@ -1,6 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
-// solc's print-init emits the contract alone, so the CHECKs stop at the call sites.
 
 // CHECK: sol.func @{{.*plus.*}}-> ui256
 // CHECK:   sol.call @{{.*add.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256

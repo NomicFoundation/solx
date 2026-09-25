@@ -86,8 +86,7 @@ fn invalid_address() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        "--yul",
-        crate::common::TEST_YUL_CONTRACT,
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--libraries",
         "tests/data/contracts/solidity/MiniMath.sol:MiniMath=INVALID",
     ];

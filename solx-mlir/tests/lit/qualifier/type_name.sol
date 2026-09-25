@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %qualifier_type_name/main.sol %qualifier_type_name/module.sol | FileCheck %s
-// RUN: solc --mlir-action=print-init %qualifier_type_name/main.sol %qualifier_type_name/module.sol 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func @{{.*enumMember.*}}
 // CHECK:   sol.enum_cast

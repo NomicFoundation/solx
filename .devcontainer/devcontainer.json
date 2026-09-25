@@ -62,15 +62,11 @@
                 // lag in integrated terminals after the first bootstrap.
                 "files.watcherExclude": {
                     "**/target/**": true,
-                    "**/target-llvm/**": true,
-                    "**/solx-solidity/build/**": true,
-                    "**/solx-solidity/boost/**": true
+                    "**/target-llvm/**": true
                 },
                 "search.exclude": {
                     "**/target": true,
-                    "**/target-llvm": true,
-                    "**/solx-solidity/build": true,
-                    "**/solx-solidity/boost": true
+                    "**/target-llvm": true
                 }
             }
         }

@@ -8,7 +8,6 @@
     }
   },
   "settings": {
-    "viaIR": true,
     "optimizer": {
       "runs": 200,
       "details": {
@@ -34,9 +33,7 @@
           "storageLayout",
           "transientStorageLayout",
           "evm.methodIdentifiers",
-          "evm.legacyAssembly",
           "evm.gasEstimates",
-          "ir",
           "evm"
         ]
       }

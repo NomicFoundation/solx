@@ -77,9 +77,7 @@ impl Selection {
                         return false;
                     };
                     match selector {
-                        Selector::MethodIdentifiers
-                        | Selector::EVMLegacyAssembly
-                        | Selector::GasEstimates
+                        Selector::MethodIdentifiers | Selector::GasEstimates
                             if contract.contains(&Selector::EVM) =>
                         {
                             true
@@ -124,44 +122,6 @@ impl Selection {
     }
 
     ///
-    /// Adds the specified selector to the output selection of all contracts.
-    ///
-    pub fn set_selector(&mut self, selector: Selector) {
-        for file in self.inner.values_mut() {
-            match selector {
-                Selector::AST => {
-                    file.entry(Self::ANY_CONTRACT.to_owned())
-                        .or_default()
-                        .insert(selector);
-                }
-                selector => {
-                    for (name, contract) in file.iter_mut() {
-                        if name == Self::ANY_CONTRACT {
-                            continue;
-                        }
-                        contract.insert(selector);
-                    }
-                }
-            }
-        }
-    }
-
-    ///
-    /// Requests the specified contract selector for every file via the `*` wildcard, so that `solc`
-    /// also emits it for dependencies located in files absent from the output selection. Needed
-    /// because dependency resolution hashes the assembly of every referenced contract, including
-    /// contracts instantiated from files a per-file selection does not list.
-    ///
-    pub fn set_selector_for_all_files(&mut self, selector: Selector) {
-        self.inner
-            .entry(Self::WILDCARD.to_owned())
-            .or_default()
-            .entry(Self::WILDCARD.to_owned())
-            .or_default()
-            .insert(selector);
-    }
-
-    ///
     /// Normalizes the selection by converting multi-item selectors into single-item selectors.
     ///
     pub fn normalize(&mut self) {
@@ -171,17 +131,6 @@ impl Selection {
                     .iter()
                     .flat_map(|selector| selector.into_single_selectors())
                     .collect::<BTreeSet<_>>();
-            }
-        }
-    }
-
-    ///
-    /// Retains only the selectors that request data from `solc`.
-    ///
-    pub fn retain_solc(&mut self) {
-        for file in self.inner.values_mut() {
-            for contract in file.values_mut() {
-                contract.retain(Selector::is_received_from_solc);
             }
         }
     }

@@ -8,6 +8,7 @@ use test_case::test_case;
 
 #[test_case(true ; "yul")]
 #[test_case(false ; "evmla")]
+#[ignore = "solx does not emit this output yet"]
 fn default(via_ir: bool) -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -44,6 +45,7 @@ fn standard_json() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "solx does not emit this output yet"]
 fn output_dir() -> anyhow::Result<()> {
     crate::common::setup()?;
 

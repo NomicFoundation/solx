@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Container plumbing that must run once per container creation. The heavy
-# toolchain build (LLVM, solc) is deliberately NOT run here — it takes about
+# toolchain build (LLVM) is deliberately NOT run here — it takes about
 # an hour cold, so it stays an explicit step: bootstrap.sh.
 set -euo pipefail
 
@@ -16,7 +16,7 @@ git config --global --add safe.directory '*'
 
 cat <<'EOF'
 
-solx devcontainer is ready. To build the toolchain (custom LLVM + solc fork):
+solx devcontainer is ready. To build the toolchain (custom LLVM):
 
     .devcontainer/bootstrap.sh
 

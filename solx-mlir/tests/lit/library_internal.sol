@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// Copies land at their first reference, after the own functions; solc's print-init emits them
-// first, so this is solx-only.
-
 // CHECK: sol.contract @{{.*Lib.*}} {
 // CHECK: sol.func @{{.*chain.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #NonPayable}
 // CHECK:   sol.call @{{.*link.*}}(%{{.*}}) : (ui256) -> ui256

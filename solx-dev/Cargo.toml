@@ -18,7 +18,6 @@ anyhow.workspace = true
 clap.workspace = true
 colored.workspace = true
 serde.workspace = true
-sha2.workspace = true
 serde_json.workspace = true
 regex.workspace = true
 glob.workspace = true

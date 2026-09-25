@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.contract @{{.*Lib.*}} {
 // CHECK: sol.func @{{.*external_member.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, orig_fn_type = (ui256) -> ui256, selector = -1958955763 : i32, state_mutability = #Pure}

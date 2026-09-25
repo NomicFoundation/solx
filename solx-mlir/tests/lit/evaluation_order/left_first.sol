@@ -1,7 +1,5 @@
 // RUN: solx --emit-mlir=sol %evaluation_order/left_first.sol | FileCheck %s
 
-// solc print-init aborts on the conditional lowering on some platforms (#591), so this is solx-only.
-
 // CHECK: sol.func @{{.*logicalAnd\(.*}}
 // CHECK:   sol.call @{{.*left.*}}
 // CHECK:   sol.if

@@ -20,7 +20,6 @@ fn default() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "slang")]
 #[test]
 fn records_every_pipeline_stage() -> anyhow::Result<()> {
     crate::common::setup()?;

@@ -179,7 +179,6 @@ jobs:
         with:
           build-type: Release
           enable-assertions: 'false'
-          enable-mlir: 'true'
 
       - name: Free disk space (remove LLVM build artifacts)
         shell: bash

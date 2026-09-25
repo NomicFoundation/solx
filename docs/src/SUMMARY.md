@@ -10,10 +10,9 @@
 # Compiler Internals
 
 - [Architecture](./internals/01-architecture.md)
-- [EVM Assembly Translator](./internals/02-evm-assembly-translator.md)
-- [EVM Instructions Reference](./internals/03-evm-instructions.md)
-- [Yul Builtins Reference](./internals/04-yul-builtins.md)
-- [Binary Layout and Linking](./internals/05-binary-layout.md)
+- [EVM Instructions Reference](./internals/02-evm-instructions.md)
+- [Yul Builtins Reference](./internals/03-yul-builtins.md)
+- [Binary Layout and Linking](./internals/04-binary-layout.md)
 
 # Developer Guide
 

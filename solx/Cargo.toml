@@ -10,15 +10,6 @@ license = "GPL-3.0-only"
 name = "solx"
 path = "src/solx.rs"
 
-[lib]
-doctest = false
-
-[features]
-default = ["solc"]
-solc = ["solx-core/solc"]
-mlir = ["solx-core/mlir"]
-slang = ["mlir", "dep:solx-slang"]
-
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
@@ -28,7 +19,7 @@ semver.workspace = true
 libc = "0.2"
 
 solx-core = { path = "../solx-core" }
-solx-slang = { path = "../solx-slang", optional = true }
+solx-slang = { path = "../solx-slang" }
 solx-standard-json = { path = "../solx-standard-json" }
 solx-utils = { path = "../solx-utils" }
 

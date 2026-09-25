@@ -64,9 +64,10 @@ impl Input {
     }
 
     ///
-    /// A shortcut constructor from paths to Solidity source files.
+    /// A shortcut constructor from paths to source files.
     ///
-    pub fn try_from_solidity_paths(
+    pub fn try_from_paths(
+        language: Language,
         paths: &[PathBuf],
         libraries: &[String],
         remappings: Vec<solx_utils::Remapping>,
@@ -96,7 +97,8 @@ impl Input {
             })
             .collect::<anyhow::Result<BTreeMap<String, Source>>>()?;
 
-        Self::try_from_solidity_sources(
+        Self::try_from_sources(
+            language,
             sources,
             libraries,
             remappings,
@@ -111,9 +113,10 @@ impl Input {
     }
 
     ///
-    /// A shortcut constructor from Solidity source code.
+    /// A shortcut constructor from source code.
     ///
-    pub fn try_from_solidity_sources(
+    pub fn try_from_sources(
+        language: Language,
         sources: BTreeMap<String, Source>,
         libraries: solx_utils::Libraries,
         remappings: Vec<solx_utils::Remapping>,
@@ -126,7 +129,7 @@ impl Input {
         llvm_options: Vec<String>,
     ) -> anyhow::Result<Self> {
         Ok(Self {
-            language: Language::Solidity,
+            language,
             sources,
             settings: Settings::new(
                 optimizer,
@@ -140,65 +143,6 @@ impl Input {
                 llvm_options,
             ),
         })
-    }
-
-    ///
-    /// A shortcut constructor from paths to Yul source files.
-    ///
-    pub fn from_yul_paths(
-        paths: &[PathBuf],
-        libraries: solx_utils::Libraries,
-        optimizer: InputSettingsOptimizer,
-        output_selection: &InputSettingsSelection,
-        metadata: InputSettingsMetadata,
-        llvm_options: Vec<String>,
-    ) -> Self {
-        let sources = paths
-            .iter()
-            .map(|path| {
-                (
-                    path.to_string_lossy().to_string(),
-                    Source::from(path.as_path()),
-                )
-            })
-            .collect();
-
-        Self::from_yul_sources(
-            sources,
-            libraries,
-            optimizer,
-            output_selection,
-            metadata,
-            llvm_options,
-        )
-    }
-
-    ///
-    /// A shortcut constructor from Yul source code.
-    ///
-    pub fn from_yul_sources(
-        sources: BTreeMap<String, Source>,
-        libraries: solx_utils::Libraries,
-        optimizer: InputSettingsOptimizer,
-        output_selection: &InputSettingsSelection,
-        metadata: InputSettingsMetadata,
-        llvm_options: Vec<String>,
-    ) -> Self {
-        Self {
-            language: Language::Yul,
-            sources,
-            settings: Settings::new(
-                optimizer,
-                libraries,
-                Vec::new(),
-                None,
-                false,
-                output_selection.to_owned(),
-                metadata,
-                None,
-                llvm_options,
-            ),
-        }
     }
 
     ///

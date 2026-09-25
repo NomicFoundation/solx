@@ -1,7 +1,5 @@
 // RUN: solx --emit-mlir=sol %evaluation_order/binary.sol | FileCheck %s
 
-// solc print-init emits binary operands left-first rather than legacy's right-first, so this is solx-only.
-
 // CHECK: sol.func @{{.*arithmetic.*}}
 // CHECK:   %[[ARITHMETIC_RIGHT:.*]] = sol.call @{{.*right.*}}
 // CHECK:   %[[ARITHMETIC_LEFT:.*]] = sol.call @{{.*left.*}}

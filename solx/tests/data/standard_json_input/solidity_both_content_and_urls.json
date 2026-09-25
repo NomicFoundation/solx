@@ -7,7 +7,6 @@
     }
   },
   "settings": {
-    "viaIR": true,
     "outputSelection": {
       "*": {
         "*": [

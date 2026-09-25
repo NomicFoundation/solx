@@ -115,7 +115,7 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
         "": [
           // AST of all source files.
           "ast",
-          // Benchmarks of the solx LLVM-based compilation pipeline and its underlying call to solc.
+          // Benchmarks of the compilation pipeline.
           "benchmarks"
         ],
         // Available contract-level options, must be listed under "<path>"."<name>":
@@ -132,15 +132,10 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
           "storageLayout",
           // Slots, offsets and types of the contract's state variables in transient storage.
           "transientStorageLayout",
-          // Yul produced by solc.
-          // An alias "irOptimized" is supported for compatibility, but it will request unoptimized Yul IR anyway.
-          "ir",
           // Everything of the below.
           "evm",
           // Solidity function hashes.
           "evm.methodIdentifiers",
-          // EVM assembly produced by solc.
-          "evm.legacyAssembly",
           // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
           "evm.gasEstimates",
           // Everything that starts with "evm.bytecode".
@@ -150,10 +145,6 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
           "evm.bytecode.object",
           // Deploy code assembly produced by solx/LLVM.
           "evm.bytecode.llvmAssembly",
-          // solx-only: EVM legacy assembly IR (internal representation). Only available for non-viaIR mode.
-          "evm.bytecode.evmla",
-          // solx-only: Ethereal IR (internal representation). Only available for non-viaIR mode.
-          "evm.bytecode.ethir",
           // solx-only: Unoptimized LLVM IR (internal representation).
           "evm.bytecode.llvmIrUnoptimized",
           // solx-only: Optimized LLVM IR (internal representation).
@@ -177,10 +168,6 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
           "evm.deployedBytecode.object",
           // Runtime code assembly produced by solx/LLVM.
           "evm.deployedBytecode.llvmAssembly",
-          // solx-only: EVM legacy assembly IR (internal representation). Only available for non-viaIR mode.
-          "evm.deployedBytecode.evmla",
-          // solx-only: Ethereal IR (internal representation). Only available for non-viaIR mode.
-          "evm.deployedBytecode.ethir",
           // solx-only: Unoptimized LLVM IR (internal representation).
           "evm.deployedBytecode.llvmIrUnoptimized",
           // solx-only: Optimized LLVM IR (internal representation).
@@ -215,7 +202,7 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
       // Default: true.
       "appendCBOR": true
     },
-    // Optional: Enables the IR codegen in solc.
+    // Optional: Enables the IR codegen. Currently not supported.
     "viaIR": true,
 
     // Optional, solx-only: Extra LLVM settings.
@@ -230,7 +217,7 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
 
 ## Output JSON
 
-The output JSON contains all artifacts produced by **solx** and **solc** together. The example below serves as the specification of the output JSON format.
+The output JSON contains all artifacts produced by **solx**. The example below serves as the specification of the output JSON format.
 
 ```javascript
 {
@@ -271,15 +258,9 @@ The output JSON contains all artifacts produced by **solx** and **solc** togethe
         // Optional: User documentation (natspec object).
         // Corresponds to "userdoc" in the outputSelection settings.
         "userdoc": {/* ... */},
-        // Optional: Yul produced by solc (string).
-        // Corresponds to "ir" in the outputSelection settings.
-        "ir": "/* ... */",
         // Optional: EVM target outputs.
         // Corresponds to "evm" in the outputSelection settings.
         "evm": {
-          // Optional: EVM assembly produced by solc (object).
-          // Corresponds to "evm.legacyAssembly" in the outputSelection settings.
-          "legacyAssembly": {/* ... */},
           // Optional: List of function hashes (object).
           // Corresponds to "evm.methodIdentifiers" in the outputSelection settings.
           "methodIdentifiers": {
@@ -298,12 +279,6 @@ The output JSON contains all artifacts produced by **solx** and **solc** togethe
             // Optional: LLVM text assembly (string).
             // Corresponds to "evm.bytecode.llvmAssembly" in the outputSelection settings.
             "llvmAssembly": "/* ... */",
-            // Optional, solx-only: EVM legacy assembly IR (string). Only available for non-viaIR mode.
-            // Corresponds to "evm.bytecode.evmla" in the outputSelection settings.
-            "evmla": "/* ... */",
-            // Optional, solx-only: Ethereal IR (string). Only available for non-viaIR mode.
-            // Corresponds to "evm.bytecode.ethir" in the outputSelection settings.
-            "ethir": "/* ... */",
             // Optional, solx-only: Unoptimized LLVM IR (string).
             // Corresponds to "evm.bytecode.llvmIrUnoptimized" in the outputSelection settings.
             "llvmIrUnoptimized": "/* ... */",
@@ -341,12 +316,6 @@ The output JSON contains all artifacts produced by **solx** and **solc** togethe
             // Optional: LLVM text assembly (string).
             // Corresponds to "evm.deployedBytecode.llvmAssembly" in the outputSelection settings.
             "llvmAssembly": "/* ... */",
-            // Optional, solx-only: EVM legacy assembly IR (string). Only available for non-viaIR mode.
-            // Corresponds to "evm.deployedBytecode.evmla" in the outputSelection settings.
-            "evmla": "/* ... */",
-            // Optional, solx-only: Ethereal IR (string). Only available for non-viaIR mode.
-            // Corresponds to "evm.deployedBytecode.ethir" in the outputSelection settings.
-            "ethir": "/* ... */",
             // Optional, solx-only: Unoptimized LLVM IR (string).
             // Corresponds to "evm.deployedBytecode.llvmIrUnoptimized" in the outputSelection settings.
             "llvmIrUnoptimized": "/* ... */",
@@ -384,7 +353,7 @@ The output JSON contains all artifacts produced by **solx** and **solc** togethe
     }
   },
 
-  // Optional: Benchmarks of the solx LLVM-based compilation pipeline and its underlying call to solc (array).
+  // Optional: Benchmarks of the compilation pipeline (array).
   // Corresponds to "benchmarks" in the outputSelection settings.
   "benchmarks": [/* ... */],
 
@@ -410,9 +379,7 @@ The output JSON contains all artifacts produced by **solx** and **solc** togethe
       // Possible values: "error", "warning", "info".
       "severity": "error",
       // Optional: Unique code for the cause of the error.
-      // Only solc produces error codes for now.
-      // solx currently emits errors without codes, but they will be introduced soon.
-      "errorCode": "3141",
+      "errorCode": "syntax/unexpected-terminal",
       // Required: Message.
       "message": "Invalid keyword",
       // Required: Message formatted using the source location.

@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func @{{.*items.*}}(%arg0: ui256) -> ui256 attributes {{.*}}selector = -1078840878 : i32
 // CHECK:   %[[A:.*]] = sol.addr_of @{{.*items.*}} : !sol.array<? x ui256, Storage>
