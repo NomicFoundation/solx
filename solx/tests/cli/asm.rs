@@ -20,7 +20,6 @@ fn default() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn invalid_input() -> anyhow::Result<()> {
     crate::common::setup()?;

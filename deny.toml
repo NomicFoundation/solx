@@ -21,11 +21,6 @@ allow = [
 confidence-threshold = 0.8
 unused-allowed-license = "allow"
 
-[[licenses.clarify]]
-name = "mlir-sys"
-expression = "MIT"
-license-files = [{ path = "LICENSE", hash = 0x0637b9b4 }]
-
 [licenses.private]
 ignore = false
 
@@ -40,7 +35,6 @@ external-default-features = "allow"
 skip = [
     { crate = "arrayvec" },
     { crate = "block-buffer" },
-    { crate = "convert_case" },
     { crate = "derive_more" },
     { crate = "digest" },
     { crate = "getrandom" },
@@ -79,6 +73,4 @@ allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
     "https://github.com/NomicFoundation/inkwell",
     "https://github.com/NomicFoundation/llvm-sys.rs",
-    "https://github.com/NomicFoundation/melior",
-    "https://github.com/NomicFoundation/slang",
 ]

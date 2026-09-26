@@ -5,8 +5,6 @@
 pub mod cache_key;
 pub mod dwarf;
 pub mod mode;
-#[cfg(feature = "slang-ast")]
-pub mod slang_ast;
 pub mod subprocess;
 
 use std::collections::BTreeMap;
@@ -493,7 +491,7 @@ impl SolidityCompiler {
     }
 
     ///
-    /// Compiles for EVM using solc/solx-mlir toolchain.
+    /// Compiles for EVM using the solc toolchain.
     ///
     fn compile_solc_for_evm(
         &self,
@@ -588,10 +586,6 @@ impl Compiler for SolidityCompiler {
     fn all_modes(&self) -> Vec<Mode> {
         match (self.language, self.toolchain) {
             (solx_standard_json::InputLanguage::Solidity, Toolchain::Solx) => {
-                // Slang/MLIR is a single pipeline that ignores via_ir.
-                #[cfg(feature = "slang-ast")]
-                let codegen_versions = vec![(false, self.version.to_owned())];
-                #[cfg(not(feature = "slang-ast"))]
                 let codegen_versions = vec![
                     (false, self.version.to_owned()),
                     (true, self.version.to_owned()),

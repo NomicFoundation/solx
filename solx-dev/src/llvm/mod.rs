@@ -12,8 +12,6 @@ pub use crate::build_type::BuildType;
 
 use crate::ccache_variant::CcacheVariant;
 
-use anyhow::Context;
-
 ///
 /// Executes the building of the LLVM framework for the platform determined by the cfg macro.
 /// Since cfg is evaluated at compile time, overriding the platform with a command-line
@@ -22,7 +20,6 @@ use anyhow::Context;
 ///
 pub fn build(
     build_type: BuildType,
-    enable_mlir: bool,
     enable_utils: bool,
     install_distribution: bool,
     enable_tests: bool,
@@ -58,7 +55,6 @@ pub fn build(
         if cfg!(target_os = "linux") {
             platforms::x86_64_linux_gnu::build(
                 build_type,
-                enable_mlir,
                 enable_utils,
                 install_distribution,
                 enable_tests,
@@ -73,7 +69,6 @@ pub fn build(
         } else if cfg!(target_os = "macos") {
             platforms::x86_64_macos::build(
                 build_type,
-                enable_mlir,
                 enable_utils,
                 install_distribution,
                 enable_tests,
@@ -86,7 +81,6 @@ pub fn build(
         } else if cfg!(target_os = "windows") {
             platforms::x86_64_windows_gnu::build(
                 build_type,
-                enable_mlir,
                 enable_utils,
                 install_distribution,
                 enable_tests,
@@ -103,7 +97,6 @@ pub fn build(
         if cfg!(target_os = "linux") {
             platforms::aarch64_linux_gnu::build(
                 build_type,
-                enable_mlir,
                 enable_utils,
                 install_distribution,
                 enable_tests,
@@ -118,7 +111,6 @@ pub fn build(
         } else if cfg!(target_os = "macos") {
             platforms::aarch64_macos::build(
                 build_type,
-                enable_mlir,
                 enable_utils,
                 install_distribution,
                 enable_tests,
@@ -135,30 +127,5 @@ pub fn build(
         anyhow::bail!("Unsupported target architecture");
     }
 
-    if enable_mlir {
-        create_mlir_link_stub()?;
-    }
-
-    Ok(())
-}
-
-/// Create an empty `libMLIR.a` archive in the LLVM install prefix.
-///
-/// mlir-sys unconditionally emits `cargo:rustc-link-lib=MLIR` expecting a
-/// monolithic library, but the LLVM/MLIR build only produces individual
-/// component libraries (all already linked by mlir-sys). This empty archive
-/// satisfies the linker without duplicating symbols.
-///
-/// Fragility: if a future mlir-sys version expects symbols from the
-/// monolithic libMLIR.a that are not in the component libraries, the link
-/// will fail. Also, this stub is only created by `solx-dev llvm build
-/// --enable-mlir`; manual LLVM builds must create it themselves.
-fn create_mlir_link_stub() -> anyhow::Result<()> {
-    let lib_dir = Path::llvm_target_final()?.join("lib");
-    let stub_path = lib_dir.join("libMLIR.a");
-    if !stub_path.exists() {
-        std::fs::write(&stub_path, b"!<arch>\n")
-            .with_context(|| format!("Failed to write MLIR stub archive to {stub_path:?}"))?;
-    }
     Ok(())
 }

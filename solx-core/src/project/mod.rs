@@ -25,8 +25,6 @@ use self::contract::Contract;
 use self::contract::ir::IR as ContractIR;
 use self::contract::ir::evmla::EVMLegacyAssembly as ContractEVMLegacyAssembly;
 use self::contract::ir::llvm_ir::LLVMIR as ContractLLVMIR;
-#[cfg(feature = "mlir")]
-use self::contract::ir::mlir::MLIR as ContractMLIR;
 use self::contract::ir::yul::Yul as ContractYul;
 use self::contract::metadata::Metadata as ContractMetadata;
 
@@ -96,9 +94,6 @@ impl Project {
         output_selection: &solx_standard_json::InputSelection,
         output_config: Option<&solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<Self> {
-        #[cfg(feature = "mlir")]
-        let _ = (via_ir, output_config);
-
         solc_output
             .contracts
             .values_mut()
@@ -108,7 +103,6 @@ impl Project {
             .into_par_iter()
             .try_for_each(|legacy_assembly| legacy_assembly.materialize())?;
 
-        #[cfg(not(feature = "mlir"))]
         if !via_ir {
             let legacy_assemblies: BTreeMap<
                 String,
@@ -178,21 +172,6 @@ impl Project {
                     solx_standard_json::InputSelector::EVMLegacyAssembly,
                 );
 
-                #[cfg(feature = "mlir")]
-                let result = contract.mlir.as_ref().map(|output| {
-                    let runtime_code = ContractMLIR {
-                        source: output.runtime_source.clone(),
-                        runtime_code: None,
-                    };
-                    let deploy_code = ContractMLIR {
-                        source: output.deploy_source.clone(),
-                        runtime_code: Some(Box::new(runtime_code)),
-                    };
-                    Ok::<_, anyhow::Error>(Some(ContractIR::from(deploy_code)))
-                });
-                #[cfg(feature = "mlir")]
-                let mlir_stages = contract.mlir.take();
-                #[cfg(not(feature = "mlir"))]
                 let result = if via_ir {
                     contract.ir.as_deref().map(|ir| {
                         ContractYul::try_from_source(name.full_path.as_str(), ir, output_config)
@@ -238,8 +217,6 @@ impl Project {
                     contract.transient_storage_layout,
                     legacy_assembly.filter(|_| output_legacy_assembly),
                     contract.ir,
-                    #[cfg(feature = "mlir")]
-                    mlir_stages,
                 );
                 (name, Ok(contract))
             })
@@ -366,8 +343,6 @@ impl Project {
                     None,
                     None,
                     Some(source_code),
-                    #[cfg(feature = "mlir")]
-                    None,
                 );
                 (name, Ok(contract))
             })
@@ -483,8 +458,6 @@ impl Project {
                     None,
                     None,
                     None,
-                    #[cfg(feature = "mlir")]
-                    None,
                 );
 
                 (contract_name, Ok(contract))
@@ -565,8 +538,6 @@ impl Project {
                 let transient_storage_layout = contract.transient_storage_layout.take();
                 let legacy_assembly = contract.legacy_assembly.take();
                 let yul = contract.yul.take();
-                #[cfg(feature = "mlir")]
-                let mlir = contract.mlir.take();
 
                 let mut deploy_debug_info: Option<solx_utils::DebugInfo> = None;
                 let mut runtime_debug_info: Option<solx_utils::DebugInfo> = None;
@@ -660,12 +631,6 @@ impl Project {
                         );
                         (deploy_code.into(), runtime_code.into())
                     }
-                    #[cfg(feature = "mlir")]
-                    Some(ContractIR::MLIR(mut deploy_code)) => {
-                        let runtime_code: ContractMLIR =
-                            *deploy_code.runtime_code.take().expect("Always exists");
-                        (deploy_code.into(), runtime_code.into())
-                    }
                     None => {
                         let build = EVMContractBuild::new(
                             contract_name,
@@ -680,8 +645,6 @@ impl Project {
                             transient_storage_layout,
                             legacy_assembly,
                             yul,
-                            #[cfg(feature = "mlir")]
-                            mlir,
                         );
                         return (path, build);
                     }
@@ -744,8 +707,6 @@ impl Project {
                     transient_storage_layout,
                     legacy_assembly,
                     yul,
-                    #[cfg(feature = "mlir")]
-                    mlir,
                 );
                 (path, build)
             })

@@ -9,8 +9,6 @@
 #![allow(clippy::should_implement_trait)]
 #![allow(clippy::result_large_err)]
 
-#[cfg(feature = "solc")]
 pub(crate) mod solc;
 
-#[cfg(feature = "solc")]
 pub use self::solc::Solc;

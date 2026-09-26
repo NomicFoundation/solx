@@ -14,7 +14,6 @@ use crate::llvm::sanitizer::Sanitizer;
 ///
 pub fn build(
     build_type: BuildType,
-    enable_mlir: bool,
     enable_utils: bool,
     install_distribution: bool,
     enable_tests: bool,
@@ -36,7 +35,7 @@ pub fn build(
     let llvm_target_final_str = llvm_target_final.to_string_lossy();
 
     let distribution_opts = if install_distribution {
-        crate::llvm::platforms::shared::build_opts_distribution(enable_mlir, enable_utils)
+        crate::llvm::platforms::shared::build_opts_distribution(enable_utils)
     } else {
         Vec::new()
     };
@@ -54,9 +53,7 @@ pub fn build(
                 format!("-DCMAKE_BUILD_TYPE='{build_type}'").as_str(),
                 "-DCMAKE_OSX_DEPLOYMENT_TARGET='11.0'",
             ])
-            .args(crate::llvm::platforms::shared::shared_build_opts_projects(
-                enable_mlir,
-            ))
+            .args(crate::llvm::platforms::shared::shared_build_opts_projects())
             .args(crate::llvm::platforms::shared::shared_build_opts_targets())
             .args(crate::llvm::platforms::shared::shared_build_opts_utils(
                 enable_utils,

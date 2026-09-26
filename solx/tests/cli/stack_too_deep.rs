@@ -4,7 +4,6 @@
 
 use predicates::prelude::*;
 
-#[cfg(feature = "solc")]
 #[test]
 fn stack_too_deep_solc() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -23,7 +22,6 @@ fn stack_too_deep_solc() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn stack_too_deep_llvm() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -43,7 +41,6 @@ fn stack_too_deep_llvm() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn stack_too_deep_llvm_suppressed() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -67,7 +64,6 @@ fn stack_too_deep_llvm_suppressed() -> anyhow::Result<()> {
 // Recursive functions cannot use the memory spill, so their stack-too-deep is
 // unrecoverable: the worker relays the LLVM fatal error, and the failure must name
 // the contract instead of dropping it from the output.
-#[cfg(feature = "solc")]
 #[test]
 fn stack_too_deep_recursive() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -87,7 +83,6 @@ fn stack_too_deep_recursive() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn stack_too_deep_recursive_standard_json() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -112,7 +107,6 @@ fn stack_too_deep_recursive_standard_json() -> anyhow::Result<()> {
 // The reported spill area is underestimated under the pinned LLVM backend, so the
 // fixture compiles only through stack-too-deep retries in both the initial settings
 // and the size fallback.
-#[cfg(feature = "solc")]
 #[test]
 fn stack_too_deep_size_fallback() -> anyhow::Result<()> {
     crate::common::setup()?;

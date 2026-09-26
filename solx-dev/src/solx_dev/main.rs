@@ -54,7 +54,6 @@ fn main_inner() -> anyhow::Result<()> {
 
             solx_dev::llvm_build(
                 arguments.build_type,
-                arguments.enable_mlir,
                 arguments.enable_utils,
                 arguments.install_distribution,
                 arguments.enable_tests,
@@ -80,7 +79,6 @@ fn main_inner() -> anyhow::Result<()> {
                 arguments.extra_args,
                 arguments.clean,
                 arguments.boost_version,
-                arguments.enable_mlir,
                 arguments.use_gcc,
                 arguments.build_boost,
                 arguments.ccache_variant,
