@@ -333,6 +333,13 @@ dialect_ops! {
         DoWhileOperation; body, cond
     }
 
+    Block::modifier_invocation(self, callee: function) {
+        ModifierInvocationOperation.callee(symbol_attr(&callee.mlir_name)); args_region
+    }
+    Block::placeholder(self) {
+        PlaceholderOperation
+    }
+
     Block::inline_asm(self, memory_safe: flag) {
         InlineAsmOperation.memory_safe(memory_safe); body
     }

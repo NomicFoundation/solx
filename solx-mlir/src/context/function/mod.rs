@@ -22,6 +22,7 @@ use crate::StateMutability;
 use crate::Type;
 use crate::Value;
 use crate::ods::sol::FuncOperation;
+use crate::ods::sol::ModifierOperation;
 
 /// A function a call site can name: its mangled symbol and MLIR-interned parameter and return
 /// types, so the site emits its call without re-resolving the signature. Functions this unit
@@ -51,9 +52,9 @@ impl<'context> Function<'context> {
         Self::new(Self::CONSTRUCTOR_NAME.to_owned(), FunctionType::default())
     }
 
-    /// Emits this function's `sol.func` definition and returns its entry block, whose arguments
-    /// carry the parameter types. An original function type is attached for selector-dispatched
-    /// and constructor functions.
+    /// Emits this definition, a `sol.modifier` for a modifier and a `sol.func` otherwise, and
+    /// returns its entry block, whose arguments carry the parameter types. An original function
+    /// type is attached for selector-dispatched and constructor functions.
     pub fn define(
         &self,
         selector: Option<u32>,
@@ -81,20 +82,7 @@ impl<'context> Function<'context> {
         let mut operation_builder = FuncOperation::builder(context.melior, context.location())
             .sym_name(StringAttribute::new(context.melior, &self.mlir_name))
             .function_type(TypeAttribute::new(function_type.into()))
-            .state_mutability(state_mutability.attribute(context.melior))
-            .body(body_region);
-        operation_builder = match dispatch {
-            FunctionDispatch::Identifier(identifier) => {
-                operation_builder.id(IntegerAttribute::new(
-                    IntegerType::new(context.melior, solx_utils::BIT_LENGTH_X64 as u32).into(),
-                    u64::from(identifier) as i64,
-                ))
-            }
-            FunctionDispatch::Kind(function_kind) => {
-                operation_builder.kind(function_kind.attribute(context.melior))
-            }
-            FunctionDispatch::Symbol => operation_builder,
-        };
+            .state_mutability(state_mutability.attribute(context.melior));
         if let Some(selector_value) = selector {
             operation_builder = operation_builder
                 .selector(Type::selector_attribute(selector_value, context.melior));
@@ -105,13 +93,37 @@ impl<'context> Function<'context> {
             operation_builder =
                 operation_builder.orig_fn_type(TypeAttribute::new(function_type.into()));
         }
-        let operation = contract_body.append_operation(operation_builder.build().into());
+        let operation = match dispatch {
+            FunctionDispatch::Identifier(identifier) => operation_builder
+                .id(IntegerAttribute::new(
+                    IntegerType::new(context.melior, solx_utils::BIT_LENGTH_X64 as u32).into(),
+                    u64::from(identifier) as i64,
+                ))
+                .body(body_region)
+                .build()
+                .into(),
+            FunctionDispatch::Kind(function_kind) => operation_builder
+                .kind(function_kind.attribute(context.melior))
+                .body(body_region)
+                .build()
+                .into(),
+            FunctionDispatch::Symbol => operation_builder.body(body_region).build().into(),
+            FunctionDispatch::Modifier => {
+                ModifierOperation::builder(context.melior, context.location())
+                    .sym_name(StringAttribute::new(context.melior, &self.mlir_name))
+                    .function_type(TypeAttribute::new(function_type.into()))
+                    .body(body_region)
+                    .build()
+                    .into()
+            }
+        };
+        let operation = contract_body.append_operation(operation);
         Block::from(
             operation
                 .region(0)
-                .expect("func has one region")
+                .expect("a definition has one region")
                 .first_block()
-                .expect("func body has entry block"),
+                .expect("a definition body has an entry block"),
         )
     }
 

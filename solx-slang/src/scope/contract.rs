@@ -8,7 +8,9 @@ use std::collections::HashSet;
 use std::ops::Deref;
 
 use slang_solidity_v2::ast::ContractDefinition;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::ModifierInvocation;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::VirtualTarget;
 
@@ -103,6 +105,24 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         };
         node.resolve_super(function, enclosing_contract)
             .expect("a `super` call resolves to an implemented base function")
+    }
+
+    /// The modifier a modifier-list entry runs in this object: the most-derived override of its
+    /// hierarchy for a bare name, or the declaration itself when the name is qualified or the
+    /// modifier is a library's, which nothing overrides.
+    pub fn invoked_modifier(
+        &self,
+        invocation: &ModifierInvocation,
+        declaration: FunctionDefinition,
+    ) -> FunctionDefinition {
+        match (&self.object, declaration.enclosing_definition()) {
+            (Object::Contract(node), Some(Definition::Contract(_))) => {
+                node.resolve_modifier(invocation).expect(
+                    "a contract's modifier resolves in the hierarchy of a contract invoking it",
+                )
+            }
+            _ => declaration,
+        }
     }
 }
 
