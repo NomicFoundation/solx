@@ -19,7 +19,6 @@ fn default() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn deploy_time_linking() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -39,7 +38,6 @@ fn deploy_time_linking() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn invalid_input() -> anyhow::Result<()> {
     crate::common::setup()?;

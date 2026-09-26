@@ -33,11 +33,6 @@ pub struct Contract {
     /// The contract Yul IR code.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ir: Option<String>,
-    /// MLIR pipeline output: optional pre-pass Sol dialect snapshot plus
-    /// the deploy and runtime LLVM dialect modules.
-    #[cfg(feature = "mlir")]
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub mlir: Option<solx_mlir::MlirOutput>,
     /// The EVM data of the contract.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evm: Option<EVM>,
@@ -45,28 +40,10 @@ pub struct Contract {
 
 impl Contract {
     ///
-    /// Wraps an MLIR pipeline output together with its ABI method identifiers.
-    ///
-    #[cfg(feature = "mlir")]
-    pub fn new_mlir(
-        mlir: solx_mlir::MlirOutput,
-        method_identifiers: std::collections::BTreeMap<String, String>,
-    ) -> Self {
-        Self {
-            mlir: Some(mlir),
-            evm: Some(EVM {
-                method_identifiers: Some(method_identifiers),
-                ..Default::default()
-            }),
-            ..Default::default()
-        }
-    }
-
-    ///
     /// Checks if all fields are unset or empty.
     ///
     pub fn is_empty(&self) -> bool {
-        let empty = self.abi.is_none()
+        self.abi.is_none()
             && self.storage_layout.is_none()
             && self.transient_storage_layout.is_none()
             && self.metadata.is_none()
@@ -76,9 +53,6 @@ impl Contract {
             && match self.evm.as_ref() {
                 Some(evm) => evm.is_empty(),
                 None => true,
-            };
-        #[cfg(feature = "mlir")]
-        let empty = empty && self.mlir.is_none();
-        empty
+            }
     }
 }

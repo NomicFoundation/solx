@@ -41,10 +41,6 @@ inputs:
     description: "Enable coverage."
     required: false
     default: 'false'
-  enable-mlir:
-    description: "Enable MLIR support in the LLVM build."
-    required: false
-    default: 'false'
   sanitizer:
     description: 'A sanitizer to build LLVM with. Possible values are Address, Memory, MemoryWithOrigins, Undefined, Thread, DataFlow, and Address;Undefined'
     required: false
@@ -95,7 +91,6 @@ runs:
         DEV_HASH=$(printf %s '${{ hashFiles(format('{0}/solx-dev/src/llvm/**', inputs.working-dir), format('{0}/solx-dev/src/arguments/llvm/**', inputs.working-dir), format('{0}/solx-dev/src/build_type.rs', inputs.working-dir), format('{0}/solx-dev/src/ccache_variant.rs', inputs.working-dir), format('{0}/solx-dev/src/utils.rs', inputs.working-dir)) }}' | head -c 8)
         KEY="v1-llvm-${{ runner.os }}-${{ runner.arch }}"
         [ '${{ inputs.build-type }}' != 'Release' ] && KEY="${KEY}-${{ inputs.build-type }}"
-        [ '${{ inputs.enable-mlir }}' = 'true' ] && KEY="${KEY}-mlir"
         [ -n '${{ inputs.sanitizer }}' ] && KEY="${KEY}-${{ inputs.sanitizer }}"
         [ '${{ inputs.enable-coverage }}' = 'true' ] && KEY="${KEY}-coverage"
         [ '${{ inputs.enable-assertions }}' != 'true' ] && KEY="${KEY}-no-assertions"
@@ -156,7 +151,6 @@ runs:
       run: |
         KEY="llvm-${{ runner.os }}-${{ runner.arch }}"
         [ '${{ inputs.build-type }}' != 'Release' ] && KEY="${KEY}-${{ inputs.build-type }}"
-        [ '${{ inputs.enable-mlir }}' = 'true' ] && KEY="${KEY}-mlir"
         [ -n '${{ inputs.sanitizer }}' ] && KEY="${KEY}-${{ inputs.sanitizer }}"
         [ '${{ inputs.enable-coverage }}' = 'true' ] && KEY="${KEY}-coverage"
         [ '${{ inputs.enable-assertions }}' != 'true' ] && KEY="${KEY}-no-assertions"
@@ -167,7 +161,7 @@ runs:
         [ "$UTILS" = 'true' ] && KEY="${KEY}-utils"
         [ '${{ inputs.enable-tests }}' = 'true' ] && KEY="${KEY}-tests"
         # Terminator: prevents shorter-variant keys from prefix-matching longer ones
-        # via ccache-action's restore-keys (e.g. `...-mlir` matching `...-mlir-coverage-no-assertions`).
+        # via ccache-action's restore-keys (e.g. `...-utils` matching `...-utils-tests`).
         KEY="${KEY}-end"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
@@ -217,7 +211,6 @@ runs:
         [ "${{ inputs.enable-tests }}" = "true" ] && ENABLE_TESTS="--enable-tests"
         [ "${{ inputs.enable-assertions }}" = "true" ] && ENABLE_ASSERTIONS="--enable-assertions"
         [ "${{ inputs.enable-coverage }}" = "true" ] && ENABLE_COVERAGE="--enable-coverage"
-        [ "${{ inputs.enable-mlir }}" = "true" ] && ENABLE_MLIR="--enable-mlir"
         [ "${{ inputs.sanitizer }}" != "" ] && SANITIZER="--sanitizer ${{ inputs.sanitizer }}"
         if [ "${{ inputs.enable-valgrind }}" = "true" ]; then
           ENABLE_VALGRIND="--enable-valgrind"
@@ -241,7 +234,7 @@ runs:
         fi
 
         ./target/release/solx-dev llvm build --build-type ${{ inputs.build-type }} --install-distribution \
-          --ccache-variant=ccache ${ENABLE_UTILS} ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER} \
+          --ccache-variant=ccache ${ENABLE_UTILS} ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${SANITIZER} \
           --extra-args "-DCMAKE_EXPORT_COMPILE_COMMANDS='Off'" "-DLLVM_PARALLEL_LINK_JOBS='${LINK_JOBS}'" "-DLLVM_OPTIMIZED_TABLEGEN='On'"
 
     # `continue-on-error` keeps a failing ccache install (→ ccache not on PATH)

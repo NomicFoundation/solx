@@ -11,9 +11,6 @@ use solx_standard_json::OutputError;
 use solx_standard_json::output::source::Source;
 use solx_utils::ContractName;
 
-#[cfg(feature = "slang-ast")]
-use crate::compilers::solidity::slang_ast::SlangAst;
-
 ///
 /// Extracts method identifiers from all contracts in the output.
 ///
@@ -70,11 +67,6 @@ pub fn get_last_contract(
                     Ok(name) => return Ok(ContractName::full_path(path, name.as_str())),
                     Err(_error) => continue,
                 }
-            }
-
-            #[cfg(feature = "slang-ast")]
-            if let Some(full_path) = SlangAst::parse(sources).last_deployable(&output.contracts) {
-                return Ok(full_path);
             }
 
             anyhow::bail!("The last contract not found in the output")

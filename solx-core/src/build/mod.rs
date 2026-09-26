@@ -155,27 +155,6 @@ impl Build {
     }
 
     ///
-    /// Drops every captured MLIR stage on every contract except the one
-    /// matching `dialect`.
-    ///
-    #[cfg(feature = "mlir")]
-    pub fn retain_mlir_dialect(&mut self, dialect: solx_mlir::Dialect) {
-        for contract in self.contracts.values_mut() {
-            if let Some(output) = contract.mlir.as_mut() {
-                match dialect {
-                    solx_mlir::Dialect::Sol => {
-                        output.deploy_source.clear();
-                        output.runtime_source.clear();
-                    }
-                    solx_mlir::Dialect::Llvm => {
-                        output.sol_source = None;
-                    }
-                }
-            }
-        }
-    }
-
-    ///
     /// Writes all contracts to the terminal.
     ///
     pub fn write_to_terminal(
