@@ -8,20 +8,12 @@ use std::collections::BTreeSet;
 ///
 /// Creates the output selection required for testing.
 ///
-/// Selects AST, bytecode, deployedBytecode, methodIdentifiers,
-/// and either Yul or EVMLegacyAssembly depending on via_ir.
-///
-pub fn selection_required_for_testing(via_ir: bool) -> solx_standard_json::InputSelection {
+pub fn selection_required_for_testing() -> solx_standard_json::InputSelection {
     let mut selectors = BTreeSet::new();
     selectors.insert(solx_standard_json::InputSelector::AST);
     selectors.insert(solx_standard_json::InputSelector::Bytecode);
     selectors.insert(solx_standard_json::InputSelector::RuntimeBytecode);
     selectors.insert(solx_standard_json::InputSelector::MethodIdentifiers);
-    selectors.insert(if via_ir {
-        solx_standard_json::InputSelector::Yul
-    } else {
-        solx_standard_json::InputSelector::EVMLegacyAssembly
-    });
     solx_standard_json::InputSelection::new(selectors)
 }
 
@@ -35,7 +27,7 @@ pub fn new_input_for_solc(
     remappings: Option<Vec<solx_utils::Remapping>>,
     evm_version: Option<solx_utils::EVMVersion>,
     via_ir: bool,
-    mut output_selection: solx_standard_json::InputSelection,
+    output_selection: solx_standard_json::InputSelection,
     optimizer_enabled: bool,
     debug: Option<solx_standard_json::InputDebug>,
 ) -> solx_standard_json::Input {
@@ -51,8 +43,6 @@ pub fn new_input_for_solc(
             )
         })
         .collect();
-
-    output_selection.set_selector(via_ir.into());
 
     solx_standard_json::Input {
         language,

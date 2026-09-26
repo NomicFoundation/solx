@@ -11,28 +11,6 @@ EVM contracts have two code segments:
 
 Deploy code typically builds runtime bytes in memory and executes `RETURN(offset, size)`.
 
-## `solc` JSON Assembly Layout
-
-In legacy assembly JSON, the object is split into top-level deploy code and nested runtime code:
-
-- Top-level `.code`: deploy instruction stream.
-- `.data["0"]`: runtime object.
-- `.data[<hex>]`: additional referenced data objects (for example constructor-time dependencies).
-
-Conceptually:
-
-```json
-{
-  ".code": [ /* deploy instructions */ ],
-  ".data": {
-    "0": { /* runtime assembly object */ },
-    "ab12...": { /* dependency object or hash */ }
-  }
-}
-```
-
-The EVM assembly layer exposes this as `Assembly { code, data }`, with `runtime_code()` reading `data["0"]`.
-
 ## Dependencies and `CREATE` / `CREATE2`
 
 Factory-style deploy code can reference other contract objects. In assembly, this is represented via data entries and push-style aliases:

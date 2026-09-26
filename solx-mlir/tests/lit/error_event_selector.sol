@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// Error and event .selector are compile-time constants: solc's print-init
-// crashes (SIGSEGV), so this is solx-only.
-
 // CHECK: sol.func @{{.*error_selector.*}}
 // CHECK:   sol.constant 816952677 : ui32
 // CHECK:   sol.bytes_cast %{{.*}} : ui32 to !sol.fixedbytes<4>

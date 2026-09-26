@@ -7,7 +7,6 @@ pub mod error;
 pub mod source;
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -85,23 +84,9 @@ impl Output {
                 source.ast = None;
             }
         }
-        for (path, file) in self.contracts.iter_mut() {
-            for (name, contract) in file.iter_mut() {
-                if !output_selection.check_selection(
-                    path.as_str(),
-                    Some(name.as_str()),
-                    InputSettingsSelector::Yul,
-                ) {
-                    contract.ir = None;
-                }
+        for file in self.contracts.values_mut() {
+            for contract in file.values_mut() {
                 if let Some(evm) = contract.evm.as_mut() {
-                    if !output_selection.check_selection(
-                        path.as_str(),
-                        Some(name.as_str()),
-                        InputSettingsSelector::EVMLegacyAssembly,
-                    ) {
-                        evm.legacy_assembly = None;
-                    }
                     if evm
                         .bytecode
                         .as_ref()
@@ -149,71 +134,6 @@ impl Output {
     pub fn push_error(&mut self, path: &str, error: anyhow::Error) {
         self.errors
             .push(JsonOutputError::new_error_contract(Some(path), error));
-    }
-
-    ///
-    /// Extracts the debug info from all source code files.
-    ///
-    pub fn get_debug_info(&self, sources: &BTreeMap<String, InputSource>) -> solx_utils::DebugInfo {
-        let mut contract_definitions: HashMap<String, solx_utils::DebugInfoContractDefinition> =
-            HashMap::new();
-        let mut function_definitions: HashMap<usize, solx_utils::DebugInfoFunctionDefinition> =
-            HashMap::new();
-        let mut ast_nodes: HashMap<usize, HashMap<usize, solx_utils::DebugInfoAstNode>> =
-            HashMap::new();
-
-        // Build source_id -> path mapping
-        let source_ids: BTreeMap<usize, String> = self
-            .sources
-            .iter()
-            .map(|(path, source)| (source.id, path.clone()))
-            .collect();
-
-        for (path, source) in self.sources.iter() {
-            if let Some(ref ast_json) = source.ast {
-                let content = sources
-                    .get(path)
-                    .and_then(|source| source.content())
-                    .unwrap_or_default();
-                let line_index = solx_utils::DebugInfoLineIndex::new(content);
-
-                contract_definitions.extend(Source::get_ast_nodes(
-                    &|path: &str, ast: &serde_json::Value| {
-                        Source::contract_definition(path, ast, &line_index)
-                    },
-                    path.as_str(),
-                    ast_json,
-                ));
-
-                function_definitions.extend(Source::get_ast_nodes(
-                    &|path: &str, ast: &serde_json::Value| {
-                        Source::function_definition(path, ast, &line_index)
-                    },
-                    path.as_str(),
-                    ast_json,
-                ));
-
-                ast_nodes.insert(
-                    source.id,
-                    Source::get_ast_nodes(
-                        &|path: &str, ast: &serde_json::Value| {
-                            Source::ast_node(path, ast, &line_index)
-                        },
-                        path.as_str(),
-                        ast_json,
-                    )
-                    .into_iter()
-                    .collect(),
-                );
-            }
-        }
-
-        solx_utils::DebugInfo::new(
-            contract_definitions,
-            function_definitions,
-            ast_nodes,
-            source_ids,
-        )
     }
 }
 

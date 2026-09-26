@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func {{.*}}pay_send{{.*}}-> i1
 // CHECK:   %[[SR:.*]] = sol.address_cast %{{.*}} : !sol.address<payable> to !sol.address

@@ -3,9 +3,7 @@
 //!
 
 pub mod cache_key;
-pub mod dwarf;
 pub mod mode;
-#[cfg(feature = "slang-ast")]
 pub mod slang_ast;
 pub mod subprocess;
 
@@ -232,13 +230,9 @@ impl SolidityCompiler {
         selectors.insert(solx_standard_json::InputSelector::AST);
         selectors.insert(solx_standard_json::InputSelector::MethodIdentifiers);
         selectors.insert(solx_standard_json::InputSelector::Metadata);
-        selectors.insert(if mode.via_ir {
-            solx_standard_json::InputSelector::Yul
-        } else {
-            solx_standard_json::InputSelector::EVMLegacyAssembly
-        });
 
-        solx_standard_json::Input::try_from_solidity_sources(
+        solx_standard_json::Input::try_from_sources(
+            solx_standard_json::InputLanguage::Solidity,
             sources_json,
             libraries.clone(),
             Vec::new(),
@@ -265,7 +259,7 @@ impl SolidityCompiler {
         libraries: &solx_utils::Libraries,
         mode: &YulMode,
         llvm_options: Vec<String>,
-    ) -> solx_standard_json::Input {
+    ) -> anyhow::Result<solx_standard_json::Input> {
         let llvm_settings = mode
             .llvm_optimizer_settings
             .as_ref()
@@ -290,20 +284,25 @@ impl SolidityCompiler {
         selectors.insert(solx_standard_json::InputSelector::AST);
         selectors.insert(solx_standard_json::InputSelector::MethodIdentifiers);
         selectors.insert(solx_standard_json::InputSelector::Metadata);
-        selectors.insert(solx_standard_json::InputSelector::Yul);
 
-        solx_standard_json::Input::from_yul_sources(
+        solx_standard_json::Input::try_from_sources(
+            solx_standard_json::InputLanguage::Yul,
             sources_json,
             libraries.clone(),
+            Vec::new(),
             solx_standard_json::InputOptimizer {
                 enabled: None,
                 mode: Some(llvm_settings.middle_end_as_char()),
                 size_fallback: Some(llvm_settings.is_fallback_to_size_enabled),
             },
+            None,
+            false,
             &solx_standard_json::InputSelection::new(selectors),
             solx_standard_json::InputMetadata::default(),
+            None,
             llvm_options,
         )
+        .map_err(|error| anyhow::anyhow!("Yul standard JSON I/O error: {error}"))
     }
 
     ///
@@ -323,7 +322,7 @@ impl SolidityCompiler {
             mode => panic!("Unsupported mode for solc input: {mode}"),
         };
 
-        let output_selection = crate::compilers::input_ext::selection_required_for_testing(via_ir);
+        let output_selection = crate::compilers::input_ext::selection_required_for_testing();
 
         let evm_version = match mode {
             Mode::Solidity(_) => evm_version,
@@ -446,7 +445,7 @@ impl SolidityCompiler {
             solx_standard_json::InputLanguage::Yul => {
                 let yul_mode = YulMode::unwrap(mode);
                 let input =
-                    Self::create_solx_yul_input(&sources, &libraries, yul_mode, llvm_options);
+                    Self::create_solx_yul_input(&sources, &libraries, yul_mode, llvm_options)?;
 
                 self.run_solx(
                     mode,
@@ -463,7 +462,6 @@ impl SolidityCompiler {
         };
 
         solx_standard_json::CollectableError::check_errors(&output)?;
-        self::dwarf::DwarfValidator::validate_output(&output)?;
 
         let method_identifiers = match self.language {
             solx_standard_json::InputLanguage::Solidity => Some(
@@ -608,14 +606,7 @@ impl Compiler for SolidityCompiler {
     fn all_modes(&self) -> Vec<Mode> {
         match (self.language, self.toolchain) {
             (solx_standard_json::InputLanguage::Solidity, Toolchain::Solx) => {
-                // Slang/MLIR is a single pipeline that ignores via_ir.
-                #[cfg(feature = "slang-ast")]
                 let codegen_versions = vec![(false, self.version.to_owned())];
-                #[cfg(not(feature = "slang-ast"))]
-                let codegen_versions = vec![
-                    (false, self.version.to_owned()),
-                    (true, self.version.to_owned()),
-                ];
 
                 super::optimizer_combinations()
                     .into_iter()
@@ -626,23 +617,14 @@ impl Compiler for SolidityCompiler {
                     .collect::<Vec<Mode>>()
             }
             (solx_standard_json::InputLanguage::Solidity, Toolchain::Solc) => {
-                // Generate modes for both via_ir settings with the single solc version
                 let mut modes = Vec::new();
                 for via_ir in [false, true] {
                     modes.push(SolidityMode::new_solc(self.version.clone(), via_ir, true).into());
                 }
                 modes
             }
-            (solx_standard_json::InputLanguage::Yul, Toolchain::Solx) => {
-                super::optimizer_combinations()
-                    .into_iter()
-                    .map(|llvm_optimizer_settings| {
-                        YulMode::new_solx(llvm_optimizer_settings).into()
-                    })
-                    .collect::<Vec<Mode>>()
-            }
+            (solx_standard_json::InputLanguage::Yul, Toolchain::Solx) => Vec::new(),
             (solx_standard_json::InputLanguage::Yul, Toolchain::Solc) => {
-                // Single mode for the single solc version
                 vec![YulMode::new_solc(self.version.clone(), true).into()]
             }
             (solx_standard_json::InputLanguage::LLVMIR, _) => Vec::new(),

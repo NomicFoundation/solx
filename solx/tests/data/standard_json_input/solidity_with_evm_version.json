@@ -6,7 +6,6 @@
     }
   },
   "settings": {
-    "viaIR": true,
     "evmVersion": "cancun",
     "optimizer": {
       "mode": "3"

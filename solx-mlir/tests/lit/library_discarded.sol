@@ -1,8 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// A discarded library-rooted expression evaluates nothing: solc's print-init still materialises
-// the linked address for a bare library name, so this is solx-only.
-
 // CHECK: sol.contract @{{.*C.*}} {
 // CHECK: sol.func @{{.*discarded_function.*}}()
 // CHECK-NEXT:   sol.return

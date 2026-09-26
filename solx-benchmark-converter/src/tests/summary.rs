@@ -510,7 +510,7 @@ fn fixture_output_changed() {
     let tester = SummarySuite::merged(
         SuiteKind::Tester,
         vec![Test::contract(
-            "solx-solidity",
+            "solidity",
             "test/libsolidity/semanticTests/structs/delete_struct.sol",
             &[
                 ("00.solx-main-solx-Y-M3B3-0.8.34", 214, 85_899),

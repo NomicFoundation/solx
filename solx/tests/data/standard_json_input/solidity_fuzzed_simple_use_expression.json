@@ -10,7 +10,6 @@
   },
   "settings": {
     "evmVersion": "cancun",
-    "viaIR": true,
     "outputSelection": {
       "*": {
         "*": [

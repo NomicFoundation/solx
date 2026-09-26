@@ -1,11 +1,10 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
-
-// CHECK: sol.func @{{.*assign_fixed.*}}
-// CHECK:   sol.copy %{{.*}}, %{{.*}} : !sol.array<3 x ui256, Memory>, !sol.array<3 x ui256, Storage>
 
 // CHECK: sol.func @{{.*assign_dynamic.*}}
 // CHECK:   sol.copy %{{.*}}, %{{.*}} : !sol.array<3 x ui8, Memory>, !sol.array<? x ui256, Storage>
+
+// CHECK: sol.func @{{.*assign_fixed.*}}
+// CHECK:   sol.copy %{{.*}}, %{{.*}} : !sol.array<3 x ui256, Memory>, !sol.array<3 x ui256, Storage>
 
 // CHECK: sol.func @{{.*assign_string.*}}
 // CHECK:   sol.copy %{{.*}}, %{{.*}} : !sol.string<Memory>, !sol.string<Storage>
@@ -13,14 +12,14 @@
 // CHECK: sol.func @{{.*assign_struct.*}}
 // CHECK:   sol.copy %{{.*}}, %{{.*}} : !sol.struct<(ui256, ui256), Memory>, !sol.struct<(ui256, ui256), Storage>
 
-// CHECK: sol.func @{{.*rebind.*}}
-// CHECK:   sol.length %{{.*}} : !sol.array<? x ui256, Storage>
-
 // CHECK: sol.func @{{.*from_calldata.*}}
 // CHECK:   sol.data_loc_cast %{{.*}} : !sol.array<? x ui256, CallData>, !sol.array<? x ui256, Memory>
 
 // CHECK: sol.func @{{.*from_storage.*}}
 // CHECK:   sol.data_loc_cast %{{.*}} : !sol.array<? x ui256, Storage>, !sol.array<? x ui256, Memory>
+
+// CHECK: sol.func @{{.*rebind.*}}
+// CHECK:   sol.length %{{.*}} : !sol.array<? x ui256, Storage>
 
 contract C {
     uint256[3] fixed_array;

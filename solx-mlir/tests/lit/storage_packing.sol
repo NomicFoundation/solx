@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.state_var @{{.*tag.*}} slot 0 offset 0 : !sol.fixedbytes<4>
 // CHECK: sol.state_var @{{.*small.*}} slot 0 offset 4 : ui8

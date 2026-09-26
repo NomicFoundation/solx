@@ -5,10 +5,8 @@
 use std::io::Read;
 
 use predicates::prelude::*;
-#[cfg(feature = "solc")]
 use test_case::test_case;
 
-#[cfg(feature = "solc")]
 #[test]
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -22,13 +20,11 @@ fn default() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("bytecode"))
-        .stdout(predicate::str::contains("object"))
-        .stdout(predicate::str::contains("debugInfo"));
+        .stdout(predicate::str::contains("object"));
 
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn stdin() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -40,13 +36,11 @@ fn stdin() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("bytecode"))
-        .stdout(predicate::str::contains("object"))
-        .stdout(predicate::str::contains("debugInfo"));
+        .stdout(predicate::str::contains("object"));
 
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn stdin_hyphen() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -61,13 +55,11 @@ fn stdin_hyphen() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("bytecode"))
-        .stdout(predicate::str::contains("object"))
-        .stdout(predicate::str::contains("debugInfo"));
+        .stdout(predicate::str::contains("object"));
 
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn deploy_time_linking() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -85,7 +77,6 @@ fn deploy_time_linking() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn recursion() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -99,13 +90,11 @@ fn recursion() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("bytecode"))
-        .stdout(predicate::str::contains("object"))
-        .stdout(predicate::str::contains("debugInfo"));
+        .stdout(predicate::str::contains("object"));
 
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn fuzzed_simple_use_expression() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -119,8 +108,7 @@ fn fuzzed_simple_use_expression() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("bytecode"))
-        .stdout(predicate::str::contains("object"))
-        .stdout(predicate::str::contains("debugInfo"));
+        .stdout(predicate::str::contains("object"));
 
     Ok(())
 }
@@ -139,9 +127,8 @@ fn invalid_input() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
-fn invalid_input_solc_error() -> anyhow::Result<()> {
+fn invalid_input_error() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
@@ -150,9 +137,9 @@ fn invalid_input_solc_error() -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    result.success().stdout(predicate::str::contains(
-        "ParserError: Expected identifier but got",
-    ));
+    result
+        .success()
+        .stdout(predicate::str::contains("syntax/unexpected-terminal"));
 
     Ok(())
 }
@@ -225,8 +212,8 @@ fn stdin_hyphen_missing() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
+#[ignore = "solx does not emit this output yet"]
 fn empty_sources() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -260,8 +247,8 @@ fn missing_sources() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
+#[ignore = "solx does not emit this output yet"]
 fn metadata_hash_ipfs_and_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -279,8 +266,8 @@ fn metadata_hash_ipfs_and_metadata() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
+#[ignore = "solx does not emit this output yet"]
 fn metadata_hash_ipfs_no_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -298,8 +285,8 @@ fn metadata_hash_ipfs_no_metadata() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
+#[ignore = "solx does not emit this output yet"]
 fn metadata_hash_none_and_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -317,7 +304,6 @@ fn metadata_hash_none_and_metadata() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn metadata_hash_none_no_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -336,7 +322,6 @@ fn metadata_hash_none_no_metadata() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn select_evm() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -351,7 +336,6 @@ fn select_evm() -> anyhow::Result<()> {
         .success()
         .stdout(predicate::str::contains("bytecode"))
         .stdout(predicate::str::contains("deployedBytecode"))
-        .stdout(predicate::str::contains("debugInfo"))
         .stdout(predicate::str::contains("llvmAssembly"))
         .stdout(predicate::str::contains("opcodes"))
         .stdout(predicate::str::contains("linkReferences"));
@@ -433,7 +417,6 @@ fn select_evm_deployed_bytecode_link_references() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn select_single() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -472,9 +455,9 @@ fn select_none() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test_case(crate::common::standard_json!("select_all.json"))]
 #[test_case(crate::common::standard_json!("select_all_wildcard.json"))]
+#[ignore = "solx does not emit this output yet"]
 fn select_all(path: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -558,26 +541,6 @@ fn select_llvm_ir() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
-#[test]
-fn select_evmla_ethir() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let result = crate::cli::execute_solx_with_stdin(
-        &["--standard-json"],
-        crate::common::standard_json!("select_evmla_ethir.json"),
-    )?;
-
-    result.success().stdout(
-        predicate::str::contains("evmla")
-            .and(predicate::str::contains("ethir"))
-            .and(predicate::str::contains("object")),
-    );
-
-    Ok(())
-}
-
-#[cfg(feature = "mlir")]
 #[test]
 fn select_mlir_and_llvm_ir() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -596,7 +559,6 @@ fn select_mlir_and_llvm_ir() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "mlir")]
 #[test]
 fn select_mlir() -> anyhow::Result<()> {
     crate::common::setup()?;

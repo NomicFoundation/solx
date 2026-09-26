@@ -1,8 +1,7 @@
 name: Checkout submodules
 description: >-
-  Initializes and updates all submodules at depth 1, including ones marked
-  inactive in .gitmodules. The repository must already be checked out before
-  calling this action.
+  Initializes and updates all submodules at depth 1. The repository must
+  already be checked out before calling this action.
 
 inputs:
   working-directory:
@@ -17,4 +16,4 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       run: |
         git config --global --replace-all safe.directory '*'
-        git submodule update --init --force --recursive --depth 1 --checkout
+        git submodule update --init --force --depth 1 --checkout

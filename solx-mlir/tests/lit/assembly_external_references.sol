@@ -1,6 +1,33 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
-// RUN: solx --emit-mlir=sol %s | FileCheck %s --check-prefix=SOLX
+
+// CHECK: sol.func @{{.*calldata_reference.*}}
+// CHECK:   sol.inline_asm {
+// CHECK:     sol.yul_calldata_offset %{{.*}} -> !yul.ptr
+// CHECK:     sol.yul_calldata_length %{{.*}} -> !yul.ptr
+
+// CHECK: sol.func @{{.*chained_string_constant.*}}
+// CHECK:   sol.inline_asm {
+// CHECK-NOT: sol.string_lit
+// CHECK:     sol.yul_val_cast %{{.*}} : !sol.fixedbytes<32> -> i256
+// CHECK:   }
+
+// CHECK: sol.func @{{.*constant_in_yul_function.*}}
+// CHECK:   sol.inline_asm {
+// CHECK:     yul.func @{{.*folded.*}}
+// CHECK:       sol.yul_val_cast %{{.*}} -> i256
+// CHECK:       sol.yul_val_cast %{{.*}} -> i256
+
+// CHECK: sol.func @{{.*constants.*}}
+// CHECK:   sol.inline_asm {
+// CHECK:     sol.yul_val_cast %{{.*}} -> i256
+// CHECK:     sol.yul_val_cast %{{.*}} -> i256
+// CHECK:     sol.yul_val_cast %{{.*}} -> i256
+// CHECK:     sol.yul_val_cast %{{.*}} : !sol.fixedbytes<32> -> i256
+
+// CHECK: sol.func @{{.*function_pointer.*}}
+// CHECK:   sol.inline_asm {
+// CHECK:     sol.yul_selector %{{.*}} -> !yul.ptr
+// CHECK:     sol.yul_address_of %{{.*}} -> !yul.ptr
 
 // CHECK: sol.func @{{.*local.*}}
 // CHECK:   %[[X:.*]] = sol.alloca : !sol.ptr<ui256, Stack>
@@ -39,16 +66,6 @@
 // CHECK:     sol.yul_storage_slot %{{.*}} : !sol.ptr<!sol.array<? x ui256, Storage>, Stack> -> !yul.ptr
 // CHECK:     sol.yul_storage_offset %{{.*}} : !sol.ptr<!sol.array<? x ui256, Storage>, Stack>
 
-// CHECK: sol.func @{{.*calldata_reference.*}}
-// CHECK:   sol.inline_asm {
-// CHECK:     sol.yul_calldata_offset %{{.*}} -> !yul.ptr
-// CHECK:     sol.yul_calldata_length %{{.*}} -> !yul.ptr
-
-// CHECK: sol.func @{{.*function_pointer.*}}
-// CHECK:   sol.inline_asm {
-// CHECK:     sol.yul_selector %{{.*}} -> !yul.ptr
-// CHECK:     sol.yul_address_of %{{.*}} -> !yul.ptr
-
 // CHECK: sol.func @{{.*writable_suffixes.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     %[[SLOT:.*]] = sol.yul_storage_slot %{{.*}} -> !yul.ptr
@@ -61,26 +78,6 @@
 // CHECK:     yul.store %{{.*}}, %[[SEL]] : i256, !yul.ptr
 // CHECK:     %[[ADDR:.*]] = sol.yul_address_of %{{.*}} -> !yul.ptr
 // CHECK:     yul.store %{{.*}}, %[[ADDR]] : i256, !yul.ptr
-
-// CHECK: sol.func @{{.*constants.*}}
-// CHECK:   sol.inline_asm {
-// CHECK:     sol.yul_val_cast %{{.*}} -> i256
-// CHECK:     sol.yul_val_cast %{{.*}} -> i256
-// CHECK:     sol.yul_val_cast %{{.*}} -> i256
-// CHECK:     sol.yul_val_cast %{{.*}} : !sol.fixedbytes<32> -> i256
-
-// print-init lands a `sol.string_lit` on this one, so the RUN line above cannot check it.
-// SOLX: sol.func @{{.*chained_string_constant.*}}
-// SOLX:   sol.inline_asm {
-// SOLX-NOT: sol.string_lit
-// SOLX:     sol.yul_val_cast %{{.*}} : !sol.fixedbytes<32> -> i256
-// SOLX:   }
-
-// CHECK: sol.func @{{.*constant_in_yul_function.*}}
-// CHECK:   sol.inline_asm {
-// CHECK:     yul.func @{{.*folded.*}}
-// CHECK:       sol.yul_val_cast %{{.*}} -> i256
-// CHECK:       sol.yul_val_cast %{{.*}} -> i256
 
 uint256 constant FILE_LEVEL = 3;
 

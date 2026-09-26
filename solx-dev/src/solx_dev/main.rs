@@ -9,7 +9,6 @@ use clap::Parser;
 
 use solx_dev::Arguments;
 use solx_dev::arguments::llvm::LLVM as LLVMArguments;
-use solx_dev::arguments::solc::Solc as SolcArguments;
 use solx_dev::arguments::test::Test as TestArguments;
 
 ///
@@ -54,7 +53,6 @@ fn main_inner() -> anyhow::Result<()> {
 
             solx_dev::llvm_build(
                 arguments.build_type,
-                arguments.enable_mlir,
                 arguments.enable_utils,
                 arguments.install_distribution,
                 arguments.enable_tests,
@@ -66,24 +64,6 @@ fn main_inner() -> anyhow::Result<()> {
                 arguments.enable_valgrind,
                 arguments.valgrind_options,
                 arguments.clean,
-            )?;
-        }
-        Arguments::Solc(SolcArguments::Build(arguments)) => {
-            if let Some(ccache_variant) = arguments.ccache_variant {
-                solx_dev::exists(ccache_variant.to_string().as_str())?;
-            }
-
-            solx_dev::solc_build(
-                arguments.build_type,
-                arguments.pedantic,
-                arguments.tests,
-                arguments.extra_args,
-                arguments.clean,
-                arguments.boost_version,
-                arguments.enable_mlir,
-                arguments.use_gcc,
-                arguments.build_boost,
-                arguments.ccache_variant,
             )?;
         }
         Arguments::Test(TestArguments::Hardhat(arguments)) => {

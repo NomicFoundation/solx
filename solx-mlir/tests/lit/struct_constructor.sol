@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func {{.*}}build{{.*}}-> !sol.struct<(ui256, ui256), Memory>
 // CHECK:   sol.malloc :{{ +}}!sol.struct<(ui256, ui256), Memory>

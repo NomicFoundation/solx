@@ -11,7 +11,6 @@ use solx_solc_test_adapter::Params;
 use crate::compilers::mode::Mode as ModeWrapper;
 use crate::compilers::mode::imode::IMode;
 use crate::compilers::mode::llvm_options::LLVMOptions;
-#[cfg(feature = "slang-ast")]
 use crate::compilers::solidity::slang_ast::SlangAst;
 
 ///
@@ -77,11 +76,10 @@ impl Mode {
     }
 
     ///
-    /// Checks if the mode is compatible with the source code pragmas. Under the Slang frontend,
-    /// tests pinned to `pragma abicoder v1` are incompatible.
+    /// Checks if the mode is compatible with the source code pragmas. Tests pinned to
+    /// `pragma abicoder v1` are incompatible.
     ///
     pub fn check_pragmas(&self, sources: &[(String, String)]) -> bool {
-        #[cfg(feature = "slang-ast")]
         if SlangAst::parse(sources).is_abi_encoder_v1_pinned() {
             return false;
         }
@@ -115,7 +113,6 @@ impl Mode {
     /// Checks if the mode is compatible with the Ethereum tests params.
     ///
     pub fn check_ethereum_tests_params(&self, params: &Params) -> bool {
-        #[cfg(feature = "slang-ast")]
         if params.abi_encoder_v1_only == ABIEncoderV1Only::True {
             return false;
         }

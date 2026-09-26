@@ -13,11 +13,7 @@ use clap::Parser;
 #[command(about, long_about = None)]
 pub struct Arguments {
     /// Source directory of changed tests.
-    #[arg(
-        short,
-        long,
-        default_value = "solx-solidity/test/libsolidity/semanticTests"
-    )]
+    #[arg(short, long, default_value = "solidity/test/libsolidity/semanticTests")]
     pub source: PathBuf,
 
     /// Path of the tests' index.

@@ -25,10 +25,8 @@ hex.workspace = true
 sha3.workspace = true
 md5.workspace = true
 regex.workspace = true
-gimli.workspace = true
 glob.workspace = true
 itertools.workspace = true
-object.workspace = true
 rayon.workspace = true
 which = "8.0"
 ron = "0.12"
@@ -36,7 +34,7 @@ rlp = "0.6"
 once_cell = "1.21"
 revm = "42.0"
 
-slang_solidity_v2 = { workspace = true, optional = true }
+slang_solidity_v2.workspace = true
 
 solx-standard-json = { path = "../solx-standard-json" }
 solx-codegen-evm = { path = "../solx-codegen-evm" }
@@ -45,6 +43,3 @@ solx-benchmark-converter = { path = "../solx-benchmark-converter" }
 solx-solc-test-adapter = { path = "../solx-solc-test-adapter" }
 solx-compiler-downloader = { path = "../solx-compiler-downloader" }
 solx-dev = { path = "../solx-dev" }
-
-[features]
-slang-ast = ["dep:slang_solidity_v2"]

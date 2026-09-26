@@ -1,7 +1,11 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.state_var @{{.*}} slot 0 offset 0 : !sol.struct<(ui256, ui256), Storage>
+
+// CHECK: sol.func {{.*}}readCalldata{{.*}}-> ui256
+// CHECK:   sol.constant 1 : ui64
+// CHECK:   sol.gep %{{.*}}, %{{.*}} : !sol.struct<(ui256, ui256), CallData>, ui64, !sol.ptr<ui256, CallData>
+// CHECK:   sol.load %{{.*}} : !sol.ptr<ui256, CallData>, ui256
 
 // CHECK: sol.func {{.*}}readField{{.*}}-> ui256
 // CHECK:   sol.constant 1 : ui64
@@ -13,11 +17,6 @@
 // CHECK:   sol.load %{{.*}} : !sol.ptr<!sol.struct<(ui256, ui256), Memory>, Memory>, !sol.struct<(ui256, ui256), Memory>
 // CHECK:   sol.gep %{{.*}}, %{{.*}} : !sol.struct<(ui256, ui256), Memory>, ui64, !sol.ptr<ui256, Memory>
 // CHECK:   sol.load %{{.*}} : !sol.ptr<ui256, Memory>, ui256
-
-// CHECK: sol.func {{.*}}readCalldata{{.*}}-> ui256
-// CHECK:   sol.constant 1 : ui64
-// CHECK:   sol.gep %{{.*}}, %{{.*}} : !sol.struct<(ui256, ui256), CallData>, ui64, !sol.ptr<ui256, CallData>
-// CHECK:   sol.load %{{.*}} : !sol.ptr<ui256, CallData>, ui256
 
 // CHECK: sol.func {{.*}}readStorage{{.*}}-> ui256
 // CHECK:   sol.addr_of @{{.*}} : !sol.struct<(ui256, ui256), Storage>

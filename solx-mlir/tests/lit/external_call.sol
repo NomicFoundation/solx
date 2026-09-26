@@ -1,32 +1,10 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// solc print-init evaluates a call's options before its receiver, unlike legacy, so this is
-// solx-only.
-
-// CHECK: sol.func @{{.*plain.*}}
-// CHECK:   sol.address_cast %{{.*}} : !sol.contract<{{.*I.*}}> to !sol.address
-// CHECK:   %[[SELECTOR:.*]] = sol.constant 3017696395 : ui256
-// CHECK:   sol.gasleft
-// CHECK:   sol.ext_call "{{.*f.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %[[SELECTOR]] {callee_type = (ui256) -> ui256} : !sol.address, (ui256) -> (i1, ui256)
-
-// CHECK: sol.func @{{.*view_callee.*}}
-// CHECK:   %[[SELECTOR:.*]] = sol.constant 3827312202 : ui256
-// CHECK:   sol.ext_call "{{.*g.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %[[SELECTOR]] {callee_type = (ui256) -> ui256, static_call} : !sol.address, (ui256) -> (i1, ui256)
-
-// CHECK: sol.func @{{.*named.*}}
-// CHECK:   sol.constant 11 : ui8
-// CHECK:   sol.constant 99 : ui8
-// CHECK:   sol.ext_call "{{.*h.*}}"(%{{.*}}, %{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256, ui256) -> ui256} : !sol.address, (ui256, ui256) -> (i1, ui256)
-
-// CHECK: sol.func @{{.*storage_argument.*}}
-// CHECK:   %[[SLOT:.*]] = sol.addr_of @{{.*}} : !sol.array<? x ui256, Storage>
-// CHECK:   sol.ext_call "{{.*r.*}}"(%[[SLOT]]) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (!sol.array<? x ui256, Memory>) -> ui256} : !sol.address, (!sol.array<? x ui256, Storage>) -> (i1, ui256)
-
-// CHECK: sol.func @{{.*value_then_gas.*}}
+// CHECK: sol.func @{{.*gas_only.*}}
 // CHECK:   %[[RECEIVER:.*]] = sol.address_cast %{{.*}} : !sol.contract<{{.*I.*}}> to !sol.address
-// CHECK:   %[[V:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
 // CHECK:   %[[G:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
-// CHECK:   sol.ext_call "{{.*p.*}}"(%{{.*}}) at %[[RECEIVER]] gas %[[G]] value %[[V]] selector
+// CHECK:   %[[ZERO:.*]] = sol.constant 0 : ui256
+// CHECK:   sol.ext_call "{{.*p.*}}"(%{{.*}}) at %[[RECEIVER]] gas %[[G]] value %[[ZERO]] selector
 
 // CHECK: sol.func @{{.*gas_then_value.*}}
 // CHECK:   %[[RECEIVER:.*]] = sol.address_cast %{{.*}} : !sol.contract<{{.*I.*}}> to !sol.address
@@ -34,17 +12,10 @@
 // CHECK:   %[[V:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
 // CHECK:   sol.ext_call "{{.*p.*}}"(%{{.*}}) at %[[RECEIVER]] gas %[[G]] value %[[V]] selector
 
-// CHECK: sol.func @{{.*gas_only.*}}
-// CHECK:   %[[RECEIVER:.*]] = sol.address_cast %{{.*}} : !sol.contract<{{.*I.*}}> to !sol.address
-// CHECK:   %[[G:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
-// CHECK:   %[[ZERO:.*]] = sol.constant 0 : ui256
-// CHECK:   sol.ext_call "{{.*p.*}}"(%{{.*}}) at %[[RECEIVER]] gas %[[G]] value %[[ZERO]] selector
-
-// CHECK: sol.func @{{.*value_only.*}}
-// CHECK:   %[[RECEIVER:.*]] = sol.address_cast %{{.*}} : !sol.contract<{{.*I.*}}> to !sol.address
-// CHECK:   %[[V:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
-// CHECK:   %[[LEFT:.*]] = sol.gasleft
-// CHECK:   sol.ext_call "{{.*p.*}}"(%{{.*}}) at %[[RECEIVER]] gas %[[LEFT]] value %[[V]] selector
+// CHECK: sol.func @{{.*named.*}}
+// CHECK:   sol.constant 11 : ui8
+// CHECK:   sol.constant 99 : ui8
+// CHECK:   sol.ext_call "{{.*h.*}}"(%{{.*}}, %{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256, ui256) -> ui256} : !sol.address, (ui256, ui256) -> (i1, ui256)
 
 // CHECK: sol.func @{{.*parenthesized.*}}
 // CHECK:   %[[V:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
@@ -52,6 +23,32 @@
 
 // CHECK: sol.func @{{.*parenthesized_reference.*}}
 // CHECK:   sol.ext_call "{{.*g.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256, static_call}
+
+// CHECK: sol.func @{{.*plain.*}}
+// CHECK:   sol.address_cast %{{.*}} : !sol.contract<{{.*I.*}}> to !sol.address
+// CHECK:   %[[SELECTOR:.*]] = sol.constant 3017696395 : ui256
+// CHECK:   sol.gasleft
+// CHECK:   sol.ext_call "{{.*f.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %[[SELECTOR]] {callee_type = (ui256) -> ui256} : !sol.address, (ui256) -> (i1, ui256)
+
+// CHECK: sol.func @{{.*storage_argument.*}}
+// CHECK:   %[[SLOT:.*]] = sol.addr_of @{{.*}} : !sol.array<? x ui256, Storage>
+// CHECK:   sol.ext_call "{{.*r.*}}"(%[[SLOT]]) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (!sol.array<? x ui256, Memory>) -> ui256} : !sol.address, (!sol.array<? x ui256, Storage>) -> (i1, ui256)
+
+// CHECK: sol.func @{{.*value_only.*}}
+// CHECK:   %[[RECEIVER:.*]] = sol.address_cast %{{.*}} : !sol.contract<{{.*I.*}}> to !sol.address
+// CHECK:   %[[V:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
+// CHECK:   %[[LEFT:.*]] = sol.gasleft
+// CHECK:   sol.ext_call "{{.*p.*}}"(%{{.*}}) at %[[RECEIVER]] gas %[[LEFT]] value %[[V]] selector
+
+// CHECK: sol.func @{{.*value_then_gas.*}}
+// CHECK:   %[[RECEIVER:.*]] = sol.address_cast %{{.*}} : !sol.contract<{{.*I.*}}> to !sol.address
+// CHECK:   %[[V:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
+// CHECK:   %[[G:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
+// CHECK:   sol.ext_call "{{.*p.*}}"(%{{.*}}) at %[[RECEIVER]] gas %[[G]] value %[[V]] selector
+
+// CHECK: sol.func @{{.*view_callee.*}}
+// CHECK:   %[[SELECTOR:.*]] = sol.constant 3827312202 : ui256
+// CHECK:   sol.ext_call "{{.*g.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %[[SELECTOR]] {callee_type = (ui256) -> ui256, static_call} : !sol.address, (ui256) -> (i1, ui256)
 
 contract C {
     uint256[] stored;

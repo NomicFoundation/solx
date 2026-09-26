@@ -69,14 +69,12 @@ impl Settings {
         evm_version: Option<solx_utils::EVMVersion>,
         via_ir: bool,
 
-        mut output_selection: Selection,
+        output_selection: Selection,
         metadata: Metadata,
 
         debug: Option<Debug>,
         llvm_options: Vec<String>,
     ) -> Self {
-        output_selection.set_selector(via_ir.into());
-
         Self {
             optimizer,
 

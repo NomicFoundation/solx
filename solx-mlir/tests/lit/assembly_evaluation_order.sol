@@ -1,13 +1,11 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// No print-init RUN line: Yul evaluates an argument list right to left and the C++ frontend
-// emits it left to right.
-
-// CHECK: sol.func @{{.*two_calls.*}}
+// CHECK: sol.func @{{.*builtin_operands.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     yul.func_call @{{.*right.*}}(
-// CHECK:     yul.func_call @{{.*left.*}}(
-// CHECK:     yul.add
+// CHECK:     %[[C:.*]] = yul.constant 32
+// CHECK:     %[[XPTR:.*]] = sol.yul_ptr_cast
+// CHECK:     %[[X:.*]] = yul.load %[[XPTR]]
+// CHECK:     yul.mstore %[[X]], %[[C]]
 
 // CHECK: sol.func @{{.*nested_calls.*}}
 // CHECK:   sol.inline_asm {
@@ -16,12 +14,11 @@
 // CHECK:     yul.func_call @{{.*first.*}}(
 // CHECK:     yul.func_call @{{.*sum.*}}(
 
-// CHECK: sol.func @{{.*builtin_operands.*}}
+// CHECK: sol.func @{{.*two_calls.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     %[[C:.*]] = yul.constant 32
-// CHECK:     %[[XPTR:.*]] = sol.yul_ptr_cast
-// CHECK:     %[[X:.*]] = yul.load %[[XPTR]]
-// CHECK:     yul.mstore %[[X]], %[[C]]
+// CHECK:     yul.func_call @{{.*right.*}}(
+// CHECK:     yul.func_call @{{.*left.*}}(
+// CHECK:     yul.add
 
 contract C {
     function two_calls() public returns (uint256 r) {

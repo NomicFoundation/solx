@@ -1,14 +1,7 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @{{.*uint8_to_uint256.*}}
-// CHECK:   sol.cast %{{.*}} : ui8 to ui256
-
-// CHECK: sol.func @{{.*uint256_to_uint8.*}}
-// CHECK:   sol.cast %{{.*}} : ui256 to ui8
-
-// CHECK: sol.func @{{.*int_to_uint.*}}
-// CHECK:   sol.cast %{{.*}} : si256 to ui256
+// CHECK: sol.func @{{.*array_to_memory.*}}
+// CHECK:   sol.data_loc_cast %{{.*}} : !sol.array<? x ui256, CallData>, !sol.array<? x ui256, Memory>
 
 // CHECK: sol.func @{{.*bytes4_to_int.*}}
 // CHECK:   sol.bytes_cast %{{.*}} : !sol.fixedbytes<4> to ui32
@@ -16,36 +9,42 @@
 // CHECK: sol.func @{{.*bytes_to_int.*}}
 // CHECK:   sol.bytes_cast %{{.*}} : !sol.fixedbytes<32> to ui256
 
-// CHECK: sol.func @{{.*int_to_bytes.*}}
-// CHECK:   sol.bytes_cast %{{.*}} : ui256 to !sol.fixedbytes<32>
-
-// CHECK: sol.func @{{.*widen_bytes.*}}
-// CHECK:   sol.bytes_cast %{{.*}} : !sol.fixedbytes<1> to !sol.fixedbytes<4>
-
-// CHECK: sol.func @{{.*narrow_bytes.*}}
-// CHECK:   sol.bytes_cast %{{.*}} : !sol.fixedbytes<32> to !sol.fixedbytes<16>
-
-// CHECK: sol.func @{{.*memory_to_bytes32.*}}
-// CHECK:   sol.dyn_bytes_to_fixedbytes %{{.*}} : <Memory> to <32>
+// CHECK: sol.func @{{.*bytes_to_memory.*}}
+// CHECK:   sol.data_loc_cast %{{.*}} : !sol.string<CallData>, !sol.string<Memory>
 
 // CHECK: sol.func @{{.*calldata_to_bytes32.*}}
 // CHECK:   sol.dyn_bytes_to_fixedbytes %{{.*}} : <CallData> to <32>
 
-// CHECK: sol.func @{{.*bytes_to_memory.*}}
-// CHECK:   sol.data_loc_cast %{{.*}} : !sol.string<CallData>, !sol.string<Memory>
-
-// CHECK: sol.func @{{.*array_to_memory.*}}
-// CHECK:   sol.data_loc_cast %{{.*}} : !sol.array<? x ui256, CallData>, !sol.array<? x ui256, Memory>
-
-// CHECK: sol.func @{{.*uint8_to_enum.*}}
-// CHECK:   sol.enum_cast %{{.*}} : ui8 to !sol.enum<2>
+// CHECK: sol.func @{{.*enum_to_uint256.*}}
+// CHECK:   sol.enum_cast %{{.*}} : !sol.enum<2> to ui8
+// CHECK:   sol.cast %{{.*}} : ui8 to ui256
 
 // CHECK: sol.func @{{.*enum_to_uint8.*}}
 // CHECK:   sol.enum_cast %{{.*}} : !sol.enum<2> to ui8
 
-// CHECK: sol.func @{{.*enum_to_uint256.*}}
-// CHECK:   sol.enum_cast %{{.*}} : !sol.enum<2> to ui8
+// CHECK: sol.func @{{.*int_to_bytes.*}}
+// CHECK:   sol.bytes_cast %{{.*}} : ui256 to !sol.fixedbytes<32>
+
+// CHECK: sol.func @{{.*int_to_uint.*}}
+// CHECK:   sol.cast %{{.*}} : si256 to ui256
+
+// CHECK: sol.func @{{.*memory_to_bytes32.*}}
+// CHECK:   sol.dyn_bytes_to_fixedbytes %{{.*}} : <Memory> to <32>
+
+// CHECK: sol.func @{{.*narrow_bytes.*}}
+// CHECK:   sol.bytes_cast %{{.*}} : !sol.fixedbytes<32> to !sol.fixedbytes<16>
+
+// CHECK: sol.func @{{.*uint256_to_uint8.*}}
+// CHECK:   sol.cast %{{.*}} : ui256 to ui8
+
+// CHECK: sol.func @{{.*uint8_to_enum.*}}
+// CHECK:   sol.enum_cast %{{.*}} : ui8 to !sol.enum<2>
+
+// CHECK: sol.func @{{.*uint8_to_uint256.*}}
 // CHECK:   sol.cast %{{.*}} : ui8 to ui256
+
+// CHECK: sol.func @{{.*widen_bytes.*}}
+// CHECK:   sol.bytes_cast %{{.*}} : !sol.fixedbytes<1> to !sol.fixedbytes<4>
 
 contract C {
     enum E { First, Second, Third }

@@ -1,5 +1,5 @@
 //!
-//! Import resolution for the Slang frontend.
+//! Import resolution for Slang compilation units.
 //!
 
 use slang_solidity_v2::compilation::FileId;

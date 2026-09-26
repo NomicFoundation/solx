@@ -11,7 +11,6 @@ use solx_standard_json::OutputError;
 use solx_standard_json::output::source::Source;
 use solx_utils::ContractName;
 
-#[cfg(feature = "slang-ast")]
 use crate::compilers::solidity::slang_ast::SlangAst;
 
 ///
@@ -72,7 +71,6 @@ pub fn get_last_contract(
                 }
             }
 
-            #[cfg(feature = "slang-ast")]
             if let Some(full_path) = SlangAst::parse(sources).last_deployable(&output.contracts) {
                 return Ok(full_path);
             }

@@ -10,7 +10,6 @@
     }
   },
   "settings": {
-    "viaIR": true,
     "optimizer": {
       "mode": "3",
       "sizeFallback": true

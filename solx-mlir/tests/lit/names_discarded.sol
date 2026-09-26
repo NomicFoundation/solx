@@ -1,14 +1,12 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// solc's print-init crashes on a discarded struct, error, or event name, so this is solx-only.
-
-// CHECK: sol.func @{{.*structs.*}}()
-// CHECK-NEXT:   sol.return
-
 // CHECK: sol.func @{{.*errors.*}}()
 // CHECK-NEXT:   sol.return
 
 // CHECK: sol.func @{{.*events.*}}()
+// CHECK-NEXT:   sol.return
+
+// CHECK: sol.func @{{.*structs.*}}()
 // CHECK-NEXT:   sol.return
 
 struct Pair {

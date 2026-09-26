@@ -76,8 +76,6 @@ fn metadata() -> anyhow::Result<()> {
 #[test_case("--devdoc")]
 #[test_case("--storage-layout")]
 #[test_case("--transient-storage-layout")]
-#[test_case("--asm-solc-json")]
-#[test_case("--ir")]
 fn unavailable(flag: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 

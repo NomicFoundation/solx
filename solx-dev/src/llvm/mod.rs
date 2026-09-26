@@ -22,7 +22,6 @@ use anyhow::Context;
 ///
 pub fn build(
     build_type: BuildType,
-    enable_mlir: bool,
     enable_utils: bool,
     install_distribution: bool,
     enable_tests: bool,
@@ -58,7 +57,6 @@ pub fn build(
         if cfg!(target_os = "linux") {
             platforms::x86_64_linux_gnu::build(
                 build_type,
-                enable_mlir,
                 enable_utils,
                 install_distribution,
                 enable_tests,
@@ -73,7 +71,6 @@ pub fn build(
         } else if cfg!(target_os = "macos") {
             platforms::x86_64_macos::build(
                 build_type,
-                enable_mlir,
                 enable_utils,
                 install_distribution,
                 enable_tests,
@@ -86,7 +83,6 @@ pub fn build(
         } else if cfg!(target_os = "windows") {
             platforms::x86_64_windows_gnu::build(
                 build_type,
-                enable_mlir,
                 enable_utils,
                 install_distribution,
                 enable_tests,
@@ -103,7 +99,6 @@ pub fn build(
         if cfg!(target_os = "linux") {
             platforms::aarch64_linux_gnu::build(
                 build_type,
-                enable_mlir,
                 enable_utils,
                 install_distribution,
                 enable_tests,
@@ -118,7 +113,6 @@ pub fn build(
         } else if cfg!(target_os = "macos") {
             platforms::aarch64_macos::build(
                 build_type,
-                enable_mlir,
                 enable_utils,
                 install_distribution,
                 enable_tests,
@@ -135,9 +129,7 @@ pub fn build(
         anyhow::bail!("Unsupported target architecture");
     }
 
-    if enable_mlir {
-        create_mlir_link_stub()?;
-    }
+    create_mlir_link_stub()?;
 
     Ok(())
 }
@@ -151,8 +143,8 @@ pub fn build(
 ///
 /// Fragility: if a future mlir-sys version expects symbols from the
 /// monolithic libMLIR.a that are not in the component libraries, the link
-/// will fail. Also, this stub is only created by `solx-dev llvm build
-/// --enable-mlir`; manual LLVM builds must create it themselves.
+/// will fail. Also, this stub is only created by `solx-dev llvm build`;
+/// manual LLVM builds must create it themselves.
 fn create_mlir_link_stub() -> anyhow::Result<()> {
     let lib_dir = Path::llvm_target_final()?.join("lib");
     let stub_path = lib_dir.join("libMLIR.a");

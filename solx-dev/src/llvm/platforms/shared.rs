@@ -44,14 +44,9 @@ const REQUIRED_LLVM_BINARIES: &[&str] = &["llvm-config"];
 
 ///
 /// The CMake argument for LLVM_ENABLE_PROJECTS.
-/// LLD is always included; MLIR is added when `enable_mlir` is true.
 ///
-pub fn shared_build_opts_projects(enable_mlir: bool) -> Vec<String> {
-    let mut projects = vec!["lld"];
-    if enable_mlir {
-        projects.push("mlir");
-    }
-    vec![format!("-DLLVM_ENABLE_PROJECTS='{}'", projects.join(";"))]
+pub fn shared_build_opts_projects() -> Vec<String> {
+    vec!["-DLLVM_ENABLE_PROJECTS='lld;mlir'".to_owned()]
 }
 
 ///
@@ -213,9 +208,7 @@ pub fn shared_build_opts_coverage(enabled: bool) -> Vec<String> {
 /// time. `llvm-sys` still needs `llvm-config` at Rust build time —
 /// `build_and_install_llvm_binaries` builds it directly via
 /// `ninja llvm-config` and copies the binary into the install prefix
-/// afterwards. `lld-*` is always included because
-/// `shared_build_opts_projects` always enables `lld`. `mlir-*` is included
-/// only when `enable_mlir` is true.
+/// afterwards.
 ///
 /// When `enable_utils` is true, `FileCheck` is added to the whitelist —
 /// `solx-mlir/tests/lit/*.sol` uses it in RUN lines, so it must land in the
@@ -231,7 +224,7 @@ pub fn shared_build_opts_coverage(enabled: bool) -> Vec<String> {
 /// distribution component errors at configure time. How `target-final/bin/
 /// llvm-lit` reaches the install prefix today is independent of this PR.
 ///
-pub fn build_opts_distribution(enable_mlir: bool, enable_utils: bool) -> Vec<String> {
+pub fn build_opts_distribution(enable_utils: bool) -> Vec<String> {
     let mut components = vec![
         "llvm-libraries",
         "llvm-headers",
@@ -239,10 +232,10 @@ pub fn build_opts_distribution(enable_mlir: bool, enable_utils: bool) -> Vec<Str
         "lld-libraries",
         "lld-headers",
         "lld-cmake-exports",
+        "mlir-libraries",
+        "mlir-headers",
+        "mlir-cmake-exports",
     ];
-    if enable_mlir {
-        components.extend(["mlir-libraries", "mlir-headers", "mlir-cmake-exports"]);
-    }
     if enable_utils {
         components.push("FileCheck");
     }

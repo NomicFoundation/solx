@@ -83,6 +83,12 @@ unsafe extern "C" {
     /// Creates an `EvmVersionAttr`.
     pub fn solxCreateEvmVersionAttr(context: MlirContext, version: u32) -> mlir_sys::MlirAttribute;
 
+    /// Creates a `RevertStringsAttr`.
+    pub fn solxCreateRevertStringsAttr(
+        context: MlirContext,
+        revert_strings: u32,
+    ) -> mlir_sys::MlirAttribute;
+
     /// Creates an MLIR `IntegerAttr` of `ty` from an LSB-first array of
     /// `num_words` 64-bit chunks describing the unsigned magnitude. When
     /// `is_negative` is true the result is the two's-complement of that

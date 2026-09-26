@@ -128,9 +128,9 @@ impl Benchmark {
         project: String,
         mut report: Benchmark,
     ) -> anyhow::Result<()> {
-        report.tests.retain(|name, _| {
-            name.starts_with("solx-solidity") || name.starts_with("tests/solidity")
-        });
+        report
+            .tests
+            .retain(|name, _| name.starts_with("solidity") || name.starts_with("tests/solidity"));
 
         for (name, test) in report.tests.into_iter() {
             let selector = TestSelector {

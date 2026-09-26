@@ -1,5 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.immutable @{{.*x.*}} : ui256
 // CHECK: sol.state_var @{{.*y.*}} slot 0 offset 0 : ui256

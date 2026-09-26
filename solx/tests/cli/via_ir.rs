@@ -5,6 +5,7 @@
 use predicates::prelude::*;
 
 #[test]
+#[ignore = "solx does not support viaIR yet"]
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -14,6 +15,20 @@ fn default() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("Binary:\n"));
+
+    Ok(())
+}
+
+#[test]
+fn rejected() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &["--via-ir", "--bin", crate::common::TEST_SOLIDITY_CONTRACT];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .failure()
+        .stderr(predicate::str::contains("viaIR is not supported yet."));
 
     Ok(())
 }
@@ -75,6 +90,7 @@ fn standard_json() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "solx does not support viaIR yet"]
 fn emit_llvm_ir() -> anyhow::Result<()> {
     crate::common::setup()?;
 

@@ -158,7 +158,6 @@ impl Build {
     /// Drops every captured MLIR stage on every contract except the one
     /// matching `dialect`.
     ///
-    #[cfg(feature = "mlir")]
     pub fn retain_mlir_dialect(&mut self, dialect: solx_mlir::Dialect) {
         for contract in self.contracts.values_mut() {
             if let Some(output) = contract.mlir.as_mut() {

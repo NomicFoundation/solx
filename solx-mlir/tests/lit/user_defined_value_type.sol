@@ -1,20 +1,15 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @{{.*identity_unsigned.*}}: ui256) -> ui256
-// CHECK: sol.func @{{.*identity_signed.*}}: si8) -> si8
 // CHECK: sol.func @{{.*identity_address.*}}: !sol.address) -> !sol.address
 // CHECK: sol.func @{{.*identity_boolean.*}}: i1) -> i1
+// CHECK: sol.func @{{.*identity_signed.*}}: si8) -> si8
+// CHECK: sol.func @{{.*identity_unsigned.*}}: ui256) -> ui256
 
-// CHECK: sol.func @{{.*wrap_unsigned.*}}: ui256) -> ui256
+// CHECK: sol.func @{{.*unwrap_address.*}}: !sol.address) -> !sol.address
 // CHECK:   %[[VALUE:.*]] = sol.load
 // CHECK-NEXT:   sol.return %[[VALUE]]
 
-// CHECK: sol.func @{{.*unwrap_unsigned.*}}: ui256) -> ui256
-// CHECK:   %[[VALUE:.*]] = sol.load
-// CHECK-NEXT:   sol.return %[[VALUE]]
-
-// CHECK: sol.func @{{.*wrap_signed.*}}: si8) -> si8
+// CHECK: sol.func @{{.*unwrap_boolean.*}}: i1) -> i1
 // CHECK:   %[[VALUE:.*]] = sol.load
 // CHECK-NEXT:   sol.return %[[VALUE]]
 
@@ -22,11 +17,11 @@
 // CHECK:   %[[VALUE:.*]] = sol.load
 // CHECK-NEXT:   sol.return %[[VALUE]]
 
-// CHECK: sol.func @{{.*wrap_address.*}}: !sol.address) -> !sol.address
+// CHECK: sol.func @{{.*unwrap_unsigned.*}}: ui256) -> ui256
 // CHECK:   %[[VALUE:.*]] = sol.load
 // CHECK-NEXT:   sol.return %[[VALUE]]
 
-// CHECK: sol.func @{{.*unwrap_address.*}}: !sol.address) -> !sol.address
+// CHECK: sol.func @{{.*wrap_address.*}}: !sol.address) -> !sol.address
 // CHECK:   %[[VALUE:.*]] = sol.load
 // CHECK-NEXT:   sol.return %[[VALUE]]
 
@@ -34,7 +29,11 @@
 // CHECK:   %[[VALUE:.*]] = sol.load
 // CHECK-NEXT:   sol.return %[[VALUE]]
 
-// CHECK: sol.func @{{.*unwrap_boolean.*}}: i1) -> i1
+// CHECK: sol.func @{{.*wrap_signed.*}}: si8) -> si8
+// CHECK:   %[[VALUE:.*]] = sol.load
+// CHECK-NEXT:   sol.return %[[VALUE]]
+
+// CHECK: sol.func @{{.*wrap_unsigned.*}}: ui256) -> ui256
 // CHECK:   %[[VALUE:.*]] = sol.load
 // CHECK-NEXT:   sol.return %[[VALUE]]
 

@@ -23,11 +23,8 @@ use crate::process::session::Session as EVMProcessSession;
 
 use self::contract::Contract;
 use self::contract::ir::IR as ContractIR;
-use self::contract::ir::evmla::EVMLegacyAssembly as ContractEVMLegacyAssembly;
 use self::contract::ir::llvm_ir::LLVMIR as ContractLLVMIR;
-#[cfg(feature = "mlir")]
 use self::contract::ir::mlir::MLIR as ContractMLIR;
-use self::contract::ir::yul::Yul as ContractYul;
 use self::contract::metadata::Metadata as ContractMetadata;
 
 ///
@@ -35,10 +32,7 @@ use self::contract::metadata::Metadata as ContractMetadata;
 ///
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Project {
-    /// The project language.
-    pub language: solx_standard_json::InputLanguage,
-    /// The `solc` compiler version.
-    /// Used only for Solidity and Yul input languages.
+    /// The `solc` compiler version, absent for LLVM IR projects.
     pub solc_version: Option<solx_standard_json::Version>,
     /// The project build results.
     pub contracts: BTreeMap<String, Contract>,
@@ -46,9 +40,6 @@ pub struct Project {
     pub ast_jsons: Option<BTreeMap<String, Option<serde_json::Value>>>,
     /// The library addresses.
     pub libraries: solx_utils::Libraries,
-    /// Solidity function definitions.
-    #[serde(skip)]
-    pub debug_info: Option<solx_utils::DebugInfo>,
 }
 
 impl Project {
@@ -59,28 +50,16 @@ impl Project {
     /// A shortcut constructor.
     ///
     pub fn new(
-        language: solx_standard_json::InputLanguage,
         solc_version: Option<solx_standard_json::Version>,
         contracts: BTreeMap<String, Contract>,
         ast_jsons: Option<BTreeMap<String, Option<serde_json::Value>>>,
         libraries: solx_utils::Libraries,
-        debug_info: Option<solx_utils::DebugInfo>,
     ) -> Self {
-        let solc_version = match language {
-            solx_standard_json::InputLanguage::Solidity
-            | solx_standard_json::InputLanguage::Yul => Some(
-                solc_version.expect("`solc` version is mandatory for Solidity and Yul projects"),
-            ),
-            solx_standard_json::InputLanguage::LLVMIR => None,
-        };
-
         Self {
-            language,
             solc_version,
             contracts,
             ast_jsons,
             libraries,
-            debug_info,
         }
     }
 
@@ -90,67 +69,23 @@ impl Project {
     pub fn try_from_solidity_output(
         solc_version: &solx_standard_json::Version,
         libraries: solx_utils::Libraries,
-        via_ir: bool,
-        solc_output: &mut solx_standard_json::Output,
-        debug_info: Option<solx_utils::DebugInfo>,
-        output_selection: &solx_standard_json::InputSelection,
-        output_config: Option<&solx_codegen_evm::OutputConfig>,
+        output: &mut solx_standard_json::Output,
     ) -> anyhow::Result<Self> {
-        #[cfg(feature = "mlir")]
-        let _ = (via_ir, output_config);
-
-        solc_output
-            .contracts
-            .values_mut()
-            .flat_map(|file| file.values_mut())
-            .filter_map(|contract| contract.evm.as_mut()?.legacy_assembly.as_mut())
-            .collect::<Vec<_>>()
-            .into_par_iter()
-            .try_for_each(|legacy_assembly| legacy_assembly.materialize())?;
-
-        #[cfg(not(feature = "mlir"))]
-        if !via_ir {
-            let legacy_assemblies: BTreeMap<
-                String,
-                BTreeMap<String, &mut solx_evm_assembly::Assembly>,
-            > = solc_output
-                .contracts
-                .iter_mut()
-                .map(|(path, file)| {
-                    let legacy_assemblies: BTreeMap<String, &mut solx_evm_assembly::Assembly> =
-                        file.iter_mut()
-                            .filter_map(|(name, contract)| {
-                                Some((
-                                    name.to_owned(),
-                                    contract
-                                        .evm
-                                        .as_mut()
-                                        .and_then(|evm| evm.legacy_assembly.as_mut())
-                                        .map(|legacy_assembly| legacy_assembly.parsed_mut())?,
-                                ))
-                            })
-                            .collect();
-                    (path.to_owned(), legacy_assemblies)
-                })
-                .collect();
-            solx_evm_assembly::Assembly::preprocess_dependencies(legacy_assemblies)?;
-        }
-
-        let ast_jsons = solc_output
+        let ast_jsons = output
             .sources
             .iter_mut()
             .map(|(path, source)| (path.to_owned(), source.ast.take()))
             .collect::<BTreeMap<String, Option<serde_json::Value>>>();
 
-        let mut input_contracts = Vec::with_capacity(solc_output.contracts.len());
-        for path in solc_output
+        let mut input_contracts = Vec::with_capacity(output.contracts.len());
+        for path in output
             .contracts
             .keys()
             .cloned()
             .collect::<Vec<_>>()
             .into_iter()
         {
-            let file = solc_output
+            let file = output
                 .contracts
                 .remove(path.as_str())
                 .expect("Always exists");
@@ -167,18 +102,6 @@ impl Project {
                     .evm
                     .as_mut()
                     .and_then(|evm| evm.method_identifiers.take());
-                let legacy_assembly = contract
-                    .evm
-                    .as_mut()
-                    .and_then(|evm| evm.legacy_assembly.take())
-                    .map(solx_standard_json::OutputContractEVMLegacyAssembly::into_parsed);
-                let output_legacy_assembly = output_selection.check_selection(
-                    name.path.as_str(),
-                    name.name.as_deref(),
-                    solx_standard_json::InputSelector::EVMLegacyAssembly,
-                );
-
-                #[cfg(feature = "mlir")]
                 let result = contract.mlir.as_ref().map(|output| {
                     let runtime_code = ContractMLIR {
                         source: output.runtime_source.clone(),
@@ -192,29 +115,6 @@ impl Project {
                     };
                     Ok::<_, anyhow::Error>(Some(ContractIR::from(deploy_code)))
                 });
-                #[cfg(feature = "mlir")]
-                let mlir_stages = contract.mlir.take();
-                #[cfg(not(feature = "mlir"))]
-                let result = if via_ir {
-                    contract.ir.as_deref().map(|ir| {
-                        ContractYul::try_from_source(name.full_path.as_str(), ir, output_config)
-                            .map(|yul| yul.map(ContractIR::from))
-                    })
-                } else {
-                    let extra_metadata = contract
-                        .evm
-                        .as_mut()
-                        .and_then(|evm| evm.extra_metadata.take());
-                    legacy_assembly.as_ref().map(|legacy_assembly| {
-                        Ok(Some(ContractIR::from(
-                            ContractEVMLegacyAssembly::from_contract(
-                                name.full_path.as_str(),
-                                legacy_assembly.to_owned(),
-                                extra_metadata,
-                            )?,
-                        )))
-                    })
-                };
                 let ir = match result {
                     Some(Ok(Some(ir))) => Some(ir),
                     Some(Err(error)) => return (name, Err(error)),
@@ -231,10 +131,7 @@ impl Project {
                     contract.devdoc,
                     contract.storage_layout,
                     contract.transient_storage_layout,
-                    legacy_assembly.filter(|_| output_legacy_assembly),
-                    contract.ir,
-                    #[cfg(feature = "mlir")]
-                    mlir_stages,
+                    contract.mlir.take(),
                 );
                 (name, Ok(contract))
             })
@@ -246,147 +143,14 @@ impl Project {
                 Ok(contract) => {
                     contracts.insert(contract_name.full_path, contract);
                 }
-                Err(error) => solc_output.push_error(contract_name.path.as_str(), error),
+                Err(error) => output.push_error(contract_name.path.as_str(), error),
             }
         }
         Ok(Project::new(
-            solx_standard_json::InputLanguage::Solidity,
             Some(solc_version.to_owned()),
             contracts,
             Some(ast_jsons),
             libraries,
-            debug_info,
-        ))
-    }
-
-    ///
-    /// Reads the Yul source code `paths` and returns a Yul project.
-    ///
-    pub fn try_from_yul_paths(
-        solc_version: &solx_standard_json::Version,
-        paths: &[PathBuf],
-        libraries: solx_utils::Libraries,
-        output_selection: &solx_standard_json::InputSelection,
-        solc_output: Option<&mut solx_standard_json::Output>,
-        output_config: Option<&solx_codegen_evm::OutputConfig>,
-    ) -> anyhow::Result<Self> {
-        let sources = paths
-            .iter()
-            .map(|path| {
-                let source = solx_standard_json::InputSource::try_from_path(path.as_path())?;
-                let path = if path.to_string_lossy()
-                    == solx_standard_json::InputSource::STDIN_INPUT_IDENTIFIER
-                {
-                    solx_standard_json::InputSource::STDIN_OUTPUT_IDENTIFIER.to_owned()
-                } else {
-                    path.to_string_lossy().to_string()
-                };
-                Ok((path, source))
-            })
-            .collect::<anyhow::Result<BTreeMap<String, solx_standard_json::InputSource>>>()?;
-
-        Self::try_from_yul_sources(
-            solc_version,
-            sources,
-            libraries,
-            output_selection,
-            solc_output,
-            output_config,
-        )
-    }
-
-    ///
-    /// Parses the Yul `sources` and returns a Yul project.
-    ///
-    pub fn try_from_yul_sources(
-        solc_version: &solx_standard_json::Version,
-        sources: BTreeMap<String, solx_standard_json::InputSource>,
-        libraries: solx_utils::Libraries,
-        output_selection: &solx_standard_json::InputSelection,
-        mut solc_output: Option<&mut solx_standard_json::Output>,
-        output_config: Option<&solx_codegen_evm::OutputConfig>,
-    ) -> anyhow::Result<Self> {
-        let results = sources
-            .into_par_iter()
-            .map(|(path, mut source)| {
-                let mut name = solx_utils::ContractName::new(path.clone(), None);
-
-                let source_code = match source.try_resolve() {
-                    Ok(()) => match source.take_content() {
-                        Some(content) => content,
-                        None => {
-                            return (
-                                name,
-                                Err(anyhow::anyhow!("Source content is missing for `{path}`")),
-                            );
-                        }
-                    },
-                    Err(error) => return (name, Err(error)),
-                };
-
-                let metadata = if output_selection.check_selection(
-                    path.as_str(),
-                    None,
-                    solx_standard_json::InputSelector::Metadata,
-                ) {
-                    let source_hash = solx_utils::Keccak256Hash::from_slice(source_code.as_bytes());
-                    let metadata_json = serde_json::json!({
-                        "source_hash": source_hash.to_string(),
-                        "solc_version": solc_version,
-                    });
-                    Some(serde_json::to_string(&metadata_json).expect("Always valid"))
-                } else {
-                    None
-                };
-
-                let ir = match ContractYul::try_from_source(
-                    path.as_str(),
-                    source_code.as_str(),
-                    output_config,
-                ) {
-                    Ok(ir) => ir,
-                    Err(error) => return (name, Err(error)),
-                };
-                name.name = ir.as_ref().map(|ir| ir.object.identifier.to_owned());
-
-                let contract = Contract::new(
-                    name.clone(),
-                    ir.map(ContractIR::from),
-                    metadata,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    Some(source_code),
-                    #[cfg(feature = "mlir")]
-                    None,
-                );
-                (name, Ok(contract))
-            })
-            .collect::<Vec<(solx_utils::ContractName, anyhow::Result<Contract>)>>();
-
-        let mut contracts = BTreeMap::new();
-        for (contract_name, result) in results.into_iter() {
-            match result {
-                Ok(contract) => {
-                    contracts.insert(contract_name.full_path, contract);
-                }
-                Err(error) => match solc_output.as_mut() {
-                    Some(solc_output) => solc_output.push_error(contract_name.path.as_str(), error),
-                    None => anyhow::bail!(error),
-                },
-            }
-        }
-        Ok(Self::new(
-            solx_standard_json::InputLanguage::Yul,
-            Some(solc_version.to_owned()),
-            contracts,
-            None,
-            libraries,
-            None,
         ))
     }
 
@@ -397,7 +161,7 @@ impl Project {
         paths: &[PathBuf],
         libraries: solx_utils::Libraries,
         output_selection: &solx_standard_json::InputSelection,
-        solc_output: Option<&mut solx_standard_json::Output>,
+        output: Option<&mut solx_standard_json::Output>,
     ) -> anyhow::Result<Self> {
         let sources = paths
             .iter()
@@ -414,7 +178,7 @@ impl Project {
             })
             .collect::<anyhow::Result<BTreeMap<String, solx_standard_json::InputSource>>>()?;
 
-        Self::try_from_llvm_ir_sources(sources, libraries, output_selection, solc_output)
+        Self::try_from_llvm_ir_sources(sources, libraries, output_selection, output)
     }
 
     ///
@@ -424,7 +188,7 @@ impl Project {
         sources: BTreeMap<String, solx_standard_json::InputSource>,
         libraries: solx_utils::Libraries,
         output_selection: &solx_standard_json::InputSelection,
-        mut solc_output: Option<&mut solx_standard_json::Output>,
+        mut output: Option<&mut solx_standard_json::Output>,
     ) -> anyhow::Result<Self> {
         let results = sources
             .into_par_iter()
@@ -477,9 +241,6 @@ impl Project {
                     None,
                     None,
                     None,
-                    None,
-                    #[cfg(feature = "mlir")]
-                    None,
                 );
 
                 (contract_name, Ok(contract))
@@ -492,20 +253,13 @@ impl Project {
                 Ok(contract) => {
                     contracts.insert(contract_name.full_path, contract);
                 }
-                Err(error) => match solc_output.as_mut() {
-                    Some(solc_output) => solc_output.push_error(contract_name.path.as_str(), error),
+                Err(error) => match output.as_mut() {
+                    Some(output) => output.push_error(contract_name.path.as_str(), error),
                     None => anyhow::bail!(error),
                 },
             }
         }
-        Ok(Self::new(
-            solx_standard_json::InputLanguage::LLVMIR,
-            None,
-            contracts,
-            None,
-            libraries,
-            None,
-        ))
+        Ok(Self::new(None, contracts, None, libraries))
     }
 
     ///
@@ -523,16 +277,12 @@ impl Project {
         output_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<EVMBuild> {
         let Self {
-            language,
             solc_version,
             contracts,
             ast_jsons,
             libraries: _,
-            debug_info,
         } = self;
         let pool = EVMProcessPool::new(EVMProcessSession::new(
-            language,
-            solc_version.clone(),
             evm_version,
             output_selection.clone(),
             llvm_options.clone(),
@@ -565,86 +315,10 @@ impl Project {
                 let devdoc = contract.devdoc.take();
                 let storage_layout = contract.storage_layout.take();
                 let transient_storage_layout = contract.transient_storage_layout.take();
-                let legacy_assembly = contract.legacy_assembly.take();
-                let yul = contract.yul.take();
-                #[cfg(feature = "mlir")]
                 let mlir = contract.mlir.take();
-
-                let mut deploy_debug_info: Option<solx_utils::DebugInfo> = None;
-                let mut runtime_debug_info: Option<solx_utils::DebugInfo> = None;
 
                 let (deploy_code_ir, runtime_code_ir): (ContractIR, ContractIR) = match contract.ir
                 {
-                    Some(ContractIR::Yul(mut deploy_code)) => {
-                        let runtime_code: ContractYul =
-                            *deploy_code.runtime_code.take().expect("Always exists");
-
-                        deploy_debug_info = debug_info.as_ref().and_then(|debug_info| {
-                            output_selection
-                                .check_selection(
-                                    path.as_str(),
-                                    contract_name.name.as_deref(),
-                                    solx_standard_json::InputSelector::BytecodeDebugInfo,
-                                )
-                                .then(|| {
-                                    debug_info.filter_to(
-                                        &deploy_code.object.sources.keys().copied().collect(),
-                                        contract_name.name.as_deref(),
-                                    )
-                                })
-                        });
-                        runtime_debug_info = debug_info.as_ref().and_then(|debug_info| {
-                            output_selection
-                                .check_selection(
-                                    path.as_str(),
-                                    contract_name.name.as_deref(),
-                                    solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
-                                )
-                                .then(|| {
-                                    debug_info.filter_to(
-                                        &runtime_code.object.sources.keys().copied().collect(),
-                                        contract_name.name.as_deref(),
-                                    )
-                                })
-                        });
-
-                        (deploy_code.into(), runtime_code.into())
-                    }
-                    Some(ContractIR::EVMLegacyAssembly(mut deploy_code)) => {
-                        let runtime_code: ContractEVMLegacyAssembly =
-                            *deploy_code.runtime_code.take().expect("Always exists");
-
-                        deploy_debug_info = debug_info.as_ref().and_then(|debug_info| {
-                            output_selection
-                                .check_selection(
-                                    path.as_str(),
-                                    contract_name.name.as_deref(),
-                                    solx_standard_json::InputSelector::BytecodeDebugInfo,
-                                )
-                                .then(|| {
-                                    debug_info.filter_to(
-                                        &deploy_code.assembly.source_ids(),
-                                        contract_name.name.as_deref(),
-                                    )
-                                })
-                        });
-                        runtime_debug_info = debug_info.as_ref().and_then(|debug_info| {
-                            output_selection
-                                .check_selection(
-                                    path.as_str(),
-                                    contract_name.name.as_deref(),
-                                    solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
-                                )
-                                .then(|| {
-                                    debug_info.filter_to(
-                                        &runtime_code.assembly.source_ids(),
-                                        contract_name.name.as_deref(),
-                                    )
-                                })
-                        });
-
-                        (deploy_code.into(), runtime_code.into())
-                    }
                     Some(ContractIR::LLVMIR(runtime_code)) => {
                         let deploy_code_identifier = contract.name.full_path.to_owned();
                         let runtime_code_identifier = format!(
@@ -662,7 +336,6 @@ impl Project {
                         );
                         (deploy_code.into(), runtime_code.into())
                     }
-                    #[cfg(feature = "mlir")]
                     Some(ContractIR::MLIR(mut deploy_code)) => {
                         let runtime_code: ContractMLIR =
                             *deploy_code.runtime_code.take().expect("Always exists");
@@ -680,9 +353,6 @@ impl Project {
                             devdoc,
                             storage_layout,
                             transient_storage_layout,
-                            legacy_assembly,
-                            yul,
-                            #[cfg(feature = "mlir")]
                             mlir,
                         );
                         return (path, build);
@@ -701,7 +371,6 @@ impl Project {
                         contract_name.clone(),
                         runtime_code_ir,
                         solx_utils::CodeSegment::Runtime,
-                        runtime_debug_info,
                         None,
                         metadata_bytes,
                         optimizer_settings.clone(),
@@ -720,7 +389,6 @@ impl Project {
                         contract_name.clone(),
                         deploy_code_ir,
                         solx_utils::CodeSegment::Deploy,
-                        deploy_debug_info,
                         immutables,
                         None,
                         optimizer_settings.clone(),
@@ -742,9 +410,6 @@ impl Project {
                     devdoc,
                     storage_layout,
                     transient_storage_layout,
-                    legacy_assembly,
-                    yul,
-                    #[cfg(feature = "mlir")]
                     mlir,
                 );
                 (path, build)

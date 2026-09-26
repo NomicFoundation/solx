@@ -13,10 +13,9 @@ solx_bin_dir = os.path.join(
     os.environ.get("SOLX_LIT_TARGET", ""),
     os.environ.get("SOLX_LIT_PROFILE", "debug"),
 )
-solc_bin_dir = os.path.join(solx_root, "solx-solidity", "build", "solc")
 
 config.environment["PATH"] = os.pathsep.join(
-    [solx_bin_dir, solc_bin_dir, os.environ.get("PATH", "")]
+    [solx_bin_dir, os.environ.get("PATH", "")]
 )
 
 config.substitutions.append(

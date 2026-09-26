@@ -21,15 +21,6 @@ pub struct OutputConfig {
     /// Whether to overwrite existing files.
     #[serde(default)]
     pub overwrite: bool,
-    /// Whether to output Yul IR.
-    #[serde(default)]
-    pub output_yul: bool,
-    /// Whether to output EVM legacy assembly.
-    #[serde(default)]
-    pub output_evmla: bool,
-    /// Whether to output Ethereal IR.
-    #[serde(default)]
-    pub output_ethir: bool,
     /// Whether to output LLVM IR.
     #[serde(default)]
     pub output_llvm_ir: bool,
@@ -46,9 +37,6 @@ impl OutputConfig {
         Self {
             output_directory,
             overwrite: true,
-            output_yul: true,
-            output_evmla: true,
-            output_ethir: true,
             output_llvm_ir: true,
             output_assembly: true,
         }
@@ -60,32 +48,15 @@ impl OutputConfig {
     pub fn new(
         output_directory: PathBuf,
         overwrite: bool,
-        output_yul: bool,
-        output_evmla: bool,
-        output_ethir: bool,
         output_llvm_ir: bool,
         output_assembly: bool,
     ) -> Self {
         Self {
             output_directory,
             overwrite,
-            output_yul,
-            output_evmla,
-            output_ethir,
             output_llvm_ir,
             output_assembly,
         }
-    }
-
-    ///
-    /// Checks if any IR output is enabled.
-    ///
-    pub fn has_any_ir_output(&self) -> bool {
-        self.output_yul
-            || self.output_evmla
-            || self.output_ethir
-            || self.output_llvm_ir
-            || self.output_assembly
     }
 
     ///
@@ -98,71 +69,9 @@ impl OutputConfig {
         Ok(Self {
             output_directory: subdirectory_path,
             overwrite: self.overwrite,
-            output_yul: self.output_yul,
-            output_evmla: self.output_evmla,
-            output_ethir: self.output_ethir,
             output_llvm_ir: self.output_llvm_ir,
             output_assembly: self.output_assembly,
         })
-    }
-
-    ///
-    /// Dumps the Yul IR.
-    ///
-    pub fn dump_yul(&self, contract_path: &str, code: &str) -> anyhow::Result<()> {
-        if !self.output_yul {
-            return Ok(());
-        }
-        let mut file_path = self.output_directory.to_owned();
-        let full_file_name = Self::full_file_name(contract_path, None, IRType::Yul);
-        file_path.push(full_file_name);
-        self.write_file(file_path.as_path(), code)?;
-
-        Ok(())
-    }
-
-    ///
-    /// Dumps the EVM legacy assembly IR.
-    ///
-    pub fn dump_evmla(
-        &self,
-        contract_path: &str,
-        code: &str,
-        is_size_fallback: bool,
-        spill_area_size: Option<u64>,
-    ) -> anyhow::Result<()> {
-        if !self.output_evmla {
-            return Ok(());
-        }
-        let suffix = Self::build_suffix(is_size_fallback, spill_area_size);
-        let mut file_path = self.output_directory.to_owned();
-        let full_file_name = Self::full_file_name(contract_path, suffix.as_deref(), IRType::EVMLA);
-        file_path.push(full_file_name);
-        self.write_file(file_path.as_path(), code)?;
-
-        Ok(())
-    }
-
-    ///
-    /// Dumps the Ethereal IR.
-    ///
-    pub fn dump_ethir(
-        &self,
-        contract_path: &str,
-        code: &str,
-        is_size_fallback: bool,
-        spill_area_size: Option<u64>,
-    ) -> anyhow::Result<()> {
-        if !self.output_ethir {
-            return Ok(());
-        }
-        let suffix = Self::build_suffix(is_size_fallback, spill_area_size);
-        let mut file_path = self.output_directory.to_owned();
-        let full_file_name = Self::full_file_name(contract_path, suffix.as_deref(), IRType::EthIR);
-        file_path.push(full_file_name);
-        self.write_file(file_path.as_path(), code)?;
-
-        Ok(())
     }
 
     ///
@@ -299,6 +208,3 @@ impl OutputConfig {
         full_file_name
     }
 }
-
-/// Type alias for backward compatibility during transition.
-pub type DebugConfig = OutputConfig;

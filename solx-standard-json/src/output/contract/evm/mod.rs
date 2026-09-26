@@ -3,12 +3,10 @@
 //!
 
 pub mod bytecode;
-pub mod legacy_assembly;
 
 use std::collections::BTreeMap;
 
 use self::bytecode::Bytecode;
-use self::legacy_assembly::LegacyAssembly;
 
 ///
 /// The `solc --standard-json` output contract EVM data.
@@ -22,19 +20,12 @@ pub struct EVM {
     /// The contract runtime bytecode.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deployed_bytecode: Option<Bytecode>,
-    /// The contract EVM legacy assembly code.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub legacy_assembly: Option<LegacyAssembly>,
     /// The contract function signatures.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub method_identifiers: Option<BTreeMap<String, String>>,
     /// The contract gas estimates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gas_estimates: Option<serde_json::Value>,
-
-    /// The extra EVM legacy assembly metadata.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub extra_metadata: Option<solx_evm_assembly::ExtraMetadata>,
 }
 
 impl EVM {
@@ -51,7 +42,6 @@ impl EVM {
                 .as_ref()
                 .map(|bytecode| bytecode.is_empty())
                 .unwrap_or(true)
-            && self.legacy_assembly.is_none()
             && self.method_identifiers.is_none()
             && self.gas_estimates.is_none()
     }

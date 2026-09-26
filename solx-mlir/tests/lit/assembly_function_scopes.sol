@@ -1,19 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// No print-init RUN line: it names a Yul function by its bare name, and it splits a block after
-// a terminator into a predecessorless one.
-
-// CHECK: sol.func @{{.*sibling_scopes.*}}
-// CHECK:   sol.inline_asm {
-// CHECK:     yul.func @[[G1:g_[0-9]+]] : () -> i256 {
-// CHECK:       yul.store %c1_i256
-// CHECK:     yul.func @[[G2:g_[0-9]+]] : () -> i256 {
-// CHECK:       yul.store %c2_i256
-// CHECK-NOT: yul.func @[[G1]]
-// CHECK-NOT: yul.func @[[G2]]
-// CHECK:     yul.func_call @[[G1]]() : () -> i256
-// CHECK:     yul.func_call @[[G2]]() : () -> i256
-
 // CHECK: sol.func @{{.*leave_in_for_init.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     yul.func @{{.*g.*}} : () -> i256 {
@@ -27,6 +13,17 @@
 // CHECK:       } body {
 // CHECK:       } step {
 // CHECK:         yul.func_return
+
+// CHECK: sol.func @{{.*sibling_scopes.*}}
+// CHECK:   sol.inline_asm {
+// CHECK:     yul.func @[[G1:g_[0-9]+]] : () -> i256 {
+// CHECK:       yul.store %c1_i256
+// CHECK:     yul.func @[[G2:g_[0-9]+]] : () -> i256 {
+// CHECK:       yul.store %c2_i256
+// CHECK-NOT: yul.func @[[G1]]
+// CHECK-NOT: yul.func @[[G2]]
+// CHECK:     yul.func_call @[[G1]]() : () -> i256
+// CHECK:     yul.func_call @[[G2]]() : () -> i256
 
 // CHECK: sol.func @{{.*terminator_in_block.*}}
 // CHECK:   sol.inline_asm {

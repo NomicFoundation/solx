@@ -9,10 +9,6 @@ use solx_utils::MetadataHashType;
 const CBOR_IPFS_HASH_PREFIX: &str = "a264697066735822";
 
 /// The key of the compiler's own section in the metadata.
-#[cfg(feature = "solc")]
-const SECTION_KEY: &str = "\"solx\":{";
-/// The key of the compiler's own section in the metadata.
-#[cfg(not(feature = "solc"))]
 const SECTION_KEY: &str = "\"slang\":{";
 
 #[test]
@@ -46,15 +42,13 @@ fn ipfs() -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    #[cfg(feature = "solc")]
-    result.success().stdout(predicate::str::contains("a264"));
-    #[cfg(not(feature = "solc"))]
     result.success().stdout(predicate::str::contains("a164"));
 
     Ok(())
 }
 
 #[test]
+#[ignore = "solx does not lower Yul yet"]
 fn none_prints_compiler_section() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -78,6 +72,7 @@ fn none_prints_compiler_section() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "solx does not lower Yul yet"]
 fn ipfs_hashes_printed_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 

@@ -6,6 +6,7 @@ use predicates::prelude::*;
 use tempfile::TempDir;
 
 #[test]
+#[ignore = "solx does not emit this output yet"]
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -42,6 +43,7 @@ fn standard_json() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "solx does not emit this output yet"]
 fn output_dir() -> anyhow::Result<()> {
     crate::common::setup()?;
 

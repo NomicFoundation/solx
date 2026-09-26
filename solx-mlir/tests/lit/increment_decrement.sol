@@ -1,21 +1,10 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @{{.*prefix_increment.*}}
-// CHECK:   %[[NEW:.*]] = sol.cadd
-// CHECK:   sol.store %[[NEW]], %{{.*}}
-// CHECK:   sol.return %[[NEW]]
-
-// CHECK: sol.func @{{.*postfix_increment.*}}
+// CHECK: sol.func @{{.*parenthesized.*}}
 // CHECK:   %[[OLD:.*]] = sol.load
 // CHECK:   %[[NEW:.*]] = sol.cadd
 // CHECK:   sol.store %[[NEW]], %{{.*}}
 // CHECK:   sol.return %[[OLD]]
-
-// CHECK: sol.func @{{.*prefix_decrement.*}}
-// CHECK:   %[[NEW:.*]] = sol.csub
-// CHECK:   sol.store %[[NEW]], %{{.*}}
-// CHECK:   sol.return %[[NEW]]
 
 // CHECK: sol.func @{{.*postfix_decrement.*}}
 // CHECK:   %[[OLD:.*]] = sol.load
@@ -23,18 +12,14 @@
 // CHECK:   sol.store %[[NEW]], %{{.*}}
 // CHECK:   sol.return %[[OLD]]
 
-// CHECK: sol.func @{{.*prefix_field.*}}
-// CHECK:   %[[NEW:.*]] = sol.csub
-// CHECK:   sol.store %[[NEW]], %{{.*}}
-// CHECK:   sol.return %[[NEW]]
-
-// CHECK: sol.func @{{.*prefix_index.*}}
-// CHECK:   %[[NEW:.*]] = sol.cadd
-// CHECK:   sol.store %[[NEW]], %{{.*}}
-// CHECK:   sol.return %[[NEW]]
-
 // CHECK: sol.func @{{.*postfix_field.*}}
 // CHECK:   %[[OLD:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Storage>, ui256
+// CHECK:   %[[NEW:.*]] = sol.cadd
+// CHECK:   sol.store %[[NEW]], %{{.*}}
+// CHECK:   sol.return %[[OLD]]
+
+// CHECK: sol.func @{{.*postfix_increment.*}}
+// CHECK:   %[[OLD:.*]] = sol.load
 // CHECK:   %[[NEW:.*]] = sol.cadd
 // CHECK:   sol.store %[[NEW]], %{{.*}}
 // CHECK:   sol.return %[[OLD]]
@@ -45,11 +30,25 @@
 // CHECK:   sol.store %[[NEW]], %{{.*}}
 // CHECK:   sol.return %[[OLD]]
 
-// CHECK: sol.func @{{.*parenthesized.*}}
-// CHECK:   %[[OLD:.*]] = sol.load
+// CHECK: sol.func @{{.*prefix_decrement.*}}
+// CHECK:   %[[NEW:.*]] = sol.csub
+// CHECK:   sol.store %[[NEW]], %{{.*}}
+// CHECK:   sol.return %[[NEW]]
+
+// CHECK: sol.func @{{.*prefix_field.*}}
+// CHECK:   %[[NEW:.*]] = sol.csub
+// CHECK:   sol.store %[[NEW]], %{{.*}}
+// CHECK:   sol.return %[[NEW]]
+
+// CHECK: sol.func @{{.*prefix_increment.*}}
 // CHECK:   %[[NEW:.*]] = sol.cadd
 // CHECK:   sol.store %[[NEW]], %{{.*}}
-// CHECK:   sol.return %[[OLD]]
+// CHECK:   sol.return %[[NEW]]
+
+// CHECK: sol.func @{{.*prefix_index.*}}
+// CHECK:   %[[NEW:.*]] = sol.cadd
+// CHECK:   sol.store %[[NEW]], %{{.*}}
+// CHECK:   sol.return %[[NEW]]
 
 contract C {
     uint256[] array;

@@ -12,12 +12,12 @@
 // CHECK:   sol.call @[[ROOT:.*]]() : () -> ui256
 // CHECK: sol.func @[[ROOT]]() -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability
 // CHECK:   sol.constant 1
-// CHECK: sol.func @{{.*}}pointer{{.*}}
-// CHECK:   sol.func_constant @[[RIGHT]] : !sol.func_ref<() -> ui256>
-// CHECK:   sol.icall
 // CHECK: sol.func @{{.*}}parenthesized{{.*}}
 // CHECK:   sol.call @[[RIGHT]]() : () -> ui256
 // CHECK: sol.func @{{.*}}parenthesized_pointer{{.*}}
+// CHECK:   sol.func_constant @[[RIGHT]] : !sol.func_ref<() -> ui256>
+// CHECK:   sol.icall
+// CHECK: sol.func @{{.*}}pointer{{.*}}
 // CHECK:   sol.func_constant @[[RIGHT]] : !sol.func_ref<() -> ui256>
 // CHECK:   sol.icall
 // CHECK: sol.func @{{.*}}qualified_pointer{{.*}}

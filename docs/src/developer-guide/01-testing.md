@@ -43,9 +43,9 @@ paths hex-encoded inside DWARF output, which differ on every run.
 
 For version bumps, do not use `TRYCMD=overwrite`: the CBOR trailer lines that
 carry the version also carry a `[..]` metadata-digest wildcard, and a blessed
-literal digest only breaks weeks later on the next solc-fork re-pin. Update
-the hex-encoded version strings in the trailer lines directly instead — the
-new bytes are deterministic (hex of `solx:X.Y.Z;solc:A.B.C`).
+literal digest only breaks on the next Slang re-pin. Update the hex-encoded
+version strings in the trailer lines directly instead — the new bytes are
+deterministic (hex of `solx:X.Y.Z;solc:A.B.C`).
 
 ## Integration Tests
 
@@ -61,19 +61,12 @@ cargo build --release
 # Run tests for a specific file
 ./target/release/solx-tester --solidity-compiler ./target/release/solx --path tests/solidity/simple/default.sol
 
-# Run only Yul IR pipeline tests (excludes EVMLA pipeline)
-./target/release/solx-tester --solidity-compiler ./target/release/solx --via-ir
-
 # Run tests with specific optimizer settings
 ./target/release/solx-tester --solidity-compiler ./target/release/solx --optimizer M3B3
-
-# Combine filters: Yul IR pipeline with M3B3 optimizer
-./target/release/solx-tester --solidity-compiler ./target/release/solx --via-ir --optimizer M3B3
 ```
 
 ### Filtering Options
 
-- `--via-ir` — Run only tests using the Yul IR pipeline (codegen `Y`). Without this flag, both Yul IR and EVMLA pipelines are tested.
 - `--optimizer <PATTERN>` — Filter by optimizer settings. Examples:
   - `M3B3` — Match exact optimizer level
   - `M^B3` — Match M3 or Mz with B3
@@ -105,13 +98,12 @@ This section describes the format of test files used by **solx-tester**.
 
 The repository contains three types of tests:
 
-- **Upstream** — Tests following the [Solidity semantic test format](https://github.com/NomicFoundation/solx-solidity/tree/0.8.34/test/libsolidity/semanticTests).
+- **Upstream** — Tests following the [Solidity semantic test format](https://github.com/argotorg/solidity/tree/v0.8.34/test/libsolidity/semanticTests).
 - **Simple** — Single-contract tests.
 - **Complex** — Multi-contract tests and vendored DeFi projects.
 
 Test data is located in:
 - `tests/solidity/` — Solidity test contracts
-- `tests/yul/` — Yul test contracts
 - `tests/llvm-ir/` — LLVM IR test contracts
 
 ### Test Format
@@ -209,5 +201,5 @@ Notes:
 
 ### Upstream Solidity Semantic Tests
 
-These tests follow the [Solidity semantic test format](https://github.com/NomicFoundation/solx-solidity/tree/0.8.34/test/libsolidity/semanticTests).
+These tests follow the [Solidity semantic test format](https://github.com/argotorg/solidity/tree/v0.8.34/test/libsolidity/semanticTests).
 Test descriptions and expected results are embedded as comments in the test file. Lines begin with `//` for Solidity files. The beginning of the test description is indicated by a comment line containing `----`.

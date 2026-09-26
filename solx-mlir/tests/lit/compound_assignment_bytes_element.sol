@@ -1,11 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
-
-// CHECK: sol.func @{{.*or_element.*}}
-// CHECK:   %[[OR_PTR:.*]] = sol.gep %{{.*}}, %{{.*}} : !sol.string<Memory>, ui8, !sol.ptr<!sol.byte, Memory>
-// CHECK:   sol.load %[[OR_PTR]] : !sol.ptr<!sol.byte, Memory>, !sol.byte
-// CHECK:   sol.or %{{.*}}, %{{.*}} : !sol.{{(fixedbytes<1>|byte)}}
-// CHECK:   sol.store %{{.*}}, %[[OR_PTR]] : !sol.byte, !sol.ptr<!sol.byte, Memory>
 
 // CHECK: sol.func @{{.*and_element.*}}
 // CHECK:   %[[AND_PTR:.*]] = sol.gep %{{.*}}, %{{.*}} : !sol.string<Memory>, ui8, !sol.ptr<!sol.byte, Memory>
@@ -13,17 +6,23 @@
 // CHECK:   sol.and %{{.*}}, %{{.*}} : !sol.{{(fixedbytes<1>|byte)}}
 // CHECK:   sol.store %{{.*}}, %[[AND_PTR]] : !sol.byte, !sol.ptr<!sol.byte, Memory>
 
-// CHECK: sol.func @{{.*xor_element.*}}
-// CHECK:   %[[XOR_PTR:.*]] = sol.gep %{{.*}}, %{{.*}} : !sol.string<Memory>, ui8, !sol.ptr<!sol.byte, Memory>
-// CHECK:   sol.load %[[XOR_PTR]] : !sol.ptr<!sol.byte, Memory>, !sol.byte
-// CHECK:   sol.xor %{{.*}}, %{{.*}} : !sol.{{(fixedbytes<1>|byte)}}
-// CHECK:   sol.store %{{.*}}, %[[XOR_PTR]] : !sol.byte, !sol.ptr<!sol.byte, Memory>
+// CHECK: sol.func @{{.*or_element.*}}
+// CHECK:   %[[OR_PTR:.*]] = sol.gep %{{.*}}, %{{.*}} : !sol.string<Memory>, ui8, !sol.ptr<!sol.byte, Memory>
+// CHECK:   sol.load %[[OR_PTR]] : !sol.ptr<!sol.byte, Memory>, !sol.byte
+// CHECK:   sol.or %{{.*}}, %{{.*}} : !sol.{{(fixedbytes<1>|byte)}}
+// CHECK:   sol.store %{{.*}}, %[[OR_PTR]] : !sol.byte, !sol.ptr<!sol.byte, Memory>
 
 // CHECK: sol.func @{{.*or_storage_element.*}}
 // CHECK:   %[[SPTR:.*]] = sol.gep %{{.*}}, %{{.*}} : !sol.string<Storage>, ui8, !sol.ptr<!sol.byte, Storage>
 // CHECK:   sol.load %[[SPTR]] : !sol.ptr<!sol.byte, Storage>, !sol.byte
 // CHECK:   sol.or %{{.*}}, %{{.*}} : !sol.{{(fixedbytes<1>|byte)}}
 // CHECK:   sol.store %{{.*}}, %[[SPTR]] : !sol.byte, !sol.ptr<!sol.byte, Storage>
+
+// CHECK: sol.func @{{.*xor_element.*}}
+// CHECK:   %[[XOR_PTR:.*]] = sol.gep %{{.*}}, %{{.*}} : !sol.string<Memory>, ui8, !sol.ptr<!sol.byte, Memory>
+// CHECK:   sol.load %[[XOR_PTR]] : !sol.ptr<!sol.byte, Memory>, !sol.byte
+// CHECK:   sol.xor %{{.*}}, %{{.*}} : !sol.{{(fixedbytes<1>|byte)}}
+// CHECK:   sol.store %{{.*}}, %[[XOR_PTR]] : !sol.byte, !sol.ptr<!sol.byte, Memory>
 
 contract C {
     bytes data;

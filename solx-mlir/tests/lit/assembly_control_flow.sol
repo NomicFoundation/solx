@@ -1,13 +1,16 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @{{.*if_statement.*}}
+// CHECK: sol.func @{{.*continue_statement.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     yul.if %{{.*}} {
-// CHECK:       yul.store %c3_i256
-// CHECK-NEXT:  yul.yield
-// CHECK-NEXT: } else {
-// CHECK-NEXT: }
+// CHECK:     yul.for cond {
+// CHECK:     } body {
+// CHECK:       yul.if %{{.*}} {
+// CHECK-NEXT:    yul.continue
+// CHECK:       } else {
+// CHECK-NEXT:  }
+// CHECK:       yul.add %{{.*}}, %c13_i256
+// CHECK:       yul.yield
+// CHECK:     } step {
 
 // CHECK: sol.func @{{.*for_statement.*}}
 // CHECK:   sol.inline_asm {
@@ -25,6 +28,19 @@
 // CHECK:       yul.yield
 // CHECK:     }
 
+// CHECK: sol.func @{{.*forward_reference.*}}
+// CHECK:   sol.inline_asm {
+// CHECK:     yul.func @[[LATER:.*later.*]] : (i256) -> i256 {
+// CHECK:     yul.func_call @[[LATER]]
+
+// CHECK: sol.func @{{.*if_statement.*}}
+// CHECK:   sol.inline_asm {
+// CHECK:     yul.if %{{.*}} {
+// CHECK:       yul.store %c3_i256
+// CHECK-NEXT:  yul.yield
+// CHECK-NEXT: } else {
+// CHECK-NEXT: }
+
 // CHECK: sol.func @{{.*infinite_for.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     yul.for cond {
@@ -36,33 +52,26 @@
 // CHECK-NEXT:  yul.yield
 // CHECK-NEXT: }
 
-// CHECK: sol.func @{{.*continue_statement.*}}
+// CHECK: sol.func @{{.*nested_definitions.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     yul.for cond {
-// CHECK:     } body {
-// CHECK:       yul.if %{{.*}} {
-// CHECK-NEXT:    yul.continue
-// CHECK:       } else {
-// CHECK-NEXT:  }
+// CHECK:     yul.func @[[IN_IF:.*in_if.*]] : (i256) -> i256 {
+// CHECK:       yul.add %{{.*}}, %c11_i256
+// CHECK:     yul.func @[[IN_FOR:.*in_for.*]] : (i256) -> i256 {
 // CHECK:       yul.add %{{.*}}, %c13_i256
-// CHECK:       yul.yield
-// CHECK:     } step {
+// CHECK:     yul.func @[[IN_SWITCH:.*in_switch.*]] : (i256) -> i256 {
+// CHECK:       yul.add %{{.*}}, %c17_i256
+// CHECK:     yul.func @[[IN_DEFAULT:.*in_default.*]] : (i256) -> i256 {
+// CHECK:       yul.add %{{.*}}, %c19_i256
+// CHECK:     yul.func_call @[[IN_IF]]
+// CHECK:     yul.func_call @[[IN_FOR]]
+// CHECK:     yul.func_call @[[IN_SWITCH]]
+// CHECK:     yul.func_call @[[IN_DEFAULT]]
 
-// CHECK: sol.func @{{.*switch_statement.*}}
+// CHECK: sol.func @{{.*recursion.*}}
 // CHECK:   sol.inline_asm {
-// CHECK:     yul.switch %{{.*}} : i256
-// CHECK:     case 0 {
-// CHECK:       yul.store %c17_i256
-// CHECK-NEXT:  yul.yield
-// CHECK-NEXT: }
-// CHECK:     case 1 {
-// CHECK:       yul.store %c19_i256
-// CHECK-NEXT:  yul.yield
-// CHECK-NEXT: }
-// CHECK:     default {
-// CHECK:       yul.store %c23_i256
-// CHECK-NEXT:  yul.yield
-// CHECK-NEXT: }
+// CHECK:     yul.func @[[FACT:.*]] : (i256) -> i256 {
+// CHECK:       yul.func_call @[[FACT]](%{{.*}}) : (i256) -> i256
+// CHECK:     yul.func_call @[[FACT]](%{{.*}}) : (i256) -> i256
 
 // CHECK: sol.func @{{.*switch_no_default.*}}
 // CHECK:   sol.inline_asm {
@@ -80,6 +89,22 @@
 // CHECK-NOT: yul.switch
 // CHECK:     yul.store %c31_i256
 // CHECK:   }
+
+// CHECK: sol.func @{{.*switch_statement.*}}
+// CHECK:   sol.inline_asm {
+// CHECK:     yul.switch %{{.*}} : i256
+// CHECK:     case 0 {
+// CHECK:       yul.store %c17_i256
+// CHECK-NEXT:  yul.yield
+// CHECK-NEXT: }
+// CHECK:     case 1 {
+// CHECK:       yul.store %c19_i256
+// CHECK-NEXT:  yul.yield
+// CHECK-NEXT: }
+// CHECK:     default {
+// CHECK:       yul.store %c23_i256
+// CHECK-NEXT:  yul.yield
+// CHECK-NEXT: }
 
 // CHECK: sol.func @{{.*terminator_in_case.*}}
 // CHECK:   sol.inline_asm {
@@ -120,32 +145,6 @@
 // CHECK:     yul.func_call @{{.*}} : (i256) -> i256
 // CHECK:     yul.func_call @{{.*}} : (i256) -> i256
 // CHECK:     yul.add
-
-// CHECK: sol.func @{{.*forward_reference.*}}
-// CHECK:   sol.inline_asm {
-// CHECK:     yul.func @[[LATER:.*later.*]] : (i256) -> i256 {
-// CHECK:     yul.func_call @[[LATER]]
-
-// CHECK: sol.func @{{.*recursion.*}}
-// CHECK:   sol.inline_asm {
-// CHECK:     yul.func @[[FACT:.*]] : (i256) -> i256 {
-// CHECK:       yul.func_call @[[FACT]](%{{.*}}) : (i256) -> i256
-// CHECK:     yul.func_call @[[FACT]](%{{.*}}) : (i256) -> i256
-
-// CHECK: sol.func @{{.*nested_definitions.*}}
-// CHECK:   sol.inline_asm {
-// CHECK:     yul.func @[[IN_IF:.*in_if.*]] : (i256) -> i256 {
-// CHECK:       yul.add %{{.*}}, %c11_i256
-// CHECK:     yul.func @[[IN_FOR:.*in_for.*]] : (i256) -> i256 {
-// CHECK:       yul.add %{{.*}}, %c13_i256
-// CHECK:     yul.func @[[IN_SWITCH:.*in_switch.*]] : (i256) -> i256 {
-// CHECK:       yul.add %{{.*}}, %c17_i256
-// CHECK:     yul.func @[[IN_DEFAULT:.*in_default.*]] : (i256) -> i256 {
-// CHECK:       yul.add %{{.*}}, %c19_i256
-// CHECK:     yul.func_call @[[IN_IF]]
-// CHECK:     yul.func_call @[[IN_FOR]]
-// CHECK:     yul.func_call @[[IN_SWITCH]]
-// CHECK:     yul.func_call @[[IN_DEFAULT]]
 
 contract C {
     function if_statement(uint256 n) public pure returns (uint256 r) {

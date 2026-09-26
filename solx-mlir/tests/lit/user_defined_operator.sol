@@ -1,48 +1,4 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
-// solc's print-init emits the contract alone, so the CHECKs stop at the call sites.
-
-// CHECK: sol.func @{{.*plus.*}}-> ui256
-// CHECK:   sol.call @{{.*add.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
-
-// CHECK: sol.func @{{.*minus.*}}-> ui256
-// CHECK:   sol.call @{{.*sub.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
-
-// CHECK: sol.func @{{.*times.*}}-> ui256
-// CHECK:   sol.call @{{.*mul.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
-
-// CHECK: sol.func @{{.*divided.*}}-> ui256
-// CHECK:   sol.call @{{.*div.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
-
-// CHECK: sol.func @{{.*modulo.*}}-> ui256
-// CHECK:   sol.call @{{.*rem.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
-
-// CHECK: sol.func @{{.*conjunction.*}}-> ui256
-// CHECK:   sol.call @{{.*band.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
-
-// CHECK: sol.func @{{.*disjunction.*}}-> ui256
-// CHECK:   sol.call @{{.*bor.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
-
-// CHECK: sol.func @{{.*exclusive.*}}-> ui256
-// CHECK:   sol.call @{{.*bxor.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
-
-// CHECK: sol.func @{{.*negated.*}}-> ui256
-// CHECK:   sol.call @{{.*neg.*}}(%{{.*}}) : (ui256) -> ui256
-
-// CHECK: sol.func @{{.*inverted.*}}-> ui256
-// CHECK:   sol.call @{{.*bnot.*}}(%{{.*}}) : (ui256) -> ui256
-
-// CHECK: sol.func @{{.*equal.*}}-> i1
-// CHECK:   sol.call @{{.*eq.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> i1
-
-// CHECK: sol.func @{{.*unequal.*}}-> i1
-// CHECK:   sol.call @{{.*ne.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> i1
-
-// CHECK: sol.func @{{.*below.*}}-> i1
-// CHECK:   sol.call @{{.*lt.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> i1
-
-// CHECK: sol.func @{{.*at_most.*}}-> i1
-// CHECK:   sol.call @{{.*le.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> i1
 
 // CHECK: sol.func @{{.*above.*}}-> i1
 // CHECK:   sol.call @{{.*gt.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> i1
@@ -50,15 +6,57 @@
 // CHECK: sol.func @{{.*at_least.*}}-> i1
 // CHECK:   sol.call @{{.*ge.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> i1
 
+// CHECK: sol.func @{{.*at_most.*}}-> i1
+// CHECK:   sol.call @{{.*le.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> i1
+
+// CHECK: sol.func @{{.*below.*}}-> i1
+// CHECK:   sol.call @{{.*lt.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> i1
+
+// CHECK: sol.func @{{.*conjunction.*}}-> ui256
+// CHECK:   sol.call @{{.*band.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
+
+// CHECK: sol.func @{{.*disjunction.*}}-> ui256
+// CHECK:   sol.call @{{.*bor.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
+
+// CHECK: sol.func @{{.*divided.*}}-> ui256
+// CHECK:   sol.call @{{.*div.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
+
+// CHECK: sol.func @{{.*equal.*}}-> i1
+// CHECK:   sol.call @{{.*eq.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> i1
+
+// CHECK: sol.func @{{.*exclusive.*}}-> ui256
+// CHECK:   sol.call @{{.*bxor.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
+
+// CHECK: sol.func @{{.*inverted.*}}-> ui256
+// CHECK:   sol.call @{{.*bnot.*}}(%{{.*}}) : (ui256) -> ui256
+
+// CHECK: sol.func @{{.*minus.*}}-> ui256
+// CHECK:   sol.call @{{.*sub.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
+
+// CHECK: sol.func @{{.*modulo.*}}-> ui256
+// CHECK:   sol.call @{{.*rem.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
+
+// CHECK: sol.func @{{.*negated.*}}-> ui256
+// CHECK:   sol.call @{{.*neg.*}}(%{{.*}}) : (ui256) -> ui256
+
+// CHECK: sol.func @{{.*plus.*}}-> ui256
+// CHECK:   sol.call @{{.*add.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
+
 // CHECK: sol.func @{{.*precedence.*}}-> ui256
 // CHECK:   sol.call @{{.*mul.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
 // CHECK:   sol.call @{{.*add.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
 
+// CHECK: sol.func @{{.*signed_below.*}}-> i1
+// CHECK:   sol.call @{{.*signed_lt.*}}(%{{.*}}, %{{.*}}) : (si256, si256) -> i1
+
 // CHECK: sol.func @{{.*signed_equal.*}}-> i1
 // CHECK:   sol.call @{{.*signed_eq.*}}(%{{.*}}, %{{.*}}) : (si256, si256) -> i1
 
-// CHECK: sol.func @{{.*signed_below.*}}-> i1
-// CHECK:   sol.call @{{.*signed_lt.*}}(%{{.*}}, %{{.*}}) : (si256, si256) -> i1
+// CHECK: sol.func @{{.*times.*}}-> ui256
+// CHECK:   sol.call @{{.*mul.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
+
+// CHECK: sol.func @{{.*unequal.*}}-> i1
+// CHECK:   sol.call @{{.*ne.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> i1
 
 type T is uint256;
 type Signed is int256;

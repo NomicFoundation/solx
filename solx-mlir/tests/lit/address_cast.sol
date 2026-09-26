@@ -1,9 +1,13 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @{{.*identity.*}}
-// CHECK:   %[[VALUE:.*]] = sol.load
-// CHECK-NEXT:   sol.return %[[VALUE]]
+// CHECK: sol.func @{{.*address_to_bytes20.*}}
+// CHECK:   sol.address_cast %{{.*}} : !sol.address to !sol.fixedbytes<20>
+
+// CHECK: sol.func @{{.*address_to_contract.*}}
+// CHECK:   sol.address_cast %{{.*}} : !sol.address to !sol.contract<{{.*Other.*}}>
+
+// CHECK: sol.func @{{.*address_to_interface.*}}
+// CHECK:   sol.address_cast %{{.*}} : !sol.address to !sol.contract<{{.*I.*}}>
 
 // CHECK: sol.func @{{.*address_to_u160.*}}
 // CHECK:   sol.address_cast %{{.*}} : !sol.address to ui160
@@ -12,8 +16,24 @@
 // CHECK:   sol.address_cast %{{.*}} : !sol.address to ui160
 // CHECK:   sol.cast %{{.*}} : ui160 to ui256
 
-// CHECK: sol.func @{{.*address_to_bytes20.*}}
-// CHECK:   sol.address_cast %{{.*}} : !sol.address to !sol.fixedbytes<20>
+// CHECK: sol.func @{{.*contract_to_address.*}}
+// CHECK:   sol.address_cast %{{.*}} : !sol.contract<{{.*Other.*}}> to !sol.address
+
+// CHECK: sol.func @{{.*identity.*}}
+// CHECK:   %[[VALUE:.*]] = sol.load
+// CHECK-NEXT:   sol.return %[[VALUE]]
+
+// CHECK: sol.func @{{.*interface_to_address.*}}
+// CHECK:   sol.address_cast %{{.*}} : !sol.contract<{{.*I.*}}> to !sol.address
+
+// CHECK: sol.func @{{.*literal_to_address.*}}
+// CHECK:   sol.constant 0 : ui8
+// CHECK:   sol.cast %{{.*}} : ui8 to ui160
+// CHECK:   sol.address_cast %{{.*}} : ui160 to !sol.address
+
+// CHECK: sol.func @{{.*this_to_address.*}}
+// CHECK:   %[[SELF:.*]] = sol.this : !sol.contract<{{.*C.*}}>
+// CHECK:   sol.address_cast %[[SELF]] : !sol.contract<{{.*C.*}}> to !sol.address
 
 // CHECK: sol.func @{{.*to_address.*}}
 // CHECK:   sol.cast %{{.*}} : ui256 to ui160
@@ -21,27 +41,6 @@
 
 // CHECK: sol.func @{{.*u160_to_address.*}}
 // CHECK:   sol.address_cast %{{.*}} : ui160 to !sol.address
-
-// CHECK: sol.func @{{.*literal_to_address.*}}
-// CHECK:   sol.constant 0 : ui8
-// CHECK:   sol.cast %{{.*}} : ui8 to ui160
-// CHECK:   sol.address_cast %{{.*}} : ui160 to !sol.address
-
-// CHECK: sol.func @{{.*contract_to_address.*}}
-// CHECK:   sol.address_cast %{{.*}} : !sol.contract<{{.*Other.*}}> to !sol.address
-
-// CHECK: sol.func @{{.*this_to_address.*}}
-// CHECK:   %[[SELF:.*]] = sol.this : !sol.contract<{{.*C.*}}>
-// CHECK:   sol.address_cast %[[SELF]] : !sol.contract<{{.*C.*}}> to !sol.address
-
-// CHECK: sol.func @{{.*interface_to_address.*}}
-// CHECK:   sol.address_cast %{{.*}} : !sol.contract<{{.*I.*}}> to !sol.address
-
-// CHECK: sol.func @{{.*address_to_contract.*}}
-// CHECK:   sol.address_cast %{{.*}} : !sol.address to !sol.contract<{{.*Other.*}}>
-
-// CHECK: sol.func @{{.*address_to_interface.*}}
-// CHECK:   sol.address_cast %{{.*}} : !sol.address to !sol.contract<{{.*I.*}}>
 
 contract C {
     function identity(address a) public pure returns (address) {

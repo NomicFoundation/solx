@@ -1,8 +1,18 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// solc print-init evaluates a creation's constructor arguments before its options, unlike legacy,
-// and casts a string-typed salt straight to integer, failing module verification, so this is
-// solx-only.
+// CHECK: sol.func @{{.*literal_salt.*}}
+// CHECK:   %[[LITERAL:.*]] = sol.constant 452312848583266388373324160190187140051835877600158453279131187530910662656 : ui256
+// CHECK:   %[[BYTES:.*]] = sol.bytes_cast %[[LITERAL]] : ui256 to !sol.fixedbytes<32>
+// CHECK:   %[[SALT:.*]] = sol.bytes_cast %[[BYTES]] : !sol.fixedbytes<32> to ui256
+// CHECK:   sol.new "{{.*}}:Empty" value = %{{.*}} salt = %[[SALT]] ctor() : !sol.contract<"{{.*}}:Empty">
+
+// CHECK: sol.func @{{.*named.*}}
+// CHECK:   %[[FIRST:.*]] = sol.cast %c11_ui8
+// CHECK:   %[[SECOND:.*]] = sol.cast %c99_ui8
+// CHECK:   sol.new "{{.*}}:Child" value = %{{.*}} ctor(%[[FIRST]], %[[SECOND]] : ui256, ui256) : !sol.contract<"{{.*}}:Child">
+
+// CHECK: sol.func @{{.*parenthesized.*}}
+// CHECK:   sol.new "{{.*}}:Child" value = %{{.*}} ctor(%{{.*}}, %{{.*}} : ui256, ui256) : !sol.contract<"{{.*}}:Child">
 
 // CHECK: sol.func @{{.*plain.*}}
 // CHECK:   %[[FIRST:.*]] = sol.cast %{{.*}} : ui8 to ui256
@@ -10,10 +20,14 @@
 // CHECK:   %[[VALUE:.*]] = sol.constant 0 : ui256
 // CHECK:   sol.new "{{.*}}:Child" value = %[[VALUE]] ctor(%[[FIRST]], %[[SECOND]] : ui256, ui256) : !sol.contract<"{{.*}}:Child">
 
-// CHECK: sol.func @{{.*named.*}}
-// CHECK:   %[[FIRST:.*]] = sol.cast %c11_ui8
-// CHECK:   %[[SECOND:.*]] = sol.cast %c99_ui8
-// CHECK:   sol.new "{{.*}}:Child" value = %{{.*}} ctor(%[[FIRST]], %[[SECOND]] : ui256, ui256) : !sol.contract<"{{.*}}:Child">
+// CHECK: sol.func @{{.*reference_argument.*}}
+// CHECK:   %[[SLOT:.*]] = sol.addr_of @{{.*}} : !sol.array<? x ui256, Storage>
+// CHECK:   sol.new "{{.*}}:Holder" value = %{{.*}} ctor(%[[SLOT]] : !sol.array<? x ui256, Storage>) : !sol.contract<"{{.*}}:Holder">
+
+// CHECK: sol.func @{{.*salt_only.*}}
+// CHECK:   %[[SALT:.*]] = sol.bytes_cast %{{.*}} : !sol.fixedbytes<32> to ui256
+// CHECK:   %[[VALUE:.*]] = sol.constant 0 : ui256
+// CHECK:   sol.new "{{.*}}:Empty" value = %[[VALUE]] salt = %[[SALT]] ctor() : !sol.contract<"{{.*}}:Empty">
 
 // CHECK: sol.func @{{.*value_and_salt.*}}
 // CHECK:   %[[VALUE:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
@@ -22,27 +36,9 @@
 // CHECK:   %[[SECOND:.*]] = sol.cast %{{.*}} : ui8 to ui256
 // CHECK:   sol.new "{{.*}}:Child" value = %[[VALUE]] salt = %[[SALT]] ctor(%[[FIRST]], %[[SECOND]] : ui256, ui256) : !sol.contract<"{{.*}}:Child">
 
-// CHECK: sol.func @{{.*literal_salt.*}}
-// CHECK:   %[[LITERAL:.*]] = sol.constant 452312848583266388373324160190187140051835877600158453279131187530910662656 : ui256
-// CHECK:   %[[BYTES:.*]] = sol.bytes_cast %[[LITERAL]] : ui256 to !sol.fixedbytes<32>
-// CHECK:   %[[SALT:.*]] = sol.bytes_cast %[[BYTES]] : !sol.fixedbytes<32> to ui256
-// CHECK:   sol.new "{{.*}}:Empty" value = %{{.*}} salt = %[[SALT]] ctor() : !sol.contract<"{{.*}}:Empty">
-
-// CHECK: sol.func @{{.*salt_only.*}}
-// CHECK:   %[[SALT:.*]] = sol.bytes_cast %{{.*}} : !sol.fixedbytes<32> to ui256
-// CHECK:   %[[VALUE:.*]] = sol.constant 0 : ui256
-// CHECK:   sol.new "{{.*}}:Empty" value = %[[VALUE]] salt = %[[SALT]] ctor() : !sol.contract<"{{.*}}:Empty">
-
 // CHECK: sol.func @{{.*value_only.*}}
 // CHECK:   %[[VALUE:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
 // CHECK:   sol.new "{{.*}}:Empty" value = %[[VALUE]] ctor() : !sol.contract<"{{.*}}:Empty">
-
-// CHECK: sol.func @{{.*reference_argument.*}}
-// CHECK:   %[[SLOT:.*]] = sol.addr_of @{{.*}} : !sol.array<? x ui256, Storage>
-// CHECK:   sol.new "{{.*}}:Holder" value = %{{.*}} ctor(%[[SLOT]] : !sol.array<? x ui256, Storage>) : !sol.contract<"{{.*}}:Holder">
-
-// CHECK: sol.func @{{.*parenthesized.*}}
-// CHECK:   sol.new "{{.*}}:Child" value = %{{.*}} ctor(%{{.*}}, %{{.*}} : ui256, ui256) : !sol.contract<"{{.*}}:Child">
 
 contract C {
     uint256[] stored;

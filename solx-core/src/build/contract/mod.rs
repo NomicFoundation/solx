@@ -38,12 +38,7 @@ pub struct Contract {
     pub storage_layout: Option<serde_json::Value>,
     /// solc transient storage layout.
     pub transient_storage_layout: Option<serde_json::Value>,
-    /// solc EVM legacy assembly.
-    pub legacy_assembly: Option<solx_evm_assembly::Assembly>,
-    /// solc Yul IR.
-    pub yul: Option<String>,
     /// MLIR pipeline output.
-    #[cfg(feature = "mlir")]
     pub mlir: Option<solx_mlir::MlirOutput>,
 }
 
@@ -62,9 +57,7 @@ impl Contract {
         devdoc: Option<serde_json::Value>,
         storage_layout: Option<serde_json::Value>,
         transient_storage_layout: Option<serde_json::Value>,
-        legacy_assembly: Option<solx_evm_assembly::Assembly>,
-        yul: Option<String>,
-        #[cfg(feature = "mlir")] mlir: Option<solx_mlir::MlirOutput>,
+        mlir: Option<solx_mlir::MlirOutput>,
     ) -> Self {
         Self {
             name,
@@ -77,9 +70,6 @@ impl Contract {
             devdoc,
             storage_layout,
             transient_storage_layout,
-            legacy_assembly,
-            yul,
-            #[cfg(feature = "mlir")]
             mlir,
         }
     }
@@ -96,15 +86,6 @@ impl Contract {
             "\n======= {} =======",
             self.name.full_path
         )?;
-
-        if output_selection.check_selection(
-            self.name.path.as_str(),
-            self.name.name.as_deref(),
-            solx_standard_json::InputSelector::EVMLegacyAssembly,
-        ) && let Some(legacy_assembly) = self.legacy_assembly.take()
-        {
-            writeln!(std::io::stdout(), "EVM assembly:\n{legacy_assembly}")?;
-        }
 
         if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
             && output_selection.check_selection(
@@ -177,52 +158,6 @@ impl Contract {
             )?;
         }
 
-        if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
-            && output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::BytecodeDebugInfo,
-            )
-        {
-            let debug_info = deploy_object_result
-                .as_mut()
-                .expect("Always exists")
-                .debug_info
-                .take()
-                .map(hex::encode)
-                .expect("Always exists");
-            writeln!(std::io::stdout(), "Debug info:\n{debug_info}")?;
-        }
-        if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
-            && output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
-            )
-        {
-            let debug_info = runtime_object_result
-                .as_mut()
-                .expect("Always exists")
-                .debug_info
-                .take()
-                .map(hex::encode)
-                .expect("Always valid");
-            writeln!(
-                std::io::stdout(),
-                "Debug info of the runtime part:\n{debug_info}"
-            )?;
-        }
-
-        if output_selection.check_selection(
-            self.name.path.as_str(),
-            self.name.name.as_deref(),
-            solx_standard_json::InputSelector::Yul,
-        ) && let Some(yul) = self.yul.take()
-        {
-            writeln!(std::io::stdout(), "IR:\n{yul}")?;
-        }
-
-        #[cfg(feature = "mlir")]
         if output_selection.check_selection(
             self.name.path.as_str(),
             self.name.name.as_deref(),
@@ -246,64 +181,6 @@ impl Contract {
                     output.runtime_source
                 )?;
             }
-        }
-
-        if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
-            && output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::BytecodeEVMLA,
-            )
-            && let Some(evmla) = deploy_object_result
-                .as_mut()
-                .expect("Always exists")
-                .evmla
-                .take()
-        {
-            writeln!(std::io::stdout(), "Deploy EVM legacy assembly:\n{evmla}")?;
-        }
-        if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
-            && output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::RuntimeBytecodeEVMLA,
-            )
-            && let Some(evmla) = runtime_object_result
-                .as_mut()
-                .expect("Always exists")
-                .evmla
-                .take()
-        {
-            writeln!(std::io::stdout(), "Runtime EVM legacy assembly:\n{evmla}")?;
-        }
-
-        if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
-            && output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::BytecodeEthIR,
-            )
-            && let Some(ethir) = deploy_object_result
-                .as_mut()
-                .expect("Always exists")
-                .ethir
-                .take()
-        {
-            writeln!(std::io::stdout(), "Deploy Ethereal IR:\n{ethir}")?;
-        }
-        if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
-            && output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::RuntimeBytecodeEthIR,
-            )
-            && let Some(ethir) = runtime_object_result
-                .as_mut()
-                .expect("Always exists")
-                .ethir
-                .take()
-        {
-            writeln!(std::io::stdout(), "Runtime Ethereal IR:\n{ethir}")?;
         }
 
         if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
@@ -593,54 +470,6 @@ impl Contract {
             }
         }
 
-        if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
-            && output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::BytecodeDebugInfo,
-            )
-        {
-            let output_name = format!(
-                "{contract_path}_{}.dbg.{}",
-                self.name.name.as_deref().unwrap_or(contract_name),
-                solx_utils::EXTENSION_EVM_BINARY
-            );
-            let mut output_path = output_directory.to_owned();
-            output_path.push(output_name.as_str());
-
-            let debug_info = deploy_object_result
-                .as_mut()
-                .expect("Always exists")
-                .debug_info
-                .take()
-                .expect("Always exists");
-            Self::write_to_file(output_path.as_path(), debug_info, overwrite)?;
-        }
-        if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
-            && output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
-            )
-        {
-            let output_name = format!(
-                "{contract_path}_{}.dbg.{}-{}",
-                self.name.name.as_deref().unwrap_or(contract_name),
-                solx_utils::EXTENSION_EVM_BINARY,
-                solx_utils::CodeSegment::Runtime,
-            );
-            let mut output_path = output_directory.to_owned();
-            output_path.push(output_name.as_str());
-
-            let debug_info = runtime_object_result
-                .as_mut()
-                .expect("Always exists")
-                .debug_info
-                .take()
-                .expect("Always exists");
-            Self::write_to_file(output_path.as_path(), debug_info, overwrite)?;
-        }
-
         if output_selection.check_selection(
             self.name.path.as_str(),
             self.name.name.as_deref(),
@@ -767,39 +596,6 @@ impl Contract {
             Self::write_to_file(output_path.as_path(), userdoc, overwrite)?;
         }
 
-        if output_selection.check_selection(
-            self.name.path.as_str(),
-            self.name.name.as_deref(),
-            solx_standard_json::InputSelector::EVMLegacyAssembly,
-        ) {
-            let output_name = format!(
-                "{contract_path}_{}_evm.{}",
-                self.name.name.as_deref().unwrap_or(contract_name),
-                solx_utils::EXTENSION_JSON,
-            );
-            let mut output_path = output_directory.to_owned();
-            output_path.push(output_name.as_str());
-
-            let legacy_assembly = self.legacy_assembly.expect("Always exists").to_string();
-            Self::write_to_file(output_path.as_path(), legacy_assembly, overwrite)?;
-        }
-        if output_selection.check_selection(
-            self.name.path.as_str(),
-            self.name.name.as_deref(),
-            solx_standard_json::InputSelector::Yul,
-        ) {
-            let output_name = format!(
-                "{contract_path}_{}_opt.{}",
-                self.name.name.as_deref().unwrap_or(contract_name),
-                solx_utils::EXTENSION_YUL,
-            );
-            let mut output_path = output_directory.to_owned();
-            output_path.push(output_name.as_str());
-
-            let yul = self.yul.expect("Always exists").to_string();
-            Self::write_to_file(output_path.as_path(), yul, overwrite)?;
-        }
-        #[cfg(feature = "mlir")]
         if output_selection.check_selection(
             self.name.path.as_str(),
             self.name.name.as_deref(),
@@ -931,16 +727,6 @@ impl Contract {
         }) {
             standard_json_contract.transient_storage_layout = Some(value);
         }
-        if let Some(value) = self.yul.take().filter(|_| {
-            output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::Yul,
-            )
-        }) {
-            standard_json_contract.ir = Some(value);
-        }
-        #[cfg(feature = "mlir")]
         if let Some(value) = self.mlir.take().filter(|_| {
             output_selection.check_selection(
                 self.name.path.as_str(),
@@ -962,15 +748,6 @@ impl Contract {
             )
         }) {
             evm.method_identifiers = Some(value);
-        }
-        if let Some(value) = self.legacy_assembly.take().filter(|_| {
-            output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::EVMLegacyAssembly,
-            )
-        }) {
-            evm.legacy_assembly = Some(value.into());
         }
         if output_selection.check_selection(
             self.name.path.as_str(),
@@ -1012,12 +789,9 @@ impl Contract {
     ) -> solx_standard_json::OutputContractEVMBytecode {
         let (
             selector_object,
-            selector_evmla,
-            selector_ethir,
             selector_llvm_ir_unoptimized,
             selector_llvm_ir,
             selector_llvm_assembly,
-            selector_debug_info,
             selector_link_references,
             selector_opcodes,
             selector_source_map,
@@ -1027,12 +801,9 @@ impl Contract {
         ) = match code_segment {
             solx_utils::CodeSegment::Deploy => (
                 solx_standard_json::InputSelector::BytecodeObject,
-                solx_standard_json::InputSelector::BytecodeEVMLA,
-                solx_standard_json::InputSelector::BytecodeEthIR,
                 solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
                 solx_standard_json::InputSelector::BytecodeLLVMIR,
                 solx_standard_json::InputSelector::BytecodeLLVMAssembly,
-                solx_standard_json::InputSelector::BytecodeDebugInfo,
                 solx_standard_json::InputSelector::BytecodeLinkReferences,
                 solx_standard_json::InputSelector::BytecodeOpcodes,
                 solx_standard_json::InputSelector::BytecodeSourceMap,
@@ -1042,12 +813,9 @@ impl Contract {
             ),
             solx_utils::CodeSegment::Runtime => (
                 solx_standard_json::InputSelector::RuntimeBytecodeObject,
-                solx_standard_json::InputSelector::RuntimeBytecodeEVMLA,
-                solx_standard_json::InputSelector::RuntimeBytecodeEthIR,
                 solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
                 solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
                 solx_standard_json::InputSelector::RuntimeBytecodeLLVMAssembly,
-                solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
                 solx_standard_json::InputSelector::RuntimeBytecodeLinkReferences,
                 solx_standard_json::InputSelector::RuntimeBytecodeOpcodes,
                 solx_standard_json::InputSelector::RuntimeBytecodeSourceMap,
@@ -1072,24 +840,6 @@ impl Contract {
             } else {
                 None
             },
-            // evmla
-            object_result.as_mut().and_then(|result| {
-                result
-                    .as_mut()
-                    .ok()?
-                    .evmla
-                    .take()
-                    .filter(|_| output_selection.check_selection(path, name, selector_evmla))
-            }),
-            // ethir
-            object_result.as_mut().and_then(|result| {
-                result
-                    .as_mut()
-                    .ok()?
-                    .ethir
-                    .take()
-                    .filter(|_| output_selection.check_selection(path, name, selector_ethir))
-            }),
             // llvm_ir_unoptimized
             object_result.as_mut().and_then(|result| {
                 result
@@ -1117,15 +867,7 @@ impl Contract {
                 })
             }),
             // debug_info
-            object_result
-                .as_mut()
-                .and_then(|result| result.as_mut().ok())
-                .map(|object| {
-                    object.debug_info.take().map(hex::encode).filter(|_| {
-                        output_selection.check_selection(path, name, selector_debug_info)
-                    })
-                })
-                .unwrap_or(Some(String::new())),
+            object_result.is_none().then(String::new),
             // unlinked_symbols (link_references)
             if is_bytecode_linked
                 && output_selection.check_selection(path, name, selector_link_references)

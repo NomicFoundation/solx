@@ -1,16 +1,10 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func @{{.*identity.*}}
 // CHECK:   %[[OUT:.*]] = sol.alloca : !sol.ptr<i1, Stack>
 // CHECK:   sol.store %{{.*}}, %[[OUT]]
 // CHECK:   sol.load %[[OUT]]
 // CHECK:   sol.return
-
-// CHECK: sol.func @{{.*plus_one.*}}
-// CHECK:   sol.alloca : !sol.ptr<ui256, Stack>
-// CHECK:   %[[SUM:.*]] = sol.cadd
-// CHECK-NEXT:   sol.return %[[SUM]]
 
 // CHECK: sol.func @{{.*named_bytes.*}}
 // CHECK:   %[[ZERO:.*]] = sol.constant 0 : ui32
@@ -19,6 +13,11 @@
 // CHECK: sol.func @{{.*named_enum.*}}
 // CHECK:   %[[ORDINAL:.*]] = sol.constant 0 : ui256
 // CHECK:   sol.enum_cast %[[ORDINAL]] : ui256 to !sol.enum<2>
+
+// CHECK: sol.func @{{.*plus_one.*}}
+// CHECK:   sol.alloca : !sol.ptr<ui256, Stack>
+// CHECK:   %[[SUM:.*]] = sol.cadd
+// CHECK-NEXT:   sol.return %[[SUM]]
 
 contract C {
     enum E { First, Second, Third }

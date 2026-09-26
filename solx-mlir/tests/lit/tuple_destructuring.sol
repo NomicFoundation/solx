@@ -1,5 +1,9 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
-// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
+
+// CHECK: sol.func @{{.*literal_fold.*}}
+// CHECK: sol.constant 1633837924
+// CHECK: sol.bytes_cast %{{.*}} : ui32 to !sol.fixedbytes<4>
+// CHECK: sol.cast %{{.*}} : ui8 to ui256
 
 // CHECK: sol.func @{{.*sum.*}}
 // CHECK: sol.store %arg0
@@ -14,11 +18,6 @@
 // CHECK-NEXT: sol.store %{{[0-9]+}}
 // CHECK: sol.alloca
 // CHECK-NEXT: sol.store %{{[0-9]+}}
-
-// CHECK: sol.func @{{.*literal_fold.*}}
-// CHECK: sol.constant 1633837924
-// CHECK: sol.bytes_cast %{{.*}} : ui32 to !sol.fixedbytes<4>
-// CHECK: sol.cast %{{.*}} : ui8 to ui256
 
 contract C {
     function sum(uint256 x, uint256 y, uint256 z) public pure returns (uint256) {
