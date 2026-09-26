@@ -1,5 +1,20 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
+// CHECK: sol.func @{{.*do_while.*}}
+// CHECK:   sol.do {
+// CHECK:     sol.yield
+// CHECK:   } while {
+// CHECK:     sol.condition %{{.*}}
+
+// CHECK: sol.func @{{.*for_loop.*}}
+// CHECK:   sol.for cond {
+// CHECK:     sol.condition %{{.*}}
+// CHECK:   } body {
+// CHECK:     sol.yield
+// CHECK:   } step {
+// CHECK: sol.cadd %
+// CHECK:     sol.yield
+
 // CHECK: sol.func @{{.*if_else.*}}
 // CHECK:   sol.if %{{.*}} {
 // CHECK:     sol.return
@@ -14,32 +29,17 @@
 // CHECK-NOT: sol.yield
 // CHECK:   sol.load
 
-// CHECK: sol.func @{{.*while_loop.*}}
-// CHECK:   sol.while {
-// CHECK:     sol.condition %{{.*}}
-// CHECK:   } do {
-// CHECK:     sol.yield
-
-// CHECK: sol.func @{{.*for_loop.*}}
-// CHECK:   sol.for cond {
-// CHECK:     sol.condition %{{.*}}
-// CHECK:   } body {
-// CHECK:     sol.yield
-// CHECK:   } step {
-// CHECK: sol.cadd %
-// CHECK:     sol.yield
-
-// CHECK: sol.func @{{.*do_while.*}}
-// CHECK:   sol.do {
-// CHECK:     sol.yield
-// CHECK:   } while {
-// CHECK:     sol.condition %{{.*}}
-
 // CHECK: sol.func @{{.*infinite_for.*}}
 // CHECK:   sol.for cond {
 // CHECK:     %[[TRUE:.*]] = sol.constant true
 // CHECK:     sol.condition %[[TRUE]]
 // CHECK:   } body {
+
+// CHECK: sol.func @{{.*while_loop.*}}
+// CHECK:   sol.while {
+// CHECK:     sol.condition %{{.*}}
+// CHECK:   } do {
+// CHECK:     sol.yield
 
 // CHECK: sol.func @{{.*with_break.*}}
 // CHECK:   sol.while {

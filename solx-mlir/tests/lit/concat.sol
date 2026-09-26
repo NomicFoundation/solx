@@ -3,14 +3,14 @@
 // CHECK: sol.func {{.*}}bytes_concat{{.*}}-> !sol.string<Memory>
 // CHECK:   sol.concat %{{.*}}, %{{.*}} : !sol.string<Memory>, !sol.string<Memory> -> <Memory>
 
-// CHECK: sol.func {{.*}}string_concat{{.*}}-> !sol.string<Memory>
-// CHECK:   sol.concat %{{.*}}, %{{.*}} : !sol.string<Memory>, !sol.string<Memory> -> <Memory>
+// CHECK: sol.func {{.*}}empty{{.*}}-> !sol.string<Memory>
+// CHECK:   sol.concat -> <Memory>
 
 // CHECK: sol.func {{.*}}mixed{{.*}}-> !sol.string<Memory>
 // CHECK:   sol.concat %{{.*}}, %{{.*}}, %{{.*}} : !sol.string<Memory>, !sol.fixedbytes<4>, !sol.string<Memory> -> <Memory>
 
-// CHECK: sol.func {{.*}}empty{{.*}}-> !sol.string<Memory>
-// CHECK:   sol.concat -> <Memory>
+// CHECK: sol.func {{.*}}string_concat{{.*}}-> !sol.string<Memory>
+// CHECK:   sol.concat %{{.*}}, %{{.*}} : !sol.string<Memory>, !sol.string<Memory> -> <Memory>
 
 contract Concat {
     function bytes_concat(bytes memory a, bytes memory b) public pure returns (bytes memory) {

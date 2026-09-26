@@ -12,9 +12,18 @@
 // CHECK: sol.func {{.*}}readFixedBytes{{.*}}-> !sol.fixedbytes<1>
 // CHECK:   sol.fixed_bytes_index %{{.*}}[%{{.*}}] : !sol.fixedbytes<32>, ui256 -> !sol.fixedbytes<1>
 
+// CHECK: sol.func {{.*}}readLiteralKey{{.*}}-> ui256
+// CHECK:   sol.constant 44048180597813453602326562734351324025098966208897425494240603688123167145984 : ui256
+// CHECK:   sol.bytes_cast %{{.*}} : ui256 to !sol.fixedbytes<32>
+// CHECK:   sol.map %{{.*}}, %{{.*}} : !sol.mapping<!sol.fixedbytes<32>, ui256>, !sol.fixedbytes<32>, !sol.ptr<ui256, Storage>
+
 // CHECK: sol.func {{.*}}readMapping{{.*}}-> ui256
 // CHECK:   sol.map %{{.*}}, %{{.*}} : !sol.mapping<ui256, ui256>, ui256, !sol.ptr<ui256, Storage>
 // CHECK:   sol.load %{{.*}} : !sol.ptr<ui256, Storage>, ui256
+
+// CHECK: sol.func {{.*}}readNarrowKey{{.*}}-> ui256
+// CHECK:   sol.cast %{{.*}} : si8 to si256
+// CHECK:   sol.map %{{.*}}, %{{.*}} : !sol.mapping<si256, ui256>, si256, !sol.ptr<ui256, Storage>
 
 // CHECK: sol.func {{.*}}writeArray
 // CHECK:   sol.gep %{{.*}}, %{{.*}} : !sol.array<? x ui256, Memory>, ui256, !sol.ptr<ui256, Memory>
@@ -23,15 +32,6 @@
 // CHECK: sol.func {{.*}}writeMapping
 // CHECK:   sol.map %{{.*}}, %{{.*}} : !sol.mapping<ui256, ui256>, ui256, !sol.ptr<ui256, Storage>
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
-
-// CHECK: sol.func {{.*}}readLiteralKey{{.*}}-> ui256
-// CHECK:   sol.constant 44048180597813453602326562734351324025098966208897425494240603688123167145984 : ui256
-// CHECK:   sol.bytes_cast %{{.*}} : ui256 to !sol.fixedbytes<32>
-// CHECK:   sol.map %{{.*}}, %{{.*}} : !sol.mapping<!sol.fixedbytes<32>, ui256>, !sol.fixedbytes<32>, !sol.ptr<ui256, Storage>
-
-// CHECK: sol.func {{.*}}readNarrowKey{{.*}}-> ui256
-// CHECK:   sol.cast %{{.*}} : si8 to si256
-// CHECK:   sol.map %{{.*}}, %{{.*}} : !sol.mapping<si256, ui256>, si256, !sol.ptr<ui256, Storage>
 
 contract C {
     mapping(uint256 => uint256) map;

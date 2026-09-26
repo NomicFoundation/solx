@@ -1,10 +1,5 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// CHECK: sol.func @{{.*numbers.*}}
-// CHECK:   sol.inline_asm {
-// CHECK:     yul.add %c42_i256, %c255_i256
-// CHECK:     yul.add %{{.*}}, %c-1_i256
-
 // CHECK: sol.func @{{.*booleans.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     yul.if %c1_i256 {
@@ -12,6 +7,11 @@
 // CHECK:     %[[ZERO:.*]] = yul.constant 0
 // CHECK:     yul.cmp eq, %[[FALSE]], %[[ZERO]]
 // CHECK:     yul.if
+
+// CHECK: sol.func @{{.*numbers.*}}
+// CHECK:   sol.inline_asm {
+// CHECK:     yul.add %c42_i256, %c255_i256
+// CHECK:     yul.add %{{.*}}, %c-1_i256
 
 // CHECK: sol.func @{{.*words.*}}
 // CHECK:   sol.inline_asm {

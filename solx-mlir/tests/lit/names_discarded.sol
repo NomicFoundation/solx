@@ -1,12 +1,12 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// CHECK: sol.func @{{.*structs.*}}()
-// CHECK-NEXT:   sol.return
-
 // CHECK: sol.func @{{.*errors.*}}()
 // CHECK-NEXT:   sol.return
 
 // CHECK: sol.func @{{.*events.*}}()
+// CHECK-NEXT:   sol.return
+
+// CHECK: sol.func @{{.*structs.*}}()
 // CHECK-NEXT:   sol.return
 
 struct Pair {

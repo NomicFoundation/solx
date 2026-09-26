@@ -1,9 +1,5 @@
 // RUN: solx --emit-mlir=sol %evaluation_order/assignment.sol | FileCheck %s
 
-// CHECK: sol.func @{{.*scalar.*}}
-// CHECK:   sol.call @{{.*rightValue.*}}
-// CHECK:   sol.call @{{.*leftIndex.*}}
-
 // CHECK: sol.func @{{.*compound.*}}
 // CHECK:   sol.call @{{.*rightValue.*}}
 // CHECK:   sol.call @{{.*leftIndex.*}}
@@ -15,6 +11,10 @@
 // CHECK:   sol.call @{{.*leftSecond.*}}
 // CHECK:   sol.store %[[RIGHT_SECOND]],
 // CHECK:   sol.store %[[RIGHT_FIRST]],
+
+// CHECK: sol.func @{{.*scalar.*}}
+// CHECK:   sol.call @{{.*rightValue.*}}
+// CHECK:   sol.call @{{.*leftIndex.*}}
 
 // CHECK: sol.func @{{.*tupleStore.*}}
 // CHECK:   %[[X:.*]] = sol.alloca : !sol.ptr<ui256, Stack>

@@ -1,5 +1,20 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
+// CHECK: sol.func @{{.*empty_catch_all.*}}
+// CHECK:   sol.try %{{.*}} {
+// CHECK:   } panic {
+// CHECK-NEXT:   } error {
+// CHECK-NEXT:   } fallback {
+// CHECK-NEXT:   sol.yield
+
+// CHECK: sol.func @{{.*error_only.*}}
+// CHECK:   sol.try %{{.*}} {
+// CHECK:   } panic {
+// CHECK-NEXT:   } error {
+// CHECK-NEXT:   ^bb{{[0-9]+}}(%{{.*}}: !sol.string<Memory>):
+// CHECK:   } fallback {
+// CHECK-NEXT:   }
+
 // CHECK: sol.func @{{.*every_clause.*}}
 // CHECK:   %[[STATUS:[^,]*]], %{{.*}} = sol.ext_call "{{.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256, try_call} : !sol.address, (ui256) -> (i1, ui256)
 // CHECK:   sol.try %[[STATUS]] {
@@ -10,13 +25,22 @@
 // CHECK:   } fallback {
 // CHECK-NEXT:   ^bb{{[0-9]+}}(%{{.*}}: !sol.string<Memory>):
 
-// CHECK: sol.func @{{.*error_only.*}}
-// CHECK:   sol.try %{{.*}} {
-// CHECK:   } panic {
-// CHECK-NEXT:   } error {
-// CHECK-NEXT:   ^bb{{[0-9]+}}(%{{.*}}: !sol.string<Memory>):
+// CHECK: sol.func @{{.*getter.*}}
+// CHECK:   %[[STATUS:[^,]*]], %{{.*}} = sol.ext_call "{{.*totalSupply.*}}"() at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = () -> ui256, static_call, try_call} : !sol.address, () -> (i1, ui256)
+// CHECK:   sol.try %[[STATUS]] {
+// CHECK:   } error {
 // CHECK:   } fallback {
-// CHECK-NEXT:   }
+
+// CHECK: sol.func @{{.*multi_return.*}}
+// CHECK:   %[[STATUS:[^,]*]], %[[OUTS:[^:]*]]:2 = sol.ext_call "{{.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> (ui256, ui256), try_call} : !sol.address, (ui256) -> (i1, ui256, ui256)
+// CHECK:   sol.try %[[STATUS]] {
+// CHECK:     sol.store %[[OUTS]]#0
+// CHECK:     sol.store %[[OUTS]]#1
+
+// CHECK: sol.func @{{.*named.*}}
+// CHECK:   sol.constant 11 : ui8
+// CHECK:   sol.constant 99 : ui8
+// CHECK:   sol.ext_call "{{.*h.*}}"(%{{.*}}, %{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256, ui256) -> ui256, try_call} : !sol.address, (ui256, ui256) -> (i1, ui256)
 
 // CHECK: sol.func @{{.*unbound_catch_all.*}}
 // CHECK:   sol.try %{{.*}} {
@@ -25,41 +49,17 @@
 // CHECK-NEXT:   } fallback {
 // CHECK-NEXT:   sol.constant 0 : ui8
 
-// CHECK: sol.func @{{.*empty_catch_all.*}}
-// CHECK:   sol.try %{{.*}} {
-// CHECK:   } panic {
-// CHECK-NEXT:   } error {
-// CHECK-NEXT:   } fallback {
-// CHECK-NEXT:   sol.yield
-
-// CHECK: sol.func @{{.*void_callee.*}}
-// CHECK:   %[[STATUS:.*]] = sol.ext_call "{{.*v.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> (), try_call} : !sol.address, (ui256) -> i1
-// CHECK:   sol.try %[[STATUS]] {
-
-// CHECK: sol.func @{{.*view_callee.*}}
-// CHECK:   sol.ext_call "{{.*g.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256, static_call, try_call} : !sol.address, (ui256) -> (i1, ui256)
-
-// CHECK: sol.func @{{.*named.*}}
-// CHECK:   sol.constant 11 : ui8
-// CHECK:   sol.constant 99 : ui8
-// CHECK:   sol.ext_call "{{.*h.*}}"(%{{.*}}, %{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256, ui256) -> ui256, try_call} : !sol.address, (ui256, ui256) -> (i1, ui256)
-
 // CHECK: sol.func @{{.*value_option.*}}
 // CHECK:   %[[VALUE:.*]] = sol.cast %c5_ui8 : ui8 to ui256
 // CHECK:   %[[STATUS:[^,]*]], %{{.*}} = sol.ext_call "{{.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %[[VALUE]] selector %{{.*}} {callee_type = (ui256) -> ui256, try_call} : !sol.address, (ui256) -> (i1, ui256)
 // CHECK:   sol.try %[[STATUS]] {
 
-// CHECK: sol.func @{{.*multi_return.*}}
-// CHECK:   %[[STATUS:[^,]*]], %[[OUTS:[^:]*]]:2 = sol.ext_call "{{.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> (ui256, ui256), try_call} : !sol.address, (ui256) -> (i1, ui256, ui256)
-// CHECK:   sol.try %[[STATUS]] {
-// CHECK:     sol.store %[[OUTS]]#0
-// CHECK:     sol.store %[[OUTS]]#1
+// CHECK: sol.func @{{.*view_callee.*}}
+// CHECK:   sol.ext_call "{{.*g.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256, static_call, try_call} : !sol.address, (ui256) -> (i1, ui256)
 
-// CHECK: sol.func @{{.*getter.*}}
-// CHECK:   %[[STATUS:[^,]*]], %{{.*}} = sol.ext_call "{{.*totalSupply.*}}"() at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = () -> ui256, static_call, try_call} : !sol.address, () -> (i1, ui256)
+// CHECK: sol.func @{{.*void_callee.*}}
+// CHECK:   %[[STATUS:.*]] = sol.ext_call "{{.*v.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> (), try_call} : !sol.address, (ui256) -> i1
 // CHECK:   sol.try %[[STATUS]] {
-// CHECK:   } error {
-// CHECK:   } fallback {
 
 contract C {
     function every_clause(I i) public returns (uint256) {

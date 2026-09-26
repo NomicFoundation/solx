@@ -1,15 +1,15 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// CHECK: sol.func @{{.*qualified_gas.*}}
-// CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
-// CHECK:   %[[GAS:.*]] = sol.load
-// CHECK:   %[[ARG:.*]] = sol.load
-// CHECK:   sol.ext_call "{{.*mutate.*}}"(%[[ARG]]) at %[[ADDR]] gas %[[GAS]] value %c0_ui256 selector %c1899731083_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, static_call} : !sol.address, (ui256) -> (i1, ui256)
-
 // CHECK: sol.func @{{.*attached_gas.*}}
 // CHECK:   %[[GAS:.*]] = sol.load
 // CHECK:   %[[ARG:.*]] = sol.load
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
+// CHECK:   sol.ext_call "{{.*mutate.*}}"(%[[ARG]]) at %[[ADDR]] gas %[[GAS]] value %c0_ui256 selector %c1899731083_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, static_call} : !sol.address, (ui256) -> (i1, ui256)
+
+// CHECK: sol.func @{{.*qualified_gas.*}}
+// CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
+// CHECK:   %[[GAS:.*]] = sol.load
+// CHECK:   %[[ARG:.*]] = sol.load
 // CHECK:   sol.ext_call "{{.*mutate.*}}"(%[[ARG]]) at %[[ADDR]] gas %[[GAS]] value %c0_ui256 selector %c1899731083_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, static_call} : !sol.address, (ui256) -> (i1, ui256)
 
 library Lib {

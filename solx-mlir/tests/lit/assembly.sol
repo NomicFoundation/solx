@@ -33,6 +33,15 @@
 // CHECK:     yul.byte %c19_i256, %{{.*}}
 // CHECK:     yul.clz %{{.*}}
 
+// CHECK: sol.func @{{.*calls.*}}
+// CHECK:   sol.inline_asm {
+// CHECK:     yul.call %c1_i256, %c2_i256, %c3_i256, %c4_i256, %c5_i256, %c6_i256, %c7_i256
+// CHECK:     yul.callcode %c11_i256, %c12_i256, %c13_i256, %c14_i256, %c15_i256, %c16_i256, %c17_i256
+// CHECK:     yul.static_call %c21_i256, %c22_i256, %c23_i256, %c24_i256, %c25_i256, %c26_i256
+// CHECK:     yul.delegate_call %c31_i256, %c32_i256, %c33_i256, %c34_i256, %c35_i256, %c36_i256
+// CHECK:     yul.create %c41_i256, %c42_i256, %c43_i256
+// CHECK:     yul.create2 %c51_i256, %c52_i256, %c53_i256, %c54_i256
+
 // CHECK: sol.func @{{.*comparison.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     yul.cmp ult, %c1_i256, %c2_i256
@@ -42,31 +51,6 @@
 // CHECK:     yul.cmp eq, %c19_i256, %c23_i256
 // CHECK:     %[[ZERO:.*]] = yul.constant 0
 // CHECK:     yul.cmp eq, %c29_i256, %[[ZERO]]
-
-// CHECK: sol.func @{{.*memory_ops.*}}
-// CHECK:   sol.inline_asm {
-// CHECK:     yul.mload %c1_i256
-// CHECK:     yul.mstore %c11_i256, %c12_i256
-// CHECK:     yul.mstore8 %c21_i256, %c22_i256
-// CHECK:     yul.mcopy %c31_i256, %c32_i256, %c33_i256
-// CHECK:     yul.msize
-// CHECK:     yul.keccak256 %c41_i256, %c42_i256
-
-// CHECK: sol.func @{{.*storage_ops.*}}
-// CHECK:   sol.inline_asm {
-// CHECK:     yul.sload
-// CHECK:     yul.sstore %{{.*}}, %c7_i256
-// CHECK:     yul.tload
-// CHECK:     yul.tstore %{{.*}}, %c11_i256
-
-// CHECK: sol.func @{{.*calls.*}}
-// CHECK:   sol.inline_asm {
-// CHECK:     yul.call %c1_i256, %c2_i256, %c3_i256, %c4_i256, %c5_i256, %c6_i256, %c7_i256
-// CHECK:     yul.callcode %c11_i256, %c12_i256, %c13_i256, %c14_i256, %c15_i256, %c16_i256, %c17_i256
-// CHECK:     yul.static_call %c21_i256, %c22_i256, %c23_i256, %c24_i256, %c25_i256, %c26_i256
-// CHECK:     yul.delegate_call %c31_i256, %c32_i256, %c33_i256, %c34_i256, %c35_i256, %c36_i256
-// CHECK:     yul.create %c41_i256, %c42_i256, %c43_i256
-// CHECK:     yul.create2 %c51_i256, %c52_i256, %c53_i256, %c54_i256
 
 // CHECK: sol.func @{{.*context.*}}
 // CHECK:   sol.inline_asm {
@@ -102,14 +86,6 @@
 // CHECK:     yul.extcodehash %c43_i256
 // CHECK:     yul.extcodecopy %c51_i256, %c52_i256, %c53_i256, %c54_i256
 
-// CHECK: sol.func @{{.*logs.*}}
-// CHECK:   sol.inline_asm {
-// CHECK:     yul.log %c1_i256, %c2_i256{{$}}
-// CHECK:     yul.log %c11_i256, %c12_i256 topics(%c13_i256)
-// CHECK:     yul.log %c21_i256, %c22_i256 topics(%c23_i256, %c24_i256)
-// CHECK:     yul.log %c31_i256, %c32_i256 topics(%c33_i256, %c34_i256, %c35_i256)
-// CHECK:     yul.log %c41_i256, %c42_i256 topics(%c43_i256, %c44_i256, %c45_i256, %c46_i256)
-
 // CHECK: sol.func @{{.*halting.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     yul.selfdestruct %c101_i256
@@ -118,8 +94,32 @@
 // CHECK:     yul.revert %c102_i256, %c103_i256
 // CHECK:     yul.return %c104_i256, %c105_i256
 
+// CHECK: sol.func @{{.*logs.*}}
+// CHECK:   sol.inline_asm {
+// CHECK:     yul.log %c1_i256, %c2_i256{{$}}
+// CHECK:     yul.log %c11_i256, %c12_i256 topics(%c13_i256)
+// CHECK:     yul.log %c21_i256, %c22_i256 topics(%c23_i256, %c24_i256)
+// CHECK:     yul.log %c31_i256, %c32_i256 topics(%c33_i256, %c34_i256, %c35_i256)
+// CHECK:     yul.log %c41_i256, %c42_i256 topics(%c43_i256, %c44_i256, %c45_i256, %c46_i256)
+
+// CHECK: sol.func @{{.*memory_ops.*}}
+// CHECK:   sol.inline_asm {
+// CHECK:     yul.mload %c1_i256
+// CHECK:     yul.mstore %c11_i256, %c12_i256
+// CHECK:     yul.mstore8 %c21_i256, %c22_i256
+// CHECK:     yul.mcopy %c31_i256, %c32_i256, %c33_i256
+// CHECK:     yul.msize
+// CHECK:     yul.keccak256 %c41_i256, %c42_i256
+
 // CHECK: sol.func @{{.*memory_safe.*}}
 // CHECK:   sol.inline_asm attributes {memory_safe} {
+
+// CHECK: sol.func @{{.*storage_ops.*}}
+// CHECK:   sol.inline_asm {
+// CHECK:     yul.sload
+// CHECK:     yul.sstore %{{.*}}, %c7_i256
+// CHECK:     yul.tload
+// CHECK:     yul.tstore %{{.*}}, %c11_i256
 
 contract C {
     uint256 slot0;

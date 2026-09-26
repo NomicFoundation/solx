@@ -4,13 +4,13 @@
 // CHECK:   %[[SIZE:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
 // CHECK:   sol.malloc %[[SIZE]] zero_init : ui256 !sol.array<? x ui256, Memory>
 
-// CHECK: sol.func @{{.*nested.*}}
-// CHECK:   %[[SIZE:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
-// CHECK:   sol.malloc %[[SIZE]] zero_init : ui256 !sol.array<? x !sol.array<? x ui256, Memory>, Memory>
-
 // CHECK: sol.func @{{.*narrow_size.*}}
 // CHECK:   %[[SIZE:.*]] = sol.load %{{.*}} : !sol.ptr<ui8, Stack>, ui8
 // CHECK:   sol.malloc %[[SIZE]] zero_init : ui8 !sol.array<? x !sol.address, Memory>
+
+// CHECK: sol.func @{{.*nested.*}}
+// CHECK:   %[[SIZE:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
+// CHECK:   sol.malloc %[[SIZE]] zero_init : ui256 !sol.array<? x !sol.array<? x ui256, Memory>, Memory>
 
 // CHECK: sol.func @{{.*raw_bytes.*}}
 // CHECK:   %[[SIZE:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256

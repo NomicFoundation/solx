@@ -3,38 +3,38 @@
 // CHECK: sol.func @{{.*checked_add.*}}
 // CHECK:   sol.cadd %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @{{.*checked_sub.*}}
-// CHECK:   sol.csub %{{.*}}, %{{.*}} : ui256
-
-// CHECK: sol.func @{{.*checked_mul.*}}
-// CHECK:   sol.cmul %{{.*}}, %{{.*}} : ui256
-
 // CHECK: sol.func @{{.*checked_div.*}}
 // CHECK:   sol.cdiv %{{.*}}, %{{.*}} : ui256
-
-// CHECK: sol.func @{{.*checked_mod.*}}
-// CHECK:   sol.mod %{{.*}}, %{{.*}} : ui256
 
 // CHECK: sol.func @{{.*checked_exp.*}}
 // CHECK:   sol.cexp %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @{{.*unchecked_add.*}}
-// CHECK:   sol.add %{{.*}}, %{{.*}} : ui256
-
-// CHECK: sol.func @{{.*unchecked_sub.*}}
-// CHECK:   sol.sub %{{.*}}, %{{.*}} : ui256
-
-// CHECK: sol.func @{{.*unchecked_mul.*}}
-// CHECK:   sol.mul %{{.*}}, %{{.*}} : ui256
-
-// CHECK: sol.func @{{.*unchecked_div.*}}
-// CHECK:   sol.div %{{.*}}, %{{.*}} : ui256
-
-// CHECK: sol.func @{{.*unchecked_mod.*}}
+// CHECK: sol.func @{{.*checked_mod.*}}
 // CHECK:   sol.mod %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @{{.*unchecked_exp.*}}
-// CHECK:   sol.exp %{{.*}}, %{{.*}} : ui256
+// CHECK: sol.func @{{.*checked_mul.*}}
+// CHECK:   sol.cmul %{{.*}}, %{{.*}} : ui256
+
+// CHECK: sol.func @{{.*checked_sub.*}}
+// CHECK:   sol.csub %{{.*}}, %{{.*}} : ui256
+
+// CHECK: sol.func @{{.*signed_add.*}}
+// CHECK:   sol.cadd %{{.*}}, %{{.*}} : si256
+
+// CHECK: sol.func @{{.*signed_div.*}}
+// CHECK:   sol.cdiv %{{.*}}, %{{.*}} : si256
+
+// CHECK: sol.func @{{.*signed_exp.*}}
+// CHECK:   sol.cexp %{{.*}}, %{{.*}} : si256, ui8 -> si256
+
+// CHECK: sol.func @{{.*signed_mod.*}}
+// CHECK:   sol.mod %{{.*}}, %{{.*}} : si256
+
+// CHECK: sol.func @{{.*signed_mul.*}}
+// CHECK:   sol.cmul %{{.*}}, %{{.*}} : si256
+
+// CHECK: sol.func @{{.*signed_sub.*}}
+// CHECK:   sol.csub %{{.*}}, %{{.*}} : si256
 
 // CHECK: sol.func @{{.*unary_neg.*}}
 // CHECK:   %{{.*}} = sol.sub %{{.*}}, %{{.*}} : si256
@@ -42,23 +42,23 @@
 // CHECK: sol.func @{{.*unary_neg_checked.*}}
 // CHECK:   %{{.*}} = sol.csub %{{.*}}, %{{.*}} : si256
 
-// CHECK: sol.func @{{.*signed_add.*}}
-// CHECK:   sol.cadd %{{.*}}, %{{.*}} : si256
+// CHECK: sol.func @{{.*unchecked_add.*}}
+// CHECK:   sol.add %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @{{.*signed_sub.*}}
-// CHECK:   sol.csub %{{.*}}, %{{.*}} : si256
+// CHECK: sol.func @{{.*unchecked_div.*}}
+// CHECK:   sol.div %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @{{.*signed_mul.*}}
-// CHECK:   sol.cmul %{{.*}}, %{{.*}} : si256
+// CHECK: sol.func @{{.*unchecked_exp.*}}
+// CHECK:   sol.exp %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @{{.*signed_div.*}}
-// CHECK:   sol.cdiv %{{.*}}, %{{.*}} : si256
+// CHECK: sol.func @{{.*unchecked_mod.*}}
+// CHECK:   sol.mod %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @{{.*signed_mod.*}}
-// CHECK:   sol.mod %{{.*}}, %{{.*}} : si256
+// CHECK: sol.func @{{.*unchecked_mul.*}}
+// CHECK:   sol.mul %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @{{.*signed_exp.*}}
-// CHECK:   sol.cexp %{{.*}}, %{{.*}} : si256, ui8 -> si256
+// CHECK: sol.func @{{.*unchecked_sub.*}}
+// CHECK:   sol.sub %{{.*}}, %{{.*}} : ui256
 
 contract C {
     function checked_add(uint256 a, uint256 b) public pure returns (uint256) {

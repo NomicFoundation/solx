@@ -3,31 +3,23 @@
 // CHECK: sol.func @{{.*local_array.*}}
 // CHECK:   sol.malloc zero_init : !sol.array<? x ui256, Memory>
 
-// CHECK: sol.func @{{.*local_struct.*}}
-// CHECK:   sol.malloc zero_init : !sol.struct<(ui256, ui256), Memory>
-
-// CHECK: sol.func @{{.*local_string.*}}
+// CHECK: sol.func @{{.*local_bytes.*}}
 // CHECK:   sol.malloc : !sol.string<Memory>
-
-// CHECK: sol.func @{{.*named_array.*}}
-// CHECK:   sol.malloc zero_init : !sol.array<? x ui256, Memory>
-
-// CHECK: sol.func @{{.*unnamed_array.*}}
-// CHECK:   sol.alloca : !sol.ptr<!sol.array<? x ui256, Memory>, Stack>
-// CHECK:   sol.malloc zero_init : !sol.array<? x ui256, Memory>
-// CHECK:   sol.return %{{.*}} : !sol.array<? x ui256, Memory>
 
 // CHECK: sol.func @{{.*local_fixed_array.*}}
 // CHECK:   sol.malloc zero_init : !sol.array<3 x ui256, Memory>
 
-// CHECK: sol.func @{{.*local_bytes.*}}
+// CHECK: sol.func @{{.*local_string.*}}
 // CHECK:   sol.malloc : !sol.string<Memory>
+
+// CHECK: sol.func @{{.*local_struct.*}}
+// CHECK:   sol.malloc zero_init : !sol.struct<(ui256, ui256), Memory>
 
 // CHECK: sol.func @{{.*local_struct_with_array.*}}
 // CHECK:   sol.malloc zero_init : !sol.struct<(ui256, !sol.array<? x ui256, Memory>), Memory>
 
-// CHECK: sol.func @{{.*named_storage.*}}
-// CHECK:   sol.default_storage : !sol.array<? x ui256, Storage>
+// CHECK: sol.func @{{.*named_array.*}}
+// CHECK:   sol.malloc zero_init : !sol.array<? x ui256, Memory>
 
 // CHECK: sol.func @{{.*named_calldata.*}}
 // CHECK:   sol.default_calldata : !sol.array<? x ui256, CallData>
@@ -37,15 +29,23 @@
 // CHECK:   %[[ADDR:.*]] = sol.address_cast %[[ZERO]] : ui160 to !sol.address
 // CHECK:   sol.address_cast %[[ADDR]] : !sol.address to !sol.contract<{{.*D.*}}>
 
+// CHECK: sol.func @{{.*named_external_function.*}}
+// CHECK:   %[[ZERO:.*]] = sol.constant 0 : ui160
+// CHECK:   %[[ADDR:.*]] = sol.address_cast %[[ZERO]] : ui160 to !sol.address
+// CHECK:   sol.ext_func_constant %[[ADDR]] {selector = 0 : i32} : !sol.address -> !sol.ext_func_ref<(ui256) -> ui256>
+
 // CHECK: sol.func @{{.*named_interface.*}}
 // CHECK:   %[[ZERO:.*]] = sol.constant 0 : ui160
 // CHECK:   %[[ADDR:.*]] = sol.address_cast %[[ZERO]] : ui160 to !sol.address
 // CHECK:   sol.address_cast %[[ADDR]] : !sol.address to !sol.contract<{{.*I.*}}>
 
-// CHECK: sol.func @{{.*named_external_function.*}}
-// CHECK:   %[[ZERO:.*]] = sol.constant 0 : ui160
-// CHECK:   %[[ADDR:.*]] = sol.address_cast %[[ZERO]] : ui160 to !sol.address
-// CHECK:   sol.ext_func_constant %[[ADDR]] {selector = 0 : i32} : !sol.address -> !sol.ext_func_ref<(ui256) -> ui256>
+// CHECK: sol.func @{{.*named_storage.*}}
+// CHECK:   sol.default_storage : !sol.array<? x ui256, Storage>
+
+// CHECK: sol.func @{{.*unnamed_array.*}}
+// CHECK:   sol.alloca : !sol.ptr<!sol.array<? x ui256, Memory>, Stack>
+// CHECK:   sol.malloc zero_init : !sol.array<? x ui256, Memory>
+// CHECK:   sol.return %{{.*}} : !sol.array<? x ui256, Memory>
 
 contract C {
     struct S {

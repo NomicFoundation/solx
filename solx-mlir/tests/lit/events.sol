@@ -6,14 +6,14 @@
 // CHECK:   %[[AMT:.*]] = sol.load
 // CHECK:   sol.emit "Transfer(address,address,uint256)" indexed = [%[[CALLER]], %[[TO]]] non_indexed = [%[[AMT]]] : !sol.address, !sol.address, ui256
 
+// CHECK: sol.func @{{.*}}fireAnon
+// CHECK:   sol.emit non_indexed = [%{{.*}}] : ui256
+
 // CHECK: sol.func @{{.*}}fireNamed
 // CHECK:   %[[CALLER:.*]] = sol.caller
 // CHECK:   %[[TO:.*]] = sol.load
 // CHECK:   %[[AMT:.*]] = sol.load
 // CHECK:   sol.emit "Transfer(address,address,uint256)" indexed = [%[[CALLER]], %[[TO]]] non_indexed = [%[[AMT]]] : !sol.address, !sol.address, ui256
-
-// CHECK: sol.func @{{.*}}fireAnon
-// CHECK:   sol.emit non_indexed = [%{{.*}}] : ui256
 
 contract C {
     event Transfer(address indexed from, address indexed to, uint256 value);

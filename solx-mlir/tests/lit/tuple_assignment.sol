@@ -5,12 +5,6 @@
 // CHECK:   sol.store %[[R]]#1, %{{.*}}
 // CHECK:   sol.store %[[R]]#0, %{{.*}}
 
-// CHECK: sol.func @{{.*swap.*}}
-// CHECK:   %[[V0:.*]] = sol.load
-// CHECK:   %[[V1:.*]] = sol.load
-// CHECK:   sol.store %[[V1]], %{{.*}}
-// CHECK:   sol.store %[[V0]], %{{.*}}
-
 // CHECK: sol.func @{{.*conditional_right.*}}
 // CHECK:   sol.if
 // CHECK:   sol.store %{{.*}}, %[[A:.*]] : ui256, !sol.ptr<ui256, Stack>
@@ -22,6 +16,12 @@
 // CHECK: sol.func @{{.*reference_element.*}}
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Stack>
 // CHECK:   sol.copy %{{.*}}, %{{.*}} : !sol.array<3 x ui256, Memory>, !sol.array<? x ui256, Storage>
+
+// CHECK: sol.func @{{.*swap.*}}
+// CHECK:   %[[V0:.*]] = sol.load
+// CHECK:   %[[V1:.*]] = sol.load
+// CHECK:   sol.store %[[V1]], %{{.*}}
+// CHECK:   sol.store %[[V0]], %{{.*}}
 
 contract C {
     uint256[] array;

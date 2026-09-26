@@ -3,24 +3,20 @@
 // CHECK: sol.func @{{.*add.*}}(%{{.*}}: ui256, %{{.*}}: ui256) -> ui256
 // CHECK:   sol.cadd
 
-// CHECK: sol.func @{{.*double.*}}
-// CHECK:   sol.call @{{.*add.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
-
 // CHECK: sol.func @{{.*chain.*}}
 // CHECK:   sol.call @{{.*double.*}}
 // CHECK:   sol.call @{{.*add.*}}
+
+// CHECK: sol.func @{{.*double.*}}
+// CHECK:   sol.call @{{.*add.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
+
+// CHECK: sol.func @{{.*empty_braces.*}}
+// CHECK:   sol.call @{{.*literal_argument.*}}() : () -> ()
 
 // CHECK: sol.func @{{.*literal_argument.*}}
 // CHECK:   sol.constant 1633837924 : ui32
 // CHECK:   sol.bytes_cast %{{.*}} : ui32 to !sol.fixedbytes<4>
 // CHECK:   sol.call @{{.*literal_receiver.*}}
-
-// CHECK: sol.func @{{.*widening_argument.*}}
-// CHECK:   sol.load %{{.*}}
-// CHECK:   sol.cast %{{.*}} : ui8 to ui256
-// CHECK:   sol.load %{{.*}}
-// CHECK:   sol.cast %{{.*}} : ui8 to ui256
-// CHECK:   sol.call @{{.*add.*}}
 
 // CHECK: sol.func @{{.*named_argument.*}}
 // CHECK:   sol.load %{{.*}}
@@ -32,12 +28,16 @@
 // CHECK:   %[[ONE:.*]] = sol.cast
 // CHECK:   sol.call @{{.*add.*}}(%[[X]], %[[ONE]])
 
-// CHECK: sol.func @{{.*empty_braces.*}}
-// CHECK:   sol.call @{{.*literal_argument.*}}() : () -> ()
-
 // CHECK: sol.func @{{.*tuple_statement.*}}
 // CHECK:   sol.call @{{.*add.*}}
 // CHECK:   sol.call @{{.*double.*}}
+
+// CHECK: sol.func @{{.*widening_argument.*}}
+// CHECK:   sol.load %{{.*}}
+// CHECK:   sol.cast %{{.*}} : ui8 to ui256
+// CHECK:   sol.load %{{.*}}
+// CHECK:   sol.cast %{{.*}} : ui8 to ui256
+// CHECK:   sol.call @{{.*add.*}}
 
 contract C {
     function add(uint256 a, uint256 b) public pure returns (uint256) {

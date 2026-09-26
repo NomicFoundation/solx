@@ -13,6 +13,12 @@
 // CHECK:   sol.data_loc_cast %{{.*}} : !sol.string<CallData>, !sol.string<Memory>
 // CHECK:   sol.bare_call
 
+// CHECK: sol.func @{{.*call_gas.*}}
+// CHECK:   %[[RECEIVER:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.address, Stack>, !sol.address
+// CHECK:   %[[G:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
+// CHECK:   %[[ZERO:.*]] = sol.constant 0 : ui256
+// CHECK:   sol.bare_call %[[RECEIVER]] gas %[[G]] value %[[ZERO]] input
+
 // CHECK: sol.func @{{.*call_storage.*}}
 // CHECK:   sol.data_loc_cast %{{.*}} : !sol.string<Storage>, !sol.string<Memory>
 // CHECK:   sol.bare_call
@@ -22,12 +28,6 @@
 // CHECK:   %[[V:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
 // CHECK:   %[[LEFT:.*]] = sol.gasleft
 // CHECK:   sol.bare_call %[[RECEIVER]] gas %[[LEFT]] value %[[V]] input
-
-// CHECK: sol.func @{{.*call_gas.*}}
-// CHECK:   %[[RECEIVER:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.address, Stack>, !sol.address
-// CHECK:   %[[G:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
-// CHECK:   %[[ZERO:.*]] = sol.constant 0 : ui256
-// CHECK:   sol.bare_call %[[RECEIVER]] gas %[[G]] value %[[ZERO]] input
 
 contract C {
     bytes data;

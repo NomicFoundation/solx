@@ -3,91 +3,91 @@
 // CHECK: sol.func @{{.*eq.*}}
 // CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @{{.*eq_mixed.*}}
-// CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : si16
-
-// CHECK: sol.func @{{.*eq_fixed_bytes.*}}
-// CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : !sol.fixedbytes<8>
+// CHECK: sol.func @{{.*eq_address.*}}
+// CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : !sol.address
 
 // CHECK: sol.func @{{.*eq_bool.*}}
 // CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : i1
 
-// CHECK: sol.func @{{.*eq_address.*}}
-// CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : !sol.address
+// CHECK: sol.func @{{.*eq_enum.*}}
+// CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : !sol.enum<2>
+
+// CHECK: sol.func @{{.*eq_fixed_bytes.*}}
+// CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : !sol.fixedbytes<8>
+
+// CHECK: sol.func @{{.*eq_mixed.*}}
+// CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : si16
 
 // CHECK: sol.func @{{.*eq_string_literal.*}}
 // CHECK:   sol.constant 1633837924 : ui32
 // CHECK:   sol.bytes_cast %{{.*}} : ui32 to !sol.fixedbytes<4>
 // CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : !sol.fixedbytes<4>
 
-// CHECK: sol.func @{{.*ne.*}}
-// CHECK:   sol.cmp ne, %{{.*}}, %{{.*}} : ui256
-
-// CHECK: sol.func @{{.*ne_mixed.*}}
-// CHECK:   sol.cmp ne, %{{.*}}, %{{.*}} : si16
-
-// CHECK: sol.func @{{.*ne_fixed_bytes.*}}
-// CHECK:   sol.cmp ne, %{{.*}}, %{{.*}} : !sol.fixedbytes<8>
-
-// CHECK: sol.func @{{.*ne_bool.*}}
-// CHECK:   sol.cmp ne, %{{.*}}, %{{.*}} : i1
-
-// CHECK: sol.func @{{.*ne_address.*}}
-// CHECK:   sol.cmp ne, %{{.*}}, %{{.*}} : !sol.address
-
-// CHECK: sol.func @{{.*lt.*}}
-// CHECK:   sol.cmp lt, %{{.*}}, %{{.*}} : ui256
-
-// CHECK: sol.func @{{.*lt_mixed.*}}
-// CHECK:   sol.cmp lt, %{{.*}}, %{{.*}} : si16
-
-// CHECK: sol.func @{{.*lt_fixed_bytes.*}}
-// CHECK:   sol.cmp lt, %{{.*}}, %{{.*}} : !sol.fixedbytes<8>
-
-// CHECK: sol.func @{{.*le.*}}
-// CHECK:   sol.cmp le, %{{.*}}, %{{.*}} : ui256
-
-// CHECK: sol.func @{{.*le_mixed.*}}
-// CHECK:   sol.cmp le, %{{.*}}, %{{.*}} : si16
-
-// CHECK: sol.func @{{.*le_fixed_bytes.*}}
-// CHECK:   sol.cmp le, %{{.*}}, %{{.*}} : !sol.fixedbytes<8>
-
-// CHECK: sol.func @{{.*gt.*}}
-// CHECK:   sol.cmp gt, %{{.*}}, %{{.*}} : ui256
-
-// CHECK: sol.func @{{.*gt_mixed.*}}
-// CHECK:   sol.cmp gt, %{{.*}}, %{{.*}} : si16
-
-// CHECK: sol.func @{{.*gt_fixed_bytes.*}}
-// CHECK:   sol.cmp gt, %{{.*}}, %{{.*}} : !sol.fixedbytes<8>
-
 // CHECK: sol.func @{{.*ge.*}}
 // CHECK:   sol.cmp ge, %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @{{.*ge_mixed.*}}
-// CHECK:   sol.cmp ge, %{{.*}}, %{{.*}} : si16
+// CHECK: sol.func @{{.*ge_enum.*}}
+// CHECK:   sol.cmp ge, %{{.*}}, %{{.*}} : !sol.enum<2>
 
 // CHECK: sol.func @{{.*ge_fixed_bytes.*}}
 // CHECK:   sol.cmp ge, %{{.*}}, %{{.*}} : !sol.fixedbytes<8>
 
-// CHECK: sol.func @{{.*eq_enum.*}}
-// CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : !sol.enum<2>
+// CHECK: sol.func @{{.*ge_mixed.*}}
+// CHECK:   sol.cmp ge, %{{.*}}, %{{.*}} : si16
 
-// CHECK: sol.func @{{.*ne_enum.*}}
-// CHECK:   sol.cmp ne, %{{.*}}, %{{.*}} : !sol.enum<2>
-
-// CHECK: sol.func @{{.*lt_enum.*}}
-// CHECK:   sol.cmp lt, %{{.*}}, %{{.*}} : !sol.enum<2>
-
-// CHECK: sol.func @{{.*le_enum.*}}
-// CHECK:   sol.cmp le, %{{.*}}, %{{.*}} : !sol.enum<2>
+// CHECK: sol.func @{{.*gt.*}}
+// CHECK:   sol.cmp gt, %{{.*}}, %{{.*}} : ui256
 
 // CHECK: sol.func @{{.*gt_enum.*}}
 // CHECK:   sol.cmp gt, %{{.*}}, %{{.*}} : !sol.enum<2>
 
-// CHECK: sol.func @{{.*ge_enum.*}}
-// CHECK:   sol.cmp ge, %{{.*}}, %{{.*}} : !sol.enum<2>
+// CHECK: sol.func @{{.*gt_fixed_bytes.*}}
+// CHECK:   sol.cmp gt, %{{.*}}, %{{.*}} : !sol.fixedbytes<8>
+
+// CHECK: sol.func @{{.*gt_mixed.*}}
+// CHECK:   sol.cmp gt, %{{.*}}, %{{.*}} : si16
+
+// CHECK: sol.func @{{.*le.*}}
+// CHECK:   sol.cmp le, %{{.*}}, %{{.*}} : ui256
+
+// CHECK: sol.func @{{.*le_enum.*}}
+// CHECK:   sol.cmp le, %{{.*}}, %{{.*}} : !sol.enum<2>
+
+// CHECK: sol.func @{{.*le_fixed_bytes.*}}
+// CHECK:   sol.cmp le, %{{.*}}, %{{.*}} : !sol.fixedbytes<8>
+
+// CHECK: sol.func @{{.*le_mixed.*}}
+// CHECK:   sol.cmp le, %{{.*}}, %{{.*}} : si16
+
+// CHECK: sol.func @{{.*lt.*}}
+// CHECK:   sol.cmp lt, %{{.*}}, %{{.*}} : ui256
+
+// CHECK: sol.func @{{.*lt_enum.*}}
+// CHECK:   sol.cmp lt, %{{.*}}, %{{.*}} : !sol.enum<2>
+
+// CHECK: sol.func @{{.*lt_fixed_bytes.*}}
+// CHECK:   sol.cmp lt, %{{.*}}, %{{.*}} : !sol.fixedbytes<8>
+
+// CHECK: sol.func @{{.*lt_mixed.*}}
+// CHECK:   sol.cmp lt, %{{.*}}, %{{.*}} : si16
+
+// CHECK: sol.func @{{.*ne.*}}
+// CHECK:   sol.cmp ne, %{{.*}}, %{{.*}} : ui256
+
+// CHECK: sol.func @{{.*ne_address.*}}
+// CHECK:   sol.cmp ne, %{{.*}}, %{{.*}} : !sol.address
+
+// CHECK: sol.func @{{.*ne_bool.*}}
+// CHECK:   sol.cmp ne, %{{.*}}, %{{.*}} : i1
+
+// CHECK: sol.func @{{.*ne_enum.*}}
+// CHECK:   sol.cmp ne, %{{.*}}, %{{.*}} : !sol.enum<2>
+
+// CHECK: sol.func @{{.*ne_fixed_bytes.*}}
+// CHECK:   sol.cmp ne, %{{.*}}, %{{.*}} : !sol.fixedbytes<8>
+
+// CHECK: sol.func @{{.*ne_mixed.*}}
+// CHECK:   sol.cmp ne, %{{.*}}, %{{.*}} : si16
 
 contract C {
     enum E { First, Second, Third }

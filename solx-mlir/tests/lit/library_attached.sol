@@ -1,22 +1,22 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// CHECK: sol.func @{{.*plain.*}}
+// CHECK: sol.func @{{.*free_function.*}}
 // CHECK:   %[[RECEIVER:.*]] = sol.load
-// CHECK:   %[[ARG:.*]] = sol.cast
-// CHECK:   sol.call @{{.*bump.*}}(%[[RECEIVER]], %[[ARG]]) : (ui256, ui256) -> ui256
+// CHECK:   sol.call @{{.*double.*}}(%[[RECEIVER]]) : (ui256) -> ui256
 
 // CHECK: sol.func @{{.*named.*}}
 // CHECK:   %[[RECEIVER:.*]] = sol.load
 // CHECK:   sol.constant 4 : ui8
 // CHECK:   sol.call @{{.*bump.*}}(%[[RECEIVER]], %{{.*}}) : (ui256, ui256) -> ui256
 
+// CHECK: sol.func @{{.*plain.*}}
+// CHECK:   %[[RECEIVER:.*]] = sol.load
+// CHECK:   %[[ARG:.*]] = sol.cast
+// CHECK:   sol.call @{{.*bump.*}}(%[[RECEIVER]], %[[ARG]]) : (ui256, ui256) -> ui256
+
 // CHECK: sol.func @{{.*storage_receiver.*}}
 // CHECK:   %[[BOX:.*]] = sol.addr_of @{{.*stored.*}} : !sol.struct<(ui256), Storage>
 // CHECK:   sol.call @{{.*fill.*}}(%[[BOX]], %{{.*}}) : (!sol.struct<(ui256), Storage>, ui256) -> ()
-
-// CHECK: sol.func @{{.*free_function.*}}
-// CHECK:   %[[RECEIVER:.*]] = sol.load
-// CHECK:   sol.call @{{.*double.*}}(%[[RECEIVER]]) : (ui256) -> ui256
 
 function double(uint256 a) pure returns (uint256) {
     return a * 2;

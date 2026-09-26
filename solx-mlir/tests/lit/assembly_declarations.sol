@@ -1,5 +1,26 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
+// CHECK: sol.func @{{.*nested_blocks.*}}
+// CHECK:   sol.inline_asm {
+// CHECK-NOT: yul.scope
+// CHECK:     %[[ONE:.*]] = yul.constant 1
+// CHECK:     %[[A:.*]] = yul.alloca : !yul.ptr
+// CHECK:     yul.store %[[ONE]], %[[A]] : i256, !yul.ptr
+// CHECK:     %[[TWO:.*]] = yul.constant 2
+// CHECK:     %[[B:.*]] = yul.alloca : !yul.ptr
+// CHECK:     yul.store %[[TWO]], %[[B]] : i256, !yul.ptr
+
+// CHECK: sol.func @{{.*tuple_assignment.*}}
+// CHECK:   sol.inline_asm {
+// CHECK:     %[[FIRST:.*]]:2 = yul.func_call @{{.*pair.*}}
+// CHECK:     %[[P:.*]] = yul.alloca : !yul.ptr
+// CHECK:     yul.store %[[FIRST]]#0, %[[P]] : i256, !yul.ptr
+// CHECK:     %[[Q:.*]] = yul.alloca : !yul.ptr
+// CHECK:     yul.store %[[FIRST]]#1, %[[Q]] : i256, !yul.ptr
+// CHECK:     %[[SECOND:.*]]:2 = yul.func_call @{{.*pair.*}}
+// CHECK:     yul.store %[[SECOND]]#0, %[[P]] : i256, !yul.ptr
+// CHECK:     yul.store %[[SECOND]]#1, %[[Q]] : i256, !yul.ptr
+
 // CHECK: sol.func @{{.*uninitialized.*}}
 // CHECK:   sol.inline_asm {
 // CHECK:     %[[Z:.*]] = yul.constant 0
@@ -14,27 +35,6 @@
 // CHECK:     yul.store %[[Z1]], %[[X]] : i256, !yul.ptr
 // CHECK:     %[[Y:.*]] = yul.alloca : !yul.ptr
 // CHECK:     yul.store %[[Z2]], %[[Y]] : i256, !yul.ptr
-
-// CHECK: sol.func @{{.*tuple_assignment.*}}
-// CHECK:   sol.inline_asm {
-// CHECK:     %[[FIRST:.*]]:2 = yul.func_call @{{.*pair.*}}
-// CHECK:     %[[P:.*]] = yul.alloca : !yul.ptr
-// CHECK:     yul.store %[[FIRST]]#0, %[[P]] : i256, !yul.ptr
-// CHECK:     %[[Q:.*]] = yul.alloca : !yul.ptr
-// CHECK:     yul.store %[[FIRST]]#1, %[[Q]] : i256, !yul.ptr
-// CHECK:     %[[SECOND:.*]]:2 = yul.func_call @{{.*pair.*}}
-// CHECK:     yul.store %[[SECOND]]#0, %[[P]] : i256, !yul.ptr
-// CHECK:     yul.store %[[SECOND]]#1, %[[Q]] : i256, !yul.ptr
-
-// CHECK: sol.func @{{.*nested_blocks.*}}
-// CHECK:   sol.inline_asm {
-// CHECK-NOT: yul.scope
-// CHECK:     %[[ONE:.*]] = yul.constant 1
-// CHECK:     %[[A:.*]] = yul.alloca : !yul.ptr
-// CHECK:     yul.store %[[ONE]], %[[A]] : i256, !yul.ptr
-// CHECK:     %[[TWO:.*]] = yul.constant 2
-// CHECK:     %[[B:.*]] = yul.alloca : !yul.ptr
-// CHECK:     yul.store %[[TWO]], %[[B]] : i256, !yul.ptr
 
 contract C {
     function uninitialized() public pure returns (uint256 r) {
