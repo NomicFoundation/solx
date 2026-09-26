@@ -164,7 +164,7 @@ impl Slang {
                     format!("{}_SerializeAST:{file_id}", Self::NAME).as_str(),
                 );
                 output_source.ast = Some(
-                    serde_json::to_value(file.ast())
+                    serde_json::value::to_raw_value(&file.ast())
                         .map_err(|error| anyhow::anyhow!("AST serialization: {error}"))?,
                 );
                 run_ast_serialization.borrow_mut().finish();

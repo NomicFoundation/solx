@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use normpath::PathExt;
+use serde_json::value::RawValue;
 use solx_utils::SyncLock;
 
 use solx_standard_json::CollectableError;
@@ -27,7 +28,7 @@ pub struct Build {
     /// The contract builds,
     pub contracts: BTreeMap<String, Contract>,
     /// The Solidity AST JSONs of the source files.
-    pub ast_jsons: Option<BTreeMap<String, Option<serde_json::Value>>>,
+    pub ast_jsons: Option<BTreeMap<String, Option<Box<RawValue>>>>,
     /// The additional message to output.
     pub messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
     /// Compilation pipeline benchmarks.
@@ -40,7 +41,7 @@ impl Build {
     ///
     pub fn new(
         contracts: BTreeMap<String, Contract>,
-        ast_jsons: Option<BTreeMap<String, Option<serde_json::Value>>>,
+        ast_jsons: Option<BTreeMap<String, Option<Box<RawValue>>>>,
         messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
     ) -> Self {
         Self {

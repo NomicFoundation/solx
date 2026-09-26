@@ -2,6 +2,8 @@
 //! The `solc --standard-json` output source.
 //!
 
+use serde_json::value::RawValue;
+
 ///
 /// The `solc --standard-json` output source.
 ///
@@ -12,7 +14,7 @@ pub struct Source {
     pub id: usize,
     /// Source code AST.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub ast: Option<serde_json::Value>,
+    pub ast: Option<Box<RawValue>>,
 }
 
 impl Source {
