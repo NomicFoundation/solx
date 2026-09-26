@@ -12,6 +12,7 @@ use std::sync::Mutex;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelBridge;
 use rayon::iter::ParallelIterator;
+use serde_json::value::RawValue;
 
 use crate::build::Build as EVMBuild;
 use crate::build::contract::Contract as EVMContractBuild;
@@ -37,7 +38,7 @@ pub struct Project {
     /// The project build results.
     pub contracts: BTreeMap<String, Contract>,
     /// The Solidity AST JSONs of the source files.
-    pub ast_jsons: Option<BTreeMap<String, Option<serde_json::Value>>>,
+    pub ast_jsons: Option<BTreeMap<String, Option<Box<RawValue>>>>,
     /// The library addresses.
     pub libraries: solx_utils::Libraries,
 }
@@ -52,7 +53,7 @@ impl Project {
     pub fn new(
         solc_version: Option<solx_standard_json::Version>,
         contracts: BTreeMap<String, Contract>,
-        ast_jsons: Option<BTreeMap<String, Option<serde_json::Value>>>,
+        ast_jsons: Option<BTreeMap<String, Option<Box<RawValue>>>>,
         libraries: solx_utils::Libraries,
     ) -> Self {
         Self {
@@ -75,7 +76,7 @@ impl Project {
             .sources
             .iter_mut()
             .map(|(path, source)| (path.to_owned(), source.ast.take()))
-            .collect::<BTreeMap<String, Option<serde_json::Value>>>();
+            .collect::<BTreeMap<String, Option<Box<RawValue>>>>();
 
         let mut input_contracts = Vec::with_capacity(output.contracts.len());
         for path in output
