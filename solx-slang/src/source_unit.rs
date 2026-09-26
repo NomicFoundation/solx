@@ -32,11 +32,7 @@ impl<'context> SourceUnitScope<'context> {
         capture_sol_dialect: impl Fn(&str) -> bool,
         profiler: &mut Profiler,
     ) -> anyhow::Result<BTreeMap<String, Contract>> {
-        let run_context_creation = profiler.start_pipeline_element(
-            format!("solx_CreateMLIRContext:{}", unit.get_file_id()).as_str(),
-        );
-        let melior = Context::create_melior_context();
-        run_context_creation.borrow_mut().finish();
+        let mut melior = None;
         let mut contracts = BTreeMap::new();
         for member in unit.members().iter() {
             let object = match member {
@@ -46,9 +42,18 @@ impl<'context> SourceUnitScope<'context> {
                 SourceUnitMember::LibraryDefinition(library) => Object::Library(library.clone()),
                 _ => continue,
             };
+
+            let melior = melior.get_or_insert_with(|| {
+                let run_context_creation = profiler.start_pipeline_element(
+                    format!("solx_CreateMLIRContext:{}", unit.get_file_id()).as_str(),
+                );
+                let melior = Context::create_melior_context();
+                run_context_creation.borrow_mut().finish();
+                melior
+            });
+
             let identifier = object.identifier();
-            let mut scope =
-                SourceUnitScope::new(Context::new(&melior, evm_version, revert_strings));
+            let mut scope = SourceUnitScope::new(Context::new(melior, evm_version, revert_strings));
             let run_emission =
                 profiler.start_pipeline_element(format!("solx_EmitSol:{identifier}").as_str());
             let method_identifiers = scope.object_definition(&object);
