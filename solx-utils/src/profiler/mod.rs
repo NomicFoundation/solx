@@ -36,13 +36,16 @@ impl Profiler {
     pub fn start_evm_translation_unit(
         &mut self,
         full_path: &str,
-        code_segment: CodeSegment,
+        code_segment: Option<CodeSegment>,
         description: &str,
         optimizer_mode: &str,
         spill_area_size: Option<u64>,
     ) -> Rc<RefCell<Run>> {
         self.start_run(format!(
-            "{full_path}:{code_segment}/{description}/{optimizer_mode}/SpillArea({})",
+            "{full_path}{}/{description}/{optimizer_mode}/SpillArea({})",
+            code_segment
+                .map(|code_segment| format!(":{code_segment}"))
+                .unwrap_or_default(),
             spill_area_size.unwrap_or_default()
         ))
     }

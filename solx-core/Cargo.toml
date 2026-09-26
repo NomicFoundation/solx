@@ -21,6 +21,7 @@ semver.workspace = true
 hex.workspace = true
 num.workspace = true
 rayon.workspace = true
+melior.workspace = true
 inkwell.workspace = true
 path-slash = "0.2"
 normpath = "1.5"

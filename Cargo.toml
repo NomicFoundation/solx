@@ -56,6 +56,17 @@ md5 = "0.8"
 ruint = "1.17"
 alloy-primitives = "1.6"
 
+# Slang
+[workspace.dependencies.slang_solidity_v2]
+git = "https://github.com/NomicFoundation/slang.git"
+# TODO: pin to a release tag instead of a revision.
+rev = "eb9ca42ccd0a6cb5b5cc22e2adb027ab59331344"
+
+# MLIR
+[workspace.dependencies.melior]
+git = "https://github.com/NomicFoundation/melior"
+rev = "f780c87b43f3015176ba919f7749c655cc13685e"
+
 # LLVM
 [workspace.dependencies.inkwell]
 git = "https://github.com/NomicFoundation/inkwell"
@@ -67,9 +78,3 @@ features = [
     "no-libffi-linking",
     "target-evm",
 ]
-
-# Slang
-[workspace.dependencies.slang_solidity_v2]
-git = "https://github.com/NomicFoundation/slang.git"
-# TODO: pin to a release tag instead of a revision.
-rev = "eb9ca42ccd0a6cb5b5cc22e2adb027ab59331344"
