@@ -71,7 +71,6 @@ impl<'a> SolxTester<'a> {
     const SOLIDITY_UPSTREAM: &'static str = "solx-solidity/test/libsolidity/semanticTests";
 
     /// The Yul simple tests directory.
-    #[cfg(not(feature = "slang-ast"))]
     const YUL_SIMPLE: &'static str = "tests/yul";
 
     /// The LLVM IR simple tests directory.
@@ -136,7 +135,6 @@ impl<'a> SolxTester<'a> {
         )?);
         let toolchain = solidity_compiler.toolchain();
 
-        #[cfg(not(feature = "slang-ast"))]
         let yul_compiler = Arc::new(SolidityCompiler::new(
             solidity_compiler_path.clone(),
             solx_standard_json::InputLanguage::Yul,
@@ -165,7 +163,6 @@ impl<'a> SolxTester<'a> {
             solidity_compiler.clone(),
         )?);
 
-        #[cfg(not(feature = "slang-ast"))]
         tests.extend(self.directory::<MatterLabsDirectory>(
             Self::YUL_SIMPLE,
             solx_utils::EXTENSION_YUL,

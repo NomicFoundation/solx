@@ -27,7 +27,6 @@ pub fn build(
     tests: bool,
     extra_args: Vec<String>,
     boost_config: Option<&BoostConfig>,
-    enable_mlir: bool,
     use_gcc: bool,
     ccache_variant: Option<CcacheVariant>,
 ) -> anyhow::Result<()> {
@@ -84,11 +83,9 @@ pub fn build(
     cmake.arg("-DBoost_ARCHITECTURE=-x64");
 
     // MLIR configuration
-    if enable_mlir {
-        let llvm_build_dir = std::path::PathBuf::from(crate::solc::LLVM_BUILD_DIR);
-        for arg in shared::mlir_cmake_args(&llvm_build_dir) {
-            cmake.arg(arg);
-        }
+    let llvm_build_dir = std::path::PathBuf::from(crate::solc::LLVM_BUILD_DIR);
+    for arg in shared::mlir_cmake_args(&llvm_build_dir) {
+        cmake.arg(arg);
     }
 
     // Compiler cache

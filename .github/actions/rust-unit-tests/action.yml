@@ -26,7 +26,7 @@ inputs:
     required: false
     default: 'Unit Tests Results'
   cargo-test-command:
-    description: 'Cargo test command or alias to run (e.g., test, test-slang).'
+    description: 'Cargo test command or alias to run (e.g., test).'
     required: false
     default: 'test'
 
@@ -107,7 +107,7 @@ runs:
         fi
         # Use LLD on Windows and Linux to properly link with libstdc++.
         # On Windows, also strip debuginfo: PE/COFF has a 2 GB SizeOfImage limit
-        # and debug binaries statically linking LLVM+MLIR+LLD can exceed it,
+        # and debug binaries statically linking LLVM+LLD can exceed it,
         # producing "%1 is not a valid Win32 application" (os error 193).
         # Skip when using sanitizers — clang needs its native linker for ASan runtime.
         if [[ ${RUNNER_OS} = Windows ]]; then

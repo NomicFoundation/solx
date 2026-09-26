@@ -36,10 +36,6 @@ pub struct Build {
     #[arg(long)]
     pub build_boost: bool,
 
-    /// Enable MLIR support (requires LLVM built with MLIR).
-    #[arg(long)]
-    pub enable_mlir: bool,
-
     /// Use GCC compiler instead of clang.
     #[arg(long)]
     pub use_gcc: bool,

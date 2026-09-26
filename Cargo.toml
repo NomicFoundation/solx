@@ -1,27 +1,6 @@
 [workspace]
 members = [
     "solx",
-    "solx-slang",
-    "solx-core",
-    "solx-standard-json",
-    "solx-evm-assembly",
-    "solx-yul",
-    "solx-codegen-evm",
-    "solx-utils",
-    "solx-dev",
-    "solx-tester",
-    "solx-benchmark-converter",
-    "solx-solc-test-adapter",
-    "solx-compiler-downloader",
-    "solx-mlir",
-]
-# IMPORTANT: solx-slang and solx-mlir are intentionally excluded from
-# default-members. They depend on inkwell with `llvm21-1-no-llvm-linking`,
-# while solx-codegen-evm uses inkwell with `llvm21-1` (links LLVM). Cargo
-# feature unification would merge these into one inkwell with conflicting
-# features, causing linker failures. Use `cargo test-slang` to test them.
-default-members = [
-    "solx",
     "solx-core",
     "solx-standard-json",
     "solx-evm-assembly",
@@ -75,7 +54,6 @@ itertools = "0.15"
 sha2 = "0.11"
 sha3 = "0.12"
 md5 = "0.8"
-ruint = "1.17"
 alloy-primitives = "1.6"
 
 # LLVM
@@ -89,9 +67,3 @@ features = [
     "no-libffi-linking",
     "target-evm",
 ]
-
-# Slang
-[workspace.dependencies.slang_solidity_v2]
-git = "https://github.com/NomicFoundation/slang.git"
-# TODO: pin to a release tag instead of a revision.
-rev = "3b82850f6d525d42456135fea742ee556f56c298"

@@ -6,7 +6,7 @@ set -euo pipefail
 
 # Named volumes are created root-owned; hand them to the dev user.
 sudo chown "$(id -u):$(id -g)" \
-    target target-slang target-llvm \
+    target target-llvm \
     /var/cache/solx-ccache /usr/local/rustup /usr/local/cargo
 
 # Docker Desktop file sharing can surface the bind mount with foreign

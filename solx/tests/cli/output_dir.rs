@@ -8,7 +8,6 @@ use predicates::prelude::*;
 use tempfile::TempDir;
 use test_case::test_case;
 
-#[cfg(feature = "solc")]
 #[test]
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -80,7 +79,6 @@ fn yul(extension: String) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn unusual_path_characters() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -125,7 +123,6 @@ fn standard_json() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn multiple_outputs() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -150,7 +147,6 @@ fn multiple_outputs() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn multiple_outputs_simple_contract() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -200,7 +196,6 @@ fn emit_llvm_ir() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn evmla() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -229,7 +224,6 @@ fn evmla() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "solc")]
 #[test]
 fn ethir() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -258,105 +252,6 @@ fn ethir() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "mlir")]
-#[test]
-fn emit_mlir() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let output_directory = TempDir::with_prefix("solx_output")?;
-
-    let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT,
-        "--emit-mlir",
-        "--output-dir",
-        output_directory.path().to_str().expect("Always valid"),
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stderr(predicate::str::contains("Compiler run successful"));
-
-    let entries: Vec<_> = std::fs::read_dir(output_directory.path())?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "mlir"))
-        .collect();
-
-    assert!(
-        entries.len() >= 3,
-        "Expected at least 3 .mlir files (sol + llvm deploy + llvm runtime)"
-    );
-
-    let filenames: Vec<_> = entries
-        .iter()
-        .filter_map(|entry| entry.file_name().into_string().ok())
-        .collect();
-    assert!(
-        filenames.iter().any(|name| name.contains(".sol.mlir")),
-        "Expected a .sol.mlir file, found: {filenames:?}"
-    );
-    assert!(
-        filenames
-            .iter()
-            .any(|name| name.contains(".llvm.deploy.mlir")),
-        "Expected a .llvm.deploy.mlir file, found: {filenames:?}"
-    );
-    assert!(
-        filenames
-            .iter()
-            .any(|name| name.contains(".llvm.runtime.mlir")),
-        "Expected a .llvm.runtime.mlir file, found: {filenames:?}"
-    );
-
-    Ok(())
-}
-
-#[cfg(feature = "mlir")]
-#[test]
-fn emit_mlir_filter_sol() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let output_directory = TempDir::with_prefix("solx_output")?;
-
-    let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT,
-        "--emit-mlir=sol",
-        "--output-dir",
-        output_directory.path().to_str().expect("Always valid"),
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stderr(predicate::str::contains("Compiler run successful"));
-
-    let filenames: Vec<_> = std::fs::read_dir(output_directory.path())?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "mlir"))
-        .filter_map(|entry| entry.file_name().into_string().ok())
-        .collect();
-
-    assert!(
-        filenames.iter().any(|name| name.contains(".sol.mlir")),
-        "Expected a .sol.mlir file, found: {filenames:?}"
-    );
-    assert!(
-        !filenames
-            .iter()
-            .any(|name| name.contains(".llvm.deploy.mlir")),
-        "Did not expect a .llvm.deploy.mlir file, found: {filenames:?}"
-    );
-    assert!(
-        !filenames
-            .iter()
-            .any(|name| name.contains(".llvm.runtime.mlir")),
-        "Did not expect a .llvm.runtime.mlir file, found: {filenames:?}"
-    );
-
-    Ok(())
-}
-
-#[cfg(feature = "solc")]
 #[test]
 fn multiple_ir_outputs() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -407,49 +302,6 @@ fn multiple_ir_outputs() -> anyhow::Result<()> {
         !ethir_files.is_empty(),
         "Expected .ethir files to be created"
     );
-    assert!(!asm_files.is_empty(), "Expected .asm files to be created");
-
-    Ok(())
-}
-
-#[cfg(feature = "mlir")]
-#[test]
-fn emit_mlir_and_llvm_ir() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let output_directory = TempDir::with_prefix("solx_output")?;
-
-    let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT,
-        "--emit-mlir",
-        "--emit-llvm-ir",
-        "--asm",
-        "--output-dir",
-        output_directory.path().to_str().expect("Always valid"),
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stderr(predicate::str::contains("Compiler run successful"));
-
-    let mlir_files: Vec<_> = std::fs::read_dir(output_directory.path())?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "mlir"))
-        .collect();
-
-    let ll_files: Vec<_> = std::fs::read_dir(output_directory.path())?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "ll"))
-        .collect();
-
-    let asm_files: Vec<_> = std::fs::read_dir(output_directory.path())?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "asm"))
-        .collect();
-
-    assert!(!mlir_files.is_empty(), "Expected .mlir files to be created");
-    assert!(!ll_files.is_empty(), "Expected .ll files to be created");
     assert!(!asm_files.is_empty(), "Expected .asm files to be created");
 
     Ok(())

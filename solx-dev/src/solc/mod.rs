@@ -33,7 +33,6 @@ pub fn build(
     extra_args: Vec<String>,
     clean: bool,
     boost_version: Option<String>,
-    enable_mlir: bool,
     use_gcc: bool,
     build_boost: bool,
     ccache_variant: Option<CcacheVariant>,
@@ -93,7 +92,6 @@ pub fn build(
                 tests,
                 extra_args,
                 boost_config.as_ref(),
-                enable_mlir,
                 use_gcc,
                 ccache_variant,
             )?;
@@ -106,7 +104,6 @@ pub fn build(
                 tests,
                 extra_args,
                 boost_config.as_ref(),
-                enable_mlir,
                 ccache_variant,
             )?;
         } else if cfg!(target_os = "windows") {
@@ -118,7 +115,6 @@ pub fn build(
                 tests,
                 extra_args,
                 boost_config.as_ref(),
-                enable_mlir,
                 use_gcc,
                 ccache_variant,
             )?;
@@ -135,7 +131,6 @@ pub fn build(
                 tests,
                 extra_args,
                 boost_config.as_ref(),
-                enable_mlir,
                 use_gcc,
                 ccache_variant,
             )?;
@@ -148,7 +143,6 @@ pub fn build(
                 tests,
                 extra_args,
                 boost_config.as_ref(),
-                enable_mlir,
                 ccache_variant,
             )?;
         } else {

@@ -18,20 +18,13 @@ Three-repository structure via git submodules:
 Solidity → solc frontend (parse, analyze) → Yul/EVM assembly → LLVM IR → LLVM optimizer → EVM bytecode
 ```
 
-Alternative pipeline via Slang (Rust-based frontend, WIP):
-```
-Solidity → Slang (parse, analyze) → MLIR → LLVM IR → EVM bytecode
-```
-
-### Workspace Crates (14 total)
+### Workspace Crates (12 total)
 
 | Crate | Purpose |
 |---|---|
 | `solx` | CLI entry point, frontend dispatch |
 | `solx-core` | Pipeline orchestration (`standard_output_evm`, `standard_json_evm`, `yul_to_evm`, `llvm_ir_to_evm`) |
 | `solx-codegen-evm` | LLVM IR generation, optimization passes, bytecode assembly, linking |
-| `solx-slang` | Alternative Rust-based Slang frontend |
-| `solx-mlir` | MLIR-to-LLVM translation via melior |
 | `solx-yul` | Yul lexer/parser |
 | `solx-evm-assembly` | EVM assembly representation and ethereal IR |
 | `solx-standard-json` | solc-compatible JSON I/O protocol |
@@ -41,8 +34,6 @@ Solidity → Slang (parse, analyze) → MLIR → LLVM IR → EVM bytecode
 | `solx-compiler-downloader` | Downloads/verifies compiler binaries |
 | `solx-benchmark-converter` | Benchmark analysis and comparison |
 | `solx-solc-test-adapter` | Adapter for upstream solc tests |
-
-**Important feature split:** `solx-slang` and `solx-mlir` use inkwell with `llvm21-1-no-llvm-linking`, while `solx-codegen-evm` uses `llvm21-1` (links LLVM). They are excluded from `default-members` to avoid Cargo feature unification conflicts. Use `cargo test-slang` to test them.
 
 ## Build Commands
 
@@ -54,7 +45,7 @@ Build the `solx-dev` tool first, then use it to build LLVM and solc:
 cargo build --release --bin solx-dev
 
 # Build LLVM (outputs to target-llvm/target-final/)
-./target/release/solx-dev llvm build --enable-mlir --enable-utils --build-type RelWithDebInfo
+./target/release/solx-dev llvm build --enable-utils --build-type RelWithDebInfo
 
 # Build solc libraries (outputs to solx-solidity/build/)
 ./target/release/solx-dev solc build
@@ -70,8 +61,6 @@ cargo build --release    # release (outputs to target/release/solx)
 ### Environment Variables (auto-set via .cargo/config.toml)
 
 - `LLVM_SYS_211_PREFIX` → `./target-llvm/target-final/`
-- `MLIR_SYS_210_PREFIX` → `./target-llvm/target-final/`
-- `TABLEGEN_210_PREFIX` → `./target-llvm/target-final/`
 - `SOLC_PREFIX` → `./solx-solidity/build/`
 - `BOOST_PREFIX` → `./solx-solidity/boost/lib/`
 
@@ -84,13 +73,6 @@ cargo test                              # all tests (unit + CLI)
 cargo test --lib                        # unit tests only
 cargo test --test mod                   # CLI integration tests only (target is `mod`)
 cargo test --test mod -- cli::bin::default  # specific test
-```
-
-### Slang/MLIR tests (cargo alias)
-
-```bash
-cargo test-slang
-# expands to: cargo test -p solx-slang -p solx-mlir -p solx --no-default-features --features slang --target-dir target-slang
 ```
 
 ### Integration tests with solx-tester
@@ -134,4 +116,4 @@ Tests live in `tests/solidity/`, `tests/yul/`, `tests/llvm-ir/`.
 When editing `renovate.json`, validate locally before pushing (CI runs the same checks via the `renovate-config-check` job in `test.yaml`):
 
 - **Schema check:** `npx --yes --package renovate -- renovate-config-validator renovate.json`
-- **Full extraction dry-run:** `LOG_LEVEL=debug npx --yes renovate --platform=local --dry-run=full` — confirms each dep shows the expected `skipReason` / `updates`. Catches gotchas like `matchPackageNames` failing to match git-source cargo deps (where `packageName` is the git URL, not the `Cargo.toml` key — use `matchDepNames` for those, as the pinned-fork rule does for `inkwell`/`melior`/`slang_solidity`/`web3`).
+- **Full extraction dry-run:** `LOG_LEVEL=debug npx --yes renovate --platform=local --dry-run=full` — confirms each dep shows the expected `skipReason` / `updates`. Catches gotchas like `matchPackageNames` failing to match git-source cargo deps (where `packageName` is the git URL, not the `Cargo.toml` key — use `matchDepNames` for those, as the pinned-fork rule does for `inkwell`).
