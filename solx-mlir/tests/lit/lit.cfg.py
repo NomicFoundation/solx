@@ -7,7 +7,12 @@ config.suffixes = [".sol"]
 
 config_dir = os.path.dirname(os.path.abspath(__file__))
 solx_root = os.path.normpath(os.path.join(config_dir, "..", "..", ".."))
-solx_bin_dir = os.path.join(solx_root, "target", os.environ.get("SOLX_LIT_TARGET", ""), "debug")
+solx_bin_dir = os.path.join(
+    solx_root,
+    "target",
+    os.environ.get("SOLX_LIT_TARGET", ""),
+    os.environ.get("SOLX_LIT_PROFILE", "debug"),
+)
 
 config.environment["PATH"] = os.pathsep.join(
     [solx_bin_dir, os.environ.get("PATH", "")]
