@@ -490,7 +490,7 @@ impl Project {
         let mut result = loop {
             let run_roundtrip = profiler.start_evm_translation_unit(
                 job.contract_name.full_path.as_str(),
-                job.code_segment,
+                Some(job.code_segment),
                 format!("WorkerRoundtrip({attempt})").as_str(),
                 job.optimizer_settings.to_string().as_str(),
                 job.optimizer_settings.spill_area_size(),

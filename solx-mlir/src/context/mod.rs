@@ -33,11 +33,8 @@ use crate::Type;
 use crate::llvm_module::RawLlvmModule;
 
 /// Accumulated MLIR state threaded through the AST visitors.
-///
-/// Owns a `melior::ir::Module` being populated, and provides function registration, pass pipeline
-/// execution, and LLVM translation. Emission is expressed through the [`crate::ir`] entity API.
 pub struct Context<'context> {
-    /// The MLIR context with all dialects and translations registered.
+    /// The MLIR context.
     pub melior: &'context melior::Context,
     /// The MLIR module being built.
     pub module: Module<'context>,
@@ -50,6 +47,8 @@ pub struct Context<'context> {
 }
 
 impl<'context> Context<'context> {
+    /// The dialects emission builds in, which op, type and attribute construction does not load.
+    const EMITTED_DIALECTS: [&'static str; 2] = ["sol", "yul"];
     /// The op a code segment's module is.
     const BUILTIN_MODULE: &'static str = "builtin.module";
     /// The data layout the LLVM translation reads off the module.
@@ -73,9 +72,7 @@ impl<'context> Context<'context> {
     /// The attribute an intrinsic call carries its string operands in.
     const INTRINSIC_METADATA: &'static str = "metadata";
 
-    /// Creates a fully-initialized `melior::Context` with all upstream
-    /// dialects, Sol dialect, Yul dialect, and LLVM translation interfaces
-    /// registered.
+    /// Creates a single-threaded MLIR context.
     ///
     /// `register_all_llvm_translations` MUST be called before any
     /// MLIR-to-LLVM translation. Without it, `mlirTranslateModuleToLLVMIR`
@@ -96,8 +93,8 @@ impl<'context> Context<'context> {
         }
 
         let melior = melior::Context::new();
+        melior.enable_multi_threading(false);
         melior.append_dialect_registry(&registry);
-        melior.load_all_available_dialects();
         melior::utility::register_all_llvm_translations(&melior);
 
         static REGISTER_PASSES: Once = Once::new();
@@ -109,14 +106,15 @@ impl<'context> Context<'context> {
     }
 
     /// Creates a new MLIR state with an empty module.
-    ///
-    /// Sets the `sol.evm_version` and `sol.revert_strings` module attributes the
-    /// `convert-sol-to-yul` pass reads.
     pub fn new(
         melior: &'context melior::Context,
         evm_version: solx_utils::EVMVersion,
         revert_strings: solx_utils::RevertStrings,
     ) -> Self {
+        for dialect in Self::EMITTED_DIALECTS {
+            melior.get_or_load_dialect(dialect);
+        }
+
         let location = Location::unknown(melior);
         let mut module = Module::new(location);
 
@@ -169,20 +167,6 @@ impl<'context> Context<'context> {
 
     /// Run the Sol-to-LLVM conversion pass pipeline on a module in-place.
     ///
-    /// The pass pipeline is:
-    /// 1. `canonicalize`
-    /// 2. `sol-inline-modifiers`
-    /// 3. `convert-sol-to-yul`: Sol → Yul
-    /// 4. `convert-yul-to-std`: Yul → func/arith/scf/cf/LLVM
-    /// 5. `canonicalize`
-    /// 6. `convert-scf-to-cf`
-    /// 7. `convert-func-to-llvm`
-    /// 8. `convert-arith-to-llvm`
-    /// 9. `convert-cf-to-llvm`
-    /// 10. `reconcile-unrealized-casts`
-    ///
-    /// `sol-licm` is not yet in the pipeline.
-    ///
     /// # Errors
     ///
     /// Returns an error if any pass in the pipeline fails or the resulting module fails
@@ -233,20 +217,14 @@ impl<'context> Context<'context> {
         Ok(())
     }
 
-    /// Consumes the context, runs the Sol-to-LLVM pass pipeline, and returns
-    /// the deploy and runtime modules as separate LLVM dialect strings.
+    /// Returns the deploy and runtime modules as separate LLVM dialect strings.
     ///
     /// The Sol conversion pass produces a nested module:
     /// ```text
     /// module @Contract { deploy __entry + module @Contract_deployed { runtime __entry } }
     /// ```
-    /// The inner module, matched by `runtime_code_identifier`, is detached
-    /// from the outer and stringified separately, so each can be translated
-    /// to its own LLVM IR module by `solx-codegen-evm` and emit its own
-    /// bytecode segment. The Sol-pass-generated outer carries the deploy
-    /// entry that runs the constructor and returns the runtime bytecode;
-    /// it replaces the synthetic `minimal_deploy_code` wrapper that
-    /// `solx-core` uses for non-MLIR pipelines.
+    /// Each is translated to its own LLVM IR module and emits its own bytecode segment. The outer
+    /// carries the deploy entry that runs the constructor and returns the runtime bytecode.
     ///
     /// # Errors
     ///
@@ -313,9 +291,8 @@ impl<'context> Context<'context> {
 
     /// Translates a parsed LLVM-dialect module to raw LLVM pointers.
     ///
-    /// Lowers each `llvm.setimmutable` into heap stores at its id's `immutables` offsets, then
-    /// translates to LLVM IR. The module is consumed because the lowering erases the
-    /// `llvm.setimmutable` operations it reads, and the translation copies everything it needs.
+    /// The module is consumed because lowering `llvm.setimmutable` erases the operations it reads,
+    /// and the translation copies everything it needs.
     ///
     /// # Errors
     ///
@@ -360,9 +337,8 @@ impl<'context> Context<'context> {
         }
     }
 
-    /// Finds a nested `builtin.module` in `module`'s body whose `sym_name` matches `target`,
-    /// destroys it, and returns its textual form and the objects it references. The walk runs before
-    /// the module leaves the tree, so each segment's dependencies come from its own code.
+    /// The walk runs before the module leaves the tree, so each segment's dependencies come from its
+    /// own code.
     fn take_nested_module(
         module: &mut Module,
         target: &str,
@@ -395,7 +371,7 @@ impl<'context> Context<'context> {
         .ok_or_else(|| anyhow::anyhow!("no module with sym_name `{target}` in Sol pass output"))
     }
 
-    /// The objects `operation`'s code references, read off the intrinsics naming them.
+    /// The objects `operation`'s code references.
     fn object_dependencies<'c: 'a, 'a>(
         operation: &impl OperationLike<'c, 'a>,
         identifier: &str,

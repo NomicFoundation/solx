@@ -308,13 +308,12 @@ solx_ExtractMLIRObjects:Simple.sol:Simple: [..]us
 
 ======= Simple.sol:Simple =======
 Benchmarks:
-    Simple.sol:Simple:deploy/CreateMLIRContext/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/ParseMLIR/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/MLIRToLLVMIR/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/InitVerify/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/OptimizeVerify/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/WorkerRoundtrip(0)/M3B3/SpillArea(0): [..]us
-    Simple.sol:Simple:runtime/CreateMLIRContext/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple/CreateMLIRContext/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:runtime/ParseMLIR/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:runtime/MLIRToLLVMIR/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple_deployed:runtime/InitVerify/M3B3/SpillArea(0): [..]us

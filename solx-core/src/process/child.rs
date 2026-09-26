@@ -2,6 +2,7 @@
 //! The subprocess-side worker: reads a session, then compiles jobs until `stdin` closes.
 //!
 
+use std::cell::OnceCell;
 use std::sync::atomic::Ordering;
 use std::thread::Builder;
 
@@ -28,12 +29,14 @@ pub fn run() -> anyhow::Result<()> {
             inkwell::support::error_handling::install_stack_error_handler(evm_stack_error_handler);
             inkwell::support::error_handling::install_fatal_error_handler(llvm_fatal_error_handler);
 
+            let melior = OnceCell::new();
             while let Some(job) = stdin.recv::<Job>()? {
                 solx_codegen_evm::IS_SIZE_FALLBACK.store(
                     job.optimizer_settings.is_fallback_to_size_active(),
                     Ordering::Relaxed,
                 );
                 let result = Contract::compile_to_evm(
+                    &melior,
                     job.contract_name.clone(),
                     job.contract_ir,
                     job.code_segment,
