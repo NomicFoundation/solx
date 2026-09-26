@@ -48,6 +48,7 @@ impl<'a> Metadata<'a> {
             crate::r#const::METADATA_SECTION_KEY.to_owned(),
             serde_json::to_value(self).expect("Always valid"),
         );
+        object.sort_all_objects();
         serde_json::to_string(&object).expect("Always valid")
     }
 }
