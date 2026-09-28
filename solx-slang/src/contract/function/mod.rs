@@ -138,16 +138,15 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// Emits the modifier invocations in source order, each a `sol.modifier_invocation` whose
-    /// region evaluates the arguments and yields them. An entry naming a base is a
-    /// base-constructor call, which the constructor chain consumes.
+    /// region evaluates the arguments and yields them, ahead of the body. `sol-inline-modifiers`
+    /// later expands each modifier's `sol.placeholder` into the next modifier, and the last
+    /// one's into this function's body. An entry naming a base is a base-constructor call,
+    /// which the constructor chain consumes.
     pub fn modifier_invocations(&mut self, node: &ModifierInvocations) {
         for invocation in node.iter() {
-            let declaration = match invocation.name().resolve_to_definition() {
-                Some(Definition::Modifier(declaration)) => declaration,
-                Some(Definition::Contract(_) | Definition::Interface(_)) => continue,
-                _ => unreachable!("a modifier-list entry names a modifier or a base"),
+            let Some(definition) = self.contract.invoked_modifier(&invocation) else {
+                continue;
             };
-            let definition = self.contract.invoked_modifier(&invocation, declaration);
             let modifier = self.contract.function_definition(&definition);
             let arguments_block = self.current_block().modifier_invocation(&modifier, self);
             self.region(arguments_block, |scope| {

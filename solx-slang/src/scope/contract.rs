@@ -107,22 +107,25 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             .expect("a `super` call resolves to an implemented base function")
     }
 
-    /// The modifier a modifier-list entry runs in this object: the most-derived override of its
-    /// hierarchy for a bare name, or the declaration itself when the name is qualified or the
-    /// modifier is a library's, which nothing overrides.
-    pub fn invoked_modifier(
-        &self,
-        invocation: &ModifierInvocation,
-        declaration: FunctionDefinition,
-    ) -> FunctionDefinition {
-        match (&self.object, declaration.enclosing_definition()) {
+    /// The modifier a modifier-list entry runs in this object, or `None` for an entry naming a
+    /// base, which is a base-constructor call. A contract's modifier is Slang's dispatch answer:
+    /// the most-derived override for a bare name, the declaration for a qualified one. A
+    /// library's modifier, which that dispatch does not cover and nothing overrides, is the
+    /// declaration.
+    pub fn invoked_modifier(&self, invocation: &ModifierInvocation) -> Option<FunctionDefinition> {
+        let declaration = match invocation.name().resolve_to_definition() {
+            Some(Definition::Modifier(declaration)) => declaration,
+            Some(Definition::Contract(_) | Definition::Interface(_)) => return None,
+            _ => unreachable!("a modifier-list entry names a modifier or a base"),
+        };
+        Some(match (&self.object, declaration.enclosing_definition()) {
             (Object::Contract(node), Some(Definition::Contract(_))) => {
                 node.resolve_modifier(invocation).expect(
                     "a contract's modifier resolves in the hierarchy of a contract invoking it",
                 )
             }
             _ => declaration,
-        }
+        })
     }
 }
 
