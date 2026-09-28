@@ -21,6 +21,18 @@
 // CHECK:   } body {
 // CHECK-NEXT: sol.placeholder
 
+// CHECK: sol.func @{{.*}}interval{{.*}}(%arg0: ui256) -> (ui256, ui256)
+// CHECK:   sol.store %arg0, %[[Z:.*]] : ui256, !sol.ptr<ui256, Stack>
+// CHECK:   sol.modifier_invocation @[[BOUNDED]] {
+// CHECK:     %[[OPERAND:.*]] = sol.load %[[Z]]
+// CHECK:     %[[SUM:.*]] = sol.cadd %[[OPERAND]]
+// CHECK:     sol.yield %[[SUM]] : ui256
+// CHECK:   sol.modifier_invocation @[[DOUBLED:.*]] {
+
+// CHECK: sol.modifier @[[DOUBLED]]() {
+// CHECK-NEXT: sol.placeholder
+// CHECK-NEXT: sol.placeholder
+
 // CHECK: sol.func @{{.*}}other{{.*}}(%arg0: ui256) -> ui256
 // CHECK:   sol.modifier_invocation @[[BOUNDED]] {
 // CHECK-NOT: sol.modifier @[[BOUNDED]](
@@ -40,7 +52,14 @@ contract C {
         }
     }
 
+    modifier doubled() {
+        _;
+        _;
+    }
+
     function guarded(uint256 x) public bounded(x) twice returns (uint256) {}
+
+    function interval(uint256 z) public bounded(z + 1) doubled returns (uint256, uint256) {}
 
     function other(uint256 y) public bounded(y) returns (uint256) {}
 }
