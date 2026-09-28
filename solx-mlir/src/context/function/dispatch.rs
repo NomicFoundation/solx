@@ -18,6 +18,8 @@ pub enum FunctionDispatch {
     Kind(FunctionKind),
     /// A synthesized state-variable getter or a base constructor, reached by its symbol alone.
     Symbol,
+    /// A modifier, defined as `sol.modifier` and reached by the invocations naming it.
+    Modifier,
 }
 
 impl FunctionDispatch {
@@ -32,7 +34,7 @@ impl FunctionDispatch {
             SlangFunctionKind::Fallback => Self::Kind(FunctionKind::Fallback),
             SlangFunctionKind::Receive => Self::Kind(FunctionKind::Receive),
             SlangFunctionKind::Regular => Self::Identifier(function.node_id()),
-            SlangFunctionKind::Modifier => unreachable!("slang yields no modifier as a function"),
+            SlangFunctionKind::Modifier => Self::Modifier,
         }
     }
 }
