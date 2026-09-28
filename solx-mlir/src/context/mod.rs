@@ -185,10 +185,11 @@ impl<'context> Context<'context> {
     ///
     /// # Errors
     ///
-    /// Returns an error if any pass in the pipeline fails.
+    /// Returns an error if any pass in the pipeline fails or the resulting module fails
+    /// verification.
     pub fn run_sol_passes(melior: &melior::Context, module: &mut Module) -> anyhow::Result<()> {
         let pass_manager = PassManager::new(melior);
-        pass_manager.enable_verifier(true);
+        pass_manager.enable_verifier(cfg!(debug_assertions));
 
         unsafe {
             pass_manager.add_pass(melior::pass::Pass::from_raw(
@@ -225,7 +226,11 @@ impl<'context> Context<'context> {
 
         pass_manager
             .run(module)
-            .map_err(|error| anyhow::anyhow!("Sol pass pipeline failed: {error}"))
+            .map_err(|error| anyhow::anyhow!("Sol pass pipeline failed: {error}"))?;
+        if !cfg!(debug_assertions) && !module.as_operation().verify() {
+            anyhow::bail!("Sol pass pipeline produced an invalid module");
+        }
+        Ok(())
     }
 
     /// Consumes the context, runs the Sol-to-LLVM pass pipeline, and returns
