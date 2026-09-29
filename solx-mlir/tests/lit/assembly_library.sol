@@ -2,12 +2,12 @@
 
 // CHECK: sol.contract @{{.*}}C{{.*}} {
 // CHECK:   sol.func @{{.*use.*}}
-// CHECK:   sol.func @{{.*twice.*}}
+// CHECK:   sol.func private @{{.*twice.*}}
 // CHECK:     sol.inline_asm {
 // CHECK:       yul.mul %{{.*}}, %c2_i256
 // CHECK: } {kind = #Contract}
 // CHECK: sol.contract @{{.*}}L{{.*}} {
-// CHECK:   sol.func @{{.*twice.*}}
+// CHECK:   sol.func private @{{.*twice.*}}
 // CHECK:     sol.inline_asm {
 // CHECK:       yul.mul %{{.*}}, %c2_i256
 // CHECK: } {kind = #Library}
