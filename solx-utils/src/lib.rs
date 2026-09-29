@@ -38,6 +38,7 @@ pub use self::cbor::CBOR;
 pub use self::code_segment::CodeSegment;
 pub use self::contract_name::ContractName;
 pub use self::data_location::DataLocation;
+pub use self::debug_info::line_index::LineIndex;
 pub use self::debug_info::mapped_location::MappedLocation as DebugInfoMappedLocation;
 pub use self::debug_info::solc_location::SolcLocation as DebugInfoSolcLocation;
 pub use self::debug_info::solc_location::ordering::Ordering as DebugInfoSolcLocationOrdering;

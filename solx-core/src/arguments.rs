@@ -465,6 +465,12 @@ impl Arguments {
         if self.output_benchmarks {
             selectors.insert(solx_standard_json::InputSelector::Benchmarks);
         }
+        if self.output_debug_info {
+            selectors.insert(solx_standard_json::InputSelector::BytecodeDebugInfo);
+        }
+        if self.output_debug_info_runtime {
+            selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo);
+        }
         if self.output_mlir.is_some() {
             selectors.insert(solx_standard_json::InputSelector::MLIR);
         }

@@ -32,23 +32,37 @@ impl<'function, 'contract, 'source_unit, 'context>
         }
     }
 
-    /// A Yul statement, routed to its lowering.
+    /// A Yul statement, routed to its lowering. The ops a statement emits carry its location,
+    /// except a block and an expression statement, which emit no op of their own, and a function
+    /// definition, which takes its own where it is first named.
     fn statement(&mut self, node: &YulStatement) {
         match node {
             YulStatement::YulBlock(inner) => self.statements(inner),
             YulStatement::YulVariableDeclarationStatement(inner) => {
-                self.variable_declaration_statement(inner)
+                self.at_node(inner, |scope| scope.variable_declaration_statement(inner))
             }
             YulStatement::YulVariableAssignmentStatement(inner) => {
-                self.variable_assignment_statement(inner)
+                self.at_node(inner, |scope| scope.variable_assignment_statement(inner))
             }
             YulStatement::YulExpression(inner) => self.expression_effect(inner),
-            YulStatement::YulIfStatement(inner) => self.if_statement(inner),
-            YulStatement::YulForStatement(inner) => self.for_statement(inner),
-            YulStatement::YulSwitchStatement(inner) => self.switch_statement(inner),
-            YulStatement::YulBreakStatement(_) => self.current_block().r#break(self),
-            YulStatement::YulContinueStatement(_) => self.current_block().r#continue(self),
-            YulStatement::YulLeaveStatement(_) => self.function_return(),
+            YulStatement::YulIfStatement(inner) => {
+                self.at_node(inner, |scope| scope.if_statement(inner))
+            }
+            YulStatement::YulForStatement(inner) => {
+                self.at_node(inner, |scope| scope.for_statement(inner))
+            }
+            YulStatement::YulSwitchStatement(inner) => {
+                self.at_node(inner, |scope| scope.switch_statement(inner))
+            }
+            YulStatement::YulBreakStatement(inner) => {
+                self.at_node(inner, |scope| scope.current_block().r#break(scope))
+            }
+            YulStatement::YulContinueStatement(inner) => {
+                self.at_node(inner, |scope| scope.current_block().r#continue(scope))
+            }
+            YulStatement::YulLeaveStatement(inner) => {
+                self.at_node(inner, |scope| scope.function_return())
+            }
             YulStatement::YulFunctionDefinition(inner) => {
                 self.function_definition(inner);
             }

@@ -19,22 +19,24 @@ impl<'function, 'contract, 'source_unit, 'context>
 {
     /// A Yul expression in value position.
     pub fn expression(&mut self, node: &YulExpression) -> Word<'context> {
-        match node {
-            YulExpression::YulLiteral(literal) => Word::constant(&literal.integer_value(), self),
-            YulExpression::YulPath(path) => self.reference(path).read(self),
-            YulExpression::YulFunctionCallExpression(call) => self
+        self.at_node(node, |scope| match node {
+            YulExpression::YulLiteral(literal) => Word::constant(&literal.integer_value(), scope),
+            YulExpression::YulPath(path) => scope.reference(path).read(scope),
+            YulExpression::YulFunctionCallExpression(call) => scope
                 .call(call)
                 .into_iter()
                 .next()
                 .expect("a Yul call in value position yields a word"),
-        }
+        })
     }
 
     /// A Yul expression in multi-value position: only a call to a multi-return Yul function yields
     /// more than one word, and only a call yields none.
     pub fn expression_words(&mut self, node: &YulExpression) -> Vec<Word<'context>> {
         match node {
-            YulExpression::YulFunctionCallExpression(call) => self.call(call),
+            YulExpression::YulFunctionCallExpression(call) => {
+                self.at_node(node, |scope| scope.call(call))
+            }
             _ => vec![self.expression(node)],
         }
     }

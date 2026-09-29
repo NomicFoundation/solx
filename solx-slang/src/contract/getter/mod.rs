@@ -15,6 +15,7 @@ use solx_mlir::Block;
 use solx_mlir::Context;
 use solx_mlir::Function;
 use solx_mlir::FunctionDispatch;
+use solx_mlir::FunctionOrigin;
 use solx_mlir::Place;
 use solx_mlir::StateMutability;
 use solx_mlir::Type as MlirType;
@@ -106,7 +107,9 @@ impl<'context> Getter<'context> {
 impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
     /// Emits the `sol.func` a `public` state variable declares, dispatched by its ABI selector
     /// with slang's getter type as its signature. A constant folds its initializer; a mutable
-    /// variable reads its storage slot; an immutable loads its linked value.
+    /// variable reads its storage slot; an immutable loads its linked value. The getter belongs to
+    /// the state variable, whose location its `sol.func` and the ops it adds carry; a constant's
+    /// initializer carries its own.
     pub fn state_variable_getter(&mut self, state_variable: &StateVariableDefinition) {
         let selector = state_variable
             .compute_selector()
@@ -118,65 +121,56 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             SourceUnitScope::getter_symbol(state_variable),
             self.source_unit.function_type(&getter_type),
         );
-        match state_variable.attributes().mutability() {
-            StateVariableMutability::Constant => {
-                let initializer = state_variable
-                    .value()
-                    .expect("a constant state variable is initialized");
-                let entry = signature.define(
-                    Some(selector),
-                    FunctionDispatch::Symbol,
-                    StateMutability::Pure,
-                    self,
-                    self.contract.body,
-                );
-                self.function(entry, false, &signature, |scope| {
-                    let result_type = scope.return_types[0];
-                    let value = scope.converted(&initializer, result_type);
-                    scope.current_block().r#return(&[value], scope);
-                });
-            }
-            StateVariableMutability::Mutable | StateVariableMutability::Transient => {
-                let getter = Getter::new(state_variable, self.source_unit);
-                let entry = signature.define(
-                    Some(selector),
-                    FunctionDispatch::Symbol,
-                    StateMutability::View,
-                    self,
-                    self.contract.body,
-                );
-                self.function(entry, false, &signature, |scope| {
-                    let (place, _) = scope.state_variable_place(state_variable);
-                    let values = getter.returned_values(place, &scope.return_types, entry, scope);
-                    scope.current_block().r#return(&values, scope);
-                });
-            }
-            StateVariableMutability::Immutable => {
-                let entry = signature.define(
-                    Some(selector),
-                    FunctionDispatch::Symbol,
-                    StateMutability::View,
-                    self,
-                    self.contract.body,
-                );
-                self.function(entry, false, &signature, |scope| {
-                    let result_type = scope.return_types[0];
-                    let element_type = scope.resolve_type(
-                        &state_variable
-                            .get_type()
-                            .expect("binder types every state variable"),
-                        None,
-                    );
-                    let value = Value::load_immutable(
-                        &SourceUnitScope::state_variable_symbol(state_variable),
-                        element_type,
-                        scope,
-                    )
-                    .convert(result_type, scope);
-                    scope.current_block().r#return(&[value], scope);
-                });
-            }
-        }
+        let mutability = state_variable.attributes().mutability();
+        let state_mutability = match mutability {
+            StateVariableMutability::Constant => StateMutability::Pure,
+            StateVariableMutability::Mutable
+            | StateVariableMutability::Transient
+            | StateVariableMutability::Immutable => StateMutability::View,
+        };
+        self.at_node(state_variable, |scope| {
+            let entry = signature.define(
+                state_variable.name().name(),
+                Some(selector),
+                FunctionDispatch::Symbol,
+                FunctionOrigin::Declared,
+                state_mutability,
+                scope,
+                scope.contract.body,
+            );
+            scope.function(entry, false, &signature, |scope| {
+                let values = match mutability {
+                    StateVariableMutability::Constant => {
+                        let initializer = state_variable
+                            .value()
+                            .expect("a constant state variable is initialized");
+                        vec![scope.converted(&initializer, scope.return_types[0])]
+                    }
+                    StateVariableMutability::Mutable | StateVariableMutability::Transient => {
+                        let getter = Getter::new(state_variable, scope.contract.source_unit);
+                        let (place, _) = scope.state_variable_place(state_variable);
+                        getter.returned_values(place, &scope.return_types, entry, scope)
+                    }
+                    StateVariableMutability::Immutable => {
+                        let element_type = scope.resolve_type(
+                            &state_variable
+                                .get_type()
+                                .expect("binder types every state variable"),
+                            None,
+                        );
+                        vec![
+                            Value::load_immutable(
+                                &SourceUnitScope::state_variable_symbol(state_variable),
+                                element_type,
+                                scope,
+                            )
+                            .convert(scope.return_types[0], scope),
+                        ]
+                    }
+                };
+                scope.current_block().r#return(&values, scope);
+            });
+        });
     }
 }
 

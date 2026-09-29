@@ -12,6 +12,8 @@ use std::collections::BTreeSet;
 pub struct Build {
     /// Bytecode.
     pub bytecode: Option<Vec<u8>>,
+    /// ELF-wrapped DWARF debug info.
+    pub debug_info: Option<Vec<u8>>,
     /// Text assembly.
     pub assembly: Option<String>,
     /// Unoptimized LLVM IR (solx internal representation).
@@ -32,6 +34,7 @@ impl Build {
     ///
     pub fn new(
         bytecode: Option<Vec<u8>>,
+        debug_info: Option<Vec<u8>>,
         assembly: Option<String>,
         llvm_ir_unoptimized: Option<String>,
         llvm_ir: Option<String>,
@@ -41,6 +44,7 @@ impl Build {
     ) -> Self {
         Self {
             bytecode,
+            debug_info,
             assembly,
             llvm_ir_unoptimized,
             llvm_ir,

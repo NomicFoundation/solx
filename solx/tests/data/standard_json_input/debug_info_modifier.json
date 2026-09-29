@@ -1,0 +1,20 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "Modified.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract Modified {\n    uint256 public value;\n\n    modifier positive(uint256 x) {\n        require(x > 0);\n        _;\n        value += 1;\n    }\n\n    function set(uint256 newValue) public positive(newValue) {\n        value = newValue;\n    }\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": true
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.deployedBytecode.debugInfo"
+        ]
+      }
+    }
+  }
+}

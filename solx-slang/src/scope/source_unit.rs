@@ -15,21 +15,26 @@ use solx_mlir::Function;
 use solx_mlir::Type as MlirType;
 
 use crate::contract::object::Object;
+use crate::debug_locations::DebugLocations;
 use crate::scope::contract::ContractScope;
 
 /// The source unit scope: the owned MLIR context that every nested scope emits into.
 pub struct SourceUnitScope<'context> {
     /// The owned MLIR context, surrendered by the conversion into it.
     pub mlir: Context<'context>,
+    /// What the nodes lowered here resolve to: their locations when debug info was requested for
+    /// the object, the unknown location otherwise.
+    pub debug_locations: DebugLocations<'context>,
     /// The mangled symbol and MLIR signature of each function, filled at its first naming.
     pub function_signatures: HashMap<NodeId, Function<'context>>,
 }
 
 impl<'context> SourceUnitScope<'context> {
     /// Wraps the MLIR context for one source unit's emission.
-    pub fn new(mlir: Context<'context>) -> Self {
+    pub fn new(mlir: Context<'context>, debug_locations: DebugLocations<'context>) -> Self {
         Self {
             mlir,
+            debug_locations,
             function_signatures: HashMap::new(),
         }
     }

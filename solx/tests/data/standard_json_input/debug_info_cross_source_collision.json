@@ -1,0 +1,23 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n// padding padding\ncontract Alpha {\n    function run(uint256 value) public pure returns (uint256) {\n        return value + 1;\n    }\n}\n"
+    },
+    "B.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n//a\n//a\n//a\n//a\n//\ncontract Betaa {\n    function rag(uint256 value) public pure returns (uint256) {\n        return value + 2;\n    }\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": true
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.deployedBytecode.debugInfo"
+        ]
+      }
+    }
+  }
+}

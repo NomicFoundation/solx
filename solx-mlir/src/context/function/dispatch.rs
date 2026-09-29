@@ -16,7 +16,7 @@ pub enum FunctionDispatch {
     Identifier(NodeId),
     /// The dialect kind of a constructor, fallback or receive function.
     Kind(FunctionKind),
-    /// A synthesized state-variable getter or a base constructor, reached by its symbol alone.
+    /// A state-variable getter or a base constructor, reached by its symbol alone.
     Symbol,
     /// A modifier, defined as `sol.modifier` and reached by the invocations naming it.
     Modifier,

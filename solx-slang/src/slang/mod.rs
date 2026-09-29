@@ -21,6 +21,7 @@ use solx_utils::Profiler;
 use solx_utils::Remapping;
 use solx_utils::RevertStrings;
 
+use crate::debug_locations::sources::Sources;
 use crate::scope::source_unit::SourceUnitScope;
 
 use self::import_resolver::SourceImportResolver;
@@ -181,19 +182,21 @@ impl Slang {
             .as_ref()
             .and_then(|debug| debug.revert_strings)
             .unwrap_or(RevertStrings::Default);
+        let sources = Sources::new(&sources);
         for file in unit.files() {
             let file_id = file.id();
             let contracts = SourceUnitScope::source_unit(
                 &file.ast(),
                 evm_version,
                 revert_strings,
-                |contract_name| {
+                |contract_name, selector| {
                     input_json.settings.output_selection.check_selection(
                         file_id.as_str(),
                         Some(contract_name),
-                        solx_standard_json::InputSelector::MLIR,
+                        selector,
                     )
                 },
+                &sources,
                 &mut profiler,
             )?;
             output
