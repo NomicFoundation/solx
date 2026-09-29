@@ -4791,6 +4791,7 @@ dependencies = [
  "clap",
  "hex",
  "inkwell",
+ "melior",
  "normpath",
  "num",
  "path-slash",

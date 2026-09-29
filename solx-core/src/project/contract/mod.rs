@@ -5,6 +5,7 @@
 pub mod ir;
 pub mod metadata;
 
+use std::cell::OnceCell;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
@@ -96,6 +97,7 @@ impl Contract {
     /// Compiles the specified contract to EVM, returning its build artifacts.
     ///
     pub fn compile_to_evm(
+        melior: &OnceCell<melior::Context>,
         contract_name: solx_utils::ContractName,
         contract_ir: IR,
         code_segment: solx_utils::CodeSegment,
@@ -209,15 +211,19 @@ impl Contract {
                     ),
                 };
 
-                let run_context_creation = profiler.start_evm_translation_unit(
-                    contract_name.full_path.as_str(),
-                    code_segment,
-                    "CreateMLIRContext",
-                    optimizer_mode.as_str(),
-                    spill_area_size,
-                );
-                let melior = solx_mlir::Context::create_melior_context();
-                run_context_creation.borrow_mut().finish();
+                let melior = melior.get_or_init(|| {
+                    let run_context_creation = profiler.start_evm_translation_unit(
+                        contract_name.full_path.as_str(),
+                        None,
+                        "CreateMLIRContext",
+                        optimizer_mode.as_str(),
+                        spill_area_size,
+                    );
+                    let melior = solx_mlir::Context::create_melior_context();
+                    run_context_creation.borrow_mut().finish();
+                    melior
+                });
+
                 let immutables = match code_segment {
                     solx_utils::CodeSegment::Deploy => immutables.unwrap_or_else(|| {
                         BTreeMap::from([(
@@ -229,18 +235,18 @@ impl Contract {
                 };
                 let run_mlir_parsing = profiler.start_evm_translation_unit(
                     contract_name.full_path.as_str(),
-                    code_segment,
+                    Some(code_segment),
                     "ParseMLIR",
                     optimizer_mode.as_str(),
                     spill_area_size,
                 );
-                let mlir_module = solx_mlir::Context::parse_source(&melior, &mlir.source)
+                let mlir_module = solx_mlir::Context::parse_source(melior, &mlir.source)
                     .context("MLIR translation")?;
                 run_mlir_parsing.borrow_mut().finish();
 
                 let run_mlir_translation = profiler.start_evm_translation_unit(
                     contract_name.full_path.as_str(),
-                    code_segment,
+                    Some(code_segment),
                     "MLIRToLLVMIR",
                     optimizer_mode.as_str(),
                     spill_area_size,

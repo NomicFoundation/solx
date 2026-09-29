@@ -34,29 +34,48 @@ fn records_every_pipeline_stage() -> anyhow::Result<()> {
 
     result
         .success()
-        .stdout(predicate::str::contains("Slang_RunStandardJSON"))
-        .stdout(predicate::str::contains("Slang_ParseAndBind"))
-        .stdout(predicate::str::contains("Slang_SerializeAST:"))
-        .stdout(predicate::str::contains("solx_CreateMLIRContext:"))
-        .stdout(predicate::str::contains("solx_EmitSol:"))
-        .stdout(predicate::str::contains("solx_RunSolPasses:"))
-        .stdout(predicate::str::contains("solx_ExtractMLIRObjects:"))
-        .stdout(predicate::str::contains("solx_BuildProject"))
-        .stdout(predicate::str::contains("solx_Compile"))
-        .stdout(predicate::str::contains("solx_Link"))
-        .stdout(predicate::str::contains("/InitVerify/"))
-        .stdout(predicate::str::contains("/OptimizeVerify/"))
-        .stdout(predicate::str::contains("/EmitBytecode/"))
-        .stdout(predicate::str::contains(":deploy/CreateMLIRContext/"))
-        .stdout(predicate::str::contains(":runtime/CreateMLIRContext/"))
-        .stdout(predicate::str::contains(":deploy/ParseMLIR/"))
-        .stdout(predicate::str::contains(":runtime/ParseMLIR/"))
-        .stdout(predicate::str::contains(":deploy/MLIRToLLVMIR/"))
-        .stdout(predicate::str::contains(":runtime/MLIRToLLVMIR/"))
-        .stdout(predicate::str::contains(":deploy/WorkerRoundtrip(0)/"))
-        .stdout(predicate::str::contains(":runtime/WorkerRoundtrip(0)/"))
+        .stdout(predicate::str::contains("Slang_RunStandardJSON").count(1))
+        .stdout(predicate::str::contains("Slang_ParseAndBind").count(1))
+        .stdout(predicate::str::contains("Slang_SerializeAST:").count(1))
+        .stdout(predicate::str::contains("solx_CreateMLIRContext:").count(1))
+        .stdout(predicate::str::contains("solx_EmitSol:").count(1))
+        .stdout(predicate::str::contains("solx_RunSolPasses:").count(1))
+        .stdout(predicate::str::contains("solx_ExtractMLIRObjects:").count(1))
+        .stdout(predicate::str::contains("solx_BuildProject").count(1))
+        .stdout(predicate::str::contains("solx_Compile").count(1))
+        .stdout(predicate::str::contains("solx_Link").count(1))
+        .stdout(predicate::str::contains("/InitVerify/").count(2))
+        .stdout(predicate::str::contains("/OptimizeVerify/").count(2))
+        .stdout(predicate::str::contains("/EmitBytecode/").count(2))
+        .stdout(predicate::str::contains("/CreateMLIRContext/").count(1))
+        .stdout(predicate::str::contains(":deploy/ParseMLIR/").count(1))
+        .stdout(predicate::str::contains(":runtime/ParseMLIR/").count(1))
+        .stdout(predicate::str::contains(":deploy/MLIRToLLVMIR/").count(1))
+        .stdout(predicate::str::contains(":runtime/MLIRToLLVMIR/").count(1))
+        .stdout(predicate::str::contains(":deploy/WorkerRoundtrip(0)/").count(1))
+        .stdout(predicate::str::contains(":runtime/WorkerRoundtrip(0)/").count(1))
         .stdout(predicate::str::contains("us\n"))
         .stdout(predicate::str::contains("ms").not());
+
+    Ok(())
+}
+
+#[test]
+fn creates_no_mlir_context_without_objects() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/Abstract.sol"),
+        "--benchmarks",
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    result
+        .success()
+        .stdout(predicate::str::contains("Slang_ParseAndBind").count(1))
+        .stdout(predicate::str::contains("solx_CreateMLIRContext:").not());
 
     Ok(())
 }
