@@ -338,14 +338,14 @@ impl Contract {
             )
         {
             writeln!(std::io::stdout(), "Benchmarks:")?;
-            for (name, value) in deploy_object_result
+            for (name, value) in runtime_object_result
                 .expect("Always exists")
                 .benchmarks
                 .into_iter()
             {
                 writeln!(std::io::stdout(), "    {name}: {value}us")?;
             }
-            for (name, value) in runtime_object_result
+            for (name, value) in deploy_object_result
                 .expect("Always exists")
                 .benchmarks
                 .into_iter()
@@ -642,7 +642,7 @@ impl Contract {
 
             let mut output = String::with_capacity(4096);
             output.push_str("Benchmarks:\n");
-            for (name, value) in deploy_object_result
+            for (name, value) in runtime_object_result
                 .as_ref()
                 .expect("Always exists")
                 .benchmarks
@@ -650,7 +650,7 @@ impl Contract {
             {
                 output.push_str(format!("{name}: {value}us\n").as_str());
             }
-            for (name, value) in runtime_object_result
+            for (name, value) in deploy_object_result
                 .as_ref()
                 .expect("Always exists")
                 .benchmarks
