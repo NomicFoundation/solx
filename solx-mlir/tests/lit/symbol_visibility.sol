@@ -2,10 +2,6 @@
 // RUN: solx --emit-mlir=llvm %s | FileCheck %s --check-prefix=KEPT
 // RUN: solx --emit-mlir=llvm %s | FileCheck %s --check-prefix=DEAD
 
-// An entry point - selector-dispatched, constructor, fallback, receive, getter - is a public
-// symbol; everything else is private and symbol-dce removes it unless an entry point reaches
-// it.
-
 // SOL: sol.contract @{{.*:Entries"}} {
 // SOL-DAG: sol.func @"@constructor()_{{[0-9]+}}"() attributes {kind = #Constructor
 // SOL-DAG: sol.func @"public_entry(uint256)_{{[0-9]+}}"(%{{.*}}: ui256) -> ui256 attributes {{.*}}selector
