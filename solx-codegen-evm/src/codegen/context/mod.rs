@@ -34,6 +34,9 @@ pub struct Context<'ctx> {
 }
 
 impl<'ctx> Context<'ctx> {
+    /// The module flag holding the size of the spill region.
+    const STACK_REGION_SIZE_FLAG: &'static str = "evm-stack-region-size";
+
     ///
     /// Initializes a new LLVM context.
     ///
@@ -77,11 +80,19 @@ impl<'ctx> Context<'ctx> {
             optimizer_mode.as_str(),
             spill_area_size,
         );
-        let target_machine = TargetMachine::new(
-            self.optimizer.settings(),
-            self.llvm_options.as_slice(),
-            spill_area_size.map(|size| (crate::r#const::SOLC_USER_MEMORY_OFFSET, size)),
-        )?;
+        if let Some(spill_area_size) = spill_area_size {
+            if self.module.get_flag(Self::STACK_REGION_SIZE_FLAG).is_none() {
+                anyhow::bail!(solx_utils::ERROR_UNSAFE_MEMORY_ASM_STACK_TOO_DEEP);
+            }
+            let stack_region_size = self.llvm.i64_type().const_int(spill_area_size, false);
+            self.module.set_basic_value_flag(
+                Self::STACK_REGION_SIZE_FLAG,
+                inkwell::module::FlagBehavior::Error,
+                stack_region_size,
+            );
+        }
+        let target_machine =
+            TargetMachine::new(self.optimizer.settings(), self.llvm_options.as_slice())?;
         target_machine.set_target_data(&self.module);
         target_machine.set_asm_verbosity(true);
 

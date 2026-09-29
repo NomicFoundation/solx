@@ -19,7 +19,10 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// An `assembly { .. }` statement: a `sol.inline_asm` region holding the block's Yul dialect
     /// ops.
     pub fn assembly_statement(&mut self, node: &AssemblyStatement) {
-        let body = self.current_block().inline_asm(node.is_memory_safe(), self);
+        let memory_safe = node.is_memory_safe()
+            || std::env::var(solx_utils::ENV_DISABLE_UNSAFE_MEMORY_ASM_STACK_TOO_DEEP_CHECK)
+                .is_ok();
+        let body = self.current_block().inline_asm(memory_safe, self);
         self.assembly(body, |scope| scope.statements(&node.body()));
     }
 }
