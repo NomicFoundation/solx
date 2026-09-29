@@ -59,6 +59,7 @@ pub fn run() -> anyhow::Result<()> {
                 std::io::stdout().send(&result)?;
             }
 
+            drop(melior);
             unsafe { inkwell::support::shutdown_llvm() };
             Ok(())
         })

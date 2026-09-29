@@ -371,7 +371,7 @@ impl<'context> Context<'context> {
         .ok_or_else(|| anyhow::anyhow!("no module with sym_name `{target}` in Sol pass output"))
     }
 
-    /// The objects `operation`'s code references.
+    /// The objects `operation`'s code references, read off the intrinsics naming them.
     fn object_dependencies<'c: 'a, 'a>(
         operation: &impl OperationLike<'c, 'a>,
         identifier: &str,
