@@ -1,7 +1,19 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
-// CHECK: sol.func @{{.*builtins.*}}()
+// CHECK: sol.func @{{.*abiNamespace.*}}()
+// CHECK-NEXT:   sol.return
+
+// CHECK: sol.func @{{.*abiReference.*}}()
+// CHECK-NEXT:   sol.return
+
+// CHECK: sol.func @{{.*arrayReference.*}}()
 // CHECK-NEXT:   sol.addr_of @{{.*data.*}}
+// CHECK-NEXT:   sol.return
+
+// CHECK: sol.func @{{.*arrayType.*}}()
+// CHECK-NEXT:   sol.return
+
+// CHECK: sol.func @{{.*elementaryType.*}}()
 // CHECK-NEXT:   sol.return
 
 // CHECK: sol.func @{{.*errors.*}}()
@@ -14,7 +26,22 @@
 // CHECK-NEXT:   sol.call @{{.*recipient.*}}()
 // CHECK-NEXT:   sol.return
 
+// CHECK: sol.func private @{{.*recipient.*}}()
+// CHECK-NEXT:   %[[THIS:.*]] = sol.this
+// CHECK-NEXT:   %[[SELF:.*]] = sol.address_cast %[[THIS]]
+// CHECK-NEXT:   %[[PAYABLE:.*]] = sol.address_cast %[[SELF]]
+// CHECK-NEXT:   sol.return %[[PAYABLE]]
+
+// CHECK: sol.func @{{.*receiverValue.*}}()
+// CHECK-NEXT:   %[[RECIPIENT:.*]] = sol.call @{{.*recipient.*}}()
+// CHECK-NEXT:   %[[ADDRESS:.*]] = sol.address_cast %[[RECIPIENT]]
+// CHECK-NEXT:   sol.balance %[[ADDRESS]]
+// CHECK-NEXT:   sol.return
+
 // CHECK: sol.func @{{.*structs.*}}()
+// CHECK-NEXT:   sol.return
+
+// CHECK: sol.func @{{.*typeReference.*}}()
 // CHECK-NEXT:   sol.return
 
 struct Pair {
@@ -40,30 +67,25 @@ contract C {
         return payable(address(this));
     }
 
-    function builtins() public view {
-        abi;
-        abi.encode;
-        data.pop;
-        Pair[7][];
-        uint256;
-    }
+    function abiNamespace() public pure { abi; }
 
-    function operand() public view {
-        recipient().transfer;
-    }
+    function abiReference() public pure { abi.encode; }
 
-    function structs() public pure {
-        Pair;
-        Inner;
-    }
+    function arrayReference() public view { data.pop; }
 
-    function errors() public pure {
-        Missing;
-        Absent;
-    }
+    function arrayType() public pure { Pair[7][]; }
 
-    function events() public pure {
-        Logged;
-        Traced;
-    }
+    function elementaryType() public pure { uint256; }
+
+    function operand() public view { recipient().transfer; }
+
+    function receiverValue() public view { recipient().balance; }
+
+    function structs() public pure { Pair; Inner; }
+
+    function errors() public pure { Missing; Absent; }
+
+    function events() public pure { Logged; Traced; }
+
+    function typeReference() public pure { type(uint256); }
 }

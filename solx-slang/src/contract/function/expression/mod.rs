@@ -201,10 +201,34 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                             | Definition::Import(_)
                     )
                 ) => {}
-            Expression::MemberAccessExpression(inner) if inner.get_type().is_none() => {
+            Expression::MemberAccessExpression(inner)
+                if matches!(
+                    inner.member().resolve_to_built_in(),
+                    Some(
+                        BuiltIn::AbiDecode
+                            | BuiltIn::AbiEncode
+                            | BuiltIn::AbiEncodeCall
+                            | BuiltIn::AbiEncodePacked
+                            | BuiltIn::AbiEncodeWithSelector
+                            | BuiltIn::AbiEncodeWithSignature
+                            | BuiltIn::AddressCall
+                            | BuiltIn::AddressCallcode
+                            | BuiltIn::AddressDelegatecall
+                            | BuiltIn::AddressSend
+                            | BuiltIn::AddressStaticcall
+                            | BuiltIn::AddressTransfer
+                            | BuiltIn::ArrayPop
+                            | BuiltIn::ArrayPush
+                            | BuiltIn::BytesConcat
+                            | BuiltIn::StringConcat
+                            | BuiltIn::Wrap
+                            | BuiltIn::Unwrap
+                    )
+                ) =>
+            {
                 self.expression_effect(&inner.operand());
             }
-            Expression::ElementaryType(_) => {}
+            Expression::ElementaryType(_) | Expression::TypeExpression(_) => {}
             Expression::IndexAccessExpression(inner)
                 if matches!(inner.get_type(), Some(Type::MetaType(_))) => {}
             _ => {
