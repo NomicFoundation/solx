@@ -147,7 +147,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     }
 
     /// Emits an expression for its side effects, discarding the values. `new C;` denotes a creation
-    /// function rather than performing one, so it evaluates nothing; a modifier's `_;` is the
+    /// function rather than performing one, so it evaluates nothing, as does a builtin or a type,
+    /// while an uncalled builtin member evaluates only its operand; a modifier's `_;` is the
     /// placeholder the modified body expands at.
     pub fn expression_effect(&mut self, node: &Expression) {
         match node {
@@ -174,6 +175,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             {
                 self.current_block().placeholder(self);
             }
+            Expression::Identifier(inner) if inner.resolve_to_built_in().is_some() => {}
             Expression::Identifier(inner)
                 if matches!(
                     inner.resolve_to_definition(),
@@ -199,6 +201,12 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                             | Definition::Import(_)
                     )
                 ) => {}
+            Expression::MemberAccessExpression(inner) if inner.get_type().is_none() => {
+                self.expression_effect(&inner.operand());
+            }
+            Expression::ElementaryType(_) => {}
+            Expression::IndexAccessExpression(inner)
+                if matches!(inner.get_type(), Some(Type::MetaType(_))) => {}
             _ => {
                 self.expression(node);
             }
