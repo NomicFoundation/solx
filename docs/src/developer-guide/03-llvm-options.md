@@ -14,14 +14,6 @@ solx contract.sol --llvm-options='-option1 value1 -option2 value2'
 
 These options are specific to the custom LLVM EVM backend and affect compilation behavior directly.
 
-### `-evm-stack-region-size <value>`
-
-Sets the stack spill region size in bytes. The compiler uses this region to spill values that cannot remain on the EVM stack (stack-too-deep mitigation). Normally set automatically based on optimizer settings. Requires `-evm-stack-region-offset` to be set as well.
-
-### `-evm-stack-region-offset <value>`
-
-Sets the stack spill region memory offset. Normally set automatically to match the solc user memory offset.
-
 ### `-evm-metadata-size <value>`
 
 Sets the metadata size hint used by the backend for gas and code size tradeoff decisions.
