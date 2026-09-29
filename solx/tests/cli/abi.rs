@@ -28,6 +28,10 @@ fn default() -> anyhow::Result<()> {
     crate::common::contract!("solidity/SlangTest.sol"),
     crate::common::abi!("SlangTest.json")
 )]
+#[test_case(
+    crate::common::contract!("solidity/SlangAbi.sol"),
+    crate::common::abi!("SlangAbi.json")
+)]
 fn matches_solc(contract: &str, expected: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
