@@ -4857,7 +4857,6 @@ dependencies = [
  "num-traits",
  "ruint",
  "semver 1.0.28",
- "serde",
  "serde_json",
  "slang_solidity_v2",
  "solx-mlir",
