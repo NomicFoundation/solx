@@ -32,6 +32,12 @@
 // CHECK-NEXT:   %[[PAYABLE:.*]] = sol.address_cast %[[SELF]]
 // CHECK-NEXT:   sol.return %[[PAYABLE]]
 
+// CHECK: sol.func @{{.*options.*}}()
+// CHECK-NEXT:   sol.call @{{.*recipient.*}}()
+// CHECK-NEXT:   sol.gasleft
+// CHECK-NEXT:   sol.gasleft
+// CHECK-NEXT:   sol.return
+
 // CHECK: sol.func @{{.*receiverValue.*}}()
 // CHECK-NEXT:   %[[RECIPIENT:.*]] = sol.call @{{.*recipient.*}}()
 // CHECK-NEXT:   %[[ADDRESS:.*]] = sol.address_cast %[[RECIPIENT]]
@@ -78,6 +84,8 @@ contract C {
     function elementaryType() public pure { uint256; }
 
     function operand() public view { recipient().transfer; }
+
+    function options() public view { recipient().call{value: gasleft(), gas: gasleft()}; }
 
     function receiverValue() public view { recipient().balance; }
 

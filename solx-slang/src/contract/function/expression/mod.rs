@@ -155,6 +155,12 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             Expression::FunctionCallExpression(call) => {
                 Call::emit(call, self);
             }
+            Expression::CallOptionsExpression(inner) => {
+                self.expression_effect(&inner.operand());
+                for option in inner.options().iter() {
+                    self.expression_effect(&option.value());
+                }
+            }
             Expression::PrefixExpression(inner) => {
                 self.prefix(inner);
             }
