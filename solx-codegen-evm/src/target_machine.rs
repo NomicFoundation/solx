@@ -23,9 +23,10 @@ impl TargetMachine {
     /// A shortcut constructor.
     ///
     /// Supported LLVM options:
-    /// `-evm-stack-region-size <value>`
-    /// `-evm-stack-region-offset <value>`
     /// `-evm-metadata-size <value>`
+    ///
+    /// The spill region is described by the "evm-memory-guard" and
+    /// "evm-stack-region-size" module flags.
     ///
     /// LLVM command line options are process-global, so their occurrences are reset before
     /// each parse: a unit never inherits an option set by a previous one in the same worker.
@@ -33,15 +34,10 @@ impl TargetMachine {
     pub fn new(
         optimizer_settings: &OptimizerSettings,
         llvm_options: &[String],
-        spill_area: Option<(u64, u64)>,
     ) -> anyhow::Result<Self> {
-        let mut arguments = Vec::with_capacity(4 + llvm_options.len());
+        let mut arguments = Vec::with_capacity(2 + llvm_options.len());
         arguments.push(Self::TARGET.to_string());
         arguments.extend_from_slice(llvm_options);
-        if let Some((offset, size)) = spill_area {
-            arguments.push(format!("-evm-stack-region-offset={offset}"));
-            arguments.push(format!("-evm-stack-region-size={size}"));
-        }
         if let Some(size) = optimizer_settings.metadata_size {
             arguments.push(format!("-evm-metadata-size={size}"));
         }
