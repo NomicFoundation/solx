@@ -946,10 +946,7 @@ impl Call {
             Some(BuiltIn::AbiEncodeCall) => {
                 let mut iter = arguments.iter();
                 let callee = iter.next().expect("slang validates the callee argument");
-                // Slang leaves `()` untyped, so a function pointer called with it is not externalized.
-                let Some(Type::Function(function_type)) =
-                    call.encode_call_callee_type().or_else(|| callee.get_type())
-                else {
+                let Some(Type::Function(function_type)) = call.encode_call_callee_type() else {
                     unreachable!("abi.encodeCall dispatches on an external function");
                 };
                 let parameters = scope
