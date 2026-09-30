@@ -105,15 +105,15 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 Value::code(address, self)
             }
             Some(BuiltIn::Length) => {
-                let value = self.expression(&operand);
-                match operand.get_type() {
-                    Some(Type::ByteArray(byte_array_type)) => Value::constant_from_bigint(
+                if let Some(Type::ByteArray(byte_array_type)) = operand.get_type() {
+                    self.expression_effect(&operand);
+                    return Value::constant_from_bigint(
                         &BigInt::from(byte_array_type.width()),
                         self.typing(node.get_type()),
                         self,
-                    ),
-                    _ => value.length(self),
+                    );
                 }
+                self.expression(&operand).length(self)
             }
             Some(BuiltIn::FunctionSelector) => self.external_selector(&operand),
             Some(BuiltIn::FunctionAddress) => {
