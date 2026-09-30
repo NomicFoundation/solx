@@ -3,6 +3,7 @@
 //!
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ops::Deref;
 
 use slang_solidity_v2::ast::FunctionDefinition;
@@ -27,6 +28,11 @@ pub struct SourceUnitScope<'context> {
     pub debug_locations: DebugLocations<'context>,
     /// The mangled symbol and MLIR signature of each function, filled at its first naming.
     pub function_signatures: HashMap<NodeId, Function<'context>>,
+    /// The definition ids and data locations of the recursive structs identified so far.
+    pub identified_structures: HashSet<(NodeId, solx_utils::DataLocation)>,
+    /// Whether a struct at the current position may stay opaque: behind an array, a mapping or a
+    /// function reference.
+    pub breaks_cycle: bool,
 }
 
 impl<'context> SourceUnitScope<'context> {
@@ -36,6 +42,8 @@ impl<'context> SourceUnitScope<'context> {
             mlir,
             debug_locations,
             function_signatures: HashMap::new(),
+            identified_structures: HashSet::new(),
+            breaks_cycle: false,
         }
     }
 
@@ -52,6 +60,19 @@ impl<'context> SourceUnitScope<'context> {
         self.mlir.current_contract_type = Some(contract_type);
         emit(&mut ContractScope::new(self, contract, object));
         self.mlir.current_contract_type = None;
+    }
+
+    /// Runs `resolve` with `breaks_cycle` as the current position's, restoring the enclosing
+    /// position afterwards.
+    pub fn at_position<R>(
+        &mut self,
+        breaks_cycle: bool,
+        resolve: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let enclosing = std::mem::replace(&mut self.breaks_cycle, breaks_cycle);
+        let result = resolve(self);
+        self.breaks_cycle = enclosing;
+        result
     }
 
     /// The function's mangled symbol and MLIR signature, computed at its first naming.
