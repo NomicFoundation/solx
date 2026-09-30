@@ -1,0 +1,18 @@
+{ "cases": [ {
+    "name": "default",
+    "inputs": [
+        {
+            "instance": "First",
+            "method": "run",
+            "calldata": []
+        }
+    ],
+    "expected": [
+        "7",
+        "9"
+    ]
+} ],
+    "contracts": {
+        "First": "first.sol:First"
+    }
+}
