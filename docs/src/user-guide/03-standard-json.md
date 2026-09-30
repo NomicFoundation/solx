@@ -153,7 +153,7 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
           "evm.bytecode.debugInfo",
           // Link references for linkers that are to resolve library addresses at deploy time.
           "evm.bytecode.linkReferences",
-          // Unsupported, but emitted as an empty string to preserve compatibility with some toolkits.
+          // Unsupported, but emitted as an empty string with a warning to preserve compatibility with some toolkits.
           "evm.bytecode.opcodes",
           // Unsupported, but emitted as an empty string with a warning to preserve compatibility with some toolkits.
           "evm.bytecode.sourceMap",
@@ -178,7 +178,7 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
           "evm.deployedBytecode.immutableReferences",
           // ELF-wrapped DWARF debug info produced by solx/LLVM. Only available for Solidity source code input.
           "evm.deployedBytecode.debugInfo",
-          // Unsupported, but emitted as an empty string to preserve compatibility with some toolkits.
+          // Unsupported, but emitted as an empty string with a warning to preserve compatibility with some toolkits.
           "evm.deployedBytecode.opcodes",
           // Unsupported, but emitted as an empty string with a warning to preserve compatibility with some toolkits.
           "evm.deployedBytecode.sourceMap",

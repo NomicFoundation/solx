@@ -87,7 +87,9 @@ impl Slang {
             solx_standard_json::InputSelector::RuntimeBytecodeSourceMap => {
                 r#" Use "evm.deployedBytecode.debugInfo" for DWARF debug info instead."#
             }
-            solx_standard_json::InputSelector::BytecodeFunctionDebugData
+            solx_standard_json::InputSelector::BytecodeOpcodes
+            | solx_standard_json::InputSelector::RuntimeBytecodeOpcodes
+            | solx_standard_json::InputSelector::BytecodeFunctionDebugData
             | solx_standard_json::InputSelector::RuntimeBytecodeFunctionDebugData
             | solx_standard_json::InputSelector::BytecodeGeneratedSources
             | solx_standard_json::InputSelector::RuntimeBytecodeGeneratedSources => "",

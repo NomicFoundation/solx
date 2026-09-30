@@ -393,7 +393,9 @@ fn select_evm_bytecode_opcodes() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
-        .stdout(predicate::str::contains("opcodes"))
+        .stdout(predicate::str::contains(
+            r#"Output selection \"evm.bytecode.opcodes\" is not produced by Slang and is left empty."#,
+        ))
         .stdout(predicate::str::contains("deployedBytecode").not());
 
     Ok(())

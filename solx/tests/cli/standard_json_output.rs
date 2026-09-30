@@ -323,7 +323,8 @@ fn select_specific_bytecode(path: &str, expected_key: &str) -> anyhow::Result<()
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
-        .stdout(predicate::str::contains(expected_key));
+        .stdout(predicate::str::contains(expected_key))
+        .stdout(predicate::str::contains("is not produced by Slang").not());
 
     Ok(())
 }
