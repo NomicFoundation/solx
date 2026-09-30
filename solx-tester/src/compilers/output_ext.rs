@@ -152,10 +152,11 @@ pub fn errors_opt(output: &Output) -> Option<&[OutputError]> {
 /// Returns the name of the last contract in the AST.
 ///
 fn last_contract_name(source: &Source) -> anyhow::Result<String> {
-    source
+    let ast = source
         .ast
         .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("The AST is empty"))?
+        .ok_or_else(|| anyhow::anyhow!("The AST is empty"))?;
+    solx_utils::deserialize_from_str::<serde_json::Value>(ast.get())?
         .get("nodes")
         .and_then(|value| value.as_array())
         .ok_or_else(|| {
