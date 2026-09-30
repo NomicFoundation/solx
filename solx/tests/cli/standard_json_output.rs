@@ -367,7 +367,7 @@ fn via_ir_output_structure() -> anyhow::Result<()> {
 }
 
 #[test]
-fn via_ir_is_rejected() -> anyhow::Result<()> {
+fn via_ir_is_ignored() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
@@ -376,9 +376,9 @@ fn via_ir_is_rejected() -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains("viaIR is not supported yet."));
+    result.success().stdout(predicate::str::contains(
+        "viaIR is ignored: Slang has a single compilation pipeline.",
+    ));
 
     Ok(())
 }
@@ -494,7 +494,7 @@ fn devdoc_userdoc_output() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test_case(crate::common::standard_json!("solidity_via_ir.json") => ignore["solx does not support viaIR yet"])]
+#[test_case(crate::common::standard_json!("solidity_via_ir.json"))]
 #[test_case(crate::common::standard_json!("solidity_with_remappings.json"))]
 #[test_case(crate::common::standard_json!("solidity_with_evm_version.json"))]
 #[test_case(crate::common::standard_json!("solidity_storage_layout.json"))]
@@ -513,7 +513,7 @@ fn additional_outputs_no_errors(path: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test_case(crate::common::standard_json!("solidity_via_ir.json") => ignore["solx does not support viaIR yet"])]
+#[test_case(crate::common::standard_json!("solidity_via_ir.json"))]
 #[test_case(crate::common::standard_json!("solidity_with_remappings.json"))]
 #[test_case(crate::common::standard_json!("solidity_with_evm_version.json"))]
 fn additional_outputs_via_stdin(path: &str) -> anyhow::Result<()> {

@@ -4,7 +4,7 @@ This chapter summarizes where **solx** differs from upstream **solc**, and which
 
 ## Compilation Pipeline
 
-For now **solx** only supports the MLIR pipeline, which mirrors the behavior of the **solc** legacy pipeline: [Slang](https://github.com/NomicFoundation/slang) parses and binds the Solidity source, **solx** lowers it to MLIR, and the LLVM backend produces the bytecode. `viaIR` is currently not supported.
+For now **solx** only supports the MLIR pipeline, which mirrors the behavior of the **solc** legacy pipeline: [Slang](https://github.com/NomicFoundation/slang) parses and binds the Solidity source, **solx** lowers it to MLIR, and the LLVM backend produces the bytecode. `viaIR` is accepted and ignored with a warning.
 
 ## Behavioral Differences
 

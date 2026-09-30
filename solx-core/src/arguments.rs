@@ -162,7 +162,7 @@ pub struct Arguments {
     #[arg(long, help_heading = "Compilation Settings")]
     pub evm_version: Option<solx_utils::EVMVersion>,
 
-    /// Enable the IR codegen. Currently not supported.
+    /// Accepted for compatibility and ignored with a warning.
     #[arg(long, help_heading = "Compilation Settings")]
     pub via_ir: bool,
 

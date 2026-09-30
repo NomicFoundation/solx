@@ -609,14 +609,18 @@ The options in this section mirror the **solc** options of the same name.
 
 ### `--via-ir`
 
-Switches the codegen to Yul a.k.a. IR. Currently not supported.
+Accepted for compatibility and ignored with a warning: **solx** has a single compilation pipeline.
 
 Usage:
 
 ```console
 $ solx 'Simple.sol' --bin --via-ir
-? 1
-Error: viaIR is not supported yet.
+Warning: viaIR is ignored: Slang has a single compilation pipeline.
+
+
+======= Simple.sol:Simple =======
+Binary:
+5b3460485763000000c38038036080601f19601f8301160191680100000000000000008310607f19601f8401101615604c5782604052608039630000005f908163000000648239f35b5f5ffd5b505050634e487b7160e01b5f52604160045260245ffdfe5b60043610603a575f3560e01c635a8ac02d8114602f57633df4ddf403603a5734603a5760015b60805260206080f35b5034603a5760026026565b5f5ffdfea164736f6c637816736f6c783a302e312e383b736f6c633a302e382e3337001e
 
 ```
 
