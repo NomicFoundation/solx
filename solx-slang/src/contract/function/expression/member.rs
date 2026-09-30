@@ -104,7 +104,17 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 let address = self.converted(&operand, MlirType::address(self.melior, false));
                 Value::code(address, self)
             }
-            Some(BuiltIn::Length) => self.expression(&operand).length(self),
+            Some(BuiltIn::Length) => {
+                if let Some(Type::ByteArray(byte_array_type)) = operand.get_type() {
+                    self.expression_effect(&operand);
+                    return Value::constant_from_bigint(
+                        &BigInt::from(byte_array_type.width()),
+                        self.typing(node.get_type()),
+                        self,
+                    );
+                }
+                self.expression(&operand).length(self)
+            }
             Some(BuiltIn::FunctionSelector) => self.external_selector(&operand),
             Some(BuiltIn::FunctionAddress) => {
                 self.expression(&operand).external_function_address(self)
