@@ -62,10 +62,31 @@ assert out.get("contracts"), "no contracts in output"
 '
 }
 
+# Slang ignores the `/// @solidity memory-safe-assembly` NatSpec tag (slang#2170),
+# so the benchmarked copy carries it as the equivalent `assembly ("memory-safe")` flag.
+prepare_fixture() {
+  python3 - "$1" "$2" <<'EOF'
+import json, re, sys
+tagged = re.compile(r'(///\s*@solidity\s+memory-safe-assembly[^\n]*\n\s*)assembly(\s*)\{')
+with open(sys.argv[1]) as file:
+    fixture = json.load(file)
+for path, source in fixture["sources"].items():
+    tags = len(re.findall(r'@solidity\s+memory-safe-assembly', source["content"]))
+    source["content"], rewritten = tagged.subn(r'\1assembly ("memory-safe")\2{', source["content"])
+    assert rewritten == tags, f"{path}: {tags - rewritten} memory-safe-assembly tag(s) left unrewritten"
+with open(sys.argv[2], "w") as file:
+    json.dump(fixture, file)
+EOF
+}
+PREPARED_DIR="$(mktemp -d)"
+trap 'rm -rf "${PREPARED_DIR}"' EXIT
+
 # Fixtures mirror the hardhat-published corpus layout: <scenario>/<variant>.json
 # (manifest.json at the root carries provenance and is not a fixture).
 for fixture in "${FIXTURES_DIR}"/*/*.json; do
   name="$(basename "$(dirname "${fixture}")")--$(basename "${fixture}" .json)"
+  prepare_fixture "${fixture}" "${PREPARED_DIR}/${name}.json"
+  fixture="${PREPARED_DIR}/${name}.json"
   args=()
   for i in "${!BIN_NAMES[@]}"; do
     echo "validating ${name} with ${BIN_NAMES[$i]}"

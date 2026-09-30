@@ -35,6 +35,11 @@ directory vendors the legacy-DWARF subset:
 | `openzeppelin-contracts-0.34/solx-legacy-dwarf.json` | 422 | the heavy cell (~50 s/compile on the CI runner) |
 | `uniswap-v4-core-solx/solx-legacy-dwarf.json` | 157 | |
 
+`run.sh` benchmarks a copy of each fixture with every `/// @solidity memory-safe-assembly`
+tag rewritten to the equivalent `assembly ("memory-safe")` flag, because Slang does not read
+the NatSpec tag yet (slang#2170). Without it, solx treats forge-std's and solmate's tagged
+blocks as memory-unsafe, and the Uniswap fixture fails on stack-too-deep.
+
 These compile with production settings — optimizer enabled and DWARF debug
 info — unlike hand-packed inputs, so timings here are comparable to what the
 Hardhat solx benchmark measures (minus Hardhat's own overhead).
