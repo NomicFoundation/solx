@@ -200,6 +200,16 @@ impl Selection {
     }
 
     ///
+    /// Returns every selector spelled out in the selection, across all files and contracts.
+    ///
+    pub fn selectors(&self) -> BTreeSet<Selector> {
+        self.inner
+            .values()
+            .flat_map(|file| file.values().flatten().copied())
+            .collect()
+    }
+
+    ///
     /// Whether the selection is empty.
     ///
     pub fn is_empty(&self) -> bool {
