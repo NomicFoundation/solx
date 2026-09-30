@@ -97,8 +97,6 @@ jobs:
       # the LLVM cache that cache-warmup.yaml keeps warm on hosted runners.
       - name: Build toolchain
         uses: ./.github/actions/build-toolchain
-        with:
-          solc: 'false'
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -111,7 +109,7 @@ jobs:
       - name: Build solx (Slang frontend)
         run: |
           ${SFW_PREFIX:-} cargo fetch --locked
-          ${SFW_PREFIX:-} cargo build-slang --frozen --release
+          ${SFW_PREFIX:-} cargo build --frozen --release
           cp target/release/solx "${RUNNER_TEMP}/solx-slang"
           "${RUNNER_TEMP}/solx-slang" --version
 
