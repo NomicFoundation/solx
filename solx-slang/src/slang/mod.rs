@@ -100,10 +100,9 @@ impl Slang {
         }
 
         if input_json.settings.via_ir {
-            output
-                .errors
-                .push(OutputError::new_error("viaIR is not supported yet."));
-            return Ok(output);
+            output.errors.push(OutputError::new_warning(
+                "viaIR is ignored: Slang has a single compilation pipeline.",
+            ));
         }
 
         if let Err(error) = input_json.resolve_sources() {
