@@ -35,8 +35,8 @@
 // CHECK:   sol.encode selector(%[[ARRAYSEL]]) %{{.*}} : !sol.fixedbytes<4> !sol.array<? x !sol.string<Memory>, Memory> : !sol.string<Memory>
 
 // CHECK: sol.func @{{.*encodeCallCalldata.*}}
-// CHECK:   %[[COPIED:.*]] = sol.data_loc_cast %{{.*}} : !sol.string<CallData>, !sol.string<Memory>
-// CHECK:   sol.encode selector(%{{.*}}) %[[COPIED]] : !sol.fixedbytes<4> !sol.string<Memory> : !sol.string<Memory>
+// CHECK-NOT: sol.data_loc_cast
+// CHECK:   sol.encode selector(%{{.*}}) %{{.*}} : !sol.fixedbytes<4> !sol.string<CallData> : !sol.string<Memory>
 
 // CHECK: sol.func @{{.*encodeCallEmpty.*}}
 // CHECK:   %[[EMPTY:.*]] = sol.constant 777180678 : ui32
@@ -60,8 +60,8 @@
 
 // CHECK: sol.func @{{.*encodeCallStorage.*}}
 // CHECK:   %[[SLOT:.*]] = sol.addr_of @{{.*}} : !sol.string<Storage>
-// CHECK:   %[[LOADED:.*]] = sol.data_loc_cast %[[SLOT]] : !sol.string<Storage>, !sol.string<Memory>
-// CHECK:   sol.encode selector(%{{.*}}) %[[LOADED]] : !sol.fixedbytes<4> !sol.string<Memory> : !sol.string<Memory>
+// CHECK-NOT: sol.data_loc_cast
+// CHECK:   sol.encode selector(%{{.*}}) %[[SLOT]] : !sol.fixedbytes<4> !sol.string<Storage> : !sol.string<Memory>
 
 // CHECK: sol.func @{{.*encodeCallUnparenthesized.*}}
 // CHECK:   %[[FLAT:.*]] = sol.constant 3017696395 : ui32
