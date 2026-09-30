@@ -163,6 +163,15 @@ unsafe extern "C" {
         data_location: u32,
     ) -> mlir_sys::MlirType;
 
+    /// Gets or creates the identified `sol::StructType` of `name` at `data_location`, opaque
+    /// until its body is set.
+    pub fn solxCreateIdentifiedStructType(
+        context: MlirContext,
+        name_ptr: *const std::ffi::c_char,
+        name_len: usize,
+        data_location: u32,
+    ) -> mlir_sys::MlirType;
+
     /// Creates a `sol::EnumType` whose maximum valid value is `max`
     /// (one less than the number of enum members).
     pub fn solxCreateEnumType(context: MlirContext, max: u32) -> mlir_sys::MlirType;
@@ -174,6 +183,16 @@ unsafe extern "C" {
         signature: mlir_sys::MlirType,
         kind: u32,
     ) -> mlir_sys::MlirType;
+
+    // ---- Sol type mutation (from dialect_stubs.cpp) ----
+
+    /// Sets the body of an identified `sol::StructType`; setting the same body again is a no-op,
+    /// and a differing one aborts.
+    pub fn solxStructTypeSetBody(
+        ty: mlir_sys::MlirType,
+        member_types: *const mlir_sys::MlirType,
+        member_count: usize,
+    );
 
     // ---- Yul type constructors (from dialect_stubs.cpp) ----
 
@@ -218,6 +237,9 @@ unsafe extern "C" {
     /// Whether the type is a `sol::PointerType`, as opposed to a reference type that is its
     /// own place.
     pub fn solxIsPointerType(ty: mlir_sys::MlirType) -> bool;
+
+    /// Whether an identified `sol::StructType` still awaits its body.
+    pub fn solxStructTypeIsOpaque(ty: mlir_sys::MlirType) -> bool;
 
     /// Returns the data location of a located reference type, in the same encoding the
     /// type constructors take.

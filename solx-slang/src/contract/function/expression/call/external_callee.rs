@@ -39,7 +39,7 @@ impl ExternalCallee {
     pub fn function<'context>(
         &self,
         function_type: &FunctionType,
-        source_unit: &SourceUnitScope<'context>,
+        source_unit: &mut SourceUnitScope<'context>,
     ) -> Function<'context> {
         let symbol = match self {
             Self::Function(function_definition, _) => {

@@ -41,7 +41,7 @@ impl<'context> Getter<'context> {
     /// and the type left at the bottom is the leaf.
     pub fn new(
         state_variable: &StateVariableDefinition,
-        source_unit: &SourceUnitScope<'context>,
+        source_unit: &mut SourceUnitScope<'context>,
     ) -> Self {
         let mut current = state_variable
             .get_type()
