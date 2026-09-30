@@ -77,29 +77,6 @@ impl Slang {
             resolver: SourceImportResolver { remappings },
         }))
     }
-
-    /// Returns the warning for a selected output that Slang leaves empty.
-    fn empty_output_warning(selector: solx_standard_json::InputSelector) -> Option<String> {
-        let hint = match selector {
-            solx_standard_json::InputSelector::BytecodeSourceMap => {
-                r#" Use "evm.bytecode.debugInfo" for DWARF debug info instead."#
-            }
-            solx_standard_json::InputSelector::RuntimeBytecodeSourceMap => {
-                r#" Use "evm.deployedBytecode.debugInfo" for DWARF debug info instead."#
-            }
-            solx_standard_json::InputSelector::BytecodeOpcodes
-            | solx_standard_json::InputSelector::RuntimeBytecodeOpcodes
-            | solx_standard_json::InputSelector::BytecodeFunctionDebugData
-            | solx_standard_json::InputSelector::RuntimeBytecodeFunctionDebugData
-            | solx_standard_json::InputSelector::BytecodeGeneratedSources
-            | solx_standard_json::InputSelector::RuntimeBytecodeGeneratedSources => "",
-            _ => return None,
-        };
-        let selector = serde_json::to_string(&selector).expect("Always valid");
-        Some(format!(
-            "Output selection {selector} is not produced by Slang and is left empty.{hint}"
-        ))
-    }
 }
 
 impl Slang {
@@ -126,12 +103,6 @@ impl Slang {
             output.errors.push(OutputError::new_warning(
                 "viaIR is ignored: Slang has a single compilation pipeline.",
             ));
-        }
-
-        for selector in input_json.settings.output_selection.selectors().iter() {
-            if let Some(warning) = Self::empty_output_warning(*selector) {
-                output.errors.push(OutputError::new_warning(warning));
-            }
         }
 
         if let Err(error) = input_json.resolve_sources() {

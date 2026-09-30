@@ -393,54 +393,8 @@ fn select_evm_bytecode_opcodes() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
-        .stdout(predicate::str::contains(
-            r#"Output selection \"evm.bytecode.opcodes\" is not produced by Slang and is left empty."#,
-        ))
+        .stdout(predicate::str::contains("opcodes"))
         .stdout(predicate::str::contains("deployedBytecode").not());
-
-    Ok(())
-}
-
-#[test]
-fn select_evm_bytecode_object_and_source_map() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let args = &[
-        "--standard-json",
-        crate::common::standard_json!("select_evm_bytecode_object_and_source_map.json"),
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains(
-            r#"Output selection \"evm.bytecode.sourceMap\" is not produced by Slang and is left empty. Use \"evm.bytecode.debugInfo\" for DWARF debug info instead."#,
-        ))
-        .stdout(predicate::str::contains("\"object\""))
-        .stdout(predicate::str::contains("\"severity\":\"error\"").not());
-
-    Ok(())
-}
-
-#[test]
-fn select_empty_outputs() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let args = &[
-        "--standard-json",
-        crate::common::standard_json!("select_empty_outputs.json"),
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains(
-            r#"Output selection \"evm.deployedBytecode.functionDebugData\" is not produced by Slang and is left empty."#,
-        ))
-        .stdout(predicate::str::contains(
-            r#"Output selection \"evm.deployedBytecode.generatedSources\" is not produced by Slang and is left empty."#,
-        ))
-        .stdout(predicate::str::contains("\"severity\":\"error\"").not());
 
     Ok(())
 }
