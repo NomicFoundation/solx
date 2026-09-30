@@ -962,12 +962,7 @@ impl Call {
                             .iter()
                             .map(|item| item.expression().expect("slang validates tuple elements"))
                             .collect(),
-                        argument => {
-                            let [_] = parameters[..] else {
-                                unreachable!("an untupled argument list names one parameter");
-                            };
-                            vec![argument.clone()]
-                        }
+                        argument => vec![argument.clone()],
                     };
                 let values = scope.external_arguments(&arguments, &parameters);
                 vec![Value::encode(&values, Some(selector), scope)]
