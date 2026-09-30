@@ -29,15 +29,42 @@
 // CHECK:   %[[CALLSEL:.*]] = sol.bytes_cast %[[CALL]] : ui32 to !sol.fixedbytes<4>
 // CHECK:   sol.encode selector(%[[CALLSEL]]) %{{.*}} : !sol.fixedbytes<4> ui256 : !sol.string<Memory>
 
+// CHECK: sol.func @{{.*encodeCallArray.*}}
+// CHECK:   %[[ARRAY:.*]] = sol.constant 3580528309 : ui32
+// CHECK:   %[[ARRAYSEL:.*]] = sol.bytes_cast %[[ARRAY]] : ui32 to !sol.fixedbytes<4>
+// CHECK:   sol.encode selector(%[[ARRAYSEL]]) %{{.*}} : !sol.fixedbytes<4> !sol.array<? x !sol.string<Memory>, Memory> : !sol.string<Memory>
+
+// CHECK: sol.func @{{.*encodeCallBytesLiteral.*}}
+// CHECK:   sol.encode selector(%{{.*}}) %{{.*}} : !sol.fixedbytes<4> !sol.fixedbytes<32> : !sol.string<Memory>
+
+// CHECK: sol.func @{{.*encodeCallCalldata.*}}
+// CHECK-NOT: sol.data_loc_cast
+// CHECK:   sol.encode selector(%{{.*}}) %{{.*}} : !sol.fixedbytes<4> !sol.string<CallData> : !sol.string<Memory>
+
 // CHECK: sol.func @{{.*encodeCallEmpty.*}}
 // CHECK:   %[[EMPTY:.*]] = sol.constant 777180678 : ui32
 // CHECK:   %[[EMPTYSEL:.*]] = sol.bytes_cast %[[EMPTY]] : ui32 to !sol.fixedbytes<4>
 // CHECK:   sol.encode selector(%[[EMPTYSEL]]) : !sol.fixedbytes<4>  : !sol.string<Memory>
 
+// CHECK: sol.func @{{.*encodeCallMemory.*}}
+// CHECK:   %[[MEM:.*]] = sol.constant 4152292210 : ui32
+// CHECK:   %[[MEMSEL:.*]] = sol.bytes_cast %[[MEM]] : ui32 to !sol.fixedbytes<4>
+// CHECK:   sol.encode selector(%[[MEMSEL]]) %{{.*}} : !sol.fixedbytes<4> !sol.string<Memory> : !sol.string<Memory>
+
 // CHECK: sol.func @{{.*encodeCallPointer.*}}
 // CHECK:   %[[PTR:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.ext_func_ref<(ui256) -> ui256>, Stack>, !sol.ext_func_ref<(ui256) -> ui256>
 // CHECK:   %[[PTRSEL:.*]] = sol.ext_func_selector %[[PTR]] : !sol.ext_func_ref<(ui256) -> ui256> -> !sol.fixedbytes<4>
 // CHECK:   sol.encode selector(%[[PTRSEL]]) %{{.*}} : !sol.fixedbytes<4> ui256 : !sol.string<Memory>
+
+// CHECK: sol.func @{{.*encodeCallPointerEmpty.*}}
+// CHECK:   %[[EPTR:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.ext_func_ref<() -> ()>, Stack>, !sol.ext_func_ref<() -> ()>
+// CHECK:   %[[EPTRSEL:.*]] = sol.ext_func_selector %[[EPTR]] : !sol.ext_func_ref<() -> ()> -> !sol.fixedbytes<4>
+// CHECK:   sol.encode selector(%[[EPTRSEL]]) : !sol.fixedbytes<4>  : !sol.string<Memory>
+
+// CHECK: sol.func @{{.*encodeCallStorage.*}}
+// CHECK:   %[[SLOT:.*]] = sol.addr_of @{{.*}} : !sol.string<Storage>
+// CHECK-NOT: sol.data_loc_cast
+// CHECK:   sol.encode selector(%{{.*}}) %[[SLOT]] : !sol.fixedbytes<4> !sol.string<Storage> : !sol.string<Memory>
 
 // CHECK: sol.func @{{.*encodeCallUnparenthesized.*}}
 // CHECK:   %[[FLAT:.*]] = sol.constant 3017696395 : ui32
@@ -98,9 +125,21 @@ contract C {
 
     function encodeCallWidened(uint8 x) public pure returns (bytes memory) { return abi.encodeCall(I.f, (x)); }
 
+    function encodeCallMemory(bytes memory data) public pure returns (bytes memory) { return abi.encodeCall(I.withBytes, (data)); }
+
+    function encodeCallStorage() public view returns (bytes memory) { return abi.encodeCall(I.withBytes, (stored)); }
+
+    function encodeCallCalldata(bytes calldata data) public pure returns (bytes memory) { return abi.encodeCall(I.withBytes, (data)); }
+
+    function encodeCallArray(bytes[] memory data) public pure returns (bytes memory) { return abi.encodeCall(I.withBytesArray, (data)); }
+
+    function encodeCallBytesLiteral() public pure returns (bytes memory) { return abi.encodeCall(I.withBytes32, ("abc")); }
+
     function encodeCallEmpty() public pure returns (bytes memory) { return abi.encodeCall(I.n, ()); }
 
     function encodeCallPointer(function(uint256) external returns (uint256) p, uint256 x) public pure returns (bytes memory) { return abi.encodeCall(p, (x)); }
+
+    function encodeCallPointerEmpty(function() external p) public pure returns (bytes memory) { return abi.encodeCall(p, ()); }
 
     function decode(bytes memory data) public pure returns (uint256) { return abi.decode(data, (uint256)); }
 
@@ -119,6 +158,12 @@ interface I {
     function f(uint256 a) external returns (uint256);
 
     function n() external returns (uint256);
+
+    function withBytes(bytes calldata data) external returns (uint256);
+
+    function withBytesArray(bytes[] calldata data) external returns (uint256);
+
+    function withBytes32(bytes32 data) external returns (uint256);
 }
 
 library Lib {}

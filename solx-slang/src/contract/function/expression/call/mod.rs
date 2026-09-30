@@ -946,49 +946,25 @@ impl Call {
             Some(BuiltIn::AbiEncodeCall) => {
                 let mut iter = arguments.iter();
                 let callee = iter.next().expect("slang validates the callee argument");
-                let callee_definition = match callee {
-                    Expression::MemberAccessExpression(access) => {
-                        access.member().resolve_to_definition()
-                    }
-                    _ => None,
+                let Some(Type::Function(function_type)) = call.encode_call_callee_type() else {
+                    unreachable!("abi.encodeCall dispatches on an external function");
                 };
-                let parameters: Vec<MlirType<'context>> = match callee_definition {
-                    Some(Definition::Function(function_definition)) => function_definition
-                        .parameters()
-                        .iter()
-                        .map(|parameter| scope.typing(parameter.get_type()))
-                        .collect(),
-                    _ => {
-                        let Some(Type::Function(function_type)) = callee.get_type() else {
-                            unreachable!("abi.encodeCall dispatches on an external function");
-                        };
-                        scope
-                            .contract
-                            .source_unit
-                            .function_type(&function_type)
-                            .parameters
-                    }
-                };
+                let parameters = scope
+                    .contract
+                    .source_unit
+                    .function_type(&function_type)
+                    .parameters;
                 let selector = scope.external_selector(callee);
-                let values: Vec<Value<'context>> =
+                let arguments: Vec<Expression> =
                     match iter.next().expect("slang validates the argument list") {
-                        Expression::TupleExpression(tuple) => parameters
-                            .into_iter()
-                            .zip(tuple.items().iter())
-                            .map(|(parameter_type, item)| {
-                                scope.converted(
-                                    &item.expression().expect("slang validates tuple elements"),
-                                    parameter_type,
-                                )
-                            })
+                        Expression::TupleExpression(tuple) => tuple
+                            .items()
+                            .iter()
+                            .map(|item| item.expression().expect("slang validates tuple elements"))
                             .collect(),
-                        argument => {
-                            let [parameter_type] = parameters[..] else {
-                                unreachable!("an untupled argument list names one parameter");
-                            };
-                            vec![scope.converted(argument, parameter_type)]
-                        }
+                        argument => vec![argument.clone()],
                     };
+                let values = scope.external_arguments(&arguments, &parameters);
                 vec![Value::encode(&values, Some(selector), scope)]
             }
             Some(BuiltIn::AbiDecode) => {

@@ -168,7 +168,6 @@ impl<'context> SourceUnitScope<'context> {
                 .map(|parameter_type| self.resolve(parameter_type, None))
                 .collect(),
             results: match function_type.return_type() {
-                Type::Void(_) => Vec::new(),
                 Type::Tuple(tuple_type) => tuple_type
                     .types()
                     .iter()
