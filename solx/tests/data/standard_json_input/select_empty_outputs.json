@@ -11,7 +11,6 @@
     "outputSelection": {
       "*": {
         "*": [
-          "evm.bytecode.sourceMap",
           "evm.deployedBytecode.functionDebugData",
           "evm.deployedBytecode.generatedSources"
         ]

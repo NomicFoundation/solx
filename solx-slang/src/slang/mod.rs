@@ -80,26 +80,23 @@ impl Slang {
 
     /// Returns the warning for a selected output that Slang leaves empty.
     fn empty_output_warning(selector: solx_standard_json::InputSelector) -> Option<String> {
-        let alternative = match selector {
-            solx_standard_json::InputSelector::BytecodeSourceMap => Some("evm.bytecode.debugInfo"),
+        let hint = match selector {
+            solx_standard_json::InputSelector::BytecodeSourceMap => {
+                r#" Use "evm.bytecode.debugInfo" for DWARF debug info instead."#
+            }
             solx_standard_json::InputSelector::RuntimeBytecodeSourceMap => {
-                Some("evm.deployedBytecode.debugInfo")
+                r#" Use "evm.deployedBytecode.debugInfo" for DWARF debug info instead."#
             }
             solx_standard_json::InputSelector::BytecodeFunctionDebugData
             | solx_standard_json::InputSelector::RuntimeBytecodeFunctionDebugData
             | solx_standard_json::InputSelector::BytecodeGeneratedSources
-            | solx_standard_json::InputSelector::RuntimeBytecodeGeneratedSources => None,
+            | solx_standard_json::InputSelector::RuntimeBytecodeGeneratedSources => "",
             _ => return None,
         };
         let selector = serde_json::to_string(&selector).expect("Always valid");
-        let mut warning =
-            format!("Output selection {selector} is not produced by Slang and is left empty.");
-        if let Some(alternative) = alternative {
-            warning.push_str(
-                format!(r#" Use "{alternative}" for DWARF debug info instead."#).as_str(),
-            );
-        }
-        Some(warning)
+        Some(format!(
+            "Output selection {selector} is not produced by Slang and is left empty.{hint}"
+        ))
     }
 }
 
