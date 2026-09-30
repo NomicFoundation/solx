@@ -28,6 +28,7 @@ use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
 
+use crate::contract::function::expression::call::options::Options;
 use crate::scope::function::FunctionScope;
 
 use self::call::Call;
@@ -147,12 +148,17 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     }
 
     /// Emits an expression for its side effects, discarding the values. `new C;` denotes a creation
-    /// function rather than performing one, so it evaluates nothing; a modifier's `_;` is the
+    /// function rather than performing one, so it evaluates nothing, as does a builtin or a type,
+    /// while an uncalled builtin member evaluates only its operand; a modifier's `_;` is the
     /// placeholder the modified body expands at.
     pub fn expression_effect(&mut self, node: &Expression) {
         match node {
             Expression::FunctionCallExpression(call) => {
                 Call::emit(call, self);
+            }
+            Expression::CallOptionsExpression(inner) => {
+                self.expression_effect(&inner.operand());
+                Options::new(Some(&inner.options()), self);
             }
             Expression::PrefixExpression(inner) => {
                 self.prefix(inner);
@@ -174,6 +180,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             {
                 self.current_block().placeholder(self);
             }
+            Expression::Identifier(inner) if inner.resolve_to_built_in().is_some() => {}
             Expression::Identifier(inner)
                 if matches!(
                     inner.resolve_to_definition(),
@@ -199,6 +206,36 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                             | Definition::Import(_)
                     )
                 ) => {}
+            Expression::MemberAccessExpression(inner)
+                if matches!(
+                    inner.member().resolve_to_built_in(),
+                    Some(
+                        BuiltIn::AbiDecode
+                            | BuiltIn::AbiEncode
+                            | BuiltIn::AbiEncodeCall
+                            | BuiltIn::AbiEncodePacked
+                            | BuiltIn::AbiEncodeWithSelector
+                            | BuiltIn::AbiEncodeWithSignature
+                            | BuiltIn::AddressCall
+                            | BuiltIn::AddressCallcode
+                            | BuiltIn::AddressDelegatecall
+                            | BuiltIn::AddressSend
+                            | BuiltIn::AddressStaticcall
+                            | BuiltIn::AddressTransfer
+                            | BuiltIn::ArrayPop
+                            | BuiltIn::ArrayPush
+                            | BuiltIn::BytesConcat
+                            | BuiltIn::StringConcat
+                            | BuiltIn::Wrap
+                            | BuiltIn::Unwrap
+                    )
+                ) =>
+            {
+                self.expression_effect(&inner.operand());
+            }
+            Expression::ElementaryType(_) | Expression::TypeExpression(_) => {}
+            Expression::IndexAccessExpression(inner)
+                if matches!(inner.get_type(), Some(Type::MetaType(_))) => {}
             _ => {
                 self.expression(node);
             }
