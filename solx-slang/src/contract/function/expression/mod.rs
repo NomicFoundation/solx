@@ -28,6 +28,7 @@ use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
 
+use crate::contract::function::expression::call::options::Options;
 use crate::scope::function::FunctionScope;
 
 use self::call::Call;
@@ -157,9 +158,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             }
             Expression::CallOptionsExpression(inner) => {
                 self.expression_effect(&inner.operand());
-                for option in inner.options().iter() {
-                    self.expression_effect(&option.value());
-                }
+                Options::new(Some(&inner.options()), self);
             }
             Expression::PrefixExpression(inner) => {
                 self.prefix(inner);
