@@ -6,8 +6,9 @@ every verified solc 0.8.34 and 0.8.36 contract with evmVersion >= cancun
 (119,117 contracts, extracted from Sourcify's BigQuery dataset 2026-08-18 and
 2026-09-20), so the
 failure census is a ranked list of the frontend's remaining gaps on deployed
-code. Runs in CI behind the `ci:sourcify-sweep` PR label
-(`.github/workflows/sourcify-sweep.yaml`) and posts the report as a PR comment.
+code. Runs in CI (`.github/workflows/sourcify-sweep.yaml`) on every push to
+main and on PR pushes while the PR carries the `ci:sourcify-sweep` label; on a
+PR it posts the report as a comment, on main it goes to the run summary.
 Report-only: frontend failures never fail the run.
 
 ## Running locally
