@@ -236,13 +236,19 @@ impl Buildable for EthereumTest {
             }
         };
 
+        let evm_version = self
+            .test
+            .params
+            .evm_version
+            .newest_matching()
+            .expect("check_filters skips tests no supported EVM version satisfies");
         let evm_input = match compiler
             .compile_for_evm(
                 self.selector.to_string(),
                 self.test.sources.clone(),
                 libraries,
                 &mode,
-                Some(self.test.params.evm_version.newest_matching()),
+                Some(evm_version),
                 Some(self.test.params.revert_strings),
                 vec![],
                 debug_config,
