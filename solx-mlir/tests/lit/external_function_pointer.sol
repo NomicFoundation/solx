@@ -4,6 +4,11 @@
 // CHECK:   %[[POINTER:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.ext_func_ref<(ui256) -> ui256>, Stack>, !sol.ext_func_ref<(ui256) -> ui256>
 // CHECK:   sol.ext_func_addr %[[POINTER]] : !sol.ext_func_ref<(ui256) -> ui256> -> !sol.address
 
+// CHECK: sol.func @{{.*address_of_decorated.*}}
+// CHECK:   %[[DECORATED:.*]] = sol.ext_func_constant %{{.*}} {selector = -1743665215 : i32} : !sol.address -> !sol.ext_func_ref<(ui256) -> ui256>
+// CHECK:   sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
+// CHECK:   sol.ext_func_addr %[[DECORATED]] : !sol.ext_func_ref<(ui256) -> ui256> -> !sol.address
+
 // CHECK: sol.func @{{.*address_of_named.*}}
 // CHECK:   %[[NAMED:.*]] = sol.ext_func_constant %{{.*}} {selector = -1743665215 : i32} : !sol.address -> !sol.ext_func_ref<(ui256) -> ui256>
 // CHECK:   sol.ext_func_addr %[[NAMED]] : !sol.ext_func_ref<(ui256) -> ui256> -> !sol.address
@@ -45,6 +50,11 @@
 // CHECK:   %[[POINTER:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.ext_func_ref<(ui256) -> ui256>, Stack>, !sol.ext_func_ref<(ui256) -> ui256>
 // CHECK:   sol.ext_func_selector %[[POINTER]] : !sol.ext_func_ref<(ui256) -> ui256> -> !sol.fixedbytes<4>
 
+// CHECK: sol.func @{{.*selector_of_decorated.*}}
+// CHECK:   %[[DECORATED:.*]] = sol.ext_func_constant %{{.*}} {selector = -1743665215 : i32} : !sol.address -> !sol.ext_func_ref<(ui256) -> ui256>
+// CHECK:   sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
+// CHECK:   sol.ext_func_selector %[[DECORATED]] : !sol.ext_func_ref<(ui256) -> ui256> -> !sol.fixedbytes<4>
+
 // CHECK: sol.func @{{.*selector_of_named.*}}
 // CHECK:   %[[SELECTOR:.*]] = sol.constant 2551302081 : ui32
 // CHECK:   sol.bytes_cast %[[SELECTOR]] : ui32 to !sol.fixedbytes<4>
@@ -72,12 +82,20 @@ contract C {
         return this.target.selector;
     }
 
+    function selector_of_decorated(uint256 g) public view returns (bytes4) {
+        return this.target{gas: g}.selector;
+    }
+
     function address_of(function(uint256) external returns (uint256) p) public pure returns (address) {
         return p.address;
     }
 
     function address_of_named() public view returns (address) {
         return this.target.address;
+    }
+
+    function address_of_decorated(uint256 g) public view returns (address) {
+        return this.target{gas: g}.address;
     }
 
     function call(function(uint256) external returns (uint256) p, uint256 x) public returns (uint256) {
