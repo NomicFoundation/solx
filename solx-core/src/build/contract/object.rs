@@ -132,7 +132,7 @@ impl Object {
         let memory_buffer = self.to_memory_buffer()?;
 
         let mut memory_buffers = Vec::with_capacity(
-            1 + usize::from(self.dependencies.runtime.is_some()) + self.dependencies.inner.len(),
+            1 + usize::from(self.dependencies.runtime.is_some()) + self.dependencies.objects.len(),
         );
         memory_buffers.push((self.identifier.to_owned(), memory_buffer));
 

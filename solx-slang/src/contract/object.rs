@@ -56,6 +56,44 @@ impl Object {
         solx_utils::ContractName::full_path(file_id.as_str(), self.name().name())
     }
 
+    /// The objects the deploy code may embed, its runtime object leading.
+    pub fn deploy_dependencies(&self) -> solx_utils::Dependencies {
+        let definitions = match self {
+            Self::Contract(node) => node.creation_bytecode_dependencies(),
+            Self::Library(_) => Vec::new(),
+        };
+        let deploy_identifier = self.identifier();
+        let runtime_identifier =
+            solx_utils::Dependencies::runtime_identifier(deploy_identifier.as_str());
+        Self::dependencies(deploy_identifier, Some(runtime_identifier), definitions)
+    }
+
+    /// The objects the runtime code may embed.
+    pub fn runtime_dependencies(&self) -> solx_utils::Dependencies {
+        let definitions = match self {
+            Self::Contract(node) => node.deployed_bytecode_dependencies(),
+            Self::Library(node) => node.bytecode_dependencies(),
+        };
+        let runtime_identifier =
+            solx_utils::Dependencies::runtime_identifier(self.identifier().as_str());
+        Self::dependencies(runtime_identifier, None, definitions)
+    }
+
+    fn dependencies(
+        code_identifier: String,
+        runtime_identifier: Option<String>,
+        definitions: Vec<Definition>,
+    ) -> solx_utils::Dependencies {
+        let dependencies = definitions.into_iter().map(|definition| {
+            let Some(object) = Self::from_definition(definition) else {
+                unreachable!("a bytecode dependency is a contract or a library");
+            };
+            object.identifier()
+        });
+
+        solx_utils::Dependencies::new(code_identifier.as_str(), runtime_identifier, dependencies)
+    }
+
     /// The kind the object's `sol.contract` declares.
     pub fn kind(&self) -> ContractKind {
         match self {

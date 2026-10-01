@@ -7,7 +7,7 @@ use std::option::Iter as OptionIter;
 use std::slice::Iter as SliceIter;
 
 ///
-/// The objects a code segment references. The assembler reads the first object yielded by
+/// The objects a code segment may embed. The assembler reads the first object yielded by
 /// iteration as the segment's runtime object.
 ///
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -16,37 +16,43 @@ pub struct Dependencies {
     pub identifier: String,
     /// The runtime object the deploy code returns. `None` in a runtime segment.
     pub runtime: Option<String>,
-    /// List of EVM dependencies in the order they are encountered in IR.
-    pub inner: Vec<String>,
+    /// The objects of every dependency.
+    pub objects: Vec<String>,
 }
 
 impl Dependencies {
-    /// The deployed object identifier suffix used by the Yul AST and the Sol-to-LLVM pass output.
+    /// The deployed object identifier suffix the Sol-to-LLVM pass output names runtime objects with.
     pub const DEPLOYED_OBJECT_SUFFIX: &'static str = "_deployed";
 
     ///
-    /// Create a new instance of dependencies.
+    /// Create a new instance of dependencies. Each dependency brings both its objects, since the
+    /// code may name either and the assembler links only those it names.
     ///
-    pub fn new(identifier: &str, runtime: Option<String>) -> Self {
+    pub fn new(
+        identifier: &str,
+        runtime: Option<String>,
+        dependencies: impl IntoIterator<Item = String>,
+    ) -> Self {
+        let objects = dependencies
+            .into_iter()
+            .flat_map(|dependency| {
+                let runtime = Self::runtime_identifier(dependency.as_str());
+                [dependency, runtime]
+            })
+            .collect();
+
         Self {
             identifier: identifier.to_owned(),
             runtime,
-            inner: Vec::new(),
+            objects,
         }
     }
 
     ///
-    /// Push a single dependency.
+    /// The identifier of the runtime object the deploy code of `identifier` returns.
     ///
-    pub fn push(&mut self, dependency: String) {
-        if dependency == self.identifier
-            || Some(&dependency) == self.runtime.as_ref()
-            || self.inner.contains(&dependency)
-        {
-            return;
-        }
-
-        self.inner.push(dependency);
+    pub fn runtime_identifier(identifier: &str) -> String {
+        format!("{identifier}{}", Self::DEPLOYED_OBJECT_SUFFIX)
     }
 }
 
@@ -55,38 +61,6 @@ impl<'a> IntoIterator for &'a Dependencies {
     type IntoIter = Chain<OptionIter<'a, String>, SliceIter<'a, String>>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.runtime.iter().chain(self.inner.iter())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Dependencies;
-
-    /// The assembler reads the first dependency as the runtime object, so a contract the
-    /// constructor creates must not displace the runtime child when it is encountered first.
-    #[test]
-    fn the_runtime_child_leads_whatever_the_encounter_order() {
-        let mut encountered_first = Dependencies::new("C", Some("C_deployed".to_owned()));
-        encountered_first.push("C_deployed".to_owned());
-        encountered_first.push("A".to_owned());
-
-        let mut encountered_last = Dependencies::new("C", Some("C_deployed".to_owned()));
-        encountered_last.push("A".to_owned());
-        encountered_last.push("C_deployed".to_owned());
-
-        assert_eq!(Vec::from_iter(&encountered_first), ["C_deployed", "A"]);
-        assert_eq!(Vec::from_iter(&encountered_last), ["C_deployed", "A"]);
-    }
-
-    /// An object never depends on itself, and a repeated reference adds nothing.
-    #[test]
-    fn the_object_itself_and_repeats_are_dropped() {
-        let mut dependencies = Dependencies::new("C", None);
-        dependencies.push("C".to_owned());
-        dependencies.push("A".to_owned());
-        dependencies.push("A".to_owned());
-
-        assert_eq!(Vec::from_iter(&dependencies), ["A"]);
+        self.runtime.iter().chain(self.objects.iter())
     }
 }
