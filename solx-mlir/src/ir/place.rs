@@ -20,6 +20,13 @@ pub struct Place<'context> {
 }
 
 impl<'context> Place<'context> {
+    /// A stack slot holding `element_type`'s default value.
+    pub fn stack_default(element_type: Type<'context>, context: &Context<'context>) -> Self {
+        let pointer = Self::stack(element_type, context);
+        pointer.store(Value::default_initialized(element_type, context), context);
+        pointer
+    }
+
     /// The place of the aggregate field at `field_index`: a `sol.gep` stepped by the index
     /// materialized as a `ui64` constant.
     pub fn gep_field(

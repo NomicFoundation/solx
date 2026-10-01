@@ -107,20 +107,22 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                     });
                 }
 
-                let return_pointers: Vec<Option<Place>> = function
+                let return_pointers: Vec<Place> = function
                     .returns()
                     .map(|returns| {
                         returns
                             .iter()
                             .enumerate()
                             .map(|(index, parameter)| {
-                                let identifier = parameter.name()?;
                                 let return_type = scope.return_types[index];
-                                Some(scope.at_node(&parameter, |scope| {
-                                    scope.define_local(identifier.name(), return_type, |scope| {
-                                        Value::default_initialized(return_type, scope)
-                                    })
-                                }))
+                                scope.at_node(&parameter, |scope| match parameter.name() {
+                                    Some(identifier) => scope.define_local(
+                                        identifier.name(),
+                                        return_type,
+                                        |scope| Value::default_initialized(return_type, scope),
+                                    ),
+                                    None => Place::stack_default(return_type, scope),
+                                })
                             })
                             .collect()
                     })
@@ -142,17 +144,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                             .return_types
                             .iter()
                             .zip(&return_pointers)
-                            .map(|(&return_type, return_pointer)| match return_pointer {
-                                Some(pointer) => pointer.load(return_type, scope),
-                                None => {
-                                    let pointer = Place::stack(return_type, scope);
-                                    pointer.store(
-                                        Value::default_initialized(return_type, scope),
-                                        scope,
-                                    );
-                                    pointer.load(return_type, scope)
-                                }
-                            })
+                            .map(|(&return_type, pointer)| pointer.load(return_type, scope))
                             .collect();
                         scope.current_block().r#return(&values, scope);
                     });

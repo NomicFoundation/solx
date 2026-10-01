@@ -27,7 +27,7 @@
 // CHECK-NEXT:   sol.return
 
 // CHECK: sol.func private @{{.*recipient.*}}()
-// CHECK-NEXT:   %[[THIS:.*]] = sol.this
+// CHECK:   %[[THIS:.*]] = sol.this
 // CHECK-NEXT:   %[[SELF:.*]] = sol.address_cast %[[THIS]]
 // CHECK-NEXT:   %[[PAYABLE:.*]] = sol.address_cast %[[SELF]]
 // CHECK-NEXT:   sol.return %[[PAYABLE]]

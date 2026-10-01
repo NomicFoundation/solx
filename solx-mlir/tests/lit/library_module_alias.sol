@@ -7,7 +7,7 @@
 // CHECK: sol.func @{{.*alias_call.*}}
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
 // CHECK:   %[[ARG:.*]] = sol.load
-// CHECK:   sol.ext_call "{{.*visible.*}}"(%[[ARG]]) at %[[ADDR]] gas %{{.*}} value %c0_ui256 selector %c2825669559_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, static_call} : !sol.address, (ui256) -> (i1, ui256)
+// CHECK:   sol.ext_call "{{.*visible.*}}"(%[[ARG]]) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256(_[0-9]+)?}} selector %c2825669559_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call, static_call} : !sol.address, (ui256) -> (i1, ui256)
 
 import "./library_module_alias.sol" as M;
 

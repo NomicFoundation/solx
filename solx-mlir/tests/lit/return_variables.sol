@@ -19,6 +19,12 @@
 // CHECK:   %[[SUM:.*]] = sol.cadd
 // CHECK-NEXT:   sol.return %[[SUM]]
 
+// CHECK: sol.func @{{.*unnamed_memory.*}}
+// CHECK:   %[[RETURN:.*]] = sol.alloca : !sol.ptr<!sol.array<2 x ui256, Memory>, Stack>
+// CHECK:   %[[RETURN_ZERO:.*]] = sol.malloc zero_init :  !sol.array<2 x ui256, Memory>
+// CHECK:   sol.store %[[RETURN_ZERO]], %[[RETURN]]
+// CHECK:   sol.alloca : !sol.ptr<!sol.array<2 x ui256, Memory>, Stack>
+
 contract C {
     enum E { First, Second, Third }
 
@@ -33,4 +39,9 @@ contract C {
     function named_bytes() public pure returns (bytes4 result) {}
 
     function named_enum() public pure returns (E result) {}
+
+    function unnamed_memory() public pure returns (uint256[2] memory) {
+        uint256[2] memory x;
+        return x;
+    }
 }
