@@ -5,6 +5,20 @@
 use predicates::prelude::*;
 use test_case::test_case;
 
+#[test]
+fn missing() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &["--emit-mlir=sol", crate::common::TEST_SOLIDITY_CONTRACT];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("sol.evm_version = #Osaka"));
+
+    Ok(())
+}
+
 #[test_case(solx_utils::EVMVersion::Cancun)]
 #[test_case(solx_utils::EVMVersion::Prague)]
 #[test_case(solx_utils::EVMVersion::Osaka)]
@@ -24,6 +38,26 @@ fn default(evm_version: solx_utils::EVMVersion) -> anyhow::Result<()> {
         .success()
         .stdout(predicate::str::contains("Binary:\n"))
         .stderr(predicate::str::contains("is not a recognized feature").not());
+
+    Ok(())
+}
+
+#[test]
+fn built_in_names_follow_the_version() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let evm_version = solx_utils::EVMVersion::Prague.to_string();
+    let args = &[
+        "--evm-version",
+        evm_version.as_str(),
+        "--bin",
+        crate::common::contract!("solidity/ClzIdentifier.sol"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("Binary:\n"));
 
     Ok(())
 }

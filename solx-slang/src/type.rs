@@ -42,7 +42,7 @@ impl<'context> SourceUnitScope<'context> {
                 LiteralKind::Address { .. } => MlirType::address(self.melior, false),
                 LiteralKind::Integer { value } => {
                     let bits = if value.is_negative() {
-                        (-&value - 1u32).bits() + 1
+                        (-value - 1u32).bits() + 1
                     } else {
                         value.bits().max(1)
                     };
@@ -53,13 +53,13 @@ impl<'context> SourceUnitScope<'context> {
                     MlirType::integer(self.melior, bits, value.is_negative())
                 }
                 LiteralKind::HexInteger { bytes, .. } => {
-                    let bits = bytes as usize * solx_utils::BIT_LENGTH_BYTE;
+                    let bits = *bytes as usize * solx_utils::BIT_LENGTH_BYTE;
                     MlirType::unsigned(self.melior, bits)
                 }
                 LiteralKind::String { .. } => {
                     MlirType::string(self.melior, solx_utils::DataLocation::Memory)
                 }
-                LiteralKind::HexString { bytes } => MlirType::fixed_bytes(self.melior, bytes),
+                LiteralKind::HexString { value } => MlirType::fixed_bytes(self.melior, value.len()),
                 LiteralKind::Rational { .. } => {
                     unreachable!("a rational literal folds into its integer-typed parent")
                 }
