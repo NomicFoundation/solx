@@ -35,8 +35,7 @@ use self::call::Call;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// Lowers an expression to its single MLIR value, routing each kind to its lowering. An
-    /// expression the binder folded to an integer constant materializes it directly. A call in
-    /// value position takes its one result.
+    /// expression the binder folded to an integer constant materializes it directly.
     pub fn expression(&mut self, node: &Expression) -> Value<'context> {
         let slang_type = node.get_type();
         if let Some(Type::Literal(literal_type)) = &slang_type
@@ -73,7 +72,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             Expression::ArrayExpression(inner) => self.array(inner),
             Expression::MemberAccessExpression(inner) => self.member_access(inner),
             Expression::IndexAccessExpression(inner) => self.index_access(inner),
-            Expression::FunctionCallExpression(inner) => Call::emit(inner, self)
+            Expression::FunctionCallExpression(_) => self
+                .expression_values(node)
                 .into_iter()
                 .next()
                 .expect("a call in value position yields a value"),
@@ -102,6 +102,16 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     pub fn expression_values(&mut self, node: &Expression) -> Vec<Value<'context>> {
         match node {
             Expression::TupleExpression(inner) => self.tuple_values(inner),
+            Expression::FunctionCallExpression(inner)
+                if matches!(
+                    inner.operand(),
+                    Expression::MemberAccessExpression(access)
+                        if access.member().resolve_to_built_in() == Some(BuiltIn::ArrayPush)
+                ) =>
+            {
+                let (place, element_type) = self.function_call_place(inner);
+                vec![place.load(element_type, self)]
+            }
             Expression::FunctionCallExpression(inner) => Call::emit(inner, self),
             Expression::ConditionalExpression(inner) => self.conditional_values(inner),
             _ => vec![self.expression(node)],

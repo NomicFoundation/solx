@@ -49,6 +49,10 @@
 // CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
 
+// CHECK: sol.func {{.*}}pushRead
+// CHECK:   %[[READ_SLOT:.*]] = sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
+// CHECK:   sol.load %[[READ_SLOT]] : !sol.ptr<ui256, Storage>, ui256
+
 // CHECK: sol.func {{.*}}pushStructMember
 // CHECK:   sol.push %{{.*}} : !sol.array<? x !sol.struct<(ui256, ui256), Storage>, Storage> -> !sol.struct<(ui256, ui256), Storage>
 // CHECK:   sol.gep %{{.*}}, %{{.*}} : !sol.struct<(ui256, ui256), Storage>, ui64, !sol.ptr<ui256, Storage>
@@ -91,6 +95,10 @@ contract C {
 
     function pushCompound(uint256 x) public {
         arr.push() += x;
+    }
+
+    function pushRead() public returns (uint256) {
+        return arr.push();
     }
 
     function pushStructMember() public {
