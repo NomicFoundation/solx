@@ -2,10 +2,10 @@ name: Sourcify Sweep
 
 # Compiles the pinned Sourcify corpus (every verified solc 0.8.34 and 0.8.36
 # contract with evmVersion >= cancun, 119k contracts) through the Slang-frontend solx build
-# of the PR, re-runs each failure with the released solc-frontend solx as a
+# of the commit, re-runs each failure with the released solc-frontend solx as a
 # baseline, and reports the outcome table plus the ranked failure census.
-# Expensive (24 shards x ~1h), so it only runs when asked for: label the PR
-# `ci:sourcify-sweep` (re-label to re-run) or dispatch manually. Report-only:
+# Runs on every push to main, and on PR pushes while the PR carries the
+# `ci:sourcify-sweep` label (adding the label starts a run). Report-only:
 # frontend failures never fail the run, only harness breakage does.
 #
 # See tests/sourcify-sweep/README.md; the corpus release is pinned in
@@ -13,7 +13,10 @@ name: Sourcify Sweep
 
 on:
   pull_request:
-    types: [labeled]
+    types: [opened, synchronize, reopened, labeled]
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -21,7 +24,8 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Every main push keeps its own census.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
@@ -36,8 +40,9 @@ jobs:
 
   label-check:
     if: >-
-      github.event_name == 'workflow_dispatch'
-      || (github.event.label.name == 'ci:sourcify-sweep'
+      github.event_name != 'pull_request'
+      || (contains(github.event.pull_request.labels.*.name, 'ci:sourcify-sweep')
+        && (github.event.action != 'labeled' || github.event.label.name == 'ci:sourcify-sweep')
         && !github.event.pull_request.head.repo.fork)
     runs-on: ubuntu-24.04
     steps:
