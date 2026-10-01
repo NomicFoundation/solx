@@ -1,5 +1,5 @@
 //!
-//! CLI tests for the objects each MLIR code segment references.
+//! CLI tests for the objects each MLIR code segment may embed.
 //!
 
 #[test]
@@ -27,18 +27,18 @@ fn per_code_segment() -> anyhow::Result<()> {
         "the deploy segment returns its own runtime object"
     );
     assert_eq!(
-        mlir.deploy_dependencies.inner,
-        ["creation.sol:A"],
-        "the deploy segment's dependencies come from its own module, not the whole source unit"
+        mlir.deploy_dependencies.objects,
+        ["creation.sol:A", "creation.sol:A_deployed"],
+        "the deploy segment may embed what its creation code creates"
     );
     assert_eq!(
         mlir.runtime_dependencies.runtime, None,
         "a runtime segment has no runtime child"
     );
     assert_eq!(
-        mlir.runtime_dependencies.inner,
-        ["creation.sol:B"],
-        "the runtime segment references only what its own functions create"
+        mlir.runtime_dependencies.objects,
+        ["creation.sol:B", "creation.sol:B_deployed"],
+        "the runtime segment may embed only what its own functions create"
     );
 
     Ok(())

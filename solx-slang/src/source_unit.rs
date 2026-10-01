@@ -60,7 +60,8 @@ impl<'context> SourceUnitScope<'context> {
             run_emission.borrow_mut().finish();
             let name = object.name().name().to_owned();
             let mlir = Context::from(scope).finalize_module(
-                identifier.as_str(),
+                object.deploy_dependencies(),
+                object.runtime_dependencies(),
                 capture_sol_dialect(name.as_str()),
                 profiler,
             )?;
