@@ -22,11 +22,13 @@ impl LLVMIR {
 
         let runtime_code_identifier = format!("{path}.{}", solx_utils::CodeSegment::Runtime);
         let dependencies = match code_segment {
-            solx_utils::CodeSegment::Deploy => {
-                solx_utils::Dependencies::new(path.as_str(), Some(runtime_code_identifier))
-            }
+            solx_utils::CodeSegment::Deploy => solx_utils::Dependencies::new(
+                path.as_str(),
+                Some(runtime_code_identifier),
+                Vec::new(),
+            ),
             solx_utils::CodeSegment::Runtime => {
-                solx_utils::Dependencies::new(runtime_code_identifier.as_str(), None)
+                solx_utils::Dependencies::new(runtime_code_identifier.as_str(), None, Vec::new())
             }
         };
 

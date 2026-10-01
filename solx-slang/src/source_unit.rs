@@ -97,7 +97,8 @@ impl<'context> SourceUnitScope<'context> {
             let method_identifiers = scope.object_definition(&object);
             run_emission.borrow_mut().finish();
             let mlir = Context::from(scope).finalize_module(
-                identifier.as_str(),
+                object.deploy_dependencies(),
+                object.runtime_dependencies(),
                 selected(name.as_str(), solx_standard_json::InputSelector::MLIR),
                 pass_timing,
                 profiler,

@@ -173,10 +173,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 Value::object_code(Self::meta_object_identifier(&operand).as_str(), self)
             }
             Some(BuiltIn::TypeRuntimeCode) => Value::object_code(
-                format!(
-                    "{}{}",
-                    Self::meta_object_identifier(&operand),
-                    solx_utils::Dependencies::DEPLOYED_OBJECT_SUFFIX,
+                solx_utils::Dependencies::runtime_identifier(
+                    Self::meta_object_identifier(&operand).as_str(),
                 )
                 .as_str(),
                 self,
