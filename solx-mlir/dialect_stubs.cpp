@@ -114,14 +114,21 @@ MlirType solxCreateFixedBytesType(MlirContext ctx, uint32_t size) {
     return wrap(mlir::sol::FixedBytesType::get(context, size));
 }
 
-MlirType solxCreateArrayType(MlirContext ctx, int64_t size, MlirType elementType,
-                             uint32_t dataLocation) {
+MlirType solxCreateDynamicArrayType(MlirContext ctx, MlirType elementType,
+                                    uint32_t dataLocation) {
     if (dataLocation > 5) abort();
     auto *context = unwrap(ctx);
     auto location = static_cast<mlir::sol::DataLocation>(dataLocation);
-    std::optional<llvm::APInt> sizeOpt;
-    if (size >= 0) sizeOpt = llvm::APInt(256, static_cast<uint64_t>(size));
-    return wrap(mlir::sol::ArrayType::get(context, sizeOpt, unwrap(elementType), location));
+    return wrap(mlir::sol::ArrayType::get(context, std::nullopt, unwrap(elementType), location));
+}
+
+MlirType solxCreateFixedArrayType(MlirContext ctx, const uint64_t *size, MlirType elementType,
+                                  uint32_t dataLocation) {
+    if (dataLocation > 5) abort();
+    auto *context = unwrap(ctx);
+    auto location = static_cast<mlir::sol::DataLocation>(dataLocation);
+    llvm::APInt sizeValue(256, llvm::ArrayRef<uint64_t>(size, 4));
+    return wrap(mlir::sol::ArrayType::get(context, sizeValue, unwrap(elementType), location));
 }
 
 MlirType solxCreateMappingType(MlirContext ctx, MlirType keyType, MlirType valType) {

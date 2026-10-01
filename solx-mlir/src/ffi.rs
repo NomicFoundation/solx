@@ -139,11 +139,19 @@ unsafe extern "C" {
     /// Creates a `sol::FixedBytesType` of the given byte width.
     pub fn solxCreateFixedBytesType(context: MlirContext, size: u32) -> mlir_sys::MlirType;
 
-    /// Creates a `sol::ArrayType` with the given size, element type, and data
-    /// location. `size = -1` denotes a dynamic array.
-    pub fn solxCreateArrayType(
+    /// Creates a dynamically sized `sol::ArrayType` with the given element type
+    /// and data location.
+    pub fn solxCreateDynamicArrayType(
         context: MlirContext,
-        size: i64,
+        element_type: mlir_sys::MlirType,
+        data_location: u32,
+    ) -> mlir_sys::MlirType;
+
+    /// Creates a fixed-size `sol::ArrayType` whose 256-bit size is the four
+    /// LSB-first 64-bit words at `size`.
+    pub fn solxCreateFixedArrayType(
+        context: MlirContext,
+        size: *const u64,
         element_type: mlir_sys::MlirType,
         data_location: u32,
     ) -> mlir_sys::MlirType;
