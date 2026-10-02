@@ -101,6 +101,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.prepare-matrix.outputs.matrix }}
+      prerelease-suffix: ${{ steps.prerelease-suffix.outputs.prerelease-suffix }}
     steps:
       - name: Checkout source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -139,6 +140,15 @@ jobs:
             [ -n "${platform}" ] && PLATFORMS+=("${platform}")
           done
           echo "matrix={ \"include\": [ $(IFS=, ; echo "${PLATFORMS[*]}") ] }" | tee -a "${GITHUB_OUTPUT}"
+
+      # The suffix ends up in file paths, where a stray space splits them in two.
+      - name: Trim pre-release suffix
+        id: prerelease-suffix
+        env:
+          PRERELEASE_SUFFIX: ${{ inputs.prerelease_suffix }}
+        run: |
+          TRIMMED="$(printf '%s' "${PRERELEASE_SUFFIX}" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+          echo "prerelease-suffix=${TRIMMED}" | tee -a "${GITHUB_OUTPUT}"
 
   build:
     permissions:
@@ -199,7 +209,7 @@ jobs:
         uses: ./.github/actions/build-rust
         with:
           target: ${{ matrix.target }}
-          release-suffix: ${{ format('{0}-{1}', matrix.release-suffix, github.ref_type == 'tag' && format('v{0}', github.ref_name) || inputs.prerelease_suffix || 'notag') }}
+          release-suffix: ${{ format('{0}-{1}', matrix.release-suffix, github.ref_type == 'tag' && format('v{0}', github.ref_name) || needs.prepare-matrix.outputs.prerelease-suffix || 'notag') }}
 
   get-previous-release:
     needs: [label-check]
@@ -239,7 +249,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
-    needs: [build]
+    needs: [prepare-matrix, build]
     outputs:
       release_title: ${{ steps.release.outputs.release_title }}
       version_or_sha: ${{ steps.release.outputs.version_or_sha }}
@@ -264,7 +274,7 @@ jobs:
         env:
           REF_TYPE: ${{ github.ref_type }}
           EVENT_NAME: ${{ github.event_name }}
-          PRERELEASE_SUFFIX: ${{ github.event.inputs.prerelease_suffix }}
+          PRERELEASE_SUFFIX: ${{ needs.prepare-matrix.outputs.prerelease-suffix }}
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
           if [ "${REF_TYPE}" = 'tag' ]; then
@@ -301,7 +311,7 @@ jobs:
           || (github.event_name == 'workflow_dispatch' && inputs.release_macos_amd64 && inputs.release_macos_arm64)
         env:
           MACOSX_UNIVERSAL_SUFFIX: "macosx"
-          RELEASE_SUFFIX: ${{ github.ref_type == 'tag' && format('v{0}', github.ref_name) || inputs.prerelease_suffix || 'notag' }}
+          RELEASE_SUFFIX: ${{ github.ref_type == 'tag' && format('v{0}', github.ref_name) || needs.prepare-matrix.outputs.prerelease-suffix || 'notag' }}
         run: |
           OUTDIR="./releases/release-${MACOSX_UNIVERSAL_SUFFIX}-${RELEASE_SUFFIX}/${MACOSX_UNIVERSAL_SUFFIX}-${RELEASE_SUFFIX}"
           mkdir -p "${OUTDIR}"
