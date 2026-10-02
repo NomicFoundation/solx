@@ -35,8 +35,7 @@ use self::call::Call;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// Lowers an expression to its single MLIR value, routing each kind to its lowering. An
-    /// expression the binder folded to an integer constant materializes it directly. A call in
-    /// value position takes its one result.
+    /// expression the binder folded to an integer constant materializes it directly.
     pub fn expression(&mut self, node: &Expression) -> Value<'context> {
         self.at_node(node, |scope| {
             let slang_type = node.get_type();
@@ -82,10 +81,10 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 Expression::DecimalNumberExpression(_) | Expression::HexNumberExpression(_) => {
                     unreachable!("the binder folds every number literal to an integer constant")
                 }
-                Expression::CallOptionsExpression(_) => {
-                    unreachable!(
-                        "call options reach the call they decorate, never a value position"
-                    )
+                Expression::CallOptionsExpression(inner) => {
+                    let function = scope.expression(&inner.operand());
+                    Options::new(Some(&inner.options()), scope);
+                    function
                 }
                 Expression::NewExpression(_) => {
                     unreachable!("`new C` denotes a creation function, which only a call consumes")
