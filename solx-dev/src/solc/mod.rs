@@ -17,9 +17,6 @@ pub const SOLIDITY_DIR: &str = "solx-solidity";
 /// The build directory name.
 pub const BUILD_DIR: &str = "build";
 
-/// The LLVM install tree (where the MLIR/LLD CMake config files live).
-pub const LLVM_BUILD_DIR: &str = "target-llvm/target-final";
-
 ///
 /// Builds the solc libraries using cmake.
 ///

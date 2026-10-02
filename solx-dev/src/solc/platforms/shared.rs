@@ -58,22 +58,3 @@ pub fn boost_cmake_args(
         "-DBoost_DEBUG=1".to_owned(),
     ]
 }
-
-///
-/// MLIR and LLD cmake arguments.
-///
-pub fn mlir_cmake_args(llvm_build_dir: &Path) -> Vec<String> {
-    let llvm_build_dir = llvm_build_dir
-        .canonicalize()
-        .unwrap_or_else(|_| llvm_build_dir.to_path_buf());
-    vec![
-        format!(
-            "-DMLIR_DIR={}",
-            llvm_build_dir.join("lib/cmake/mlir").display()
-        ),
-        format!(
-            "-DLLD_DIR={}",
-            llvm_build_dir.join("lib/cmake/lld").display()
-        ),
-    ]
-}

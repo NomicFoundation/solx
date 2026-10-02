@@ -141,7 +141,7 @@ This repository maintains intuitive and stable naming for the executables and pr
    ./target/release/solx-dev solc build
    ```
 
-   This will configure and build the solc libraries in `solx-solidity/build/`. The command points CMake at the MLIR and LLD packages of the LLVM build.
+   This will configure and build the solc libraries in `solx-solidity/build/`.
 
    For more options, run `./target/release/solx-dev solc build --help`.
 

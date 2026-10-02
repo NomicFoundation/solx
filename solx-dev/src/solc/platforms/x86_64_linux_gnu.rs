@@ -66,12 +66,6 @@ pub fn build(
         }
     }
 
-    // MLIR configuration
-    let llvm_build_dir = std::path::PathBuf::from(crate::solc::LLVM_BUILD_DIR);
-    for arg in shared::mlir_cmake_args(&llvm_build_dir) {
-        cmake.arg(arg);
-    }
-
     // Compiler cache
     for arg in CcacheVariant::cmake_args(ccache_variant) {
         cmake.arg(arg);
