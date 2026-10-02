@@ -74,7 +74,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 Expression::ArrayExpression(inner) => scope.array(inner),
                 Expression::MemberAccessExpression(inner) => scope.member_access(inner),
                 Expression::IndexAccessExpression(inner) => scope.index_access(inner),
-                Expression::FunctionCallExpression(inner) => Call::emit(inner, scope)
+                Expression::FunctionCallExpression(_) => scope
+                    .expression_values(node)
                     .into_iter()
                     .next()
                     .expect("a call in value position yields a value"),
@@ -106,6 +107,18 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     pub fn expression_values(&mut self, node: &Expression) -> Vec<Value<'context>> {
         match node {
             Expression::TupleExpression(inner) => self.tuple_values(inner),
+            Expression::FunctionCallExpression(inner)
+                if matches!(
+                    Call::callee(inner).0,
+                    Expression::MemberAccessExpression(access)
+                        if access.member().resolve_to_built_in() == Some(BuiltIn::ArrayPush)
+                ) =>
+            {
+                self.at_node(node, |scope| {
+                    let (place, element_type) = scope.function_call_place(inner);
+                    vec![place.load(element_type, scope)]
+                })
+            }
             Expression::FunctionCallExpression(inner) => {
                 self.at_node(node, |scope| Call::emit(inner, scope))
             }

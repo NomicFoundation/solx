@@ -1,7 +1,7 @@
 // RUN: solx --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'
 
-// CHECK: #[[NESTED:loc[0-9]*]] = loc("{{.*}}debug_location_index_access.sol":91:5)
-// CHECK: #[[READ:loc[0-9]*]] = loc("{{.*}}debug_location_index_access.sol":87:5)
+// CHECK: #[[NESTED:loc[0-9]*]] = loc("{{.*}}debug_location_index_access.sol":96:5)
+// CHECK: #[[READ:loc[0-9]*]] = loc("{{.*}}debug_location_index_access.sol":92:5)
 
 // CHECK: sol.state_var @{{.*}} loc(#[[DATA:loc[0-9]*]])
 // CHECK: sol.state_var @{{.*}} loc(#[[S:loc[0-9]*]])
@@ -31,6 +31,10 @@
 // CHECK:   sol.return %{{.*}} : ui256 loc(#[[NESTED_RETURN:loc[0-9]*]])
 // CHECK: } loc(#[[NESTED_FN:loc[0-9]*]])
 
+// CHECK: sol.func @{{.*pushes.*}}(
+// CHECK:   sol.push %{{.*}} loc(#[[PUSH_READ:loc[0-9]*]])
+// CHECK:   sol.load %{{.*}} loc(#[[PUSH_READ]])
+
 // CHECK: sol.func @{{.*read.*}}(
 // CHECK:   sol.addr_of @{{.*}} loc(#[[ELEMENT:loc[0-9]*]])
 // CHECK:   sol.load %{{.*}} loc(#[[READ_I:loc[0-9]*]])
@@ -39,24 +43,25 @@
 // CHECK:   sol.return %{{.*}} : ui256 loc(#[[READ_RETURN:loc[0-9]*]])
 // CHECK: } loc(#[[READ_FN:loc[0-9]*]])
 
-// CHECK-DAG: #[[DATA]] = loc("{{.*}}debug_location_index_access.sol":71:5)
-// CHECK-DAG: #[[S]] = loc("{{.*}}debug_location_index_access.sol":72:5)
-// CHECK-DAG: #[[ELEMENT]] = loc("{{.*}}debug_location_index_access.sol":88:16)
-// CHECK-DAG: #[[READ_I]] = loc("{{.*}}debug_location_index_access.sol":88:21)
-// CHECK-DAG: #[[READ_RETURN]] = loc("{{.*}}debug_location_index_access.sol":88:9)
-// CHECK-DAG: #[[NESTED_ELEMENT]] = loc("{{.*}}debug_location_index_access.sol":92:16)
-// CHECK-DAG: #[[NESTED_I]] = loc("{{.*}}debug_location_index_access.sol":92:25)
-// CHECK-DAG: #[[NESTED_RETURN]] = loc("{{.*}}debug_location_index_access.sol":92:9)
+// CHECK-DAG: #[[DATA]] = loc("{{.*}}debug_location_index_access.sol":76:5)
+// CHECK-DAG: #[[S]] = loc("{{.*}}debug_location_index_access.sol":77:5)
+// CHECK-DAG: #[[ELEMENT]] = loc("{{.*}}debug_location_index_access.sol":93:16)
+// CHECK-DAG: #[[READ_I]] = loc("{{.*}}debug_location_index_access.sol":93:21)
+// CHECK-DAG: #[[READ_RETURN]] = loc("{{.*}}debug_location_index_access.sol":93:9)
+// CHECK-DAG: #[[NESTED_ELEMENT]] = loc("{{.*}}debug_location_index_access.sol":97:16)
+// CHECK-DAG: #[[NESTED_I]] = loc("{{.*}}debug_location_index_access.sol":97:25)
+// CHECK-DAG: #[[NESTED_RETURN]] = loc("{{.*}}debug_location_index_access.sol":97:9)
 
-// CHECK-DAG: #[[CLEARED]] = loc("{{.*}}debug_location_index_access.sol":96:16)
-// CHECK-DAG: #[[DELETE_ELEMENT]] = loc("{{.*}}debug_location_index_access.sol":96:9)
-// CHECK-DAG: #[[CLEARED_MEMBER]] = loc("{{.*}}debug_location_index_access.sol":97:16)
-// CHECK-DAG: #[[DELETE_MEMBER]] = loc("{{.*}}debug_location_index_access.sol":97:9)
+// CHECK-DAG: #[[CLEARED]] = loc("{{.*}}debug_location_index_access.sol":101:16)
+// CHECK-DAG: #[[DELETE_ELEMENT]] = loc("{{.*}}debug_location_index_access.sol":101:9)
+// CHECK-DAG: #[[CLEARED_MEMBER]] = loc("{{.*}}debug_location_index_access.sol":102:16)
+// CHECK-DAG: #[[DELETE_MEMBER]] = loc("{{.*}}debug_location_index_access.sol":102:9)
 
-// CHECK-DAG: #[[NEW_ARRAY]] = loc("{{.*}}debug_location_index_access.sol":76:16)
-// CHECK-DAG: #[[PUSHED]] = loc("{{.*}}debug_location_index_access.sol":80:17)
-// CHECK-DAG: #[[TUPLE_ASSIGN]] = loc("{{.*}}debug_location_index_access.sol":80:9)
-// CHECK-DAG: #[[ARRAY_LITERAL]] = loc("{{.*}}debug_location_index_access.sol":84:16)
+// CHECK-DAG: #[[NEW_ARRAY]] = loc("{{.*}}debug_location_index_access.sol":81:16)
+// CHECK-DAG: #[[PUSHED]] = loc("{{.*}}debug_location_index_access.sol":85:17)
+// CHECK-DAG: #[[TUPLE_ASSIGN]] = loc("{{.*}}debug_location_index_access.sol":85:9)
+// CHECK-DAG: #[[ARRAY_LITERAL]] = loc("{{.*}}debug_location_index_access.sol":89:16)
+// CHECK-DAG: #[[PUSH_READ]] = loc("{{.*}}debug_location_index_access.sol":106:16)
 
 // CHECK-DAG: #[[READ_FN]] = loc(fused<#[[READ_SP:di_subprogram[0-9]*]]>[#[[READ]]])
 // CHECK-DAG: #[[READ_SP]] = #llvm.di_subprogram<{{.*}}name = "read", linkageName = "read", {{.*}}type = #di_subroutine_type>
@@ -95,5 +100,9 @@ contract C {
     function clears(uint256 i) public {
         delete data[i];
         delete s.values;
+    }
+
+    function pushes() public returns (uint256) {
+        return grown.push();
     }
 }
