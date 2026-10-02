@@ -104,7 +104,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             Expression::TupleExpression(inner) => self.tuple_values(inner),
             Expression::FunctionCallExpression(inner)
                 if matches!(
-                    inner.operand(),
+                    Call::callee(inner).0,
                     Expression::MemberAccessExpression(access)
                         if access.member().resolve_to_built_in() == Some(BuiltIn::ArrayPush)
                 ) =>

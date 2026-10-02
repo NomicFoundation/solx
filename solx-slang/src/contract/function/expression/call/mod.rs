@@ -250,6 +250,31 @@ impl Call {
         }
     }
 
+    /// The callee under the parentheses and call-option layers wrapping it, and the options those
+    /// layers carry. Both nest freely and in either order, so a peel that stops at one of them
+    /// leaves the other in a position no emitter admits.
+    pub fn callee(call: &FunctionCallExpression) -> (Expression, Option<CallOptions>) {
+        let mut callee = call.operand();
+        let mut options = None;
+        loop {
+            match callee {
+                Expression::CallOptionsExpression(decorated) => {
+                    options = Some(decorated.options());
+                    callee = decorated.operand();
+                }
+                Expression::TupleExpression(inner) => {
+                    callee = inner
+                        .items()
+                        .iter()
+                        .next()
+                        .and_then(|item| item.expression())
+                        .expect("a parenthesized callee wraps a single operand");
+                }
+                resolved => return (resolved, options),
+            }
+        }
+    }
+
     /// Classifies the call by its callee.
     fn from_call(call: &FunctionCallExpression, callee: Expression) -> Self {
         if let Some(Definition::Struct(struct_definition)) =
@@ -356,31 +381,6 @@ impl Call {
                     std::mem::discriminant(&callee)
                 ),
             },
-        }
-    }
-
-    /// The callee under the parentheses and call-option layers wrapping it, and the options those
-    /// layers carry. Both nest freely and in either order, so a peel that stops at one of them
-    /// leaves the other in a position no emitter admits.
-    fn callee(call: &FunctionCallExpression) -> (Expression, Option<CallOptions>) {
-        let mut callee = call.operand();
-        let mut options = None;
-        loop {
-            match callee {
-                Expression::CallOptionsExpression(decorated) => {
-                    options = Some(decorated.options());
-                    callee = decorated.operand();
-                }
-                Expression::TupleExpression(inner) => {
-                    callee = inner
-                        .items()
-                        .iter()
-                        .next()
-                        .and_then(|item| item.expression())
-                        .expect("a parenthesized callee wraps a single operand");
-                }
-                resolved => return (resolved, options),
-            }
         }
     }
 

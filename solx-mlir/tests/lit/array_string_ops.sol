@@ -53,6 +53,10 @@
 // CHECK:   %[[READ_SLOT:.*]] = sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
 // CHECK:   sol.load %[[READ_SLOT]] : !sol.ptr<ui256, Storage>, ui256
 
+// CHECK: sol.func {{.*}}pushReadParenthesized
+// CHECK:   %[[PAREN_SLOT:.*]] = sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
+// CHECK:   sol.load %[[PAREN_SLOT]] : !sol.ptr<ui256, Storage>, ui256
+
 // CHECK: sol.func {{.*}}pushStructMember
 // CHECK:   sol.push %{{.*}} : !sol.array<? x !sol.struct<(ui256, ui256), Storage>, Storage> -> !sol.struct<(ui256, ui256), Storage>
 // CHECK:   sol.gep %{{.*}}, %{{.*}} : !sol.struct<(ui256, ui256), Storage>, ui64, !sol.ptr<ui256, Storage>
@@ -99,6 +103,10 @@ contract C {
 
     function pushRead() public returns (uint256) {
         return arr.push();
+    }
+
+    function pushReadParenthesized() public returns (uint256) {
+        return (arr.push)();
     }
 
     function pushStructMember() public {
