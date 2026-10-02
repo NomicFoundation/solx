@@ -40,7 +40,7 @@ runs:
       shell: msys2 {0}
       run: |
         # cargo's libgit2 enforces the 260-char MAX_PATH when checking out
-        # git dependencies, and slang's generated snapshot paths exceed it.
+        # git dependencies.
         # Written here so it lands in the msys2 HOME that the `msys2 {0}`
         # cargo steps resolve as the global git config.
         git config --global core.longpaths true
