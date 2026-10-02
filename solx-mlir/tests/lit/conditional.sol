@@ -30,6 +30,7 @@
 // CHECK:   }
 
 // CHECK: sol.func @{{.*ternary_string.*}}(%{{.*}}: i1) -> !sol.string<Memory>
+// CHECK:   sol.alloca : !sol.ptr<!sol.string<Memory>, Stack>
 // CHECK:   %[[STR_SLOT:.*]] = sol.alloca : !sol.ptr<!sol.string<Memory>, Stack>
 // CHECK:   sol.if
 // CHECK:     %[[Y:.*]] = sol.string_lit "yes" -> !sol.string<Memory>

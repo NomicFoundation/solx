@@ -17,6 +17,7 @@
 // CHECK:   sol.call @{{.*leftIndex.*}}
 
 // CHECK: sol.func @{{.*tupleStore.*}}
+// CHECK:   sol.alloca : !sol.ptr<ui256, Stack>
 // CHECK:   %[[X:.*]] = sol.alloca : !sol.ptr<ui256, Stack>
 // CHECK:   %[[ONE:.*]] = sol.constant 1 : ui8
 // CHECK:   %[[TWO:.*]] = sol.constant 2 : ui8

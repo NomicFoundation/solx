@@ -4617,7 +4617,7 @@ entries:
         version: '>=0.4.12'
       return_variable.sol:
         hash: '0xf9a59a83b001a005179dd76479a775cc'
-        enabled: false
+        enabled: true
         version: '>=0.4.16'
       static_memory_array_allocation.sol:
         hash: '0x4af9144962c3ee494c96737c2c125ba2'
