@@ -65,7 +65,7 @@ rev = "f63ac5c4f0d7ce86d63cc8599cb43007ea9a26d6"
 # MLIR
 [workspace.dependencies.melior]
 git = "https://github.com/NomicFoundation/melior"
-rev = "f780c87b43f3015176ba919f7749c655cc13685e"
+rev = "f68f5ba4f4862cccb560f24b536528f2f7b6221c"
 
 # LLVM
 [workspace.dependencies.inkwell]
