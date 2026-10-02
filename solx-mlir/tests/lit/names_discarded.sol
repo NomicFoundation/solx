@@ -27,7 +27,11 @@
 // CHECK-NEXT:   sol.return
 
 // CHECK: sol.func private @{{.*recipient.*}}()
-// CHECK:   %[[THIS:.*]] = sol.this
+// CHECK-NEXT:   %[[RETURN:.*]] = sol.alloca : !sol.ptr<!sol.address<payable>, Stack>
+// CHECK-NEXT:   %[[ZERO:.*]] = sol.constant 0 : ui160
+// CHECK-NEXT:   %[[DEFAULT:.*]] = sol.address_cast %[[ZERO]]
+// CHECK-NEXT:   sol.store %[[DEFAULT]], %[[RETURN]]
+// CHECK-NEXT:   %[[THIS:.*]] = sol.this
 // CHECK-NEXT:   %[[SELF:.*]] = sol.address_cast %[[THIS]]
 // CHECK-NEXT:   %[[PAYABLE:.*]] = sol.address_cast %[[SELF]]
 // CHECK-NEXT:   sol.return %[[PAYABLE]]
