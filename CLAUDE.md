@@ -167,11 +167,12 @@ It is forbidden to post low-level code changes, the process of how the work was 
 
 Two labels switch on optional CI: `ci:sanitizer` for the address sanitizer tests, `ci:integration` for the integration tests.
 
-A change to [`renovate.json`](./renovate.json) is validated before pushing, with the checks CI repeats in its `renovate-config-check` job:
+A change to [`renovate.json`](./renovate.json) is validated before pushing, with the checks CI repeats in its `renovate-config-check` job, at the Renovate version that job pins:
 
 ```bash
-npx --yes --package renovate -- renovate-config-validator renovate.json
-LOG_LEVEL=debug npx --yes renovate --platform=local --dry-run=full
+export RENOVATE_VERSION=$(sed -n 's/.*RENOVATE_VERSION: "\(.*\)"/\1/p' .github/workflows/test.yaml)
+npx --yes --package "renovate@$RENOVATE_VERSION" -- renovate-config-validator renovate.json
+LOG_LEVEL=debug npx --yes "renovate@$RENOVATE_VERSION" --platform=local --dry-run=full
 ```
 
 The dry run is what catches `matchPackageNames` silently missing a git-source cargo dependency, whose `packageName` is the git URL rather than the `Cargo.toml` key. Those are matched by `matchDepNames`, as the pinned-fork rule does for `inkwell`, `melior`, `slang_solidity` and `web3`.

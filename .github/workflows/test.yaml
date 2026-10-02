@@ -154,6 +154,9 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     permissions:
       contents: read
+    env:
+      # renovate: datasource=npm depName=renovate
+      RENOVATE_VERSION: "44.115.2"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -166,7 +169,7 @@ jobs:
           node-version: 24
 
       - name: Renovate schema check
-        run: npx --yes --package renovate -- renovate-config-validator renovate.json
+        run: npx --yes --package "renovate@${RENOVATE_VERSION}" -- renovate-config-validator renovate.json
 
       - name: Renovate extraction dry-run
         env:
@@ -174,7 +177,7 @@ jobs:
           # anonymous 60 req/hr rate limit shared across the runner IP.
           GITHUB_COM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LOG_LEVEL: debug
-        run: npx --yes renovate --platform=local --dry-run=full
+        run: npx --yes "renovate@${RENOVATE_VERSION}" --platform=local --dry-run=full
 
   build-and-test:
     needs: [changes, cooldown-check]
