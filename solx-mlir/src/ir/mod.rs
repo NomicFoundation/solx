@@ -160,6 +160,9 @@ dialect_ops! {
     Value::code(address: value) -> value {
         CodeOperation.cont_addr(address).out(memory())
     }
+    Value::code_size(address: value) -> value {
+        CodeSizeOperation.cont_addr(address).out(word())
+    }
     Value::object_code(object_name: str) -> value {
         ObjectCodeOperation.obj_name(str_attr(object_name)).out(memory())
     }
