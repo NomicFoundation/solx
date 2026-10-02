@@ -1,0 +1,20 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "LineTable.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract LineTable {\n    uint256 public value;\n\n    constructor() {\n        value = 1;\n    }\n\n    function set(uint256 newValue) public {\n        if (newValue == 0) {\n            revert();\n        }\n        value = newValue;\n    }\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": true
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.deployedBytecode.debugInfo"
+        ]
+      }
+    }
+  }
+}

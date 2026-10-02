@@ -330,7 +330,6 @@ fn select_specific_bytecode(path: &str, expected_key: &str) -> anyhow::Result<()
 
 #[test_case(crate::common::standard_json!("select_evm_bytecode_debug_info.json"), "bytecode")]
 #[test_case(crate::common::standard_json!("select_evm_deployed_bytecode_debug_info.json"), "deployedBytecode")]
-#[ignore = "solx does not emit this output yet"]
 fn select_specific_debug_info(path: &str, expected_key: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 

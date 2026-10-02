@@ -2,6 +2,7 @@
 //! EVM codegen library.
 //!
 
+#![allow(clippy::too_many_arguments)]
 #![allow(clippy::upper_case_acronyms)]
 
 pub(crate) mod attribute;

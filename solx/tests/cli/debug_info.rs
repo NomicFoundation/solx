@@ -4,24 +4,19 @@
 
 use predicates::prelude::*;
 use tempfile::TempDir;
-use test_case::test_case;
 
-#[test_case(true ; "yul")]
-#[test_case(false ; "evmla")]
-#[ignore = "solx does not emit this output yet"]
-fn default(via_ir: bool) -> anyhow::Result<()> {
+#[test]
+fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let mut args = vec![crate::common::TEST_SOLIDITY_CONTRACT, "--debug-info"];
-    if via_ir {
-        args.push("--via-ir");
-    }
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--debug-info"];
 
-    let result = crate::cli::execute_solx(&args)?;
+    let result = crate::cli::execute_solx(args)?;
 
     result
         .success()
-        .stdout(predicate::str::contains("Debug info").count(1));
+        .stdout(predicate::str::contains("Debug info:\n7f454c46").count(1))
+        .stdout(predicate::str::contains("runtime part").not());
 
     Ok(())
 }
@@ -45,7 +40,6 @@ fn standard_json() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "solx does not emit this output yet"]
 fn output_dir() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -62,6 +56,14 @@ fn output_dir() -> anyhow::Result<()> {
     result
         .success()
         .stderr(predicate::str::contains("Compiler run successful"));
+
+    let output_file = format!(
+        "{}_SlangTest.dbg.{}",
+        crate::common::TEST_SOLIDITY_CONTRACT.replace(['\\', '/', '.'], "_"),
+        solx_utils::EXTENSION_EVM_BINARY,
+    );
+    let debug_info = std::fs::read(output_directory.path().join(output_file))?;
+    assert!(debug_info.starts_with(b"\x7fELF"));
 
     Ok(())
 }

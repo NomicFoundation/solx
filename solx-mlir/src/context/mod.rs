@@ -3,6 +3,7 @@
 //!
 
 pub mod contract;
+pub mod debug_info;
 pub mod environment;
 pub mod function;
 pub mod yul_function;
@@ -13,15 +14,18 @@ use std::ffi::CString;
 use std::sync::Once;
 
 use melior::dialect::DialectRegistry;
+use melior::dialect::ods::llvm::ModuleFlagsOperation;
 use melior::ir::Attribute;
 use melior::ir::AttributeLike;
 use melior::ir::BlockLike;
 use melior::ir::Location;
 use melior::ir::Module;
 use melior::ir::Operation;
+use melior::ir::attribute::ArrayAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationLike;
 use melior::ir::operation::OperationMutLike;
+use melior::ir::operation::OperationPrintingFlags;
 use melior::ir::operation::OperationRef;
 use melior::ir::operation::WalkOrder;
 use melior::ir::operation::WalkResult;
@@ -29,6 +33,9 @@ use melior::pass::PassManager;
 use solx_utils::Profiler;
 
 use crate::Block;
+use crate::DebugInfoCompileUnit;
+use crate::DebugInfoRequest;
+use crate::FunctionOrigin;
 use crate::Type;
 use crate::llvm_module::RawLlvmModule;
 
@@ -38,6 +45,14 @@ pub struct Context<'context> {
     pub melior: &'context melior::Context,
     /// The MLIR module being built.
     pub module: Module<'context>,
+    /// Which of the module's code segments debug info is requested for.
+    pub debug_info_request: DebugInfoRequest,
+    /// The debug-info compile unit every subprogram in this module points at. Absent without debug
+    /// info, where no function gets a subprogram.
+    pub debug_info_compile_unit: Option<DebugInfoCompileUnit<'context>>,
+    /// The location cursor: the location the next op carries, that of the innermost node being
+    /// lowered. Frontends set it around each node and restore the enclosing value.
+    pub current_location: Location<'context>,
     /// The MLIR type of the contract currently being emitted, used to type
     /// `this` expressions. Frontends set this before emitting function bodies.
     pub current_contract_type: Option<Type<'context>>,
@@ -51,6 +66,8 @@ impl<'context> Context<'context> {
     const EMITTED_DIALECTS: [&'static str; 2] = ["sol", "yul"];
     /// The op a code segment's module is.
     const BUILTIN_MODULE: &'static str = "builtin.module";
+    /// The DWARF version a module with debug info declares, where LLVM would default to 4.
+    const DWARF_VERSION: u32 = 5;
     /// The data layout the LLVM translation reads off the module.
     const DATA_LAYOUT: &'static str = "llvm.data_layout";
     /// The target triple the LLVM translation reads off the module.
@@ -105,18 +122,33 @@ impl<'context> Context<'context> {
         melior
     }
 
-    /// Creates a new MLIR state with an empty module.
+    /// Creates a new MLIR state with an empty module at `location`, with a compile unit of
+    /// `file_name` fused onto it when `debug_info_request` asks for either segment. `location` is
+    /// the object's definition, which is where the Sol-to-Yul lowering puts the functions it
+    /// generates, or the unknown location without debug info. The location cursor starts at
+    /// `location`.
     pub fn new(
         melior: &'context melior::Context,
         evm_version: solx_utils::EVMVersion,
         revert_strings: solx_utils::RevertStrings,
+        location: Location<'context>,
+        debug_info_request: DebugInfoRequest,
+        file_name: &str,
     ) -> Self {
         for dialect in Self::EMITTED_DIALECTS {
             melior.get_or_load_dialect(dialect);
         }
 
-        let location = Location::unknown(melior);
-        let mut module = Module::new(location);
+        let debug_info_compile_unit = debug_info_request
+            .any()
+            .then(|| DebugInfoCompileUnit::new(melior, file_name));
+        let module_location = match debug_info_compile_unit {
+            Some(debug_info_compile_unit) => {
+                debug_info_compile_unit.fuse_compile_unit(melior, location)
+            }
+            None => location,
+        };
+        let mut module = Module::new(module_location);
 
         let evm_version_attribute = unsafe {
             Attribute::from_raw(crate::ffi::solxCreateEvmVersionAttr(
@@ -146,16 +178,12 @@ impl<'context> Context<'context> {
         Self {
             melior,
             module,
+            debug_info_request,
+            debug_info_compile_unit,
+            current_location: location,
             current_contract_type: None,
             current_block: None,
         }
-    }
-
-    /// The unknown source location.
-    pub fn location(&self) -> Location<'context> {
-        // TODO: stop generating unknown locations; every op should carry a real source
-        // location derived from the AST going forward.
-        Location::unknown(self.melior)
     }
 
     /// The block the insertion cursor points at, which the function-body emitters position before
@@ -236,10 +264,13 @@ impl<'context> Context<'context> {
     /// Each is translated to its own LLVM IR module and emits its own bytecode segment. The outer
     /// carries the deploy entry that runs the constructor and returns the runtime bytecode.
     ///
+    /// Each segment's text is printed with locations ([`Self::printing_flags`]) when debug info
+    /// is requested for it, and the Sol text when it is for either.
+    ///
     /// # Errors
     ///
-    /// Returns an error if the pass pipeline fails or the runtime module
-    /// is not found.
+    /// Returns an error if the pass pipeline fails, the runtime module is
+    /// not found, or a module cannot be printed.
     pub fn finalize_module(
         self,
         code_identifier: &str,
@@ -248,12 +279,23 @@ impl<'context> Context<'context> {
     ) -> anyhow::Result<crate::output::MlirOutput> {
         let mut module = self.module;
 
-        let sol_source = capture_sol.then(|| module.as_operation().to_string());
+        let sol_source = capture_sol
+            .then(|| {
+                module
+                    .as_operation()
+                    .to_string_with_flags(Self::printing_flags(self.debug_info_request.any()))
+            })
+            .transpose()
+            .map_err(|error| anyhow::anyhow!("Sol dialect module printing: {error}"))?;
 
         let run_sol_passes = profiler
             .start_pipeline_element(format!("solx_RunSolPasses:{code_identifier}").as_str());
         Self::run_sol_passes(self.melior, &mut module)?;
         run_sol_passes.borrow_mut().finish();
+
+        if self.debug_info_request.deploy {
+            Self::declare_dwarf_version(self.melior, &module);
+        }
 
         let run_object_extraction = profiler
             .start_pipeline_element(format!("solx_ExtractMLIRObjects:{code_identifier}").as_str());
@@ -261,14 +303,21 @@ impl<'context> Context<'context> {
             "{code_identifier}{}",
             solx_utils::Dependencies::DEPLOYED_OBJECT_SUFFIX
         );
-        let (runtime_llvm, runtime_dependencies) =
-            Self::take_nested_module(&mut module, runtime_code_identifier.as_str())?;
+        let (runtime_llvm, runtime_dependencies) = Self::take_nested_module(
+            self.melior,
+            &mut module,
+            runtime_code_identifier.as_str(),
+            self.debug_info_request.runtime,
+        )?;
         let deploy_dependencies = Self::object_dependencies(
             &module.as_operation(),
             code_identifier,
             Some(runtime_code_identifier),
         );
-        let deploy_llvm = module.as_operation().to_string();
+        let deploy_llvm = module
+            .as_operation()
+            .to_string_with_flags(Self::printing_flags(self.debug_info_request.deploy))
+            .map_err(|error| anyhow::anyhow!("deploy module printing: {error}"))?;
         run_object_extraction.borrow_mut().finish();
 
         Ok(crate::output::MlirOutput {
@@ -347,11 +396,67 @@ impl<'context> Context<'context> {
         }
     }
 
-    /// The walk runs before the module leaves the tree, so each segment's dependencies come from its
-    /// own code.
+    /// The location a `sol.func` or `yul.func` carries: the location cursor with a subprogram of
+    /// its own fused onto it, artificial for a function the frontend synthesizes.
+    ///
+    /// The translation keeps a function's inner locations only when its own location carries a
+    /// subprogram, which belongs there and nowhere else
+    /// ([`DebugInfoCompileUnit::fuse_subprogram`]).
+    fn function_location(&self, name: &str, origin: FunctionOrigin) -> Location<'context> {
+        match self.debug_info_compile_unit {
+            Some(debug_info_compile_unit) => {
+                debug_info_compile_unit.fuse_subprogram(name, origin, self.current_location)
+            }
+            None => self.current_location,
+        }
+    }
+
+    /// The flags a module text is printed with. `print_locations` prints locations in the
+    /// non-pretty form, the one that re-parses, so they survive the round-trip to the worker
+    /// processes; the default flags drop them. Each distinct location is written once as a `#locN`
+    /// alias, except on block arguments, which the printer allows no alias.
+    fn printing_flags(print_locations: bool) -> OperationPrintingFlags {
+        let flags = OperationPrintingFlags::new();
+        if print_locations {
+            flags.enable_debug_info(true, false)
+        } else {
+            flags
+        }
+    }
+
+    /// Appends to `module` the `llvm.module_flags` declaring [`Self::DWARF_VERSION`], at the
+    /// module's location.
+    ///
+    /// MLIR's translation sets `Debug Info Version` but no DWARF version. Each module a worker
+    /// translates becomes its own LLVM module, so each segment that carries debug info declares
+    /// its own.
+    fn declare_dwarf_version(melior: &'context melior::Context, module: &Module<'context>) {
+        let flag = unsafe {
+            Attribute::from_raw(crate::ffi::solxCreateDwarfVersionFlagAttr(
+                melior.to_raw(),
+                Self::DWARF_VERSION,
+            ))
+        };
+        module.body().append_operation(
+            ModuleFlagsOperation::builder(melior, module.as_operation().location())
+                .flags(ArrayAttribute::new(melior, &[flag]))
+                .build()
+                .into(),
+        );
+    }
+
+    /// The walk runs before the module leaves the tree, so each segment's dependencies come from
+    /// its own code.
+    ///
+    /// With `print_locations`, the module declares the DWARF version and is detached before it is
+    /// printed: the printer emits an alias table only for a top-level op, so a detached module
+    /// writes each repeated location once and re-parses on its own. Without, it is printed in
+    /// place, which spares the printer the scan that builds the table.
     fn take_nested_module(
-        module: &mut Module,
+        melior: &'context melior::Context,
+        module: &mut Module<'context>,
         target: &str,
+        print_locations: bool,
     ) -> anyhow::Result<(String, solx_utils::Dependencies)> {
         let body = module.body();
         std::iter::successors(body.first_operation_mut(), |operation| {
@@ -372,13 +477,26 @@ impl<'context> Context<'context> {
 
             let dependencies = Self::object_dependencies(&operation, target, None);
 
-            let text = operation.to_string();
-            operation.remove_from_parent();
-            drop(unsafe { Operation::from_raw(operation.to_raw()) });
+            let text = if print_locations {
+                operation.remove_from_parent();
+                let runtime =
+                    Module::from_operation(unsafe { Operation::from_raw(operation.to_raw()) })
+                        .expect("a `builtin.module` op is a module");
+                Self::declare_dwarf_version(melior, &runtime);
+                runtime
+                    .as_operation()
+                    .to_string_with_flags(Self::printing_flags(true))
+                    .map_err(|error| anyhow::anyhow!("runtime module printing: {error}"))
+            } else {
+                let text = operation.to_string();
+                operation.remove_from_parent();
+                drop(unsafe { Operation::from_raw(operation.to_raw()) });
+                Ok(text)
+            };
 
-            Some((text, dependencies))
+            Some(text.map(|text| (text, dependencies)))
         })
-        .ok_or_else(|| anyhow::anyhow!("no module with sym_name `{target}` in Sol pass output"))
+        .ok_or_else(|| anyhow::anyhow!("no module with sym_name `{target}` in Sol pass output"))?
     }
 
     /// The objects `operation`'s code references, read off the intrinsics naming them.

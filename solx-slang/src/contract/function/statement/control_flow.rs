@@ -66,11 +66,11 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         });
     }
 
-    /// The `for` statement's initialization clause.
+    /// The `for` statement's initialization clause, at its own location.
     pub fn for_statement_initialization(&mut self, node: &ForStatementInitialization) {
         match node {
             ForStatementInitialization::VariableDeclarationStatement(inner) => {
-                self.variable_declaration_statement(inner)
+                self.at_node(inner, |scope| scope.variable_declaration_statement(inner))
             }
             ForStatementInitialization::ExpressionStatement(inner) => {
                 self.expression_effect(&inner.expression())

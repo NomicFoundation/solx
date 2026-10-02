@@ -231,10 +231,12 @@ solx 'Simple.sol' --devdoc
 
 Emits the ELF-wrapped DWARF debug info of the deploy code.
 
-Currently not supported. Usage:
+```console
+$ solx 'Simple.sol' --debug-info
 
-```bash
-solx 'Simple.sol' --debug-info
+======= Simple.sol:Simple =======
+Debug info:
+7f454c46010201ff[..]
 ```
 
 
@@ -243,10 +245,12 @@ solx 'Simple.sol' --debug-info
 
 Emits the ELF-wrapped DWARF debug info of the runtime code.
 
-Currently not supported. Usage:
+```console
+$ solx 'Simple.sol' --debug-info-runtime
 
-```bash
-solx 'Simple.sol' --debug-info-runtime
+======= Simple.sol:Simple =======
+Debug info of the runtime part:
+7f454c46010201ff[..]
 ```
 
 

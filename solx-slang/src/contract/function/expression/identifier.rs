@@ -95,7 +95,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     pub fn identifier_place(&mut self, node: &Identifier) -> (Place<'context>, MlirType<'context>) {
         match node.resolve_to_definition() {
             Some(Definition::StateVariable(state_variable)) => {
-                self.state_variable_place(&state_variable)
+                self.at_node(node, |scope| scope.state_variable_place(&state_variable))
             }
             Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                 self.environment.variable_with_type(node.name())

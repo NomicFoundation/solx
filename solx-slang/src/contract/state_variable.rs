@@ -18,6 +18,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// Emits every state variable's inline initializer (`T x = <expr>;`) in storage order over the
     /// hierarchy as the constructor prologue, storing each into its place. Reference-typed slots
     /// take a `sol.copy`; value-typed places convert to the declared element type and `sol.store`.
+    /// Each initializer's place and store carry its declaration's location.
     pub fn state_variable_initializers(&mut self) {
         let initializers: Vec<(StateVariableDefinition, Expression)> = self
             .contract
@@ -36,12 +37,14 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             })
             .collect();
         for (state_variable, initializer) in initializers {
-            let (storage_ref, element_type) = self.state_variable_place(&state_variable);
-            if storage_ref.r#type() == element_type {
-                storage_ref.copy_from(self.expression(&initializer), self);
-            } else {
-                storage_ref.store(self.converted(&initializer, element_type), self);
-            }
+            self.at_node(&state_variable, |scope| {
+                let (storage_ref, element_type) = scope.state_variable_place(&state_variable);
+                if storage_ref.r#type() == element_type {
+                    storage_ref.copy_from(scope.expression(&initializer), scope);
+                } else {
+                    storage_ref.store(scope.converted(&initializer, element_type), scope);
+                }
+            });
         }
     }
 

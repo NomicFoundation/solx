@@ -6,3 +6,4 @@
 
 mod cli;
 mod common;
+mod debug_info;

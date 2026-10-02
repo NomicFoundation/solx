@@ -6,6 +6,8 @@
 
 use std::ops::Deref;
 
+use melior::ir::Location;
+use slang_solidity_v2::ast::NodeLocation;
 use slang_solidity_v2::ast::Type;
 
 use solx_mlir::Block;
@@ -82,6 +84,25 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         result
     }
 
+    /// Runs `emit` with the location cursor on `node`'s first byte, so the ops it emits carry it,
+    /// and restores the enclosing cursor afterwards. The node's source range is read only when the
+    /// object requested debug info.
+    pub fn at_node<R>(&mut self, node: &impl NodeLocation, emit: impl FnOnce(&mut Self) -> R) -> R {
+        let location = self.contract.source_unit.debug_locations.location(node);
+        self.at(location, emit)
+    }
+
+    /// Like [`Self::at_node`], with the location cursor on `node`'s last byte: the closing brace of
+    /// a body, where the implicit return of one that falls through belongs.
+    pub fn at_node_end<R>(
+        &mut self,
+        node: &impl NodeLocation,
+        emit: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let location = self.contract.source_unit.debug_locations.location_end(node);
+        self.at(location, emit)
+    }
+
     /// Opens the assembly scope around `emit`: the Yul bindings an inline-assembly block
     /// introduces, with the MLIR cursor on `body` - the `sol.inline_asm` region, which is also the
     /// symbol table its Yul functions are emitted into - for the block's duration.
@@ -96,7 +117,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     }
 
     /// Emits into `block`, appends the implicit `sol.yield` if the emitted code did not terminate
-    /// it, and restores the cursor to the enclosing block.
+    /// it, and restores the cursor to the enclosing block. The yield carries the location of the
+    /// construct opening the region, since every node lowered inside has restored the location
+    /// cursor by then.
     pub fn region(&mut self, block: Block<'context>, emit: impl FnOnce(&mut Self)) {
         let enclosing = self.contract.source_unit.mlir.current_block.replace(block);
         emit(self);
@@ -174,6 +197,18 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         self.contract
             .source_unit
             .pointer(node, element_type, base_location)
+    }
+
+    /// Runs `emit` with the location cursor on `location`, restoring the enclosing cursor
+    /// afterwards.
+    fn at<R>(&mut self, location: Location<'context>, emit: impl FnOnce(&mut Self) -> R) -> R {
+        let enclosing = std::mem::replace(
+            &mut self.contract.source_unit.mlir.current_location,
+            location,
+        );
+        let result = emit(self);
+        self.contract.source_unit.mlir.current_location = enclosing;
+        result
     }
 }
 

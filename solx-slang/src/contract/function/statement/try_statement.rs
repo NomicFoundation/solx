@@ -19,7 +19,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         let Expression::FunctionCallExpression(call) = node.expression() else {
             unimplemented!("a `try` statement guards a call");
         };
-        let (status, values) = Call::try_call(&call, self);
+        let (status, values) = self.at_node(&call, |scope| Call::try_call(&call, scope));
 
         let (mut panic, mut error, mut fallback) = (None, None, None);
         for clause in node.catch_clauses().iter() {
@@ -48,7 +48,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                             continue;
                         };
                         let declared_type = scope.typing(parameter.get_type());
-                        scope.define_local(name.name(), declared_type, |_scope| value);
+                        scope.at_node(&parameter, |scope| {
+                            scope.define_local(name.name(), declared_type, |_scope| value);
+                        });
                     }
                 }
                 scope.block(&node.body());
@@ -76,7 +78,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         {
             let declared_type = self.typing(parameter.get_type());
             let bound = self.current_block().argument(0);
-            self.define_local(name.name(), declared_type, |_scope| bound);
+            self.at_node(&parameter, |scope| {
+                scope.define_local(name.name(), declared_type, |_scope| bound);
+            });
         }
         self.block(&node.body());
     }

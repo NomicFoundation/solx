@@ -4,6 +4,7 @@ import lit.formats
 config.name = "solx-mlir"
 config.test_format = lit.formats.ShTest(True)
 config.suffixes = [".sol"]
+config.excludes = ["Inputs"]
 
 config_dir = os.path.dirname(os.path.abspath(__file__))
 solx_root = os.path.normpath(os.path.join(config_dir, "..", "..", ".."))

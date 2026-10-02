@@ -25,6 +25,9 @@ pub struct Object {
     pub bytecode: Option<Vec<u8>>,
     /// Hexadecimal bytecode.
     pub bytecode_hex: Option<String>,
+    /// ELF-wrapped DWARF debug info.
+    #[serde(with = "serde_bytes")]
+    pub debug_info: Option<Vec<u8>>,
     /// Unoptimized LLVM IR (solx internal representation).
     pub llvm_ir_unoptimized: Option<String>,
     /// Optimized LLVM IR (solx internal representation).
@@ -63,6 +66,7 @@ impl Object {
         contract_name: solx_utils::ContractName,
         assembly: Option<String>,
         bytecode: Option<Vec<u8>>,
+        debug_info: Option<Vec<u8>>,
         llvm_ir_unoptimized: Option<String>,
         llvm_ir: Option<String>,
         code_segment: solx_utils::CodeSegment,
@@ -80,6 +84,7 @@ impl Object {
             assembly,
             bytecode,
             bytecode_hex,
+            debug_info,
             llvm_ir_unoptimized,
             llvm_ir,
             code_segment,

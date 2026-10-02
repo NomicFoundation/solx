@@ -23,9 +23,13 @@ pub(crate) mod output;
 
 pub use self::context::Context;
 pub use self::context::contract::Contract;
+pub use self::context::debug_info::compile_unit::DebugInfoCompileUnit;
+pub use self::context::debug_info::file_name::DebugInfoFileName;
+pub use self::context::debug_info::request::DebugInfoRequest;
 pub use self::context::environment::Environment;
 pub use self::context::function::Function;
 pub use self::context::function::dispatch::FunctionDispatch;
+pub use self::context::function::origin::FunctionOrigin;
 pub use self::context::yul_function::YulFunction;
 pub use self::dialect::Dialect;
 pub use self::ir::attributes::CmpPredicate;

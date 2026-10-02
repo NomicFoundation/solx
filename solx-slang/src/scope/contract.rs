@@ -12,6 +12,7 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::ModifierInvocation;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::NodeLocation;
 use slang_solidity_v2::ast::VirtualTarget;
 
 use solx_mlir::Block;
@@ -61,7 +62,9 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
 
     /// Opens the function scope around `emit`: whether the frame is a constructor, a fresh
     /// variable environment, the declared return types a `return` converts to, and checked
-    /// arithmetic, with the MLIR cursor on `entry` for the body's duration.
+    /// arithmetic, with the MLIR cursor on `entry` for the body's duration. The location cursor is
+    /// the caller's, the function's own node; each part of the body with a node of its own narrows
+    /// it.
     pub fn function(
         &mut self,
         entry: Block<'context>,
@@ -76,6 +79,17 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             &signature.function_type.results,
         ));
         self.source_unit.mlir.current_block = enclosing;
+    }
+
+    /// Runs `emit` with the location cursor on `node`'s first byte, so the ops it emits carry it,
+    /// and restores the enclosing cursor afterwards. The node's source range is read only when the
+    /// object requested debug info.
+    pub fn at_node<R>(&mut self, node: &impl NodeLocation, emit: impl FnOnce(&mut Self) -> R) -> R {
+        let location = self.source_unit.debug_locations.location(node);
+        let enclosing = std::mem::replace(&mut self.source_unit.mlir.current_location, location);
+        let result = emit(self);
+        self.source_unit.mlir.current_location = enclosing;
+        result
     }
 
     /// The function a bare name runs in this object: the most-derived override of its hierarchy,

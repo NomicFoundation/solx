@@ -177,6 +177,7 @@ impl Contract {
                         selector_llvm_assembly,
                     ),
                     output_bytecode,
+                    false,
                     optimizer_settings.is_fallback_to_size_active(),
                     &mut profiler,
                 )?;
@@ -189,6 +190,7 @@ impl Contract {
                     contract_name.clone(),
                     build.assembly,
                     build.bytecode,
+                    build.debug_info,
                     build.llvm_ir_unoptimized,
                     build.llvm_ir,
                     code_segment,
@@ -259,19 +261,25 @@ impl Contract {
                 let module = unsafe { inkwell::module::Module::new(raw_llvm.module) };
                 module.set_name(code_identifier.as_str());
 
-                let (selector_llvm_ir_unoptimized, selector_llvm_ir, selector_llvm_assembly) =
-                    match code_segment {
-                        solx_utils::CodeSegment::Deploy => (
-                            solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
-                            solx_standard_json::InputSelector::BytecodeLLVMIR,
-                            solx_standard_json::InputSelector::BytecodeLLVMAssembly,
-                        ),
-                        solx_utils::CodeSegment::Runtime => (
-                            solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
-                            solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
-                            solx_standard_json::InputSelector::RuntimeBytecodeLLVMAssembly,
-                        ),
-                    };
+                let (
+                    selector_debug_info,
+                    selector_llvm_ir_unoptimized,
+                    selector_llvm_ir,
+                    selector_llvm_assembly,
+                ) = match code_segment {
+                    solx_utils::CodeSegment::Deploy => (
+                        solx_standard_json::InputSelector::BytecodeDebugInfo,
+                        solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
+                        solx_standard_json::InputSelector::BytecodeLLVMIR,
+                        solx_standard_json::InputSelector::BytecodeLLVMAssembly,
+                    ),
+                    solx_utils::CodeSegment::Runtime => (
+                        solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
+                        solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
+                        solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
+                        solx_standard_json::InputSelector::RuntimeBytecodeLLVMAssembly,
+                    ),
+                };
 
                 let mut context = solx_codegen_evm::Context::new(
                     &context,
@@ -299,6 +307,11 @@ impl Contract {
                         selector_llvm_assembly,
                     ),
                     output_bytecode,
+                    output_selection.check_selection(
+                        contract_name.path.as_str(),
+                        contract_name.name.as_deref(),
+                        selector_debug_info,
+                    ),
                     optimizer_settings.is_fallback_to_size_active(),
                     &mut profiler,
                 )?;
@@ -313,6 +326,7 @@ impl Contract {
                     contract_name.clone(),
                     build.assembly,
                     build.bytecode,
+                    build.debug_info,
                     build.llvm_ir_unoptimized,
                     build.llvm_ir,
                     code_segment,
