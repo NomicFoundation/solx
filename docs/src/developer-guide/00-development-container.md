@@ -30,11 +30,10 @@ The Rust toolchain itself is also resolved lazily: rustup downloads the version 
 3. Build the toolchain:
 
    ```shell
-   .devcontainer/bootstrap.sh          # MLIR-enabled build (default)
-   .devcontainer/bootstrap.sh --no-mlir  # skip MLIR if you only touch the solc/Yul pipeline
+   .devcontainer/bootstrap.sh
    ```
 
-   This is the ~1 hour step (cold). It is kept out of the automatic container setup precisely because of that cost — you should know when you are paying it. The wrapper takes two flags: `--no-mlir` (build LLVM without MLIR — see [How LLVM is installed](#how-llvm-is-installed)) and `--clean` (wipe `target-llvm/` first — see [Troubleshooting](#troubleshooting)).
+   This is the ~1 hour step (cold). It is kept out of the automatic container setup precisely because of that cost — you should know when you are paying it. The wrapper takes one flag: `--clean` (wipe `target-llvm/` first — see [Troubleshooting](#troubleshooting)).
 
 4. Build and test **solx**:
 
@@ -49,12 +48,11 @@ The Rust toolchain itself is also resolved lazily: rustup downloads the version 
 
 1. `git submodule update --init --recursive --depth 1` — fetches `solx-llvm` and `solx-solidity` shallowly, exactly as CI does, but only for submodules that were never initialized. An existing checkout is never moved: if it differs from the recorded commit, the bootstrap prints a warning with that same command and carries on — refreshing is your explicit step (see [Rebuilding after a submodule bump](#rebuilding-after-a-submodule-bump)). If you need full history in a submodule (e.g. to bisect), run `git fetch --unshallow` inside it.
 2. `cargo build --release --bin solx-dev` — builds the builder. This first `cargo` call also downloads the pinned Rust toolchain.
-3. `./target/release/solx-dev llvm build --enable-assertions --enable-mlir --ccache-variant ccache` — configures and builds LLVM:
+3. `./target/release/solx-dev llvm build --enable-assertions --ccache-variant ccache` — configures and builds LLVM:
    - The build tree lives in `target-llvm/build-final/`, the installation in `target-llvm/target-final/`.
-   - `.cargo/config.toml` already points `LLVM_SYS_211_PREFIX`, `MLIR_SYS_210_PREFIX`, and `TABLEGEN_210_PREFIX` at that installation, so no environment setup is needed — `cargo` and rust-analyzer find it as soon as it exists.
-   - MLIR is enabled by default because the Slang frontend pipeline (`cargo test-slang`) requires it. To skip it and shave build time if you only work on the solc/Yul pipeline: pass `--no-mlir` to `bootstrap.sh`, or — if you drive `solx-dev` directly — simply omit `--enable-mlir` (there is no `--no-mlir` at the `solx-dev` layer; it is a boolean flag). Either way, keep the LLVM and solc builds consistent — MLIR must be enabled or disabled on both.
+   - `.cargo/config.toml` already points `LLVM_SYS_211_PREFIX` at that installation, so no environment setup is needed — `cargo` and rust-analyzer find it as soon as it exists.
    - Assertions are enabled, matching CI.
-4. `./target/release/solx-dev solc build --build-boost --ccache-variant ccache --enable-mlir` — builds the solc fork libraries into `solx-solidity/build/` (again already wired up via `SOLC_PREFIX`/`BOOST_PREFIX`). `--build-boost` downloads and builds a static Boost into `solx-solidity/boost/` first — the runner image deliberately ships no system Boost, matching how CI builds solc.
+4. `./target/release/solx-dev solc build --build-boost --ccache-variant ccache` — builds the solc fork libraries into `solx-solidity/build/` (again already wired up via `SOLC_PREFIX`/`BOOST_PREFIX`). `--build-boost` downloads and builds a static Boost into `solx-solidity/boost/` first — the runner image deliberately ships no system Boost, matching how CI builds solc.
 
 Until step 3 has completed, `cargo check`/rust-analyzer fail in `llvm-sys`'s build script with a missing `llvm-config` — that is the expected symptom of "LLVM not built yet", not a broken container.
 
@@ -88,7 +86,6 @@ Build state lives in Docker named volumes so it survives **Rebuild Container** a
 | Volume | Mount point | Holds |
 |---|---|---|
 | `solx-target-<id>` | `target/` | solx build artifacts, `solx-dev` |
-| `solx-target-slang-<id>` | `target-slang/` | `cargo *-slang` alias artifacts |
 | `solx-target-llvm-<id>` | `target-llvm/` | LLVM build tree + installation |
 | `solx-rustup` | `/usr/local/rustup` | downloaded Rust toolchains |
 | `solx-cargo` | `/usr/local/cargo` | cargo registry/git caches |
@@ -103,9 +100,5 @@ To start truly fresh, or to prune volumes left by deleted checkouts, list them w
 The devcontainer is also the intended environment for hacking on `solx-llvm`: the fork is not built standalone — `solx-dev` owns the CMake configuration (in `solx-dev/src/llvm/`), and `solx-llvm`'s own regression CI drives its builds through a **solx** checkout in the same runner image.
 
 1. Point the submodule at your branch: `git -C solx-llvm checkout <branch>` (after `git -C solx-llvm fetch --unshallow origin <branch>` if needed). Rerunning `bootstrap.sh` is safe: it never moves an initialized submodule — it only notes that the checkout differs from the recorded commit.
-2. Rebuild: `./target/release/solx-dev llvm build --enable-assertions --enable-mlir --enable-tests --ccache-variant ccache --extra-args "-DLLVM_PARALLEL_LINK_JOBS='2'"`. `--enable-tests` builds FileCheck, `llvm-lit`, and the `check-*` targets so the regression suite runs locally (it implies the full toolset — expect a longer first build); the link-jobs cap keeps peak memory inside the 16 GB host minimum.
+2. Rebuild: `./target/release/solx-dev llvm build --enable-assertions --enable-tests --ccache-variant ccache --extra-args "-DLLVM_PARALLEL_LINK_JOBS='2'"`. `--enable-tests` builds FileCheck, `llvm-lit`, and the `check-*` targets so the regression suite runs locally (it implies the full toolset — expect a longer first build); the link-jobs cap keeps peak memory inside the 16 GB host minimum.
 3. C++ language support: `solx-dev` exports `compile_commands.json` into `target-llvm/build-final/`, and the devcontainer configures clangd to read it, so cross-references in the submodule work after the first build.
-
-## Notes for Slang contributors
-
-Coming from `slang`, the moving parts map as follows: there is no Hermit — the system toolchain comes from the CI image and the Rust toolchain from `rust-toolchain.toml`; the `infra` CLI's role is split between `.devcontainer/bootstrap.sh` (one-time environment setup) and `solx-dev` (LLVM/solc builds, integration test suites). The Slang-frontend crates (`solx-slang`, `solx-mlir`) are built and tested via the `cargo build-slang` / `cargo test-slang` aliases, which need the MLIR-enabled LLVM build that `bootstrap.sh` produces by default.

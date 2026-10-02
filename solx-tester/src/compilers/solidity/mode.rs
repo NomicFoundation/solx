@@ -11,8 +11,6 @@ use solx_solc_test_adapter::Params;
 use crate::compilers::mode::Mode as ModeWrapper;
 use crate::compilers::mode::imode::IMode;
 use crate::compilers::mode::llvm_options::LLVMOptions;
-#[cfg(feature = "slang-ast")]
-use crate::compilers::solidity::slang_ast::SlangAst;
 
 ///
 /// Unified Solidity mode for all toolchains.
@@ -77,15 +75,9 @@ impl Mode {
     }
 
     ///
-    /// Checks if the mode is compatible with the source code pragmas. Under the Slang frontend,
-    /// tests pinned to `pragma abicoder v1` are incompatible.
+    /// Checks if the mode is compatible with the source code pragmas.
     ///
     pub fn check_pragmas(&self, sources: &[(String, String)]) -> bool {
-        #[cfg(feature = "slang-ast")]
-        if SlangAst::parse(sources).is_abi_encoder_v1_pinned() {
-            return false;
-        }
-
         // Strip pre-release for pragma matching since semver pre-release versions
         // have special matching rules that don't work well with Solidity pragmas.
         // E.g., ">=0.8.0" should match "0.8.34-develop" but semver doesn't agree.
@@ -115,10 +107,6 @@ impl Mode {
     /// Checks if the mode is compatible with the Ethereum tests params.
     ///
     pub fn check_ethereum_tests_params(&self, params: &Params) -> bool {
-        #[cfg(feature = "slang-ast")]
-        if params.abi_encoder_v1_only == ABIEncoderV1Only::True {
-            return false;
-        }
         if self.via_ir {
             params.compile_via_yul != CompileViaYul::False
                 && params.abi_encoder_v1_only != ABIEncoderV1Only::True

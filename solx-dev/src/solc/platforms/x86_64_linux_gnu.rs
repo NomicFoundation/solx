@@ -21,7 +21,6 @@ pub fn build(
     tests: bool,
     extra_args: Vec<String>,
     boost_config: Option<&BoostConfig>,
-    enable_mlir: bool,
     use_gcc: bool,
     ccache_variant: Option<CcacheVariant>,
 ) -> anyhow::Result<()> {
@@ -63,14 +62,6 @@ pub fn build(
         for arg in
             shared::boost_cmake_args(&boost_config.version, &boost_lib_dir, &boost_include_dir)
         {
-            cmake.arg(arg);
-        }
-    }
-
-    // MLIR configuration
-    if enable_mlir {
-        let llvm_build_dir = std::path::PathBuf::from(crate::solc::LLVM_BUILD_DIR);
-        for arg in shared::mlir_cmake_args(&llvm_build_dir) {
             cmake.arg(arg);
         }
     }

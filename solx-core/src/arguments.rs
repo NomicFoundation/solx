@@ -160,21 +160,6 @@ pub struct Arguments {
     #[arg(long = "emit-llvm-ir", help_heading = "Output Selection")]
     pub output_llvm_ir: bool,
 
-    /// Emit MLIR at each pipeline stage.
-    /// Without a value (`--emit-mlir`), prints every dialect in pipeline
-    /// order. Pass `--emit-mlir=sol` or `--emit-mlir=llvm` to print one
-    /// dialect. Can be used with --output-dir to write .mlir files.
-    #[cfg(feature = "mlir")]
-    #[arg(
-        long = "emit-mlir",
-        value_enum,
-        value_name = "DIALECT",
-        num_args = 0..=1,
-        require_equals = true,
-        help_heading = "Output Selection",
-    )]
-    pub output_mlir: Option<Option<solx_mlir::Dialect>>,
-
     //
     // Compilation Settings
     //
@@ -317,7 +302,7 @@ impl Arguments {
                 ));
             }
 
-            let solidity_only = self.output_abi
+            if self.output_abi
                 || self.output_hashes
                 || self.output_userdoc
                 || self.output_devdoc
@@ -328,12 +313,10 @@ impl Arguments {
                 || self.output_ir
                 || self.output_debug_info
                 || self.output_debug_info_runtime
-                || self.output_benchmarks;
-            #[cfg(feature = "mlir")]
-            let solidity_only = solidity_only || self.output_mlir.is_some();
-            if solidity_only {
+                || self.output_benchmarks
+            {
                 messages.push(solx_standard_json::OutputError::new_error(
-                    "ABI, hashes, userdoc, devdoc, storage layout, transient storage layout, AST, EVM assembly, Yul, MLIR, debug info, benchmarks can be only emitted for Solidity contracts.",
+                    "ABI, hashes, userdoc, devdoc, storage layout, transient storage layout, AST, EVM assembly, Yul, debug info, benchmarks can be only emitted for Solidity contracts.",
                 ));
             }
 
@@ -351,7 +334,7 @@ impl Arguments {
         }
 
         if self.standard_json.is_some() {
-            let has_output_flags = self.output_bytecode
+            if self.output_bytecode
                 || self.output_bytecode_runtime
                 || self.output_assembly
                 || self.output_debug_info
@@ -369,10 +352,8 @@ impl Arguments {
                 || self.output_benchmarks
                 || self.output_evmla
                 || self.output_ethir
-                || self.output_llvm_ir;
-            #[cfg(feature = "mlir")]
-            let has_output_flags = has_output_flags || self.output_mlir.is_some();
-            if has_output_flags {
+                || self.output_llvm_ir
+            {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "Cannot output data outside of JSON in standard JSON mode.",
                 ));
@@ -479,9 +460,6 @@ impl Arguments {
     ///
     /// Builds an `InputSelection` from CLI output flags.
     ///
-    /// Only flags supported by the current feature set are included.
-    /// Flags behind `#[cfg(feature = "solc")]` require the solc frontend.
-    ///
     pub fn output_selection(&self) -> solx_standard_json::InputSelection {
         let mut selectors = std::collections::BTreeSet::new();
 
@@ -504,10 +482,6 @@ impl Arguments {
         if self.output_benchmarks {
             selectors.insert(solx_standard_json::InputSelector::Benchmarks);
         }
-        #[cfg(feature = "mlir")]
-        if self.output_mlir.is_some() {
-            selectors.insert(solx_standard_json::InputSelector::MLIR);
-        }
         if self.output_ast_json {
             selectors.insert(solx_standard_json::InputSelector::AST);
         }
@@ -516,62 +490,46 @@ impl Arguments {
             selectors.insert(solx_standard_json::InputSelector::Metadata);
         }
 
-        #[cfg(feature = "solc")]
-        {
-            if self.output_evmla {
-                selectors.insert(solx_standard_json::InputSelector::BytecodeEVMLA);
-                selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEVMLA);
-            }
-            if self.output_ethir {
-                selectors.insert(solx_standard_json::InputSelector::BytecodeEthIR);
-                selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEthIR);
-            }
-            if self.output_debug_info {
-                selectors.insert(solx_standard_json::InputSelector::BytecodeDebugInfo);
-            }
-            if self.output_debug_info_runtime {
-                selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo);
-            }
-            if self.output_abi {
-                selectors.insert(solx_standard_json::InputSelector::ABI);
-            }
-            if self.output_hashes {
-                selectors.insert(solx_standard_json::InputSelector::MethodIdentifiers);
-            }
-            if self.output_userdoc {
-                selectors.insert(solx_standard_json::InputSelector::UserDocumentation);
-            }
-            if self.output_devdoc {
-                selectors.insert(solx_standard_json::InputSelector::DeveloperDocumentation);
-            }
-            if self.output_storage_layout {
-                selectors.insert(solx_standard_json::InputSelector::StorageLayout);
-            }
-            if self.output_transient_storage_layout {
-                selectors.insert(solx_standard_json::InputSelector::TransientStorageLayout);
-            }
-            if self.output_asm_solc_json {
-                selectors.insert(solx_standard_json::InputSelector::EVMLegacyAssembly);
-            }
-            if self.output_ir {
-                selectors.insert(solx_standard_json::InputSelector::Yul);
-            }
+        if self.output_evmla {
+            selectors.insert(solx_standard_json::InputSelector::BytecodeEVMLA);
+            selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEVMLA);
+        }
+        if self.output_ethir {
+            selectors.insert(solx_standard_json::InputSelector::BytecodeEthIR);
+            selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEthIR);
+        }
+        if self.output_debug_info {
+            selectors.insert(solx_standard_json::InputSelector::BytecodeDebugInfo);
+        }
+        if self.output_debug_info_runtime {
+            selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo);
+        }
+        if self.output_abi {
+            selectors.insert(solx_standard_json::InputSelector::ABI);
+        }
+        if self.output_hashes {
+            selectors.insert(solx_standard_json::InputSelector::MethodIdentifiers);
+        }
+        if self.output_userdoc {
+            selectors.insert(solx_standard_json::InputSelector::UserDocumentation);
+        }
+        if self.output_devdoc {
+            selectors.insert(solx_standard_json::InputSelector::DeveloperDocumentation);
+        }
+        if self.output_storage_layout {
+            selectors.insert(solx_standard_json::InputSelector::StorageLayout);
+        }
+        if self.output_transient_storage_layout {
+            selectors.insert(solx_standard_json::InputSelector::TransientStorageLayout);
+        }
+        if self.output_asm_solc_json {
+            selectors.insert(solx_standard_json::InputSelector::EVMLegacyAssembly);
+        }
+        if self.output_ir {
+            selectors.insert(solx_standard_json::InputSelector::Yul);
         }
 
         solx_standard_json::InputSelection::new(selectors)
-    }
-
-    ///
-    /// Returns the explicit dialect filter from `--emit-mlir=DIALECT`.
-    ///
-    /// Returns `None` for an absent flag and for the bare form
-    /// (`--emit-mlir`); both leave every captured stage in place.
-    ///
-    #[cfg(feature = "mlir")]
-    pub fn mlir_dialect_filter(&self) -> Option<solx_mlir::Dialect> {
-        self.output_mlir
-            .as_ref()
-            .and_then(|inner| inner.as_ref().copied())
     }
 
     ///
@@ -611,8 +569,6 @@ impl Arguments {
             || self.output_ethir
             || self.output_llvm_ir
             || self.output_assembly;
-        #[cfg(feature = "mlir")]
-        let has_ir_flags = has_ir_flags || self.output_mlir.is_some();
         if !has_ir_flags {
             return Ok(None);
         }

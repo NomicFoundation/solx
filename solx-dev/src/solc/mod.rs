@@ -17,9 +17,6 @@ pub const SOLIDITY_DIR: &str = "solx-solidity";
 /// The build directory name.
 pub const BUILD_DIR: &str = "build";
 
-/// The LLVM install tree (where the MLIR/LLD CMake config files live).
-pub const LLVM_BUILD_DIR: &str = "target-llvm/target-final";
-
 ///
 /// Builds the solc libraries using cmake.
 ///
@@ -33,7 +30,6 @@ pub fn build(
     extra_args: Vec<String>,
     clean: bool,
     boost_version: Option<String>,
-    enable_mlir: bool,
     use_gcc: bool,
     build_boost: bool,
     ccache_variant: Option<CcacheVariant>,
@@ -93,7 +89,6 @@ pub fn build(
                 tests,
                 extra_args,
                 boost_config.as_ref(),
-                enable_mlir,
                 use_gcc,
                 ccache_variant,
             )?;
@@ -106,7 +101,6 @@ pub fn build(
                 tests,
                 extra_args,
                 boost_config.as_ref(),
-                enable_mlir,
                 ccache_variant,
             )?;
         } else if cfg!(target_os = "windows") {
@@ -118,7 +112,6 @@ pub fn build(
                 tests,
                 extra_args,
                 boost_config.as_ref(),
-                enable_mlir,
                 use_gcc,
                 ccache_variant,
             )?;
@@ -135,7 +128,6 @@ pub fn build(
                 tests,
                 extra_args,
                 boost_config.as_ref(),
-                enable_mlir,
                 use_gcc,
                 ccache_variant,
             )?;
@@ -148,7 +140,6 @@ pub fn build(
                 tests,
                 extra_args,
                 boost_config.as_ref(),
-                enable_mlir,
                 ccache_variant,
             )?;
         } else {

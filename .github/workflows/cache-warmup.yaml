@@ -91,7 +91,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-mlir-end
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-utils-end
           fail-on-cache-miss: false
           lookup-only: true
 

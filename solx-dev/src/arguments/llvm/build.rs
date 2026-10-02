@@ -28,10 +28,6 @@ pub struct Build {
     #[arg(long)]
     pub clean: bool,
 
-    /// Enable MLIR support in the LLVM build.
-    #[arg(long, help_heading = "Build Features")]
-    pub enable_mlir: bool,
-
     /// Extra arguments to pass to CMake.
     /// A leading backslash will be unescaped.
     #[arg(long, num_args = 1.., allow_hyphen_values = true, help_heading = "Build Configuration")]

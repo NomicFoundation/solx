@@ -28,7 +28,6 @@
     // in the guide's Persistence section.
     "mounts": [
         "source=solx-target-${devcontainerId},target=${containerWorkspaceFolder}/target,type=volume",
-        "source=solx-target-slang-${devcontainerId},target=${containerWorkspaceFolder}/target-slang,type=volume",
         "source=solx-target-llvm-${devcontainerId},target=${containerWorkspaceFolder}/target-llvm,type=volume",
         "source=solx-rustup,target=/usr/local/rustup,type=volume",
         "source=solx-cargo,target=/usr/local/cargo,type=volume",
@@ -63,14 +62,12 @@
                 // lag in integrated terminals after the first bootstrap.
                 "files.watcherExclude": {
                     "**/target/**": true,
-                    "**/target-slang/**": true,
                     "**/target-llvm/**": true,
                     "**/solx-solidity/build/**": true,
                     "**/solx-solidity/boost/**": true
                 },
                 "search.exclude": {
                     "**/target": true,
-                    "**/target-slang": true,
                     "**/target-llvm": true,
                     "**/solx-solidity/build": true,
                     "**/solx-solidity/boost": true
