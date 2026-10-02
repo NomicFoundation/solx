@@ -175,12 +175,19 @@ impl<'context> Type<'context> {
         location: solx_utils::DataLocation,
     ) -> Self {
         Self::new(unsafe {
-            MlirType::from_raw(ffi::solxCreateArrayType(
-                context.to_raw(),
-                i64::from(size),
-                element_type.inner.to_raw(),
-                location as u32,
-            ))
+            MlirType::from_raw(match size {
+                ArraySize::Dynamic => ffi::solxCreateDynamicArrayType(
+                    context.to_raw(),
+                    element_type.inner.to_raw(),
+                    location as u32,
+                ),
+                ArraySize::Fixed(size) => ffi::solxCreateFixedArrayType(
+                    context.to_raw(),
+                    size.as_limbs().as_ptr(),
+                    element_type.inner.to_raw(),
+                    location as u32,
+                ),
+            })
         })
     }
 
