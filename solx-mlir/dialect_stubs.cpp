@@ -1,6 +1,8 @@
 /*
  * C wrappers for Sol and Yul dialect attribute and type creation and
- * inspection.
+ * inspection, and for the debug-info builders the C API lacks: a location
+ * over a uniqued file name, a subprogram with `DIFlags`, and the DWARF
+ * version flag.
  *
  * The Sol dialect's C API (mlir-c/Dialect/Sol.h) does not expose
  * constructors for several attributes (e.g. ContractKindAttr,
@@ -10,6 +12,7 @@
  * methods via extern "C" linkage so Rust can reach them through FFI.
  */
 
+#include "mlir/Dialect/Sol/DebugInfo.h"
 #include "mlir/Dialect/Sol/Sol.h"
 #include "mlir/Dialect/Yul/Yul.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -210,6 +213,31 @@ bool solxIsPointerType(MlirType ty) {
 
 uint32_t solxTypeDataLocation(MlirType ty) {
     return static_cast<uint32_t>(mlir::sol::getDataLocation(unwrap(ty)));
+}
+
+MlirLocation solxCreateFileLineColLoc(MlirAttribute fileName, uint32_t line,
+                                      uint32_t column) {
+    return wrap(mlir::Location(mlir::FileLineColLoc::get(
+        mlir::cast<mlir::StringAttr>(unwrap(fileName)), line, column)));
+}
+
+MlirLocation solxFuseSubprogram(MlirAttribute compileUnit,
+                                const char *name_ptr, size_t name_len,
+                                MlirLocation location, bool artificial) {
+    llvm::StringRef name(name_ptr, name_len);
+    return wrap(mlir::evm::fuseSubprogram(
+        mlir::cast<mlir::LLVM::DICompileUnitAttr>(unwrap(compileUnit)), name,
+        unwrap(location),
+        artificial ? mlir::LLVM::DIFlags::Artificial : mlir::LLVM::DIFlags::Zero));
+}
+
+MlirAttribute solxCreateDwarfVersionFlagAttr(MlirContext ctx,
+                                             uint32_t version) {
+    auto *context = unwrap(ctx);
+    return wrap(mlir::LLVM::ModuleFlagAttr::get(
+        context, mlir::LLVM::ModFlagBehavior::Warning,
+        mlir::StringAttr::get(context, "Dwarf Version"),
+        mlir::IntegerAttr::get(mlir::IntegerType::get(context, 32), version)));
 }
 
 } /* extern "C" */

@@ -234,6 +234,34 @@ unsafe extern "C" {
         element_type: mlir_sys::MlirType,
     ) -> mlir_sys::MlirType;
 
+    // ---- Debug info (from dialect_stubs.cpp) ----
+
+    /// Creates the `FileLineColLoc` of `line` and `column` in the file `file_name` names. The C
+    /// API builds one only from a path, which it uniques again each time.
+    pub fn solxCreateFileLineColLoc(
+        file_name: mlir_sys::MlirAttribute,
+        line: u32,
+        column: u32,
+    ) -> mlir_sys::MlirLocation;
+
+    /// Fuses a fresh `DISubprogramAttr` named `name` in `compile_unit`, marked `Artificial` when
+    /// `artificial`, onto `location`, the plain location of the function it describes. The C API
+    /// builds a subprogram with no `DIFlags`.
+    pub fn solxFuseSubprogram(
+        compile_unit: mlir_sys::MlirAttribute,
+        name_ptr: *const std::ffi::c_char,
+        name_len: usize,
+        location: mlir_sys::MlirLocation,
+        artificial: bool,
+    ) -> mlir_sys::MlirLocation;
+
+    /// Creates the `llvm.module_flags` entry declaring DWARF `version`, with `Warning` behavior so
+    /// a module merged with one declaring another version still links.
+    pub fn solxCreateDwarfVersionFlagAttr(
+        context: MlirContext,
+        version: u32,
+    ) -> mlir_sys::MlirAttribute;
+
     // ---- Solidity immutables lowering ----
 
     /// Lowers each `llvm.setimmutable` into heap stores at its id's offsets, taken from the

@@ -16,12 +16,14 @@ use solx_mlir::Block;
 use solx_mlir::Function;
 use solx_mlir::FunctionDispatch;
 use solx_mlir::FunctionKind;
+use solx_mlir::FunctionOrigin;
 use solx_mlir::StateMutability;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
 
 use crate::scope::contract::ContractScope;
 use crate::scope::function::FunctionScope;
+use crate::scope::source_unit::SourceUnitScope;
 
 /// Mutable state shared while emitting the object's constructor chain.
 ///
@@ -127,8 +129,10 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         }
 
         let entry = Function::constructor().define(
+            SourceUnitScope::CONSTRUCTOR_KEYWORD,
             None,
             FunctionDispatch::Kind(FunctionKind::Constructor),
+            FunctionOrigin::Synthesized,
             StateMutability::NonPayable,
             self,
             self.contract.body,
@@ -217,7 +221,9 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// Evaluates base constructor arguments provided here, forwards arguments needed by bases
-    /// below, and emits the call to the next constructor in the linearisation.
+    /// below, and emits the call to the next constructor in the linearisation. The conversions of a
+    /// base's arguments and the call to it carry that base constructor's location, since both are
+    /// part of running it.
     pub fn base_constructor_call(&mut self) {
         if let Some(arguments) = self
             .contract
@@ -226,11 +232,13 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             .remove(&self.contract.constructor.current)
         {
             for argument in arguments {
-                let values: Vec<Value<'context>> = self
-                    .arguments_declaration(&argument.arguments, &argument.function.parameters())
-                    .into_iter()
-                    .map(|(_, value)| value)
-                    .collect();
+                let values: Vec<Value<'context>> = self.at_node(&argument.function, |scope| {
+                    scope
+                        .arguments_declaration(&argument.arguments, &argument.function.parameters())
+                        .into_iter()
+                        .map(|(_, value)| value)
+                        .collect()
+                });
                 self.contract
                     .constructor
                     .forwarded
@@ -244,11 +252,13 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
         if let Some(arguments) = self.contract.constructor.arguments.remove(&None) {
             for argument in arguments {
-                let values: Vec<Value<'context>> = self
-                    .arguments_declaration(&argument.arguments, &argument.function.parameters())
-                    .into_iter()
-                    .map(|(_, value)| value)
-                    .collect();
+                let values: Vec<Value<'context>> = self.at_node(&argument.function, |scope| {
+                    scope
+                        .arguments_declaration(&argument.arguments, &argument.function.parameters())
+                        .into_iter()
+                        .map(|(_, value)| value)
+                        .collect()
+                });
                 self.contract
                     .constructor
                     .forwarded
@@ -265,6 +275,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 .flat_map(|(_, values)| values.iter().copied()),
         );
         let signature = self.contract.function_definition(&callee);
-        Function::call(&signature, &operands, self);
+        self.at_node(&callee, |scope| {
+            Function::call(&signature, &operands, scope)
+        });
     }
 }

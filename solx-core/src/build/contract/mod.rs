@@ -158,6 +158,42 @@ impl Contract {
             )?;
         }
 
+        if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
+            && output_selection.check_selection(
+                self.name.path.as_str(),
+                self.name.name.as_deref(),
+                solx_standard_json::InputSelector::BytecodeDebugInfo,
+            )
+        {
+            let debug_info = deploy_object_result
+                .as_mut()
+                .expect("Always exists")
+                .debug_info
+                .take()
+                .map(hex::encode)
+                .expect("Always exists");
+            writeln!(std::io::stdout(), "Debug info:\n{debug_info}")?;
+        }
+        if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
+            && output_selection.check_selection(
+                self.name.path.as_str(),
+                self.name.name.as_deref(),
+                solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
+            )
+        {
+            let debug_info = runtime_object_result
+                .as_mut()
+                .expect("Always exists")
+                .debug_info
+                .take()
+                .map(hex::encode)
+                .expect("Always exists");
+            writeln!(
+                std::io::stdout(),
+                "Debug info of the runtime part:\n{debug_info}"
+            )?;
+        }
+
         if output_selection.check_selection(
             self.name.path.as_str(),
             self.name.name.as_deref(),
@@ -468,6 +504,54 @@ impl Contract {
                     .expect("Always exists");
                 Self::write_to_file(output_path.as_path(), assembly, overwrite)?;
             }
+        }
+
+        if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
+            && output_selection.check_selection(
+                self.name.path.as_str(),
+                self.name.name.as_deref(),
+                solx_standard_json::InputSelector::BytecodeDebugInfo,
+            )
+        {
+            let output_name = format!(
+                "{contract_path}_{}.dbg.{}",
+                self.name.name.as_deref().unwrap_or(contract_name),
+                solx_utils::EXTENSION_EVM_BINARY
+            );
+            let mut output_path = output_directory.to_owned();
+            output_path.push(output_name.as_str());
+
+            let debug_info = deploy_object_result
+                .as_mut()
+                .expect("Always exists")
+                .debug_info
+                .take()
+                .expect("Always exists");
+            Self::write_to_file(output_path.as_path(), debug_info, overwrite)?;
+        }
+        if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
+            && output_selection.check_selection(
+                self.name.path.as_str(),
+                self.name.name.as_deref(),
+                solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
+            )
+        {
+            let output_name = format!(
+                "{contract_path}_{}.dbg.{}-{}",
+                self.name.name.as_deref().unwrap_or(contract_name),
+                solx_utils::EXTENSION_EVM_BINARY,
+                solx_utils::CodeSegment::Runtime,
+            );
+            let mut output_path = output_directory.to_owned();
+            output_path.push(output_name.as_str());
+
+            let debug_info = runtime_object_result
+                .as_mut()
+                .expect("Always exists")
+                .debug_info
+                .take()
+                .expect("Always exists");
+            Self::write_to_file(output_path.as_path(), debug_info, overwrite)?;
         }
 
         if output_selection.check_selection(
@@ -867,7 +951,14 @@ impl Contract {
                 })
             }),
             // debug_info
-            object_result.is_none().then(String::new),
+            match object_result {
+                Some(result) => result
+                    .as_mut()
+                    .ok()
+                    .and_then(|object| object.debug_info.take())
+                    .map(hex::encode),
+                None => Some(String::new()),
+            },
             // unlinked_symbols (link_references)
             if is_bytecode_linked
                 && output_selection.check_selection(path, name, selector_link_references)

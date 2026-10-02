@@ -65,7 +65,7 @@ impl<'context> Block<'context> {
         fallback: Option<FallbackRegion>,
         context: &Context<'context>,
     ) -> TryRegions<'context> {
-        let location = context.location();
+        let location = context.current_location;
         let return_data = Type::string(context.melior, solx_utils::DataLocation::Memory);
         let entry = |arguments: &[Type<'context>]| {
             let region = Region::new();

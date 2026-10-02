@@ -105,6 +105,13 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 Value::code(address, self)
             }
             Some(BuiltIn::Length) => {
+                if let Expression::MemberAccessExpression(code) = &operand
+                    && code.member().resolve_to_built_in() == Some(BuiltIn::AddressCode)
+                {
+                    let address =
+                        self.converted(&code.operand(), MlirType::address(self.melior, false));
+                    return Value::code_size(address, self);
+                }
                 if let Some(Type::ByteArray(byte_array_type)) = operand.get_type() {
                     self.expression_effect(&operand);
                     return Value::constant_from_bigint(

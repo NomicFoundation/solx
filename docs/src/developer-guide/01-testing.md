@@ -38,8 +38,8 @@ TRYCMD=overwrite cargo test -p solx --test mod docs_examples
 
 Overwriting preserves `...` line elisions, but inline `[..]` wildcards on
 lines that no longer match are expanded to the literal output and must be
-restored by hand — watch for benchmark timings and for working-directory
-paths hex-encoded inside DWARF output, which differ on every run.
+restored by hand — watch for benchmark timings and for hex-encoded DWARF
+output.
 
 For version bumps, do not use `TRYCMD=overwrite`: the CBOR trailer lines that
 carry the version also carry a `[..]` metadata-digest wildcard, and a blessed

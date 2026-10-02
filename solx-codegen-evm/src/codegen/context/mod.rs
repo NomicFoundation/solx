@@ -66,6 +66,7 @@ impl<'ctx> Context<'ctx> {
         &mut self,
         output_assembly: bool,
         output_bytecode: bool,
+        output_debug_info: bool,
         is_size_fallback: bool,
         profiler: &mut Profiler,
     ) -> anyhow::Result<EVMBuild> {
@@ -191,8 +192,9 @@ impl<'ctx> Context<'ctx> {
         let assembly = assembly_buffer
             .map(|assembly_buffer| String::from_utf8_lossy(assembly_buffer.as_slice()).to_string());
 
-        if !output_bytecode {
+        if !output_bytecode && !output_debug_info {
             return Ok(EVMBuild::new(
+                None,
                 None,
                 assembly,
                 captured_llvm_ir_unoptimized,
@@ -210,9 +212,21 @@ impl<'ctx> Context<'ctx> {
             optimizer_mode.as_str(),
             spill_area_size,
         );
-        let bytecode_buffer = target_machine
-            .write_to_memory_buffer(&self.module, inkwell::targets::FileType::Object)
-            .map_err(|error| anyhow::anyhow!("{} bytecode emitting: {error}", self.code_segment))?;
+        let (bytecode_buffer, debug_info_buffer) = if output_debug_info {
+            target_machine
+                .write_to_memory_buffer_with_debug_info(
+                    &self.module,
+                    inkwell::targets::FileType::Object,
+                )
+                .map(|(bytecode_buffer, debug_info_buffer)| {
+                    (bytecode_buffer, Some(debug_info_buffer))
+                })
+        } else {
+            target_machine
+                .write_to_memory_buffer(&self.module, inkwell::targets::FileType::Object)
+                .map(|bytecode_buffer| (bytecode_buffer, None))
+        }
+        .map_err(|error| anyhow::anyhow!("{} bytecode emitting: {error}", self.code_segment))?;
         run_emit_bytecode.borrow_mut().finish();
 
         let immutables = match self.code_segment {
@@ -233,7 +247,13 @@ impl<'ctx> Context<'ctx> {
                 for function in self.module.get_functions() {
                     self.set_size_attributes(function);
                 }
-                return self.build(output_assembly, output_bytecode, true, profiler);
+                return self.build(
+                    output_assembly,
+                    output_bytecode,
+                    output_debug_info,
+                    true,
+                    profiler,
+                );
             } else {
                 warnings.push(solx_utils::Warning::code_size(
                     self.code_segment,
@@ -244,6 +264,7 @@ impl<'ctx> Context<'ctx> {
 
         Ok(EVMBuild::new(
             Some(bytecode_buffer.as_slice().to_vec()),
+            debug_info_buffer.map(|buffer| buffer.as_slice().to_vec()),
             assembly,
             captured_llvm_ir_unoptimized,
             captured_llvm_ir,

@@ -3,6 +3,7 @@
 //!
 
 pub mod dispatch;
+pub mod origin;
 
 use melior::ir::Block as MlirBlock;
 use melior::ir::Region;
@@ -17,6 +18,7 @@ use crate::Block;
 use crate::Context;
 use crate::FunctionDispatch;
 use crate::FunctionKind;
+use crate::FunctionOrigin;
 use crate::FunctionType;
 use crate::StateMutability;
 use crate::Type;
@@ -58,10 +60,16 @@ impl<'context> Function<'context> {
     /// Emits this definition, a `sol.modifier` for a modifier and a `sol.func` otherwise, and
     /// returns its entry block, whose arguments carry the parameter types. An original function
     /// type is attached for selector-dispatched and constructor functions.
+    ///
+    /// `name` is what the source calls the function, which its subprogram carries; the mangled
+    /// `mlir_name` is the operation's symbol. `origin` marks a synthesized function's subprogram
+    /// artificial. A modifier, which inlining erases, has no subprogram.
     pub fn define(
         &self,
+        name: &str,
         selector: Option<u32>,
         dispatch: FunctionDispatch,
+        origin: FunctionOrigin,
         state_mutability: StateMutability,
         context: &Context<'context>,
         contract_body: Block<'context>,
@@ -77,12 +85,18 @@ impl<'context> Function<'context> {
         let entry_block = MlirBlock::new(
             &parameters
                 .iter()
-                .map(|parameter| (*parameter, context.location()))
+                .map(|parameter| (*parameter, context.current_location))
                 .collect::<Vec<_>>(),
         );
         body_region.append_block(entry_block);
 
-        let mut operation_builder = FuncOperation::builder(context.melior, context.location())
+        let location = match dispatch {
+            FunctionDispatch::Identifier(_)
+            | FunctionDispatch::Kind(_)
+            | FunctionDispatch::Symbol => context.function_location(name, origin),
+            FunctionDispatch::Modifier => context.current_location,
+        };
+        let mut operation_builder = FuncOperation::builder(context.melior, location)
             .sym_name(StringAttribute::new(context.melior, &self.mlir_name))
             .function_type(TypeAttribute::new(function_type.into()))
             .state_mutability(state_mutability.attribute(context.melior));
@@ -117,14 +131,12 @@ impl<'context> Function<'context> {
                 .build()
                 .into(),
             FunctionDispatch::Symbol => operation_builder.body(body_region).build().into(),
-            FunctionDispatch::Modifier => {
-                ModifierOperation::builder(context.melior, context.location())
-                    .sym_name(StringAttribute::new(context.melior, &self.mlir_name))
-                    .function_type(TypeAttribute::new(function_type.into()))
-                    .body(body_region)
-                    .build()
-                    .into()
-            }
+            FunctionDispatch::Modifier => ModifierOperation::builder(context.melior, location)
+                .sym_name(StringAttribute::new(context.melior, &self.mlir_name))
+                .function_type(TypeAttribute::new(function_type.into()))
+                .body(body_region)
+                .build()
+                .into(),
         };
         let operation = contract_body.append_operation(operation);
         Block::from(

@@ -1,0 +1,24 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "Base.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract Base {\n    uint256 count;\n    uint256 start = block.number;\n    bytes32 constant SEED = sha256(abi.encodePacked(uint256(7)));\n\n    modifier counted() {\n        count += 1;\n        _;\n        count += 2;\n    }\n}\n"
+    },
+    "Derived.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\nimport \"Base.sol\";\n\ncontract Derived is Base {\n    function set(uint256 x) public counted returns (bytes32) {\n        return SEED ^ bytes32(x);\n    }\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": true
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.bytecode.debugInfo",
+          "evm.deployedBytecode.debugInfo"
+        ]
+      }
+    }
+  }
+}

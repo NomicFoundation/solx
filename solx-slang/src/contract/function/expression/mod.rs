@@ -37,64 +37,69 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// Lowers an expression to its single MLIR value, routing each kind to its lowering. An
     /// expression the binder folded to an integer constant materializes it directly.
     pub fn expression(&mut self, node: &Expression) -> Value<'context> {
-        let slang_type = node.get_type();
-        if let Some(Type::Literal(literal_type)) = &slang_type
-            && let Some(Number::Integer(value)) = Number::from_literal_kind(&literal_type.kind())
-        {
-            return Value::constant_from_bigint(&value, self.typing(slang_type), self);
-        }
-        match node {
-            Expression::TrueKeyword(_) => self.boolean_literal(true),
-            Expression::FalseKeyword(_) => self.boolean_literal(false),
-            Expression::StringExpression(inner) => self.string_literal(inner),
-            Expression::Identifier(inner) => self.identifier(inner),
-            Expression::ThisKeyword(_) => self.this_value(),
-            Expression::AdditiveExpression(inner) => self.additive(inner),
-            Expression::MultiplicativeExpression(inner) => self.multiplicative(inner),
-            Expression::ExponentiationExpression(inner) => self.exponentiation(inner),
-            Expression::BitwiseAndExpression(inner) => self.bitwise_and(inner),
-            Expression::BitwiseOrExpression(inner) => self.bitwise_or(inner),
-            Expression::BitwiseXorExpression(inner) => self.bitwise_xor(inner),
-            Expression::ShiftExpression(inner) => self.shift(inner),
-            Expression::EqualityExpression(inner) => self.equality(inner),
-            Expression::InequalityExpression(inner) => self.inequality(inner),
-            Expression::AndExpression(inner) => self.and(inner),
-            Expression::OrExpression(inner) => self.or(inner),
-            Expression::PrefixExpression(inner) => self
-                .prefix(inner)
-                .expect("a prefix expression in value position yields a value"),
-            Expression::PostfixExpression(inner) => self.postfix(inner),
-            Expression::AssignmentExpression(inner) => self
-                .assignment(inner)
-                .expect("an assignment in value position yields its assigned value"),
-            Expression::ConditionalExpression(inner) => self.conditional(inner),
-            Expression::TupleExpression(inner) => self.tuple(inner),
-            Expression::ArrayExpression(inner) => self.array(inner),
-            Expression::MemberAccessExpression(inner) => self.member_access(inner),
-            Expression::IndexAccessExpression(inner) => self.index_access(inner),
-            Expression::FunctionCallExpression(_) => self
-                .expression_values(node)
-                .into_iter()
-                .next()
-                .expect("a call in value position yields a value"),
-            Expression::DecimalNumberExpression(_) | Expression::HexNumberExpression(_) => {
-                unreachable!("the binder folds every number literal to an integer constant")
+        self.at_node(node, |scope| {
+            let slang_type = node.get_type();
+            if let Some(Type::Literal(literal_type)) = &slang_type
+                && let Some(Number::Integer(value)) =
+                    Number::from_literal_kind(&literal_type.kind())
+            {
+                return Value::constant_from_bigint(&value, scope.typing(slang_type), scope);
             }
-            Expression::CallOptionsExpression(_) => {
-                unreachable!("call options reach the call they decorate, never a value position")
+            match node {
+                Expression::TrueKeyword(_) => scope.boolean_literal(true),
+                Expression::FalseKeyword(_) => scope.boolean_literal(false),
+                Expression::StringExpression(inner) => scope.string_literal(inner),
+                Expression::Identifier(inner) => scope.identifier(inner),
+                Expression::ThisKeyword(_) => scope.this_value(),
+                Expression::AdditiveExpression(inner) => scope.additive(inner),
+                Expression::MultiplicativeExpression(inner) => scope.multiplicative(inner),
+                Expression::ExponentiationExpression(inner) => scope.exponentiation(inner),
+                Expression::BitwiseAndExpression(inner) => scope.bitwise_and(inner),
+                Expression::BitwiseOrExpression(inner) => scope.bitwise_or(inner),
+                Expression::BitwiseXorExpression(inner) => scope.bitwise_xor(inner),
+                Expression::ShiftExpression(inner) => scope.shift(inner),
+                Expression::EqualityExpression(inner) => scope.equality(inner),
+                Expression::InequalityExpression(inner) => scope.inequality(inner),
+                Expression::AndExpression(inner) => scope.and(inner),
+                Expression::OrExpression(inner) => scope.or(inner),
+                Expression::PrefixExpression(inner) => scope
+                    .prefix(inner)
+                    .expect("a prefix expression in value position yields a value"),
+                Expression::PostfixExpression(inner) => scope.postfix(inner),
+                Expression::AssignmentExpression(inner) => scope
+                    .assignment(inner)
+                    .expect("an assignment in value position yields its assigned value"),
+                Expression::ConditionalExpression(inner) => scope.conditional(inner),
+                Expression::TupleExpression(inner) => scope.tuple(inner),
+                Expression::ArrayExpression(inner) => scope.array(inner),
+                Expression::MemberAccessExpression(inner) => scope.member_access(inner),
+                Expression::IndexAccessExpression(inner) => scope.index_access(inner),
+                Expression::FunctionCallExpression(_) => scope
+                    .expression_values(node)
+                    .into_iter()
+                    .next()
+                    .expect("a call in value position yields a value"),
+                Expression::DecimalNumberExpression(_) | Expression::HexNumberExpression(_) => {
+                    unreachable!("the binder folds every number literal to an integer constant")
+                }
+                Expression::CallOptionsExpression(inner) => {
+                    let function = scope.expression(&inner.operand());
+                    Options::new(Some(&inner.options()), scope);
+                    function
+                }
+                Expression::NewExpression(_) => {
+                    unreachable!("`new C` denotes a creation function, which only a call consumes")
+                }
+                Expression::TypeExpression(_) => {
+                    unimplemented!("`type(..)` expressions are not yet supported")
+                }
+                Expression::ElementaryType(_)
+                | Expression::PayableKeyword(_)
+                | Expression::SuperKeyword(_) => {
+                    unimplemented!("a type or `super`/`payable` keyword is not a value expression")
+                }
             }
-            Expression::NewExpression(_) => {
-                unreachable!("`new C` denotes a creation function, which only a call consumes")
-            }
-            Expression::TypeExpression(_) => {
-                unimplemented!("`type(..)` expressions are not yet supported")
-            }
-            Expression::ElementaryType(_)
-            | Expression::PayableKeyword(_)
-            | Expression::SuperKeyword(_) => {
-                unimplemented!("a type or `super`/`payable` keyword is not a value expression")
-            }
-        }
+        })
     }
 
     /// Lowers an expression that occupies a multi-value position: a tuple yields its elements, a
@@ -109,11 +114,17 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                         if access.member().resolve_to_built_in() == Some(BuiltIn::ArrayPush)
                 ) =>
             {
-                let (place, element_type) = self.function_call_place(inner);
-                vec![place.load(element_type, self)]
+                self.at_node(node, |scope| {
+                    let (place, element_type) = scope.function_call_place(inner);
+                    vec![place.load(element_type, scope)]
+                })
             }
-            Expression::FunctionCallExpression(inner) => Call::emit(inner, self),
-            Expression::ConditionalExpression(inner) => self.conditional_values(inner),
+            Expression::FunctionCallExpression(inner) => {
+                self.at_node(node, |scope| Call::emit(inner, scope))
+            }
+            Expression::ConditionalExpression(inner) => {
+                self.at_node(node, |scope| scope.conditional_values(inner))
+            }
             _ => vec![self.expression(node)],
         }
     }
@@ -125,9 +136,15 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     pub fn expression_place(&mut self, node: &Expression) -> (Place<'context>, MlirType<'context>) {
         match node {
             Expression::Identifier(inner) => self.identifier_place(inner),
-            Expression::MemberAccessExpression(inner) => self.member_access_place(inner),
-            Expression::IndexAccessExpression(inner) => self.index_access_place(inner),
-            Expression::FunctionCallExpression(inner) => self.function_call_place(inner),
+            Expression::MemberAccessExpression(inner) => {
+                self.at_node(node, |scope| scope.member_access_place(inner))
+            }
+            Expression::IndexAccessExpression(inner) => {
+                self.at_node(node, |scope| scope.index_access_place(inner))
+            }
+            Expression::FunctionCallExpression(inner) => {
+                self.at_node(node, |scope| scope.function_call_place(inner))
+            }
             Expression::TupleExpression(inner) => {
                 let operand = inner
                     .items()
@@ -164,20 +181,20 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     pub fn expression_effect(&mut self, node: &Expression) {
         match node {
             Expression::FunctionCallExpression(call) => {
-                Call::emit(call, self);
+                self.at_node(node, |scope| Call::emit(call, scope));
             }
-            Expression::CallOptionsExpression(inner) => {
-                self.expression_effect(&inner.operand());
-                Options::new(Some(&inner.options()), self);
-            }
+            Expression::CallOptionsExpression(inner) => self.at_node(node, |scope| {
+                scope.expression_effect(&inner.operand());
+                Options::new(Some(&inner.options()), scope);
+            }),
             Expression::PrefixExpression(inner) => {
-                self.prefix(inner);
+                self.at_node(node, |scope| scope.prefix(inner));
             }
             Expression::AssignmentExpression(inner) => {
-                self.assignment(inner);
+                self.at_node(node, |scope| scope.assignment(inner));
             }
             Expression::ConditionalExpression(inner) => {
-                self.conditional_effect(inner);
+                self.at_node(node, |scope| scope.conditional_effect(inner));
             }
             Expression::TupleExpression(inner) => self.tuple_effect(inner),
             Expression::NewExpression(_) => {}
@@ -188,7 +205,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                     Some(BuiltIn::ModifierUnderscore)
                 ) =>
             {
-                self.current_block().placeholder(self);
+                self.at_node(node, |scope| scope.current_block().placeholder(scope));
             }
             Expression::Identifier(inner) if inner.resolve_to_built_in().is_some() => {}
             Expression::Identifier(inner)

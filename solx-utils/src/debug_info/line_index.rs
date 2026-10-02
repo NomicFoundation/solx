@@ -2,64 +2,83 @@
 //! Source code line index.
 //!
 
-use crate::debug_info::mapped_location::MappedLocation;
-
 ///
 /// Source code line index.
 ///
-/// Maps each source line to its starting byte offset, so that a `solc` byte offset can be resolved
-/// to a line and column with a binary search instead of a scan from the beginning of the file.
+/// The byte offset each line of a source starts at, for resolving an offset to its line and column
+/// with a binary search. A line ends at `\n`, `\r\n` or a lone `\r`, the terminators Slang's lexer
+/// recognizes.
 ///
-pub struct LineIndex<'a> {
-    /// Byte offset and text of each source line.
-    lines: Vec<(usize, &'a str)>,
+pub struct LineIndex {
+    /// The offset of each line's first byte, in order.
+    line_starts: Vec<usize>,
 }
 
-impl<'a> LineIndex<'a> {
+impl LineIndex {
     ///
     /// Builds the line index for the source code.
     ///
-    pub fn new(source_code: &'a str) -> Self {
-        let lines = source_code
-            .lines()
-            .scan(0usize, |cursor, line| {
-                let start = *cursor;
-                *cursor += line.len() + 1;
-                Some((start, line))
-            })
+    pub fn new(source_code: &str) -> Self {
+        let bytes = source_code.as_bytes();
+        let line_starts = std::iter::once(0)
+            .chain(
+                bytes
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(offset, &byte)| match byte {
+                        b'\n' => Some(offset + 1),
+                        // The `\r` of a `\r\n` belongs to the line its `\n` ends.
+                        b'\r' if bytes.get(offset + 1) != Some(&b'\n') => Some(offset + 1),
+                        _ => None,
+                    }),
+            )
             .collect();
-        Self { lines }
+        Self { line_starts }
     }
 
     ///
-    /// Resolves a `solc` byte offset range to a line-column location.
+    /// The 1-based line and byte column of `offset`.
     ///
-    pub fn mapped_location(&self, path: String, start: isize, end: isize) -> MappedLocation {
-        if start < 0 || end < 0 || end < start {
-            return MappedLocation::new(path);
-        }
-        let start = start as usize;
-        let end = end as usize;
+    #[inline]
+    pub fn line_and_column(&self, offset: usize) -> (usize, usize) {
+        let line = self.line_starts.partition_point(|&start| start <= offset);
+        (line, offset - self.line_starts[line - 1] + 1)
+    }
+}
 
-        let line = self
-            .lines
-            .partition_point(|&(offset, _)| offset < start)
-            .saturating_sub(1);
-        let &(cursor, source_line) = match self.lines.get(line) {
-            Some(entry) => entry,
-            None => return MappedLocation::new(path),
-        };
-        if start > cursor + source_line.len() + 1 {
-            return MappedLocation::new(path);
-        }
+#[cfg(test)]
+mod tests {
+    use super::LineIndex;
 
-        let column = start - cursor;
-        let (line, column) = if column == source_line.len() + 1 {
-            (line + 2, 1)
-        } else {
-            (line + 1, column + 1)
-        };
-        let length = end - start;
-        MappedLocation::new_with_location(path, line, column, length, Some(source_line.to_owned()))
+    /// Asserts that every byte of the source `lines` make up, the terminators included, resolves
+    /// to its line and column, and the end of the source to the column after the last line.
+    fn assert_resolves(lines: &[&str]) {
+        let source = lines.concat();
+        let index = LineIndex::new(source.as_str());
+        let mut offset = 0;
+        for (line, text) in lines.iter().enumerate() {
+            for column in 0..text.len() {
+                assert_eq!(
+                    index.line_and_column(offset + column),
+                    (line + 1, column + 1),
+                    "{source:?} at {}",
+                    offset + column,
+                );
+            }
+            offset += text.len();
+        }
+        let last = lines.last().expect("a source has a line");
+        assert_eq!(
+            index.line_and_column(source.len()),
+            (lines.len(), last.len() + 1),
+            "{source:?} at its end",
+        );
+    }
+
+    #[test]
+    fn every_byte_resolves_to_its_line_and_column() {
+        assert_resolves(&["ab\n", "c\n", ""]);
+        assert_resolves(&["ab\r\n", "c\r\n", ""]);
+        assert_resolves(&["a\r", "b\r", "\r\n", "c\n", "d"]);
     }
 }

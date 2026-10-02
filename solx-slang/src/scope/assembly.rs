@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::ops::Deref;
 
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::NodeLocation;
 use slang_solidity_v2::ast::YulFunctionDefinition;
 
 use solx_mlir::Block;
@@ -97,6 +98,18 @@ impl<'function, 'contract, 'source_unit, 'context>
         *self.current_block_mut() = enclosing;
         self.frame = frame;
         self.variables = variables;
+    }
+
+    /// Runs `emit` with the location cursor on `node`'s first byte, so the ops it emits carry it,
+    /// and restores the enclosing cursor afterwards. The node's source range is read only when the
+    /// object requested debug info.
+    pub fn at_node<R>(&mut self, node: &impl NodeLocation, emit: impl FnOnce(&mut Self) -> R) -> R {
+        let source_unit = &mut self.function.contract.source_unit;
+        let location = source_unit.debug_locations.location(node);
+        let enclosing = std::mem::replace(&mut source_unit.mlir.current_location, location);
+        let result = emit(self);
+        self.function.contract.source_unit.mlir.current_location = enclosing;
+        result
     }
 
     /// The return-variable pointers a `leave` in the current frame loads and returns.

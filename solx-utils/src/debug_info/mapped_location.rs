@@ -67,7 +67,19 @@ impl MappedLocation {
     ) -> Self {
         match source_code {
             Some(source_code) if start >= 0 && end >= start => {
-                LineIndex::new(source_code).mapped_location(path, start, end)
+                let start = start as usize;
+                let (line, column) = LineIndex::new(source_code).line_and_column(start);
+                let from_line_start = &source_code[start + 1 - column..];
+                let source_line = from_line_start
+                    .find(['\n', '\r'])
+                    .map_or(from_line_start, |line_end| &from_line_start[..line_end]);
+                Self::new_with_location(
+                    path,
+                    line,
+                    column,
+                    end as usize - start,
+                    Some(source_line.to_owned()),
+                )
             }
             _ => Self::new(path),
         }
@@ -106,5 +118,28 @@ impl std::fmt::Display for MappedLocation {
             writeln!(f, "--> {path}")?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MappedLocation;
+
+    #[test]
+    fn a_location_has_its_own_line_without_the_terminator() {
+        for source in ["ab\nc\n", "ab\r\nc\r\n", "ab\rc\r"] {
+            let offset = source.find('c').expect("the source has a `c`") as isize;
+            let location = MappedLocation::from_solc_location(
+                "a.sol".to_owned(),
+                offset,
+                offset + 1,
+                Some(source),
+            );
+            assert_eq!(
+                (location.line, location.column, location.source_code_line),
+                (Some(2), Some(1), Some("c".to_owned())),
+                "{source:?}",
+            );
+        }
     }
 }

@@ -15,6 +15,7 @@ use slang_solidity_v2::ast::VirtualTarget;
 
 use solx_mlir::Function;
 use solx_mlir::FunctionDispatch;
+use solx_mlir::FunctionOrigin;
 use solx_mlir::Place;
 use solx_mlir::StateMutability;
 use solx_mlir::Value;
@@ -27,6 +28,9 @@ use crate::scope::source_unit::SourceUnitScope;
 impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
     /// Defines `function`'s `sol.func`, or a modifier's `sol.modifier`, in the contract body at
     /// its first naming, binding parameters and named-return pointers into a fresh function frame.
+    ///
+    /// The `sol.func` carries the definition's location, and the implicit return of a body that
+    /// falls through carries the closing brace's.
     pub fn function_definition(&mut self, function: &FunctionDefinition) -> Function<'context> {
         if !self.defined_functions.insert(function.node_id()) {
             return self.source_unit.function_signature(function);
@@ -63,74 +67,97 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 .extend(self.constructor.parameter_types());
         }
 
-        let entry = signature.define(
-            selector,
-            FunctionDispatch::new(function, is_most_derived_constructor),
-            StateMutability::from(function.attributes().mutability()),
-            self,
-            self.contract.body,
-        );
+        let identifier = function.name();
+        let name = match function.kind() {
+            FunctionKind::Constructor => SourceUnitScope::CONSTRUCTOR_KEYWORD,
+            FunctionKind::Fallback => "fallback",
+            FunctionKind::Receive => "receive",
+            FunctionKind::Regular | FunctionKind::Modifier => identifier
+                .as_ref()
+                .expect("slang names every regular function and modifier")
+                .name(),
+        };
+        self.at_node(function, |scope| {
+            let entry = signature.define(
+                name,
+                selector,
+                FunctionDispatch::new(function, is_most_derived_constructor),
+                FunctionOrigin::Declared,
+                StateMutability::from(function.attributes().mutability()),
+                scope,
+                scope.contract.body,
+            );
 
-        if is_constructor {
-            self.constructor.current = Some(function.node_id());
-            self.constructor.bind_parameters(function, entry);
-        }
-
-        self.function(entry, is_constructor, &signature, |scope| {
-            for (index, parameter) in function.parameters().iter().enumerate() {
-                let Some(identifier) = parameter.name() else {
-                    continue;
-                };
-                scope.define_local(
-                    identifier.name(),
-                    signature.function_type.parameters[index],
-                    |_scope| entry.argument(index),
-                );
-            }
-
-            let return_pointers: Vec<Option<Place>> = function
-                .returns()
-                .map(|returns| {
-                    returns
-                        .iter()
-                        .enumerate()
-                        .map(|(index, parameter)| {
-                            let identifier = parameter.name()?;
-                            let return_type = scope.return_types[index];
-                            Some(scope.define_local(identifier.name(), return_type, |scope| {
-                                Value::default_initialized(return_type, scope)
-                            }))
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-
-            if is_most_derived_constructor {
-                scope.state_variable_initializers();
-            }
             if is_constructor {
-                scope.base_constructor_call();
+                scope.constructor.current = Some(function.node_id());
+                scope.constructor.bind_parameters(function, entry);
             }
-            scope.modifier_invocations(&function.attributes().modifier_invocations());
 
-            scope.statements(&body.statements());
+            scope.function(entry, is_constructor, &signature, |scope| {
+                for (index, parameter) in function.parameters().iter().enumerate() {
+                    let Some(identifier) = parameter.name() else {
+                        continue;
+                    };
+                    scope.at_node(&parameter, |scope| {
+                        scope.define_local(
+                            identifier.name(),
+                            signature.function_type.parameters[index],
+                            |_scope| entry.argument(index),
+                        );
+                    });
+                }
 
-            if !scope.current_block().is_terminated() {
-                let values: Vec<_> = scope
-                    .return_types
-                    .iter()
-                    .zip(&return_pointers)
-                    .map(|(&return_type, return_pointer)| match return_pointer {
-                        Some(pointer) => pointer.load(return_type, scope),
-                        None => {
-                            let pointer = Place::stack(return_type, scope);
-                            pointer.store(Value::default_initialized(return_type, scope), scope);
-                            pointer.load(return_type, scope)
-                        }
+                let return_pointers: Vec<Option<Place>> = function
+                    .returns()
+                    .map(|returns| {
+                        returns
+                            .iter()
+                            .enumerate()
+                            .map(|(index, parameter)| {
+                                let identifier = parameter.name()?;
+                                let return_type = scope.return_types[index];
+                                Some(scope.at_node(&parameter, |scope| {
+                                    scope.define_local(identifier.name(), return_type, |scope| {
+                                        Value::default_initialized(return_type, scope)
+                                    })
+                                }))
+                            })
+                            .collect()
                     })
-                    .collect();
-                scope.current_block().r#return(&values, scope);
-            }
+                    .unwrap_or_default();
+
+                if is_most_derived_constructor {
+                    scope.state_variable_initializers();
+                }
+                if is_constructor {
+                    scope.base_constructor_call();
+                }
+                scope.modifier_invocations(&function.attributes().modifier_invocations());
+
+                scope.statements(&body.statements());
+
+                if !scope.current_block().is_terminated() {
+                    scope.at_node_end(&body, |scope| {
+                        let values: Vec<_> = scope
+                            .return_types
+                            .iter()
+                            .zip(&return_pointers)
+                            .map(|(&return_type, return_pointer)| match return_pointer {
+                                Some(pointer) => pointer.load(return_type, scope),
+                                None => {
+                                    let pointer = Place::stack(return_type, scope);
+                                    pointer.store(
+                                        Value::default_initialized(return_type, scope),
+                                        scope,
+                                    );
+                                    pointer.load(return_type, scope)
+                                }
+                            })
+                            .collect();
+                        scope.current_block().r#return(&values, scope);
+                    });
+                }
+            });
         });
         signature
     }
@@ -148,25 +175,31 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 continue;
             };
             let modifier = self.contract.function_definition(&definition);
-            let arguments_block = self.current_block().modifier_invocation(&modifier, self);
-            self.region(arguments_block, |scope| {
-                if let Some(arguments) = invocation.arguments() {
-                    let values: Vec<_> = scope
-                        .arguments_declaration(
-                            &ArgumentsDeclaration::PositionalArguments(arguments),
-                            &definition.parameters(),
-                        )
-                        .into_iter()
-                        .map(|(_, value)| value)
-                        .collect();
-                    scope.current_block().r#yield(&values, scope);
-                }
+            self.at_node(&invocation, |scope| {
+                let arguments_block = scope.current_block().modifier_invocation(&modifier, scope);
+                scope.region(arguments_block, |scope| {
+                    if let Some(arguments) = invocation.arguments() {
+                        let values: Vec<_> = scope
+                            .arguments_declaration(
+                                &ArgumentsDeclaration::PositionalArguments(arguments),
+                                &definition.parameters(),
+                            )
+                            .into_iter()
+                            .map(|(_, value)| value)
+                            .collect();
+                        scope.current_block().r#yield(&values, scope);
+                    }
+                });
             });
         }
     }
 }
 
 impl<'context> SourceUnitScope<'context> {
+    /// The name a constructor has in the source, its keyword, which a synthesized constructor
+    /// takes too.
+    pub const CONSTRUCTOR_KEYWORD: &'static str = "constructor";
+
     /// The function's symbol: its internal signature qualified by the node id, since internal
     /// signatures alone collide.
     pub fn function_symbol(function: &FunctionDefinition) -> String {

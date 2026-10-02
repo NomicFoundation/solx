@@ -54,7 +54,7 @@ impl<'context> YulBlock<'context> {
         .expect("a ranked tensor type is shaped");
 
         let operation = self.inner.append_operation(
-            SwitchOperation::builder(context.melior, context.location())
+            SwitchOperation::builder(context.melior, context.current_location)
                 .results(&[])
                 .arg(argument.into_mlir())
                 .default_region(Self::entry_region())

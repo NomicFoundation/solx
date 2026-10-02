@@ -38,6 +38,11 @@ impl<'function, 'contract, 'source_unit, 'context>
     ///
     /// Parameters and return variables are pointers like any Yul variable: the parameter takes the
     /// incoming block argument, the return variable the zero a Yul return defaults to.
+    ///
+    /// The `yul.func` carries the definition's location with a subprogram of its own, since the
+    /// function is lowered to a function of its own and a body without one loses its locations.
+    /// Each parameter binding and return variable carries its name's, and the implicit return, the
+    /// function's exit, the definition's.
     pub fn function_definition(
         &mut self,
         definition: &YulFunctionDefinition,
@@ -47,23 +52,26 @@ impl<'function, 'contract, 'source_unit, 'context>
         }
         let position = self.function_signatures.len();
         let signature = self.signature(definition);
-        let entry = signature.define(position, self, self.body);
-
-        self.function_body(entry, |scope| {
-            for (index, parameter) in definition.parameters().iter().enumerate() {
-                let argument = entry.argument(index);
-                scope.bind(parameter.node_id(), argument);
-            }
-            if let Some(names) = definition.returns() {
-                for name in names.iter() {
-                    scope.bind_return(name.node_id());
+        self.at_node(definition, |scope| {
+            let entry = signature.define(definition.name().name(), position, scope, scope.body);
+            scope.function_body(entry, |scope| {
+                for (index, parameter) in definition.parameters().iter().enumerate() {
+                    let argument = entry.argument(index);
+                    scope.at_node(&parameter, |scope| {
+                        scope.bind(parameter.node_id(), argument);
+                    });
                 }
-            }
+                if let Some(names) = definition.returns() {
+                    for name in names.iter() {
+                        scope.at_node(&name, |scope| scope.bind_return(name.node_id()));
+                    }
+                }
 
-            scope.statements(&definition.body());
-            if !scope.current_block().is_terminated() {
-                scope.function_return();
-            }
+                scope.statements(&definition.body());
+                if !scope.current_block().is_terminated() {
+                    scope.function_return();
+                }
+            });
         });
         signature
     }

@@ -32,6 +32,7 @@ fn default() -> anyhow::Result<()> {
     );
     assert!(stdout.contains("sol.contract"));
     assert!(stdout.contains("llvm.func"));
+    assert!(!stdout.contains("loc("));
 
     Ok(())
 }
@@ -73,6 +74,49 @@ fn filter_llvm_only() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("MLIR Dialect llvm (runtime):"))
         .stdout(predicate::str::contains("llvm.func"))
         .stdout(predicate::str::contains("MLIR Dialect sol:").not());
+
+    Ok(())
+}
+
+#[test]
+fn locations_with_runtime_debug_info() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT,
+        "--emit-mlir=sol",
+        "--debug-info-runtime",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("sol.contract"))
+        .stdout(predicate::str::contains("loc("));
+
+    Ok(())
+}
+
+#[test]
+fn runtime_location_aliases() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT,
+        "--emit-mlir=llvm",
+        "--debug-info-runtime",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    let stdout = String::from_utf8(result.success().get_output().stdout.clone())?;
+
+    let runtime_index = stdout
+        .find("MLIR Dialect llvm (runtime):")
+        .expect("llvm runtime dialect header missing");
+    assert!(
+        stdout[runtime_index..].contains("\n#loc"),
+        "the runtime module is printed detached, with its locations as `#loc` aliases"
+    );
 
     Ok(())
 }

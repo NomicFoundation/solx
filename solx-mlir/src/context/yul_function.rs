@@ -11,6 +11,7 @@ use melior::ir::operation::OperationLike;
 
 use crate::Block;
 use crate::Context;
+use crate::FunctionOrigin;
 use crate::FunctionType;
 use crate::Type;
 use crate::YulBlock;
@@ -47,8 +48,12 @@ impl<'context> YulFunction<'context> {
     /// Emits this function's `yul.func` at `position` in `body` - the `sol.inline_asm` region, which
     /// is the symbol table Yul functions live in - and returns the entry block its body is emitted
     /// into. The entry block's arguments carry the parameter words.
+    ///
+    /// `name` is what the source calls the function, which its subprogram carries; `mlir_name` is
+    /// the operation's symbol.
     pub fn define(
         &self,
+        name: &str,
         position: usize,
         context: &Context<'context>,
         body: Block<'context>,
@@ -57,24 +62,27 @@ impl<'context> YulFunction<'context> {
             .function_type
             .parameters
             .iter()
-            .map(|parameter| (parameter.into_mlir(), context.location()))
+            .map(|parameter| (parameter.into_mlir(), context.current_location))
             .collect();
         let region = Region::new();
         region.append_block(MlirBlock::new(&entry_arguments));
 
         let operation = body.insert_operation(
             position,
-            FuncOperation::builder(context.melior, context.location())
-                .sym_name(StringAttribute::new(
-                    context.melior,
-                    self.mlir_name.as_str(),
-                ))
-                .function_type(TypeAttribute::new(
-                    self.function_type.to_mlir(context.melior).into(),
-                ))
-                .body(region)
-                .build()
-                .into(),
+            FuncOperation::builder(
+                context.melior,
+                context.function_location(name, FunctionOrigin::Declared),
+            )
+            .sym_name(StringAttribute::new(
+                context.melior,
+                self.mlir_name.as_str(),
+            ))
+            .function_type(TypeAttribute::new(
+                self.function_type.to_mlir(context.melior).into(),
+            ))
+            .body(region)
+            .build()
+            .into(),
         );
         YulBlock::from(
             operation

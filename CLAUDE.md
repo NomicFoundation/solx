@@ -96,11 +96,17 @@ Solidity → Slang (parse, bind) → Sol-dialect MLIR → Sol→Yul→Standard p
 
 1. A domain lands complete over the types that exist when it lands. Later domains extend the earlier mechanisms for the types they introduce, so every mechanism is designed once as an extension point.
 
+### Debug locations
+
+1. An op carries the first byte of the innermost node it is lowered from. A lowering that emits a node's own ops runs inside `at_node(node, …)`, and a Solidity body's implicit return inside `at_node_end`. A construct that emits no op of its own, such as a block or an expression statement, takes no `at_node`, so no position is resolved that no op carries.
+
+2. A construct that emits ops lands with its locations pinned in a `debug_location*.sol` fixture.
+
 ### Fixtures
 
 1. A LIT fixture pins op shape. A tester case under [`tests/solidity/`](./tests/solidity/) pins behavior.
 
-2. A fixture has one RUN line, `solx --emit-mlir=sol %s | FileCheck %s`, and no prose. The CHECKs are the whole statement.
+2. A fixture has one RUN line, `solx --emit-mlir=sol %s | FileCheck %s`, and no prose. The CHECKs are the whole statement. A debug-location fixture runs `solx --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'`.
 
 3. One fixture per construct. A new case joins the fixture that owns its construct.
 
@@ -110,6 +116,8 @@ Solidity → Slang (parse, bind) → Sol-dialect MLIR → Sol→Yul→Standard p
 
 6. A base the fixture does not observe is `abstract`.
 
+7. A file that only a fixture imports lives in `Inputs/`, which lit skips, and joins the RUN line after `%s` as `%S/Inputs/<file>`.
+
 ### Naming and docs
 
 1. One concept has one name across the frontend.
@@ -118,7 +126,7 @@ Solidity → Slang (parse, bind) → Sol-dialect MLIR → Sol→Yul→Standard p
 
 3. An imported type that clashes with a local one takes the prefix of the crate it came from.
 
-4. No contractions in names: `identifier`, not `id`; `message`, not `msg`; `context`, not `ctx`. Initialisms read as words stay short, such as `abi`, `mlir`, `ods`, `url`, `api`, and unit symbols such as `ms`.
+4. No contractions in Rust names: `identifier`, not `id`; `message`, not `msg`; `context`, not `ctx`. Initialisms read as words stay short, such as `abi`, `mlir`, `ods`, `url`, `api`, and unit symbols such as `ms`. FileCheck captures stay short, such as `ADDR` and `PTR`.
 
 5. A doc says why the item exists or what is non-obvious, never its name again.
 
@@ -159,11 +167,12 @@ It is forbidden to post low-level code changes, the process of how the work was 
 
 Two labels switch on optional CI: `ci:sanitizer` for the address sanitizer tests, `ci:integration` for the integration tests.
 
-A change to [`renovate.json`](./renovate.json) is validated before pushing, with the checks CI repeats in its `renovate-config-check` job:
+A change to [`renovate.json`](./renovate.json) is validated before pushing, with the checks CI repeats in its `renovate-config-check` job, at the Renovate version that job pins:
 
 ```bash
-npx --yes --package renovate -- renovate-config-validator renovate.json
-LOG_LEVEL=debug npx --yes renovate --platform=local --dry-run=full
+export RENOVATE_VERSION=$(sed -n 's/.*RENOVATE_VERSION: "\(.*\)"/\1/p' .github/workflows/test.yaml)
+npx --yes --package "renovate@$RENOVATE_VERSION" -- renovate-config-validator renovate.json
+LOG_LEVEL=debug npx --yes "renovate@$RENOVATE_VERSION" --platform=local --dry-run=full
 ```
 
 The dry run is what catches `matchPackageNames` silently missing a git-source cargo dependency, whose `packageName` is the git URL rather than the `Cargo.toml` key. Those are matched by `matchDepNames`, as the pinned-fork rule does for `inkwell`, `melior`, `slang_solidity` and `web3`.

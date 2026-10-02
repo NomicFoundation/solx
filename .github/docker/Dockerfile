@@ -175,13 +175,14 @@ RUN curl -fsSL -o valgrind-${VALGRIND_VERSION}.tar.bz2 \
     && cd .. && rm -rf valgrind-${VALGRIND_VERSION}.tar.bz2 valgrind-${VALGRIND_VERSION}
 
 # ── Rust ─────────────────────────────────────────────────────────────────────
-# Version must match rust-toolchain.toml (a renovate customManager bumps both
-# in one PR); jobs resolve that pin via rustup anyway, so a matching default
+# Version must match rust-toolchain.toml (Renovate bumps both in one PR);
+# jobs resolve that pin via rustup anyway, so a matching default
 # only saves the download. Lives in ci, not base: CI jobs run as root, while
 # the dev stage ships its own shared rustup — a /root-homed toolchain is dead
 # weight in the dev image. rust-src serves the -Zbuild-std actions
 # (build-rust, rust-unit-tests). On a bump, re-check the LLVM section
 # comment in base (rustc's embedded LLVM major moves).
+# renovate: datasource=rust-version depName=rust
 ARG RUST_VERSION=1.98.1
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         | sh -s -- -y --default-toolchain "${RUST_VERSION}" --profile default \

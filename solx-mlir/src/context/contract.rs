@@ -6,6 +6,7 @@
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
+use melior::ir::operation::OperationLike;
 use melior::ir::r#type::IntegerType;
 use ruint::aliases::U256;
 
@@ -32,8 +33,10 @@ impl<'context> Contract<'context> {
         context: &Context<'context>,
         module_body: Block<'context>,
     ) -> Self {
+        // The Sol-to-Yul lowering creates the runtime module at this location, which is how it gets
+        // the module's compile unit.
         let body = mlir_region_op!(
-            context, &module_body.inner,
+            at context.module.as_operation().location(), context, &module_body.inner,
             ContractOperation
                 .sym_name(StringAttribute::new(context.melior, name))
                 .kind(kind.attribute(context.melior));
