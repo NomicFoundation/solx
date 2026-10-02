@@ -116,6 +116,9 @@ impl Mode {
         if params.abi_encoder_v1_only == ABIEncoderV1Only::True {
             return false;
         }
+        if params.evm_version.newest_matching().is_none() {
+            return false;
+        }
         if self.via_ir {
             params.compile_via_yul != CompileViaYul::False
                 && params.abi_encoder_v1_only != ABIEncoderV1Only::True

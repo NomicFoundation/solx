@@ -41,7 +41,7 @@ impl TryFrom<&str> for Params {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let mut compile_via_yul = CompileViaYul::Default;
         let mut abi_encoder_v1_only = ABIEncoderV1Only::Default;
-        let mut evm_version = EVMVersion::Default;
+        let mut evm_version = EVMVersion::Any;
         let mut revert_strings = RevertStrings::Default;
         let mut allow_non_existing_functions = AllowNonExistingFunctions::Default;
         let mut bytecode_format = String::new();
@@ -77,7 +77,9 @@ impl TryFrom<&str> for Params {
                         .map_err(|error| anyhow::anyhow!("{} on line {}", error, index + 1))?;
                 }
                 "EVMVersion" => {
-                    evm_version = value.try_into().unwrap_or_default();
+                    evm_version = value
+                        .try_into()
+                        .map_err(|error| anyhow::anyhow!("{} on line {}", error, index + 1))?;
                 }
                 "revertStrings" => {
                     revert_strings = value
