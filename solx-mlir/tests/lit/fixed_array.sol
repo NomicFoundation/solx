@@ -3,10 +3,10 @@
 // CHECK: sol.func {{.*}}fixed_array{{.*}}!sol.array<4 x ui256, Memory>
 
 // CHECK: sol.func {{.*}}wide_element
-// CHECK:   sol.addr_of @{{.*}} : !sol.array<18446744073709551616 x ui256, Storage>
+// CHECK:   sol.addr_of @{{.*}} : !sol.array<1766847064778384329583297500742918515827483896875618958121606201292619776 x ui256, Storage>
 
 contract C {
-    uint256[2**64] wide;
+    uint256[2**240] wide;
 
     function fixed_array(uint256[4] memory a) public pure returns (uint256[4] memory) { return a; }
 
