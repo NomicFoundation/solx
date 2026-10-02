@@ -52,6 +52,9 @@ jobs:
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
       options: -m 110g
+    env:
+      # renovate: datasource=github-releases depName=foundry-rs/foundry
+      FOUNDRY_VERSION: "v1.8.3"
     steps:
       - name: Checkout PR
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -232,8 +235,7 @@ jobs:
         uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
         with:
           # Pinning the action digest alone still floats the frontend: this input defaults to `stable`.
-          # renovate: datasource=github-releases depName=foundry-rs/foundry
-          version: v1.8.3
+          version: ${{ env.FOUNDRY_VERSION }}
 
       # Some projects might use hardcoded ssh URLs: force git to use https instead.
       - name: Git https settings
