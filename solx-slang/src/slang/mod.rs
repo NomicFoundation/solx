@@ -186,6 +186,18 @@ impl Slang {
             Some(solx_standard_json::InputSelection::ANY_CONTRACT),
             solx_standard_json::InputSelector::Benchmarks,
         );
+        for file in unit.files() {
+            let file_id = file.id();
+            let ast = file.ast();
+            if input_json.settings.output_selection.check_selection(
+                file_id.as_str(),
+                None,
+                solx_standard_json::InputSelector::DebugSymbols,
+            ) && let Some(output_source) = output.sources.get_mut(file_id.as_str())
+            {
+                output_source.debug_symbols = Some(crate::debug_symbols::symbol_table(&ast));
+            }
+        }
 
         if benchmarks {
             output.benchmarks = profiler.to_vec();

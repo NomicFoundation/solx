@@ -2,7 +2,11 @@
 //! The `solc --standard-json` output source.
 //!
 
+pub mod debug_symbols;
+
 use serde_json::value::RawValue;
+
+use self::debug_symbols::DebugSymbols;
 
 ///
 /// The `solc --standard-json` output source.
@@ -15,6 +19,9 @@ pub struct Source {
     /// Source code AST.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ast: Option<Box<RawValue>>,
+    /// The symbol table for debuggers and stack tracers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub debug_symbols: Option<DebugSymbols>,
 }
 
 impl Source {
@@ -24,6 +31,10 @@ impl Source {
     /// Is used for projects compiled without `solc`.
     ///
     pub fn new(id: usize) -> Self {
-        Self { id, ast: None }
+        Self {
+            id,
+            ast: None,
+            debug_symbols: None,
+        }
     }
 }

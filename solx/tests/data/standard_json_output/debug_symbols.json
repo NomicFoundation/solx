@@ -1,0 +1,434 @@
+{
+  "Base.sol": {
+    "contracts": [
+      {
+        "name": "IERC165",
+        "kind": "interface",
+        "abstract": false,
+        "range": [57, 93],
+        "functions": [
+          {
+            "name": "supportsInterface",
+            "kind": "function",
+            "visibility": "external",
+            "mutability": "view",
+            "selector": "01ffc9a7",
+            "range": [81, 67],
+            "implemented": false
+          }
+        ]
+      },
+      {
+        "name": "ICounter",
+        "kind": "interface",
+        "abstract": false,
+        "range": [152, 87],
+        "functions": [
+          {
+            "name": "count",
+            "kind": "function",
+            "visibility": "external",
+            "mutability": "view",
+            "selector": "06661abd",
+            "range": [188, 49],
+            "implemented": false
+          }
+        ]
+      },
+      {
+        "name": "Root",
+        "kind": "contract",
+        "abstract": true,
+        "range": [241, 223],
+        "bases": [
+          {"file": "Base.sol", "name": "Root"},
+          {"file": "Base.sol", "name": "ICounter"},
+          {"file": "Base.sol", "name": "IERC165"}
+        ],
+        "functions": [
+          {
+            "name": "supportsInterface",
+            "kind": "function",
+            "visibility": "public",
+            "mutability": "pure",
+            "selector": "01ffc9a7",
+            "range": [282, 114],
+            "implemented": true
+          },
+          {
+            "name": "hook",
+            "kind": "function",
+            "visibility": "internal",
+            "mutability": "nonpayable",
+            "range": [402, 60],
+            "implemented": false
+          }
+        ]
+      }
+    ],
+    "freeFunctions": [],
+    "spans": [
+      [32, 23],
+      [32, 432],
+      [39, 15],
+      [48, 6],
+      [57, 93],
+      [81, 67],
+      [108, 9],
+      [119, 13],
+      [142, 4],
+      [152, 87],
+      [174, 7],
+      [188, 49],
+      [205, 13],
+      [228, 7],
+      [241, 223],
+      [267, 8],
+      [282, 114],
+      [282, 180],
+      [309, 9],
+      [320, 20],
+      [350, 4],
+      [356, 40],
+      [366, 24],
+      [373, 16],
+      [379, 10],
+      [402, 60],
+      [416, 9],
+      [427, 16],
+      [453, 7]
+    ]
+  },
+  "Main.sol": {
+    "contracts": [
+      {
+        "name": "MathLib",
+        "kind": "library",
+        "abstract": false,
+        "range": [150, 212],
+        "bases": [
+          {"file": "Main.sol", "name": "MathLib"}
+        ],
+        "functions": [
+          {
+            "name": "add",
+            "kind": "function",
+            "visibility": "internal",
+            "mutability": "pure",
+            "range": [172, 96],
+            "implemented": true
+          },
+          {
+            "name": "triple",
+            "kind": "function",
+            "visibility": "public",
+            "mutability": "pure",
+            "selector": "f40a049d",
+            "range": [274, 86],
+            "implemented": true
+          }
+        ]
+      },
+      {
+        "name": "Left",
+        "kind": "contract",
+        "abstract": true,
+        "range": [364, 137],
+        "bases": [
+          {"file": "Main.sol", "name": "Left"},
+          {"file": "Base.sol", "name": "Root"},
+          {"file": "Base.sol", "name": "ICounter"},
+          {"file": "Base.sol", "name": "IERC165"}
+        ],
+        "functions": [
+          {
+            "name": "hook",
+            "kind": "function",
+            "visibility": "internal",
+            "mutability": "nonpayable",
+            "range": [401, 98],
+            "implemented": true
+          }
+        ]
+      },
+      {
+        "name": "Right",
+        "kind": "contract",
+        "abstract": true,
+        "range": [503, 138],
+        "bases": [
+          {"file": "Main.sol", "name": "Right"},
+          {"file": "Base.sol", "name": "Root"},
+          {"file": "Base.sol", "name": "ICounter"},
+          {"file": "Base.sol", "name": "IERC165"}
+        ],
+        "functions": [
+          {
+            "name": "hook",
+            "kind": "function",
+            "visibility": "internal",
+            "mutability": "nonpayable",
+            "range": [541, 98],
+            "implemented": true
+          }
+        ]
+      },
+      {
+        "name": "Counter",
+        "kind": "contract",
+        "abstract": false,
+        "range": [643, 779],
+        "bases": [
+          {"file": "Main.sol", "name": "Counter"},
+          {"file": "Main.sol", "name": "Right"},
+          {"file": "Main.sol", "name": "Left"},
+          {"file": "Base.sol", "name": "Root"},
+          {"file": "Base.sol", "name": "ICounter"},
+          {"file": "Base.sol", "name": "IERC165"}
+        ],
+        "functions": [
+          {
+            "name": "count",
+            "kind": "getter",
+            "visibility": "public",
+            "mutability": "view",
+            "selector": "06661abd",
+            "range": [708, 30],
+            "implemented": true
+          },
+          {
+            "name": "balances",
+            "kind": "getter",
+            "visibility": "public",
+            "mutability": "view",
+            "selector": "27e235e3",
+            "range": [743, 44],
+            "implemented": true
+          },
+          {
+            "name": "history",
+            "kind": "getter",
+            "visibility": "public",
+            "mutability": "view",
+            "selector": "a7a38f0b",
+            "range": [792, 25],
+            "implemented": true
+          },
+          {
+            "name": "onlyOwner",
+            "kind": "modifier",
+            "visibility": "internal",
+            "mutability": "nonpayable",
+            "range": [823, 77],
+            "implemented": true
+          },
+          {
+            "name": "constructor",
+            "kind": "constructor",
+            "visibility": "public",
+            "mutability": "payable",
+            "range": [906, 57],
+            "implemented": true
+          },
+          {
+            "name": "inc",
+            "kind": "function",
+            "visibility": "public",
+            "mutability": "nonpayable",
+            "selector": "371303c0",
+            "range": [969, 107],
+            "implemented": true
+          },
+          {
+            "name": "inc",
+            "kind": "function",
+            "visibility": "external",
+            "mutability": "nonpayable",
+            "selector": "812600df",
+            "range": [1082, 93],
+            "implemented": true
+          },
+          {
+            "name": "hook",
+            "kind": "function",
+            "visibility": "internal",
+            "mutability": "nonpayable",
+            "range": [1181, 111],
+            "implemented": true
+          },
+          {
+            "name": "reset",
+            "kind": "function",
+            "visibility": "private",
+            "mutability": "nonpayable",
+            "range": [1298, 51],
+            "implemented": true
+          },
+          {
+            "name": "fallback",
+            "kind": "fallback",
+            "visibility": "external",
+            "mutability": "payable",
+            "range": [1355, 30],
+            "implemented": true
+          },
+          {
+            "name": "receive",
+            "kind": "receive",
+            "visibility": "external",
+            "mutability": "payable",
+            "range": [1391, 29],
+            "implemented": true
+          }
+        ]
+      }
+    ],
+    "freeFunctions": [
+      {
+        "name": "double",
+        "kind": "free",
+        "visibility": "internal",
+        "mutability": "pure",
+        "range": [77, 71],
+        "implemented": true
+      }
+    ],
+    "spans": [
+      [32, 23],
+      [32, 1390],
+      [39, 15],
+      [48, 6],
+      [64, 10],
+      [77, 71],
+      [93, 9],
+      [104, 4],
+      [118, 7],
+      [127, 21],
+      [133, 13],
+      [140, 5],
+      [144, 1],
+      [150, 212],
+      [172, 96],
+      [172, 188],
+      [185, 9],
+      [185, 20],
+      [196, 9],
+      [207, 13],
+      [230, 7],
+      [239, 29],
+      [249, 13],
+      [256, 5],
+      [274, 86],
+      [290, 9],
+      [301, 11],
+      [322, 7],
+      [331, 29],
+      [341, 13],
+      [348, 5],
+      [352, 1],
+      [364, 137],
+      [390, 4],
+      [401, 98],
+      [415, 9],
+      [426, 25],
+      [461, 7],
+      [470, 29],
+      [480, 13],
+      [487, 5],
+      [491, 1],
+      [503, 138],
+      [530, 4],
+      [541, 98],
+      [555, 9],
+      [566, 25],
+      [601, 7],
+      [610, 29],
+      [620, 13],
+      [627, 5],
+      [631, 1],
+      [643, 779],
+      [663, 4],
+      [663, 11],
+      [669, 5],
+      [681, 7],
+      [681, 22],
+      [681, 739],
+      [689, 7],
+      [708, 30],
+      [716, 15],
+      [743, 27],
+      [743, 44],
+      [751, 7],
+      [762, 7],
+      [771, 6],
+      [792, 9],
+      [792, 25],
+      [802, 6],
+      [823, 77],
+      [844, 56],
+      [854, 28],
+      [854, 29],
+      [854, 40],
+      [862, 10],
+      [862, 19],
+      [892, 2],
+      [906, 57],
+      [920, 7],
+      [928, 35],
+      [938, 18],
+      [938, 19],
+      [946, 10],
+      [969, 107],
+      [984, 16],
+      [991, 9],
+      [1001, 75],
+      [1011, 29],
+      [1011, 30],
+      [1011, 59],
+      [1019, 11],
+      [1019, 21],
+      [1031, 8],
+      [1038, 1],
+      [1050, 12],
+      [1050, 19],
+      [1050, 20],
+      [1063, 5],
+      [1082, 93],
+      [1095, 10],
+      [1107, 18],
+      [1116, 9],
+      [1126, 49],
+      [1136, 32],
+      [1136, 33],
+      [1144, 10],
+      [1144, 24],
+      [1151, 2],
+      [1157, 11],
+      [1162, 5],
+      [1181, 111],
+      [1195, 9],
+      [1206, 30],
+      [1224, 4],
+      [1224, 11],
+      [1230, 5],
+      [1246, 7],
+      [1255, 37],
+      [1265, 21],
+      [1272, 10],
+      [1272, 13],
+      [1283, 1],
+      [1298, 51],
+      [1315, 7],
+      [1323, 26],
+      [1333, 9],
+      [1333, 10],
+      [1341, 1],
+      [1355, 30],
+      [1366, 16],
+      [1383, 2],
+      [1391, 29],
+      [1401, 16],
+      [1418, 2]
+    ]
+  }
+}
