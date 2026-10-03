@@ -12,6 +12,9 @@ pub enum Selector {
     /// The AST JSON.
     #[serde(rename = "ast")]
     AST,
+    /// The symbol table for debuggers and stack tracers.
+    #[serde(rename = "debugSymbols")]
+    DebugSymbols,
     /// The ABI JSON.
     #[serde(rename = "abi")]
     ABI,
@@ -119,105 +122,4 @@ pub enum Selector {
     /// The wildcard variant that selects everything.
     #[serde(rename = "*")]
     Any,
-}
-
-impl Selector {
-    ///
-    /// Converts a multi-item selector into a group of single-item selectors.
-    ///
-    pub fn into_single_selectors(self) -> Vec<Self> {
-        match self {
-            Self::EVM => vec![
-                Self::Bytecode,
-                Self::BytecodeObject,
-                Self::BytecodeLLVMIRUnoptimized,
-                Self::BytecodeLLVMIR,
-                Self::BytecodeLLVMAssembly,
-                Self::BytecodeOpcodes,
-                Self::BytecodeLinkReferences,
-                Self::BytecodeSourceMap,
-                Self::BytecodeDebugInfo,
-                Self::BytecodeFunctionDebugData,
-                Self::BytecodeGeneratedSources,
-                Self::RuntimeBytecode,
-                Self::RuntimeBytecodeObject,
-                Self::RuntimeBytecodeLLVMIRUnoptimized,
-                Self::RuntimeBytecodeLLVMIR,
-                Self::RuntimeBytecodeLLVMAssembly,
-                Self::RuntimeBytecodeOpcodes,
-                Self::RuntimeBytecodeLinkReferences,
-                Self::RuntimeBytecodeImmutableReferences,
-                Self::RuntimeBytecodeSourceMap,
-                Self::RuntimeBytecodeDebugInfo,
-                Self::RuntimeBytecodeFunctionDebugData,
-                Self::RuntimeBytecodeGeneratedSources,
-                Self::GasEstimates,
-            ],
-            Self::Bytecode => vec![
-                Self::BytecodeObject,
-                Self::BytecodeLLVMIRUnoptimized,
-                Self::BytecodeLLVMIR,
-                Self::BytecodeLLVMAssembly,
-                Self::BytecodeOpcodes,
-                Self::BytecodeLinkReferences,
-                Self::BytecodeSourceMap,
-                Self::BytecodeDebugInfo,
-                Self::BytecodeFunctionDebugData,
-                Self::BytecodeGeneratedSources,
-            ],
-            Self::RuntimeBytecode => vec![
-                Self::RuntimeBytecodeObject,
-                Self::RuntimeBytecodeLLVMIRUnoptimized,
-                Self::RuntimeBytecodeLLVMIR,
-                Self::RuntimeBytecodeLLVMAssembly,
-                Self::RuntimeBytecodeOpcodes,
-                Self::RuntimeBytecodeLinkReferences,
-                Self::RuntimeBytecodeImmutableReferences,
-                Self::RuntimeBytecodeSourceMap,
-                Self::RuntimeBytecodeDebugInfo,
-                Self::RuntimeBytecodeFunctionDebugData,
-                Self::RuntimeBytecodeGeneratedSources,
-            ],
-            Self::Any => {
-                vec![
-                    Self::AST,
-                    Self::ABI,
-                    Self::Metadata,
-                    Self::DeveloperDocumentation,
-                    Self::UserDocumentation,
-                    Self::StorageLayout,
-                    Self::TransientStorageLayout,
-                    Self::MethodIdentifiers,
-                    Self::Benchmarks,
-                    Self::EVM,
-                    Self::Bytecode,
-                    Self::BytecodeObject,
-                    Self::BytecodeLLVMIRUnoptimized,
-                    Self::BytecodeLLVMIR,
-                    Self::BytecodeLLVMAssembly,
-                    Self::BytecodeOpcodes,
-                    Self::BytecodeLinkReferences,
-                    Self::BytecodeSourceMap,
-                    Self::BytecodeDebugInfo,
-                    Self::BytecodeFunctionDebugData,
-                    Self::BytecodeGeneratedSources,
-                    Self::RuntimeBytecode,
-                    Self::RuntimeBytecodeObject,
-                    Self::RuntimeBytecodeLLVMIRUnoptimized,
-                    Self::RuntimeBytecodeLLVMIR,
-                    Self::RuntimeBytecodeLLVMAssembly,
-                    Self::RuntimeBytecodeOpcodes,
-                    Self::RuntimeBytecodeLinkReferences,
-                    Self::RuntimeBytecodeImmutableReferences,
-                    Self::RuntimeBytecodeSourceMap,
-                    Self::RuntimeBytecodeDebugInfo,
-                    Self::RuntimeBytecodeFunctionDebugData,
-                    Self::RuntimeBytecodeGeneratedSources,
-                    Self::GasEstimates,
-                    Self::MLIR,
-                ]
-            }
-            selector => vec![selector],
-        }
-    }
 }

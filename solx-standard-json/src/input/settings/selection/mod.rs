@@ -23,7 +23,7 @@ impl Selection {
     /// Wildcard selection.
     pub const WILDCARD: &'static str = "*";
 
-    /// Any contract selection, used for file-level AST.
+    /// Any contract selection, used for file-level outputs such as the AST.
     pub const ANY_CONTRACT: &'static str = "";
 
     ///
@@ -63,7 +63,10 @@ impl Selection {
             let Some(file) = self.inner.get(file_key) else {
                 return false;
             };
-            if matches!(selector, Selector::AST | Selector::Benchmarks) {
+            if matches!(
+                selector,
+                Selector::AST | Selector::DebugSymbols | Selector::Benchmarks
+            ) {
                 return [Self::ANY_CONTRACT, path].into_iter().any(|contract_key| {
                     file.get(contract_key)
                         .is_some_and(|any| any.contains(&Selector::Any) || any.contains(&selector))
@@ -119,20 +122,6 @@ impl Selection {
                     }
                 })
         })
-    }
-
-    ///
-    /// Normalizes the selection by converting multi-item selectors into single-item selectors.
-    ///
-    pub fn normalize(&mut self) {
-        for file in self.inner.values_mut() {
-            for contract in file.values_mut() {
-                *contract = contract
-                    .iter()
-                    .flat_map(|selector| selector.into_single_selectors())
-                    .collect::<BTreeSet<_>>();
-            }
-        }
     }
 
     ///

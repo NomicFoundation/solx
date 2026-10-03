@@ -159,16 +159,17 @@ impl Slang {
 
         for file in unit.files() {
             let file_id = file.id();
-            if let Some(output_source) = output.sources.get_mut(file_id.as_str()) {
-                let run_ast_serialization = profiler.start_pipeline_element(
-                    format!("{}_SerializeAST:{file_id}", Self::NAME).as_str(),
-                );
-                output_source.ast = Some(
-                    serde_json::value::to_raw_value(&file.ast())
-                        .map_err(|error| anyhow::anyhow!("AST serialization: {error}"))?,
-                );
-                run_ast_serialization.borrow_mut().finish();
-            }
+            let output_source = output
+                .sources
+                .get_mut(file_id.as_str())
+                .expect("every compiled file is an input source");
+            let run_ast_serialization = profiler
+                .start_pipeline_element(format!("{}_SerializeAST:{file_id}", Self::NAME).as_str());
+            output_source.ast = Some(
+                serde_json::value::to_raw_value(&file.ast())
+                    .map_err(|error| anyhow::anyhow!("AST serialization: {error}"))?,
+            );
+            run_ast_serialization.borrow_mut().finish();
         }
 
         if output.has_errors() {
@@ -185,8 +186,9 @@ impl Slang {
         let sources = Sources::new(&sources);
         for file in unit.files() {
             let file_id = file.id();
+            let ast = file.ast();
             let contracts = SourceUnitScope::source_unit(
-                &file.ast(),
+                &ast,
                 evm_version,
                 revert_strings,
                 |contract_name, selector| {
@@ -204,6 +206,22 @@ impl Slang {
                 .entry(file_id.to_string())
                 .or_default()
                 .extend(contracts);
+
+            if input_json.settings.output_selection.check_selection(
+                file_id.as_str(),
+                None,
+                solx_standard_json::InputSelector::DebugSymbols,
+            ) {
+                let run_debug_symbols = profiler.start_pipeline_element(
+                    format!("{}_DebugSymbols:{file_id}", Self::NAME).as_str(),
+                );
+                output
+                    .sources
+                    .get_mut(file_id.as_str())
+                    .expect("every compiled file is an input source")
+                    .debug_symbols = Some(crate::debug_symbols::SymbolTable::build(&ast));
+                run_debug_symbols.borrow_mut().finish();
+            }
         }
 
         if input_json.settings.output_selection.check_selection(
