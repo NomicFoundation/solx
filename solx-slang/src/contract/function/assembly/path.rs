@@ -137,7 +137,7 @@ impl<'function, 'contract, 'source_unit, 'context>
 
         let slang_type = node.get_type();
         let value = if let Some(Type::Literal(literal_type)) = &slang_type
-            && let Some(Number::Integer(number)) = Number::from_literal_kind(&literal_type.kind())
+            && let Some(Number::Integer(number)) = Number::from_literal_kind(literal_type.kind())
         {
             let literal_type = self.function.typing(slang_type);
             Value::constant_from_bigint(&number, literal_type, self.function)

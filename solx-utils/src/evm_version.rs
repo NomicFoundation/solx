@@ -4,21 +4,13 @@
 
 use std::str::FromStr;
 
+use slang_solidity_v2::utils::EvmTarget;
+
 ///
 /// EVM version.
 ///
 #[derive(
-    Debug,
-    Default,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    serde::Serialize,
-    serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
 #[serde(rename_all = "camelCase")]
 pub enum EVMVersion {
@@ -30,7 +22,6 @@ pub enum EVMVersion {
     Prague,
     /// The corresponding EVM version.
     #[serde(rename = "osaka")]
-    #[default]
     Osaka,
 }
 
@@ -89,5 +80,28 @@ impl std::fmt::Display for EVMVersion {
             Self::Prague => write!(f, "prague"),
             Self::Osaka => write!(f, "osaka"),
         }
+    }
+}
+
+impl From<EVMVersion> for EvmTarget {
+    fn from(evm_version: EVMVersion) -> Self {
+        match evm_version {
+            EVMVersion::Cancun => Self::Cancun,
+            EVMVersion::Prague => Self::Prague,
+            EVMVersion::Osaka => Self::Osaka,
+        }
+    }
+}
+
+impl TryFrom<EvmTarget> for EVMVersion {
+    type Error = anyhow::Error;
+
+    fn try_from(evm_target: EvmTarget) -> Result<Self, Self::Error> {
+        Ok(match evm_target {
+            EvmTarget::Cancun => Self::Cancun,
+            EvmTarget::Prague => Self::Prague,
+            EvmTarget::Osaka => Self::Osaka,
+            _ => anyhow::bail!("Unsupported EVM version: {evm_target}"),
+        })
     }
 }

@@ -40,8 +40,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         self.at_node(node, |scope| {
             let slang_type = node.get_type();
             if let Some(Type::Literal(literal_type)) = &slang_type
-                && let Some(Number::Integer(value)) =
-                    Number::from_literal_kind(&literal_type.kind())
+                && let Some(Number::Integer(value)) = Number::from_literal_kind(literal_type.kind())
             {
                 return Value::constant_from_bigint(&value, scope.typing(slang_type), scope);
             }
