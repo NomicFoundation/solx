@@ -197,6 +197,11 @@ impl<'context> SourceUnitScope<'context> {
         }
     }
 
+    /// A 4-byte selector as standard JSON prints it: eight lower-case hex digits.
+    pub fn selector_hex(selector: u32) -> String {
+        format!("{selector:08x}")
+    }
+
     /// The function's symbol: its internal signature qualified by the node id, since internal
     /// signatures alone collide.
     pub fn function_symbol(function: &FunctionDefinition) -> String {
