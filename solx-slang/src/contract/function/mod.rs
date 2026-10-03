@@ -67,19 +67,10 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 .extend(self.constructor.parameter_types());
         }
 
-        let identifier = function.name();
-        let name = match function.kind() {
-            FunctionKind::Constructor => SourceUnitScope::CONSTRUCTOR_KEYWORD,
-            FunctionKind::Fallback => "fallback",
-            FunctionKind::Receive => "receive",
-            FunctionKind::Regular | FunctionKind::Modifier => identifier
-                .as_ref()
-                .expect("slang names every regular function and modifier")
-                .name(),
-        };
+        let name = SourceUnitScope::function_name(function);
         self.at_node(function, |scope| {
             let entry = signature.define(
-                name,
+                name.as_str(),
                 selector,
                 FunctionDispatch::new(function, is_most_derived_constructor),
                 FunctionOrigin::Declared,
@@ -191,6 +182,20 @@ impl<'context> SourceUnitScope<'context> {
     /// The name a constructor has in the source, its keyword, which a synthesized constructor
     /// takes too.
     pub const CONSTRUCTOR_KEYWORD: &'static str = "constructor";
+
+    /// The function's source name: the keyword for a constructor, fallback or receive function.
+    pub fn function_name(function: &FunctionDefinition) -> String {
+        match function.kind() {
+            FunctionKind::Constructor => Self::CONSTRUCTOR_KEYWORD.to_owned(),
+            FunctionKind::Fallback => "fallback".to_owned(),
+            FunctionKind::Receive => "receive".to_owned(),
+            FunctionKind::Regular | FunctionKind::Modifier => function
+                .name()
+                .expect("slang names every regular function and modifier")
+                .name()
+                .to_owned(),
+        }
+    }
 
     /// The function's symbol: its internal signature qualified by the node id, since internal
     /// signatures alone collide.
