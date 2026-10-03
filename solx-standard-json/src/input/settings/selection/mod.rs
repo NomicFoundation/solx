@@ -37,15 +37,11 @@ impl Selection {
         if selectors.contains(&Selector::AST) {
             per_file_selectors.insert(Selector::AST);
         }
-        if selectors.contains(&Selector::DebugSymbols) {
-            per_file_selectors.insert(Selector::DebugSymbols);
-        }
         if selectors.contains(&Selector::Benchmarks) {
             per_file_selectors.insert(Selector::Benchmarks);
         }
         let mut per_contract_selectors = selectors;
         per_contract_selectors.remove(&Selector::AST);
-        per_contract_selectors.remove(&Selector::DebugSymbols);
 
         if !per_file_selectors.is_empty() {
             contract_level.insert(Self::ANY_CONTRACT.to_owned(), per_file_selectors);
@@ -126,20 +122,6 @@ impl Selection {
                     }
                 })
         })
-    }
-
-    ///
-    /// Normalizes the selection by converting multi-item selectors into single-item selectors.
-    ///
-    pub fn normalize(&mut self) {
-        for file in self.inner.values_mut() {
-            for contract in file.values_mut() {
-                *contract = contract
-                    .iter()
-                    .flat_map(|selector| selector.into_single_selectors())
-                    .collect::<BTreeSet<_>>();
-            }
-        }
     }
 
     ///
