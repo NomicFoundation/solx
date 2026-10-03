@@ -11,3 +11,7 @@ solx-benchmark-converter/src/tests/fixtures/*.md text eol=lf
 # preventive: any future expected-output fixture is compared byte-wise.
 docs/src/user-guide/02-command-line-interface.in/** text eol=lf
 docs/src/user-guide/02-command-line-interface.out/** text eol=lf
+
+# The debugSymbols fixture asserts byte offsets into these sources, which the
+# compiler reads from disk, so a CRLF checkout would shift every span.
+solx/tests/data/contracts/solidity/debug_symbols/*.sol text eol=lf
