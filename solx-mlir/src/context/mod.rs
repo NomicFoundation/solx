@@ -6,6 +6,7 @@ pub mod contract;
 pub mod debug_info;
 pub mod environment;
 pub mod function;
+pub mod pass_timing;
 pub mod yul_function;
 
 use std::collections::BTreeMap;
@@ -38,6 +39,8 @@ use crate::DebugInfoRequest;
 use crate::FunctionOrigin;
 use crate::Type;
 use crate::llvm_module::RawLlvmModule;
+
+use self::pass_timing::PassTiming;
 
 /// Accumulated MLIR state threaded through the AST visitors.
 pub struct Context<'context> {
@@ -203,9 +206,23 @@ impl<'context> Context<'context> {
     ///
     /// Returns an error if any pass in the pipeline fails or the resulting module fails
     /// verification.
-    pub fn run_sol_passes(melior: &melior::Context, module: &mut Module) -> anyhow::Result<()> {
+    pub fn run_sol_passes(
+        melior: &melior::Context,
+        module: &mut Module,
+        pass_timing: bool,
+    ) -> anyhow::Result<Vec<PassTiming>> {
+        let mut pass_timings = Vec::new();
         let pass_manager = PassManager::new(melior);
         pass_manager.enable_verifier(cfg!(debug_assertions));
+        if pass_timing {
+            unsafe {
+                crate::ffi::solxPassManagerEnableTiming(
+                    pass_manager.to_raw(),
+                    PassTiming::push,
+                    (&raw mut pass_timings).cast(),
+                )
+            };
+        }
 
         unsafe {
             pass_manager.add_pass(melior::pass::Pass::from_raw(
@@ -249,10 +266,13 @@ impl<'context> Context<'context> {
         pass_manager
             .run(module)
             .map_err(|error| anyhow::anyhow!("Sol pass pipeline failed: {error}"))?;
+        // The timing report is written into `pass_timings` when the pass manager is destroyed, so
+        // the destruction has to happen before `pass_timings` moves out.
+        drop(pass_manager);
         if !cfg!(debug_assertions) && !module.as_operation().verify() {
             anyhow::bail!("Sol pass pipeline produced an invalid module");
         }
-        Ok(())
+        Ok(pass_timings)
     }
 
     /// Returns the deploy and runtime modules as separate LLVM dialect strings.
@@ -267,6 +287,9 @@ impl<'context> Context<'context> {
     /// Each segment's text is printed with locations ([`Self::printing_flags`]) when debug info
     /// is requested for it, and the Sol text when it is for either.
     ///
+    /// `pass_timing` records the time of every pass in `profiler`, under
+    /// `solx_RunSolPasses:<code_identifier>/`.
+    ///
     /// # Errors
     ///
     /// Returns an error if the pass pipeline fails, the runtime module is
@@ -275,6 +298,7 @@ impl<'context> Context<'context> {
         self,
         code_identifier: &str,
         capture_sol: bool,
+        pass_timing: bool,
         profiler: &mut Profiler,
     ) -> anyhow::Result<crate::output::MlirOutput> {
         let mut module = self.module;
@@ -288,10 +312,11 @@ impl<'context> Context<'context> {
             .transpose()
             .map_err(|error| anyhow::anyhow!("Sol dialect module printing: {error}"))?;
 
-        let run_sol_passes = profiler
-            .start_pipeline_element(format!("solx_RunSolPasses:{code_identifier}").as_str());
-        Self::run_sol_passes(self.melior, &mut module)?;
+        let sol_passes_label = format!("solx_RunSolPasses:{code_identifier}");
+        let run_sol_passes = profiler.start_pipeline_element(sol_passes_label.as_str());
+        let pass_timings = Self::run_sol_passes(self.melior, &mut module, pass_timing)?;
         run_sol_passes.borrow_mut().finish();
+        Self::record_pass_timings(profiler, sol_passes_label.as_str(), pass_timings);
 
         if self.debug_info_request.deploy {
             Self::declare_dwarf_version(self.melior, &module);
@@ -443,6 +468,31 @@ impl<'context> Context<'context> {
                 .build()
                 .into(),
         );
+    }
+
+    /// Records each pass timing under `label`, the analyses a pass ran nested under its entry and
+    /// a pass's n-th run as `<pass> #<n>`.
+    fn record_pass_timings(profiler: &mut Profiler, label: &str, pass_timings: Vec<PassTiming>) {
+        let mut runs = BTreeMap::<String, usize>::new();
+        let mut path = Vec::new();
+        for pass_timing in pass_timings {
+            path.truncate(pass_timing.depth as usize);
+            if pass_timing.depth > 0 {
+                path.push(pass_timing.name);
+            } else {
+                let run = runs.entry(pass_timing.name.clone()).or_default();
+                *run += 1;
+                if *run == 1 {
+                    path.push(pass_timing.name);
+                } else {
+                    path.push(format!("{} #{run}", pass_timing.name));
+                }
+            }
+            profiler.record_pipeline_element(
+                format!("{label}/{}", path.join("/")).as_str(),
+                pass_timing.duration,
+            );
+        }
     }
 
     /// The walk runs before the module leaves the tree, so each segment's dependencies come from

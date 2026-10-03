@@ -39,7 +39,15 @@ fn records_every_pipeline_stage() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("Slang_SerializeAST:").count(1))
         .stdout(predicate::str::contains("solx_CreateMLIRContext:").count(1))
         .stdout(predicate::str::contains("solx_EmitSol:").count(1))
-        .stdout(predicate::str::contains("solx_RunSolPasses:").count(1))
+        .stdout(predicate::str::is_match(r"solx_RunSolPasses:\S*\.sol:\w+: \d+us")?.count(1))
+        .stdout(predicate::str::contains("/ConvertSolToYulPass: ").count(1))
+        .stdout(predicate::str::contains("/Canonicalizer: ").count(1))
+        .stdout(predicate::str::contains("/Canonicalizer #2: ").count(1))
+        .stdout(
+            predicate::str::contains("/ConvertFuncToLLVMPass/(A) DataLayoutAnalysis: ").count(1),
+        )
+        .stdout(predicate::str::contains("/Rest: ").count(1))
+        .stdout(predicate::str::contains("/Total: ").count(1))
         .stdout(predicate::str::contains("solx_ExtractMLIRObjects:").count(1))
         .stdout(predicate::str::contains("solx_BuildProject").count(1))
         .stdout(predicate::str::contains("solx_Compile").count(1))
