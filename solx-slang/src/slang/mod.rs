@@ -236,7 +236,7 @@ impl Slang {
                 solx_standard_json::InputSelector::DebugSymbols,
             ) && let Some(output_source) = output.sources.get_mut(file_id.as_str())
             {
-                output_source.debug_symbols = Some(crate::debug_symbols::symbol_table(&ast));
+                output_source.debug_symbols = Some(crate::debug_symbols::SymbolTable::build(&ast));
             }
         }
 

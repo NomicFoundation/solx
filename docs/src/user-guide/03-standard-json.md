@@ -240,12 +240,12 @@ The output JSON contains all artifacts produced by **Slang**. The example below 
       // Optional, solx-only: Symbol table for debuggers and stack tracers. Every range is [byteOffset, byteLength].
       // Corresponds to "debugSymbols" in the outputSelection settings.
       "debugSymbols": {
-        // Contracts, interfaces and libraries in source order, each with its C3 linearisation (not for interfaces)
-        // and the functions, modifiers and public state variable getters it declares itself.
+        // Contracts, interfaces and libraries in source order, each with the functions, modifiers and public state
+        // variable getters it declares itself, and for a contract or library its C3 linearisation.
         "contracts": [/* ... */],
         // File-level functions.
         "freeFunctions": [/* ... */],
-        // Ranges of every nonterminal AST node, sorted.
+        // Ranges of every nonterminal AST node, sorted and deduplicated.
         "spans": [/* ... */]
       }
     }
