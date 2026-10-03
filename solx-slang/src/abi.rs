@@ -19,6 +19,7 @@ use slang_solidity_v2::ast::StateVariableDefinition;
 
 use crate::contract::object::Object;
 use crate::contract::storage_slot::StorageSlot;
+use crate::scope::source_unit::SourceUnitScope;
 
 /// The `abi` field of a standard-JSON contract.
 pub struct Abi(ContractAbi);
@@ -147,7 +148,7 @@ impl AbiDefinition {
                         )
                     }),
             )
-            .map(|(signature, selector)| (signature, format!("{selector:08x}")))
+            .map(|(signature, selector)| (signature, SourceUnitScope::selector_hex(selector)))
             .collect()
     }
 }

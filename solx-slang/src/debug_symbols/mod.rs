@@ -167,8 +167,7 @@ impl SymbolTable {
             .collect()
     }
 
-    /// A declared function or modifier. Its selector is computed as `evm.methodIdentifiers`
-    /// computes it.
+    /// A declared function or modifier.
     fn function(function: &FunctionDefinition, kind: FunctionKind) -> Function {
         let attributes = function.attributes();
         Function {
@@ -186,10 +185,9 @@ impl SymbolTable {
                 FunctionMutability::NonPayable => Mutability::NonPayable,
                 FunctionMutability::Payable => Mutability::Payable,
             },
-            selector: matches!(kind, FunctionKind::Function)
-                .then(|| function.compute_selector())
-                .flatten()
-                .map(|selector| format!("{selector:08x}")),
+            selector: function
+                .compute_selector()
+                .map(SourceUnitScope::selector_hex),
             range: Self::range(function),
             implemented: function.body().is_some(),
         }
@@ -204,7 +202,7 @@ impl SymbolTable {
             mutability: Mutability::View,
             selector: variable
                 .compute_selector()
-                .map(|selector| format!("{selector:08x}")),
+                .map(SourceUnitScope::selector_hex),
             range: Self::range(variable),
             implemented: true,
         }
