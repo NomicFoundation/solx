@@ -18,6 +18,7 @@ use slang_solidity_v2::ast::StateVariableDefinition;
 use solx_mlir::ContractKind;
 
 use crate::contract::storage_slot::StorageSlot;
+use crate::scope::source_unit::SourceUnitScope;
 
 /// The deployable object a module emits, each variant carrying the definition its kind
 /// dispatches from.
@@ -141,7 +142,7 @@ impl Object {
                         )
                     }),
             )
-            .map(|(signature, selector)| (signature, format!("{selector:08x}")))
+            .map(|(signature, selector)| (signature, SourceUnitScope::selector_hex(selector)))
             .collect()
     }
 
