@@ -6,14 +6,10 @@ use predicates::prelude::*;
 use tempfile::TempDir;
 
 #[test]
-#[ignore = "solx does not emit this output yet"]
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        crate::common::contract!("solidity/caller/Main.sol"),
-        "--hashes",
-    ];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--hashes"];
 
     let result = crate::cli::execute_solx(args)?;
 
@@ -43,7 +39,6 @@ fn standard_json() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "solx does not emit this output yet"]
 fn output_dir() -> anyhow::Result<()> {
     crate::common::setup()?;
 
