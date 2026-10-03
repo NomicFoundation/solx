@@ -10,17 +10,16 @@ use super::function::Function;
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Contract {
-    /// The definition name.
+    /// The declared name.
     pub name: String,
-    /// The definition kind.
+    /// Whether the definition is a contract, an interface or a library.
     pub kind: ContractKind,
     /// Whether the contract is declared `abstract`.
     #[serde(rename = "abstract")]
     pub is_abstract: bool,
-    /// The definition range.
+    /// The `[byteOffset, byteLength]` of the whole definition.
     pub range: [usize; 2],
-    /// The C3 linearisation, the definition itself first. Absent for an interface, whose
-    /// linearisation Slang does not expose.
+    /// The C3 linearisation, the definition itself first. Present for contracts and libraries.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bases: Option<Vec<Base>>,
     /// The members the definition itself declares, in declaration order.
@@ -48,6 +47,6 @@ pub enum ContractKind {
 pub struct Base {
     /// The standard JSON source path.
     pub file: String,
-    /// The definition name.
+    /// The declared name of the definition in `file`.
     pub name: String,
 }

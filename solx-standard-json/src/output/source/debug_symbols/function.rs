@@ -10,11 +10,12 @@
 pub struct Function {
     /// The name, the keyword for a constructor, fallback or receive function.
     pub name: String,
-    /// The function kind.
+    /// Whether this is a function, constructor, fallback, receive, modifier, getter or free function.
     pub kind: FunctionKind,
-    /// The visibility.
+    /// The declared visibility, otherwise `internal` for a modifier or free function and `public`
+    /// for a getter.
     pub visibility: Visibility,
-    /// The state mutability.
+    /// The declared state mutability, `view` for a getter as in its ABI entry.
     pub mutability: Mutability,
     /// The 4-byte selector in lowercase hex, for an externally visible function or a getter.
     #[serde(default, skip_serializing_if = "Option::is_none")]
