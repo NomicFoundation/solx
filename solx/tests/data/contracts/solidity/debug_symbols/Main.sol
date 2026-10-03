@@ -65,3 +65,5 @@ contract Counter is Left, Right {
 
     receive() external payable {}
 }
+
+pragma abicoder v2;
