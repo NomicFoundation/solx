@@ -10,6 +10,7 @@
 pub(crate) mod abi;
 pub(crate) mod contract;
 pub(crate) mod debug_locations;
+pub(crate) mod debug_symbols;
 pub(crate) mod scope;
 pub(crate) mod slang;
 pub(crate) mod source_unit;

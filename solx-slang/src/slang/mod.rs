@@ -191,9 +191,10 @@ impl Slang {
         let melior = OnceCell::new();
         for file in unit.files() {
             let file_id = file.id();
+            let ast = file.ast();
             let (contracts, uncomputable_abis) = SourceUnitScope::source_unit(
                 &melior,
-                &file.ast(),
+                &ast,
                 evm_version,
                 revert_strings,
                 |contract_name, selector| {
@@ -228,6 +229,15 @@ impl Slang {
                 .entry(file_id.to_string())
                 .or_default()
                 .extend(contracts);
+
+            if input_json.settings.output_selection.check_selection(
+                file_id.as_str(),
+                None,
+                solx_standard_json::InputSelector::DebugSymbols,
+            ) && let Some(output_source) = output.sources.get_mut(file_id.as_str())
+            {
+                output_source.debug_symbols = Some(crate::debug_symbols::symbol_table(&ast));
+            }
         }
 
         if benchmarks {

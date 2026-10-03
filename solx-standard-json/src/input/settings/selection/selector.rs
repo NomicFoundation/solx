@@ -12,6 +12,9 @@ pub enum Selector {
     /// The AST JSON.
     #[serde(rename = "ast")]
     AST,
+    /// The symbol table for debuggers and stack tracers.
+    #[serde(rename = "debugSymbols")]
+    DebugSymbols,
     /// The ABI JSON.
     #[serde(rename = "abi")]
     ABI,
@@ -181,6 +184,7 @@ impl Selector {
             Self::Any => {
                 vec![
                     Self::AST,
+                    Self::DebugSymbols,
                     Self::ABI,
                     Self::Metadata,
                     Self::DeveloperDocumentation,
