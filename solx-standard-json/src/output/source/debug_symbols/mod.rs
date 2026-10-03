@@ -13,7 +13,7 @@ use self::function::Function;
 ///
 /// Every range is `[byteOffset, byteLength]` into the source content.
 ///
-#[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DebugSymbols {
     /// The contracts, interfaces and libraries, in source order.
