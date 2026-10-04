@@ -123,9 +123,6 @@ runs:
           export "CARGO_TARGET_${TARGET_UPPER}_RUSTFLAGS=${RUSTFLAGS} -Z sanitizer=${SAN}"
           export "CARGO_TARGET_${TARGET_UPPER}_LINKER=clang"
         fi
-        if [ '${{ inputs.target }}' != '' ]; then
-          export CARGO_BIN_EXE_SLANG="./target/${{ inputs.target }}/debug/slang"
-        fi
         set -o pipefail
         ${SFW_PREFIX:-} cargo test --frozen ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
           --format json | tee -a debug-results.json || CARGO_EXIT=$?
