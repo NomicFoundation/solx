@@ -42,6 +42,7 @@ mod output_dir;
 mod overwrite;
 mod recursive_process;
 mod remappings;
+mod solidity_version;
 mod stack_too_deep;
 mod standard_json;
 mod standard_json_optimizer;

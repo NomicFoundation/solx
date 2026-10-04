@@ -465,6 +465,20 @@ The options in this section configure the **solx** compilation pipeline.
 
 
 
+### `--solidity-version`
+
+Sets the Solidity version the sources are compiled as. Slang accepts the syntax and built-ins available in that version, and every `pragma solidity` must allow it. The version is also recorded in the metadata.
+
+Versions from 0.8.0 up to the latest one Slang supports are accepted, and the latest is the default.
+
+Usage:
+
+```bash
+solx 'Simple.sol' --bin --solidity-version '0.8.20'
+```
+
+
+
 ### `--threads`
 
 Sets the number of threads used for parallel compilation. Each thread compiles a separate translation unit in a child process. By default, the number of threads equals the number of CPU cores.
