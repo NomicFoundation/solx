@@ -128,12 +128,13 @@ impl Slang {
     ///
     /// Metadata is always requested in order to calculate the metadata hash even if not requested in the `output_selection`.
     ///
-    /// Also returns the Solidity version the sources were compiled as, which goes into the metadata.
+    /// Sets `settings.solidity_version` to the version the sources are compiled as, which goes into
+    /// the metadata.
     ///
     pub fn standard_json(
         &self,
         input_json: &mut solx_standard_json::Input,
-    ) -> anyhow::Result<(solx_standard_json::Output, solx_standard_json::Version)> {
+    ) -> anyhow::Result<solx_standard_json::Output> {
         let mut profiler = Profiler::default();
         let mut output = solx_standard_json::Output::new(&input_json.sources);
 
@@ -141,7 +142,7 @@ impl Slang {
             output
                 .errors
                 .push(OutputError::new_error("Yul is not supported yet."));
-            return Ok((output, self.version.clone()));
+            return Ok(output);
         }
 
         if input_json.settings.via_ir {
@@ -152,7 +153,7 @@ impl Slang {
 
         if let Err(error) = input_json.resolve_sources() {
             output.errors.push(OutputError::new_error(error));
-            return Ok((output, self.version.clone()));
+            return Ok(output);
         }
 
         let mut sources = BTreeMap::new();
@@ -181,11 +182,10 @@ impl Slang {
             Ok(language_version) => language_version,
             Err(error) => {
                 output.errors.push(OutputError::new_error(error));
-                return Ok((output, self.version.clone()));
+                return Ok(output);
             }
         };
-        let semver_version = semver::Version::from(language_version);
-        let version = solx_standard_json::Version::new(semver_version.to_string(), semver_version);
+        input_json.settings.solidity_version = Some(language_version.into());
         let evm_version = Self::evm_version(
             input_json.settings.evm_version,
             language_version,
@@ -239,7 +239,7 @@ impl Slang {
         }
 
         if output.has_errors() {
-            return Ok((output, version));
+            return Ok(output);
         }
 
         let revert_strings = input_json
@@ -282,6 +282,6 @@ impl Slang {
             output.benchmarks = profiler.to_vec();
         }
 
-        Ok((output, version))
+        Ok(output)
     }
 }

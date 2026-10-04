@@ -251,16 +251,21 @@ impl<'arguments> Compiler<'arguments> {
 
         let run_frontend_standard_json =
             profiler.start_pipeline_element(format!("{}_RunStandardJSON", Slang::NAME).as_str());
-        let (mut output, solidity_version) = frontend.standard_json(&mut input)?;
+        let mut output = frontend.standard_json(&mut input)?;
         run_frontend_standard_json.borrow_mut().finish();
         output.take_and_write_warnings();
         output.check_errors()?;
 
         let linker_symbols = input.settings.libraries.as_linker_symbols()?;
 
+        let solidity_version = input
+            .settings
+            .solidity_version
+            .clone()
+            .expect("the frontend sets the version it compiled as");
         let run_solx_project = profiler.start_pipeline_element("solx_BuildProject");
         let project = Project::try_from_solidity_output(
-            &solidity_version,
+            &solx_standard_json::Version::new(solidity_version.to_string(), solidity_version),
             input.settings.libraries.clone(),
             &mut output,
         )?;
@@ -328,7 +333,7 @@ impl<'arguments> Compiler<'arguments> {
             | solx_standard_json::InputLanguage::Yul => {
                 let run_frontend_standard_json = profiler
                     .start_pipeline_element(format!("{}_RunStandardJSON", Slang::NAME).as_str());
-                let (mut output, solidity_version) = frontend.standard_json(&mut input)?;
+                let mut output = frontend.standard_json(&mut input)?;
                 run_frontend_standard_json.borrow_mut().finish();
 
                 if output.has_errors() {
@@ -339,9 +344,17 @@ impl<'arguments> Compiler<'arguments> {
                     .expect("lock is never poisoned because worker threads do not panic")
                     .extend(output.errors.drain(..));
 
+                let solidity_version = input
+                    .settings
+                    .solidity_version
+                    .clone()
+                    .expect("the frontend sets the version it compiled as");
                 let run_solx_project = profiler.start_pipeline_element("solx_BuildProject");
                 let project = Project::try_from_solidity_output(
-                    &solidity_version,
+                    &solx_standard_json::Version::new(
+                        solidity_version.to_string(),
+                        solidity_version,
+                    ),
                     input.settings.libraries.clone(),
                     &mut output,
                 )?;
