@@ -1,6 +1,6 @@
 # Compile-time benchmark
 
-Times `solx --standard-json <fixture>` with [hyperfine](https://github.com/sharkdp/hyperfine)
+Times `slang --standard-json <fixture>` with [hyperfine](https://github.com/sharkdp/hyperfine)
 over real-world standard-JSON inputs, comparing the PR build against a main
 build and the latest release binary. Runs in CI behind the `ci:compile-benchmark`
 PR label (`.github/workflows/compile-benchmark.yaml`) and posts the report as a
@@ -10,7 +10,7 @@ PR comment. Report-only: timings never gate the PR.
 
 ```bash
 ./tests/benchmark/run.sh \
-  --bin pr=./target/release/solx \
+  --bin pr=./target/release/slang \
   --bin release=path/to/released/solx \
   --out benchmark-out
 python3 ./tests/benchmark/report.py --dir benchmark-out --out benchmark-out/report.md
@@ -21,7 +21,7 @@ relative column in the report.
 
 ## Fixtures
 
-The fixtures are the exact standard-JSON inputs solx receives from Hardhat,
+The fixtures are the exact standard-JSON inputs the compiler receives from Hardhat,
 captured by the hardhat repo's `bench:dump-standard-json` (the solx
 regression benchmark's "Dump solx standard JSON" step) and vendored here in
 the corpus layout `fixtures/<scenario>/<variant>.json`. `fixtures/manifest.json`
@@ -37,7 +37,7 @@ directory vendors the legacy-DWARF subset:
 
 `run.sh` benchmarks a copy of each fixture with every `/// @solidity memory-safe-assembly`
 tag rewritten to the equivalent `assembly ("memory-safe")` flag, because Slang does not read
-the NatSpec tag yet (slang#2170). Without it, solx treats forge-std's and solmate's tagged
+the NatSpec tag yet (slang#2170). Without it, Slang treats forge-std's and solmate's tagged
 blocks as memory-unsafe, and the Uniswap fixture fails on stack-too-deep.
 
 These compile with production settings — optimizer enabled and DWARF debug

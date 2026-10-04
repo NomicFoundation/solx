@@ -1,6 +1,6 @@
-# solx Compiler Documentation
+# Slang Compiler Documentation
 
-This directory contains an **mdBook** project for **solx** documentation.
+This directory contains an **mdBook** project for **Slang** documentation.
 This README will guide you on how to build and test the book locally.
 
 ## Prerequisites

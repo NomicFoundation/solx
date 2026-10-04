@@ -32,7 +32,7 @@ The Rust toolchain itself is also resolved lazily: rustup downloads the version 
 
    This is the ~1 hour step (cold). It is kept out of the automatic container setup precisely because of that cost — you should know when you are paying it. The wrapper takes one flag: `--clean` (wipe `target-llvm/` first — see [Troubleshooting](#troubleshooting)).
 
-4. Build and test **solx**:
+4. Build and test **Slang**:
 
    ```shell
    cargo build --release
@@ -81,7 +81,7 @@ Build state lives in Docker named volumes so it survives **Rebuild Container** a
 
 | Volume | Mount point | Holds |
 |---|---|---|
-| `solx-target-<id>` | `target/` | solx build artifacts, `solx-dev` |
+| `solx-target-<id>` | `target/` | Slang build artifacts, `solx-dev` |
 | `solx-target-llvm-<id>` | `target-llvm/` | LLVM build tree + installation |
 | `solx-rustup` | `/usr/local/rustup` | downloaded Rust toolchains |
 | `solx-cargo` | `/usr/local/cargo` | cargo registry/git caches |
@@ -93,7 +93,7 @@ To start truly fresh, or to prune volumes left by deleted checkouts, list them w
 
 ## Working on the LLVM fork itself
 
-The devcontainer is also the intended environment for hacking on `solx-llvm`: the fork is not built standalone — `solx-dev` owns the CMake configuration (in `solx-dev/src/llvm/`), and `solx-llvm`'s own regression CI drives its builds through a **solx** checkout in the same runner image.
+The devcontainer is also the intended environment for hacking on `solx-llvm`: the fork is not built standalone — `solx-dev` owns the CMake configuration (in `solx-dev/src/llvm/`), and `solx-llvm`'s own regression CI drives its builds through a **Slang** checkout in the same runner image.
 
 1. Point the submodule at your branch: `git -C solx-llvm checkout <branch>` (after `git -C solx-llvm fetch --unshallow origin <branch>` if needed). Rerunning `bootstrap.sh` is safe: it never moves an initialized submodule — it only notes that the checkout differs from the recorded commit.
 2. Rebuild: `./target/release/solx-dev llvm build --enable-assertions --enable-tests --ccache-variant ccache --extra-args "-DLLVM_PARALLEL_LINK_JOBS='2'"`. `--enable-tests` builds FileCheck, `llvm-lit`, and the `check-*` targets so the regression suite runs locally (it implies the full toolset — expect a longer first build); the link-jobs cap keeps peak memory inside the 16 GB host minimum.

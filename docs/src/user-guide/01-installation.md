@@ -1,18 +1,7 @@
 # Installation
 
-You can start using **solx** in the following ways:
-
-1. Use the installation script.
-   ```shell
-   curl -L https://raw.githubusercontent.com/NomicFoundation/solx/main/install-solx | bash
-   ```
-
-   The script will download the latest stable release of **solx** and install it in your `PATH`.
-   > ⚠️ The script requires `curl` to be installed on your system.<br>
-   > This is the recommended way to install **solx** for MacOS users to bypass gatekeeper checks.
-
-2. Download [stable releases](https://github.com/NomicFoundation/solx/releases). See [Static Executables](#static-executables).
-3. Build **solx** from sources. See [Building from Source](#building-from-source).
+**Slang** has no release yet, so for now [build it from source](#building-from-source).
+The [installation script](https://raw.githubusercontent.com/NomicFoundation/solx/main/install-solx) and the [releases page](https://github.com/NomicFoundation/solx/releases) still serve **solx** 0.1.x, the compiler **Slang** grew out of.
 
 
 
@@ -32,27 +21,26 @@ The table below outlines the supported platforms and architectures:
 | arm64  |   ✅   |   ✅   |    ❌    |
 
 > Please avoid using outdated distributions of operating systems, as they may lack the necessary dependencies or include outdated versions of them.
-> **solx** is only tested on recent versions of popular distributions, such as MacOS 11.0 and Windows 10.
+> **Slang** is only tested on recent versions of popular distributions, such as MacOS 11.0 and Windows 10.
 
 
 
 ## Versioning
 
-> We recommend always using the latest version of **solx** to benefit from the latest features and bug fixes.
+> We recommend always using the latest version of **Slang** to benefit from the latest features and bug fixes.
 
 
 
 ## Ethereum Development Toolkits
 
-For large codebases, it is more convenient to use **solx** via toolkits such as Hardhat.
+For large codebases, it is more convenient to use **Slang** via toolkits such as Hardhat.
 These tools manage compiler input and output on a higher level, and provide additional features like incremental compilation and caching.
 
 
 
 ## Static Executables
 
-We ship **solx** binaries on the [releases page of the eponymous repository](https://github.com/NomicFoundation/solx/releases). 
-This repository maintains intuitive and stable naming for the executables and provides a changelog for each release. Tools using **solx** must download the binaries from this repository and cache them locally.
+**Slang** binaries will ship on the [releases page of this repository](https://github.com/NomicFoundation/solx/releases), with stable executable names and a changelog for each release. Tools using **Slang** must download the binaries from there and cache them locally.
 
 > All executables are statically linked and must work on all recent platforms without issues.
 
@@ -124,15 +112,15 @@ This repository maintains intuitive and stable naming for the executables and pr
 
    For more information and available build options, run `./target/release/solx-dev llvm build --help`.
 
-6. Build the **solx** executable.
+6. Build the **Slang** executable.
 
     ```shell
     cargo build --release
     ```
    
-    The **solx** executable will appear as `./target/release/solx`, where you can run it directly or move it to another location.
+    The **Slang** executable will appear as `./target/release/slang`, where you can run it directly or move it to another location.
 
-    If **cargo** cannot find the LLVM build artifacts, ensure that the `LLVM_SYS_211_PREFIX` environment variable is not set in your system, as it may be pointing to a location different from the one expected by **solx**.
+    If **cargo** cannot find the LLVM build artifacts, ensure that the `LLVM_SYS_211_PREFIX` environment variable is not set in your system, as it may be pointing to a location different from the one expected by **Slang**.
 
 
 

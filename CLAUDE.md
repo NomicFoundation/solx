@@ -15,7 +15,7 @@ Everything written for this repository is short and human-readable.
 
 ## Architecture
 
-- **solx** (this repo) is the Rust workspace: the CLI, the Slang frontend, the dialect binding and codegen.
+- **Slang** (this repo) is the Rust workspace: the CLI, the Slang frontend, the dialect binding and codegen.
 - **Slang** is the parser and binder, a git dependency pinned by `rev` in [`Cargo.toml`](./Cargo.toml).
 - [**solx-llvm**](./solx-llvm/) (submodule) is a fork of LLVM with the Sol and Yul MLIR dialects and an EVM target backend.
 - [**solidity**](./solidity/) (submodule) is upstream solc, kept for its [`test/libsolidity/semanticTests`](./solidity/test/libsolidity/semanticTests/), which the tester runs.
@@ -28,7 +28,7 @@ Solidity → Slang (parse, bind) → Sol-dialect MLIR → Sol→Yul→Standard p
 
 | Crate | Purpose |
 |---|---|
-| [`solx`](./solx/) | CLI entry point |
+| [`solx`](./solx/) | CLI entry point, the `slang` binary |
 | [`solx-core`](./solx-core/) | Pipeline orchestration |
 | [`solx-slang`](./solx-slang/) | Lowers the Slang AST to Sol-dialect MLIR |
 | [`solx-mlir`](./solx-mlir/) | The Sol and Yul dialect binding over melior: values, places, types, blocks |
@@ -50,7 +50,7 @@ A type has one inherent `impl` block, with public items before private ones.
 
 ### Ground truth
 
-1. Ground truth is legacy solc: `solc --asm`, `--bin` and `--storage-layout` define behavior. solx is never evidence about itself.
+1. Ground truth is legacy solc: `solc --asm`, `--bin` and `--storage-layout` define behavior. Slang is never evidence about itself.
 
 2. LIT fixtures follow the compiler: one that stops matching a correct change is rewritten, and no emission code exists to keep a fixture passing. The semantic tests are followed: they come from solc, and the compiler changes to pass them.
 
@@ -110,7 +110,7 @@ A type has one inherent `impl` block, with public items before private ones.
 
 1. A LIT fixture pins op shape. A tester case under [`tests/solidity/`](./tests/solidity/) pins behavior.
 
-2. A fixture has one RUN line, `solx --emit-mlir=sol %s | FileCheck %s`, and no prose. The CHECKs are the whole statement. A debug-location fixture runs `solx --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'`.
+2. A fixture has one RUN line, `slang --emit-mlir=sol %s | FileCheck %s`, and no prose. The CHECKs are the whole statement. A debug-location fixture runs `slang --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'`.
 
 3. One fixture per construct. A new case joins the fixture that owns its construct.
 
@@ -138,13 +138,13 @@ A type has one inherent `impl` block, with public items before private ones.
 
 ## Build Commands
 
-Build `solx-dev`, then LLVM with MLIR, then solx:
+Build `solx-dev`, then LLVM with MLIR, then Slang:
 
 ```bash
 cargo build --release --bin solx-dev
 ./target/release/solx-dev llvm build --enable-utils --build-type RelWithDebInfo   # target-llvm/target-final/
-cargo build              # target/debug/solx
-cargo build --release    # target/release/solx
+cargo build              # target/debug/slang
+cargo build --release    # target/release/slang
 ```
 
 ## Testing
@@ -152,11 +152,11 @@ cargo build --release    # target/release/solx
 ```bash
 cargo test                                        # unit and CLI tests
 cargo clippy --all-targets
-cargo build --release && cargo run-tester         # the REVM corpus at -O M3B3 against target/release/solx
+cargo build --release && cargo run-tester         # the REVM corpus at -O M3B3 against target/release/slang
 cargo run-tester --path tests/solidity/simple/default.sol   # one test
 ```
 
-LIT runs the fixtures under [`solx-mlir/tests/lit/`](./solx-mlir/tests/lit/) against `target/debug/solx`:
+LIT runs the fixtures under [`solx-mlir/tests/lit/`](./solx-mlir/tests/lit/) against `target/debug/slang`:
 
 ```bash
 export PATH="$PWD/target-llvm/target-final/bin:$PWD/target/debug:$PATH"

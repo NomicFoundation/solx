@@ -1,13 +1,13 @@
 # LLVM Options
 
-This guide documents LLVM backend options available in **solx** through the `--llvm-options` flag.
+This guide documents LLVM backend options available in **Slang** through the `--llvm-options` flag.
 
 ## Usage
 
 Pass options as a single string after `=`:
 
 ```bash
-solx contract.sol --llvm-options='-option1 value1 -option2 value2'
+slang contract.sol --llvm-options='-option1 value1 -option2 value2'
 ```
 
 ## EVM Backend Options
@@ -27,7 +27,7 @@ Standard LLVM diagnostic options can be passed through `--llvm-options` and thei
 Print timing information for each LLVM pass.
 
 ```bash
-solx contract.sol --bin --llvm-options='-time-passes'
+slang contract.sol --bin --llvm-options='-time-passes'
 ```
 
 ### `-stats`
@@ -48,7 +48,7 @@ Enable debug output for a specific LLVM pass. Note that `--llvm-debug-logging` c
 
 ## CLI Debug Flags
 
-These are top-level **solx** flags (not passed through `--llvm-options`):
+These are top-level **Slang** flags (not passed through `--llvm-options`):
 
 | Flag | Effect |
 |---|---|

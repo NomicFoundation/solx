@@ -1,13 +1,13 @@
 # Architecture
 
-**solx** is an LLVM-based compiler that translates Solidity source code into optimized EVM bytecode.
+**Slang** is an LLVM-based compiler that translates Solidity source code into optimized EVM bytecode.
 
 ## Components
 
 The compiler consists of three repositories:
 
-1. [solx](https://github.com/NomicFoundation/solx) — The main compiler executable and Rust crates that lower the Solidity AST to MLIR and drive the LLVM backend.
-2. [slang](https://github.com/NomicFoundation/slang) — The Solidity parser and binder.
+1. [solx](https://github.com/NomicFoundation/solx) — The `slang` compiler executable and **slang-solx**, the Rust crates that lower the Solidity AST to MLIR and drive the LLVM backend.
+2. [slang](https://github.com/NomicFoundation/slang) — The **Slang front-end**: the Solidity parser and binder.
 3. [solx-llvm](https://github.com/NomicFoundation/solx-llvm) — A fork of the LLVM framework with the Sol and Yul MLIR dialects and an EVM target backend.
 
 ## Compilation Pipeline
@@ -16,7 +16,7 @@ The compiler consists of three repositories:
                         ┌─────────────────────────────────────────────┐
                         │                  Frontend                   │
 ┌──────────┐            │  ┌────────────────┐       ┌──────────────┐  │
-│ Solidity │ ────────── │  │     Slang      │ ───── │     solx     │  │
+│ Solidity │ ────────── │  │ Slang front-end│ ───── │  slang-solx  │  │
 │  source  │            │  │                │       │              │  │
 └──────────┘            │  │ Parsing,       │ bound │ Sol-dialect  │  │
                         │  │ binding        │ AST   │ MLIR, Sol→Yul│  │
@@ -59,8 +59,8 @@ The compiler consists of three repositories:
 
 The frontend transforms Solidity source code into LLVM IR:
 
-1. **Slang** parses and binds the Solidity source.
-2. **solx** lowers the bound AST to Sol-dialect MLIR, and the Sol→Yul→Standard passes translate it into LLVM IR.
+1. The **Slang front-end** parses and binds the Solidity source.
+2. **slang-solx** lowers the bound AST to Sol-dialect MLIR, and the Sol→Yul→Standard passes translate it into LLVM IR.
 
 ### Middle-end
 
