@@ -32,13 +32,15 @@ fn pinned_pragma() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn long_version() -> anyhow::Result<()> {
+#[test_case("0.8.20+commit.a1b79de6" ; "build")]
+#[test_case("0.8.20-nightly.2023.5.1" ; "prerelease")]
+#[test_case("0.8.20-nightly.2023.5.1+commit.a1b79de6" ; "prerelease_and_build")]
+fn suffix(version: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
         "--solidity-version",
-        "0.8.20+commit.a1b79de6",
+        version,
         "--bin",
         crate::common::contract!("solidity/PinnedPragma.sol"),
     ];
@@ -47,9 +49,9 @@ fn long_version() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains(cbor_solc_version_hex("0.8.20")))
-        .stderr(predicate::str::contains(
-            "Solidity version 0.8.20+commit.a1b79de6 is compiled as 0.8.20",
-        ));
+        .stderr(predicate::str::contains(format!(
+            "Solidity version {version} is compiled as 0.8.20"
+        )));
 
     Ok(())
 }
