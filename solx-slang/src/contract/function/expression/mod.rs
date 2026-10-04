@@ -175,8 +175,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// Emits an expression for its side effects, discarding the values. `new C;` denotes a creation
     /// function rather than performing one, so it evaluates nothing, as does a builtin or a type,
-    /// while an uncalled builtin member evaluates only its operand; a modifier's `_;` is the
-    /// placeholder the modified body expands at.
+    /// while an uncalled builtin or function member evaluates only its operand; a modifier's `_;`
+    /// is the placeholder the modified body expands at.
     pub fn expression_effect(&mut self, node: &Expression) {
         match node {
             Expression::FunctionCallExpression(call) => {
@@ -255,6 +255,14 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                             | BuiltIn::Wrap
                             | BuiltIn::Unwrap
                     )
+                ) =>
+            {
+                self.expression_effect(&inner.operand());
+            }
+            Expression::MemberAccessExpression(inner)
+                if matches!(
+                    inner.member().resolve_to_definition(),
+                    Some(Definition::Function(_))
                 ) =>
             {
                 self.expression_effect(&inner.operand());
