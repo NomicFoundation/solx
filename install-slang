@@ -1,0 +1,188 @@
+#!/bin/bash
+set -euo pipefail
+
+cat << "EOF"
+ ____   _         _     _   _   ____
+/ ___| | |       / \   | \ | | / ___|
+\___ \ | |      / _ \  |  \| || |  _
+ ___) || |___  / ___ \ | |\  || |_| |
+|____/ |_____|/_/   \_\|_| \_| \____|
+
+         Installer
+EOF
+
+# Default values
+REPO="NomicFoundation/solx"
+DEFAULT_INSTALL_DIR="${HOME}/.local/bin"
+BINARY_NAME="slang"
+VERSION=""
+
+# Cleanup on exit
+TMP_DIR=""
+cleanup() {
+    if [[ -n "${TMP_DIR}" && -d "${TMP_DIR}" ]]; then
+        rm -rf "${TMP_DIR}"
+    fi
+}
+trap cleanup EXIT
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --install-dir=*)
+            INSTALL_DIR="${1#--install-dir=}"
+            shift
+            ;;
+        --version=*)
+            VERSION="${1#--version=}"
+            shift
+            ;;
+        -v=*)
+            VERSION="${1#-v=}"
+            shift
+            ;;
+        *)
+            echo "Unknown argument: $1"
+            echo "Usage: install-slang [--install-dir=DIR] [--version=X.Y.Z]"
+            exit 1
+            ;;
+    esac
+done
+
+# Set default install directory if not specified
+INSTALL_DIR="${INSTALL_DIR:-${DEFAULT_INSTALL_DIR}}"
+
+# Detect OS and architecture
+OS=$(uname -s)
+ARCH=$(uname -m)
+
+case "$OS" in
+    Darwin)
+        PLATFORM="macosx"
+        ;;
+    Linux)
+        if [[ "${ARCH}" == "x86_64" ]]; then
+            PLATFORM="linux-amd64-gnu"
+        elif [[ "${ARCH}" == "aarch64" || "${ARCH}" == "arm64" ]]; then
+            PLATFORM="linux-arm64-gnu"
+        else
+            echo "Unsupported architecture: ${ARCH}"
+            exit 1
+        fi
+        ;;
+    *)
+        echo "Unsupported OS: ${OS}"
+        exit 1
+        ;;
+esac
+
+# Check for curl
+if ! command -v curl >/dev/null 2>&1; then
+    echo "curl is not installed. Please install curl to proceed."
+    exit 1
+fi
+
+# Build curl options array
+CURL_OPTS=(-s)
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    CURL_OPTS+=(-H "Authorization: token ${GITHUB_TOKEN}")
+fi
+
+# Determine version to install
+if [[ -n "${VERSION}" ]]; then
+    # Use specified version, strip leading 'v' if present
+    VERSION="${VERSION#v}"
+    echo "Using specified version: ${VERSION}"
+else
+    # The repository also publishes solx releases, so `releases/latest` can't be used.
+    # The API lists releases newest first, and only slang releases have `slang/` tags.
+    echo "Fetching latest slang release..."
+    RELEASES=$(curl "${CURL_OPTS[@]}" "https://api.github.com/repos/${REPO}/releases?per_page=100")
+    VERSION=$(echo "${RELEASES}" | grep -o '"tag_name": *"slang/[^"]*"' | head -n 1 | sed 's/.*"slang\/\(.*\)"/\1/' || true)
+
+    if [[ -z "${VERSION}" ]]; then
+        echo "Failed to get latest slang release."
+        echo "This may be due to GitHub API rate limiting."
+        echo "Try setting GITHUB_TOKEN or use --version=X.Y.Z"
+        exit 1
+    fi
+
+    echo "Latest version: ${VERSION}"
+fi
+TAG="slang/${VERSION}"
+
+# Construct the download URL
+ASSET_NAME="slang-${PLATFORM}-v${VERSION}"
+DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET_NAME}"
+
+# Download the binary
+TMP_DIR=$(mktemp -d)
+echo "Downloading slang from ${DOWNLOAD_URL}..."
+if ! curl -L --fail "${DOWNLOAD_URL}" -o "${TMP_DIR}/${BINARY_NAME}"; then
+    echo "Failed to download slang."
+    echo "Please check that version ${VERSION} exists for platform ${PLATFORM}."
+    exit 1
+fi
+
+# Make it executable
+chmod +x "${TMP_DIR}/${BINARY_NAME}"
+
+# Create install directory if needed
+if [[ ! -d "${INSTALL_DIR}" ]]; then
+    echo "Creating installation directory: ${INSTALL_DIR}"
+    mkdir -p "${INSTALL_DIR}"
+fi
+
+# Move to install directory
+if [[ -w "${INSTALL_DIR}" ]]; then
+    mv "${TMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
+else
+    echo "Installing to ${INSTALL_DIR} requires write permissions."
+    echo "Please check your permissions or run with sudo."
+    exit 1
+fi
+
+# Ensure slang is in PATH
+if ! command -v "${BINARY_NAME}" >/dev/null 2>&1; then
+    echo "Adding ${INSTALL_DIR} to PATH..."
+
+    SHELL_NAME=$(basename "${SHELL}")
+    case "${SHELL_NAME}" in
+        bash)
+            PROFILE_FILE="${HOME}/.bashrc"
+            PATH_LINE="export PATH=\"${INSTALL_DIR}:\$PATH\""
+            ;;
+        zsh)
+            PROFILE_FILE="${HOME}/.zshrc"
+            PATH_LINE="export PATH=\"${INSTALL_DIR}:\$PATH\""
+            ;;
+        fish)
+            PROFILE_FILE="${HOME}/.config/fish/config.fish"
+            PATH_LINE="fish_add_path ${INSTALL_DIR}"
+            ;;
+        *)
+            PROFILE_FILE="${HOME}/.profile"
+            PATH_LINE="export PATH=\"${INSTALL_DIR}:\$PATH\""
+            ;;
+    esac
+
+    if [[ -f "${PROFILE_FILE}" ]] && grep -q "${INSTALL_DIR}" "${PROFILE_FILE}" 2>/dev/null; then
+        echo "${INSTALL_DIR} already in ${PROFILE_FILE}"
+    else
+        echo "${PATH_LINE}" >> "${PROFILE_FILE}"
+        echo "Added ${INSTALL_DIR} to PATH in ${PROFILE_FILE}"
+    fi
+
+    export PATH="${INSTALL_DIR}:${PATH}"
+fi
+
+# Verify installation
+echo "Verifying installation..."
+if "${INSTALL_DIR}/${BINARY_NAME}" --version; then
+    echo ""
+    echo "slang installed successfully to ${INSTALL_DIR}/${BINARY_NAME}"
+else
+    echo "slang installed but could not run 'slang --version'"
+    echo "Please check your installation in ${INSTALL_DIR}."
+    exit 1
+fi

@@ -12,6 +12,10 @@ on:
         description: "Deploy to GitHub Pages"
         required: false
         default: false
+      version:
+        type: string
+        description: "Version of the documentation to deploy"
+        required: false
   workflow_dispatch:
     inputs:
       version:
