@@ -158,13 +158,15 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 Value::string_literal(name.name().as_bytes(), self)
             }
             Some(BuiltIn::TypeInterfaceId) => {
-                let Definition::Interface(interface) = Self::meta_type_definition(&operand) else {
-                    unimplemented!("`type(..).interfaceId` names no interface");
+                let interface_id = match Self::meta_type_definition(&operand) {
+                    Definition::Interface(interface) => interface.compute_interface_id(),
+                    Definition::Contract(contract) => contract.compute_interface_id(),
+                    _ => unreachable!(
+                        "slang resolves `.interfaceId` on an interface or an abstract contract alone"
+                    ),
                 };
                 Value::selector(
-                    interface
-                        .compute_interface_id()
-                        .expect("an interface has an identifier"),
+                    interface_id.expect("an interface or an abstract contract has an identifier"),
                     self.typing(node.get_type()),
                     self,
                 )
