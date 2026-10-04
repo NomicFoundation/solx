@@ -3,6 +3,7 @@
 //! scope.
 //!
 
+use std::cell::OnceCell;
 use std::collections::BTreeMap;
 
 use slang_solidity_v2::ast::SourceUnit;
@@ -22,7 +23,7 @@ use crate::scope::source_unit::SourceUnitScope;
 
 impl<'context> SourceUnitScope<'context> {
     /// Lowers every contract and library the unit deploys into standard-JSON contract outputs
-    /// keyed by definition name, each in its own MLIR module off the file's melior context. An
+    /// keyed by definition name, each in its own MLIR module off the frontend's melior context. An
     /// abstract contract and an interface deploy nothing and produce no module.
     ///
     /// `selected` tells whether an output selector is requested for a contract, by name. The
@@ -36,6 +37,7 @@ impl<'context> SourceUnitScope<'context> {
     ///
     /// Returns an error if module finalization fails.
     pub fn source_unit(
+        melior: &OnceCell<melior::Context>,
         unit: &SourceUnit,
         evm_version: EVMVersion,
         revert_strings: RevertStrings,
@@ -44,7 +46,6 @@ impl<'context> SourceUnitScope<'context> {
         pass_timing: bool,
         profiler: &mut Profiler,
     ) -> anyhow::Result<BTreeMap<String, Contract>> {
-        let mut melior = None;
         let mut contracts = BTreeMap::new();
         for member in unit.members().iter() {
             let object = match member {
@@ -55,10 +56,9 @@ impl<'context> SourceUnitScope<'context> {
                 _ => continue,
             };
 
-            let melior = melior.get_or_insert_with(|| {
-                let run_context_creation = profiler.start_pipeline_element(
-                    format!("Compiler_CreateMLIRContext:{}", unit.get_file_id()).as_str(),
-                );
+            let melior = melior.get_or_init(|| {
+                let run_context_creation =
+                    profiler.start_pipeline_element("Compiler_CreateMLIRContext");
                 let melior = Context::create_melior_context();
                 run_context_creation.borrow_mut().finish();
                 melior

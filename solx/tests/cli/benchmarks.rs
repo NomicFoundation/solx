@@ -38,7 +38,7 @@ fn records_every_pipeline_stage() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("Slang_RunStandardJSON").count(1))
         .stdout(predicate::str::contains("Slang_ParseAndBind").count(1))
         .stdout(predicate::str::contains("Slang_SerializeAST:").count(1))
-        .stdout(predicate::str::contains("Compiler_CreateMLIRContext:").count(1))
+        .stdout(predicate::str::contains("Compiler_CreateMLIRContext").count(1))
         .stdout(predicate::str::contains("Compiler_EmitSol:").count(1))
         .stdout(predicate::str::is_match(r"Compiler_RunSolPasses:\S*\.sol:\w+: \d+us")?.count(1))
         .stdout(predicate::str::is_match(
@@ -81,7 +81,7 @@ fn creates_no_mlir_context_without_objects() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("Slang_ParseAndBind").count(1))
-        .stdout(predicate::str::contains("Compiler_CreateMLIRContext:").not());
+        .stdout(predicate::str::contains("Compiler_CreateMLIRContext").not());
 
     Ok(())
 }
