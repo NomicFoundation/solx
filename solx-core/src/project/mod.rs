@@ -34,7 +34,7 @@ use self::contract::metadata::Metadata as ContractMetadata;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Project {
     /// The `solc` compiler version, absent for LLVM IR projects.
-    pub solc_version: Option<solx_standard_json::Version>,
+    pub solc_version: Option<semver::Version>,
     /// The project build results.
     pub contracts: BTreeMap<String, Contract>,
     /// The Solidity AST JSONs of the source files.
@@ -51,7 +51,7 @@ impl Project {
     /// A shortcut constructor.
     ///
     pub fn new(
-        solc_version: Option<solx_standard_json::Version>,
+        solc_version: Option<semver::Version>,
         contracts: BTreeMap<String, Contract>,
         ast_jsons: Option<BTreeMap<String, Option<Box<RawValue>>>>,
         libraries: solx_utils::Libraries,
@@ -68,7 +68,7 @@ impl Project {
     /// Parses the Solidity `sources` and returns a Solidity project.
     ///
     pub fn try_from_solidity_output(
-        solc_version: &solx_standard_json::Version,
+        solc_version: semver::Version,
         libraries: solx_utils::Libraries,
         output: &mut solx_standard_json::Output,
     ) -> anyhow::Result<Self> {
@@ -148,7 +148,7 @@ impl Project {
             }
         }
         Ok(Project::new(
-            Some(solc_version.to_owned()),
+            Some(solc_version),
             contracts,
             Some(ast_jsons),
             libraries,
@@ -425,7 +425,7 @@ impl Project {
     ///
     fn cbor_metadata(
         metadata: Option<&str>,
-        solc_version: Option<&solx_standard_json::Version>,
+        solc_version: Option<&semver::Version>,
         metadata_hash_type: solx_utils::MetadataHashType,
         append_cbor: bool,
     ) -> Option<Vec<u8>> {
@@ -450,7 +450,7 @@ impl Project {
         if let Some(solc_version) = solc_version {
             cbor_version_parts.push((
                 crate::r#const::SOLC_METADATA_TAG.to_owned(),
-                solc_version.default.to_owned(),
+                solc_version.to_owned(),
             ));
         }
         let cbor_data = (

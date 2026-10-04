@@ -258,14 +258,13 @@ impl<'arguments> Compiler<'arguments> {
 
         let linker_symbols = input.settings.libraries.as_linker_symbols()?;
 
-        let solidity_version = input
-            .settings
-            .solidity_version
-            .clone()
-            .expect("the frontend sets the version it compiled as");
         let run_solx_project = profiler.start_pipeline_element("solx_BuildProject");
         let project = Project::try_from_solidity_output(
-            &solx_standard_json::Version::new(solidity_version.to_string(), solidity_version),
+            input
+                .settings
+                .solidity_version
+                .clone()
+                .expect("the frontend sets the version it compiled as"),
             input.settings.libraries.clone(),
             &mut output,
         )?;
@@ -344,17 +343,13 @@ impl<'arguments> Compiler<'arguments> {
                     .expect("lock is never poisoned because worker threads do not panic")
                     .extend(output.errors.drain(..));
 
-                let solidity_version = input
-                    .settings
-                    .solidity_version
-                    .clone()
-                    .expect("the frontend sets the version it compiled as");
                 let run_solx_project = profiler.start_pipeline_element("solx_BuildProject");
                 let project = Project::try_from_solidity_output(
-                    &solx_standard_json::Version::new(
-                        solidity_version.to_string(),
-                        solidity_version,
-                    ),
+                    input
+                        .settings
+                        .solidity_version
+                        .clone()
+                        .expect("the frontend sets the version it compiled as"),
                     input.settings.libraries.clone(),
                     &mut output,
                 )?;
