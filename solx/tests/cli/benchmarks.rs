@@ -28,6 +28,7 @@ fn records_every_pipeline_stage() -> anyhow::Result<()> {
         crate::common::TEST_SOLIDITY_CONTRACT,
         "--benchmarks",
         "--bin",
+        "--ast-json",
     ];
 
     let result = crate::cli::execute_solx(args)?;

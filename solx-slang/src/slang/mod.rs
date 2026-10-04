@@ -151,6 +151,13 @@ impl Slang {
 
         for file in unit.files() {
             let file_id = file.id();
+            if !input_json.settings.output_selection.check_selection(
+                file_id.as_str(),
+                None,
+                solx_standard_json::InputSelector::AST,
+            ) {
+                continue;
+            }
             if let Some(output_source) = output.sources.get_mut(file_id.as_str()) {
                 let run_ast_serialization = profiler.start_pipeline_element(
                     format!("{}_SerializeAST:{file_id}", Self::NAME).as_str(),
