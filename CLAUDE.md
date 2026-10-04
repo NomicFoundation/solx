@@ -15,7 +15,7 @@ Everything written for this repository is short and human-readable.
 
 ## Architecture
 
-- **Slang** (this repo) is the Rust workspace: the CLI, the Slang frontend, the dialect binding and codegen.
+- **solx** (this repo) is the Rust workspace of the `slang` compiler: the CLI, the Slang frontend, the dialect binding and codegen.
 - **Slang** is the parser and binder, a git dependency pinned by `rev` in [`Cargo.toml`](./Cargo.toml).
 - [**solx-llvm**](./solx-llvm/) (submodule) is a fork of LLVM with the Sol and Yul MLIR dialects and an EVM target backend.
 - [**solidity**](./solidity/) (submodule) is upstream solc, kept for its [`test/libsolidity/semanticTests`](./solidity/test/libsolidity/semanticTests/), which the tester runs.
@@ -50,7 +50,7 @@ A type has one inherent `impl` block, with public items before private ones.
 
 ### Ground truth
 
-1. Ground truth is legacy solc: `solc --asm`, `--bin` and `--storage-layout` define behavior. Slang is never evidence about itself.
+1. Ground truth is legacy solc: `solc --asm`, `--bin` and `--storage-layout` define behavior. The compiler is never evidence about itself.
 
 2. LIT fixtures follow the compiler: one that stops matching a correct change is rewritten, and no emission code exists to keep a fixture passing. The semantic tests are followed: they come from solc, and the compiler changes to pass them.
 
@@ -138,7 +138,7 @@ A type has one inherent `impl` block, with public items before private ones.
 
 ## Build Commands
 
-Build `solx-dev`, then LLVM with MLIR, then Slang:
+Build `solx-dev`, then LLVM with MLIR, then the compiler:
 
 ```bash
 cargo build --release --bin solx-dev
