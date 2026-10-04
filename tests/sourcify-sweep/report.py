@@ -117,7 +117,8 @@ def census(results, leg_name, title, lines):
     ranked = sorted(buckets.items(), key=lambda item: (-len(item[1]), item[0]))
     for (kind, sig), ids in ranked[:TOP_SIGNATURES]:
         examples = ", ".join(f"`{i}`" for i in sorted(ids)[:EXAMPLES])
-        lines.append(f"| {len(ids)} | {kind} | {sig.replace('|', '\\|')} | {examples} |")
+        escaped = sig.replace("|", "\\|")
+        lines.append(f"| {len(ids)} | {kind} | {escaped} | {examples} |")
     if len(ranked) > TOP_SIGNATURES:
         rest = sum(len(ids) for _, ids in ranked[TOP_SIGNATURES:])
         lines.append(f"| {rest} | | *{len(ranked) - TOP_SIGNATURES} further signatures* | |")
