@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*f.*}}()
 // CHECK:   %[[BASE:.*]] = sol.addr_of @{{.*data.*}} : !sol.string<Storage>

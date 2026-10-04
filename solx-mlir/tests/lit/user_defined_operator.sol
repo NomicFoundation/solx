@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*above.*}}-> i1
 // CHECK:   sol.call @{{.*gt.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> i1

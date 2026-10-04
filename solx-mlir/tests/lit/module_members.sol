@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*chained.*}}() -> ui256 attributes {{.*}}selector = 1955792327 : i32
 // CHECK:   %[[CK:.*]] = sol.constant 11 : ui8

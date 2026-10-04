@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*fold.*}}(%{{.*}}: !sol.struct<(ui256, ui256), Memory>) -> ui256 attributes {id = {{[0-9]+}} : i64, orig_fn_type = (!sol.struct<(ui256, ui256), Memory>) -> ui256, selector = -699220919 : i32, state_mutability = #Pure}
 

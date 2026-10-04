@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=llvm %s | FileCheck %s
+// RUN: slang --emit-mlir=llvm %s | FileCheck %s
 
 // CHECK: llvm.func @__entry()
 // CHECK: "llvm.intrcall"() <{id = {{[0-9]+}} : i32, name = "evm.memoryguard"}> : () -> i256

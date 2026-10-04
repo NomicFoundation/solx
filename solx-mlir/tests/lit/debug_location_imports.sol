@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol --debug-info %s %S/Inputs/debug_location_imported.sol | FileCheck %s --implicit-check-not='loc(unknown)'
+// RUN: slang --emit-mlir=sol --debug-info %s %S/Inputs/debug_location_imported.sol | FileCheck %s --implicit-check-not='loc(unknown)'
 
 // CHECK: #[[CALLER:loc[0-9]*]] = loc("{{.*}}debug_location_imports.sol":31:5)
 // CHECK: #[[TRIPLE:loc[0-9]*]] = loc("{{.*}}debug_location_imported.sol":1:1)

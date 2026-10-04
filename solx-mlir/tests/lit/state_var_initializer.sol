@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.state_var @x_{{[0-9]+}} slot 0 offset 0 : ui256
 // CHECK: sol.state_var @s_{{[0-9]+}} slot 1 offset 0 : !sol.string<Storage>

@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*}}fire{{.*}}(%arg0: !sol.address, %arg1: ui256)
 // CHECK:   %[[CALLER:.*]] = sol.caller

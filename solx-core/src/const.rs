@@ -3,7 +3,7 @@
 //!
 
 /// The default executable name.
-pub static DEFAULT_EXECUTABLE_NAME: &str = "solx";
+pub static DEFAULT_EXECUTABLE_NAME: &str = "slang";
 
 /// The default package description.
 pub static DEFAULT_PACKAGE_DESCRIPTION: &str = "LLVM-based Solidity compiler for the EVM";

@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.contract @{{.*}}Leaf
 // CHECK: sol.state_var @{{.*}}base{{.*}} slot 0 offset 0 : ui256

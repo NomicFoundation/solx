@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*bh.*}}(%{{.*}}: ui256) -> !sol.fixedbytes<32>
 // CHECK:   sol.blockhash %{{.*}} : <32>

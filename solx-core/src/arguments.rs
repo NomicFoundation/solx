@@ -528,11 +528,11 @@ impl Arguments {
     ///
     /// Build the IR output configuration from CLI arguments.
     ///
-    /// Priority: `SOLX_OUTPUT_DIR` env var (debug, all IRs) > `--output-dir` with IR flags.
+    /// Priority: `SLANG_OUTPUT_DIR` env var (debug, all IRs) > `--output-dir` with IR flags.
     ///
     pub fn output_config(&self) -> anyhow::Result<Option<solx_codegen_evm::OutputConfig>> {
         if let Some(debug_output_directory) =
-            std::env::var("SOLX_OUTPUT_DIR").ok().map(PathBuf::from)
+            std::env::var("SLANG_OUTPUT_DIR").ok().map(PathBuf::from)
         {
             std::fs::create_dir_all(debug_output_directory.as_path())?;
             return Ok(Some(solx_codegen_evm::OutputConfig::new_debug(

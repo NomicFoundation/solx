@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'
+// RUN: slang --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'
 
 // CHECK: sol.func @{{.*decodes.*}}(
 // CHECK:   sol.decode %{{.*}} loc(#[[DECODE:loc[0-9]*]])

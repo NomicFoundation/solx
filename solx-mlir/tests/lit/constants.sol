@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK:      sol.func @{{.*getDouble.*}}() -> ui8
 // CHECK-DAG:    sol.constant 42 : ui8

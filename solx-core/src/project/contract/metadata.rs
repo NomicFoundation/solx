@@ -11,8 +11,8 @@
 pub struct Metadata<'a> {
     /// The `solc` version.
     pub solc_version: Option<semver::Version>,
-    /// `solx` compiler version.
-    pub solx_version: semver::Version,
+    /// The compiler version.
+    pub slang_version: semver::Version,
     /// The LLVM compiler optimizer settings.
     pub optimizer_settings: solx_codegen_evm::OptimizerSettings,
     /// The LLVM extra arguments.
@@ -30,7 +30,7 @@ impl<'a> Metadata<'a> {
     ) -> Self {
         Self {
             solc_version: solc_version.cloned(),
-            solx_version: crate::Compiler::version()
+            slang_version: crate::Compiler::version()
                 .parse()
                 .expect("version string is valid semver"),
             optimizer_settings,

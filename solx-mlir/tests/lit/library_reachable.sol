@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.contract @{{.*User.*}} {
 // CHECK: sol.func @{{.*}} attributes {{.*}}kind = #Constructor

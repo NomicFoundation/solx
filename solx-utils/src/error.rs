@@ -5,7 +5,7 @@
 /// Error for the combination of memory-unsafe assembly and stack-too-deep.
 pub const ERROR_UNSAFE_MEMORY_ASM_STACK_TOO_DEEP: &str = r#"
 This contract cannot be compiled due to a combination of a memory-unsafe assembly block and a stack-too-deep error.
-solx can automatically fix the stack-too-deep error, but only in the absence of memory-unsafe assembly.
+Slang can automatically fix the stack-too-deep error, but only in the absence of memory-unsafe assembly.
 Please inspect assembly blocks that have produced warnings for this contract according to the requirements at:
 
     https://docs.soliditylang.org/en/latest/assembly.html#memory-safety

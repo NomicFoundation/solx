@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %evaluation_order/named_arguments.sol | FileCheck %s
+// RUN: slang --emit-mlir=sol %evaluation_order/named_arguments.sol | FileCheck %s
 
 // CHECK: sol.func @{{.*call.*}}
 // CHECK:   sol.constant 1 : ui8

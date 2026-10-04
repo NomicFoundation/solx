@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.contract @{{.*C.*}} {
 // CHECK: sol.func private @{{.*g.*}}() -> ui256 attributes {{.*}}id = {{[0-9]+}}

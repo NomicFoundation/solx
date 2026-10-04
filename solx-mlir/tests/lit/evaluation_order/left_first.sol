@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %evaluation_order/left_first.sol | FileCheck %s
+// RUN: slang --emit-mlir=sol %evaluation_order/left_first.sol | FileCheck %s
 
 // CHECK: sol.func @{{.*conditionalTrue.*}}
 // CHECK:   sol.call @{{.*left.*}}

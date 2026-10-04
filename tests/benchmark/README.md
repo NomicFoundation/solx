@@ -45,7 +45,7 @@ info — unlike hand-packed inputs, so timings here are comparable to what the
 Hardhat solx benchmark measures (minus Hardhat's own overhead).
 
 Not yet vendored: `aave-v4-solx` — its profile compiles through multiple
-per-file-override jobs that all overwrite the same `SOLX_STANDARD_JSON_DEBUG`
+per-file-override jobs that all overwrite the same `SLANG_STANDARD_JSON_DEBUG`
 path, so which job the dump captures is machine-dependent; it returns once
 the hardhat-side dump captures every job. Note its dumps require
 `EVM_DISABLE_MEMORY_SAFE_ASM_CHECK=1` to compile (scenario-level env in the

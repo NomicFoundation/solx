@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*literal_salt.*}}
 // CHECK:   %[[LITERAL:.*]] = sol.constant 452312848583266388373324160190187140051835877600158453279131187530910662656 : ui256

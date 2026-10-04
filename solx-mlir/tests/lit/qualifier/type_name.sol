@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %qualifier_type_name/main.sol %qualifier_type_name/module.sol | FileCheck %s
+// RUN: slang --emit-mlir=sol %qualifier_type_name/main.sol %qualifier_type_name/module.sol | FileCheck %s
 
 // CHECK: sol.func @{{.*constantMember.*}}
 // CHECK:   sol.constant 7

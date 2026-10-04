@@ -58,13 +58,13 @@ runs:
         # Sanitize build environment: clear variables that could tamper with compilation.
         # RUSTC_WRAPPER / RUSTC_WORKSPACE_WRAPPER: could redirect compilation through a malicious wrapper.
         # LD_PRELOAD / LD_LIBRARY_PATH / DYLD_*: could inject code into compiler and linker processes.
-        # CARGO_BIN_EXE_SOLX: could override the safe .cargo/config.toml default.
+        # CARGO_BIN_EXE_SLANG: could override the safe .cargo/config.toml default.
         # LLVM_SYS_* / MLIR_SYS_* / TABLEGEN_*: could redirect to a trojaned LLVM
         #   (safe defaults from .cargo/config.toml will be used instead).
         unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER LD_PRELOAD LD_LIBRARY_PATH \
           DYLD_INSERT_LIBRARIES DYLD_LIBRARY_PATH DYLD_FRAMEWORK_PATH \
           DYLD_FALLBACK_LIBRARY_PATH DYLD_FALLBACK_FRAMEWORK_PATH \
-          CARGO_BIN_EXE_SOLX \
+          CARGO_BIN_EXE_SLANG \
           2>/dev/null || true
         for var in $(env | awk -F= '/^(LLVM_SYS|MLIR_SYS|TABLEGEN)_/ {print $1}'); do unset "$var"; done
         ${SFW_PREFIX:-} cargo fetch --locked
@@ -87,7 +87,7 @@ runs:
         fi
         [ "$RUNNER_OS" = "Windows" ] && WIN_SUFFIX=".exe"
         echo "${BINARY_DIR}" >> "${GITHUB_PATH}"
-        echo "binary-path=${BINARY_DIR}/solx${WIN_SUFFIX}" >> "${GITHUB_OUTPUT}"
+        echo "binary-path=${BINARY_DIR}/slang${WIN_SUFFIX}" >> "${GITHUB_OUTPUT}"
 
     - name: Prepare binary
       if: inputs.release-suffix != ''
@@ -99,7 +99,7 @@ runs:
         [ "$RUNNER_OS" = "Windows" ] && WIN_SUFFIX=".exe"
         strip "${BINARY_PATH}"
         mv "${BINARY_PATH}" \
-          "./releases/${{ inputs.release-suffix }}/solx-${{ inputs.release-suffix }}${WIN_SUFFIX}"
+          "./releases/${{ inputs.release-suffix }}/slang-${{ inputs.release-suffix }}${WIN_SUFFIX}"
 
     - name: Upload binary
       if: inputs.release-suffix != ''

@@ -31,4 +31,4 @@ pub use self::output::error::collectable::Collectable as CollectableError;
 pub use self::version::Version;
 
 /// The standard JSON debug environment variable.
-pub const STANDARD_JSON_DEBUG_ENV: &str = "SOLX_STANDARD_JSON_DEBUG";
+pub const STANDARD_JSON_DEBUG_ENV: &str = "SLANG_STANDARD_JSON_DEBUG";

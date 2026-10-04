@@ -1,6 +1,6 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s --check-prefix=SOL
-// RUN: solx --emit-mlir=llvm %s | FileCheck %s --check-prefix=KEPT
-// RUN: solx --emit-mlir=llvm %s | FileCheck %s --check-prefix=DEAD
+// RUN: slang --emit-mlir=sol %s | FileCheck %s --check-prefix=SOL
+// RUN: slang --emit-mlir=llvm %s | FileCheck %s --check-prefix=KEPT
+// RUN: slang --emit-mlir=llvm %s | FileCheck %s --check-prefix=DEAD
 
 // SOL: sol.contract @{{.*:Entries"}} {
 // SOL-DAG: sol.func @"@constructor()_{{[0-9]+}}"() attributes {kind = #Constructor

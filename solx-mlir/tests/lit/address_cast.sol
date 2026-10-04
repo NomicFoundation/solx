@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*address_to_bytes20.*}}
 // CHECK:   sol.address_cast %{{.*}} : !sol.address to !sol.fixedbytes<20>

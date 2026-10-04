@@ -42,10 +42,10 @@ impl Settings {
     pub const DEFAULT_OPTIMIZATION_MODE: char = '3';
 
     /// Environment variable name for the optimization level override.
-    pub const OPTIMIZATION_ENV: &str = "SOLX_OPTIMIZATION";
+    pub const OPTIMIZATION_ENV: &str = "SLANG_OPTIMIZATION";
 
     /// Environment variable name for the size fallback flag.
-    pub const SIZE_FALLBACK_ENV: &str = "SOLX_OPTIMIZATION_SIZE_FALLBACK";
+    pub const SIZE_FALLBACK_ENV: &str = "SLANG_OPTIMIZATION_SIZE_FALLBACK";
 
     ///
     /// A shortcut constructor.
@@ -91,8 +91,8 @@ impl Settings {
 
     /// Creates settings from an optimization mode with env var overrides.
     ///
-    /// The `SOLX_OPTIMIZATION` env var takes precedence over `mode`.
-    /// The `SOLX_OPTIMIZATION_SIZE_FALLBACK` env var takes precedence over `size_fallback`.
+    /// The `SLANG_OPTIMIZATION` env var takes precedence over `mode`.
+    /// The `SLANG_OPTIMIZATION_SIZE_FALLBACK` env var takes precedence over `size_fallback`.
     pub fn try_from_mode(mode: Option<char>, size_fallback: Option<bool>) -> anyhow::Result<Self> {
         let optimization_mode = if let Ok(optimization) = std::env::var(Self::OPTIMIZATION_ENV) {
             if !Self::MIDDLE_END_LEVELS.contains(&optimization.as_str()) {

@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func private @{{.*apply_pointer.*}}(%{{.*}}: !sol.func_ref<(ui256) -> ui256>) -> ui256
 // CHECK:   sol.icall %{{[0-9]+}}(%{{.*}}) : !sol.func_ref<(ui256) -> ui256>, (ui256) -> ui256

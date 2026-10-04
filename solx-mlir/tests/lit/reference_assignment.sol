@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*assign_dynamic.*}}
 // CHECK:   sol.copy %{{.*}}, %{{.*}} : !sol.array<3 x ui8, Memory>, !sol.array<? x ui256, Storage>

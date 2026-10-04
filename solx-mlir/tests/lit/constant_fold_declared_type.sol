@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %constants/constant_fold_declared_type.sol | FileCheck %s
+// RUN: slang --emit-mlir=sol %constants/constant_fold_declared_type.sol | FileCheck %s
 
 // CHECK: sol.func @{{.*digits.*}}() -> !sol.fixedbytes<16>
 // CHECK:   %[[DGC:.*]] = sol.constant 64058384521018188869745042196707698022 : ui128

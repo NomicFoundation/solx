@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.ext_func_constant %{{.*}} {selector = {{-?[0-9]+}} : i32} : !sol.address -> !sol.ext_func_ref<() -> ui256>
 

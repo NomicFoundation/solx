@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.contract @{{.*}}Leaf
 // CHECK: sol.func @{{.*}}(%arg0: ui256) attributes {kind = #{{.*}}Constructor, orig_fn_type = (ui256) -> (), state_mutability = #{{.*}}Payable

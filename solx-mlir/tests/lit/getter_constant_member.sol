@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.contract @{{.*C.*}} {
 // CHECK: sol.func @{{.*DERIVED.*}}() -> ui256 attributes {orig_fn_type = () -> ui256, selector = 1646776813 : i32, state_mutability = #Pure}

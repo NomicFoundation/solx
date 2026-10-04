@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*folded.*}}
 // CHECK:   %[[MAX:.*]] = sol.constant 115792089237316195423570985008687907853269984665640564039457584007913129639935 : ui256

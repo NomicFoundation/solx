@@ -25,4 +25,4 @@ MLIR_SYS_210_PREFIX = { value = "./target-llvm/target-final/", relative = true, 
 TABLEGEN_210_PREFIX = { value = "./target-llvm/target-final/", relative = true }
 
 [alias]
-run-tester = "run --bin solx-tester -- --solidity-compiler ./target/release/solx -O M3B3"
+run-tester = "run --bin solx-tester -- --solidity-compiler ./target/release/slang -O M3B3"

@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'
+// RUN: slang --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'
 
 // CHECK: #[[NESTED:loc[0-9]*]] = loc("{{.*}}debug_location_index_access.sol":96:5)
 // CHECK: #[[READ:loc[0-9]*]] = loc("{{.*}}debug_location_index_access.sol":92:5)
