@@ -11,6 +11,7 @@ use slang_solidity_v2::compilation::Configuration;
 use slang_solidity_v2::compilation::FileId;
 use slang_solidity_v2::diagnostics::DiagnosticExtensions;
 use slang_solidity_v2::diagnostics::DiagnosticSeverity;
+use slang_solidity_v2::utils::EvmTarget;
 use slang_solidity_v2::utils::LanguageVersion;
 
 use solx_standard_json::CollectableError;
@@ -78,20 +79,20 @@ impl Slang {
         })
     }
 
-    /// Picks the EVM version to analyze at: the requested one, or solc's default for the language
-    /// version.
+    /// Picks the EVM version to analyze at: the requested one, or `default`, solc's default for the
+    /// language version.
     ///
     /// A default older than Cancun falls back to Cancun with a warning pushed to `messages`.
     fn evm_version(
         requested: Option<EVMVersion>,
         language_version: LanguageVersion,
+        default: EvmTarget,
         messages: &mut Vec<OutputError>,
     ) -> EVMVersion {
         if let Some(requested) = requested {
             return requested;
         }
-        let default = language_version.default_evm_target();
-        EVMVersion::try_from(default).unwrap_or_else(|_| {
+        if default < EvmTarget::Cancun {
             // TODO: target the EVM versions older than Cancun that solc defaults to.
             messages.push(OutputError::new_warning(format!(
                 "Solidity version {} defaults to EVM version {}, which solx does not support yet. Compiling for {}, the oldest EVM version solx supports.",
@@ -99,8 +100,9 @@ impl Slang {
                 default.to_string().to_lowercase(),
                 EVMVersion::Cancun,
             )));
-            EVMVersion::Cancun
-        })
+            return EVMVersion::Cancun;
+        }
+        EVMVersion::try_from(default).expect("solx supports every EVM version from Cancun up")
     }
 
     /// Builds a Slang compilation unit from the given source files, parsing every source and
@@ -189,6 +191,7 @@ impl Slang {
         let evm_version = Self::evm_version(
             input_json.settings.evm_version,
             language_version,
+            language_version.default_evm_target(),
             &mut output.errors,
         );
 
@@ -283,5 +286,42 @@ impl Slang {
         }
 
         Ok(output)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use slang_solidity_v2::utils::EvmTarget;
+    use slang_solidity_v2::utils::LanguageVersion;
+
+    use solx_utils::EVMVersion;
+
+    use super::Slang;
+
+    #[test]
+    fn default_evm_version_of_every_solidity_version() {
+        for &language_version in LanguageVersion::ALL {
+            let default = language_version.default_evm_target();
+            let mut messages = Vec::new();
+            let evm_version = Slang::evm_version(None, language_version, default, &mut messages);
+            if default < EvmTarget::Cancun {
+                assert_eq!(evm_version, EVMVersion::Cancun, "{language_version}");
+                assert_eq!(messages.len(), 1, "{language_version}");
+            } else {
+                assert_eq!(EvmTarget::from(evm_version), default, "{language_version}");
+                assert!(messages.is_empty(), "{language_version}");
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "solx supports every EVM version from Cancun up")]
+    fn default_evm_version_newer_than_supported() {
+        Slang::evm_version(
+            None,
+            LanguageVersion::LATEST,
+            EvmTarget::Amsterdam,
+            &mut Vec::new(),
+        );
     }
 }
