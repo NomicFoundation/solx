@@ -20,6 +20,8 @@ fn pinned_pragma() -> anyhow::Result<()> {
     let args = &[
         "--solidity-version",
         "0.8.20",
+        "--evm-version",
+        "cancun",
         "--bin",
         crate::common::contract!("solidity/PinnedPragma.sol"),
     ];
@@ -39,6 +41,8 @@ fn long_version() -> anyhow::Result<()> {
     let args = &[
         "--solidity-version",
         "0.8.20+commit.a1b79de6",
+        "--evm-version",
+        "cancun",
         "--bin",
         crate::common::contract!("solidity/PinnedPragma.sol"),
     ];
@@ -68,6 +72,44 @@ fn syntax_newer_than_version() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result.failure().stderr(predicate::str::contains(
         "This syntax was introduced in version '0.8.27'.",
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn default_evm_version() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--solidity-version",
+        "0.8.30",
+        "--emit-mlir=sol",
+        crate::common::TEST_SOLIDITY_CONTRACT,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("sol.evm_version = #Prague"));
+
+    Ok(())
+}
+
+#[test]
+fn default_evm_version_unsupported() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--solidity-version",
+        "0.8.24",
+        "--bin",
+        crate::common::TEST_SOLIDITY_CONTRACT,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.failure().stderr(predicate::str::contains(
+        "Solidity version 0.8.24 defaults to EVM version shanghai, which solx does not support.",
     ));
 
     Ok(())
