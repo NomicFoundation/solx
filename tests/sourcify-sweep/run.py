@@ -34,7 +34,8 @@ OUTPUT_SELECTION = {"*": {"*": ["evm.bytecode.object", "evm.deployedBytecode.obj
 PASSTHROUGH_SETTINGS = ("evmVersion", "libraries", "remappings", "viaIR")
 STDERR_TAIL = 2000
 MAX_MESSAGES = 5
-VERSION_PRAGMA = re.compile(r"pragma\s+solidity\s+[^;]+;")
+# Version-expression characters only, so "pragma solidity" in a comment never swallows code up to the next `;`.
+VERSION_PRAGMA = re.compile(r"pragma\s+solidity\s+[0-9xX*.^~<>=|\s-]+;")
 
 
 def standard_json_input(record: dict) -> dict:
