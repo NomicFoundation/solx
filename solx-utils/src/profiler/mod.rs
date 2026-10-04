@@ -6,6 +6,7 @@ pub mod run;
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Duration;
 
 use indexmap::IndexMap;
 
@@ -28,6 +29,13 @@ impl Profiler {
     ///
     pub fn start_pipeline_element(&mut self, description: &str) -> Rc<RefCell<Run>> {
         self.start_run(description.to_owned())
+    }
+
+    ///
+    /// Records a generic part of the pipeline with the given duration.
+    ///
+    pub fn record_pipeline_element(&mut self, description: &str, duration: Duration) {
+        self.start_run(description.to_owned()).borrow_mut().duration = Some(duration);
     }
 
     ///

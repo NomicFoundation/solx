@@ -41,6 +41,7 @@ impl<'context> SourceUnitScope<'context> {
         revert_strings: RevertStrings,
         selected: impl Fn(&str, solx_standard_json::InputSelector) -> bool,
         sources: &Sources<'_>,
+        pass_timing: bool,
         profiler: &mut Profiler,
     ) -> anyhow::Result<BTreeMap<String, Contract>> {
         let mut melior = None;
@@ -98,6 +99,7 @@ impl<'context> SourceUnitScope<'context> {
             let mlir = Context::from(scope).finalize_module(
                 identifier.as_str(),
                 selected(name.as_str(), solx_standard_json::InputSelector::MLIR),
+                pass_timing,
                 profiler,
             )?;
             contracts.insert(name, Contract::new_mlir(mlir, method_identifiers));

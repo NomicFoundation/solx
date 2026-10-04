@@ -180,6 +180,11 @@ impl Slang {
             .and_then(|debug| debug.revert_strings)
             .unwrap_or(RevertStrings::Default);
         let sources = Sources::new(&sources);
+        let benchmarks = input_json.settings.output_selection.check_selection(
+            solx_standard_json::InputSelection::WILDCARD,
+            Some(solx_standard_json::InputSelection::ANY_CONTRACT),
+            solx_standard_json::InputSelector::Benchmarks,
+        );
         for file in unit.files() {
             let file_id = file.id();
             let contracts = SourceUnitScope::source_unit(
@@ -194,6 +199,7 @@ impl Slang {
                     )
                 },
                 &sources,
+                benchmarks,
                 &mut profiler,
             )?;
             output
@@ -203,11 +209,7 @@ impl Slang {
                 .extend(contracts);
         }
 
-        if input_json.settings.output_selection.check_selection(
-            solx_standard_json::InputSelection::WILDCARD,
-            Some(solx_standard_json::InputSelection::ANY_CONTRACT),
-            solx_standard_json::InputSelector::Benchmarks,
-        ) {
+        if benchmarks {
             output.benchmarks = profiler.to_vec();
         }
 

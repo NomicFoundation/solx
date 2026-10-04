@@ -28,6 +28,21 @@ unsafe extern "C" {
     /// Registers all Sol dialect passes.
     pub fn mlirRegisterSolPasses();
 
+    // ---- Pass manager instrumentation (from dialect_stubs.cpp) ----
+
+    /// Times every pass `pass_manager` runs; `callback` receives each report entry when
+    /// `pass_manager` is destroyed.
+    pub fn solxPassManagerEnableTiming(
+        pass_manager: mlir_sys::MlirPassManager,
+        callback: unsafe extern "C" fn(
+            name: mlir_sys::MlirStringRef,
+            depth: u32,
+            wall_seconds: f64,
+            user_data: *mut std::ffi::c_void,
+        ),
+        user_data: *mut std::ffi::c_void,
+    );
+
     // ---- Canonicalization ----
 
     /// Creates the `canonicalize` pass.

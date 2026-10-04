@@ -306,6 +306,7 @@ Slang_SerializeAST:Simple.sol: [..]us
 solx_CreateMLIRContext:Simple.sol: [..]us
 solx_EmitSol:Simple.sol:Simple: [..]us
 solx_RunSolPasses:Simple.sol:Simple: [..]us
+...
 solx_ExtractMLIRObjects:Simple.sol:Simple: [..]us
 
 ======= Simple.sol:Simple =======
