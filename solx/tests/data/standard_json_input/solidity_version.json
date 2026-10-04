@@ -7,7 +7,6 @@
   },
   "settings": {
     "solidityVersion": "0.8.20",
-    "evmVersion": "cancun",
     "outputSelection": {
       "*": {
         "*": [

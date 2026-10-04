@@ -81,24 +81,25 @@ impl Slang {
     /// Picks the EVM version to analyze at: the requested one, or solc's default for the language
     /// version.
     ///
-    /// # Errors
-    ///
-    /// Returns an error if solx does not support the default EVM version.
+    /// A default older than Cancun falls back to Cancun with a warning pushed to `messages`.
     fn evm_version(
         requested: Option<EVMVersion>,
         language_version: LanguageVersion,
-    ) -> Result<EVMVersion, String> {
+        messages: &mut Vec<OutputError>,
+    ) -> EVMVersion {
         if let Some(requested) = requested {
-            return Ok(requested);
+            return requested;
         }
         let default = language_version.default_evm_target();
-        EVMVersion::try_from(default).map_err(|_| {
-            format!(
-                "Solidity version {} defaults to EVM version {}, which solx does not support. Set the EVM version to {} or later.",
+        EVMVersion::try_from(default).unwrap_or_else(|_| {
+            // TODO: target the EVM versions older than Cancun that solc defaults to.
+            messages.push(OutputError::new_warning(format!(
+                "Solidity version {} defaults to EVM version {}, which solx does not support yet. Compiling for {}, the oldest EVM version solx supports.",
                 semver::Version::from(language_version),
                 default.to_string().to_lowercase(),
                 EVMVersion::Cancun,
-            )
+            )));
+            EVMVersion::Cancun
         })
     }
 
@@ -185,14 +186,11 @@ impl Slang {
         };
         let semver_version = semver::Version::from(language_version);
         let version = solx_standard_json::Version::new(semver_version.to_string(), semver_version);
-        let evm_version = match Self::evm_version(input_json.settings.evm_version, language_version)
-        {
-            Ok(evm_version) => evm_version,
-            Err(error) => {
-                output.errors.push(OutputError::new_error(error));
-                return Ok((output, version));
-            }
-        };
+        let evm_version = Self::evm_version(
+            input_json.settings.evm_version,
+            language_version,
+            &mut output.errors,
+        );
 
         let run_analysis =
             profiler.start_pipeline_element(format!("{}_ParseAndBind", Self::NAME).as_str());

@@ -474,7 +474,7 @@ Versions from 0.8.0 up to the latest one Slang supports are accepted, and the la
 Usage:
 
 ```bash
-solx 'Simple.sol' --bin --solidity-version '0.8.20' --evm-version 'cancun'
+solx 'Simple.sol' --bin --solidity-version '0.8.20'
 ```
 
 
@@ -653,7 +653,7 @@ Only the following EVM versions are supported:
 - prague
 - osaka
 
-The default is solc's default for the Solidity version, which is osaka for the latest one. A Solidity version older than 0.8.25 defaults to an EVM version **solx** does not support, so it needs `--evm-version`.
+The default is solc's default for the Solidity version, which is osaka for the latest one. A Solidity version older than 0.8.25 defaults to an EVM version **solx** does not support yet, so it is compiled for cancun with a warning.
 
 Usage:
 
