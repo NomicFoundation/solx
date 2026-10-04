@@ -1,6 +1,10 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.contract @{{.*C.*}} {
+// CHECK: sol.func @{{.*discarded_attached.*}}()
+// CHECK-NEXT:   %[[COUNTER:.*]] = sol.addr_of @{{.*counter.*}} : !sol.ptr<ui256, Storage>
+// CHECK-NEXT:   sol.load %[[COUNTER]] : !sol.ptr<ui256, Storage>, ui256
+// CHECK-NEXT:   sol.return
 // CHECK: sol.func @{{.*discarded_function.*}}()
 // CHECK-NEXT:   sol.return
 // CHECK: sol.func @{{.*discarded_library.*}}()
@@ -15,6 +19,10 @@
 // CHECK: } {kind = #Library}
 
 contract C {
+    using Library for uint256;
+
+    uint256 counter;
+
     function discarded_function() public pure {
         Library.identity;
     }
@@ -25,6 +33,10 @@ contract C {
 
     function discarded_member() public pure {
         Library.SEEN;
+    }
+
+    function discarded_attached() public view {
+        counter.identity;
     }
 }
 
