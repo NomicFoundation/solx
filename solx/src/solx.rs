@@ -58,6 +58,8 @@ fn main() -> anyhow::Result<()> {
                 .push(solx_standard_json::OutputError::new_error(error));
         }
     }
+    // Both exits below skip destructors, and LeakSanitizer cannot trace semver's encoded suffix pointers.
+    drop(arguments);
 
     if is_standard_json {
         let output = solx_standard_json::Output::new_with_messages(messages);
