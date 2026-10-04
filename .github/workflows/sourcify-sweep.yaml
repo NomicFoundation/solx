@@ -23,8 +23,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  # Every main push keeps its own census.
+  # Pushes group by SHA: GitHub keeps one pending run per group, so a
+  # shared main group would drop queued pushes.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
@@ -76,8 +77,8 @@ jobs:
         - /opt/ghc:/mnt/free-disk-space/ghc
         - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
         - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
-    # Warm caches: ~15 min toolchain + solx build, ~45 min sweep. A cold LLVM
-    # build (solx-llvm bump on the PR) adds well over an hour.
+    # Warm caches: 12-18 min per shard, build included. A cold LLVM build
+    # (solx-llvm bump on the PR) adds well over an hour.
     timeout-minutes: 180
     env:
       CARGO_INCREMENTAL: "0"
