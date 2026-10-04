@@ -22,7 +22,7 @@ pub struct Dependencies {
 
 impl Dependencies {
     /// The deployed object identifier suffix the Sol-to-LLVM pass output names runtime objects with.
-    pub const DEPLOYED_OBJECT_SUFFIX: &'static str = "_deployed";
+    const DEPLOYED_OBJECT_SUFFIX: &'static str = "_deployed";
 
     ///
     /// Create a new instance of dependencies. Each dependency brings both its objects, since the

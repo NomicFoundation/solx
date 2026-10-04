@@ -85,10 +85,9 @@ impl Object {
         definitions: Vec<Definition>,
     ) -> solx_utils::Dependencies {
         let dependencies = definitions.into_iter().map(|definition| {
-            let Some(object) = Self::from_definition(definition) else {
-                unreachable!("a bytecode dependency is a contract or a library");
-            };
-            object.identifier()
+            Self::from_definition(definition)
+                .expect("Slang bytecode dependencies are contracts or libraries")
+                .identifier()
         });
 
         solx_utils::Dependencies::new(code_identifier.as_str(), runtime_identifier, dependencies)

@@ -270,6 +270,8 @@ impl<'context> Context<'context> {
     /// Each is translated to its own LLVM IR module and emits its own bytecode segment. The outer
     /// carries the deploy entry that runs the constructor and returns the runtime bytecode.
     ///
+    /// Dependency identifiers must match the emitted deploy and runtime module symbols.
+    ///
     /// Each segment's text is printed with locations ([`Self::printing_flags`]) when debug info
     /// is requested for it, and the Sol text when it is for either.
     ///
