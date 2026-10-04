@@ -89,14 +89,20 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         self.current_block().r#continue(self);
     }
 
-    /// The `return` statement, its values converted to the function's declared return types.
+    /// The `return` statement, its values converted to the declared return types; in a void
+    /// function, such as `return (ok, ) = a.call("");`, the expression runs only for its effect.
     pub fn return_statement(&mut self, node: &ReturnStatement) {
-        let Some(expression) = node.expression() else {
-            self.current_block().r#return(&[], self);
-            return;
+        let values = match node.expression() {
+            Some(expression) if !self.return_types.is_empty() => {
+                let targets: Vec<_> = self.return_types.iter().copied().map(Some).collect();
+                self.converted_values(&expression, &targets)
+            }
+            Some(expression) => {
+                self.expression_effect(&expression);
+                Vec::new()
+            }
+            None => Vec::new(),
         };
-        let targets: Vec<_> = self.return_types.iter().copied().map(Some).collect();
-        let values = self.converted_values(&expression, &targets);
         self.current_block().r#return(&values, self);
     }
 }

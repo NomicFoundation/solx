@@ -37,6 +37,20 @@
 //!                     "expected": [
 //!                         "100"
 //!                     ]
+//!                 },
+//!                 {
+//!                     "method": "g()",
+//!                     "caller": "0x1212121212121212121212121212120000000012",
+//!                     "calldata": [],
+//!                     "expected": []
+//!                 },
+//!                 {
+//!                     "method": "called()",
+//!                     "caller": "0x1212121212121212121212121212120000000012",
+//!                     "calldata": [],
+//!                     "expected": [
+//!                         "1"
+//!                     ]
 //!                 }
 //!             ]
 //!         }
@@ -49,6 +63,7 @@ pragma solidity >=0.8.0;
 
 contract Test {
   uint public x;
+  bool public called;
 
   function set(uint v) internal {
     x = v;
@@ -59,5 +74,9 @@ contract Test {
       return set(100);
     }
     return set(v);
+  }
+
+  function g() public {
+    return (called, ) = address(4).call("");
   }
 }

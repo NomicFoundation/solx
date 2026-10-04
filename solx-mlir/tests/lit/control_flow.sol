@@ -35,6 +35,12 @@
 // CHECK:     sol.condition %[[TRUE]]
 // CHECK:   } body {
 
+// CHECK: sol.func @{{.*return_effect.*}}
+// CHECK:   %[[STATUS:.*]], %{{.*}} = sol.bare_call
+// CHECK-NEXT:   %[[CALLED:.*]] = sol.addr_of @{{.*called.*}} : !sol.ptr<i1, Storage>
+// CHECK-NEXT:   sol.store %[[STATUS]], %[[CALLED]]
+// CHECK-NEXT:   sol.return
+
 // CHECK: sol.func @{{.*while_loop.*}}
 // CHECK:   sol.while {
 // CHECK:     sol.condition %{{.*}}
@@ -56,6 +62,8 @@
 // CHECK:       sol.continue
 
 contract C {
+    bool called;
+
     function if_else(uint256 x) public pure returns (uint256) {
         if (x > 10) {
             return 1;
@@ -128,5 +136,9 @@ contract C {
             sum = sum + i;
         }
         return sum;
+    }
+
+    function return_effect(address a) public {
+        return (called, ) = a.call("");
     }
 }
