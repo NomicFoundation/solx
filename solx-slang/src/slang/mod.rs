@@ -11,12 +11,12 @@ use slang_solidity_v2::compilation::Configuration;
 use slang_solidity_v2::compilation::FileId;
 use slang_solidity_v2::diagnostics::DiagnosticExtensions;
 use slang_solidity_v2::diagnostics::DiagnosticSeverity;
-use slang_solidity_v2::utils::EvmTarget;
 use slang_solidity_v2::utils::LanguageVersion;
 
 use solx_standard_json::CollectableError;
 use solx_standard_json::OutputError;
 use solx_standard_json::output::error::source_location::SourceLocation;
+use solx_utils::EVMVersion;
 use solx_utils::Profiler;
 use solx_utils::Remapping;
 use solx_utils::RevertStrings;
@@ -49,34 +49,20 @@ impl Slang {
 
     /// Builds a Slang compilation unit from the given source files, parsing every source and
     /// resolving imports with the given remappings, following solc's semantics.
-    ///
-    /// Every EVM built-in is admitted (`EvmTarget::LATEST`): Slang gates built-in availability on
-    /// the target, whereas solx handles EVM-version targeting downstream.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if Slang does not support the Solidity version.
     fn compile(
-        &self,
+        language_version: LanguageVersion,
+        evm_version: EVMVersion,
         sources: &BTreeMap<FileId, &str>,
         remappings: &[Remapping],
-    ) -> anyhow::Result<CompilationUnit> {
-        let language_version: LanguageVersion =
-            self.version.default.clone().try_into().map_err(|error| {
-                anyhow::anyhow!(
-                    "failed to convert Solidity version '{}' to a Slang language version: {error}",
-                    self.version.default
-                )
-            })?;
-
-        Ok(CompilationUnit::create(Configuration {
+    ) -> CompilationUnit {
+        CompilationUnit::create(Configuration {
             language_version,
-            evm_target: EvmTarget::LATEST,
+            evm_target: evm_version.into(),
             sources: sources
                 .iter()
                 .map(|(file_id, content)| (file_id.clone(), *content)),
             resolver: SourceImportResolver { remappings },
-        }))
+        })
     }
 }
 
@@ -130,9 +116,21 @@ impl Slang {
             sources.insert(path.as_str().into(), source_code);
         }
 
+        let language_version = LanguageVersion::try_from(self.version.default.clone())
+            .expect("the frontend version is a Slang language version");
+        let evm_version = input_json.settings.evm_version.unwrap_or_else(|| {
+            EVMVersion::try_from(language_version.default_evm_target())
+                .expect("solx supports the default EVM version of its language version")
+        });
+
         let run_analysis =
             profiler.start_pipeline_element(format!("{}_ParseAndBind", Self::NAME).as_str());
-        let unit = self.compile(&sources, &input_json.settings.remappings)?;
+        let unit = Self::compile(
+            language_version,
+            evm_version,
+            &sources,
+            &input_json.settings.remappings,
+        );
         run_analysis.borrow_mut().finish();
 
         output
@@ -175,7 +173,6 @@ impl Slang {
             return Ok(output);
         }
 
-        let evm_version = input_json.settings.evm_version.unwrap_or_default();
         let revert_strings = input_json
             .settings
             .debug

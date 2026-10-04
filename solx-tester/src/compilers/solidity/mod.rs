@@ -326,7 +326,6 @@ impl SolidityCompiler {
 
         let evm_version = match mode {
             Mode::Solidity(_) => evm_version,
-            Mode::Yul(_) => Some(solx_utils::EVMVersion::default()),
             _ => None,
         };
 
