@@ -37,18 +37,18 @@ fn records_every_pipeline_stage() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("Slang_RunStandardJSON").count(1))
         .stdout(predicate::str::contains("Slang_ParseAndBind").count(1))
         .stdout(predicate::str::contains("Slang_SerializeAST:").count(1))
-        .stdout(predicate::str::contains("slang_CreateMLIRContext:").count(1))
-        .stdout(predicate::str::contains("slang_EmitSol:").count(1))
-        .stdout(predicate::str::is_match(r"slang_RunSolPasses:\S*\.sol:\w+: \d+us")?.count(1))
+        .stdout(predicate::str::contains("Compiler_CreateMLIRContext:").count(1))
+        .stdout(predicate::str::contains("Compiler_EmitSol:").count(1))
+        .stdout(predicate::str::is_match(r"Compiler_RunSolPasses:\S*\.sol:\w+: \d+us")?.count(1))
         .stdout(predicate::str::is_match(
-            r"slang_RunSolPasses:\S*\.sol:\w+/[^:]+: \d+us",
+            r"Compiler_RunSolPasses:\S*\.sol:\w+/[^:]+: \d+us",
         )?)
         .stdout(predicate::str::contains("/Rest: ").count(1))
         .stdout(predicate::str::contains("/Total: ").count(1))
-        .stdout(predicate::str::contains("slang_ExtractMLIRObjects:").count(1))
-        .stdout(predicate::str::contains("slang_BuildProject").count(1))
-        .stdout(predicate::str::contains("slang_Compile").count(1))
-        .stdout(predicate::str::contains("slang_Link").count(1))
+        .stdout(predicate::str::contains("Compiler_ExtractMLIRObjects:").count(1))
+        .stdout(predicate::str::contains("Compiler_BuildProject").count(1))
+        .stdout(predicate::str::contains("Compiler_Compile").count(1))
+        .stdout(predicate::str::contains("Compiler_Link").count(1))
         .stdout(predicate::str::contains("/InitVerify/").count(2))
         .stdout(predicate::str::contains("/OptimizeVerify/").count(2))
         .stdout(predicate::str::contains("/EmitBytecode/").count(2))
@@ -80,7 +80,7 @@ fn creates_no_mlir_context_without_objects() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("Slang_ParseAndBind").count(1))
-        .stdout(predicate::str::contains("slang_CreateMLIRContext:").not());
+        .stdout(predicate::str::contains("Compiler_CreateMLIRContext:").not());
 
     Ok(())
 }

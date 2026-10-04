@@ -57,7 +57,7 @@ impl<'context> SourceUnitScope<'context> {
 
             let melior = melior.get_or_insert_with(|| {
                 let run_context_creation = profiler.start_pipeline_element(
-                    format!("slang_CreateMLIRContext:{}", unit.get_file_id()).as_str(),
+                    format!("Compiler_CreateMLIRContext:{}", unit.get_file_id()).as_str(),
                 );
                 let melior = Context::create_melior_context();
                 run_context_creation.borrow_mut().finish();
@@ -93,7 +93,7 @@ impl<'context> SourceUnitScope<'context> {
                 debug_locations,
             );
             let run_emission =
-                profiler.start_pipeline_element(format!("slang_EmitSol:{identifier}").as_str());
+                profiler.start_pipeline_element(format!("Compiler_EmitSol:{identifier}").as_str());
             let method_identifiers = scope.object_definition(&object);
             run_emission.borrow_mut().finish();
             let mlir = Context::from(scope).finalize_module(

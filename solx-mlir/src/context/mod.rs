@@ -288,7 +288,7 @@ impl<'context> Context<'context> {
     /// is requested for it, and the Sol text when it is for either.
     ///
     /// `pass_timing` records the time of every pass in `profiler`, under
-    /// `slang_RunSolPasses:<code_identifier>/`.
+    /// `Compiler_RunSolPasses:<code_identifier>/`.
     ///
     /// # Errors
     ///
@@ -312,7 +312,7 @@ impl<'context> Context<'context> {
             .transpose()
             .map_err(|error| anyhow::anyhow!("Sol dialect module printing: {error}"))?;
 
-        let sol_passes_label = format!("slang_RunSolPasses:{code_identifier}");
+        let sol_passes_label = format!("Compiler_RunSolPasses:{code_identifier}");
         let run_sol_passes = profiler.start_pipeline_element(sol_passes_label.as_str());
         let pass_timings = Self::run_sol_passes(self.melior, &mut module, pass_timing)?;
         run_sol_passes.borrow_mut().finish();
@@ -322,8 +322,9 @@ impl<'context> Context<'context> {
             Self::declare_dwarf_version(self.melior, &module);
         }
 
-        let run_object_extraction = profiler
-            .start_pipeline_element(format!("slang_ExtractMLIRObjects:{code_identifier}").as_str());
+        let run_object_extraction = profiler.start_pipeline_element(
+            format!("Compiler_ExtractMLIRObjects:{code_identifier}").as_str(),
+        );
         let runtime_code_identifier = format!(
             "{code_identifier}{}",
             solx_utils::Dependencies::DEPLOYED_OBJECT_SUFFIX

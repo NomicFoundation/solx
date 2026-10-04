@@ -121,7 +121,7 @@ The **Slang** metadata format is compatible with the [Solidity metadata format](
     // Optional: the Solidity language version, only set for Solidity and Yul contracts.
     "solc_version": "0.8.37",
     // Mandatory: current version of Slang.
-    "slang_version": "0.2.0"
+    "version": "0.2.0"
   }
 }
 ```
@@ -299,15 +299,15 @@ Emits benchmarks of the compilation pipeline.
 $ slang 'Simple.sol' --benchmarks
 Benchmarks:
 Slang_RunStandardJSON: [..]us
-slang_BuildProject: [..]us
-slang_Compile: [..]us
+Compiler_BuildProject: [..]us
+Compiler_Compile: [..]us
 Slang_ParseAndBind: [..]us
 Slang_SerializeAST:Simple.sol: [..]us
-slang_CreateMLIRContext:Simple.sol: [..]us
-slang_EmitSol:Simple.sol:Simple: [..]us
-slang_RunSolPasses:Simple.sol:Simple: [..]us
+Compiler_CreateMLIRContext:Simple.sol: [..]us
+Compiler_EmitSol:Simple.sol:Simple: [..]us
+Compiler_RunSolPasses:Simple.sol:Simple: [..]us
 ...
-slang_ExtractMLIRObjects:Simple.sol:Simple: [..]us
+Compiler_ExtractMLIRObjects:Simple.sol:Simple: [..]us
 
 ======= Simple.sol:Simple =======
 Benchmarks:

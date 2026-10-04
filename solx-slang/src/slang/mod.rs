@@ -257,14 +257,15 @@ impl Slang {
         if default < EvmTarget::Cancun {
             // TODO: target the EVM versions older than Cancun that solc defaults to.
             messages.push(OutputError::new_warning(format!(
-                "Solidity version {} defaults to EVM version {}, which Slang does not support yet. Compiling for {}, the oldest EVM version Slang supports.",
+                "Solidity version {} defaults to EVM version {}, which the compiler does not support yet. Compiling for {}, the oldest EVM version the compiler supports.",
                 semver::Version::from(language_version),
                 default.to_string().to_lowercase(),
                 EVMVersion::Cancun,
             )));
             return EVMVersion::Cancun;
         }
-        EVMVersion::try_from(default).expect("Slang supports every EVM version from Cancun up")
+        EVMVersion::try_from(default)
+            .expect("the compiler supports every EVM version from Cancun up")
     }
 
     /// Builds a Slang compilation unit from the given source files, parsing every source and
