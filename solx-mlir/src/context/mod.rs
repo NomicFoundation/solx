@@ -100,6 +100,12 @@ impl<'context> Context<'context> {
         melior
     }
 
+    /// Whether LLVM is built with threads. Without them its locks do nothing, so only one thread
+    /// at a time may use LLVM and MLIR.
+    pub fn is_multithreaded() -> bool {
+        inkwell::support::is_multithreaded()
+    }
+
     /// Creates a new MLIR state with an empty module at `location`, with a compile unit of
     /// `file_name` fused onto it with `emit_debug_info`. `location` is
     /// the object's definition, which is where the Sol-to-Yul lowering puts the functions it

@@ -4,6 +4,7 @@
 
 use predicates::prelude::*;
 use tempfile::TempDir;
+use test_case::test_case;
 
 #[test]
 fn default() -> anyhow::Result<()> {
@@ -79,6 +80,33 @@ fn creates_no_mlir_context_without_objects() -> anyhow::Result<()> {
         .success()
         .stdout(predicate::str::contains("Slang_ParseAndBind").count(1))
         .stdout(predicate::str::contains("Compiler_CreateMLIRContext").not());
+
+    Ok(())
+}
+
+#[test_case(crate::common::contract!("solidity/SimpleContract.sol"), "SimpleLibrary", "SimpleContract")]
+#[test_case(crate::common::contract!("solidity/SimpleContractFirst.sol"), "SimpleContract", "SimpleLibrary")]
+fn lists_objects_in_source_order(path: &str, first: &str, second: &str) -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[path, "--benchmarks", "--bin"];
+
+    let result = crate::cli::execute_solx(args)?;
+    let assert = result.success();
+    let stdout = String::from_utf8(assert.get_output().stdout.clone())?;
+
+    let emission = |name: &str| {
+        stdout
+            .lines()
+            .position(|line| {
+                line.starts_with("Compiler_EmitSol:") && line.contains(&format!(".sol:{name}: "))
+            })
+            .expect("every object's deploy code is emitted")
+    };
+    assert!(
+        emission(first) < emission(second),
+        "the benchmarks of {path} come in declaration order, whichever object is scheduled first"
+    );
 
     Ok(())
 }
