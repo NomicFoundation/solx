@@ -132,7 +132,7 @@ pub struct Arguments {
     #[arg(long = "ast-json", help_heading = "Output Selection")]
     pub output_ast_json: bool,
 
-    /// Emit solx's compilation pipeline benchmarks.
+    /// Emit Slang's compilation pipeline benchmarks.
     #[arg(long = "benchmarks", help_heading = "Output Selection")]
     pub output_benchmarks: bool,
 
