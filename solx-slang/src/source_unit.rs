@@ -86,7 +86,7 @@ impl<'context> SourceUnitScope<'context> {
                 melior
             });
 
-            let capture_sol = selected(name.as_str(), solx_standard_json::InputSelector::MLIR);
+            let capture_mlir = selected(name.as_str(), solx_standard_json::InputSelector::MLIR);
             let mut deploy_indirect_callees = BTreeMap::new();
             let deploy = SourceUnitScope::object_segment(
                 melior,
@@ -100,7 +100,7 @@ impl<'context> SourceUnitScope<'context> {
                     name.as_str(),
                     solx_standard_json::InputSelector::BytecodeDebugInfo,
                 ),
-                capture_sol,
+                capture_mlir,
                 sources,
                 pass_timing,
                 profiler,
@@ -117,7 +117,7 @@ impl<'context> SourceUnitScope<'context> {
                     name.as_str(),
                     solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
                 ),
-                capture_sol,
+                capture_mlir,
                 sources,
                 pass_timing,
                 profiler,
@@ -153,7 +153,7 @@ impl<'context> SourceUnitScope<'context> {
         evm_version: EVMVersion,
         revert_strings: RevertStrings,
         emit_debug_info: bool,
-        capture_sol: bool,
+        capture_mlir: bool,
         sources: &Sources<'_>,
         pass_timing: bool,
         profiler: &mut Profiler,
@@ -183,6 +183,6 @@ impl<'context> SourceUnitScope<'context> {
             profiler.start_pipeline_element(format!("Compiler_EmitSol:{code_identifier}").as_str());
         scope.object_definition(object, storage_layout, indirect_callees);
         run_emission.borrow_mut().finish();
-        Context::from(scope).finalize_module(dependencies, capture_sol, pass_timing, profiler)
+        Context::from(scope).finalize_module(dependencies, capture_mlir, pass_timing, profiler)
     }
 }

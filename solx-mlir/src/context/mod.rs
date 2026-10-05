@@ -30,7 +30,6 @@ use crate::Block;
 use crate::DebugInfoCompileUnit;
 use crate::FunctionOrigin;
 use crate::Type;
-use crate::llvm_module::RawLlvmModule;
 
 use self::pass_timing::PassTiming;
 
@@ -242,11 +241,11 @@ impl<'context> Context<'context> {
         Ok(pass_timings)
     }
 
-    /// Runs the pass pipeline on a code segment's module and returns its LLVM dialect text, which
-    /// is translated to its own LLVM IR module and emits its own bytecode, with `dependencies`, the
-    /// objects the code may embed, whose identifier must match the segment's object.
+    /// Runs the pass pipeline on a code segment's module and translates it to LLVM bitcode,
+    /// returned with `dependencies`, the objects the code may embed, whose identifier must match
+    /// the segment's object.
     ///
-    /// The Sol text and the LLVM dialect text are printed with locations
+    /// With `capture_mlir`, the Sol text and the LLVM dialect text are printed too, with locations
     /// ([`Self::printing_flags`]) when debug info is requested for the segment.
     ///
     /// `pass_timing` records the time of every pass in `profiler`, under
@@ -254,18 +253,18 @@ impl<'context> Context<'context> {
     ///
     /// # Errors
     ///
-    /// Returns an error if the pass pipeline fails or the module cannot be printed.
+    /// Returns an error if the pass pipeline fails, or the module cannot be printed or translated.
     pub fn finalize_module(
         self,
         dependencies: solx_utils::Dependencies,
-        capture_sol: bool,
+        capture_mlir: bool,
         pass_timing: bool,
         profiler: &mut Profiler,
     ) -> anyhow::Result<crate::output::SegmentOutput> {
         let code_identifier = dependencies.identifier.as_str();
         let mut module = self.module;
 
-        let sol_source = capture_sol
+        let sol_source = capture_mlir
             .then(|| {
                 module
                     .as_operation()
@@ -282,60 +281,49 @@ impl<'context> Context<'context> {
         run_sol_passes.borrow_mut().finish();
         Self::record_pass_timings(profiler, sol_passes_label.as_str(), pass_timings);
 
-        let source = module
-            .as_operation()
-            .to_string_with_flags(Self::printing_flags(self.debug_info_compile_unit.is_some()))
-            .map_err(|error| anyhow::anyhow!("module printing: {error}"))?;
+        let source = capture_mlir
+            .then(|| {
+                module
+                    .as_operation()
+                    .to_string_with_flags(Self::printing_flags(
+                        self.debug_info_compile_unit.is_some(),
+                    ))
+            })
+            .transpose()
+            .map_err(|error| anyhow::anyhow!("LLVM dialect module printing: {error}"))?;
+
+        let run_translation = profiler
+            .start_pipeline_element(format!("Compiler_MLIRToLLVMIR:{code_identifier}").as_str());
+        let bitcode = Self::translate_to_bitcode(&module)?;
+        run_translation.borrow_mut().finish();
 
         Ok(crate::output::SegmentOutput {
             sol_source,
             source,
+            bitcode,
             dependencies,
         })
     }
 
-    /// Parses MLIR source text (LLVM dialect) into a verified module.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the source cannot be parsed or fails verification.
-    pub fn parse_source<'melior>(
-        melior: &'melior melior::Context,
-        source: &str,
-    ) -> anyhow::Result<Module<'melior>> {
-        let module = Module::parse(melior, source)
-            .ok_or_else(|| anyhow::anyhow!("failed to parse MLIR source text"))?;
-
-        if !module.as_operation().verify() {
-            anyhow::bail!("MLIR module verification failed");
-        }
-
-        Ok(module)
-    }
-
-    /// Translates a parsed LLVM-dialect module to raw LLVM pointers.
+    /// Translates an LLVM dialect module to LLVM IR and returns its bitcode, which codegen parses
+    /// into the LLVM context it compiles in.
     ///
     /// # Errors
     ///
     /// Returns an error if the module cannot be translated to LLVM IR.
-    pub fn translate_module_to_llvm(module: &Module) -> anyhow::Result<RawLlvmModule> {
-        unsafe {
-            let raw_operation = module.as_operation().to_raw();
-            let llvm_context = inkwell::llvm_sys::core::LLVMContextCreate();
-
-            let llvm_module =
-                mlir_sys::mlirTranslateModuleToLLVMIR(raw_operation, llvm_context as *mut _);
-
-            if llvm_module.is_null() {
-                inkwell::llvm_sys::core::LLVMContextDispose(llvm_context);
-                anyhow::bail!("mlirTranslateModuleToLLVMIR returned null");
-            }
-
-            Ok(RawLlvmModule {
-                context: llvm_context,
-                module: llvm_module as *mut _,
-            })
+    fn translate_to_bitcode(module: &Module) -> anyhow::Result<Vec<u8>> {
+        let llvm = inkwell::context::Context::create();
+        let raw_module = unsafe {
+            mlir_sys::mlirTranslateModuleToLLVMIR(
+                module.as_operation().to_raw(),
+                llvm.raw() as *mut _,
+            )
+        };
+        if raw_module.is_null() {
+            anyhow::bail!("mlirTranslateModuleToLLVMIR returned null");
         }
+        let llvm_module = unsafe { inkwell::module::Module::new(raw_module as *mut _) };
+        Ok(llvm_module.write_bitcode_to_memory().as_slice().to_vec())
     }
 
     /// The location a `sol.func` or `yul.func` carries: the location cursor with a subprogram of
@@ -353,10 +341,9 @@ impl<'context> Context<'context> {
         }
     }
 
-    /// The flags a module text is printed with. `print_locations` prints locations in the
-    /// non-pretty form, the one that re-parses, so they survive the round-trip to the worker
-    /// processes; the default flags drop them. Each distinct location is written once as a `#locN`
-    /// alias, except on block arguments, which the printer allows no alias.
+    /// The flags a module text is printed with. `print_locations` prints locations, which the
+    /// default flags drop, in the form that re-parses. Each distinct location is written once as a
+    /// `#locN` alias, except on block arguments, which the printer allows no alias.
     fn printing_flags(print_locations: bool) -> OperationPrintingFlags {
         let flags = OperationPrintingFlags::new();
         if print_locations {
@@ -369,9 +356,8 @@ impl<'context> Context<'context> {
     /// Appends to `module` the `llvm.module_flags` declaring [`Self::DWARF_VERSION`], at the
     /// module's location.
     ///
-    /// MLIR's translation sets `Debug Info Version` but no DWARF version. Each module a worker
-    /// translates becomes its own LLVM module, so each segment that carries debug info declares
-    /// its own.
+    /// MLIR's translation sets `Debug Info Version` but no DWARF version. Each segment's module
+    /// becomes its own LLVM module, so each segment that carries debug info declares its own.
     fn declare_dwarf_version(melior: &'context melior::Context, module: &Module<'context>) {
         let flag = unsafe {
             Attribute::from_raw(crate::ffi::solxCreateDwarfVersionFlagAttr(

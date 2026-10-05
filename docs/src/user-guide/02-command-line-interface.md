@@ -306,20 +306,19 @@ Compiler_CreateMLIRContext: [..]us
 Compiler_EmitSol:Simple.sol:Simple: [..]us
 Compiler_RunSolPasses:Simple.sol:Simple: [..]us
 ...
+Compiler_MLIRToLLVMIR:Simple.sol:Simple: [..]us
 Compiler_EmitSol:Simple.sol:Simple_deployed: [..]us
 Compiler_RunSolPasses:Simple.sol:Simple_deployed: [..]us
 ...
+Compiler_MLIRToLLVMIR:Simple.sol:Simple_deployed: [..]us
 
 ======= Simple.sol:Simple =======
 Benchmarks:
-    Simple.sol:Simple/CreateMLIRContext/M3B3/SpillArea(0): [..]us
-    Simple.sol:Simple:runtime/ParseMLIR/M3B3/SpillArea(0): [..]us
-    Simple.sol:Simple:runtime/MLIRToLLVMIR/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple:runtime/ParseBitcode/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple_deployed:runtime/InitVerify/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple_deployed:runtime/OptimizeVerify/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:runtime/WorkerRoundtrip(0)/M3B3/SpillArea(0): [..]us
-    Simple.sol:Simple:deploy/ParseMLIR/M3B3/SpillArea(0): [..]us
-    Simple.sol:Simple:deploy/MLIRToLLVMIR/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple:deploy/ParseBitcode/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/InitVerify/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/OptimizeVerify/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/WorkerRoundtrip(0)/M3B3/SpillArea(0): [..]us
