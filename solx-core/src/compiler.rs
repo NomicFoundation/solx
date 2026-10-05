@@ -119,6 +119,7 @@ impl<'arguments> Compiler<'arguments> {
                 &output_selection,
                 messages,
                 self.arguments.evm_version,
+                self.arguments.solidity_version.clone(),
                 self.arguments.via_ir,
                 metadata_hash_type,
                 self.arguments.metadata_literal,
@@ -218,6 +219,7 @@ impl<'arguments> Compiler<'arguments> {
         output_selection: &solx_standard_json::InputSelection,
         messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
         evm_version: Option<solx_utils::EVMVersion>,
+        solidity_version: Option<semver::Version>,
         via_ir: bool,
         metadata_hash_type: solx_utils::MetadataHashType,
         metadata_literal: bool,
@@ -236,6 +238,7 @@ impl<'arguments> Compiler<'arguments> {
             remappings,
             solx_standard_json::InputOptimizer::default(),
             evm_version,
+            solidity_version,
             via_ir,
             output_selection,
             solx_standard_json::InputMetadata::new(
@@ -257,7 +260,11 @@ impl<'arguments> Compiler<'arguments> {
 
         let run_solx_project = profiler.start_pipeline_element("solx_BuildProject");
         let project = Project::try_from_solidity_output(
-            &frontend.version,
+            input
+                .settings
+                .solidity_version
+                .clone()
+                .expect("the frontend sets the version it compiled as"),
             input.settings.libraries.clone(),
             &mut output,
         )?;
@@ -338,7 +345,11 @@ impl<'arguments> Compiler<'arguments> {
 
                 let run_solx_project = profiler.start_pipeline_element("solx_BuildProject");
                 let project = Project::try_from_solidity_output(
-                    &frontend.version,
+                    input
+                        .settings
+                        .solidity_version
+                        .clone()
+                        .expect("the frontend sets the version it compiled as"),
                     input.settings.libraries.clone(),
                     &mut output,
                 )?;

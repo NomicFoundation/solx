@@ -1,0 +1,18 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A": {
+      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity 0.8.20; contract C {}"
+    }
+  },
+  "settings": {
+    "solidityVersion": "0.7.6",
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.bytecode.object"
+        ]
+      }
+    }
+  }
+}

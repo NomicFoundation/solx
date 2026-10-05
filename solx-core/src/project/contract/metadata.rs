@@ -24,12 +24,12 @@ impl<'a> Metadata<'a> {
     /// A shortcut constructor.
     ///
     pub fn new(
-        solc_version: Option<&solx_standard_json::Version>,
+        solc_version: Option<&semver::Version>,
         optimizer_settings: solx_codegen_evm::OptimizerSettings,
         llvm_options: &'a [String],
     ) -> Self {
         Self {
-            solc_version: solc_version.map(|version| version.default.to_owned()),
+            solc_version: solc_version.cloned(),
             solx_version: crate::Compiler::version()
                 .parse()
                 .expect("version string is valid semver"),

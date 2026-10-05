@@ -162,6 +162,11 @@ pub struct Arguments {
     #[arg(long, help_heading = "Compilation Settings")]
     pub evm_version: Option<solx_utils::EVMVersion>,
 
+    /// Solidity language version to compile as, from 0.8.0 up.
+    /// The default is the latest version the frontend supports.
+    #[arg(long, value_name = "VERSION", help_heading = "Compilation Settings")]
+    pub solidity_version: Option<semver::Version>,
+
     /// Accepted for compatibility and ignored with a warning.
     #[arg(long, help_heading = "Compilation Settings")]
     pub via_ir: bool,
@@ -316,6 +321,11 @@ impl Arguments {
                     "EVM version is only allowed in Solidity mode.",
                 ));
             }
+            if self.solidity_version.is_some() {
+                messages.push(solx_standard_json::OutputError::new_error(
+                    "Solidity version is only allowed in Solidity mode.",
+                ));
+            }
 
             if self.via_ir {
                 messages.push(solx_standard_json::OutputError::new_error(
@@ -366,6 +376,11 @@ impl Arguments {
             if self.evm_version.is_some() {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "EVM version must be passed via standard JSON input.",
+                ));
+            }
+            if self.solidity_version.is_some() {
+                messages.push(solx_standard_json::OutputError::new_error(
+                    "Solidity version must be passed via standard JSON input.",
                 ));
             }
 

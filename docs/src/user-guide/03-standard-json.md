@@ -105,8 +105,14 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
     // Supported EVM versions: "cancun", "prague", "osaka".
     // For instance, with version "osaka", solx will be producing `clz` instructions, whereas for older EVM versions it will not.
     // The oldest supported EVM version is "cancun".
-    // Default: "osaka".
+    // Default: solc's default for "solidityVersion", which is "osaka" for the latest one.
+    // A Solidity version older than "0.8.25" defaults to an EVM version solx does not support yet, so it is compiled for "cancun" with a warning.
     "evmVersion": "osaka",
+    // Optional, solx-only: Solidity version the sources are compiled as.
+    // Slang accepts the syntax and built-ins available in that version, and every `pragma solidity` must allow it.
+    // Supported versions: from "0.8.0" up to the latest one Slang supports.
+    // Default: the latest version Slang supports.
+    "solidityVersion": "0.8.37",
     // Optional: Select the desired output.
     // Default: no flags are selected, and no output is generated.
     "outputSelection": {

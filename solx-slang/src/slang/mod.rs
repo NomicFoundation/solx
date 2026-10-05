@@ -11,6 +11,7 @@ use slang_solidity_v2::compilation::Configuration;
 use slang_solidity_v2::compilation::FileId;
 use slang_solidity_v2::diagnostics::DiagnosticExtensions;
 use slang_solidity_v2::diagnostics::DiagnosticSeverity;
+use slang_solidity_v2::utils::EvmTarget;
 use slang_solidity_v2::utils::LanguageVersion;
 
 use solx_standard_json::CollectableError;
@@ -47,30 +48,13 @@ impl Slang {
     /// The frontend name the compiler reports and prefixes its pipeline benchmarks with.
     pub const NAME: &'static str = "Slang";
 
-    /// Builds a Slang compilation unit from the given source files, parsing every source and
-    /// resolving imports with the given remappings, following solc's semantics.
-    fn compile(
-        language_version: LanguageVersion,
-        evm_version: EVMVersion,
-        sources: &BTreeMap<FileId, &str>,
-        remappings: &[Remapping],
-    ) -> CompilationUnit {
-        CompilationUnit::create(Configuration {
-            language_version,
-            evm_target: evm_version.into(),
-            sources: sources
-                .iter()
-                .map(|(file_id, content)| (file_id.clone(), *content)),
-            resolver: SourceImportResolver { remappings },
-        })
-    }
-}
-
-impl Slang {
     ///
     /// The Solidity `--standard-json` mirror.
     ///
     /// Metadata is always requested in order to calculate the metadata hash even if not requested in the `output_selection`.
+    ///
+    /// Sets `settings.solidity_version` to the version the sources are compiled as, which goes into
+    /// the metadata.
     ///
     pub fn standard_json(
         &self,
@@ -116,12 +100,22 @@ impl Slang {
             sources.insert(path.as_str().into(), source_code);
         }
 
-        let language_version = LanguageVersion::try_from(self.version.default.clone())
-            .expect("the frontend version is a Slang language version");
-        let evm_version = input_json.settings.evm_version.unwrap_or_else(|| {
-            EVMVersion::try_from(language_version.default_evm_target())
-                .expect("solx supports the default EVM version of its language version")
-        });
+        let language_version = match Self::language_version(
+            input_json.settings.solidity_version.as_ref(),
+            &mut output.errors,
+        ) {
+            Ok(language_version) => language_version,
+            Err(error) => {
+                output.errors.push(OutputError::new_error(error));
+                return Ok(output);
+            }
+        };
+        input_json.settings.solidity_version = Some(language_version.into());
+        let evm_version = Self::evm_version(
+            input_json.settings.evm_version,
+            language_version,
+            &mut output.errors,
+        );
 
         let run_analysis =
             profiler.start_pipeline_element(format!("{}_ParseAndBind", Self::NAME).as_str());
@@ -214,5 +208,80 @@ impl Slang {
         }
 
         Ok(output)
+    }
+
+    /// Picks the language version to compile as: the requested one, or the latest Slang supports.
+    ///
+    /// A prerelease or build suffix is dropped with a warning pushed to `messages`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if Slang does not support the requested version.
+    fn language_version(
+        requested: Option<&semver::Version>,
+        messages: &mut Vec<OutputError>,
+    ) -> Result<LanguageVersion, String> {
+        let Some(requested) = requested else {
+            return Ok(LanguageVersion::LATEST);
+        };
+        let mut version = requested.clone();
+        if !version.pre.is_empty() || !version.build.is_empty() {
+            version.pre = semver::Prerelease::EMPTY;
+            version.build = semver::BuildMetadata::EMPTY;
+            messages.push(OutputError::new_warning(format!(
+                "Solidity version {requested} is compiled as {version}: the suffix names a solc build, which does not change the language version."
+            )));
+        }
+        version.clone().try_into().map_err(|_| {
+            format!(
+                "Solidity version {version} is not supported. Supported versions are {} to {}.",
+                semver::Version::from(LanguageVersion::EARLIEST),
+                semver::Version::from(LanguageVersion::LATEST),
+            )
+        })
+    }
+
+    /// Picks the EVM version to analyze at: the requested one, or solc's default for the language
+    /// version.
+    ///
+    /// A default older than Cancun falls back to Cancun with a warning pushed to `messages`.
+    fn evm_version(
+        requested: Option<EVMVersion>,
+        language_version: LanguageVersion,
+        messages: &mut Vec<OutputError>,
+    ) -> EVMVersion {
+        if let Some(requested) = requested {
+            return requested;
+        }
+        let default = language_version.default_evm_target();
+        if default < EvmTarget::Cancun {
+            // TODO: target the EVM versions older than Cancun that solc defaults to.
+            messages.push(OutputError::new_warning(format!(
+                "Solidity version {} defaults to EVM version {}, which solx does not support yet. Compiling for {}, the oldest EVM version solx supports.",
+                semver::Version::from(language_version),
+                default.to_string().to_lowercase(),
+                EVMVersion::Cancun,
+            )));
+            return EVMVersion::Cancun;
+        }
+        EVMVersion::try_from(default).expect("solx supports every EVM version from Cancun up")
+    }
+
+    /// Builds a Slang compilation unit from the given source files, parsing every source and
+    /// resolving imports with the given remappings, following solc's semantics.
+    fn compile(
+        language_version: LanguageVersion,
+        evm_version: EVMVersion,
+        sources: &BTreeMap<FileId, &str>,
+        remappings: &[Remapping],
+    ) -> CompilationUnit {
+        CompilationUnit::create(Configuration {
+            language_version,
+            evm_target: evm_version.into(),
+            sources: sources
+                .iter()
+                .map(|(file_id, content)| (file_id.clone(), *content)),
+            resolver: SourceImportResolver { remappings },
+        })
     }
 }
