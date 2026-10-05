@@ -1,4 +1,4 @@
-// RUN: slang --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'
+// RUN: slang --emit-mlir=sol --debug-info --debug-info-runtime %s | FileCheck %s --implicit-check-not='loc(unknown)'
 
 // CHECK: #[[ARITHMETIC:loc[0-9]*]] = loc("{{.*}}debug_location_arithmetic.sol":96:5)
 // CHECK: #[[BITS:loc[0-9]*]] = loc("{{.*}}debug_location_arithmetic.sol":102:5)

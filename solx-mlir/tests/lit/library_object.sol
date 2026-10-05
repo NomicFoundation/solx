@@ -3,9 +3,9 @@
 // CHECK: sol.contract @{{.*Lib.*}} {
 // CHECK: sol.func @{{.*external_member.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, orig_fn_type = (ui256) -> ui256, selector = -1958955763 : i32, state_mutability = #Pure}
 // CHECK:   sol.call @{{.*inner.*}}(%{{.*}}) : (ui256) -> ui256
-// CHECK: sol.func private @{{.*inner.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #Pure}
+// CHECK: sol.func @{{.*inner.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #Pure}
 // CHECK:   sol.call @{{.*shared.*}}(%{{.*}}) : (ui256) -> ui256
-// CHECK: } {kind = #Library}
+// CHECK: } {kind = #Library, runtime}
 
 function shared(uint256 a) pure returns (uint256) {
     return a + 1;

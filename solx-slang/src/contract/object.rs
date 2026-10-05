@@ -128,6 +128,15 @@ impl Object {
         }
     }
 
+    /// The functions the runtime code dispatches to: the externally visible ones, `receive` and
+    /// `fallback` among them.
+    pub fn entry_points(&self) -> Vec<FunctionDefinition> {
+        self.functions()
+            .into_iter()
+            .filter(FunctionDefinition::is_externally_visible)
+            .collect()
+    }
+
     /// The state variables the object declares over its hierarchy, in storage order.
     pub fn state_variables(&self) -> Vec<StateVariableDefinition> {
         match self {

@@ -1,23 +1,23 @@
 // RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.contract @{{.*C.*}} {
-// CHECK: sol.func private @{{.*g.*}}() -> ui256 attributes {{.*}}id = {{[0-9]+}}
 // CHECK: sol.func @{{.*parenthesized.*}}
 // CHECK:   sol.func_constant @{{.*g.*}} : !sol.func_ref<() -> ui256>
 // CHECK:   sol.icall %{{[0-9]+}}() : !sol.func_ref<() -> ui256>, () -> ui256
+// CHECK: sol.func @{{.*g.*}}() -> ui256 attributes {{.*}}id = {{[0-9]+}}
 // CHECK: sol.func @{{.*qualified_library.*}}
 // CHECK:   sol.func_constant @{{.*pick.*}} : !sol.func_ref<() -> ui256>
 // CHECK:   sol.icall %{{[0-9]+}}() : !sol.func_ref<() -> ui256>, () -> ui256
 // CHECK: sol.func @{{.*run.*}}
 // CHECK:   sol.func_constant @{{.*g.*}} : !sol.func_ref<() -> ui256>
 // CHECK:   sol.icall %{{[0-9]+}}() : !sol.func_ref<() -> ui256>, () -> ui256
-// CHECK: } {kind = #Contract}
+// CHECK: } {kind = #Contract, runtime}
 
 // CHECK: sol.contract @{{.*Lib.*}} {
-// CHECK: sol.func private @{{.*taker.*}}
+// CHECK: sol.func @{{.*taker.*}}
 // CHECK:   sol.func_constant @{{.*pick.*}} : !sol.func_ref<() -> ui256>
 // CHECK:   sol.icall %{{[0-9]+}}() : !sol.func_ref<() -> ui256>, () -> ui256
-// CHECK: } {kind = #Library}
+// CHECK: } {kind = #Library, runtime}
 
 contract C {
     function g() internal returns (uint256) {
@@ -45,7 +45,7 @@ library Lib {
         return 5;
     }
 
-    function taker() internal pure returns (uint256) {
+    function taker() public pure returns (uint256) {
         function () internal pure returns (uint256) functionPointer = Lib.pick;
         return functionPointer();
     }

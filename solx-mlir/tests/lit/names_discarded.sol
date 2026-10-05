@@ -26,7 +26,7 @@
 // CHECK-NEXT:   sol.call @{{.*recipient.*}}()
 // CHECK-NEXT:   sol.return
 
-// CHECK: sol.func private @{{.*recipient.*}}()
+// CHECK: sol.func @{{.*recipient.*}}()
 // CHECK-NEXT:   %[[RETURN:.*]] = sol.alloca : !sol.ptr<!sol.address<payable>, Stack>
 // CHECK-NEXT:   %[[ZERO:.*]] = sol.constant 0 : ui160
 // CHECK-NEXT:   %[[DEFAULT:.*]] = sol.address_cast %[[ZERO]]

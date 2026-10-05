@@ -5,7 +5,7 @@
 // CHECK:   %[[CONSTANT:.*]] = sol.constant 7 : ui8
 // CHECK:   %[[VALUE:.*]] = sol.cast %[[CONSTANT]] : ui8 to ui256
 // CHECK:   sol.return %[[VALUE]] : ui256
-// CHECK: } {kind = #Contract}
+// CHECK: } {kind = #Contract, runtime}
 
 contract C {
     uint256 public constant DERIVED = Library.BASE;

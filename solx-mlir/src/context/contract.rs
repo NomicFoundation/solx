@@ -3,16 +3,22 @@
 //! `sol.immutable` members.
 //!
 
+use melior::ir::Attribute;
+use melior::ir::BlockLike;
+use melior::ir::attribute::ArrayAttribute;
+use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
-use melior::ir::operation::OperationLike;
+use melior::ir::operation::OperationMutLike;
+use melior::ir::operation::OperationRefMut;
 use melior::ir::r#type::IntegerType;
 use ruint::aliases::U256;
 
 use crate::Block;
 use crate::Context;
 use crate::ContractKind;
+use crate::Function;
 use crate::Type;
 use crate::ods::sol::ContractOperation;
 use crate::ods::sol::ImmutableOperation;
@@ -26,20 +32,25 @@ pub struct Contract<'context> {
 }
 
 impl<'context> Contract<'context> {
-    /// Emits `sol.contract @name` of `kind` into `module_body`, returning it wrapping the body region.
+    /// The attribute a runtime contract lists the functions it defines whose pointer the deploy
+    /// code took in.
+    const INDIRECT_CALLEES: &'static str = "indirect_callees";
+
+    /// Emits `sol.contract @name` of `kind` for `segment` into `module_body`, returning it wrapping
+    /// the body region.
     pub fn define(
         name: &str,
         kind: ContractKind,
+        segment: solx_utils::CodeSegment,
         context: &Context<'context>,
         module_body: Block<'context>,
     ) -> Self {
-        // The Sol-to-Yul lowering creates the runtime module at this location, which is how it gets
-        // the module's compile unit.
         let body = mlir_region_op!(
-            at context.module.as_operation().location(), context, &module_body.inner,
+            context, &module_body.inner,
             ContractOperation
                 .sym_name(StringAttribute::new(context.melior, name))
-                .kind(kind.attribute(context.melior));
+                .kind(kind.attribute(context.melior))
+                .runtime(segment == solx_utils::CodeSegment::Runtime);
             body_region
         );
         Self { body }
@@ -69,6 +80,35 @@ impl<'context> Contract<'context> {
                 ))
                 .transient(transient);
             ()
+        );
+    }
+
+    /// Lists `functions`, the ones this runtime contract defines whose pointer the deploy code
+    /// took, as its indirect callees.
+    pub fn set_indirect_callees(
+        self,
+        functions: &[Function<'context>],
+        context: &Context<'context>,
+    ) {
+        if functions.is_empty() {
+            return;
+        }
+        let symbols: Vec<Attribute> = functions
+            .iter()
+            .map(|function| FlatSymbolRefAttribute::new(context.melior, &function.mlir_name).into())
+            .collect();
+        let mut operation = unsafe {
+            OperationRefMut::from_raw(
+                self.body
+                    .inner
+                    .parent_operation()
+                    .expect("a contract body belongs to its contract")
+                    .to_raw(),
+            )
+        };
+        operation.set_attribute(
+            Self::INDIRECT_CALLEES,
+            ArrayAttribute::new(context.melior, &symbols).into(),
         );
     }
 

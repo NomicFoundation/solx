@@ -37,26 +37,10 @@ macro_rules! mlir_op {
 
 /// Appends a region-bearing op and hands back each region's fresh entry block. A trailing
 /// `; empty name…` clause sets a region the op's shape requires but this method leaves bodiless —
-/// an `if` with no `else` — and it is not handed back. A leading `at $location,` puts the op at
-/// `$location` instead of the location cursor: `sol.contract` carries the compile unit, which the
-/// location cursor must not hold.
+/// an `if` with no `else` — and it is not handed back.
 macro_rules! mlir_region_op {
     (
         $context:expr, $block:expr, $operation:ident
-        $(.$method:ident($($argument:expr),* $(,)?))*
-        ; $($region:ident),+
-        $(; empty $($empty_region:ident),+)?
-        $(,)?
-    ) => {
-        mlir_region_op!(
-            at $context.current_location, $context, $block, $operation
-            $(.$method($($argument),*))*
-            ; $($region),+
-            $(; empty $($empty_region),+)?
-        )
-    };
-    (
-        at $location:expr, $context:expr, $block:expr, $operation:ident
         $(.$method:ident($($argument:expr),* $(,)?))*
         ; $($region:ident),+
         $(; empty $($empty_region:ident),+)?
@@ -74,7 +58,7 @@ macro_rules! mlir_region_op {
         )+)?
         let operation = melior::ir::BlockLike::append_operation(
             $block,
-            $operation::builder($context.melior, $location)
+            $operation::builder($context.melior, $context.current_location)
                 $(.$method($($crate::IntoOds::into_ods($argument)),*))*
                 $(.$region($region))+
                 $($(.$empty_region($empty_region))+)?

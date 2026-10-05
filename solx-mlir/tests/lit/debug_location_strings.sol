@@ -1,4 +1,4 @@
-// RUN: slang --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'
+// RUN: slang --emit-mlir=sol --debug-info --debug-info-runtime %s | FileCheck %s --implicit-check-not='loc(unknown)'
 
 // CHECK: sol.func @{{.*data.*}}
 // CHECK:   sol.string_lit "\01\02" {{.*}} loc(#[[DATA_LITERAL:loc[0-9]*]])

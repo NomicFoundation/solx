@@ -39,14 +39,13 @@ fn records_every_pipeline_stage() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("Slang_ParseAndBind").count(1))
         .stdout(predicate::str::contains("Slang_SerializeAST:").count(1))
         .stdout(predicate::str::contains("Compiler_CreateMLIRContext").count(1))
-        .stdout(predicate::str::contains("Compiler_EmitSol:").count(1))
-        .stdout(predicate::str::is_match(r"Compiler_RunSolPasses:\S*\.sol:\w+: \d+us")?.count(1))
+        .stdout(predicate::str::contains("Compiler_EmitSol:").count(2))
+        .stdout(predicate::str::is_match(r"Compiler_RunSolPasses:\S*\.sol:\w+: \d+us")?.count(2))
         .stdout(predicate::str::is_match(
             r"Compiler_RunSolPasses:\S*\.sol:\w+/[^:]+: \d+us",
         )?)
-        .stdout(predicate::str::contains("/Rest: ").count(1))
-        .stdout(predicate::str::contains("/Total: ").count(1))
-        .stdout(predicate::str::contains("Compiler_ExtractMLIRObjects:").count(1))
+        .stdout(predicate::str::contains("/Rest: ").count(2))
+        .stdout(predicate::str::contains("/Total: ").count(2))
         .stdout(predicate::str::contains("Compiler_BuildProject").count(1))
         .stdout(predicate::str::contains("Compiler_Compile").count(1))
         .stdout(predicate::str::contains("Compiler_Link").count(1))

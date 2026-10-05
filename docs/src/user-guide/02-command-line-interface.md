@@ -306,7 +306,9 @@ Compiler_CreateMLIRContext: [..]us
 Compiler_EmitSol:Simple.sol:Simple: [..]us
 Compiler_RunSolPasses:Simple.sol:Simple: [..]us
 ...
-Compiler_ExtractMLIRObjects:Simple.sol:Simple: [..]us
+Compiler_EmitSol:Simple.sol:Simple_deployed: [..]us
+Compiler_RunSolPasses:Simple.sol:Simple_deployed: [..]us
+...
 
 ======= Simple.sol:Simple =======
 Benchmarks:

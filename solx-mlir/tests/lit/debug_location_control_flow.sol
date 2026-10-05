@@ -1,4 +1,4 @@
-// RUN: slang --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'
+// RUN: slang --emit-mlir=sol --debug-info --debug-info-runtime %s | FileCheck %s --implicit-check-not='loc(unknown)'
 
 // CHECK-DAG: #[[BRANCHES:loc[0-9]*]] = loc("{{.*}}debug_location_control_flow.sol":158:5)
 // CHECK-DAG: #[[LOOPS:loc[0-9]*]] = loc("{{.*}}debug_location_control_flow.sol":166:5)

@@ -12,9 +12,9 @@
 // CHECK:   sol.addr_of @{{.*}}leaf{{.*}} : !sol.ptr<ui256, Storage>
 // CHECK:   sol.call @[[READ:.*]]() : () -> ui256
 // CHECK:   sol.store
-// CHECK: sol.func private @[[READ]]() -> ui256
+// CHECK: sol.func @[[READ]]() -> ui256
 // CHECK:   sol.addr_of @{{.*}}base{{.*}} : !sol.ptr<ui256, Storage>
-// CHECK:   sol.load_immutable @{{.*}}frozen{{.*}} : ui256
+// CHECK:   sol.addr_of @{{.*}}frozen{{.*}} : !sol.ptr<ui256, Immutable>
 // CHECK: sol.func @{{.*}}base(){{.*}} attributes {orig_fn_type = () -> ui256, selector
 // CHECK: sol.func @{{.*}}leaf(){{.*}} attributes {orig_fn_type = () -> ui256, selector
 

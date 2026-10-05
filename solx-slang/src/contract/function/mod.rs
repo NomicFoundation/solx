@@ -19,6 +19,7 @@ use solx_mlir::FunctionOrigin;
 use solx_mlir::Place;
 use solx_mlir::StateMutability;
 use solx_mlir::Value;
+use solx_utils::CodeSegment;
 
 use crate::contract::object::Object;
 use crate::scope::contract::ContractScope;
@@ -45,6 +46,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             .body()
             .expect("slang admits a call naming a function declaration nothing implements");
         let selector = match (self.object, function.enclosing_definition()) {
+            _ if self.segment == CodeSegment::Deploy => None,
             (Object::Contract(contract), Some(Definition::Contract(_)))
                 if matches!(contract.resolve_virtual(function), Some(VirtualTarget::Function(resolved))
                     if resolved.node_id() == function.node_id()) =>
@@ -93,7 +95,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 scope.constructor.bind_parameters(function, entry);
             }
 
-            scope.function(entry, is_constructor, &signature, |scope| {
+            scope.function(entry, &signature, |scope| {
                 for (index, parameter) in function.parameters().iter().enumerate() {
                     let Some(identifier) = parameter.name() else {
                         continue;
