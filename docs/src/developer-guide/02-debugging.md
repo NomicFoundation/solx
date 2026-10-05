@@ -1,6 +1,6 @@
 # Debugging and Inspecting Compiler Output
 
-This guide shows how to use **solx** debug flags to inspect intermediate representations at each compilation stage.
+This guide shows how to use **Slang** debug flags to inspect intermediate representations at each compilation stage.
 
 ## IR Dump Flags
 
@@ -17,18 +17,18 @@ The `--debug-info` and `--debug-info-runtime` flags are output selectors that pr
 Example:
 
 ```bash
-solx contract.sol -o ./debug --emit-mlir --emit-llvm-ir --asm --overwrite
+slang contract.sol -o ./debug --emit-mlir --emit-llvm-ir --asm --overwrite
 ```
 
 This produces one file per contract per stage in `./debug/`.
 
-## Quick Dump with `SOLX_OUTPUT_DIR`
+## Quick Dump with `SLANG_OUTPUT_DIR`
 
-Setting the `SOLX_OUTPUT_DIR` environment variable enables all IR dumps at once without listing individual flags:
+Setting the `SLANG_OUTPUT_DIR` environment variable enables all IR dumps at once without listing individual flags:
 
 ```bash
-export SOLX_OUTPUT_DIR=./ir_dumps
-solx contract.sol
+export SLANG_OUTPUT_DIR=./ir_dumps
+slang contract.sol
 ```
 
 This writes the LLVM IR and assembly files for every contract, with automatic overwrite.
@@ -38,7 +38,7 @@ This writes the LLVM IR and assembly files for every contract, with automatic ov
 The `--benchmarks` flag prints timing information for each pipeline stage:
 
 ```bash
-solx contract.sol --benchmarks
+slang contract.sol --benchmarks
 ```
 
 Output includes per-contract compilation timing in microseconds.
@@ -51,7 +51,7 @@ Two flags control LLVM-level diagnostics:
 - `--llvm-debug-logging` — enables detailed LLVM pass execution logging to stderr. Shows which passes and analyses run, with instruction counts.
 
 ```bash
-solx contract.sol --llvm-verify-each --llvm-debug-logging
+slang contract.sol --llvm-verify-each --llvm-debug-logging
 ```
 
 ## LLVM Options Pass-Through
@@ -59,14 +59,14 @@ solx contract.sol --llvm-verify-each --llvm-debug-logging
 Arbitrary LLVM backend options can be passed with `--llvm-options`:
 
 ```bash
-solx contract.sol --llvm-options='-evm-metadata-size 10'
+slang contract.sol --llvm-options='-evm-metadata-size 10'
 ```
 
 The value must be a single string following `=`. See the [LLVM Options](./03-llvm-options.md) guide for available options, including EVM backend options and standard LLVM diagnostic options like `-time-passes` and `-stats`.
 
 ## Optimization Levels
 
-**solx** maps optimization levels to LLVM pipelines:
+**Slang** maps optimization levels to LLVM pipelines:
 
 | Flag | Middle-end | Size level | Back-end |
 |---|---|---|---|
@@ -78,11 +78,11 @@ The value must be a single string following `=`. See the [LLVM Options](./03-llv
 
 The default is `-O3`, optimizing for runtime performance.
 
-The optimization level can also be set with the `SOLX_OPTIMIZATION` environment variable (values: `1`, `2`, `3`, `s`, `z`).
+The optimization level can also be set with the `SLANG_OPTIMIZATION` environment variable (values: `1`, `2`, `3`, `s`, `z`).
 
 ## Size Fallback
 
-The `--optimization-size-fallback` flag (or `SOLX_OPTIMIZATION_SIZE_FALLBACK` env var) recompiles with `-Oz` when bytecode exceeds the 24,576-byte EVM contract size limit (EIP-170). When triggered, output files include a `.size_fallback` suffix.
+The `--optimization-size-fallback` flag (or `SLANG_OPTIMIZATION_SIZE_FALLBACK` env var) recompiles with `-Oz` when bytecode exceeds the 24,576-byte EVM contract size limit (EIP-170). When triggered, output files include a `.size_fallback` suffix.
 
 ## Spill Area Suffix
 
@@ -91,19 +91,19 @@ When the compiler uses a memory spill region to mitigate stack-too-deep errors, 
 ## Typical Debugging Workflow
 
 1. **Reproduce** the issue with a minimal Solidity file.
-2. **Dump all IRs** using `SOLX_OUTPUT_DIR`:
+2. **Dump all IRs** using `SLANG_OUTPUT_DIR`:
    ```bash
-   SOLX_OUTPUT_DIR=./debug solx contract.sol
+   SLANG_OUTPUT_DIR=./debug slang contract.sol
    ```
 3. **Inspect stage by stage**: Sol-dialect MLIR → LLVM-dialect MLIR → LLVM IR (unoptimized) → LLVM IR (optimized) → assembly.
 4. **Narrow down** which stage introduces the problem.
 5. **Use LLVM verification** if the issue is in the optimizer:
    ```bash
-   solx contract.sol --llvm-verify-each --emit-llvm-ir -o ./debug --overwrite
+   slang contract.sol --llvm-verify-each --emit-llvm-ir -o ./debug --overwrite
    ```
 6. **Run the integration tester** on the file:
    ```bash
    cargo run --release --bin solx-tester -- \
-     --solidity-compiler ./target/release/solx \
+     --solidity-compiler ./target/release/slang \
      --path contract.sol
    ```

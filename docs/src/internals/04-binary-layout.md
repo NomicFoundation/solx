@@ -1,6 +1,6 @@
 # Binary Layout and Linking
 
-This chapter describes how **solx** models deploy/runtime bytecode objects, dependency data, and post-compilation linking.
+This chapter describes how **Slang** models deploy/runtime bytecode objects, dependency data, and post-compilation linking.
 
 ## Contract Object Model
 
@@ -41,7 +41,7 @@ The EVM codegen emits this canonical form in `minimal_deploy_code()` using:
 
 Yul builtins `datasize(<object>)` and `dataoffset(<object>)` lower to EVM intrinsics with metadata object names.
 
-In **solx**, these are translated to LLVM intrinsics:
+In **Slang**, these are translated to LLVM intrinsics:
 
 - `llvm.evm.datasize`
 - `llvm.evm.dataoffset`
@@ -63,7 +63,7 @@ In the build pipeline, metadata bytes are appended to runtime objects before fin
 Library references are resolved at link time:
 
 - The linker patches linker symbols with final addresses.
-- If a symbol is unresolved, **solx** records its offsets and emits placeholders in hex output.
+- If a symbol is unresolved, **Slang** records its offsets and emits placeholders in hex output.
 - Placeholder format follows the common pattern `__$<keccak-256-digest>$__`.
 
 Standard JSON output reports unresolved positions through `evm.*.linkReferences` so external tooling can link later.

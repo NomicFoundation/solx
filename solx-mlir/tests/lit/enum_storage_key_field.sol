@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.state_var @{{.*}} slot 0 offset 0 : !sol.enum<2>
 // CHECK: sol.state_var @{{.*}} slot 1 offset 0 : !sol.mapping<!sol.enum<2>, ui256>

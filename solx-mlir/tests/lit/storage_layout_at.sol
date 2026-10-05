@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.state_var @{{.*low.*}} slot 100 offset 0 : ui64
 // CHECK: sol.state_var @{{.*high.*}} slot 100 offset 8 : ui64

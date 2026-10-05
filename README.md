@@ -4,16 +4,16 @@
 
 # Optimizing Solidity Compiler
 
-**solx** is an optimizing Solidity compiler for EVM by [Nomic Foundation](https://nomic.foundation/). [Slang](https://github.com/NomicFoundation/slang) parses and binds the Solidity, the frontend lowers it to MLIR, and an LLVM backend with an EVM target produces the bytecode.
+**Slang** is an optimizing Solidity compiler for EVM by [Nomic Foundation](https://nomic.foundation/). The [Slang front-end](https://github.com/NomicFoundation/slang) parses and binds the Solidity, this repository lowers it to MLIR, and an LLVM backend with an EVM target produces the bytecode.
 
 > [!WARNING]  
 > The project is in development and is not ready for production use.
 
-The tester runs **solx** against:
+The tester runs **Slang** against:
 
 - [Semantic tests](./solidity/test/libsolidity/semanticTests/) from the **solc** repository
 - [DeFi protocols](./tests/solidity/complex/defi): UniswapV2, UniswapV3, Mooniswap, StarkEx
-- [Additional tests](./tests/solidity) written by the **solx** team
+- [Additional tests](./tests/solidity) written by the **Slang** team
 
 Planned:
 
@@ -22,7 +22,7 @@ Planned:
 
 ## Documentation
 
-**solx** documentation is powered by [GitHub Pages](https://nomicfoundation.github.io/solx/latest/) and provided as an [mdBook](https://github.com/rust-lang/mdBook), while its Markdown sources can be found in [this directory](./docs/src/).
+**Slang** documentation is powered by [GitHub Pages](https://nomicfoundation.github.io/solx/latest/) and provided as an [mdBook](https://github.com/rust-lang/mdBook), while its Markdown sources can be found in [this directory](./docs/src/).
 To build the book, follow these [instructions](./docs/README.md).
 The design rules of the Slang frontend and the conventions for working on this repository with an agent are in [CLAUDE.md](./CLAUDE.md).
 
@@ -39,13 +39,13 @@ For the detailed installation and usage guide, visit [the respective page of our
 
 ```shell
 # Compile a Solidity file
-solx Contract.sol --bin --abi
+slang Contract.sol --bin --abi
 
 # Compile with optimizations
-solx Contract.sol --bin --abi -O3
+slang Contract.sol --bin --abi -O3
 
 # Output to a directory
-solx Contract.sol --bin --abi -o ./build
+slang Contract.sol --bin --abi -o ./build
 ```
 
 ## Architecture
@@ -58,7 +58,7 @@ For details on running unit tests, integration tests, and project tests, see [th
 
 ## Troubleshooting
 
-If you are building **solx** from source and you have multiple LLVM builds in your system, ensure that you choose the correct one to build the compiler.
+If you are building **Slang** from source and you have multiple LLVM builds in your system, ensure that you choose the correct one to build the compiler.
 The environment variable `LLVM_SYS_211_PREFIX` sets the path to the directory with LLVM build artifacts, which typically ends with `target-llvm/target-final`.
 For example:
 
@@ -72,7 +72,7 @@ For reference, see [llvm-sys](https://crates.io/crates/llvm-sys) and [Local LLVM
 
 ## License
 
-- Crate **solx** is licensed under [GNU General Public License v3.0](./solx/LICENSE.txt)
+- Crate **slang** is licensed under [GNU General Public License v3.0](./solx/LICENSE.txt)
 - All other crates are licensed under the terms of either
   - Apache License, Version 2.0 ([LICENSE-APACHE](./solx-standard-json/LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
   - MIT license ([LICENSE-MIT](./solx-standard-json/LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
@@ -91,7 +91,7 @@ Visit the project directories to discover the terms of each license in detail. T
 
 ## Credits
 
-**solx** originated at [Matter Labs](https://matter-labs.io/), where its first pipeline and LLVM backend were built.
+**Slang** grew out of **solx**, which originated at [Matter Labs](https://matter-labs.io/), where its first pipeline and LLVM backend were built.
 
 ## Contact Us
 

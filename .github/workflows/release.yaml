@@ -296,7 +296,7 @@ jobs:
         env:
           TAG: ${{ steps.release.outputs.version_or_sha }}
         run: |
-          CARGO_PACKAGE_VERSION="$(${SFW_PREFIX:-} cargo pkgid --manifest-path solx/Cargo.toml | cut -d "#" -f2)"
+          CARGO_PACKAGE_VERSION="$(${SFW_PREFIX:-} cargo pkgid --manifest-path solx/Cargo.toml | sed 's/.*[#@]//')"
           # All versions must be equal
           if [ "${CARGO_PACKAGE_VERSION}" != "${TAG}" ]; then
             echo "Version mismatch: TAG=${TAG}, CARGO_PACKAGE_VERSION=${CARGO_PACKAGE_VERSION}"
@@ -315,12 +315,12 @@ jobs:
         run: |
           OUTDIR="./releases/release-${MACOSX_UNIVERSAL_SUFFIX}-${RELEASE_SUFFIX}/${MACOSX_UNIVERSAL_SUFFIX}-${RELEASE_SUFFIX}"
           mkdir -p "${OUTDIR}"
-          OUTPUT="${OUTDIR}/solx-${MACOSX_UNIVERSAL_SUFFIX}-${RELEASE_SUFFIX}"
+          OUTPUT="${OUTDIR}/slang-${MACOSX_UNIVERSAL_SUFFIX}-${RELEASE_SUFFIX}"
           llvm-lipo -create -output "${OUTPUT}" \
-            ./releases/release-macosx-amd64-${RELEASE_SUFFIX}/macosx-amd64-${RELEASE_SUFFIX}/solx-macosx-amd64-${RELEASE_SUFFIX} \
-            ./releases/release-macosx-arm64-${RELEASE_SUFFIX}/macosx-arm64-${RELEASE_SUFFIX}/solx-macosx-arm64-${RELEASE_SUFFIX}
-          rm -f ./releases/release-macosx-amd64-${RELEASE_SUFFIX}/macosx-amd64-${RELEASE_SUFFIX}/solx-macosx-amd64-${RELEASE_SUFFIX} \
-            ./releases/release-macosx-arm64-${RELEASE_SUFFIX}/macosx-arm64-${RELEASE_SUFFIX}/solx-macosx-arm64-${RELEASE_SUFFIX}
+            ./releases/release-macosx-amd64-${RELEASE_SUFFIX}/macosx-amd64-${RELEASE_SUFFIX}/slang-macosx-amd64-${RELEASE_SUFFIX} \
+            ./releases/release-macosx-arm64-${RELEASE_SUFFIX}/macosx-arm64-${RELEASE_SUFFIX}/slang-macosx-arm64-${RELEASE_SUFFIX}
+          rm -f ./releases/release-macosx-amd64-${RELEASE_SUFFIX}/macosx-amd64-${RELEASE_SUFFIX}/slang-macosx-amd64-${RELEASE_SUFFIX} \
+            ./releases/release-macosx-arm64-${RELEASE_SUFFIX}/macosx-arm64-${RELEASE_SUFFIX}/slang-macosx-arm64-${RELEASE_SUFFIX}
 
       - name: Generate SHA256 checksums
         run: |

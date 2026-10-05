@@ -29,7 +29,7 @@ fn docs_examples() {
 
     trycmd::TestCases::new()
         .register_bin(
-            "solx",
+            "slang",
             assert_cmd::cargo::cargo_bin!(env!("CARGO_PKG_NAME")).to_path_buf(),
         )
         .register_bin("ls", find_in_path("ls"))

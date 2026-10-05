@@ -1,6 +1,6 @@
 # Standard JSON
 
-Standard JSON is a protocol for interaction with the **solx** and **solc** compilers. This protocol must be implemented by toolkits such as Hardhat.
+Standard JSON is a protocol for interaction with the **Slang** and **solc** compilers. This protocol must be implemented by toolkits such as Hardhat.
 
 The protocol uses two data formats for communication: [input JSON](#input-json) and [output JSON](#output-json).
 
@@ -11,24 +11,24 @@ The protocol uses two data formats for communication: [input JSON](#input-json) 
 Input JSON can be provided by-value via the `--standard-json` option:
 
 ```shell
-solx --standard-json './input.json'
+slang --standard-json './input.json'
 ```
 
-Alternatively, the input JSON can be fed to **solx** via *stdin*:
+Alternatively, the input JSON can be fed to **Slang** via *stdin*:
 
 ```shell
-cat './input.json' | solx --standard-json
+cat './input.json' | slang --standard-json
 ```
 
 You can also insert your standard JSON input directly into the command line:
 
 ```shell
-solx --standard-json
+slang --standard-json
 
 <paste into stdin here and press Ctrl-D>
 ```
 
-> For the sake of interface unification, **solx** will always return with exit code 0 and have its standard JSON output printed to *stdout*.
+> For the sake of interface unification, **Slang** will always return with exit code 0 and have its standard JSON output printed to *stdout*.
 > It differs from **solc** that may return with exit code 1 and a free-formed error in some cases, such as when the standard JSON input file is missing, even though [the **solc** documentation claims otherwise](https://docs.soliditylang.org/en/latest/using-the-compiler.html#compiler-input-and-output-json-description).
 
 
@@ -37,9 +37,9 @@ solx --standard-json
 
 The input JSON provides the compiler with the source code and settings for the compilation. The example below serves as the specification of the input JSON format.
 
-This format introduces several **solx**-specific parameters such as `settings.optimizer.sizeFallback`. These parameters are marked as `solx-only`.
+This format introduces several **Slang**-specific parameters such as `settings.optimizer.sizeFallback`. These parameters are marked as `Slang-only`.
 
-On the other hand, parameters that are not mentioned here but are parts of **solc** standard JSON protocol have no effect in **solx**.
+On the other hand, parameters that are not mentioned here but are parts of **solc** standard JSON protocol have no effect in **Slang**.
 
 Optimizer modes follow the behavior described in [Optimizer and Assembly Semantics](./04-limitations.md#optimizer-and-assembly-semantics).
 
@@ -68,7 +68,7 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
   "settings": {
     // Optional: Optimizer settings.
     "optimizer": {
-      // Optional, solx-only: Set the LLVM optimizer level.
+      // Optional, Slang-only: Set the LLVM optimizer level.
       // Available options:
       // -0: do not optimize (unsupported)
       // -1: basic optimizations for gas usage
@@ -78,7 +78,7 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
       // -z: all optimizations for bytecode size
       // Default: 3.
       "mode": "3",
-      // Optional, solx-only: Re-run the compilation with "mode": "z" if the initial compilation exceeds the EVM bytecode size limit.
+      // Optional, Slang-only: Re-run the compilation with "mode": "z" if the initial compilation exceeds the EVM bytecode size limit.
       // Used on a per-contract basis and applied automatically, so some contracts will end up compiled in the initial mode, and others with "mode": "z".
       // Only activated if "mode" is set to "3", which is the default optimization mode.
       // Default: false.
@@ -101,14 +101,14 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
       }
     },
 
-    // Optional: Version of EVM solx will produce bytecode for.
+    // Optional: Version of EVM Slang will produce bytecode for.
     // Supported EVM versions: "cancun", "prague", "osaka".
-    // For instance, with version "osaka", solx will be producing `clz` instructions, whereas for older EVM versions it will not.
+    // For instance, with version "osaka", Slang will be producing `clz` instructions, whereas for older EVM versions it will not.
     // The oldest supported EVM version is "cancun".
     // Default: solc's default for "solidityVersion", which is "osaka" for the latest one.
-    // A Solidity version older than "0.8.25" defaults to an EVM version solx does not support yet, so it is compiled for "cancun" with a warning.
+    // A Solidity version older than "0.8.25" defaults to an EVM version Slang does not support yet, so it is compiled for "cancun" with a warning.
     "evmVersion": "osaka",
-    // Optional, solx-only: Solidity version the sources are compiled as.
+    // Optional, Slang-only: Solidity version the sources are compiled as.
     // Slang accepts the syntax and built-ins available in that version, and every `pragma solidity` must allow it.
     // Supported versions: from "0.8.0" up to the latest one Slang supports.
     // Default: the latest version Slang supports.
@@ -146,16 +146,16 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
           "evm.gasEstimates",
           // Everything that starts with "evm.bytecode".
           "evm.bytecode",
-          // Deploy bytecode produced by solx/LLVM.
-          // As long as the solx bytecode linker is in experimental stage, all contracts will be compiled if this key is enabled for at least one contract.
+          // Deploy bytecode produced by Slang/LLVM.
+          // As long as the Slang bytecode linker is in experimental stage, all contracts will be compiled if this key is enabled for at least one contract.
           "evm.bytecode.object",
-          // Deploy code assembly produced by solx/LLVM.
+          // Deploy code assembly produced by Slang/LLVM.
           "evm.bytecode.llvmAssembly",
-          // solx-only: Unoptimized LLVM IR (internal representation).
+          // Slang-only: Unoptimized LLVM IR (internal representation).
           "evm.bytecode.llvmIrUnoptimized",
-          // solx-only: Optimized LLVM IR (internal representation).
+          // Slang-only: Optimized LLVM IR (internal representation).
           "evm.bytecode.llvmIr",
-          // ELF-wrapped DWARF debug info produced by solx/LLVM. Only available for Solidity source code input.
+          // ELF-wrapped DWARF debug info produced by Slang/LLVM. Only available for Solidity source code input.
           "evm.bytecode.debugInfo",
           // Link references for linkers that are to resolve library addresses at deploy time.
           "evm.bytecode.linkReferences",
@@ -169,20 +169,20 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
           "evm.bytecode.generatedSources",
           // Everything that starts with "evm.deployedBytecode".
           "evm.deployedBytecode",
-          // Runtime bytecode produced by solx/LLVM.
-          // As long as the solx bytecode linker is in experimental stage, all contracts will be compiled if this key is enabled for at least one contract.
+          // Runtime bytecode produced by Slang/LLVM.
+          // As long as the Slang bytecode linker is in experimental stage, all contracts will be compiled if this key is enabled for at least one contract.
           "evm.deployedBytecode.object",
-          // Runtime code assembly produced by solx/LLVM.
+          // Runtime code assembly produced by Slang/LLVM.
           "evm.deployedBytecode.llvmAssembly",
-          // solx-only: Unoptimized LLVM IR (internal representation).
+          // Slang-only: Unoptimized LLVM IR (internal representation).
           "evm.deployedBytecode.llvmIrUnoptimized",
-          // solx-only: Optimized LLVM IR (internal representation).
+          // Slang-only: Optimized LLVM IR (internal representation).
           "evm.deployedBytecode.llvmIr",
           // Link references for linkers that are to resolve library addresses at deploy time.
           "evm.deployedBytecode.linkReferences",
-          // Resolved automatically by solx/LLVM, but emitted as an empty object to preserve compatibility with some toolkits.
+          // Resolved automatically by Slang/LLVM, but emitted as an empty object to preserve compatibility with some toolkits.
           "evm.deployedBytecode.immutableReferences",
-          // ELF-wrapped DWARF debug info produced by solx/LLVM. Only available for Solidity source code input.
+          // ELF-wrapped DWARF debug info produced by Slang/LLVM. Only available for Solidity source code input.
           "evm.deployedBytecode.debugInfo",
           // Unsupported, but emitted as an empty string to preserve compatibility with some toolkits.
           "evm.deployedBytecode.opcodes",
@@ -211,7 +211,7 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
     // Optional: Accepted for compatibility and ignored with a warning.
     "viaIR": true,
 
-    // Optional, solx-only: Extra LLVM settings.
+    // Optional, Slang-only: Extra LLVM settings.
     "llvmOptions": [
       "-key", "value"
     ]
@@ -223,7 +223,7 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
 
 ## Output JSON
 
-The output JSON contains all artifacts produced by **solx**. The example below serves as the specification of the output JSON format.
+The output JSON contains all artifacts produced by **Slang**. The example below serves as the specification of the output JSON format.
 
 ```javascript
 {
@@ -285,10 +285,10 @@ The output JSON contains all artifacts produced by **solx**. The example below s
             // Optional: LLVM text assembly (string).
             // Corresponds to "evm.bytecode.llvmAssembly" in the outputSelection settings.
             "llvmAssembly": "/* ... */",
-            // Optional, solx-only: Unoptimized LLVM IR (string).
+            // Optional, Slang-only: Unoptimized LLVM IR (string).
             // Corresponds to "evm.bytecode.llvmIrUnoptimized" in the outputSelection settings.
             "llvmIrUnoptimized": "/* ... */",
-            // Optional, solx-only: Optimized LLVM IR (string).
+            // Optional, Slang-only: Optimized LLVM IR (string).
             // Corresponds to "evm.bytecode.llvmIr" in the outputSelection settings.
             "llvmIr": "/* ... */",
             // Optional: ELF-wrapped DWARF debug info (string).
@@ -322,10 +322,10 @@ The output JSON contains all artifacts produced by **solx**. The example below s
             // Optional: LLVM text assembly (string).
             // Corresponds to "evm.deployedBytecode.llvmAssembly" in the outputSelection settings.
             "llvmAssembly": "/* ... */",
-            // Optional, solx-only: Unoptimized LLVM IR (string).
+            // Optional, Slang-only: Unoptimized LLVM IR (string).
             // Corresponds to "evm.deployedBytecode.llvmIrUnoptimized" in the outputSelection settings.
             "llvmIrUnoptimized": "/* ... */",
-            // Optional, solx-only: Optimized LLVM IR (string).
+            // Optional, Slang-only: Optimized LLVM IR (string).
             // Corresponds to "evm.deployedBytecode.llvmIr" in the outputSelection settings.
             "llvmIr": "/* ... */",
             // Optional: ELF-wrapped DWARF debug info (string).

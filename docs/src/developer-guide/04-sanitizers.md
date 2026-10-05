@@ -1,6 +1,6 @@
 # Building with Sanitizers
 
-This is the guide on building **solx** with sanitizers enabled.
+This is the guide on building **Slang** with sanitizers enabled.
 
 ## Introduction
 
@@ -11,7 +11,7 @@ If you are not familiar with sanitizers, see the [official documentation](https:
 
 ### Who is this guide for?
 
-This guide is for developers who want to debug issues with **solx**.
+This guide is for developers who want to debug issues with **Slang**.
 
 ### Prerequisites
 
@@ -21,7 +21,7 @@ This guide is for developers who want to debug issues with **solx**.
 
 <div class="warning">
 For sanitizers build to work, the host LLVM compiler version that is used to build LLVM <b>MUST</b>
-have the same version as the LLVM compiler that is used internally by `rustc` to build **solx**.
+have the same version as the LLVM compiler that is used internally by `rustc` to build **Slang**.
 
 You can check the LLVM version used by `rustc` by running the following command `rustc --version --verbose`.
 </div>
@@ -30,7 +30,7 @@ You can check the LLVM version used by `rustc` by running the following command 
 
 The general steps to have a sanitizer enabled build include:
 1. Build the LLVM framework with the required sanitizer enabled.
-2. Build **solx** with the LLVM build from the previous step.
+2. Build **Slang** with the LLVM build from the previous step.
 
 Please, follow the common [installation instructions](../user-guide/01-installation.md#building-from-source)
 until the LLVM build step.
@@ -55,9 +55,9 @@ For example:
 ./target/release/solx-dev llvm build --sanitizer=Address --build-type=RelWithDebInfo --extra-args '-DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang' '-DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++'
 ```
 
-### Build **solx** with the sanitizer enabled
+### Build **Slang** with the sanitizer enabled
 
-To build **solx** with the sanitizer enabled, you need to set the `RUSTFLAGS` environment variable
+To build **Slang** with the sanitizer enabled, you need to set the `RUSTFLAGS` environment variable
 to `-Z sanitizer=address` and run the `cargo build` command.
 Sanitizers build is a feature that is available only for the nightly Rust compiler, it is recommended
 to set `RUSTC_BOOTSTRAP=1` environment variable before the build.
@@ -76,7 +76,7 @@ Please, check the table below to find the correct target for your platform.
 Additionally, for proper reports symbolization it is recommended to set the `ASAN_SYMBOLIZER_PATH` environment variable.
 For more info, see [symbolizing reports](https://clang.llvm.org/docs/AddressSanitizer.html#id4) section of LLVM documentation.
 
-For example, to build **solx** for MacOS-arm64 with `AddressSanitizer` enabled, run the following command:
+For example, to build **Slang** for MacOS-arm64 with `AddressSanitizer` enabled, run the following command:
 ```shell
 export RUSTC_BOOTSTRAP=1
 export ASAN_SYMBOLIZER_PATH=$(which llvm-symbolizer) # check the path to llvm-symbolizer
@@ -84,7 +84,7 @@ TARGET=aarch64-apple-darwin # Change to your target
 RUSTFLAGS="-Z sanitizer=address" cargo test --target=${TARGET}
 ```
 
-Congratulations! You have successfully built **solx** with the sanitizers enabled.
+Congratulations! You have successfully built **Slang** with the sanitizers enabled.
 
 Please, refer to the [official documentation](https://rustc-dev-guide.rust-lang.org/sanitizers.html)
 for more information on how to use sanitizers and their types.

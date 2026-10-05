@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*custom_error.*}}
 // CHECK:   sol.revert "TooLow(uint256,uint256)" %{{.*}}, %{{.*}} : ui256, ui256 {call}

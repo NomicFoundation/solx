@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'
+// RUN: slang --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'
 
 // CHECK-DAG: #[[SET:loc[0-9]*]] = loc("{{.*}}debug_location_modifiers.sol":44:5)
 // CHECK-DAG: #[[MODIFIER:loc[0-9]*]] = loc("{{.*}}debug_location_modifiers.sol":38:5)

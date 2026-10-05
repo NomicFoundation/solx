@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %evaluation_order/binary.sol | FileCheck %s
+// RUN: slang --emit-mlir=sol %evaluation_order/binary.sol | FileCheck %s
 
 // CHECK: sol.func @{{.*addmod.*}}
 // CHECK:   %[[ADDMOD_MODULUS:.*]] = sol.call @{{.*modulus.*}}

@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*identity_address.*}}: !sol.address) -> !sol.address
 // CHECK: sol.func @{{.*identity_boolean.*}}: i1) -> i1

@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func {{.*}}identity_color{{.*}}!sol.enum<2>{{.*}}!sol.enum<2>
 // CHECK: sol.func {{.*}}identity_iface{{.*}}!sol.contract<"{{[^"]*}}IFoo{{[^"]*}}">{{.*}}!sol.contract<"{{[^"]*}}IFoo{{[^"]*}}">

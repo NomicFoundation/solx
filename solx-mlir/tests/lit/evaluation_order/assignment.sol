@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %evaluation_order/assignment.sol | FileCheck %s
+// RUN: slang --emit-mlir=sol %evaluation_order/assignment.sol | FileCheck %s
 
 // CHECK: sol.func @{{.*compound.*}}
 // CHECK:   sol.call @{{.*rightValue.*}}

@@ -60,7 +60,7 @@ pub struct SolxTester {
     #[arg(short, long)]
     pub threads: Option<usize>,
 
-    /// Path to the Solidity compiler executable (`solx` or `solc`).
+    /// Path to the Solidity compiler executable (`slang`, `solx` or `solc`).
     #[arg(long)]
     pub solidity_compiler: Option<PathBuf>,
 

@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %for_loop/step_overflow.sol | FileCheck %s
+// RUN: slang --emit-mlir=sol %for_loop/step_overflow.sol | FileCheck %s
 
 // CHECK: sol.func @{{.*bodyWrite.*}}
 // CHECK:   } step {

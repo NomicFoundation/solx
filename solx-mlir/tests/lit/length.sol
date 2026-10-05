@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func {{.*}}len_arr{{.*}}!sol.array<? x ui256, Memory>{{.*}}ui256
 // CHECK:   sol.length {{.*}} : !sol.array<? x ui256, Memory>

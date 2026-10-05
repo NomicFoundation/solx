@@ -383,7 +383,7 @@ fn env_var() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx_with_env_vars(
         args,
         vec![(
-            "SOLX_OUTPUT_DIR",
+            "SLANG_OUTPUT_DIR",
             output_directory.path().to_string_lossy().to_string(),
         )],
     )?;

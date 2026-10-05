@@ -13,7 +13,7 @@ The input files behind every example in
 The `docs_examples` CLI test (`solx/tests/cli/docs_examples.rs`) treats the guide
 itself as the test definition, via [trycmd](https://docs.rs/trycmd): every
 `console` code block in the guide is a case — this directory is copied into a
-temporary sandbox, the documented `$ solx …` and `$ ls '<dir>'` commands run in
+temporary sandbox, the documented `$ slang …` and `$ ls '<dir>'` commands run in
 it, and the lines under each command must match its actual output. `...` on its
 own line elides any run of lines, `[..]` matches anything within a line, and a
 `? failed` line documents a non-zero exit. The test runs with the rest of the

@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %qualifier_library_external/main.sol %qualifier_library_external/library.sol | FileCheck %s
+// RUN: slang --emit-mlir=sol %qualifier_library_external/main.sol %qualifier_library_external/library.sol | FileCheck %s
 
 // CHECK: sol.func @{{.*externalCall.*}}
 // CHECK:   sol.lib_addr

@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*add.*}}() -> ui256
 // CHECK:   %{{.*}} = sol.constant 5 : ui8

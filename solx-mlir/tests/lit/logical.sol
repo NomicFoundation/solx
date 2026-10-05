@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*logical_and.*}}
 // CHECK:   sol.alloca : !sol.ptr<i1, Stack>

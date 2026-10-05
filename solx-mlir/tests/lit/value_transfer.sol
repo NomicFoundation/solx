@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func {{.*}}pay_send{{.*}}-> i1
 // CHECK:   %[[SR:.*]] = sol.address_cast %{{.*}} : !sol.address<payable> to !sol.address

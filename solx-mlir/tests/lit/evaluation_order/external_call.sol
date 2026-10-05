@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %evaluation_order/external_call.sol | FileCheck %s
+// RUN: slang --emit-mlir=sol %evaluation_order/external_call.sol | FileCheck %s
 
 // CHECK: sol.func @{{.*bareReceiverOptions.*}}
 // CHECK:   %[[BARE_RECEIVER:.*]] = sol.call @"bareReceiver()_{{[0-9]+}}"

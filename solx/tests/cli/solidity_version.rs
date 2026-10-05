@@ -107,7 +107,7 @@ fn default_evm_version_unsupported() -> anyhow::Result<()> {
         .success()
         .stdout(predicate::str::contains("sol.evm_version = #Cancun"))
         .stderr(predicate::str::contains(
-            "Solidity version 0.8.24 defaults to EVM version shanghai, which solx does not support yet. Compiling for cancun",
+            "Solidity version 0.8.24 defaults to EVM version shanghai, which the compiler does not support yet. Compiling for cancun",
         ));
 
     Ok(())

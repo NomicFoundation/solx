@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %evaluation_order/nested_logical.sol | FileCheck %s
+// RUN: slang --emit-mlir=sol %evaluation_order/nested_logical.sol | FileCheck %s
 
 // CHECK: sol.func @{{.*assignment.*}}
 // CHECK:   sol.constant 1 : ui8

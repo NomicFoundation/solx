@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*assign_from_call.*}}
 // CHECK:   %[[R:.*]]:2 = sol.call @{{.*two.*}}()

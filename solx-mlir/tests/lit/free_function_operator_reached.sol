@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*}}f{{.*}}(%{{.*}}: si32, %{{.*}}: si32) -> si32
 // CHECK:   sol.call @"add(T,T)_[[ADD:[0-9]+]]"(%{{.*}}, %{{.*}}) : (si32, si32) -> si32

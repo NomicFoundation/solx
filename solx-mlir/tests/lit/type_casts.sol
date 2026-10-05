@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*array_to_memory.*}}
 // CHECK:   sol.data_loc_cast %{{.*}} : !sol.array<? x ui256, CallData>, !sol.array<? x ui256, Memory>

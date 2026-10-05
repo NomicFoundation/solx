@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*nonpayable_fn.*}}{{.*}} state_mutability = #{{.*}}NonPayable
 // CHECK: sol.func @{{.*payable_fn.*}}{{.*}} state_mutability = #{{.*}}Payable

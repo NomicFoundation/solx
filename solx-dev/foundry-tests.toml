@@ -51,14 +51,14 @@ disabled = true
 
 [compilers.solx-main]
 name = "02.solx-main"
-path = "./temp-solx-main/target/release/solx"
+path = "./temp-solx-main/target/release/slang"
 description = "solx built from the main branch"
 is_correctness_reference = true
 disabled = false
 
 [compilers.solx]
 name = "03.solx"
-path = "./target/release/solx"
+path = "./target/release/slang"
 description = "solx built from the current commit"
 is_correctness_candidate = true
 disabled = false

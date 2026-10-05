@@ -1,5 +1,5 @@
 [package]
-name = "solx"
+name = "slang"
 authors.workspace = true
 edition.workspace = true
 version.workspace = true
@@ -7,8 +7,8 @@ description = "LLVM-based Solidity compiler for the EVM"
 license = "GPL-3.0-only"
 
 [[bin]]
-name = "solx"
-path = "src/solx.rs"
+name = "slang"
+path = "src/slang.rs"
 
 [dependencies]
 anyhow.workspace = true

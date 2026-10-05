@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.state_var @{{.*functionPointerState.*}} slot 0 offset 0 : !sol.func_ref<() -> ui256>
 // CHECK: sol.state_var @{{.*functionPointerField.*}} slot 1 offset 0 : !sol.struct<(!sol.func_ref<() -> ui256>), Storage>

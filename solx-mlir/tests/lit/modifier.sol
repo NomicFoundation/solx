@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*}}guarded{{.*}}(%arg0: ui256) -> ui256
 // CHECK:   sol.store %arg0, %[[X:.*]] : ui256, !sol.ptr<ui256, Stack>

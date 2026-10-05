@@ -1,6 +1,6 @@
 # Yul Builtins Reference
 
-This chapter lists all Yul builtin functions supported by **solx** and how each is lowered to LLVM IR for the EVM backend.
+This chapter lists all Yul builtin functions supported by **Slang** and how each is lowered to LLVM IR for the EVM backend.
 
 ## Lowering Strategies
 
@@ -187,4 +187,4 @@ Note: `callcode` is rejected at compile time. Use `delegatecall` instead.
 |---|---|---|
 | `pop` | Optimized away | No code generated |
 | `linkersymbol` | Intrinsic `llvm.evm.linkersymbol` | Library linker placeholder |
-| `memoryguard` | Special | Reserves a memory region; used by solx to configure the spill area for stack-too-deep mitigation |
+| `memoryguard` | Special | Reserves a memory region; used by Slang to configure the spill area for stack-too-deep mitigation |

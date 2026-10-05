@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func {{.*}}build{{.*}}-> !sol.struct<(ui256, ui256), Memory>
 // CHECK:   sol.malloc :{{ +}}!sol.struct<(ui256, ui256), Memory>

@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*interface_variant.*}}-> !sol.enum<2>
 // CHECK:   sol.constant 1 : ui256

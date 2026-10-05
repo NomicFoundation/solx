@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'
+// RUN: slang --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'
 
 // CHECK: } {kind = #Contract} loc(#[[CONTRACT_CU:loc[0-9]*]])
 // CHECK-NEXT: } loc(#[[CONTRACT_CU]])

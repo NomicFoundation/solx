@@ -136,7 +136,7 @@ jobs:
       - name: Run solx-tester tests (PR)
         id: solx_tester_tests
         continue-on-error: true
-        run: ./target/release/solx-dev test solx-tester --solidity-compiler ./target/release/solx
+        run: ./target/release/solx-dev test solx-tester --solidity-compiler ./target/release/slang
 
       # When `ci:integration-benchmark-full` is present, enable every
       # otherwise-disabled compiler (solc, solx-latest) and its comparison
@@ -162,7 +162,7 @@ jobs:
         working-directory: temp-solx-main
         run: |
           ./target/release/solx-dev test solx-tester \
-            --solidity-compiler ./target/release/solx \
+            --solidity-compiler ./target/release/slang \
             --optimizer 'M^B3' \
             --benchmark=../reference-benchmark.json
 
@@ -171,7 +171,7 @@ jobs:
         continue-on-error: true
         run: |
           ./target/release/solx-dev test solx-tester \
-            --solidity-compiler ./target/release/solx \
+            --solidity-compiler ./target/release/slang \
             --optimizer 'M^B3' \
             --benchmark=candidate-benchmark.json
 

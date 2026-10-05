@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'
+// RUN: slang --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'
 
 // CHECK-DAG: #[[VALUES:loc[0-9]*]] = loc("{{.*}}debug_location_members.sol":108:5)
 // CHECK-DAG: #[[BALANCES:loc[0-9]*]] = loc("{{.*}}debug_location_members.sol":109:5)

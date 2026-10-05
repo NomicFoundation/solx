@@ -258,7 +258,7 @@ impl<'arguments> Compiler<'arguments> {
 
         let linker_symbols = input.settings.libraries.as_linker_symbols()?;
 
-        let run_solx_project = profiler.start_pipeline_element("solx_BuildProject");
+        let run_solx_project = profiler.start_pipeline_element("Compiler_BuildProject");
         let project = Project::try_from_solidity_output(
             input
                 .settings
@@ -272,7 +272,7 @@ impl<'arguments> Compiler<'arguments> {
         output.take_and_write_warnings();
         output.check_errors()?;
 
-        let run_solx_compile = profiler.start_pipeline_element("solx_Compile");
+        let run_solx_compile = profiler.start_pipeline_element("Compiler_Compile");
         let mut build = project.compile_to_evm(
             messages,
             &input.settings.output_selection,
@@ -288,7 +288,7 @@ impl<'arguments> Compiler<'arguments> {
         build.check_errors()?;
 
         let mut build = if input.settings.output_selection.is_bytecode_set_for_any() {
-            let run_solx_link = profiler.start_pipeline_element("solx_Link");
+            let run_solx_link = profiler.start_pipeline_element("Compiler_Link");
             let mut build = build.link(linker_symbols);
             run_solx_link.borrow_mut().finish();
             build.take_and_write_warnings();
@@ -343,7 +343,7 @@ impl<'arguments> Compiler<'arguments> {
                     .expect("lock is never poisoned because worker threads do not panic")
                     .extend(output.errors.drain(..));
 
-                let run_solx_project = profiler.start_pipeline_element("solx_BuildProject");
+                let run_solx_project = profiler.start_pipeline_element("Compiler_BuildProject");
                 let project = Project::try_from_solidity_output(
                     input
                         .settings
@@ -369,7 +369,8 @@ impl<'arguments> Compiler<'arguments> {
 
                 let mut output = solx_standard_json::Output::new(&input.sources);
 
-                let run_solx_llvm_ir_project = profiler.start_pipeline_element("solx_BuildProject");
+                let run_solx_llvm_ir_project =
+                    profiler.start_pipeline_element("Compiler_BuildProject");
                 let project = Project::try_from_llvm_ir_sources(
                     input.sources,
                     input.settings.libraries.clone(),
@@ -385,7 +386,7 @@ impl<'arguments> Compiler<'arguments> {
             }
         };
 
-        let run_solx_compile = profiler.start_pipeline_element("solx_Compile");
+        let run_solx_compile = profiler.start_pipeline_element("Compiler_Compile");
         let build = project.compile_to_evm(
             messages,
             &input.settings.output_selection,
@@ -408,7 +409,7 @@ impl<'arguments> Compiler<'arguments> {
             output.write_and_exit(&input.settings.output_selection);
         }
         let build = if output_selection.is_bytecode_set_for_any() {
-            let run_solx_link = profiler.start_pipeline_element("solx_Link");
+            let run_solx_link = profiler.start_pipeline_element("Compiler_Link");
             let build = build.link(linker_symbols);
             run_solx_link.borrow_mut().finish();
             build

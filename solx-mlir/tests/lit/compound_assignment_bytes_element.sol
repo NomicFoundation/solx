@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*and_element.*}}
 // CHECK:   %[[AND_PTR:.*]] = sol.gep %{{.*}}, %{{.*}} : !sol.string<Memory>, ui8, !sol.ptr<!sol.byte, Memory>

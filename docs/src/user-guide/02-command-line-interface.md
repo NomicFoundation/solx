@@ -1,13 +1,13 @@
 # Command Line Interface (CLI)
 
-The CLI of **solx** is designed to mimic that of **solc**. There are several main input/output (I/O) modes in the **solx** interface:
+The CLI of **Slang** is designed to mimic that of **solc**. There are several main input/output (I/O) modes in the **Slang** interface:
 
 - [Basic CLI](#basic-cli)
 - [Standard JSON](./03-standard-json.md)
 
 The basic CLI is simpler and suitable for using from the shell. The standard JSON mode is similar to client-server interaction, thus more suitable for using from other applications.
 
-> All toolkits using **solx** must be operating in standard JSON mode and follow [its specification](./03-standard-json.md).
+> All toolkits using **Slang** must be operating in standard JSON mode and follow [its specification](./03-standard-json.md).
 > It will make the toolkits more robust and future-proof, as the standard JSON mode is the most versatile and used for the majority of popular projects.
 
 This page focuses on the basic CLI mode. For more information on the standard JSON mode, see [this page](./03-standard-json.md).
@@ -20,7 +20,7 @@ Basic CLI mode is the simplest way to compile a file with the source code.
 
 To compile a basic Solidity contract, run the simple example from [the *--bin* section](#--bin).
 
-The rest of this section describes the available CLI options and their usage. You may also check out `solx --help` for a quick reference.
+The rest of this section describes the available CLI options and their usage. You may also check out `slang --help` for a quick reference.
 
 All examples on this page are executable and verified against the compiler on every change. Unless stated otherwise, they compile this contract, `Simple.sol`:
 
@@ -44,11 +44,11 @@ All commands on this page run in one shared working directory, so sections that 
 Emits the full bytecode.
 
 ```console
-$ solx 'Simple.sol' --bin
+$ slang 'Simple.sol' --bin
 
 ======= Simple.sol:Simple =======
 Binary:
-3460475763000000c18038036080601f19601f8301160191680100000000000000008310607f19601f8401101615604b5782604052608039630000005e908163000000638239f35b5f5ffd5b505050634e487b7160e01b5f52604160045260245ffdfe600436106039575f3560e01c635a8ac02d8114602e57633df4ddf4036039573460395760015b60805260206080f35b503460395760026025565b5f5ffdfea164736f6c637816736f6c783a302e312e383b736f6c633a302e382e3337001e
+3460475763000000c28038036080601f19601f8301160191680100000000000000008310607f19601f8401101615604b5782604052608039630000005f908163000000638239f35b5f5ffd5b505050634e487b7160e01b5f52604160045260245ffdfe600436106039575f3560e01c635a8ac02d8114602e57633df4ddf4036039573460395760015b60805260206080f35b503460395760026025565b5f5ffdfea164736f6c637817736c616e673a302e322e303b736f6c633a302e382e3337001f
 
 ```
 
@@ -59,11 +59,11 @@ Binary:
 Emits the runtime part of the bytecode.
 
 ```console
-$ solx 'Simple.sol' --bin-runtime
+$ slang 'Simple.sol' --bin-runtime
 
 ======= Simple.sol:Simple =======
 Binary of the runtime part:
-600436106039575f3560e01c635a8ac02d8114602e57633df4ddf4036039573460395760015b60805260206080f35b503460395760026025565b5f5ffdfea164736f6c637816736f6c783a302e312e383b736f6c633a302e382e3337001e
+600436106039575f3560e01c635a8ac02d8114602e57633df4ddf4036039573460395760015b60805260206080f35b503460395760026025565b5f5ffdfea164736f6c637817736c616e673a302e322e303b736f6c633a302e382e3337001f
 
 ```
 
@@ -74,7 +74,7 @@ Binary of the runtime part:
 Emits the text assembly produced by LLVM.
 
 ```console
-$ solx 'Simple.sol' --asm
+$ slang 'Simple.sol' --asm
 
 ======= Simple.sol:Simple =======
 Deploy LLVM EVM assembly:
@@ -104,7 +104,7 @@ __entry:                                ; @__entry
 
 Emits the contract metadata. The metadata is a JSON object that contains information about the contract, such as its name, source code hash, the list of dependencies, compiler versions, and so on.
 
-The **solx** metadata format is compatible with the [Solidity metadata format](https://docs.soliditylang.org/en/latest/metadata.html#contract-metadata). This means that the metadata output can be used with other tools that support Solidity metadata. The metadata that is hashed into [the CBOR trailer of the bytecode](#--metadata-hash) additionally carries extra **solx** data inserted into the metadata with this JSON object:
+The **Slang** metadata format is compatible with the [Solidity metadata format](https://docs.soliditylang.org/en/latest/metadata.html#contract-metadata). This means that the metadata output can be used with other tools that support Solidity metadata. The metadata that is hashed into [the CBOR trailer of the bytecode](#--metadata-hash) additionally carries extra **Slang** data inserted into the metadata with this JSON object:
 
 ```javascript
 {
@@ -120,8 +120,8 @@ The **solx** metadata format is compatible with the [Solidity metadata format](h
     },
     // Optional: the Solidity language version, only set for Solidity and Yul contracts.
     "solc_version": "0.8.37",
-    // Mandatory: current version of solx.
-    "solx_version": "0.1.8"
+    // Mandatory: current version of Slang.
+    "version": "0.2.0"
   }
 }
 ```
@@ -129,7 +129,7 @@ The **solx** metadata format is compatible with the [Solidity metadata format](h
 Currently not supported. Usage:
 
 ```bash
-solx 'Simple.sol' --metadata
+slang 'Simple.sol' --metadata
 ```
 
 
@@ -139,7 +139,7 @@ solx 'Simple.sol' --metadata
 Emits the AST of each Solidity file.
 
 ```console
-$ solx 'Simple.sol' --ast-json
+$ slang 'Simple.sol' --ast-json
 
 ======= Simple.sol =======
 JSON AST:
@@ -160,7 +160,7 @@ Emits the contract ABI specification.
 Currently not supported. Usage:
 
 ```bash
-solx 'Simple.sol' --abi
+slang 'Simple.sol' --abi
 ```
 
 
@@ -172,7 +172,7 @@ Emits the contract function signatures.
 Currently not supported. Usage:
 
 ```bash
-solx 'Simple.sol' --hashes
+slang 'Simple.sol' --hashes
 ```
 
 
@@ -184,7 +184,7 @@ Emits the contract storage layout.
 Currently not supported. Usage:
 
 ```bash
-solx 'Simple.sol' --storage-layout
+slang 'Simple.sol' --storage-layout
 ```
 
 
@@ -196,7 +196,7 @@ Emits the contract transient storage layout.
 Currently not supported. Usage:
 
 ```bash
-solx 'Simple.sol' --transient-storage-layout
+slang 'Simple.sol' --transient-storage-layout
 ```
 
 
@@ -208,7 +208,7 @@ Emits the contract user documentation.
 Currently not supported. Usage:
 
 ```bash
-solx 'Simple.sol' --userdoc
+slang 'Simple.sol' --userdoc
 ```
 
 
@@ -220,7 +220,7 @@ Emits the contract developer documentation.
 Currently not supported. Usage:
 
 ```bash
-solx 'Simple.sol' --devdoc
+slang 'Simple.sol' --devdoc
 ```
 
 
@@ -230,7 +230,7 @@ solx 'Simple.sol' --devdoc
 Emits the ELF-wrapped DWARF debug info of the deploy code.
 
 ```console
-$ solx 'Simple.sol' --debug-info
+$ slang 'Simple.sol' --debug-info
 
 ======= Simple.sol:Simple =======
 Debug info:
@@ -244,7 +244,7 @@ Debug info:
 Emits the ELF-wrapped DWARF debug info of the runtime code.
 
 ```console
-$ solx 'Simple.sol' --debug-info-runtime
+$ slang 'Simple.sol' --debug-info-runtime
 
 ======= Simple.sol:Simple =======
 Debug info of the runtime part:
@@ -262,7 +262,7 @@ When used with `--output-dir`, writes `.ll` files to the output directory. Witho
 Usage with `--output-dir`:
 
 ```console
-$ solx 'Simple.sol' --emit-llvm-ir --output-dir './build-llvm-ir/'
+$ slang 'Simple.sol' --emit-llvm-ir --output-dir './build-llvm-ir/'
 Compiler run successful. Artifact(s) can be found in directory "./build-llvm-ir/".
 
 $ ls './build-llvm-ir/'
@@ -276,7 +276,7 @@ Simple_sol_Simple_deployed.unoptimized.ll
 Usage with stdout:
 
 ```console
-$ solx 'Simple.sol' --emit-llvm-ir --bin
+$ slang 'Simple.sol' --emit-llvm-ir --bin
 
 ======= Simple.sol:Simple =======
 Binary:
@@ -296,18 +296,18 @@ Deploy LLVM IR:
 Emits benchmarks of the compilation pipeline.
 
 ```console
-$ solx 'Simple.sol' --benchmarks
+$ slang 'Simple.sol' --benchmarks
 Benchmarks:
 Slang_RunStandardJSON: [..]us
-solx_BuildProject: [..]us
-solx_Compile: [..]us
+Compiler_BuildProject: [..]us
+Compiler_Compile: [..]us
 Slang_ParseAndBind: [..]us
 Slang_SerializeAST:Simple.sol: [..]us
-solx_CreateMLIRContext:Simple.sol: [..]us
-solx_EmitSol:Simple.sol:Simple: [..]us
-solx_RunSolPasses:Simple.sol:Simple: [..]us
+Compiler_CreateMLIRContext:Simple.sol: [..]us
+Compiler_EmitSol:Simple.sol:Simple: [..]us
+Compiler_RunSolPasses:Simple.sol:Simple: [..]us
 ...
-solx_ExtractMLIRObjects:Simple.sol:Simple: [..]us
+Compiler_ExtractMLIRObjects:Simple.sol:Simple: [..]us
 
 ======= Simple.sol:Simple =======
 Benchmarks:
@@ -329,19 +329,19 @@ Benchmarks:
 
 ### Input Files
 
-**solx** supports multiple input files. The following command compiles two Solidity files and prints the bytecode:
+**Slang** supports multiple input files. The following command compiles two Solidity files and prints the bytecode:
 
 ```bash
-solx 'Simple.sol' 'Complex.sol' --bin
+slang 'Simple.sol' 'Complex.sol' --bin
 ```
 
 [Solidity import remappings](https://docs.soliditylang.org/en/latest/path-resolution.html#import-remapping) are passed the same way as input files, but they are distinguished by a `=` symbol between source and destination. The following command compiles a Solidity file with a remapping and prints the bytecode:
 
 ```bash
-solx 'Simple.sol' 'github.com/ethereum/dapp-bin/=/usr/local/lib/dapp-bin/' --bin
+slang 'Simple.sol' 'github.com/ethereum/dapp-bin/=/usr/local/lib/dapp-bin/' --bin
 ```
 
-**solx** applies remappings following **solc**'s semantics.
+**Slang** applies remappings following **solc**'s semantics.
 Visit [the **solc** documentation](https://docs.soliditylang.org/en/latest/using-the-compiler.html#base-path-and-import-remapping) to learn more about the processing of remappings.
 
 
@@ -355,14 +355,14 @@ The specifier has the following format: `<ContractPath>:<ContractName>=<LibraryA
 Usage:
 
 ```bash
-solx 'Simple.sol' --bin --libraries 'Simple.sol:Simple=0x1234567890abcdef1234567890abcdef12345678'
+slang 'Simple.sol' --bin --libraries 'Simple.sol:Simple=0x1234567890abcdef1234567890abcdef12345678'
 ```
 
 
 
 ### `--base-path`, `--include-path`, `--allow-paths`
 
-These options are accepted for **solc** compatibility. **solx** ignores them and resolves imports only against the sources it is given.
+These options are accepted for **solc** compatibility. **Slang** ignores them and resolves imports only against the sources it is given.
 
 Visit [the **solc** documentation](https://docs.soliditylang.org/en/latest/path-resolution.html) to learn more about the processing of these options.
 
@@ -375,7 +375,7 @@ Specifies the output directory for build artifacts. Can only be used in [basic C
 Usage in basic CLI mode:
 
 ```console
-$ solx 'Simple.sol' --bin --asm --output-dir './build/'
+$ slang 'Simple.sol' --bin --asm --output-dir './build/'
 Compiler run successful. Artifact(s) can be found in directory "./build/".
 
 $ ls './build/'
@@ -391,27 +391,27 @@ Simple_sol_Simple_llvm.asm-runtime
 
 ### `--overwrite`
 
-Overwrites the output files if they already exist in the output directory. By default, **solx** does not overwrite existing files.
+Overwrites the output files if they already exist in the output directory. By default, **Slang** does not overwrite existing files.
 
 Can only be used in combination with the [`--output-dir`](#--output-dir) option.
 
 Usage:
 
 ```console
-$ solx 'Simple.sol' --bin --output-dir './build/' --overwrite
+$ slang 'Simple.sol' --bin --output-dir './build/' --overwrite
 Compiler run successful. Artifact(s) can be found in directory "./build/".
 
 ```
 
 Here `./build/` already contains the artifacts emitted in [the `--output-dir` section](#--output-dir), so the flag has existing files to overwrite.
 
-If the `--overwrite` option is not specified and the output files already exist, **solx** refuses to overwrite them and exits with an error:
+If the `--overwrite` option is not specified and the output files already exist, **Slang** refuses to overwrite them and exits with an error:
 
 ```console
-$ solx 'Simple.sol' --bin --output-dir './build-overwrite/'
+$ slang 'Simple.sol' --bin --output-dir './build-overwrite/'
 Compiler run successful. Artifact(s) can be found in directory "./build-overwrite/".
 
-$ solx 'Simple.sol' --bin --output-dir './build-overwrite/'
+$ slang 'Simple.sol' --bin --output-dir './build-overwrite/'
 ? failed
 Error: Refusing to overwrite an existing file "./build-overwrite/Simple_sol_Simple.bin" (use --overwrite to force).
 
@@ -421,12 +421,12 @@ Error: Refusing to overwrite an existing file "./build-overwrite/Simple_sol_Simp
 
 ### `--version`
 
-Prints the version of **solx** and the hash of the LLVM commit it was built with.
+Prints the version of **Slang** and the hash of the LLVM commit it was built with.
 
 Usage:
 
 ```bash
-solx --version
+slang --version
 ```
 
 
@@ -438,7 +438,7 @@ Prints the help message.
 Usage:
 
 ```bash
-solx --help
+slang --help
 ```
 
 
@@ -459,9 +459,9 @@ For the standard JSON mode usage, see the [Standard JSON](./03-standard-json.md)
 
 
 
-## **solx** Compilation Settings
+## **Slang** Compilation Settings
 
-The options in this section configure the **solx** compilation pipeline.
+The options in this section configure the **Slang** compilation pipeline.
 
 
 
@@ -474,7 +474,7 @@ Versions from 0.8.0 up to the latest one Slang supports are accepted, and the la
 Usage:
 
 ```bash
-solx 'Simple.sol' --bin --solidity-version '0.8.20'
+slang 'Simple.sol' --bin --solidity-version '0.8.20'
 ```
 
 
@@ -489,7 +489,7 @@ Sets the number of threads used for parallel compilation. Each thread compiles a
 Usage:
 
 ```bash
-solx 'Simple.sol' --bin --threads 4
+slang 'Simple.sol' --bin --threads 4
 ```
 
 
@@ -517,14 +517,14 @@ For most cases, it is fine to keep the default value of `3`. You should only use
 Usage:
 
 ```bash
-solx 'Simple.sol' --bin -O3
+slang 'Simple.sol' --bin -O3
 ```
 
-This option can also be set with an environment variable `SOLX_OPTIMIZATION`, which is useful for toolkits
-where arbitrary solx-specific options are not supported:
+This option can also be set with an environment variable `SLANG_OPTIMIZATION`, which is useful for toolkits
+where arbitrary Slang-specific options are not supported:
 
 ```bash
-SOLX_OPTIMIZATION='3' solx 'Simple.sol' --bin
+SLANG_OPTIMIZATION='3' slang 'Simple.sol' --bin
 ```
 
 
@@ -541,14 +541,14 @@ Under the hood, this option automatically triggers recompilation of contracts wi
 Usage:
 
 ```bash
-solx 'Simple.sol' --bin -O3 --optimization-size-fallback
+slang 'Simple.sol' --bin -O3 --optimization-size-fallback
 ```
 
-This option can also be set with an environment variable `SOLX_OPTIMIZATION_SIZE_FALLBACK`, which is useful for toolkits
-where arbitrary solx-specific options are not supported:
+This option can also be set with an environment variable `SLANG_OPTIMIZATION_SIZE_FALLBACK`, which is useful for toolkits
+where arbitrary Slang-specific options are not supported:
 
 ```bash
-SOLX_OPTIMIZATION_SIZE_FALLBACK= solx 'Simple.sol' --bin -O3
+SLANG_OPTIMIZATION_SIZE_FALLBACK= slang 'Simple.sol' --bin -O3
 ```
 
 
@@ -560,11 +560,11 @@ Specifies the hash format used for contract metadata.
 Usage with `ipfs`:
 
 ```console
-$ solx 'Simple.sol' --bin --metadata-hash 'ipfs'
+$ slang 'Simple.sol' --bin --metadata-hash 'ipfs'
 
 ======= Simple.sol:Simple =======
 Binary:
-3460475763000000c18038036080601f19601f8301160191680100000000000000008310607f19601f8401101615604b5782604052608039630000005e908163000000638239f35b5f5ffd5b505050634e487b7160e01b5f52604160045260245ffdfe600436106039575f3560e01c635a8ac02d8114602e57633df4ddf4036039573460395760015b60805260206080f35b503460395760026025565b5f5ffdfea164736f6c637816736f6c783a302e312e383b736f6c633a302e382e3337001e
+3460475763000000c28038036080601f19601f8301160191680100000000000000008310607f19601f8401101615604b5782604052608039630000005f908163000000638239f35b5f5ffd5b505050634e487b7160e01b5f52604160045260245ffdfe600436106039575f3560e01c635a8ac02d8114602e57633df4ddf4036039573460395760015b60805260206080f35b503460395760026025565b5f5ffdfea164736f6c637817736c616e673a302e322e303b736f6c633a302e382e3337001f
 
 ```
 
@@ -580,9 +580,9 @@ JSON representation of the CBOR payload:
     "ipfs": "1220bec8fa0149a786c5810200ef5a436a154cff832af68ace5beeabcbb82166cb92",
 
     // Required: consists of semicolon-separated pairs of colon-separated compiler names and versions.
-    // `solx:<version>` is always included.
+    // `slang:<version>` is always included.
     // `solc:<version>` is the Solidity language version and is only included for Solidity and Yul contracts, but not included for LLVM IR ones.
-    "solc": "solx:0.1.8;solc:0.8.37"
+    "solc": "slang:0.2.0;solc:0.8.37"
 }
 ```
 
@@ -599,7 +599,7 @@ Disables the CBOR metadata that is appended at the end of bytecode. This option 
 Usage:
 
 ```shell
-solx 'Simple.sol' --no-cbor-metadata
+slang 'Simple.sol' --no-cbor-metadata
 ```
 
 
@@ -611,7 +611,7 @@ Specifies additional options for the LLVM framework. The argument must be a sing
 Usage:
 
 ```bash
-solx 'Simple.sol' --bin --llvm-options='-key=value'
+slang 'Simple.sol' --bin --llvm-options='-key=value'
 ```
 
 > The `--llvm-options` option is experimental and must only be used by experienced users. All supported options will be documented in the future.
@@ -626,18 +626,18 @@ The options in this section mirror the **solc** options of the same name.
 
 ### `--via-ir`
 
-Accepted for compatibility and ignored with a warning: **solx** has a single compilation pipeline.
+Accepted for compatibility and ignored with a warning: **Slang** has a single compilation pipeline.
 
 Usage:
 
 ```console
-$ solx 'Simple.sol' --bin --via-ir
+$ slang 'Simple.sol' --bin --via-ir
 Warning: viaIR is ignored: Slang has a single compilation pipeline.
 
 
 ======= Simple.sol:Simple =======
 Binary:
-3460475763000000c18038036080601f19601f8301160191680100000000000000008310607f19601f8401101615604b5782604052608039630000005e908163000000638239f35b5f5ffd5b505050634e487b7160e01b5f52604160045260245ffdfe600436106039575f3560e01c635a8ac02d8114602e57633df4ddf4036039573460395760015b60805260206080f35b503460395760026025565b5f5ffdfea164736f6c637816736f6c783a302e312e383b736f6c633a302e382e3337001e
+3460475763000000c28038036080601f19601f8301160191680100000000000000008310607f19601f8401101615604b5782604052608039630000005f908163000000638239f35b5f5ffd5b505050634e487b7160e01b5f52604160045260245ffdfe600436106039575f3560e01c635a8ac02d8114602e57633df4ddf4036039573460395760015b60805260206080f35b503460395760026025565b5f5ffdfea164736f6c637817736c616e673a302e322e303b736f6c633a302e382e3337001f
 
 ```
 
@@ -645,7 +645,7 @@ Binary:
 
 ### `--evm-version`
 
-Specifies the EVM version **solx** will produce bytecode for. For instance, with version *osaka*, **solx** will be producing `clz` instructions, whereas for older EVM versions it will not.
+Specifies the EVM version **Slang** will produce bytecode for. For instance, with version *osaka*, **Slang** will be producing `clz` instructions, whereas for older EVM versions it will not.
 
 Only the following EVM versions are supported:
 
@@ -653,12 +653,12 @@ Only the following EVM versions are supported:
 - prague
 - osaka
 
-The default is solc's default for the Solidity version, which is osaka for the latest one. A Solidity version older than 0.8.25 defaults to an EVM version **solx** does not support yet, so it is compiled for cancun with a warning.
+The default is solc's default for the Solidity version, which is osaka for the latest one. A Solidity version older than 0.8.25 defaults to an EVM version **Slang** does not support yet, so it is compiled for cancun with a warning.
 
 Usage:
 
 ```bash
-solx 'Simple.sol' --bin --evm-version 'osaka'
+slang 'Simple.sol' --bin --evm-version 'osaka'
 ```
 
 
@@ -670,7 +670,7 @@ Stores referenced sources as literal data in the metadata output.
 Usage:
 
 ```bash
-solx 'Simple.sol' --bin --metadata --metadata-literal
+slang 'Simple.sol' --bin --metadata --metadata-literal
 ```
 
 
@@ -684,20 +684,20 @@ Disables the default import resolution callback. Accepted for **solc** compatibi
 Usage:
 
 ```shell
-solx 'Simple.sol' --no-import-callback
+slang 'Simple.sol' --no-import-callback
 ```
 
 
 
 ## Multi-Language Support
 
-**solx** supports input in multiple programming languages:
+**Slang** supports input in multiple programming languages:
 
 - [Solidity](https://soliditylang.org/)
 - [Yul](https://docs.soliditylang.org/en/latest/yul.html)
 - [LLVM IR](https://llvm.org/docs/LangRef.html)
 
-The following sections outline how to use **solx** with these languages.
+The following sections outline how to use **Slang** with these languages.
 
 
 
@@ -716,7 +716,7 @@ Yul input is currently not supported. The example passes this Yul object, `Simpl
 Usage:
 
 ```console
-$ solx --yul 'Simple.yul' --bin
+$ slang --yul 'Simple.yul' --bin
 ? 1
 Error: Yul is not supported yet.
 
@@ -728,21 +728,21 @@ Error: Yul is not supported yet.
 
 Enables the LLVM IR mode. In this mode, input is expected to be in the LLVM IR language. The output works the same way as with Solidity input.
 
-> In this mode, every input file is treated as runtime code, while deploy code will be generated automatically by **solx**.
+> In this mode, every input file is treated as runtime code, while deploy code will be generated automatically by **Slang**.
 > It is not possible to write deploy code manually yet, but it will be supported in the future.
 
-Unlike **solc**, **solx** is an LLVM-based compiler toolchain, so it uses LLVM IR as an intermediate representation. It is not recommended to write LLVM IR manually, but it can be useful for debugging and optimization purposes. LLVM IR is more low-level than Yul and EVM assembly in the **solx** IR hierarchy.
+Unlike **solc**, **Slang** is an LLVM-based compiler toolchain, so it uses LLVM IR as an intermediate representation. It is not recommended to write LLVM IR manually, but it can be useful for debugging and optimization purposes. LLVM IR is more low-level than Yul and EVM assembly in the **Slang** IR hierarchy.
 
 The example input `Simple.ll` is the optimized runtime module of `Simple.sol` above, as produced by [`--emit-llvm-ir`](#--emit-llvm-ir).
 
 Usage:
 
 ```console
-$ solx --llvm-ir 'Simple.ll' --bin
+$ slang --llvm-ir 'Simple.ll' --bin
 
 ======= Simple.ll =======
 Binary:
-5b630000004f8063000000115f395ff3fe34600b57600336116016575b5f5ffd5b5060016031565b5f3560e01c633df4ddf48114600f57635a8ac02d03600b5760025b60805260206080f3fea164736f6c63780a736f6c783a302e312e380012
+5b63000000508063000000115f395ff3fe34600b57600336116016575b5f5ffd5b5060016031565b5f3560e01c633df4ddf48114600f57635a8ac02d03600b5760025b60805260206080f3fea164736f6c63780b736c616e673a302e322e300013
 
 ```
 
@@ -761,11 +761,11 @@ For selective IR output, use the following flags with `--output-dir`:
 These flags respect the `--overwrite` option. Without `--overwrite`, the compiler will refuse to overwrite existing files.
 
 
-### `SOLX_OUTPUT_DIR` Environment Variable
+### `SLANG_OUTPUT_DIR` Environment Variable
 
-For debugging purposes, all intermediate build artifacts can be dumped to a directory using the `SOLX_OUTPUT_DIR` environment variable. This is useful for toolkits where arbitrary solx-specific options are not supported.
+For debugging purposes, all intermediate build artifacts can be dumped to a directory using the `SLANG_OUTPUT_DIR` environment variable. This is useful for toolkits where arbitrary Slang-specific options are not supported.
 
-When this environment variable is set, **solx** will output all intermediate representations to the specified directory, always overwriting existing files.
+When this environment variable is set, **Slang** will output all intermediate representations to the specified directory, always overwriting existing files.
 
 The intermediate build artifacts include:
 
@@ -777,7 +777,7 @@ The intermediate build artifacts include:
 Usage:
 
 ```console
-$ SOLX_OUTPUT_DIR='./debug/' solx 'Simple.sol' --bin
+$ SLANG_OUTPUT_DIR='./debug/' slang 'Simple.sol' --bin
 ...
 $ ls './debug/'
 Simple_sol_Simple.asm
@@ -791,10 +791,10 @@ Simple_sol_Simple_deployed.unoptimized.ll
 
 The output file name is constructed as follows: `<ContractPath>_<ContractName>[_runtime].<Modifiers>.<Extension>`.
 
-Additionally, it is possible to dump the standard JSON input file with the `SOLX_STANDARD_JSON_DEBUG` environment variable:
+Additionally, it is possible to dump the standard JSON input file with the `SLANG_STANDARD_JSON_DEBUG` environment variable:
 
 ```bash
-SOLX_STANDARD_JSON_DEBUG='./debug/input.json' solx 'Simple.sol' --bin
+SLANG_STANDARD_JSON_DEBUG='./debug/input.json' slang 'Simple.sol' --bin
 cat './debug/input.json' | jq .
 ```
 
@@ -807,7 +807,7 @@ Enables the verification of the LLVM IR after each optimization pass. This optio
 Usage:
 
 ```bash
-solx 'Simple.sol' --bin --llvm-verify-each
+slang 'Simple.sol' --bin --llvm-verify-each
 ```
 
 
@@ -819,6 +819,6 @@ Enables the debug logging of the LLVM IR optimization passes. This option is use
 Usage:
 
 ```bash
-solx 'Simple.sol' --bin --llvm-debug-logging
+slang 'Simple.sol' --bin --llvm-debug-logging
 ```
 

@@ -1,6 +1,6 @@
 # Testing
 
-This page describes how to run tests for the **solx** compiler and the format of test files.
+This page describes how to run tests for the **Slang** compiler and the format of test files.
 
 ## Unit and CLI Tests
 
@@ -33,7 +33,7 @@ When the test fails after an intentional output change, regenerate the stale
 blocks in place and review the documentation diff:
 
 ```shell
-TRYCMD=overwrite cargo test -p solx --test mod docs_examples
+TRYCMD=overwrite cargo test -p slang --test mod docs_examples
 ```
 
 Overwriting preserves `...` line elisions, but inline `[..]` wildcards on
@@ -45,7 +45,7 @@ For version bumps, do not use `TRYCMD=overwrite`: the CBOR trailer lines that
 carry the version also carry a `[..]` metadata-digest wildcard, and a blessed
 literal digest only breaks on the next Slang re-pin. Update the hex-encoded
 version strings in the trailer lines directly instead — the new bytes are
-deterministic (hex of `solx:X.Y.Z;solc:A.B.C`).
+deterministic (hex of `slang:X.Y.Z;solc:A.B.C`).
 
 ## Integration Tests
 
@@ -56,13 +56,13 @@ The **solx-tester** tool runs integration tests by compiling contracts and execu
 cargo build --release
 
 # Run all integration tests
-./target/release/solx-tester --solidity-compiler ./target/release/solx
+./target/release/solx-tester --solidity-compiler ./target/release/slang
 
 # Run tests for a specific file
-./target/release/solx-tester --solidity-compiler ./target/release/solx --path tests/solidity/simple/default.sol
+./target/release/solx-tester --solidity-compiler ./target/release/slang --path tests/solidity/simple/default.sol
 
 # Run tests with specific optimizer settings
-./target/release/solx-tester --solidity-compiler ./target/release/solx --optimizer M3B3
+./target/release/solx-tester --solidity-compiler ./target/release/slang --optimizer M3B3
 ```
 
 ### Filtering Options

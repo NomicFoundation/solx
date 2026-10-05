@@ -66,7 +66,7 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
 
     let solidity_compiler = arguments
         .solidity_compiler
-        .unwrap_or_else(|| PathBuf::from("solx"));
+        .unwrap_or_else(|| PathBuf::from("slang"));
 
     let summary = solx_tester::Summary::new(arguments.verbose, arguments.quiet).wrap();
 

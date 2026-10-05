@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*ternary_literal_arms.*}}(%{{.*}}: i1) -> ui256
 // CHECK:   sol.if %{{.*}} {

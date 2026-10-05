@@ -19,7 +19,7 @@ impl Toolchain {
     ///
     /// Auto-detects the toolchain from the compiler's version output.
     ///
-    /// Returns `Solx` if the version output starts with "solx,",
+    /// Returns `Solx` if the version output starts with "slang" or, for 0.1.x releases, "solx",
     /// otherwise returns `Solc`.
     ///
     pub fn detect(path: &Path) -> anyhow::Result<Self> {
@@ -46,7 +46,7 @@ impl Toolchain {
         let stdout = String::from_utf8_lossy(result.stdout.as_slice());
         let first_line = stdout.lines().next().unwrap_or_default();
 
-        if first_line.starts_with("solx") {
+        if first_line.starts_with("slang") || first_line.starts_with("solx") {
             Ok(Self::Solx)
         } else {
             Ok(Self::Solc)
