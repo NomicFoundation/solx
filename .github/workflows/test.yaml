@@ -156,7 +156,7 @@ jobs:
       contents: read
     env:
       # renovate: datasource=npm depName=renovate
-      RENOVATE_VERSION: "44.115.2"
+      RENOVATE_VERSION: "44.115.13"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
