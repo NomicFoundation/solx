@@ -3,10 +3,12 @@
 //! `sol.immutable` members.
 //!
 
+use melior::ir::Attribute;
+use melior::ir::attribute::ArrayAttribute;
+use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
-use melior::ir::operation::OperationLike;
 use melior::ir::r#type::IntegerType;
 use ruint::aliases::U256;
 
@@ -26,20 +28,27 @@ pub struct Contract<'context> {
 }
 
 impl<'context> Contract<'context> {
-    /// Emits `sol.contract @name` of `kind` into `module_body`, returning it wrapping the body region.
+    /// Emits `sol.contract @name` of `kind` for `segment` into `module_body`, returning it wrapping
+    /// the body region. `indirect_callees` are the symbols of the functions this runtime contract
+    /// defines whose pointer the deploy code took.
     pub fn define(
         name: &str,
         kind: ContractKind,
+        segment: solx_utils::CodeSegment,
+        indirect_callees: impl Iterator<Item = String>,
         context: &Context<'context>,
         module_body: Block<'context>,
     ) -> Self {
-        // The Sol-to-Yul lowering creates the runtime module at this location, which is how it gets
-        // the module's compile unit.
+        let indirect_callees: Vec<Attribute> = indirect_callees
+            .map(|symbol| FlatSymbolRefAttribute::new(context.melior, &symbol).into())
+            .collect();
         let body = mlir_region_op!(
-            at context.module.as_operation().location(), context, &module_body.inner,
+            context, &module_body.inner,
             ContractOperation
                 .sym_name(StringAttribute::new(context.melior, name))
-                .kind(kind.attribute(context.melior));
+                .kind(kind.attribute(context.melior))
+                .runtime(segment == solx_utils::CodeSegment::Runtime)
+                .creation_func_refs(ArrayAttribute::new(context.melior, &indirect_callees));
             body_region
         );
         Self { body }

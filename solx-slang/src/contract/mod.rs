@@ -6,6 +6,7 @@ pub mod constructor;
 pub mod function;
 pub mod getter;
 pub mod object;
+pub mod segment;
 pub mod state_variable;
 pub mod storage_slot;
 
@@ -19,18 +20,20 @@ use solx_mlir::Contract;
 use solx_mlir::Type as MlirType;
 
 use crate::contract::object::Object;
+use crate::contract::segment::Segment;
 use crate::contract::storage_slot::StorageSlot;
 use crate::scope::contract::ContractScope;
 use crate::scope::source_unit::SourceUnitScope;
 
 impl<'context> SourceUnitScope<'context> {
-    /// Emits `object`'s `sol.contract` over `storage_layout`. The location cursor starts on the
-    /// definition; a member with a node of its own narrows it, and the synthesized constructor
+    /// Emits the `sol.contract` of `segment` over `storage_layout`. The location cursor starts on
+    /// the definition; a member with a node of its own narrows it, and the synthesized constructor
     /// keeps it.
     pub fn object_definition(
         &mut self,
         object: &Object,
-        storage_layout: HashMap<NodeId, StorageSlot>,
+        storage_layout: &HashMap<NodeId, StorageSlot>,
+        segment: Segment<'_, 'context>,
     ) {
         let identifier = object.identifier();
         self.contract(
@@ -38,20 +41,26 @@ impl<'context> SourceUnitScope<'context> {
             Contract::define(
                 identifier.as_str(),
                 object.kind(),
+                segment.code_segment(),
+                segment
+                    .runtime_indirect_callees()
+                    .map(SourceUnitScope::function_symbol),
                 self,
                 Block::from(self.module.body()),
             ),
             object,
             storage_layout,
+            segment,
             |scope| scope.members(),
         );
     }
 }
 
 impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
-    /// Emits the object's members: the state-variable declarations, the constructor, the functions
-    /// of its resolved hierarchy, and the getters of its public state variables. Each
-    /// state-variable declaration carries its own location.
+    /// Emits the segment's members: the state-variable declarations, then the deploy code's
+    /// constructor, or the runtime code's externally visible functions, the getters of the public
+    /// state variables and the indirect callees. Each state-variable declaration carries its own
+    /// location.
     fn members(&mut self) {
         for state_variable in self.object.state_variables().iter() {
             match state_variable.attributes().mutability() {
@@ -95,17 +104,24 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 StateVariableMutability::Constant => {}
             }
         }
-        self.constructor();
-        for function in self.object.functions() {
-            self.function_definition(&function);
-        }
-        for state_variable in self
-            .object
-            .state_variables()
-            .into_iter()
-            .filter(|state_variable| state_variable.is_externally_visible())
-        {
-            self.state_variable_getter(&state_variable);
+        match self.segment {
+            Segment::Deploy { .. } => self.constructor(),
+            Segment::Runtime { indirect_callees } => {
+                for function in self.object.externally_visible_functions() {
+                    self.function_definition(&function);
+                }
+                for state_variable in self
+                    .object
+                    .state_variables()
+                    .into_iter()
+                    .filter(|state_variable| state_variable.is_externally_visible())
+                {
+                    self.state_variable_getter(&state_variable);
+                }
+                for function in indirect_callees.values() {
+                    self.function_definition(function);
+                }
+            }
         }
     }
 }

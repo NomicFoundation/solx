@@ -200,8 +200,17 @@ impl Contract {
             solx_standard_json::InputSelector::MLIR,
         ) && let Some(output) = self.mlir.take()
         {
-            if let Some(sol_source) = output.sol_source.as_deref() {
-                writeln!(std::io::stdout(), "MLIR Dialect sol:\n{sol_source}")?;
+            if let Some(sol_source) = output.deploy_sol_source.as_deref() {
+                writeln!(
+                    std::io::stdout(),
+                    "MLIR Dialect sol (deploy):\n{sol_source}"
+                )?;
+            }
+            if let Some(sol_source) = output.runtime_sol_source.as_deref() {
+                writeln!(
+                    std::io::stdout(),
+                    "MLIR Dialect sol (runtime):\n{sol_source}"
+                )?;
             }
             if !output.deploy_source.is_empty() {
                 writeln!(
@@ -696,8 +705,17 @@ impl Contract {
                 output_path.push(output_name.as_str());
                 Self::write_to_file(output_path.as_path(), text, overwrite)
             };
-            if let Some(sol_source) = output.sol_source.as_deref() {
-                write("sol", sol_source)?;
+            if let Some(sol_source) = output.deploy_sol_source.as_deref() {
+                write(
+                    &format!("sol.{}", solx_utils::CodeSegment::Deploy),
+                    sol_source,
+                )?;
+            }
+            if let Some(sol_source) = output.runtime_sol_source.as_deref() {
+                write(
+                    &format!("sol.{}", solx_utils::CodeSegment::Runtime),
+                    sol_source,
+                )?;
             }
             if !output.deploy_source.is_empty() {
                 write(

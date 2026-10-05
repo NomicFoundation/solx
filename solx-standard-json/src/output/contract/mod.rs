@@ -30,8 +30,8 @@ pub struct Contract {
     /// The contract user documentation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub userdoc: Option<serde_json::Value>,
-    /// MLIR pipeline output: optional pre-pass Sol dialect snapshot plus
-    /// the deploy and runtime LLVM dialect modules.
+    /// MLIR pipeline output: optional pre-pass Sol dialect snapshots plus
+    /// the LLVM dialect modules, each of the deploy and the runtime code.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mlir: Option<solx_mlir::MlirOutput>,
     /// The EVM data of the contract.

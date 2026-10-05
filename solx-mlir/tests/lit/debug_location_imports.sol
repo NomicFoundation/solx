@@ -1,4 +1,4 @@
-// RUN: slang --emit-mlir=sol --debug-info %s %S/Inputs/debug_location_imported.sol | FileCheck %s --implicit-check-not='loc(unknown)'
+// RUN: slang --emit-mlir=sol --debug-info --debug-info-runtime %s %S/Inputs/debug_location_imported.sol | FileCheck %s --implicit-check-not='loc(unknown)'
 
 // CHECK: #[[CALLER:loc[0-9]*]] = loc("{{.*}}debug_location_imports.sol":31:5)
 // CHECK: #[[TRIPLE:loc[0-9]*]] = loc("{{.*}}debug_location_imported.sol":1:1)
@@ -6,7 +6,7 @@
 // CHECK: sol.func @{{.*run.*}}(%arg0: ui256 loc("{{.*}}debug_location_imports.sol":31:5))
 // CHECK:   sol.call @{{.*triple.*}} loc(#[[CALL:loc[0-9]*]])
 // CHECK: } loc(#[[CALLER_FN:loc[0-9]*]])
-// CHECK: sol.func private @{{.*triple.*}}(%arg0: ui256 loc("{{.*}}debug_location_imported.sol":1:1))
+// CHECK: sol.func @{{.*triple.*}}(%arg0: ui256 loc("{{.*}}debug_location_imported.sol":1:1))
 // CHECK:   sol.store %arg0, %{{.*}} loc(#[[X:loc[0-9]*]])
 // CHECK:   sol.load %{{.*}} loc(#[[PRODUCT:loc[0-9]*]])
 // CHECK:   sol.cmul %{{.*}}, %{{.*}} : ui256 loc(#[[PRODUCT]])

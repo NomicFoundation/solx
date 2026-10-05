@@ -47,9 +47,6 @@ unsafe extern "C" {
     /// Creates the `canonicalize` pass.
     pub fn mlirCreateTransformsCanonicalizer() -> MlirPass;
 
-    /// Creates the `symbol-dce` pass.
-    pub fn mlirCreateTransformsSymbolDCE() -> MlirPass;
-
     /// Creates the `sol-inline-modifiers` pass.
     pub fn mlirCreateSolModifierInliningPass() -> MlirPass;
 

@@ -22,9 +22,6 @@
 // CHECK:     sol.delete %{{.*}} : !sol.struct<"Node_[[NODE]]", Storage, {{.*}}>
 // CHECK:     sol.length %{{.*}} : !sol.array<? x !sol.struct<"Node_[[NODE]]", Memory, {{.*}}>, Memory>
 
-// CHECK:   sol.func private @{{.*}}count{{.*}}(%arg0: !sol.struct<"Node_[[NODE]]", CallData, (!sol.array<? x !sol.struct<"Node_[[NODE]]", CallData>, CallData>, ui256)>) -> ui256
-// CHECK:     sol.length %{{.*}} : !sol.array<? x !sol.struct<"Node_[[NODE]]", CallData, {{.*}}>, CallData>
-
 // CHECK: sol.contract @{{.*}}B
 // CHECK:   sol.state_var @{{.*}}other{{.*}} slot 0 offset 0 : !sol.struct<"Node_[[NODE]]", Storage, {{.*}}>
 // CHECK:     sol.gep %{{.*}}, %{{.*}} : !sol.struct<"Node_[[NODE]]", Storage, {{.*}}>, ui64, !sol.ptr<ui256, Storage>
@@ -46,7 +43,9 @@
 // CHECK:   sol.state_var @{{.*}}single{{.*}} slot 5 offset 0 : !sol.struct<"Single_[[SINGLE:[0-9]+]]", Storage, (!sol.func_ref<() -> !sol.struct<"Single_[[SINGLE]]", Memory, (!sol.func_ref<() -> !sol.struct<"Single_[[SINGLE]]", Memory>>)>>)>
 // CHECK:   sol.state_var @{{.*}}tail{{.*}} slot 6 offset 0 : ui256
 
-// CHECK:   sol.func private @{{.*}}run{{.*}}(%arg0: !sol.struct<"Closure_[[CLOSURE]]", Memory, (!sol.func_ref<(!sol.struct<"Closure_[[CLOSURE]]", Memory>) -> ui256>)>) -> ui256
+// CHECK:   sol.func @{{.*}}invoke{{.*}}() -> ui256
+// CHECK:     sol.call @{{.*}}run{{.*}}(%{{.*}}) : (!sol.struct<"Closure_[[CLOSURE]]", Memory, {{.*}}>) -> ui256
+// CHECK:   sol.func @{{.*}}run{{.*}}(%arg0: !sol.struct<"Closure_[[CLOSURE]]", Memory, (!sol.func_ref<(!sol.struct<"Closure_[[CLOSURE]]", Memory>) -> ui256>)>) -> ui256
 // CHECK:     %[[FIELD:.*]] = sol.gep %{{.*}}, %{{.*}} : !sol.struct<"Closure_[[CLOSURE]]", Memory, {{.*}}>, ui64, !sol.ptr<!sol.func_ref<(!sol.struct<"Closure_[[CLOSURE]]", Memory, {{.*}}>) -> ui256>, Memory>
 // CHECK:     %[[CALLEE:.*]] = sol.load %[[FIELD]] : !sol.ptr<!sol.func_ref<{{.*}}>, Memory>, !sol.func_ref<(!sol.struct<"Closure_[[CLOSURE]]", Memory, {{.*}}>) -> ui256>
 // CHECK:     sol.icall %[[CALLEE]](%{{.*}}) : !sol.func_ref<(!sol.struct<"Closure_[[CLOSURE]]", Memory, {{.*}}>) -> ui256>, (!sol.struct<"Closure_[[CLOSURE]]", Memory, {{.*}}>) -> ui256
@@ -132,10 +131,6 @@ contract A {
     Pong pong;
     Slots slots;
 
-    function count(Node calldata n) internal pure returns (uint256) {
-        return n.kids.length;
-    }
-
     function build(uint256 n) public returns (uint256) {
         Node memory m;
         m.kids = new Node[](n);
@@ -182,5 +177,10 @@ contract E {
 
     function run(Closure memory c) internal pure returns (uint256) {
         return c.call(c);
+    }
+
+    function invoke() public pure returns (uint256) {
+        Closure memory c;
+        return run(c);
     }
 }

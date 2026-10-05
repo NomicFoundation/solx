@@ -119,13 +119,16 @@ impl Object {
         }
     }
 
-    /// A contract's functions over its hierarchy after resolving overrides and getter shadowing;
-    /// a library's own functions.
-    pub fn functions(&self) -> Vec<FunctionDefinition> {
+    /// The functions the runtime code dispatches to, `receive` and `fallback` among them: a
+    /// contract's over its hierarchy after resolving overrides and getter shadowing, a library's
+    /// own.
+    pub fn externally_visible_functions(&self) -> impl Iterator<Item = FunctionDefinition> + use<> {
         match self {
             Self::Contract(node) => node.linearised_functions(),
             Self::Library(node) => node.functions(),
         }
+        .into_iter()
+        .filter(FunctionDefinition::is_externally_visible)
     }
 
     /// The state variables the object declares over its hierarchy, in storage order.
