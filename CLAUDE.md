@@ -42,7 +42,7 @@ Solidity → Slang (parse, bind) → Sol-dialect MLIR → Sol→Yul→Standard p
 
 ## Code layout
 
-Public items come before private ones, across a type's `impl` blocks too.
+A type has one inherent `impl` block, with public items before private ones.
 
 ## Slang Frontend
 

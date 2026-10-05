@@ -209,9 +209,7 @@ impl Slang {
 
         Ok(output)
     }
-}
 
-impl Slang {
     /// Picks the language version to compile as: the requested one, or the latest Slang supports.
     ///
     /// A prerelease or build suffix is dropped with a warning pushed to `messages`.
