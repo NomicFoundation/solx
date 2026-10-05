@@ -253,9 +253,8 @@ impl Contract {
                     optimizer_mode.as_str(),
                     spill_area_size,
                 );
-                let raw_llvm =
-                    solx_mlir::Context::translate_module_to_llvm(mlir_module, &immutables)
-                        .context("MLIR translation")?;
+                let raw_llvm = solx_mlir::Context::translate_module_to_llvm(&mlir_module)
+                    .context("MLIR translation")?;
                 run_mlir_translation.borrow_mut().finish();
                 let context = unsafe { inkwell::context::Context::new(raw_llvm.context) };
                 let module = unsafe { inkwell::module::Module::new(raw_llvm.module) };
@@ -289,6 +288,7 @@ impl Contract {
                     optimizer,
                     output_config,
                 );
+                context.set_immutables(&immutables);
                 if output_selection.check_selection(
                     contract_name.path.as_str(),
                     contract_name.name.as_deref(),

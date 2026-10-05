@@ -9,7 +9,6 @@
 use mlir_sys::MlirContext;
 use mlir_sys::MlirDialectHandle;
 use mlir_sys::MlirDialectRegistry;
-use mlir_sys::MlirModule;
 use mlir_sys::MlirPass;
 
 unsafe extern "C" {
@@ -306,16 +305,4 @@ unsafe extern "C" {
         context: MlirContext,
         version: u32,
     ) -> mlir_sys::MlirAttribute;
-
-    // ---- Solidity immutables lowering ----
-
-    /// Lowers each `llvm.setimmutable` into heap stores at its id's offsets, taken from the
-    /// parallel `ids`/`offsets` arrays of `count` pairs, and erases every one it walks: an id
-    /// absent from the arrays stores nothing.
-    pub fn mlirEvmLowerSetImmutables(
-        module: MlirModule,
-        ids: *const *const std::ffi::c_char,
-        offsets: *const u64,
-        count: u64,
-    );
 }

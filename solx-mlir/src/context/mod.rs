@@ -10,8 +10,6 @@ pub mod pass_timing;
 pub mod yul_function;
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::ffi::CString;
 use std::sync::Once;
 
 use melior::dialect::DialectRegistry;
@@ -357,34 +355,11 @@ impl<'context> Context<'context> {
 
     /// Translates a parsed LLVM-dialect module to raw LLVM pointers.
     ///
-    /// The module is consumed because lowering `llvm.setimmutable` erases the operations it reads,
-    /// and the translation copies everything it needs.
-    ///
     /// # Errors
     ///
     /// Returns an error if the module cannot be translated to LLVM IR.
-    pub fn translate_module_to_llvm(
-        module: Module,
-        immutables: &BTreeMap<String, BTreeSet<u64>>,
-    ) -> anyhow::Result<RawLlvmModule> {
-        let ids: Vec<CString> = immutables
-            .keys()
-            .map(|id| CString::new(id.as_str()).expect("an immutable id carries no NUL byte"))
-            .collect();
-        let (id_pointers, offsets): (Vec<*const std::ffi::c_char>, Vec<u64>) = ids
-            .iter()
-            .zip(immutables.values())
-            .flat_map(|(id, offsets)| offsets.iter().map(|offset| (id.as_ptr(), *offset)))
-            .unzip();
-
+    pub fn translate_module_to_llvm(module: &Module) -> anyhow::Result<RawLlvmModule> {
         unsafe {
-            crate::ffi::mlirEvmLowerSetImmutables(
-                module.to_raw(),
-                id_pointers.as_ptr(),
-                offsets.as_ptr(),
-                offsets.len() as u64,
-            );
-
             let raw_operation = module.as_operation().to_raw();
             let llvm_context = inkwell::llvm_sys::core::LLVMContextCreate();
 

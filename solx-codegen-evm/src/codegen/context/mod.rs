@@ -2,6 +2,9 @@
 //! The LLVM module build context.
 //!
 
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+
 use solx_utils::Profiler;
 
 use crate::attribute::Attribute;
@@ -36,6 +39,9 @@ pub struct Context<'ctx> {
 impl<'ctx> Context<'ctx> {
     /// The module flag holding the size of the spill region.
     const STACK_REGION_SIZE_FLAG: &'static str = "evm-stack-region-size";
+    /// The named metadata holding each immutable's identifier followed by its offsets in the runtime
+    /// code.
+    const IMMUTABLES_METADATA: &'static str = "evm.immutables";
 
     ///
     /// Initializes a new LLVM context.
@@ -281,6 +287,29 @@ impl<'ctx> Context<'ctx> {
         self.module
             .verify()
             .map_err(|error| anyhow::anyhow!(error.to_string()))
+    }
+
+    ///
+    /// Attaches the offsets the runtime code loads each immutable from, at which the deploy code
+    /// stores it into the runtime code it returns.
+    ///
+    pub fn set_immutables(&mut self, immutables: &BTreeMap<String, BTreeSet<u64>>) {
+        for (identifier, offsets) in immutables.iter() {
+            let operands: Vec<inkwell::values::BasicMetadataValueEnum<'ctx>> =
+                std::iter::once(self.llvm.metadata_string(identifier.as_str()).into())
+                    .chain(
+                        offsets
+                            .iter()
+                            .map(|offset| self.llvm.i64_type().const_int(*offset, false).into()),
+                    )
+                    .collect();
+            self.module
+                .add_global_metadata(
+                    Self::IMMUTABLES_METADATA,
+                    &self.llvm.metadata_node(operands.as_slice()),
+                )
+                .expect("a metadata node is a named metadata operand");
+        }
     }
 
     ///
