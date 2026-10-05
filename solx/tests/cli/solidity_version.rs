@@ -7,10 +7,7 @@ use test_case::test_case;
 
 /// The hex-encoded `solc:<version>` entry of the CBOR metadata appended to the bytecode.
 fn cbor_solc_version_hex(version: &str) -> String {
-    format!("solc:{version}")
-        .bytes()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    hex::encode(format!("solc:{version}"))
 }
 
 #[test]

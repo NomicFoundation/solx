@@ -40,6 +40,10 @@ Solidity → Slang (parse, bind) → Sol-dialect MLIR → Sol→Yul→Standard p
 | [`solx-compiler-downloader`](./solx-compiler-downloader/) | Downloads and verifies compiler binaries |
 | [`solx-benchmark-converter`](./solx-benchmark-converter/) | Benchmark analysis and comparison |
 
+## Code layout
+
+Public items come before private ones, across a type's `impl` blocks too.
+
 ## Slang Frontend
 
 `solx-slang` lowers the Slang AST to Sol-dialect MLIR through `solx-mlir`. The rules below are the design law of that frontend and the conventions a reviewer would otherwise repeat by hand.
