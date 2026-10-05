@@ -259,8 +259,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
-        if: success() && hashFiles('llvm/codecov.lcov') != ''
-        continue-on-error: true
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: 'llvm/codecov.lcov'
