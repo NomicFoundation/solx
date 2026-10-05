@@ -103,14 +103,14 @@ impl Project {
                     .evm
                     .as_mut()
                     .and_then(|evm| evm.method_identifiers.take());
-                let result = contract.mlir.as_ref().map(|output| {
+                let result = contract.mlir.as_mut().map(|output| {
                     let runtime_code = ContractMLIR {
-                        source: output.runtime_source.clone(),
+                        bitcode: std::mem::take(&mut output.runtime_bitcode),
                         dependencies: output.runtime_dependencies.clone(),
                         runtime_code: None,
                     };
                     let deploy_code = ContractMLIR {
-                        source: output.deploy_source.clone(),
+                        bitcode: std::mem::take(&mut output.deploy_bitcode),
                         dependencies: output.deploy_dependencies.clone(),
                         runtime_code: Some(Box::new(runtime_code)),
                     };
@@ -491,7 +491,7 @@ impl Project {
         let mut result = loop {
             let run_roundtrip = profiler.start_evm_translation_unit(
                 job.contract_name.full_path.as_str(),
-                Some(job.code_segment),
+                job.code_segment,
                 format!("WorkerRoundtrip({attempt})").as_str(),
                 job.optimizer_settings.to_string().as_str(),
                 job.optimizer_settings.spill_area_size(),
@@ -501,8 +501,6 @@ impl Project {
             attempt += 1;
 
             match attempt_result {
-                // TODO: return the unoptimized bitcode so a retry skips the MLIR
-                // parse and translation.
                 Err(Error::StackTooDeep(stack_too_deep)) => {
                     if stack_too_deep.is_size_fallback
                         && !job.optimizer_settings.is_fallback_to_size_active()

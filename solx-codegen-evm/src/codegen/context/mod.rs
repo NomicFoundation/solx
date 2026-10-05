@@ -82,7 +82,7 @@ impl<'ctx> Context<'ctx> {
 
         let run_init_verify = profiler.start_evm_translation_unit(
             contract_path,
-            Some(self.code_segment),
+            self.code_segment,
             "InitVerify",
             optimizer_mode.as_str(),
             spill_area_size,
@@ -131,7 +131,7 @@ impl<'ctx> Context<'ctx> {
 
         let run_optimize_verify = profiler.start_evm_translation_unit(
             contract_path,
-            Some(self.code_segment),
+            self.code_segment,
             "OptimizeVerify",
             optimizer_mode.as_str(),
             spill_area_size,
@@ -169,7 +169,7 @@ impl<'ctx> Context<'ctx> {
         {
             let run_emit_llvm_assembly = profiler.start_evm_translation_unit(
                 contract_path,
-                Some(self.code_segment),
+                self.code_segment,
                 "EmitLLVMAssembly",
                 optimizer_mode.as_str(),
                 spill_area_size,
@@ -213,7 +213,7 @@ impl<'ctx> Context<'ctx> {
 
         let run_emit_bytecode = profiler.start_evm_translation_unit(
             contract_path,
-            Some(self.code_segment),
+            self.code_segment,
             "EmitBytecode",
             optimizer_mode.as_str(),
             spill_area_size,

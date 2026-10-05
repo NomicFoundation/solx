@@ -17,7 +17,6 @@ pub(crate) mod context;
 pub(crate) mod dialect;
 pub(crate) mod ffi;
 pub(crate) mod ir;
-pub(crate) mod llvm_module;
 pub(crate) mod ods;
 pub(crate) mod output;
 
