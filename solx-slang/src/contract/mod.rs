@@ -10,26 +10,100 @@ pub mod segment;
 pub mod state_variable;
 pub mod storage_slot;
 
+use std::cell::OnceCell;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableMutability;
 
 use solx_mlir::Block;
+use solx_mlir::Context;
 use solx_mlir::Contract;
+use solx_mlir::MlirOutput;
+use solx_mlir::SegmentOutput;
 use solx_mlir::Type as MlirType;
+use solx_utils::EVMVersion;
+use solx_utils::Profiler;
+use solx_utils::RevertStrings;
 
+use crate::contract::constructor::ConstructorBuilder;
 use crate::contract::object::Object;
 use crate::contract::segment::Segment;
 use crate::contract::storage_slot::StorageSlot;
+use crate::debug_locations::DebugLocations;
+use crate::debug_locations::sources::Sources;
 use crate::scope::contract::ContractScope;
 use crate::scope::source_unit::SourceUnitScope;
 
 impl<'context> SourceUnitScope<'context> {
+    /// Lowers `object` over `storage_layout` off the melior context in `melior`, created on first
+    /// use, each segment into a module of its own: the deploy segment first, whose indirect
+    /// callees the runtime segment defines.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if module finalization fails.
+    pub fn object(
+        melior: &OnceCell<melior::Context>,
+        object: &Object,
+        storage_layout: &HashMap<NodeId, StorageSlot>,
+        evm_version: EVMVersion,
+        revert_strings: RevertStrings,
+        emit_deploy_debug_info: bool,
+        emit_runtime_debug_info: bool,
+        capture_mlir: bool,
+        sources: &Sources<'_>,
+        pass_timing: bool,
+        profiler: &mut Profiler,
+    ) -> anyhow::Result<MlirOutput> {
+        let melior = melior.get_or_init(|| {
+            let run_context_creation =
+                profiler.start_pipeline_element("Compiler_CreateMLIRContext");
+            let melior = Context::create_melior_context();
+            run_context_creation.borrow_mut().finish();
+            melior
+        });
+
+        let mut indirect_callees = BTreeMap::new();
+        let deploy = SourceUnitScope::object_segment(
+            melior,
+            object,
+            storage_layout,
+            Segment::Deploy {
+                indirect_callees: &mut indirect_callees,
+                constructor: ConstructorBuilder::new(object.contracts()),
+            },
+            evm_version,
+            revert_strings,
+            emit_deploy_debug_info,
+            capture_mlir,
+            sources,
+            pass_timing,
+            profiler,
+        )?;
+        let runtime = SourceUnitScope::object_segment(
+            melior,
+            object,
+            storage_layout,
+            Segment::Runtime {
+                indirect_callees: &indirect_callees,
+            },
+            evm_version,
+            revert_strings,
+            emit_runtime_debug_info,
+            capture_mlir,
+            sources,
+            pass_timing,
+            profiler,
+        )?;
+        Ok(MlirOutput::new(deploy, runtime))
+    }
+
     /// Emits the `sol.contract` of `segment` over `storage_layout`. The location cursor starts on
     /// the definition; a member with a node of its own narrows it, and the synthesized constructor
     /// keeps it.
-    pub fn object_definition(
+    fn object_definition(
         &mut self,
         object: &Object,
         storage_layout: &HashMap<NodeId, StorageSlot>,
@@ -53,6 +127,55 @@ impl<'context> SourceUnitScope<'context> {
             segment,
             |scope| scope.members(),
         );
+    }
+
+    /// Lowers `segment` of `object` into a module of its own and finalizes it.
+    ///
+    /// With `emit_debug_info`, the scope resolves the nodes it lowers through `sources`, and the
+    /// module is created at the definition's location with a debug-info compile unit.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if module finalization fails.
+    fn object_segment(
+        melior: &'context melior::Context,
+        object: &Object,
+        storage_layout: &HashMap<NodeId, StorageSlot>,
+        segment: Segment<'_, 'context>,
+        evm_version: EVMVersion,
+        revert_strings: RevertStrings,
+        emit_debug_info: bool,
+        capture_mlir: bool,
+        sources: &Sources<'_>,
+        pass_timing: bool,
+        profiler: &mut Profiler,
+    ) -> anyhow::Result<SegmentOutput> {
+        let dependencies = match segment {
+            Segment::Deploy { .. } => object.deploy_dependencies(),
+            Segment::Runtime { .. } => object.runtime_dependencies(),
+        };
+
+        let mut debug_locations = DebugLocations::new(melior, emit_debug_info.then_some(sources));
+        let mut scope = SourceUnitScope::new(
+            Context::new(
+                melior,
+                evm_version,
+                revert_strings,
+                match object {
+                    Object::Contract(contract) => debug_locations.location(contract),
+                    Object::Library(library) => debug_locations.location(library),
+                },
+                emit_debug_info,
+                object.file_id().as_str(),
+            ),
+            debug_locations,
+        );
+        let run_emission = profiler.start_pipeline_element(
+            format!("Compiler_EmitSol:{}", dependencies.identifier).as_str(),
+        );
+        scope.object_definition(object, storage_layout, segment);
+        run_emission.borrow_mut().finish();
+        Context::from(scope).finalize_module(dependencies, capture_mlir, pass_timing, profiler)
     }
 }
 

@@ -9,6 +9,7 @@ use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::LibraryDefinition;
 use slang_solidity_v2::ast::StateVariableDefinition;
+use slang_solidity_v2::compilation::FileId;
 
 use solx_mlir::ContractKind;
 
@@ -39,14 +40,18 @@ impl Object {
         }
     }
 
+    /// The file that declares the object.
+    pub fn file_id(&self) -> &FileId {
+        match self {
+            Self::Contract(node) => node.get_file_id(),
+            Self::Library(node) => node.get_file_id(),
+        }
+    }
+
     /// The object's identifier, qualified by its file: linking keys objects by it, and two files
     /// may declare the same name.
     pub fn identifier(&self) -> String {
-        let file_id = match self {
-            Self::Contract(node) => node.get_file_id(),
-            Self::Library(node) => node.get_file_id(),
-        };
-        solx_utils::ContractName::full_path(file_id.as_str(), self.name().name())
+        solx_utils::ContractName::full_path(self.file_id().as_str(), self.name().name())
     }
 
     /// The objects the deploy code may embed, its runtime object leading.
@@ -129,6 +134,14 @@ impl Object {
         }
         .into_iter()
         .filter(FunctionDefinition::is_externally_visible)
+    }
+
+    /// The source bytes of the externally visible functions, by which the objects are scheduled
+    /// for lowering: the runtime module defines what they reach, so their size tracks the work.
+    pub fn estimated_lowering_cost(&self) -> usize {
+        self.externally_visible_functions()
+            .map(|function| function.get_text_range().len())
+            .sum()
     }
 
     /// The state variables the object declares over its hierarchy, in storage order.
