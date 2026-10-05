@@ -252,12 +252,14 @@ jobs:
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: 'Coverage integration tests HTML'
-          path: ${{ env.OUTPUT_HTML_DIR }}
+          name: 'Coverage integration tests'
+          path: |
+            ${{ env.OUTPUT_HTML_DIR }}
+            llvm/${{ env.LCOV_FILE }}
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
-        if: (success() || failure())
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: 'llvm/codecov.lcov'
@@ -266,5 +268,4 @@ jobs:
           disable_search: true
           plugins: noop
           slug: ${{ github.repository }}
-          # Surface upload failures instead of silently going green.
           fail_ci_if_error: true
