@@ -72,7 +72,7 @@ impl Object {
     pub fn runtime_dependencies(&self) -> solx_utils::Dependencies {
         let definitions = match self {
             Self::Contract(node) => node.deployed_bytecode_dependencies(),
-            Self::Library(node) => node.bytecode_dependencies(),
+            Self::Library(node) => node.deployed_bytecode_dependencies(),
         };
         let runtime_identifier =
             solx_utils::Dependencies::runtime_identifier(self.identifier().as_str());
