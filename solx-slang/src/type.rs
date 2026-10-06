@@ -122,7 +122,7 @@ impl<'context> SourceUnitScope<'context> {
                     unreachable!("Slang StructType always references a Struct definition");
                 };
 
-                if !definition.is_recursive() {
+                if !definition.has_recursive_type_graph() {
                     let members = self.structure_members(&definition, location);
                     return MlirType::structure(self.melior, &members, location);
                 }
