@@ -18,6 +18,7 @@ use solx_mlir::Type as MlirType;
 use crate::contract::object::Object;
 use crate::debug_locations::DebugLocations;
 use crate::scope::contract::ContractScope;
+use crate::r#type::position::Position;
 
 /// The source unit scope: the owned MLIR context that every nested scope emits into.
 pub struct SourceUnitScope<'context> {
@@ -30,9 +31,8 @@ pub struct SourceUnitScope<'context> {
     pub function_signatures: HashMap<NodeId, Function<'context>>,
     /// The definition ids and data locations of the recursive structs identified so far.
     pub identified_structures: HashSet<(NodeId, solx_utils::DataLocation)>,
-    /// Whether a struct at the current position may stay opaque: behind an array, a mapping or a
-    /// function reference.
-    pub breaks_cycle: bool,
+    /// The current position.
+    pub position: Position,
 }
 
 impl<'context> SourceUnitScope<'context> {
@@ -43,7 +43,7 @@ impl<'context> SourceUnitScope<'context> {
             debug_locations,
             function_signatures: HashMap::new(),
             identified_structures: HashSet::new(),
-            breaks_cycle: false,
+            position: Position::ByValue,
         }
     }
 
@@ -62,16 +62,15 @@ impl<'context> SourceUnitScope<'context> {
         self.mlir.current_contract_type = None;
     }
 
-    /// Runs `resolve` with `breaks_cycle` as the current position's, restoring the enclosing
-    /// position afterwards.
+    /// Runs `resolve` at `position`, restoring the enclosing position afterwards.
     pub fn at_position<R>(
         &mut self,
-        breaks_cycle: bool,
+        position: Position,
         resolve: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        let enclosing = std::mem::replace(&mut self.breaks_cycle, breaks_cycle);
+        let enclosing = std::mem::replace(&mut self.position, position);
         let result = resolve(self);
-        self.breaks_cycle = enclosing;
+        self.position = enclosing;
         result
     }
 

@@ -2,6 +2,8 @@
 //! The projection from Slang's semantic type tree onto Sol dialect types.
 //!
 
+pub mod position;
+
 use num_traits::sign::Signed;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionType as SlangFunctionType;
@@ -14,6 +16,8 @@ use solx_mlir::FunctionType;
 use solx_mlir::Type as MlirType;
 
 use crate::scope::source_unit::SourceUnitScope;
+
+use self::position::Position;
 
 impl<'context> SourceUnitScope<'context> {
     /// Resolves a Slang semantic type to its Sol dialect MLIR type.
@@ -80,7 +84,7 @@ impl<'context> SourceUnitScope<'context> {
                 MlirType::fixed_bytes(self.melior, byte_array_type.width() as usize)
             }
             Type::Array(array_type) => {
-                let element_type = self.at_position(true, |scope| {
+                let element_type = self.at_position(Position::Breaking, |scope| {
                     scope.resolve(&array_type.element_type(), inherited_location)
                 });
                 let location =
@@ -101,7 +105,7 @@ impl<'context> SourceUnitScope<'context> {
                     location,
                 )
             }
-            Type::Mapping(mapping_type) => self.at_position(true, |scope| {
+            Type::Mapping(mapping_type) => self.at_position(Position::Breaking, |scope| {
                 let key_type = scope.resolve(
                     &mapping_type.key_type(),
                     Some(solx_utils::DataLocation::Storage),
@@ -130,7 +134,8 @@ impl<'context> SourceUnitScope<'context> {
                 let r#type = MlirType::identified_structure(self.melior, &name, location);
                 let key = (definition.node_id(), location);
                 if !r#type.is_opaque_structure()
-                    || (self.breaks_cycle && self.identified_structures.contains(&key))
+                    || (matches!(self.position, Position::Breaking)
+                        && self.identified_structures.contains(&key))
                 {
                     return r#type;
                 }
@@ -167,7 +172,7 @@ impl<'context> SourceUnitScope<'context> {
     /// Resolves a function type's MLIR signature from the binder's type, so a callee naming no
     /// definition to look a registered signature up by resolves here.
     pub fn function_type(&mut self, function_type: &SlangFunctionType) -> FunctionType<'context> {
-        self.at_position(true, |scope| FunctionType {
+        self.at_position(Position::Breaking, |scope| FunctionType {
             parameters: function_type
                 .parameter_types()
                 .iter()
@@ -219,7 +224,7 @@ impl<'context> SourceUnitScope<'context> {
         definition: &StructDefinition,
         location: solx_utils::DataLocation,
     ) -> Vec<MlirType<'context>> {
-        self.at_position(false, |scope| {
+        self.at_position(Position::ByValue, |scope| {
             definition
                 .members()
                 .iter()
