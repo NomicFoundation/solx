@@ -384,8 +384,10 @@ The output JSON contains all artifacts produced by **Slang**. The example below 
       // Required: Message severity.
       // Possible values: "error", "warning", "info".
       "severity": "error",
-      // Optional: Unique code for the cause of the error.
-      "errorCode": "syntax/unexpected-terminal",
+      // Optional: solc's numeric code for the cause of the error, on the solc-compatible warnings only.
+      "errorCode": "5574",
+      // Optional: Code of the Slang diagnostic.
+      "slangErrorCode": "syntax/unexpected-terminal",
       // Required: Message.
       "message": "Invalid keyword",
       // Required: Message formatted using the source location.

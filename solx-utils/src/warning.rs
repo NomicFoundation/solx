@@ -39,9 +39,6 @@ impl Warning {
     /// The `solc` runtime code size limit warning code.
     pub const CODE_RUNTIME_CODE_SIZE: &'static str = "5574";
 
-    /// The `solc` warning code on `type(...).runtimeCode` of a contract with an assembly constructor.
-    pub const CODE_RUNTIME_CODE_ASSEMBLY_CONSTRUCTOR: &'static str = "6417";
-
     ///
     /// The code size warning of `code_segment` whose bytecode is `found` bytes long.
     ///

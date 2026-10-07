@@ -24,6 +24,9 @@ pub struct Error {
     /// The error code.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_code: Option<String>,
+    /// The code of the Slang diagnostic, kept apart from `error_code`, which tools parse as a number.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slang_error_code: Option<String>,
     /// The formatted error message.
     pub formatted_message: String,
     /// The non-formatted error message.
@@ -41,15 +44,6 @@ pub struct Error {
 }
 
 impl Error {
-    /// The list of ignored `solc` warnings. The code size warnings are measured on the bytecode
-    /// `solc` itself would have emitted, which solx discards in favor of the LLVM backend output.
-    /// The assembly constructor warning applies to solx output as well and may deserve un-ignoring.
-    pub const IGNORED_WARNING_CODES: [&'static str; 3] = [
-        solx_utils::Warning::CODE_DEPLOY_CODE_SIZE,
-        solx_utils::Warning::CODE_RUNTIME_CODE_SIZE,
-        solx_utils::Warning::CODE_RUNTIME_CODE_ASSEMBLY_CONSTRUCTOR,
-    ];
-
     ///
     /// A shortcut constructor.
     ///
@@ -90,6 +84,7 @@ impl Error {
         Self {
             component: "general".to_owned(),
             error_code: error_code.map(str::to_owned),
+            slang_error_code: None,
             formatted_message,
             message,
             severity: r#type.to_lowercase(),
@@ -97,6 +92,14 @@ impl Error {
             secondary_source_location: None,
             r#type: r#type.to_owned(),
         }
+    }
+
+    ///
+    /// Attaches the code of the Slang diagnostic the error reports.
+    ///
+    pub fn with_slang_error_code(mut self, slang_error_code: &str) -> Self {
+        self.slang_error_code = Some(slang_error_code.to_owned());
+        self
     }
 
     ///
