@@ -16,6 +16,14 @@ macro_rules! contract {
 }
 pub(crate) use contract;
 
+/// Returns a path under `tests/data/abi/` for expected JSON ABI files.
+macro_rules! abi {
+    ($relative:literal) => {
+        concat!("tests/data/abi/", $relative)
+    };
+}
+pub(crate) use abi;
+
 /// Returns a path under `tests/data/standard_json_input/` for standard JSON input files.
 macro_rules! standard_json {
     ($relative:literal) => {

@@ -16,6 +16,8 @@ use solx_utils::EVMVersion;
 use solx_utils::Profiler;
 use solx_utils::RevertStrings;
 
+use crate::abi::Abi;
+use crate::abi::MethodIdentifiers;
 use crate::contract::object::Object;
 use crate::debug_locations::DebugLocations;
 use crate::debug_locations::sources::Sources;
@@ -24,7 +26,7 @@ use crate::scope::source_unit::SourceUnitScope;
 impl<'context> SourceUnitScope<'context> {
     /// Lowers every contract and library the unit deploys into standard-JSON contract outputs
     /// keyed by definition name, each in its own MLIR module off the frontend's melior context. An
-    /// abstract contract and an interface deploy nothing and produce no module.
+    /// abstract contract and an interface deploy nothing and produce no module, only their ABI.
     ///
     /// `selected` tells whether an output selector is requested for a contract, by name. The
     /// MLIR selector captures the Sol dialect text.
@@ -49,7 +51,27 @@ impl<'context> SourceUnitScope<'context> {
         let mut contracts = BTreeMap::new();
         for member in unit.members().iter() {
             let object = match member {
-                SourceUnitMember::ContractDefinition(contract) if !contract.is_abstract() => {
+                SourceUnitMember::ContractDefinition(contract) if contract.is_abstract() => {
+                    contracts.insert(
+                        contract.name().name().to_owned(),
+                        Contract::new_abi(
+                            Abi::from(&contract).into_value(),
+                            MethodIdentifiers::from(&contract).into_map(),
+                        ),
+                    );
+                    continue;
+                }
+                SourceUnitMember::InterfaceDefinition(interface) => {
+                    contracts.insert(
+                        interface.name().name().to_owned(),
+                        Contract::new_abi(
+                            Abi::from(&interface).into_value(),
+                            MethodIdentifiers::from(&interface).into_map(),
+                        ),
+                    );
+                    continue;
+                }
+                SourceUnitMember::ContractDefinition(contract) => {
                     Object::Contract(contract.clone())
                 }
                 SourceUnitMember::LibraryDefinition(library) => Object::Library(library.clone()),
@@ -103,7 +125,10 @@ impl<'context> SourceUnitScope<'context> {
                 pass_timing,
                 profiler,
             )?;
-            contracts.insert(name, Contract::new_mlir(mlir, method_identifiers));
+            contracts.insert(
+                name,
+                Contract::new_mlir(mlir, object.abi().into_value(), method_identifiers),
+            );
         }
         Ok(contracts)
     }
