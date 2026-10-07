@@ -3,7 +3,6 @@
 //!
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 
 use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
@@ -11,14 +10,12 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::LibraryDefinition;
-use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableDefinition;
 
 use solx_mlir::ContractKind;
 
 use crate::abi::Abi;
 use crate::abi::MethodIdentifiers;
-use crate::contract::storage_slot::StorageSlot;
 
 /// The deployable object a module emits, each variant carrying the definition its kind
 /// dispatches from.
@@ -128,10 +125,14 @@ impl Object {
     }
 
     /// The object's JSON ABI.
-    pub fn abi(&self) -> Abi {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if Slang cannot compute the ABI.
+    pub fn abi(&self) -> anyhow::Result<Abi> {
         match self {
-            Self::Contract(node) => Abi::from(node),
-            Self::Library(node) => Abi::from(node),
+            Self::Contract(node) => Abi::try_from(node),
+            Self::Library(node) => Abi::try_from(node),
         }
     }
 
@@ -156,23 +157,5 @@ impl Object {
     /// `convert-sol-to-yul` builds the entry-point dispatcher from the function selectors.
     pub fn method_identifiers(&self) -> BTreeMap<String, String> {
         MethodIdentifiers::new(self.functions(), self.state_variables()).into_map()
-    }
-
-    /// The storage slot of each state variable the object stores, persistent and transient in one
-    /// map keyed by definition id. A library declares only constants, which occupy no slot.
-    pub fn storage_layout(&self) -> HashMap<NodeId, StorageSlot> {
-        match self {
-            Self::Contract(node) => {
-                let abi = node
-                    .compute_abi()
-                    .expect("slang admits a contract whose ABI it cannot compute");
-                abi.storage_layout()
-                    .iter()
-                    .chain(abi.transient_storage_layout().iter())
-                    .map(|item| (item.node_id(), StorageSlot::from(item)))
-                    .collect()
-            }
-            Self::Library(_) => HashMap::new(),
-        }
     }
 }

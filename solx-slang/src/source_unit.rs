@@ -26,7 +26,8 @@ use crate::scope::source_unit::SourceUnitScope;
 impl<'context> SourceUnitScope<'context> {
     /// Lowers every contract and library the unit deploys into standard-JSON contract outputs
     /// keyed by definition name, each in its own MLIR module off the frontend's melior context. An
-    /// abstract contract and an interface deploy nothing and produce no module, only their ABI.
+    /// abstract contract and an interface deploy nothing and produce no module, only their ABI and
+    /// method identifiers.
     ///
     /// `selected` tells whether an output selector is requested for a contract, by name. The
     /// MLIR selector captures the Sol dialect text.
@@ -37,7 +38,7 @@ impl<'context> SourceUnitScope<'context> {
     ///
     /// # Errors
     ///
-    /// Returns an error if module finalization fails.
+    /// Returns an error if Slang cannot compute a definition's ABI or module finalization fails.
     pub fn source_unit(
         melior: &OnceCell<melior::Context>,
         unit: &SourceUnit,
@@ -55,7 +56,7 @@ impl<'context> SourceUnitScope<'context> {
                     contracts.insert(
                         contract.name().name().to_owned(),
                         Contract::new_abi(
-                            Abi::from(&contract).into_value(),
+                            Abi::try_from(&contract)?.into_value(),
                             MethodIdentifiers::from(&contract).into_map(),
                         ),
                     );
@@ -65,7 +66,7 @@ impl<'context> SourceUnitScope<'context> {
                     contracts.insert(
                         interface.name().name().to_owned(),
                         Contract::new_abi(
-                            Abi::from(&interface).into_value(),
+                            Abi::try_from(&interface)?.into_value(),
                             MethodIdentifiers::from(&interface).into_map(),
                         ),
                     );
@@ -78,6 +79,7 @@ impl<'context> SourceUnitScope<'context> {
                 _ => continue,
             };
 
+            let abi = object.abi()?;
             let melior = melior.get_or_init(|| {
                 let run_context_creation =
                     profiler.start_pipeline_element("Compiler_CreateMLIRContext");
@@ -116,7 +118,7 @@ impl<'context> SourceUnitScope<'context> {
             );
             let run_emission =
                 profiler.start_pipeline_element(format!("Compiler_EmitSol:{identifier}").as_str());
-            let method_identifiers = scope.object_definition(&object);
+            let method_identifiers = scope.object_definition(&object, abi.storage_layout());
             run_emission.borrow_mut().finish();
             let mlir = Context::from(scope).finalize_module(
                 object.deploy_dependencies(),
@@ -127,7 +129,7 @@ impl<'context> SourceUnitScope<'context> {
             )?;
             contracts.insert(
                 name,
-                Contract::new_mlir(mlir, object.abi().into_value(), method_identifiers),
+                Contract::new_mlir(mlir, abi.into_value(), method_identifiers),
             );
         }
         Ok(contracts)

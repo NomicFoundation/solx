@@ -64,6 +64,23 @@ fn matches_solc(contract: &str, expected: &str) -> anyhow::Result<()> {
 }
 
 #[test]
+fn interface_with_contract_base() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/InterfaceContractBase.sol"),
+        "--abi",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.failure().stderr(predicate::str::contains(
+        "Interface `IDerived` ABI computation failed",
+    ));
+
+    Ok(())
+}
+
+#[test]
 fn standard_json() -> anyhow::Result<()> {
     crate::common::setup()?;
 

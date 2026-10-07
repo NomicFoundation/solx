@@ -4,6 +4,7 @@
 //!
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use slang_solidity_v2::abi::ContractAbi;
 use slang_solidity_v2::ast::ContractDefinition;
@@ -11,45 +12,65 @@ use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::InterfaceDefinition;
 use slang_solidity_v2::ast::LibraryDefinition;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableDefinition;
+
+use crate::contract::storage_slot::StorageSlot;
 
 /// The `abi` field of a standard-JSON contract.
 pub struct Abi(ContractAbi);
 
 impl Abi {
+    /// The storage slot of each state variable the definition stores, persistent and transient in
+    /// one map keyed by definition id. A library declares only constants, which occupy no slot.
+    pub fn storage_layout(&self) -> HashMap<NodeId, StorageSlot> {
+        self.0
+            .storage_layout()
+            .iter()
+            .chain(self.0.transient_storage_layout().iter())
+            .map(|item| (item.node_id(), StorageSlot::from(item)))
+            .collect()
+    }
+
     /// The value the standard-JSON output stores: Slang's entries in solc's JSON-ABI spelling.
     pub fn into_value(self) -> serde_json::Value {
-        serde_json::to_value(&self.0).expect("the ABI only holds strings and booleans")
+        serde_json::to_value(&self.0).expect("Slang's ABI serializer writes only string-keyed maps")
     }
 }
 
-impl From<&ContractDefinition> for Abi {
-    fn from(contract: &ContractDefinition) -> Self {
-        Self(
-            contract
-                .compute_abi()
-                .expect("slang admits a contract whose ABI it cannot compute"),
-        )
+impl TryFrom<&ContractDefinition> for Abi {
+    type Error = anyhow::Error;
+
+    fn try_from(contract: &ContractDefinition) -> anyhow::Result<Self> {
+        contract.compute_abi().map(Self).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Contract `{}` ABI computation failed",
+                contract.name().name()
+            )
+        })
     }
 }
 
-impl From<&InterfaceDefinition> for Abi {
-    fn from(interface: &InterfaceDefinition) -> Self {
-        Self(
-            interface
-                .compute_abi()
-                .expect("slang admits an interface whose ABI it cannot compute"),
-        )
+impl TryFrom<&InterfaceDefinition> for Abi {
+    type Error = anyhow::Error;
+
+    fn try_from(interface: &InterfaceDefinition) -> anyhow::Result<Self> {
+        interface.compute_abi().map(Self).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Interface `{}` ABI computation failed",
+                interface.name().name()
+            )
+        })
     }
 }
 
-impl From<&LibraryDefinition> for Abi {
-    fn from(library: &LibraryDefinition) -> Self {
-        Self(
-            library
-                .compute_abi()
-                .expect("slang admits a library whose ABI it cannot compute"),
-        )
+impl TryFrom<&LibraryDefinition> for Abi {
+    type Error = anyhow::Error;
+
+    fn try_from(library: &LibraryDefinition) -> anyhow::Result<Self> {
+        library.compute_abi().map(Self).ok_or_else(|| {
+            anyhow::anyhow!("Library `{}` ABI computation failed", library.name().name())
+        })
     }
 }
 
@@ -59,8 +80,8 @@ impl From<&LibraryDefinition> for Abi {
 pub struct MethodIdentifiers(BTreeMap<String, String>);
 
 impl MethodIdentifiers {
-    /// Maps the given functions and state variables; a function that is not a regular external
-    /// one, or a state variable that is not public, has no identifier and is skipped.
+    /// Maps the given functions and state variables; a function that is not a regular, externally
+    /// visible one, or a state variable that is not public, has no identifier and is skipped.
     pub fn new(
         functions: impl IntoIterator<Item = FunctionDefinition>,
         state_variables: impl IntoIterator<Item = StateVariableDefinition>,
