@@ -302,7 +302,7 @@ Slang_RunStandardJSON: [..]us
 Compiler_BuildProject: [..]us
 Compiler_Compile: [..]us
 Slang_ParseAndBind: [..]us
-Compiler_CreateMLIRContext:Simple.sol: [..]us
+Compiler_CreateMLIRContext: [..]us
 Compiler_EmitSol:Simple.sol:Simple: [..]us
 Compiler_RunSolPasses:Simple.sol:Simple: [..]us
 ...

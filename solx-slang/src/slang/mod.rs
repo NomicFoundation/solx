@@ -4,6 +4,7 @@
 
 mod import_resolver;
 
+use std::cell::OnceCell;
 use std::collections::BTreeMap;
 
 use slang_solidity_v2::compilation::CompilationUnit;
@@ -186,9 +187,11 @@ impl Slang {
             Some(solx_standard_json::InputSelection::ANY_CONTRACT),
             solx_standard_json::InputSelector::Benchmarks,
         );
+        let melior = OnceCell::new();
         for file in unit.files() {
             let file_id = file.id();
             let contracts = SourceUnitScope::source_unit(
+                &melior,
                 &file.ast(),
                 evm_version,
                 revert_strings,
