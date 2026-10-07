@@ -508,6 +508,8 @@ pub fn test(
 /// Replaces every non-solc AST in the project's build infos with an empty solc source unit, since
 /// EDR refuses to start on an AST it cannot read and slang emits its own format.
 ///
+/// TODO: remove once Hardhat runs get slang stack traces (NomicFoundation/solx#806).
+///
 fn stub_slang_build_info_asts(project_directory: &std::path::Path) -> anyhow::Result<()> {
     let pattern = project_directory.join("artifacts/build-info/*.json");
     for path in glob::glob(pattern.to_string_lossy().as_ref())
