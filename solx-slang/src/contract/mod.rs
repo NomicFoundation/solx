@@ -59,6 +59,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
     /// constructor, or the runtime code's entry points, the getters of the public state variables
     /// and the indirect callees. Each state-variable declaration carries its own location.
     fn members(&mut self) {
+        let mut immutable_index = 0;
         for state_variable in self.object.state_variables().iter() {
             match state_variable.attributes().mutability() {
                 StateVariableMutability::Mutable | StateVariableMutability::Transient => self
@@ -95,8 +96,10 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                     scope.contract.declare_immutable(
                         &SourceUnitScope::state_variable_symbol(state_variable),
                         element_type,
+                        immutable_index,
                         scope,
                     );
+                    immutable_index += 1;
                 }),
                 StateVariableMutability::Constant => {}
             }

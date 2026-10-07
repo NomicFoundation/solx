@@ -112,11 +112,13 @@ impl<'context> Contract<'context> {
         );
     }
 
-    /// Emits a `sol.immutable @name` member of `element_type`.
+    /// Emits a `sol.immutable @name` member of `element_type`, the contract's `index`-th immutable
+    /// in declaration order.
     pub fn declare_immutable(
         self,
         name: &str,
         element_type: Type<'context>,
+        index: u64,
         context: &Context<'context>,
     ) {
         mlir_op!(
@@ -124,7 +126,11 @@ impl<'context> Contract<'context> {
             self.body,
             ImmutableOperation
                 .sym_name(StringAttribute::new(context.melior, name))
-                .r#type(TypeAttribute::new(element_type.into_mlir()));
+                .r#type(TypeAttribute::new(element_type.into_mlir()))
+                .index(IntegerAttribute::new(
+                    IntegerType::new(context.melior, solx_utils::BIT_LENGTH_X64 as u32).into(),
+                    index as i64,
+                ));
             ()
         );
     }
