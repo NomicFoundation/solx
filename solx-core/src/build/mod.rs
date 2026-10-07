@@ -80,8 +80,8 @@ impl Build {
                             && object.dependencies.into_iter().all(|dependency| {
                                 objects_by_id
                                     .get(dependency.as_str())
-                                    .map(|object| object.is_assembled)
-                                    .unwrap_or_default()
+                                    .expect("Every bytecode dependency has a compiled object")
+                                    .is_assembled
                             })
                     })
                     .copied()
@@ -117,11 +117,10 @@ impl Build {
                 let contract = self
                     .contracts
                     .get_mut(full_path.as_str())
-                    .expect("Always exists");
-                let object = match contract.object_mut_by_code_segment(code_segment) {
-                    Some(object) => object,
-                    None => continue,
-                };
+                    .expect("An assembled object's contract exists in this build");
+                let object = contract
+                    .object_mut_by_code_segment(code_segment)
+                    .expect("An assembled object exists in its contract");
                 object.bytecode = Some(assembled_object.as_slice().to_owned());
                 for undefined_reference in assembled_object
                     .get_undefined_references_evm()

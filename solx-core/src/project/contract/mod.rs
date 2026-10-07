@@ -206,11 +206,11 @@ impl Contract {
             (IR::MLIR(mlir), code_segment) => {
                 let code_identifier = match code_segment {
                     solx_utils::CodeSegment::Deploy => contract_name.full_path.to_owned(),
-                    solx_utils::CodeSegment::Runtime => format!(
-                        "{}{}",
-                        contract_name.full_path,
-                        solx_utils::Dependencies::DEPLOYED_OBJECT_SUFFIX
-                    ),
+                    solx_utils::CodeSegment::Runtime => {
+                        solx_utils::Dependencies::runtime_identifier(
+                            contract_name.full_path.as_str(),
+                        )
+                    }
                 };
 
                 let melior = melior.get_or_init(|| {

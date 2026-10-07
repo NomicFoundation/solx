@@ -17,7 +17,6 @@ use std::sync::Once;
 use melior::dialect::DialectRegistry;
 use melior::dialect::ods::llvm::ModuleFlagsOperation;
 use melior::ir::Attribute;
-use melior::ir::AttributeLike;
 use melior::ir::BlockLike;
 use melior::ir::Location;
 use melior::ir::Module;
@@ -27,9 +26,6 @@ use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationLike;
 use melior::ir::operation::OperationMutLike;
 use melior::ir::operation::OperationPrintingFlags;
-use melior::ir::operation::OperationRef;
-use melior::ir::operation::WalkOrder;
-use melior::ir::operation::WalkResult;
 use melior::pass::PassManager;
 use solx_utils::Profiler;
 
@@ -81,16 +77,6 @@ impl<'context> Context<'context> {
     const REVERT_STRINGS: &'static str = "sol.revert_strings";
     /// The attribute a `builtin.module` carries its own identifier in.
     const MODULE_SYMBOL: &'static str = "sym_name";
-
-    /// The op the object-naming intrinsics reach as, after the Yul-to-standard pass.
-    const LLVM_INTRINSIC_CALL: &'static str = "llvm.intrcall";
-    /// The intrinsics naming an object: the segment's own code, the runtime child its deploy
-    /// segment returns, and the contract a creation copies its bytecode from.
-    const OBJECT_INTRINSICS: [&'static str; 2] = ["evm.dataoffset", "evm.datasize"];
-    /// The attribute an intrinsic call carries its own name in.
-    const INTRINSIC_NAME: &'static str = "name";
-    /// The attribute an intrinsic call carries its string operands in.
-    const INTRINSIC_METADATA: &'static str = "metadata";
 
     /// Creates a single-threaded MLIR context.
     ///
@@ -284,6 +270,8 @@ impl<'context> Context<'context> {
     /// Each is translated to its own LLVM IR module and emits its own bytecode segment. The outer
     /// carries the deploy entry that runs the constructor and returns the runtime bytecode.
     ///
+    /// Dependency identifiers must match the emitted deploy and runtime module symbols.
+    ///
     /// Each segment's text is printed with locations ([`Self::printing_flags`]) when debug info
     /// is requested for it, and the Sol text when it is for either.
     ///
@@ -296,11 +284,13 @@ impl<'context> Context<'context> {
     /// not found, or a module cannot be printed.
     pub fn finalize_module(
         self,
-        code_identifier: &str,
+        deploy_dependencies: solx_utils::Dependencies,
+        runtime_dependencies: solx_utils::Dependencies,
         capture_sol: bool,
         pass_timing: bool,
         profiler: &mut Profiler,
     ) -> anyhow::Result<crate::output::MlirOutput> {
+        let code_identifier = deploy_dependencies.identifier.as_str();
         let mut module = self.module;
 
         let sol_source = capture_sol
@@ -325,21 +315,12 @@ impl<'context> Context<'context> {
         let run_object_extraction = profiler.start_pipeline_element(
             format!("Compiler_ExtractMLIRObjects:{code_identifier}").as_str(),
         );
-        let runtime_code_identifier = format!(
-            "{code_identifier}{}",
-            solx_utils::Dependencies::DEPLOYED_OBJECT_SUFFIX
-        );
-        let (runtime_llvm, runtime_dependencies) = Self::take_nested_module(
+        let runtime_llvm = Self::take_nested_module(
             self.melior,
             &mut module,
-            runtime_code_identifier.as_str(),
+            runtime_dependencies.identifier.as_str(),
             self.debug_info_request.runtime,
         )?;
-        let deploy_dependencies = Self::object_dependencies(
-            &module.as_operation(),
-            code_identifier,
-            Some(runtime_code_identifier),
-        );
         let deploy_llvm = module
             .as_operation()
             .to_string_with_flags(Self::printing_flags(self.debug_info_request.deploy))
@@ -496,9 +477,6 @@ impl<'context> Context<'context> {
         }
     }
 
-    /// The walk runs before the module leaves the tree, so each segment's dependencies come from
-    /// its own code.
-    ///
     /// With `print_locations`, the module declares the DWARF version and is detached before it is
     /// printed: the printer emits an alias table only for a top-level op, so a detached module
     /// writes each repeated location once and re-parses on its own. Without, it is printed in
@@ -508,7 +486,7 @@ impl<'context> Context<'context> {
         module: &mut Module<'context>,
         target: &str,
         print_locations: bool,
-    ) -> anyhow::Result<(String, solx_utils::Dependencies)> {
+    ) -> anyhow::Result<String> {
         let body = module.body();
         std::iter::successors(body.first_operation_mut(), |operation| {
             operation.next_in_block_mut()
@@ -525,8 +503,6 @@ impl<'context> Context<'context> {
             if symbol.value() != target {
                 return None;
             }
-
-            let dependencies = Self::object_dependencies(&operation, target, None);
 
             let text = if print_locations {
                 operation.remove_from_parent();
@@ -545,47 +521,8 @@ impl<'context> Context<'context> {
                 Ok(text)
             };
 
-            Some(text.map(|text| (text, dependencies)))
+            Some(text)
         })
         .ok_or_else(|| anyhow::anyhow!("no module with sym_name `{target}` in Sol pass output"))?
-    }
-
-    /// The objects `operation`'s code references, read off the intrinsics naming them.
-    fn object_dependencies<'c: 'a, 'a>(
-        operation: &impl OperationLike<'c, 'a>,
-        identifier: &str,
-        runtime: Option<String>,
-    ) -> solx_utils::Dependencies {
-        let mut dependencies = solx_utils::Dependencies::new(identifier, runtime);
-        operation.walk(WalkOrder::PreOrder, |operation| {
-            if let Some(object) = Self::referenced_object(operation) {
-                dependencies.push(object);
-            }
-            WalkResult::Advance
-        });
-        dependencies
-    }
-
-    /// The object an `evm.dataoffset` / `evm.datasize` intrinsic call names.
-    fn referenced_object(operation: OperationRef<'_, '_>) -> Option<String> {
-        if operation.name().as_string_ref().as_str().ok()? != Self::LLVM_INTRINSIC_CALL {
-            return None;
-        }
-        let name: StringAttribute = operation
-            .attribute(Self::INTRINSIC_NAME)
-            .ok()?
-            .try_into()
-            .ok()?;
-        if !Self::OBJECT_INTRINSICS.contains(&name.value()) {
-            return None;
-        }
-        let metadata = operation
-            .attribute(Self::INTRINSIC_METADATA)
-            .expect("an object intrinsic names its object in `metadata`");
-        let object: StringAttribute =
-            unsafe { Attribute::from_raw(mlir_sys::mlirArrayAttrGetElement(metadata.to_raw(), 0)) }
-                .try_into()
-                .expect("`metadata` is a one-element string array");
-        Some(object.value().to_owned())
     }
 }
