@@ -40,7 +40,6 @@ impl<'context> SourceUnitScope<'context> {
             Type::Boolean(_) => MlirType::boolean(self.melior),
             Type::Address(address) => MlirType::address(self.melior, address.is_payable()),
             Type::Literal(literal_type) => match literal_type.kind() {
-                LiteralKind::Address { .. } => MlirType::address(self.melior, false),
                 LiteralKind::Integer { value } => {
                     let bits = if value.is_negative() {
                         (-value - 1u32).bits() + 1

@@ -243,7 +243,6 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                             | BuiltIn::AbiEncodeWithSelector
                             | BuiltIn::AbiEncodeWithSignature
                             | BuiltIn::AddressCall
-                            | BuiltIn::AddressCallcode
                             | BuiltIn::AddressDelegatecall
                             | BuiltIn::AddressSend
                             | BuiltIn::AddressStaticcall
