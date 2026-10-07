@@ -27,6 +27,8 @@
 #   description = "..."             # Project description
 #   build_system = "npm"            # npm, yarn, pnpm, or bun (default: npm)
 #   dependencies = ["pkg@version"]  # Additional npm dependencies to install
+#   build_profile = "..."           # Build profile solx toolchains compile and test with
+#   config_overlay = "./path.ts"    # Installed as hardhat.config.ts; imports the project's config as hardhat.config.base.<ext>
 #   disabled = true/false           # Whether to skip this project
 #   [projects.<name>.env]
 #   VAR = "value"                   # Environment variables for build/test
@@ -113,16 +115,19 @@ dependencies = [ "hardhat@2.29.1" ]
 url = "https://github.com/antonbaliasnikov/solx-hh3"
 commit = "bfe0366f7f5936ec9e5e76fa37fe21d284a53c88"
 description = "An example Hardhat v3 project with solx support."
-dependencies = [ "ts-node" ]
+dependencies = [ "ts-node", "hardhat@3.18.0", "@nomicfoundation/hardhat-mocha@3.0.2", "@nomicfoundation/hardhat-slang-solx@3.0.2" ]
+build_profile = "slang-solx"
+config_overlay = "./solx-dev/hardhat-overlays/hardhat-v3.config.ts"
 
 [projects.openzeppelin]
-url = "https://github.com/antonbaliasnikov/openzeppelin-contracts"
-commit = "bd3c4ba5d950860ecd957a84acc65083c3aec20e"
+url = "https://github.com/OpenZeppelin/openzeppelin-contracts"
+commit = "6c2ab375a9c7db0fa8c21fba1ed3b2057f75dd75"
 description = "A library for secure smart contract development."
-build_system = "pnpm"
-dependencies = [ "hardhat@2.29.1" ]
+dependencies = [ "@nomicfoundation/hardhat-slang-solx@3.0.2" ]
+build_profile = "slang-solx"
+config_overlay = "./solx-dev/hardhat-overlays/openzeppelin.config.ts"
 [projects.openzeppelin.env]
-EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
+COMPILER = "0.8.34"
 
 [projects.zksafe]
 url = "https://github.com/antonbaliasnikov/zksafe"
