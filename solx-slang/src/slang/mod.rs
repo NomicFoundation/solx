@@ -138,7 +138,7 @@ impl Slang {
                 };
                 new_with_data(
                     Some(file_id.as_str()),
-                    Some(diagnostic.code()),
+                    None,
                     diagnostic.message(),
                     Some(SourceLocation::new(
                         file_id.to_string(),
@@ -147,6 +147,7 @@ impl Slang {
                     )),
                     Some(&input_json.sources),
                 )
+                .with_slang_error_code(diagnostic.code())
             }));
 
         for file in unit.files() {
