@@ -66,6 +66,7 @@ impl<'context> SourceUnitScope<'context> {
                 uncomputable_abis.push((name, member));
                 continue;
             };
+            let storage_layout = abi.storage_layout();
             let abi_value = abi.into_value();
             let method_identifiers = definition.method_identifiers();
             let Some(object) = definition.into_object() else {
@@ -110,7 +111,7 @@ impl<'context> SourceUnitScope<'context> {
             );
             let run_emission =
                 profiler.start_pipeline_element(format!("Compiler_EmitSol:{identifier}").as_str());
-            scope.object_definition(&object);
+            scope.object_definition(&object, storage_layout);
             run_emission.borrow_mut().finish();
             let mlir = Context::from(scope).finalize_module(
                 object.deploy_dependencies(),

@@ -2,21 +2,15 @@
 //! The deployable object a module emits: a contract or a library.
 //!
 
-use std::collections::HashMap;
-
 use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::LibraryDefinition;
-use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableDefinition;
 
 use solx_mlir::ContractKind;
-
-use crate::abi::AbiDefinition;
-use crate::contract::storage_slot::StorageSlot;
 
 /// The deployable object a module emits, each variant carrying the definition its kind
 /// dispatches from.
@@ -53,19 +47,6 @@ impl Object {
             Self::Library(node) => node.get_file_id(),
         };
         solx_utils::ContractName::full_path(file_id.as_str(), self.name().name())
-    }
-
-    /// The storage slot of each state variable the object stores, persistent and transient in one
-    /// map keyed by definition id.
-    pub fn storage_layout(&self) -> HashMap<NodeId, StorageSlot> {
-        let definition = match self {
-            Self::Contract(node) => AbiDefinition::Contract(node.clone()),
-            Self::Library(node) => AbiDefinition::Library(node.clone()),
-        };
-        definition
-            .abi()
-            .expect("an object is emitted only after Slang computed its ABI")
-            .storage_layout()
     }
 
     /// The objects the deploy code may embed, its runtime object leading.
