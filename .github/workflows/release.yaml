@@ -234,14 +234,15 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
 
-      # The newest slang release, or for the first one the solx release marked `latest`.
+      # The newest slang release other than the one being built, so a rerun keeps its changelog,
+      # or for the first one the solx release marked `latest`.
       - name: Get previous release tag
         id: latest_release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag=$(gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName,createdAt \
-            --jq '[.[] | select(.tagName | startswith("slang/"))] | sort_by(.createdAt) | last | .tagName // ""')
+            --jq '[.[] | select(.tagName | startswith("slang/")) | select(.tagName != $ENV.GITHUB_REF_NAME)] | sort_by(.createdAt) | last | .tagName // ""')
           if [ -z "${tag}" ]; then
             tag=$(gh release view --json tagName --jq .tagName)
           fi
