@@ -58,7 +58,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                     .pointer_constant(self)
             }
             Some(Definition::Library(library)) => {
-                Value::library_address(Object::Library(library).identifier().as_str(), self)
+                Value::library_address(Object::library_identifier(&library).as_str(), self)
             }
             _ => {
                 let (place, element_type) = self.identifier_place(node);

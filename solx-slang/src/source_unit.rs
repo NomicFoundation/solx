@@ -7,17 +7,18 @@ use std::cell::OnceCell;
 use std::collections::BTreeMap;
 
 use slang_solidity_v2::ast::SourceUnit;
-use slang_solidity_v2::ast::SourceUnitMember;
 
 use solx_mlir::Context;
 use solx_mlir::DebugInfoRequest;
+use solx_standard_json::InputSource;
+use solx_standard_json::OutputError;
 use solx_standard_json::output::contract::Contract;
+use solx_standard_json::output::error::source_location::SourceLocation;
 use solx_utils::EVMVersion;
 use solx_utils::Profiler;
 use solx_utils::RevertStrings;
 
-use crate::abi::Abi;
-use crate::abi::MethodIdentifiers;
+use crate::abi::AbiDefinition;
 use crate::contract::object::Object;
 use crate::debug_locations::DebugLocations;
 use crate::debug_locations::sources::Sources;
@@ -29,6 +30,9 @@ impl<'context> SourceUnitScope<'context> {
     /// abstract contract and an interface deploy nothing and produce no module, only their ABI and
     /// method identifiers.
     ///
+    /// A definition whose ABI Slang cannot compute produces no output and pushes an error located
+    /// at it to `messages`, with `input_sources` quoting the source.
+    ///
     /// `selected` tells whether an output selector is requested for a contract, by name. The
     /// MLIR selector captures the Sol dialect text.
     ///
@@ -38,7 +42,7 @@ impl<'context> SourceUnitScope<'context> {
     ///
     /// # Errors
     ///
-    /// Returns an error if Slang cannot compute a definition's ABI or module finalization fails.
+    /// Returns an error if module finalization fails.
     pub fn source_unit(
         melior: &OnceCell<melior::Context>,
         unit: &SourceUnit,
@@ -48,38 +52,37 @@ impl<'context> SourceUnitScope<'context> {
         sources: &Sources<'_>,
         pass_timing: bool,
         profiler: &mut Profiler,
+        input_sources: &BTreeMap<String, InputSource>,
+        messages: &mut Vec<OutputError>,
     ) -> anyhow::Result<BTreeMap<String, Contract>> {
         let mut contracts = BTreeMap::new();
         for member in unit.members().iter() {
-            let object = match member {
-                SourceUnitMember::ContractDefinition(contract) if contract.is_abstract() => {
-                    contracts.insert(
-                        contract.name().name().to_owned(),
-                        Contract::new_abi(
-                            Abi::try_from(&contract)?.into_value(),
-                            MethodIdentifiers::from(&contract).into_map(),
-                        ),
-                    );
-                    continue;
-                }
-                SourceUnitMember::InterfaceDefinition(interface) => {
-                    contracts.insert(
-                        interface.name().name().to_owned(),
-                        Contract::new_abi(
-                            Abi::try_from(&interface)?.into_value(),
-                            MethodIdentifiers::from(&interface).into_map(),
-                        ),
-                    );
-                    continue;
-                }
-                SourceUnitMember::ContractDefinition(contract) => {
-                    Object::Contract(contract.clone())
-                }
-                SourceUnitMember::LibraryDefinition(library) => Object::Library(library.clone()),
-                _ => continue,
+            let Some(definition) = AbiDefinition::from_member(&member) else {
+                continue;
+            };
+            let name = definition.name().name().to_owned();
+            let Some(abi) = definition.abi() else {
+                let (file_id, text_range) = definition.source_range();
+                messages.push(OutputError::new_error_with_data(
+                    Some(file_id.as_str()),
+                    None,
+                    format!("Slang cannot compute the ABI of `{name}`."),
+                    Some(SourceLocation::new(
+                        file_id.to_string(),
+                        text_range.start as isize,
+                        text_range.end as isize,
+                    )),
+                    Some(input_sources),
+                ));
+                continue;
+            };
+            let abi_value = abi.to_value();
+            let method_identifiers = definition.method_identifiers();
+            let Some(object) = definition.into_object(abi) else {
+                contracts.insert(name, Contract::new_abi(abi_value, method_identifiers));
+                continue;
             };
 
-            let abi = object.abi()?;
             let melior = melior.get_or_init(|| {
                 let run_context_creation =
                     profiler.start_pipeline_element("Compiler_CreateMLIRContext");
@@ -89,7 +92,6 @@ impl<'context> SourceUnitScope<'context> {
             });
 
             let identifier = object.identifier();
-            let name = object.name().name().to_owned();
             let debug_info = DebugInfoRequest {
                 deploy: selected(
                     name.as_str(),
@@ -108,8 +110,8 @@ impl<'context> SourceUnitScope<'context> {
                     evm_version,
                     revert_strings,
                     match &object {
-                        Object::Contract(contract) => debug_locations.location(contract),
-                        Object::Library(library) => debug_locations.location(library),
+                        Object::Contract(contract, _) => debug_locations.location(contract),
+                        Object::Library(library, _) => debug_locations.location(library),
                     },
                     debug_info,
                     unit.get_file_id().as_str(),
@@ -118,7 +120,7 @@ impl<'context> SourceUnitScope<'context> {
             );
             let run_emission =
                 profiler.start_pipeline_element(format!("Compiler_EmitSol:{identifier}").as_str());
-            let method_identifiers = scope.object_definition(&object, abi.storage_layout());
+            scope.object_definition(&object);
             run_emission.borrow_mut().finish();
             let mlir = Context::from(scope).finalize_module(
                 object.deploy_dependencies(),
@@ -129,7 +131,7 @@ impl<'context> SourceUnitScope<'context> {
             )?;
             contracts.insert(
                 name,
-                Contract::new_mlir(mlir, abi.into_value(), method_identifiers),
+                Contract::new_mlir(mlir, abi_value, method_identifiers),
             );
         }
         Ok(contracts)

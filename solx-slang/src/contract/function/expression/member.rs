@@ -287,10 +287,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// The object identifier of the contract or library `type(X)` names.
     fn meta_object_identifier(operand: &Expression) -> String {
-        let Some(object) = Object::from_definition(Self::meta_type_definition(operand)) else {
-            unreachable!("slang resolves the code built-ins on a deployable object alone")
-        };
-        object.identifier()
+        Object::definition_identifier(&Self::meta_type_definition(operand))
+            .expect("slang resolves the code built-ins on a deployable object alone")
     }
 
     /// The definition `type(X)` names.

@@ -205,6 +205,8 @@ impl Slang {
                 &sources,
                 benchmarks,
                 &mut profiler,
+                &input_json.sources,
+                &mut output.errors,
             )?;
             output
                 .contracts

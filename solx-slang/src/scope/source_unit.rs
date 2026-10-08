@@ -16,7 +16,6 @@ use solx_mlir::Function;
 use solx_mlir::Type as MlirType;
 
 use crate::contract::object::Object;
-use crate::contract::storage_slot::StorageSlot;
 use crate::debug_locations::DebugLocations;
 use crate::scope::contract::ContractScope;
 use crate::r#type::position::Position;
@@ -56,16 +55,10 @@ impl<'context> SourceUnitScope<'context> {
         contract_type: MlirType<'context>,
         contract: Contract<'context>,
         object: &Object,
-        storage_layout: HashMap<NodeId, StorageSlot>,
         emit: impl FnOnce(&mut ContractScope<'_, 'context>),
     ) {
         self.mlir.current_contract_type = Some(contract_type);
-        emit(&mut ContractScope::new(
-            self,
-            contract,
-            object,
-            storage_layout,
-        ));
+        emit(&mut ContractScope::new(self, contract, object));
         self.mlir.current_contract_type = None;
     }
 

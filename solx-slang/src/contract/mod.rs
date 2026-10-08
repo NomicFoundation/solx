@@ -9,10 +9,6 @@ pub mod object;
 pub mod state_variable;
 pub mod storage_slot;
 
-use std::collections::BTreeMap;
-use std::collections::HashMap;
-
-use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableMutability;
 
 use solx_mlir::Block;
@@ -20,19 +16,13 @@ use solx_mlir::Contract;
 use solx_mlir::Type as MlirType;
 
 use crate::contract::object::Object;
-use crate::contract::storage_slot::StorageSlot;
 use crate::scope::contract::ContractScope;
 use crate::scope::source_unit::SourceUnitScope;
 
 impl<'context> SourceUnitScope<'context> {
-    /// Emits `object`'s `sol.contract` over `storage_layout` and returns its ABI
-    /// `method_identifiers` map. The location cursor starts on the definition; a member with a node
-    /// of its own narrows it, and the synthesized constructor keeps it.
-    pub fn object_definition(
-        &mut self,
-        object: &Object,
-        storage_layout: HashMap<NodeId, StorageSlot>,
-    ) -> BTreeMap<String, String> {
+    /// Emits `object`'s `sol.contract`. The location cursor starts on the definition; a member with
+    /// a node of its own narrows it, and the synthesized constructor keeps it.
+    pub fn object_definition(&mut self, object: &Object) {
         let identifier = object.identifier();
         self.contract(
             MlirType::contract(self.melior, identifier.as_str(), object.is_payable()),
@@ -43,10 +33,8 @@ impl<'context> SourceUnitScope<'context> {
                 Block::from(self.module.body()),
             ),
             object,
-            storage_layout,
             |scope| scope.members(),
         );
-        object.method_identifiers()
     }
 }
 

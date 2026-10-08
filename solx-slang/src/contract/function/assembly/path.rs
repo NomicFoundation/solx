@@ -63,7 +63,7 @@ impl<'function, 'contract, 'source_unit, 'context>
             }
             (Some(Definition::Library(library)), None) => {
                 let address = Value::library_address(
-                    Object::Library(library).identifier().as_str(),
+                    Object::library_identifier(&library).as_str(),
                     self.function,
                 );
                 YulReference::Word(address.yul_word(self))

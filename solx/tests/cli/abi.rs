@@ -73,9 +73,12 @@ fn interface_with_contract_base() -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    result.failure().stderr(predicate::str::contains(
-        "Interface `IDerived` ABI computation failed",
-    ));
+    result
+        .failure()
+        .stderr(predicate::str::contains(
+            "Error: Slang cannot compute the ABI of `IDerived`.",
+        ))
+        .stderr(predicate::str::contains("InterfaceContractBase.sol:9:1"));
 
     Ok(())
 }
