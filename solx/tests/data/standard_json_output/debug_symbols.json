@@ -6,6 +6,9 @@
         "kind": "interface",
         "abstract": false,
         "range": [57, 93],
+        "bases": [
+          {"file": "Base.sol", "name": "IERC165"}
+        ],
         "functions": [
           {
             "name": "supportsInterface",
@@ -23,6 +26,10 @@
         "kind": "interface",
         "abstract": false,
         "range": [152, 87],
+        "bases": [
+          {"file": "Base.sol", "name": "ICounter"},
+          {"file": "Base.sol", "name": "IERC165"}
+        ],
         "functions": [
           {
             "name": "count",
@@ -106,6 +113,9 @@
         "kind": "interface",
         "abstract": false,
         "range": [842, 158],
+        "bases": [
+          {"file": "Kinds.sol", "name": "IKinds"}
+        ],
         "functions": [
           {
             "name": "statements",
@@ -731,9 +741,6 @@
         "kind": "library",
         "abstract": false,
         "range": [150, 212],
-        "bases": [
-          {"file": "Main.sol", "name": "MathLib"}
-        ],
         "functions": [
           {
             "name": "add",
@@ -815,7 +822,7 @@
           {
             "name": "count",
             "kind": "getter",
-            "visibility": "public",
+            "visibility": "external",
             "mutability": "view",
             "selector": "06661abd",
             "range": [708, 30],
@@ -824,7 +831,7 @@
           {
             "name": "balances",
             "kind": "getter",
-            "visibility": "public",
+            "visibility": "external",
             "mutability": "view",
             "selector": "27e235e3",
             "range": [743, 44],
@@ -833,7 +840,7 @@
           {
             "name": "history",
             "kind": "getter",
-            "visibility": "public",
+            "visibility": "external",
             "mutability": "view",
             "selector": "a7a38f0b",
             "range": [792, 25],
@@ -842,7 +849,7 @@
           {
             "name": "MAX",
             "kind": "getter",
-            "visibility": "public",
+            "visibility": "external",
             "mutability": "view",
             "selector": "d49d5181",
             "range": [822, 32],
@@ -851,7 +858,7 @@
           {
             "name": "created",
             "kind": "getter",
-            "visibility": "public",
+            "visibility": "external",
             "mutability": "view",
             "selector": "325a19f1",
             "range": [859, 37],
