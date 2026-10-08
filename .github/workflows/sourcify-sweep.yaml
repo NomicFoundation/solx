@@ -1,7 +1,7 @@
 name: Sourcify Sweep
 
 # Compiles the pinned Sourcify corpus (every verified solc 0.8.34 and 0.8.36
-# contract with evmVersion >= cancun, 119k contracts) through the Slang-frontend solx build
+# contract with evmVersion >= cancun, 119k contracts) through the slang build
 # of the commit, re-runs each failure with the released solc-frontend solx as a
 # baseline, and reports the outcome table plus the ranked failure census.
 # Runs on every push to main, and on PR pushes while the PR carries the
@@ -112,12 +112,12 @@ jobs:
           # Every shard builds the same artifacts; one saver is enough.
           save-if: ${{ matrix.shard == 0 }}
 
-      - name: Build solx (Slang frontend)
+      - name: Build slang
         run: |
           ${SFW_PREFIX:-} cargo fetch --locked
           ${SFW_PREFIX:-} cargo build --frozen --release
-          cp target/release/solx "${RUNNER_TEMP}/solx-slang"
-          "${RUNNER_TEMP}/solx-slang" --version
+          cp target/release/slang "${RUNNER_TEMP}/slang"
+          "${RUNNER_TEMP}/slang" --version
 
       # The sweep needs only the binary; the LLVM tree and target dir go so
       # the corpus slice and 4 concurrent compiler processes have room.
@@ -158,7 +158,7 @@ jobs:
       - name: Run the sweep shard
         run: |
           python3 tests/sourcify-sweep/run.py \
-            --bin "${RUNNER_TEMP}/solx-slang" \
+            --bin "${RUNNER_TEMP}/slang" \
             --baseline "${RUNNER_TEMP}/solx-baseline" \
             --corpus "${RUNNER_TEMP}/corpus" \
             --out "${RUNNER_TEMP}/results-shard-${SHARD}.jsonl" \
@@ -208,7 +208,7 @@ jobs:
           python3 tests/sourcify-sweep/report.py \
             --results "${RUNNER_TEMP}/results.jsonl" \
             --out "${RUNNER_TEMP}/report.md" \
-            --title "Sourcify sweep (Slang frontend vs solx ${BASELINE_TAG})"
+            --title "Sourcify sweep (slang vs solx ${BASELINE_TAG})"
           cat "${RUNNER_TEMP}/report.md" >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Post report comment

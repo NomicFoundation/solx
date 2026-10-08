@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Compile a Sourcify corpus through `solx --standard-json` and record outcomes.
+"""Compile a Sourcify corpus through `slang --standard-json` and record outcomes.
 
 Each corpus record (`contracts/<chain>_<address>.json`, slang corpus
 format_version 1 plus the contract's original solc `settings`) becomes one
 standard-JSON input: sources inline, `evmVersion`, `libraries`, `remappings`
-and `viaIR` passed through verbatim, optimizer left at solx's default, output
+and `viaIR` passed through verbatim, optimizer left at the compiler's default, output
 selection limited to bytecode. The candidate binary compiles every contract;
 contracts it does not compile are re-run with the optional `--baseline` binary
 (a released solc-pipeline solx) so failures split into candidate-only and
@@ -167,17 +167,17 @@ def sweep_one(args, path: pathlib.Path) -> dict:
     stdjson = standard_json_input(record)
     result = {"id": path.stem, "chain_id": record.get("chain_id"), "target": record["target"], "traits": traits(record)}
     candidate_input = with_pragmas(stdjson, args.bin_version) if args.rewrite_pragmas else stdjson
-    result["solx"] = compile_once(args.bin, candidate_input, record["target"], args.timeout, args.memory_limit_mb)
-    if result["solx"]["kind"] == "ok":
+    result["slang"] = compile_once(args.bin, candidate_input, record["target"], args.timeout, args.memory_limit_mb)
+    if result["slang"]["kind"] == "ok":
         result["outcome"] = "ok"
-    elif result["solx"]["kind"] == "timeout":
+    elif result["slang"]["kind"] == "timeout":
         result["outcome"] = "timeout"
     elif args.baseline:
         baseline_input = with_pragmas(stdjson, args.baseline_version) if args.rewrite_pragmas else stdjson
         result["baseline"] = compile_once(args.baseline, baseline_input, record["target"], args.timeout, args.memory_limit_mb)
-        result["outcome"] = "solx-fail" if result["baseline"]["kind"] == "ok" else "both-fail"
+        result["outcome"] = "slang-fail" if result["baseline"]["kind"] == "ok" else "both-fail"
     else:
-        result["outcome"] = "solx-fail"
+        result["outcome"] = "slang-fail"
     return result
 
 
@@ -210,7 +210,7 @@ def select_paths(args) -> list:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--bin", required=True, help="candidate solx binary")
+    parser.add_argument("--bin", required=True, help="candidate slang binary")
     parser.add_argument("--baseline", help="released solx binary re-run on candidate failures")
     parser.add_argument("--corpus", type=pathlib.Path, default=FIXTURES_DIR,
                         help="corpus root (with contracts/) or a contracts directory [default: the committed fixtures]")
@@ -245,11 +245,11 @@ def main() -> int:
     started = time.monotonic()
     with args.out.open("a") as out:
         if not done:
-            meta = {"solx": version_of(args.bin)}
+            meta = {"slang": version_of(args.bin)}
             if args.baseline:
                 meta["baseline"] = version_of(args.baseline)
             if args.rewrite_pragmas:
-                meta["pragmas_rewritten_to"] = {"solx": args.bin_version, "baseline": args.baseline_version}
+                meta["pragmas_rewritten_to"] = {"slang": args.bin_version, "baseline": args.baseline_version}
             out.write(json.dumps({"meta": meta}) + "\n")
         with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrency) as pool:
             for result in pool.map(lambda path: sweep_one(args, path), pending):
@@ -258,7 +258,7 @@ def main() -> int:
                 counts[result["outcome"]] += 1
                 total = sum(counts.values())
                 if result["outcome"] != "ok" or total % 100 == 0:
-                    tag = "" if result["outcome"] == "ok" else f" [{result['solx'].get('kind')}] {result['solx'].get('signature', '')}"
+                    tag = "" if result["outcome"] == "ok" else f" [{result['slang'].get('kind')}] {result['slang'].get('signature', '')}"
                     print(f"[{total}/{len(pending)}] {result['id']}: {result['outcome']}{tag}", file=sys.stderr)
     print(f"done in {time.monotonic() - started:.0f}s: " + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())), file=sys.stderr)
     return 0
