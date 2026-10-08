@@ -5,7 +5,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::ops::Range;
 
 use slang_solidity_v2::abi::ContractAbi;
 use slang_solidity_v2::ast::ContractDefinition;
@@ -17,7 +16,6 @@ use slang_solidity_v2::ast::LibraryDefinition;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::SourceUnitMember;
 use slang_solidity_v2::ast::StateVariableDefinition;
-use slang_solidity_v2::compilation::FileId;
 
 use crate::contract::object::Object;
 use crate::contract::storage_slot::StorageSlot;
@@ -73,15 +71,6 @@ impl AbiDefinition {
         }
     }
 
-    /// The file declaring the definition and the byte range it spans there.
-    pub fn source_range(&self) -> (&FileId, &Range<usize>) {
-        match self {
-            Self::Contract(node) => (node.get_file_id(), node.get_text_range()),
-            Self::Interface(node) => (node.get_file_id(), node.get_text_range()),
-            Self::Library(node) => (node.get_file_id(), node.get_text_range()),
-        }
-    }
-
     /// The definition's JSON ABI, or `None` for an input Slang accepts without diagnosing but
     /// cannot answer, such as an interface with a contract base.
     pub fn abi(&self) -> Option<Abi> {
@@ -95,8 +84,7 @@ impl AbiDefinition {
 
     /// The `evm.methodIdentifiers` map: each externally dispatchable function of the hierarchy
     /// keyed by the signature its selector hashes, each public state variable by its canonical
-    /// one, selectors in lower-case hex. `convert-sol-to-yul` builds the entry-point dispatcher
-    /// from the same selectors.
+    /// one, selectors in lower-case hex.
     pub fn method_identifiers(&self) -> BTreeMap<String, String> {
         match self {
             Self::Contract(node) => Self::method_identifiers_over(

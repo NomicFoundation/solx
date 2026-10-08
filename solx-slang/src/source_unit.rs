@@ -7,13 +7,11 @@ use std::cell::OnceCell;
 use std::collections::BTreeMap;
 
 use slang_solidity_v2::ast::SourceUnit;
+use slang_solidity_v2::ast::SourceUnitMember;
 
 use solx_mlir::Context;
 use solx_mlir::DebugInfoRequest;
-use solx_standard_json::InputSource;
-use solx_standard_json::OutputError;
 use solx_standard_json::output::contract::Contract;
-use solx_standard_json::output::error::source_location::SourceLocation;
 use solx_utils::EVMVersion;
 use solx_utils::Profiler;
 use solx_utils::RevertStrings;
@@ -24,14 +22,18 @@ use crate::debug_locations::DebugLocations;
 use crate::debug_locations::sources::Sources;
 use crate::scope::source_unit::SourceUnitScope;
 
+/// The definitions of a unit whose ABI Slang cannot compute, each by name and the member declaring
+/// it.
+pub type UncomputableAbis = Vec<(String, SourceUnitMember)>;
+
 impl<'context> SourceUnitScope<'context> {
     /// Lowers every contract and library the unit deploys into standard-JSON contract outputs
     /// keyed by definition name, each in its own MLIR module off the frontend's melior context. An
     /// abstract contract and an interface deploy nothing and produce no module, only their ABI and
     /// method identifiers.
     ///
-    /// A definition whose ABI Slang cannot compute produces no output and pushes an error located
-    /// at it to `messages`, with `input_sources` quoting the source.
+    /// A definition whose ABI Slang cannot compute produces no output and is returned by name
+    /// next to the outputs, as the member declaring it.
     ///
     /// `selected` tells whether an output selector is requested for a contract, by name. The
     /// MLIR selector captures the Sol dialect text.
@@ -52,28 +54,16 @@ impl<'context> SourceUnitScope<'context> {
         sources: &Sources<'_>,
         pass_timing: bool,
         profiler: &mut Profiler,
-        input_sources: &BTreeMap<String, InputSource>,
-        messages: &mut Vec<OutputError>,
-    ) -> anyhow::Result<BTreeMap<String, Contract>> {
+    ) -> anyhow::Result<(BTreeMap<String, Contract>, UncomputableAbis)> {
         let mut contracts = BTreeMap::new();
+        let mut uncomputable_abis = UncomputableAbis::new();
         for member in unit.members().iter() {
             let Some(definition) = AbiDefinition::from_member(&member) else {
                 continue;
             };
             let name = definition.name().name().to_owned();
             let Some(abi) = definition.abi() else {
-                let (file_id, text_range) = definition.source_range();
-                messages.push(OutputError::new_error_with_data(
-                    Some(file_id.as_str()),
-                    None,
-                    format!("Slang cannot compute the ABI of `{name}`."),
-                    Some(SourceLocation::new(
-                        file_id.to_string(),
-                        text_range.start as isize,
-                        text_range.end as isize,
-                    )),
-                    Some(input_sources),
-                ));
+                uncomputable_abis.push((name, member));
                 continue;
             };
             let abi_value = abi.to_value();
@@ -129,11 +119,12 @@ impl<'context> SourceUnitScope<'context> {
                 pass_timing,
                 profiler,
             )?;
+            // `convert-sol-to-yul` builds the entry-point dispatcher from the same selectors.
             contracts.insert(
                 name,
                 Contract::new_mlir(mlir, abi_value, method_identifiers),
             );
         }
-        Ok(contracts)
+        Ok((contracts, uncomputable_abis))
     }
 }
