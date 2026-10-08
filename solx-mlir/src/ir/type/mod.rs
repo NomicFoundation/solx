@@ -222,9 +222,39 @@ impl<'context> Type<'context> {
         })
     }
 
+    /// The identified `sol::StructType` of `name` at `location`, opaque until its members are
+    /// set.
+    pub fn identified_structure(
+        context: &'context melior::Context,
+        name: &str,
+        location: solx_utils::DataLocation,
+    ) -> Self {
+        let name_bytes = name.as_bytes();
+        Self::new(unsafe {
+            MlirType::from_raw(ffi::solxCreateIdentifiedStructType(
+                context.to_raw(),
+                name_bytes.as_ptr() as *const c_char,
+                name_bytes.len(),
+                location as u32,
+            ))
+        })
+    }
+
     /// A `sol::EnumType` whose maximum valid value is `max`, one less than the number of enum members.
     pub fn enumeration(context: &'context melior::Context, max: u32) -> Self {
         Self::new(unsafe { MlirType::from_raw(ffi::solxCreateEnumType(context.to_raw(), max)) })
+    }
+
+    /// Sets the body of this identified struct type, laying it out; the same body again is a
+    /// no-op.
+    pub fn set_structure_body(self, member_types: &[Self]) {
+        let raw_types: Vec<mlir_sys::MlirType> = member_types
+            .iter()
+            .map(|member_type| member_type.inner.to_raw())
+            .collect();
+        unsafe {
+            ffi::solxStructTypeSetBody(self.inner.to_raw(), raw_types.as_ptr(), raw_types.len());
+        }
     }
 
     /// Whether this is an integer type.
@@ -302,6 +332,11 @@ impl<'context> Type<'context> {
     /// place.
     pub fn is_pointer(self) -> bool {
         unsafe { ffi::solxIsPointerType(self.inner.to_raw()) }
+    }
+
+    /// Whether this is an identified struct type still awaiting its body.
+    pub fn is_opaque_structure(self) -> bool {
+        unsafe { ffi::solxStructTypeIsOpaque(self.inner.to_raw()) }
     }
 
     /// The data location a located reference type carries, decoded from the constructors' FFI

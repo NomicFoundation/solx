@@ -175,7 +175,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// Resolves a Slang semantic type through the source unit scope.
     pub fn resolve_type(
-        &self,
+        &mut self,
         node: &Type,
         inherited_location: Option<solx_utils::DataLocation>,
     ) -> MlirType<'context> {
@@ -183,7 +183,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     }
 
     /// The binder's typing of a node, resolved through the source unit scope.
-    pub fn typing(&self, slang_type: Option<Type>) -> MlirType<'context> {
+    pub fn typing(&mut self, slang_type: Option<Type>) -> MlirType<'context> {
         self.contract.source_unit.typing(slang_type)
     }
 

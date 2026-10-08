@@ -78,9 +78,10 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                     .into_iter()
                     .next()
                     .expect("a call in value position yields a value"),
-                Expression::DecimalNumberExpression(_) | Expression::HexNumberExpression(_) => {
-                    unreachable!("the binder folds every number literal to an integer constant")
+                Expression::DecimalNumberExpression(_) => {
+                    unreachable!("the binder folds every decimal literal to an integer constant")
                 }
+                Expression::HexNumberExpression(inner) => scope.hex_number_literal(inner),
                 Expression::CallOptionsExpression(inner) => {
                     let function = scope.expression(&inner.operand());
                     Options::new(Some(&inner.options()), scope);
@@ -243,7 +244,6 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                             | BuiltIn::AbiEncodeWithSelector
                             | BuiltIn::AbiEncodeWithSignature
                             | BuiltIn::AddressCall
-                            | BuiltIn::AddressCallcode
                             | BuiltIn::AddressDelegatecall
                             | BuiltIn::AddressSend
                             | BuiltIn::AddressStaticcall
