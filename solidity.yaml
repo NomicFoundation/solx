@@ -595,7 +595,8 @@ entries:
         version: '>=0.4.16'
       array_function_pointers.sol:
         hash: '0xb93d862e344adc1b9c2d0bcea9e476a1'
-        enabled: true
+        enabled: false
+        comment: 'TODO: Optimized out by LLVM'
         version: '>=0.4.12'
       array_memory_as_parameter.sol:
         hash: '0x07c5117a12da7f1ed96345146be23dc3'
