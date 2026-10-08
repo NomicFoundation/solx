@@ -55,7 +55,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             contract,
             object,
             defined_functions: HashSet::new(),
-            storage_layout: object.abi().storage_layout(),
+            storage_layout: object.storage_layout(),
             constructor: ConstructorBuilder::new(object.contracts()),
         }
     }
@@ -95,7 +95,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
     /// The function a bare name runs in this object: the most-derived override of its hierarchy,
     /// or the function itself when it is free or a library's, which nothing overrides.
     pub fn virtual_function(&self, function: &FunctionDefinition) -> FunctionDefinition {
-        let Object::Contract(node, _) = &self.object else {
+        let Object::Contract(node) = &self.object else {
             return function.clone();
         };
         match node.resolve_virtual(function) {
@@ -114,7 +114,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         function: &FunctionDefinition,
         enclosing_contract: &ContractDefinition,
     ) -> FunctionDefinition {
-        let Object::Contract(node, _) = &self.object else {
+        let Object::Contract(node) = &self.object else {
             unreachable!("`super` is written in a contract alone");
         };
         node.resolve_super(function, enclosing_contract)
@@ -133,7 +133,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             _ => unreachable!("a modifier-list entry names a modifier or a base"),
         };
         Some(match (&self.object, declaration.enclosing_definition()) {
-            (Object::Contract(node, _), Some(Definition::Contract(_))) => {
+            (Object::Contract(node), Some(Definition::Contract(_))) => {
                 node.resolve_modifier(invocation).expect(
                     "a contract's modifier resolves in the hierarchy of a contract invoking it",
                 )

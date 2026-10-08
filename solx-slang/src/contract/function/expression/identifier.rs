@@ -57,12 +57,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                     .function_definition(&function)
                     .pointer_constant(self)
             }
-            Some(library @ Definition::Library(_)) => Value::library_address(
-                Object::definition_identifier(&library)
-                    .expect("a library deploys an object")
-                    .as_str(),
-                self,
-            ),
+            Some(Definition::Library(library)) => {
+                Value::library_address(Object::Library(library).identifier().as_str(), self)
+            }
             _ => {
                 let (place, element_type) = self.identifier_place(node);
                 place.load(element_type, self)

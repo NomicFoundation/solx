@@ -61,11 +61,9 @@ impl<'function, 'contract, 'source_unit, 'context>
             (Some(Definition::Variable(_) | Definition::Parameter(_)), suffix) => {
                 self.local_reference(&base, suffix)
             }
-            (Some(library @ Definition::Library(_)), None) => {
+            (Some(Definition::Library(library)), None) => {
                 let address = Value::library_address(
-                    Object::definition_identifier(&library)
-                        .expect("a library deploys an object")
-                        .as_str(),
+                    Object::Library(library).identifier().as_str(),
                     self.function,
                 );
                 YulReference::Word(address.yul_word(self))

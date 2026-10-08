@@ -512,9 +512,7 @@ impl Call {
             .unwrap_or_default();
         let converted = scope.external_arguments(arguments, &parameter_types);
         let amount = options.amount(scope);
-        let object =
-            Object::definition_identifier(&Definition::Contract(contract_definition.clone()))
-                .expect("a contract deploys an object");
+        let object = Object::Contract(contract_definition.clone()).identifier();
         let create = if is_guarded {
             Value::create_contract_try
         } else {
@@ -813,15 +811,10 @@ impl Call {
         definition: &FunctionDefinition,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Value<'context> {
-        let Some(library @ Definition::Library(_)) = definition.enclosing_definition() else {
+        let Some(Definition::Library(library)) = definition.enclosing_definition() else {
             unreachable!("a library callee is enclosed by its library");
         };
-        Value::library_address(
-            Object::definition_identifier(&library)
-                .expect("a library deploys an object")
-                .as_str(),
-            scope,
-        )
+        Value::library_address(Object::Library(library).identifier().as_str(), scope)
     }
 
     /// Emits the `sol.ext_call` an external dispatch selects: a library callee carries

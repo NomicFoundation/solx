@@ -66,9 +66,9 @@ impl<'context> SourceUnitScope<'context> {
                 uncomputable_abis.push((name, member));
                 continue;
             };
-            let abi_value = abi.to_value();
+            let abi_value = abi.into_value();
             let method_identifiers = definition.method_identifiers();
-            let Some(object) = definition.into_object(abi) else {
+            let Some(object) = definition.into_object() else {
                 contracts.insert(name, Contract::new_abi(abi_value, method_identifiers));
                 continue;
             };
@@ -100,8 +100,8 @@ impl<'context> SourceUnitScope<'context> {
                     evm_version,
                     revert_strings,
                     match &object {
-                        Object::Contract(contract, _) => debug_locations.location(contract),
-                        Object::Library(library, _) => debug_locations.location(library),
+                        Object::Contract(contract) => debug_locations.location(contract),
+                        Object::Library(library) => debug_locations.location(library),
                     },
                     debug_info,
                     unit.get_file_id().as_str(),

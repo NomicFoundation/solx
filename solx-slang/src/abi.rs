@@ -36,7 +36,7 @@ impl Abi {
     }
 
     /// The value the standard-JSON output stores: Slang's entries in solc's JSON-ABI spelling.
-    pub fn to_value(&self) -> serde_json::Value {
+    pub fn into_value(self) -> serde_json::Value {
         serde_json::to_value(&self.0).expect("Slang's ABI serializer writes only string-keyed maps")
     }
 }
@@ -100,14 +100,14 @@ impl AbiDefinition {
         }
     }
 
-    /// The object the definition deploys, holding `abi`, or `None` for an interface or an
-    /// abstract contract, which deploy nothing.
-    pub fn into_object(self, abi: Abi) -> Option<Object> {
+    /// The object the definition deploys, or `None` for an interface or an abstract contract,
+    /// which deploy nothing.
+    pub fn into_object(self) -> Option<Object> {
         match self {
             Self::Contract(node) if node.is_abstract() => None,
-            Self::Contract(node) => Some(Object::Contract(node, abi)),
+            Self::Contract(node) => Some(Object::Contract(node)),
             Self::Interface(_) => None,
-            Self::Library(node) => Some(Object::Library(node, abi)),
+            Self::Library(node) => Some(Object::Library(node)),
         }
     }
 

@@ -38,20 +38,20 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
 
         let is_constructor = matches!(function.kind(), FunctionKind::Constructor);
         let is_most_derived_constructor = is_constructor
-            && matches!(self.object, Object::Contract(contract, _) if contract
+            && matches!(self.object, Object::Contract(contract) if contract
                 .constructor()
                 .is_some_and(|constructor| constructor.node_id() == function.node_id()));
         let body = function
             .body()
             .expect("slang admits a call naming a function declaration nothing implements");
         let selector = match (self.object, function.enclosing_definition()) {
-            (Object::Contract(contract, _), Some(Definition::Contract(_)))
+            (Object::Contract(contract), Some(Definition::Contract(_)))
                 if matches!(contract.resolve_virtual(function), Some(VirtualTarget::Function(resolved))
                     if resolved.node_id() == function.node_id()) =>
             {
                 function.compute_selector()
             }
-            (Object::Library(library, _), Some(Definition::Library(enclosing)))
+            (Object::Library(library), Some(Definition::Library(enclosing)))
                 if library.node_id() == enclosing.node_id() =>
             {
                 function.compute_selector()
