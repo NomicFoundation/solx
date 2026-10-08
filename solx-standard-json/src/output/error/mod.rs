@@ -21,10 +21,10 @@ use self::source_location::SourceLocation;
 pub struct Error {
     /// The component type.
     pub component: String,
-    /// The error code.
+    /// The `solc` numeric error code, which tools such as forge parse as a number.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_code: Option<String>,
-    /// The code of the Slang diagnostic, kept apart from `error_code`, which tools parse as a number.
+    /// The code of the Slang diagnostic.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub slang_error_code: Option<String>,
     /// The formatted error message.
@@ -51,6 +51,7 @@ impl Error {
         path: Option<&str>,
         r#type: &str,
         error_code: Option<&str>,
+        slang_error_code: Option<&str>,
         message: S,
         source_location: Option<SourceLocation>,
         sources: Option<&BTreeMap<String, InputSource>>,
@@ -84,7 +85,7 @@ impl Error {
         Self {
             component: "general".to_owned(),
             error_code: error_code.map(str::to_owned),
-            slang_error_code: None,
+            slang_error_code: slang_error_code.map(str::to_owned),
             formatted_message,
             message,
             severity: r#type.to_lowercase(),
@@ -95,21 +96,13 @@ impl Error {
     }
 
     ///
-    /// Attaches the code of the Slang diagnostic the error reports.
-    ///
-    pub fn with_slang_error_code(mut self, slang_error_code: &str) -> Self {
-        self.slang_error_code = Some(slang_error_code.to_owned());
-        self
-    }
-
-    ///
     /// Creates a new simple error
     ///
     pub fn new_error<S>(message: S) -> Self
     where
         S: std::fmt::Display,
     {
-        Self::new_error_with_data(None, None, message, None, None)
+        Self::new_error_with_data(None, message, None, None)
     }
 
     ///
@@ -136,15 +129,14 @@ impl Error {
                 SourceLocation::UNKNOWN_OFFSET,
             )
         });
-        Self::new_error_with_data(path, None, message, source_location, None)
+        Self::new_error_with_data(path, message, source_location, None)
     }
 
     ///
-    /// Creates a new error with optional code location and error code.
+    /// Creates a new error with optional code location.
     ///
     pub fn new_error_with_data<S>(
         path: Option<&str>,
-        error_code: Option<&str>,
         message: S,
         source_location: Option<SourceLocation>,
         sources: Option<&BTreeMap<String, InputSource>>,
@@ -152,7 +144,7 @@ impl Error {
     where
         S: std::fmt::Display,
     {
-        Self::new(path, "Error", error_code, message, source_location, sources)
+        Self::new(path, "Error", None, None, message, source_location, sources)
     }
 
     ///
@@ -172,6 +164,7 @@ impl Error {
             path,
             "Warning",
             error_code,
+            None,
             message,
             source_location,
             sources,
