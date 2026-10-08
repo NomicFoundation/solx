@@ -8,7 +8,10 @@ You can start using **Slang** in the following ways:
    ```
 
    The script will download the latest stable release of **Slang** and install it in your `PATH`.
-   Pass `--version=X.Y.Z` to install a specific release, or `--install-dir=DIR` to install somewhere other than `~/.local/bin`.
+   Pass `--version=X.Y.Z` to install a specific release, or `--install-dir=DIR` to install somewhere other than `~/.local/bin`:
+   ```shell
+   curl -L https://raw.githubusercontent.com/NomicFoundation/solx/main/install-slang | bash -s -- --version=X.Y.Z
+   ```
    > ⚠️ The script requires `curl` to be installed on your system.<br>
    > This is the recommended way to install **Slang** for MacOS users to bypass gatekeeper checks.
 
