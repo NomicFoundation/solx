@@ -121,7 +121,7 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
         "": [
           // AST of all source files.
           "ast",
-          // solx-only: Symbol table of each source file for debuggers and stack tracers.
+          // Slang-only: Symbol table of each source file for debuggers and stack tracers.
           "debugSymbols",
           // Benchmarks of the compilation pipeline.
           "benchmarks"
@@ -237,7 +237,7 @@ The output JSON contains all artifacts produced by **Slang**. The example below 
       // Optional: The AST object.
       // Corresponds to "ast" in the outputSelection settings.
       "ast": {/* ... */},
-      // Optional, solx-only: Symbol table for debuggers and stack tracers. Every range is [byteOffset, byteLength].
+      // Optional, Slang-only: Symbol table for debuggers and stack tracers (object). Every range is [byteOffset, byteLength].
       // Corresponds to "debugSymbols" in the outputSelection settings.
       "debugSymbols": {
         // Contracts, interfaces and libraries in source order, each with the functions, modifiers and public state
@@ -245,7 +245,8 @@ The output JSON contains all artifacts produced by **Slang**. The example below 
         "contracts": [/* ... */],
         // File-level functions.
         "freeFunctions": [/* ... */],
-        // Ranges of every nonterminal AST node, sorted and deduplicated.
+        // Ranges of the AST's sequence and collection nodes, sorted and deduplicated. A choice or terminal, such as an
+        // expression that is a bare identifier, has no range of its own.
         "spans": [/* ... */]
       }
     }
