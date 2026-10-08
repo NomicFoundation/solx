@@ -384,14 +384,21 @@ The output JSON contains all artifacts produced by **Slang**. The example below 
       // Required: Message severity.
       // Possible values: "error", "warning", "info".
       "severity": "error",
-      // Optional: solc's numeric code for the cause of the error, on the solc-compatible warnings only.
-      "errorCode": "5574",
-      // Optional: Code of the Slang diagnostic.
+      // Optional, Slang-only: Code of the Slang diagnostic.
       "slangErrorCode": "syntax/unexpected-terminal",
       // Required: Message.
       "message": "Invalid keyword",
       // Required: Message formatted using the source location.
       "formattedMessage": "sourceFile.sol:100: Invalid keyword"
+    },
+    {
+      "type": "Warning",
+      "component": "general",
+      "severity": "warning",
+      // Optional: solc's numeric code, set on the bytecode size warnings 3860 and 5574.
+      "errorCode": "5574",
+      "message": "runtime bytecode size is 31568B that exceeds the EVM limit of 24576B",
+      "formattedMessage": "Warning: runtime bytecode size is 31568B that exceeds the EVM limit of 24576B\n"
     }
   ]
 }

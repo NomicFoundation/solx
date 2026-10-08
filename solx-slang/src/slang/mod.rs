@@ -88,7 +88,6 @@ impl Slang {
             let Some(source_code) = source.content() else {
                 output.errors.push(OutputError::new_error_with_data(
                     Some(path.as_str()),
-                    None,
                     "Source content is unavailable.",
                     Some(SourceLocation::new(
                         path.to_owned(),
@@ -134,13 +133,15 @@ impl Slang {
             .extend(unit.diagnostics().iter().map(|diagnostic| {
                 let file_id = diagnostic.file_id();
                 let text_range = diagnostic.text_range();
-                let new_with_data = match diagnostic.severity() {
-                    DiagnosticSeverity::Error => OutputError::new_error_with_data,
-                    DiagnosticSeverity::Warning => OutputError::new_warning_with_data,
+                let r#type = match diagnostic.severity() {
+                    DiagnosticSeverity::Error => "Error",
+                    DiagnosticSeverity::Warning => "Warning",
                 };
-                new_with_data(
+                OutputError::new(
                     Some(file_id.as_str()),
+                    r#type,
                     None,
+                    Some(diagnostic.code()),
                     diagnostic.message(),
                     Some(SourceLocation::new(
                         file_id.to_string(),
@@ -149,7 +150,6 @@ impl Slang {
                     )),
                     Some(&input_json.sources),
                 )
-                .with_slang_error_code(diagnostic.code())
             }));
 
         for file in unit.files() {
@@ -214,7 +214,6 @@ impl Slang {
                     let (file_id, text_range) = Resolver::source_range(member);
                     OutputError::new_error_with_data(
                         Some(file_id.as_str()),
-                        None,
                         format!("Slang cannot compute the ABI of `{name}`."),
                         Some(SourceLocation::new(
                             file_id.to_string(),
