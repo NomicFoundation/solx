@@ -7,21 +7,6 @@ use std::collections::BTreeMap;
 use predicates::prelude::*;
 use test_case::test_case;
 
-#[test]
-fn default() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--abi"];
-
-    let result = crate::cli::execute_solx(args)?;
-
-    result
-        .success()
-        .stdout(predicate::str::contains("Contract JSON ABI").count(1));
-
-    Ok(())
-}
-
 /// The expected files hold solc's ABI verbatim.
 #[test_case(
     crate::common::contract!("solidity/SlangTest.sol"),

@@ -473,7 +473,8 @@ fn abi_only_output() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// An interface and an abstract contract carry an ABI and method identifiers but no bytecode.
+/// An interface and an abstract contract carry an ABI and method identifiers but no bytecode. The
+/// expected method identifiers are solc's.
 #[test]
 fn abi_without_bytecode() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -488,12 +489,18 @@ fn abi_without_bytecode() -> anyhow::Result<()> {
         serde_json::from_slice(result.success().get_output().stdout.as_slice())?;
     let contracts = &output["contracts"]["A"];
 
-    for name in ["I", "B"] {
+    for (name, method_identifiers) in [
+        ("I", serde_json::json!({ "ping(uint256)": "773acdef" })),
+        (
+            "B",
+            serde_json::json!({ "count()": "06661abd", "pong()": "bc9748a1" }),
+        ),
+    ] {
         let contract = &contracts[name];
         assert!(contract["abi"].is_array(), "{name} has an ABI");
-        assert!(
-            contract["evm"]["methodIdentifiers"].is_object(),
-            "{name} has method identifiers"
+        assert_eq!(
+            contract["evm"]["methodIdentifiers"], method_identifiers,
+            "{name}"
         );
         assert!(
             contract["evm"]["bytecode"].is_null(),
