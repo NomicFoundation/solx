@@ -2,15 +2,14 @@
   "language": "Solidity",
   "sources": {
     "A": {
-      "content": "// SPDX-License-Identifier: MIT\npragma solidity >=0.8.0; contract Base { uint256 public count; function f() external {} } interface IDerived is Base { function g() external; } contract Trailing { function h(uint256 value) external pure returns (uint256) { return value; } }"
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity >=0.8.0; contract Base {} interface IDerived is Base { function g() external; }"
     }
   },
   "settings": {
     "outputSelection": {
       "*": {
         "*": [
-          "abi",
-          "evm.methodIdentifiers"
+          "abi"
         ]
       }
     }

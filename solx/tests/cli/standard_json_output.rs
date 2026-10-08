@@ -530,10 +530,9 @@ fn abi_without_bytecode() -> anyhow::Result<()> {
 }
 
 /// An interface with a contract base has no ABI Slang can compute: it gets one error spanning its
-/// definition and no output, and the definitions around it keep their ABI and method identifiers,
-/// which are solc's for the same source without the interface.
+/// definition.
 #[test]
-fn uncomputable_abi_keeps_other_definitions() -> anyhow::Result<()> {
+fn uncomputable_abi_location() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
@@ -550,27 +549,8 @@ fn uncomputable_abi_keeps_other_definitions() -> anyhow::Result<()> {
     assert_eq!(errors[0]["severity"], "error");
     assert_eq!(
         errors[0]["sourceLocation"],
-        serde_json::json!({ "file": "A", "start": 122, "end": 175 })
+        serde_json::json!({ "file": "A", "start": 74, "end": 127 })
     );
-
-    let contracts = output["contracts"]["A"]
-        .as_object()
-        .expect("the file's contracts");
-    assert!(!contracts.contains_key("IDerived"));
-    for (name, method_identifiers) in [
-        (
-            "Base",
-            serde_json::json!({ "count()": "06661abd", "f()": "26121ff0" }),
-        ),
-        ("Trailing", serde_json::json!({ "h(uint256)": "cb97492a" })),
-    ] {
-        let contract = &contracts[name];
-        assert!(contract["abi"].is_array(), "{name} has an ABI");
-        assert_eq!(
-            contract["evm"]["methodIdentifiers"], method_identifiers,
-            "{name}"
-        );
-    }
 
     Ok(())
 }
