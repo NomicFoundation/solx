@@ -1,0 +1,19 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A": {
+      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.8.0; interface IRoot { function peek() external view returns (uint256); } interface I is IRoot { function ping(uint256 value) external returns (uint256); } abstract contract Root { uint256 public total; function base() external {} } abstract contract B is Root { uint256 public count; function pong() external virtual; } library L { function twice(uint256 value) external pure returns (uint256) { return 2 * value; } } contract C is I { function ping(uint256 value) external pure returns (uint256) { return value; } function peek() external pure returns (uint256) { return 0; } }"
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode.object",
+          "evm.methodIdentifiers"
+        ]
+      }
+    }
+  }
+}

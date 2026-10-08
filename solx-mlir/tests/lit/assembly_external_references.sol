@@ -23,6 +23,8 @@
 // CHECK:     sol.yul_val_cast %{{.*}} -> i256
 // CHECK:     sol.yul_val_cast %{{.*}} -> i256
 // CHECK:     sol.yul_val_cast %{{.*}} : !sol.fixedbytes<32> -> i256
+// CHECK:     sol.constant 255 : ui160
+// CHECK:     sol.yul_val_cast %{{.*}} : !sol.address -> i256
 
 // CHECK: sol.func @{{.*function_pointer.*}}
 // CHECK:   sol.inline_asm {
@@ -89,6 +91,7 @@ contract C {
     int8 constant NARROW = -1;
     bytes32 constant LEFT_ALIGNED = "abc";
     bytes32 constant CHAINED = LEFT_ALIGNED;
+    address constant ADDRESS = 0x00000000000000000000000000000000000000ff;
 
     function local(uint256 x) public pure returns (uint256 r) {
         assembly {
@@ -167,7 +170,8 @@ contract C {
             let n := NARROW
             let f := FILE_LEVEL
             let l := LEFT_ALIGNED
-            r := add(add(w, n), add(f, l))
+            let a := ADDRESS
+            r := add(add(add(w, n), add(f, l)), a)
         }
     }
 

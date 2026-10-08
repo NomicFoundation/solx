@@ -496,6 +496,12 @@ impl Arguments {
         if self.output_metadata {
             selectors.insert(solx_standard_json::InputSelector::Metadata);
         }
+        if self.output_abi {
+            selectors.insert(solx_standard_json::InputSelector::ABI);
+        }
+        if self.output_hashes {
+            selectors.insert(solx_standard_json::InputSelector::MethodIdentifiers);
+        }
 
         solx_standard_json::InputSelection::new(selectors)
     }

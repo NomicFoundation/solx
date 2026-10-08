@@ -23,6 +23,7 @@ use solx_utils::Profiler;
 use solx_utils::Remapping;
 use solx_utils::RevertStrings;
 
+use crate::debug_locations::resolver::Resolver;
 use crate::debug_locations::sources::Sources;
 use crate::scope::source_unit::SourceUnitScope;
 
@@ -190,7 +191,7 @@ impl Slang {
         let melior = OnceCell::new();
         for file in unit.files() {
             let file_id = file.id();
-            let contracts = SourceUnitScope::source_unit(
+            let (contracts, uncomputable_abis) = SourceUnitScope::source_unit(
                 &melior,
                 &file.ast(),
                 evm_version,
@@ -206,6 +207,22 @@ impl Slang {
                 benchmarks,
                 &mut profiler,
             )?;
+            output
+                .errors
+                .extend(uncomputable_abis.iter().map(|(name, member)| {
+                    let (file_id, text_range) = Resolver::source_range(member);
+                    OutputError::new_error_with_data(
+                        Some(file_id.as_str()),
+                        None,
+                        format!("Slang cannot compute the ABI of `{name}`."),
+                        Some(SourceLocation::new(
+                            file_id.to_string(),
+                            text_range.start as isize,
+                            text_range.end as isize,
+                        )),
+                        Some(&input_json.sources),
+                    )
+                }));
             output
                 .contracts
                 .entry(file_id.to_string())

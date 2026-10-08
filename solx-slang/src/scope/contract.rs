@@ -49,13 +49,14 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         source_unit: &'source_unit mut SourceUnitScope<'context>,
         contract: Contract<'context>,
         object: &'source_unit Object,
+        storage_layout: HashMap<NodeId, StorageSlot>,
     ) -> Self {
         Self {
             source_unit,
             contract,
             object,
             defined_functions: HashSet::new(),
-            storage_layout: object.storage_layout(),
+            storage_layout,
             constructor: ConstructorBuilder::new(object.contracts()),
         }
     }

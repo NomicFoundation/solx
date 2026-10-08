@@ -145,6 +145,9 @@ impl<'function, 'contract, 'source_unit, 'context>
             match node {
                 Expression::TrueKeyword(_) => self.function.boolean_literal(true),
                 Expression::FalseKeyword(_) => self.function.boolean_literal(false),
+                Expression::HexNumberExpression(literal) => {
+                    self.function.hex_number_literal(literal)
+                }
                 Expression::Identifier(identifier) => {
                     let referenced = identifier
                         .resolve_to_definition()

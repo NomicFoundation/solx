@@ -455,7 +455,6 @@ fn storage_layout_output() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "solx does not emit this output yet"]
 fn abi_only_output() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -470,6 +469,88 @@ fn abi_only_output() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("\"abi\""))
         .stdout(predicate::str::contains("\"name\":\"foo\""))
         .stdout(predicate::str::contains("\"name\":\"Transfer\""));
+
+    Ok(())
+}
+
+/// An interface and an abstract contract carry an ABI and method identifiers but no bytecode, each
+/// over its whole hierarchy. The expected method identifiers are solc's.
+#[test]
+fn abi_without_bytecode() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("solidity_abi_interface.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    let output: serde_json::Value =
+        serde_json::from_slice(result.success().get_output().stdout.as_slice())?;
+    let contracts = &output["contracts"]["A"];
+
+    for (name, method_identifiers) in [
+        ("IRoot", serde_json::json!({ "peek()": "59e02dd7" })),
+        (
+            "I",
+            serde_json::json!({ "peek()": "59e02dd7", "ping(uint256)": "773acdef" }),
+        ),
+        (
+            "Root",
+            serde_json::json!({ "base()": "5001f3b5", "total()": "2ddbd13a" }),
+        ),
+        (
+            "B",
+            serde_json::json!({
+                "base()": "5001f3b5",
+                "count()": "06661abd",
+                "pong()": "bc9748a1",
+                "total()": "2ddbd13a",
+            }),
+        ),
+    ] {
+        let contract = &contracts[name];
+        assert!(contract["abi"].is_array(), "{name} has an ABI");
+        assert_eq!(
+            contract["evm"]["methodIdentifiers"], method_identifiers,
+            "{name}"
+        );
+        assert!(
+            contract["evm"]["bytecode"].is_null(),
+            "{name} has no bytecode"
+        );
+    }
+    assert_eq!(
+        contracts["L"]["evm"]["methodIdentifiers"],
+        serde_json::json!({ "twice(uint256)": "3cf3bbf4" })
+    );
+    assert!(contracts["C"]["evm"]["bytecode"]["object"].is_string());
+
+    Ok(())
+}
+
+/// An interface with a contract base has no ABI Slang can compute: it gets one error spanning its
+/// definition.
+#[test]
+fn uncomputable_abi_location() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("solidity_abi_interface_contract_base.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    let output: serde_json::Value =
+        serde_json::from_slice(result.success().get_output().stdout.as_slice())?;
+
+    let errors = output["errors"].as_array().expect("errors");
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert_eq!(errors[0]["severity"], "error");
+    assert_eq!(
+        errors[0]["sourceLocation"],
+        serde_json::json!({ "file": "A", "start": 74, "end": 127 })
+    );
 
     Ok(())
 }

@@ -56,7 +56,7 @@ impl<'context> Resolver<'context> {
 
     /// The source and byte range of `node`. Slang gives both to every node other than an empty
     /// collection or a variant without source text, and the lowering takes no position from those.
-    fn source_range(node: &impl NodeLocation) -> (&FileId, Range<usize>) {
+    pub fn source_range(node: &impl NodeLocation) -> (&FileId, Range<usize>) {
         (
             node.calculate_file_id()
                 .expect("slang locates every node the lowering takes a position from"),

@@ -16,15 +16,24 @@ use solx_utils::EVMVersion;
 use solx_utils::Profiler;
 use solx_utils::RevertStrings;
 
+use crate::abi::AbiDefinition;
 use crate::contract::object::Object;
 use crate::debug_locations::DebugLocations;
 use crate::debug_locations::sources::Sources;
 use crate::scope::source_unit::SourceUnitScope;
 
+/// The definitions of a unit whose ABI Slang cannot compute, each by name and the member declaring
+/// it.
+pub type UncomputableAbis = Vec<(String, SourceUnitMember)>;
+
 impl<'context> SourceUnitScope<'context> {
     /// Lowers every contract and library the unit deploys into standard-JSON contract outputs
     /// keyed by definition name, each in its own MLIR module off the frontend's melior context. An
-    /// abstract contract and an interface deploy nothing and produce no module.
+    /// abstract contract and an interface deploy nothing and produce no module, only their ABI and
+    /// method identifiers.
+    ///
+    /// A definition whose ABI Slang cannot compute produces no output and is returned by name
+    /// next to the outputs, as the member declaring it.
     ///
     /// `selected` tells whether an output selector is requested for a contract, by name. The
     /// MLIR selector captures the Sol dialect text.
@@ -45,15 +54,24 @@ impl<'context> SourceUnitScope<'context> {
         sources: &Sources<'_>,
         pass_timing: bool,
         profiler: &mut Profiler,
-    ) -> anyhow::Result<BTreeMap<String, Contract>> {
+    ) -> anyhow::Result<(BTreeMap<String, Contract>, UncomputableAbis)> {
         let mut contracts = BTreeMap::new();
+        let mut uncomputable_abis = UncomputableAbis::new();
         for member in unit.members().iter() {
-            let object = match member {
-                SourceUnitMember::ContractDefinition(contract) if !contract.is_abstract() => {
-                    Object::Contract(contract.clone())
-                }
-                SourceUnitMember::LibraryDefinition(library) => Object::Library(library.clone()),
-                _ => continue,
+            let Some(definition) = AbiDefinition::from_member(&member) else {
+                continue;
+            };
+            let name = definition.name().name().to_owned();
+            let Some(abi) = definition.abi() else {
+                uncomputable_abis.push((name, member));
+                continue;
+            };
+            let storage_layout = abi.storage_layout();
+            let abi_value = abi.into_value();
+            let method_identifiers = definition.method_identifiers();
+            let Some(object) = definition.into_object() else {
+                contracts.insert(name, Contract::new_abi(abi_value, method_identifiers));
+                continue;
             };
 
             let melior = melior.get_or_init(|| {
@@ -65,7 +83,6 @@ impl<'context> SourceUnitScope<'context> {
             });
 
             let identifier = object.identifier();
-            let name = object.name().name().to_owned();
             let debug_info = DebugInfoRequest {
                 deploy: selected(
                     name.as_str(),
@@ -94,7 +111,7 @@ impl<'context> SourceUnitScope<'context> {
             );
             let run_emission =
                 profiler.start_pipeline_element(format!("Compiler_EmitSol:{identifier}").as_str());
-            let method_identifiers = scope.object_definition(&object);
+            scope.object_definition(&object, storage_layout);
             run_emission.borrow_mut().finish();
             let mlir = Context::from(scope).finalize_module(
                 object.deploy_dependencies(),
@@ -103,8 +120,12 @@ impl<'context> SourceUnitScope<'context> {
                 pass_timing,
                 profiler,
             )?;
-            contracts.insert(name, Contract::new_mlir(mlir, method_identifiers));
+            // `convert-sol-to-yul` builds the entry-point dispatcher from the same selectors.
+            contracts.insert(
+                name,
+                Contract::new_mlir(mlir, abi_value, method_identifiers),
+            );
         }
-        Ok(contracts)
+        Ok((contracts, uncomputable_abis))
     }
 }
