@@ -1,9 +1,10 @@
 # Three trigger flows:
 #
-#   push tag (X.Y.Z)       — Full production release: build, review, publish
+#   push tag (slang/X.Y.Z) — Full production release: build, review, publish
 #                             to GitHub Releases with attestation, deploy docs,
 #                             and verify the install script. Requires manual
 #                             approval via the solx-release environment.
+#                             The `latest` release stays on solx 0.1.x.
 #
 #   workflow_dispatch       — Nightly / ad-hoc pre-release: same build & review
 #                             pipeline, publishes a GitHub pre-release. Individual
@@ -56,7 +57,7 @@ on:
         default: true
   push:
     tags:
-      - "*.*.*"
+      - "slang/*.*.*"
 
 # Zero permissions baseline — each job declares only what it needs.
 permissions: {}
@@ -102,6 +103,7 @@ jobs:
     outputs:
       matrix: ${{ steps.prepare-matrix.outputs.matrix }}
       prerelease-suffix: ${{ steps.prerelease-suffix.outputs.prerelease-suffix }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -149,6 +151,11 @@ jobs:
         run: |
           TRIMMED="$(printf '%s' "${PRERELEASE_SUFFIX}" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
           echo "prerelease-suffix=${TRIMMED}" | tee -a "${GITHUB_OUTPUT}"
+
+      - name: Extract version from tag
+        id: version
+        if: github.ref_type == 'tag'
+        run: echo "version=${GITHUB_REF_NAME#slang/}" | tee -a "${GITHUB_OUTPUT}"
 
   build:
     permissions:
@@ -205,11 +212,11 @@ jobs:
         shell: bash
         run: echo "BINDGEN_EXTRA_CLANG_ARGS=--target=x86_64-w64-windows-gnu" >> "${GITHUB_ENV}"
 
-      - name: Build solx
+      - name: Build slang
         uses: ./.github/actions/build-rust
         with:
           target: ${{ matrix.target }}
-          release-suffix: ${{ format('{0}-{1}', matrix.release-suffix, github.ref_type == 'tag' && format('v{0}', github.ref_name) || needs.prepare-matrix.outputs.prerelease-suffix || 'notag') }}
+          release-suffix: ${{ format('{0}-{1}', matrix.release-suffix, github.ref_type == 'tag' && format('v{0}', needs.prepare-matrix.outputs.version) || needs.prepare-matrix.outputs.prerelease-suffix || 'notag') }}
 
   get-previous-release:
     needs: [label-check]
@@ -227,14 +234,18 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
 
-      # Gets the tag of the published release marked `latest`
-      # ignoring all intermediate releases and tags for manual releases
-      - name: Get latest release tag
+      # The newest slang release other than the one being built, so a rerun keeps its changelog,
+      # or for the first one the solx release marked `latest`.
+      - name: Get previous release tag
         id: latest_release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag=$(gh release view --json tagName --jq .tagName 2>/dev/null || echo "")
+          tag=$(gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | startswith("slang/")) | select(.tagName != $ENV.GITHUB_REF_NAME)] | sort_by(.createdAt) | last | .tagName // ""')
+          if [ -z "${tag}" ]; then
+            tag=$(gh release view --json tagName --jq .tagName)
+          fi
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
 
   # ───────────────────────────────────────────────
@@ -253,6 +264,7 @@ jobs:
     outputs:
       release_title: ${{ steps.release.outputs.release_title }}
       version_or_sha: ${{ steps.release.outputs.version_or_sha }}
+      tag_or_sha: ${{ steps.release.outputs.tag_or_sha }}
       full_sha: ${{ steps.release.outputs.full_sha }}
     steps:
 
@@ -275,32 +287,36 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           EVENT_NAME: ${{ github.event_name }}
           PRERELEASE_SUFFIX: ${{ needs.prepare-matrix.outputs.prerelease-suffix }}
+          VERSION: ${{ needs.prepare-matrix.outputs.version }}
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
           if [ "${REF_TYPE}" = 'tag' ]; then
-            VERSION_OR_SHA="${GITHUB_REF#refs/tags/}"
-            echo "release_title=${VERSION_OR_SHA}" >> "$GITHUB_OUTPUT"
+            VERSION_OR_SHA="${VERSION}"
+            TAG_OR_SHA="${GITHUB_REF_NAME}"
+            echo "release_title=slang ${VERSION}" >> "$GITHUB_OUTPUT"
           else
             VERSION_OR_SHA=$(git rev-parse --short HEAD)
+            TAG_OR_SHA="${VERSION_OR_SHA}"
             echo "full_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
             if [ "${EVENT_NAME}" = 'pull_request' ]; then
               echo "release_title=pr-dry-run-${VERSION_OR_SHA}" >> "$GITHUB_OUTPUT"
             else
-              echo "release_title=prerelease-${VERSION_OR_SHA}-${PRERELEASE_SUFFIX}" >> "$GITHUB_OUTPUT"
+              echo "release_title=slang-prerelease-${VERSION_OR_SHA}-${PRERELEASE_SUFFIX}" >> "$GITHUB_OUTPUT"
             fi
           fi
           echo "version_or_sha=${VERSION_OR_SHA}" >> "$GITHUB_OUTPUT"
+          echo "tag_or_sha=${TAG_OR_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Check release version
         if: github.ref_type == 'tag'
         env:
-          TAG: ${{ steps.release.outputs.version_or_sha }}
+          VERSION: ${{ steps.release.outputs.version_or_sha }}
         run: |
           CARGO_PACKAGE_VERSION="$(${SFW_PREFIX:-} cargo pkgid --manifest-path solx/Cargo.toml | sed 's/.*[#@]//')"
           # All versions must be equal
-          if [ "${CARGO_PACKAGE_VERSION}" != "${TAG}" ]; then
-            echo "Version mismatch: TAG=${TAG}, CARGO_PACKAGE_VERSION=${CARGO_PACKAGE_VERSION}"
-            echo "Please update the version in Cargo.toml and tag the commit with the same version."
+          if [ "${CARGO_PACKAGE_VERSION}" != "${VERSION}" ]; then
+            echo "Version mismatch: ${GITHUB_REF_NAME} is version ${VERSION}, CARGO_PACKAGE_VERSION=${CARGO_PACKAGE_VERSION}"
+            echo "Please update the version in Cargo.toml and tag the commit with slang/<version>."
             exit 1
           fi
 
@@ -311,7 +327,7 @@ jobs:
           || (github.event_name == 'workflow_dispatch' && inputs.release_macos_amd64 && inputs.release_macos_arm64)
         env:
           MACOSX_UNIVERSAL_SUFFIX: "macosx"
-          RELEASE_SUFFIX: ${{ github.ref_type == 'tag' && format('v{0}', github.ref_name) || needs.prepare-matrix.outputs.prerelease-suffix || 'notag' }}
+          RELEASE_SUFFIX: ${{ github.ref_type == 'tag' && format('v{0}', needs.prepare-matrix.outputs.version) || needs.prepare-matrix.outputs.prerelease-suffix || 'notag' }}
         run: |
           OUTDIR="./releases/release-${MACOSX_UNIVERSAL_SUFFIX}-${RELEASE_SUFFIX}/${MACOSX_UNIVERSAL_SUFFIX}-${RELEASE_SUFFIX}"
           mkdir -p "${OUTDIR}"
@@ -433,13 +449,13 @@ jobs:
           webhook-type: incoming-webhook
           payload: |
             {
-              "text": "solx release — Review requested: ${{ needs.prepare.outputs.release_title }}",
+              "text": "slang release — Review requested: ${{ needs.prepare.outputs.release_title }}",
               "blocks": [
                 {
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "solx release — Review requested"
+                    "text": "slang release — Review requested"
                   }
                 },
                 {
@@ -507,13 +523,13 @@ jobs:
           webhook-type: incoming-webhook
           payload: |
             {
-              "text": "solx release — Deployment starting: ${{ needs.prepare.outputs.release_title }}",
+              "text": "slang release — Deployment starting: ${{ needs.prepare.outputs.release_title }}",
               "blocks": [
                 {
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "solx release — Deployment starting"
+                    "text": "slang release — Deployment starting"
                   }
                 },
                 {
@@ -617,10 +633,10 @@ jobs:
           name: ${{ needs.prepare.outputs.release_title }}
           generate_release_notes: false
           body: ${{ steps.build_changelog.outputs.changelog }}
-          tag_name: ${{ needs.prepare.outputs.version_or_sha }}
+          tag_name: ${{ needs.prepare.outputs.tag_or_sha }}
           target_commitish: ${{ needs.prepare.outputs.full_sha || github.sha }}
           prerelease: ${{ github.ref_type != 'tag' }}
-          make_latest: ${{ github.ref_type == 'tag' }}
+          make_latest: false
           files: releases/**/**
 
       - name: "DRY-RUN: publish summary"
@@ -641,7 +657,7 @@ jobs:
           echo "Full SHA:         ${FULL_SHA}"
           echo "Is tag release:   ${IS_TAG}"
           echo "Prerelease:       ${{ github.ref_type != 'tag' }}"
-          echo "Make latest:      ${{ github.ref_type == 'tag' }}"
+          echo "Make latest:      false"
           echo ""
           echo "--- Changelog ---"
           echo "${CHANGELOG:-'(no changelog — not a tag release)'}"
@@ -683,10 +699,11 @@ jobs:
 
   deploy-docs:
     if: github.ref_type == 'tag'
-    needs: publish
+    needs: [prepare, publish]
     uses: ./.github/workflows/deploy-docs.yaml
     with:
       deploy: true
+      version: ${{ format('v{0}', needs.prepare.outputs.version_or_sha) }}
     permissions:
       contents: write
 
@@ -713,8 +730,7 @@ jobs:
       - name: Download and run installation script
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REF_NAME: ${{ github.ref_name }}
         run: |
-          curl -fsSL -o "${RUNNER_TEMP}/install-solx" \
-            "https://raw.githubusercontent.com/NomicFoundation/solx/${REF_NAME}/install-solx"
-          bash "${RUNNER_TEMP}/install-solx"
+          curl -fsSL -o "${RUNNER_TEMP}/install-slang" \
+            "https://raw.githubusercontent.com/NomicFoundation/solx/${GITHUB_SHA}/install-slang"
+          bash "${RUNNER_TEMP}/install-slang"

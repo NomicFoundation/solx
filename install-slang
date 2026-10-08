@@ -2,11 +2,11 @@
 set -euo pipefail
 
 cat << "EOF"
-  ____    ___   _     __  __
- / ___|  / _ \ | |    \ \/ /
- \___ \ | | | || |     \  /
-  ___) || |_| || |___  /  \
- |____/  \___/ |_____|/_/\_\
+ ____   _         _     _   _   ____
+/ ___| | |       / \   | \ | | / ___|
+\___ \ | |      / _ \  |  \| || |  _
+ ___) || |___  / ___ \ | |\  || |_| |
+|____/ |_____|/_/   \_\|_| \_| \____|
 
          Installer
 EOF
@@ -14,7 +14,7 @@ EOF
 # Default values
 REPO="NomicFoundation/solx"
 DEFAULT_INSTALL_DIR="${HOME}/.local/bin"
-BINARY_NAME="solx"
+BINARY_NAME="slang"
 VERSION=""
 
 # Cleanup on exit
@@ -42,11 +42,9 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         *)
-            # Positional argument - treat as install directory for backwards compatibility
-            if [[ -z "${INSTALL_DIR:-}" ]]; then
-                INSTALL_DIR="$1"
-            fi
-            shift
+            echo "Unknown argument: $1"
+            echo "Usage: install-slang [--install-dir=DIR] [--version=X.Y.Z]"
+            exit 1
             ;;
     esac
 done
@@ -93,34 +91,36 @@ fi
 # Determine version to install
 if [[ -n "${VERSION}" ]]; then
     # Use specified version, strip leading 'v' if present
-    TAG="${VERSION#v}"
-    echo "Using specified version: ${TAG}"
+    VERSION="${VERSION#v}"
+    echo "Using specified version: ${VERSION}"
 else
-    # Get latest release tag from GitHub
-    echo "Fetching latest solx release..."
-    RELEASE_INFO=$(curl "${CURL_OPTS[@]}" "https://api.github.com/repos/${REPO}/releases/latest")
-    TAG=$(echo "${RELEASE_INFO}" | sed -n 's/.*"tag_name": *"\(.*\)".*/\1/p')
+    # The repository also publishes solx releases, so `releases/latest` can't be used.
+    # The API lists releases newest first, and only slang releases have `slang/` tags.
+    echo "Fetching latest slang release..."
+    RELEASES=$(curl "${CURL_OPTS[@]}" "https://api.github.com/repos/${REPO}/releases?per_page=100")
+    VERSION=$(echo "${RELEASES}" | grep -o '"tag_name": *"slang/[^"]*"' | head -n 1 | sed 's/.*"slang\/\(.*\)"/\1/' || true)
 
-    if [[ -z "${TAG}" ]]; then
-        echo "Failed to get latest solx release."
+    if [[ -z "${VERSION}" ]]; then
+        echo "Failed to get latest slang release."
         echo "This may be due to GitHub API rate limiting."
         echo "Try setting GITHUB_TOKEN or use --version=X.Y.Z"
         exit 1
     fi
 
-    echo "Latest version: ${TAG}"
+    echo "Latest version: ${VERSION}"
 fi
+TAG="slang/${VERSION}"
 
 # Construct the download URL
-ASSET_NAME="solx-${PLATFORM}-v${TAG}"
+ASSET_NAME="slang-${PLATFORM}-v${VERSION}"
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET_NAME}"
 
 # Download the binary
 TMP_DIR=$(mktemp -d)
-echo "Downloading solx from ${DOWNLOAD_URL}..."
+echo "Downloading slang from ${DOWNLOAD_URL}..."
 if ! curl -L --fail "${DOWNLOAD_URL}" -o "${TMP_DIR}/${BINARY_NAME}"; then
-    echo "Failed to download solx."
-    echo "Please check that version ${TAG} exists for platform ${PLATFORM}."
+    echo "Failed to download slang."
+    echo "Please check that version ${VERSION} exists for platform ${PLATFORM}."
     exit 1
 fi
 
@@ -178,16 +178,16 @@ fi
 
 RESOLVED=$(command -v "${BINARY_NAME}")
 if [[ "${RESOLVED}" != "${INSTALL_DIR}/${BINARY_NAME}" ]]; then
-    echo "Warning: 'solx' runs ${RESOLVED}, which comes before ${INSTALL_DIR} in PATH."
+    echo "Warning: 'slang' runs ${RESOLVED}, which comes before ${INSTALL_DIR} in PATH."
 fi
 
 # Verify installation
 echo "Verifying installation..."
 if "${INSTALL_DIR}/${BINARY_NAME}" --version; then
     echo ""
-    echo "solx installed successfully to ${INSTALL_DIR}/${BINARY_NAME}"
+    echo "slang installed successfully to ${INSTALL_DIR}/${BINARY_NAME}"
 else
-    echo "solx installed but could not run 'solx --version'"
+    echo "slang installed but could not run 'slang --version'"
     echo "Please check your installation in ${INSTALL_DIR}."
     exit 1
 fi

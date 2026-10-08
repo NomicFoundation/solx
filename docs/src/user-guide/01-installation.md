@@ -1,7 +1,24 @@
 # Installation
 
-**Slang** has no release yet, so for now [build it from source](#building-from-source).
-The [installation script](https://raw.githubusercontent.com/NomicFoundation/solx/main/install-solx) and the [releases page](https://github.com/NomicFoundation/solx/releases) still serve **solx** 0.1.x, the compiler **Slang** grew out of.
+You can start using **Slang** in the following ways:
+
+1. Use the installation script.
+   ```shell
+   curl -L https://raw.githubusercontent.com/NomicFoundation/solx/main/install-slang | bash
+   ```
+
+   The script will download the latest stable release of **Slang** and install it in your `PATH`.
+   Pass `--version=X.Y.Z` to install a specific release, or `--install-dir=DIR` to install somewhere other than `~/.local/bin`:
+   ```shell
+   curl -L https://raw.githubusercontent.com/NomicFoundation/solx/main/install-slang | bash -s -- --version=X.Y.Z
+   ```
+   > ⚠️ The script requires `curl` to be installed on your system.<br>
+   > This is the recommended way to install **Slang** for MacOS users to bypass gatekeeper checks.
+
+2. Download [stable releases](https://github.com/NomicFoundation/solx/releases). See [Static Executables](#static-executables).
+3. Build **Slang** from sources. See [Building from Source](#building-from-source).
+
+The same repository also hosts the **solx** 0.1.x releases, the compiler **Slang** grew out of, which [install-solx](https://raw.githubusercontent.com/NomicFoundation/solx/main/install-solx) still installs.
 
 
 
@@ -40,7 +57,7 @@ These tools manage compiler input and output on a higher level, and provide addi
 
 ## Static Executables
 
-**Slang** binaries will ship on the [releases page of this repository](https://github.com/NomicFoundation/solx/releases), with stable executable names and a changelog for each release. Tools using **Slang** must download the binaries from there and cache them locally.
+We ship **Slang** binaries on the [releases page of this repository](https://github.com/NomicFoundation/solx/releases), tagged `slang/X.Y.Z` and named `slang-<platform>-vX.Y.Z`, with a changelog for each release. Tools using **Slang** must download the binaries from there and cache them locally.
 
 > All executables are statically linked and must work on all recent platforms without issues.
 
