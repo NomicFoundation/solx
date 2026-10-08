@@ -6,7 +6,6 @@ use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
-use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::LibraryDefinition;
 use slang_solidity_v2::ast::StateVariableDefinition;
 
@@ -24,41 +23,28 @@ pub enum Object {
 }
 
 impl Object {
-    /// The object's name.
-    pub fn name(&self) -> Identifier {
-        match self {
-            Self::Contract(node, _) => node.name(),
-            Self::Library(node, _) => node.name(),
-        }
-    }
-
     /// The object's identifier, qualified by its file: linking keys objects by it, and two files
     /// may declare the same name.
     pub fn identifier(&self) -> String {
-        match self {
-            Self::Contract(node, _) => Self::contract_identifier(node),
-            Self::Library(node, _) => Self::library_identifier(node),
-        }
-    }
-
-    /// The identifier of the object `contract` deploys.
-    pub fn contract_identifier(contract: &ContractDefinition) -> String {
-        solx_utils::ContractName::full_path(contract.get_file_id().as_str(), contract.name().name())
-    }
-
-    /// The identifier of the object `library` deploys.
-    pub fn library_identifier(library: &LibraryDefinition) -> String {
-        solx_utils::ContractName::full_path(library.get_file_id().as_str(), library.name().name())
+        let definition = match self {
+            Self::Contract(node, _) => Definition::Contract(node.clone()),
+            Self::Library(node, _) => Definition::Library(node.clone()),
+        };
+        Self::definition_identifier(&definition).expect("a contract or a library deploys an object")
     }
 
     /// The identifier of the object `definition` deploys, or `None` for a definition other than a
     /// contract or a library.
     pub fn definition_identifier(definition: &Definition) -> Option<String> {
-        match definition {
-            Definition::Contract(contract) => Some(Self::contract_identifier(contract)),
-            Definition::Library(library) => Some(Self::library_identifier(library)),
-            _ => None,
-        }
+        let (file_id, name) = match definition {
+            Definition::Contract(node) => (node.get_file_id(), node.name()),
+            Definition::Library(node) => (node.get_file_id(), node.name()),
+            _ => return None,
+        };
+        Some(solx_utils::ContractName::full_path(
+            file_id.as_str(),
+            name.name(),
+        ))
     }
 
     /// The object's ABI.
