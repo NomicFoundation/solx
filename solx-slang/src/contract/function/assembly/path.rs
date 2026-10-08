@@ -145,6 +145,14 @@ impl<'function, 'contract, 'source_unit, 'context>
             match node {
                 Expression::TrueKeyword(_) => self.function.boolean_literal(true),
                 Expression::FalseKeyword(_) => self.function.boolean_literal(false),
+                // An address literal is typed `address`, so the binder folds no value for it.
+                Expression::HexNumberExpression(literal) => Value::constant_from_bigint(
+                    &literal
+                        .integer_value()
+                        .expect("the parser validated this hex literal"),
+                    self.function.typing(slang_type),
+                    self.function,
+                ),
                 Expression::Identifier(identifier) => {
                     let referenced = identifier
                         .resolve_to_definition()
