@@ -1,4 +1,4 @@
-// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.contract @{{.*}}A
 // CHECK:   sol.state_var @{{.*}}root{{.*}} slot 0 offset 0 : !sol.struct<"Node_[[NODE:[0-9]+]]", Storage, (!sol.array<? x !sol.struct<"Node_[[NODE]]", Storage>, Storage>, ui256)>
