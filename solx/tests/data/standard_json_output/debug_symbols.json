@@ -7,7 +7,7 @@
         "abstract": false,
         "range": [57, 93],
         "bases": [
-          {"file": "Base.sol", "name": "IERC165"}
+          {"path": "Base.sol", "name": "IERC165"}
         ],
         "functions": [
           {
@@ -27,8 +27,8 @@
         "abstract": false,
         "range": [152, 87],
         "bases": [
-          {"file": "Base.sol", "name": "ICounter"},
-          {"file": "Base.sol", "name": "IERC165"}
+          {"path": "Base.sol", "name": "ICounter"},
+          {"path": "Base.sol", "name": "IERC165"}
         ],
         "functions": [
           {
@@ -48,9 +48,9 @@
         "abstract": true,
         "range": [241, 223],
         "bases": [
-          {"file": "Base.sol", "name": "Root"},
-          {"file": "Base.sol", "name": "ICounter"},
-          {"file": "Base.sol", "name": "IERC165"}
+          {"path": "Base.sol", "name": "Root"},
+          {"path": "Base.sol", "name": "ICounter"},
+          {"path": "Base.sol", "name": "IERC165"}
         ],
         "functions": [
           {
@@ -114,7 +114,7 @@
         "abstract": false,
         "range": [842, 158],
         "bases": [
-          {"file": "Kinds.sol", "name": "IKinds"}
+          {"path": "Kinds.sol", "name": "IKinds"}
         ],
         "functions": [
           {
@@ -143,7 +143,7 @@
         "abstract": false,
         "range": [1002, 175],
         "bases": [
-          {"file": "Kinds.sol", "name": "Callee"}
+          {"path": "Kinds.sol", "name": "Callee"}
         ],
         "functions": [
           {
@@ -171,9 +171,9 @@
         "abstract": true,
         "range": [1179, 47],
         "bases": [
-          {"file": "Kinds.sol", "name": "Child"},
-          {"file": "Kinds.sol", "name": "IKinds"},
-          {"file": "Kinds.sol", "name": "Callee"}
+          {"path": "Kinds.sol", "name": "Child"},
+          {"path": "Kinds.sol", "name": "IKinds"},
+          {"path": "Kinds.sol", "name": "Callee"}
         ],
         "functions": []
       },
@@ -183,7 +183,7 @@
         "abstract": false,
         "range": [1228, 2635],
         "bases": [
-          {"file": "Kinds.sol", "name": "Kinds"}
+          {"path": "Kinds.sol", "name": "Kinds"}
         ],
         "functions": [
           {
@@ -767,10 +767,10 @@
         "abstract": true,
         "range": [364, 137],
         "bases": [
-          {"file": "Main.sol", "name": "Left"},
-          {"file": "Base.sol", "name": "Root"},
-          {"file": "Base.sol", "name": "ICounter"},
-          {"file": "Base.sol", "name": "IERC165"}
+          {"path": "Main.sol", "name": "Left"},
+          {"path": "Base.sol", "name": "Root"},
+          {"path": "Base.sol", "name": "ICounter"},
+          {"path": "Base.sol", "name": "IERC165"}
         ],
         "functions": [
           {
@@ -789,10 +789,10 @@
         "abstract": true,
         "range": [503, 138],
         "bases": [
-          {"file": "Main.sol", "name": "Right"},
-          {"file": "Base.sol", "name": "Root"},
-          {"file": "Base.sol", "name": "ICounter"},
-          {"file": "Base.sol", "name": "IERC165"}
+          {"path": "Main.sol", "name": "Right"},
+          {"path": "Base.sol", "name": "Root"},
+          {"path": "Base.sol", "name": "ICounter"},
+          {"path": "Base.sol", "name": "IERC165"}
         ],
         "functions": [
           {
@@ -811,12 +811,12 @@
         "abstract": false,
         "range": [643, 858],
         "bases": [
-          {"file": "Main.sol", "name": "Counter"},
-          {"file": "Main.sol", "name": "Right"},
-          {"file": "Main.sol", "name": "Left"},
-          {"file": "Base.sol", "name": "Root"},
-          {"file": "Base.sol", "name": "ICounter"},
-          {"file": "Base.sol", "name": "IERC165"}
+          {"path": "Main.sol", "name": "Counter"},
+          {"path": "Main.sol", "name": "Right"},
+          {"path": "Main.sol", "name": "Left"},
+          {"path": "Base.sol", "name": "Root"},
+          {"path": "Base.sol", "name": "ICounter"},
+          {"path": "Base.sol", "name": "IERC165"}
         ],
         "functions": [
           {

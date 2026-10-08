@@ -76,7 +76,7 @@ fn profiled_under_benchmarks() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
-        .stdout(predicate::str::contains("Slang_DebugSymbols:Main.sol"));
+        .stdout(predicate::str::contains("Slang_BuildDebugSymbols:Main.sol"));
 
     Ok(())
 }

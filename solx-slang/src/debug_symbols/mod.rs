@@ -37,14 +37,14 @@ use self::spans::Spans;
 
 /// The symbol table of a source unit, filled member by member in source order.
 #[derive(Default)]
-pub struct SymbolTable {
+pub struct DebugSymbolsBuilder {
     /// The contracts, interfaces and libraries.
     contracts: Vec<Contract>,
     /// The free functions.
     free_functions: Vec<Function>,
 }
 
-impl SymbolTable {
+impl DebugSymbolsBuilder {
     /// The symbol table of `unit`: its contracts, interfaces and libraries with their own members,
     /// its free functions, and the spans of its nonterminal nodes.
     pub fn build(unit: &SourceUnit) -> DebugSymbols {
@@ -137,9 +137,9 @@ impl SymbolTable {
             .collect()
     }
 
-    fn base(file: &str, name: &str) -> Base {
+    fn base(path: &str, name: &str) -> Base {
         Base {
-            file: file.to_owned(),
+            path: path.to_owned(),
             name: name.to_owned(),
         }
     }

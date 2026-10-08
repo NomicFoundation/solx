@@ -25,6 +25,7 @@ use solx_utils::RevertStrings;
 
 use crate::debug_locations::resolver::Resolver;
 use crate::debug_locations::sources::Sources;
+use crate::debug_symbols::DebugSymbolsBuilder;
 use crate::scope::source_unit::SourceUnitScope;
 
 use self::import_resolver::SourceImportResolver;
@@ -176,10 +177,9 @@ impl Slang {
             }
             if is_selected(solx_standard_json::InputSelector::DebugSymbols) {
                 let run_debug_symbols = profiler.start_pipeline_element(
-                    format!("{}_DebugSymbols:{file_id}", Self::NAME).as_str(),
+                    format!("{}_BuildDebugSymbols:{file_id}", Self::NAME).as_str(),
                 );
-                output_source.debug_symbols =
-                    Some(crate::debug_symbols::SymbolTable::build(&file.ast()));
+                output_source.debug_symbols = Some(DebugSymbolsBuilder::build(&file.ast()));
                 run_debug_symbols.borrow_mut().finish();
             }
         }

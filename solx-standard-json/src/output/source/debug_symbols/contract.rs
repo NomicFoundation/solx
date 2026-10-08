@@ -46,7 +46,7 @@ pub enum ContractKind {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Base {
     /// The standard JSON source path.
-    pub file: String,
-    /// The declared name of the definition in `file`.
+    pub path: String,
+    /// The declared name of the definition in `path`.
     pub name: String,
 }
