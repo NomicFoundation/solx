@@ -34,6 +34,8 @@ contract Counter is Left, Right {
     uint256 public override count;
     mapping(address => uint256) public balances;
     uint256[] public history;
+    uint256 public constant MAX = 1;
+    uint256 public immutable created = 7;
 
     modifier onlyOwner() {
         require(msg.sender == owner);

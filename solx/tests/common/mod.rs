@@ -32,6 +32,14 @@ macro_rules! standard_json {
 }
 pub(crate) use standard_json;
 
+/// Returns a path under `tests/data/standard_json_output/` for expected standard JSON output files.
+macro_rules! standard_json_output {
+    ($relative:literal) => {
+        concat!("tests/data/standard_json_output/", $relative)
+    };
+}
+pub(crate) use standard_json_output;
+
 pub const TEST_SOLIDITY_CONTRACT: &str = contract!("solidity/SlangTest.sol");
 pub const TEST_YUL_CONTRACT: &str = contract!("yul/Test.yul");
 pub const TEST_LLVM_IR_CONTRACT: &str = contract!("llvm_ir/Test.ll");
