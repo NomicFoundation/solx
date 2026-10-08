@@ -21,11 +21,11 @@ import sys
 
 TOP_SIGNATURES = 40
 EXAMPLES = 3
-OUTCOME_ORDER = ["ok", "solx-fail", "both-fail", "timeout"]
+OUTCOME_ORDER = ["ok", "slang-fail", "both-fail", "timeout"]
 OUTCOME_MEANING = {
     "ok": "compiles: no errors and bytecode for the target source",
-    "solx-fail": "candidate fails, baseline compiles (or no baseline given)",
-    "both-fail": "candidate and baseline both fail: corpus artifact or documented solx limitation",
+    "slang-fail": "candidate fails, baseline compiles (or no baseline given)",
+    "both-fail": "candidate and baseline both fail: corpus artifact or documented compiler limitation",
     "timeout": "candidate exceeded the per-contract timeout",
 }
 CRASH_LINE = re.compile(r"(Assertion `.*?' failed|LLVM ERROR: [^\n]+|fatal error: [^\n]+|Unexpected [^\n]+)")
@@ -139,7 +139,7 @@ def main() -> int:
     outcomes = collections.Counter(result["outcome"] for result in results)
 
     lines = [f"## {args.title}", ""]
-    for name in ("solx", "baseline"):
+    for name in ("slang", "baseline"):
         if name in meta:
             lines.append(f"- {name}: `{meta[name]}`")
     lines += [f"- contracts: {total}", ""]
@@ -150,7 +150,7 @@ def main() -> int:
             lines.append(f"| {outcome} | {outcomes[outcome]} | {outcomes[outcome] / total:.2%} | {OUTCOME_MEANING.get(outcome, '')} |")
     lines.append("")
 
-    ok_walls = [result["solx"]["wall"] for result in results if result["outcome"] == "ok"]
+    ok_walls = [result["slang"]["wall"] for result in results if result["outcome"] == "ok"]
     if ok_walls:
         lines += [
             "candidate wall time over `ok` contracts: "
@@ -159,7 +159,7 @@ def main() -> int:
             "",
         ]
 
-    lines += ["### Outcome by corpus trait", "", "| trait | contracts | ok | solx-fail | both-fail | timeout |", "|---|---|---|---|---|---|"]
+    lines += ["### Outcome by corpus trait", "", "| trait | contracts | ok | slang-fail | both-fail | timeout |", "|---|---|---|---|---|---|"]
     trait_rows = [
         ("single source", lambda t: t["n_sources"] == 1),
         ("multiple sources", lambda t: t["n_sources"] > 1),
@@ -177,7 +177,7 @@ def main() -> int:
         lines.append(f"| {label} | {len(subset)} | {cells} |")
     lines.append("")
 
-    census([r for r in results if r["outcome"] == "solx-fail"], "solx", "Candidate-only failures", lines)
+    census([r for r in results if r["outcome"] == "slang-fail"], "slang", "Candidate-only failures", lines)
     # For shared failures the baseline's diagnostic is the one that explains the contract.
     both = [r for r in results if r["outcome"] == "both-fail" and "baseline" in r]
     census(both, "baseline", "Failures shared with the baseline (baseline diagnostics)", lines)

@@ -1,7 +1,7 @@
 # Sourcify corpus sweep
 
-Compiles real-world Sourcify-verified contracts through `solx --standard-json`
-and reports what fails, and how. Built for the Slang frontend: the corpus is
+Compiles real-world Sourcify-verified contracts through `slang --standard-json`
+and reports what fails, and how. Built for the slang compiler: the corpus is
 every verified solc 0.8.34 and 0.8.36 contract with evmVersion >= cancun
 (119,117 contracts, extracted from Sourcify's BigQuery dataset 2026-08-18 and
 2026-09-20), so the
@@ -15,11 +15,11 @@ Report-only: frontend failures never fail the run.
 
 ```bash
 # The committed fixtures (10 contracts, one per corpus layout class):
-python3 tests/sourcify-sweep/run.py --bin ./target/release/solx --out sweep.jsonl
+python3 tests/sourcify-sweep/run.py --bin ./target/release/slang --out sweep.jsonl
 python3 tests/sourcify-sweep/report.py --results sweep.jsonl
 
 # The full corpus, with a released solx as the baseline leg:
-python3 tests/sourcify-sweep/run.py --bin ./target/release/solx --baseline path/to/solx-0.1.8 \
+python3 tests/sourcify-sweep/run.py --bin ./target/release/slang --baseline path/to/solx-0.1.8 \
   --corpus path/to/corpus --out sweep.jsonl --memory-limit-mb 6144
 ```
 
@@ -33,7 +33,7 @@ Each corpus file `contracts/<chain>_<address>.json` (slang corpus
 format_version 1 plus the contract's original solc `settings`) is turned into
 one standard-JSON input: all sources inline under their original virtual
 paths, `evmVersion`, `libraries`, `remappings` and `viaIR` passed through
-verbatim, optimizer left at the solx default, output selection
+verbatim, optimizer left at the compiler default, output selection
 `evm.bytecode.object` + `evm.deployedBytecode.object`. Settings the frontend
 does not implement are deliberately not stripped: the same input must be
 valid for the baseline leg, and a resulting failure (an unresolved import
@@ -51,8 +51,8 @@ the corpus itself stays the verbatim Sourcify record.
 | outcome | meaning |
 |---|---|
 | `ok` | no error-severity diagnostics and non-empty bytecode for at least one contract in the record's `target` source |
-| `solx-fail` | the candidate fails and the baseline compiles (or no `--baseline` was given) |
-| `both-fail` | both fail: a corpus artifact or a documented solx limitation (memory-unsafe assembly with stack-too-deep, recursive stackification, CALLCODE) |
+| `slang-fail` | the candidate fails and the baseline compiles (or no `--baseline` was given) |
+| `both-fail` | both fail: a corpus artifact or a documented compiler limitation (memory-unsafe assembly with stack-too-deep, recursive stackification, CALLCODE) |
 | `timeout` | the candidate exceeded `--timeout` (300 s default) |
 
 Each leg records a failure `kind` alongside the outcome, because the Slang
