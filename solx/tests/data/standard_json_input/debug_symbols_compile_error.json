@@ -1,0 +1,17 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "Main.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract C is Missing {\n    function f() public {}\n}\n"
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "*": {
+        "": [
+          "debugSymbols"
+        ]
+      }
+    }
+  }
+}

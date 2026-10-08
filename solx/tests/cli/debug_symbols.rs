@@ -49,6 +49,23 @@ fn absent_unless_selected() -> anyhow::Result<()> {
 }
 
 #[test]
+fn present_on_compile_error() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("debug_symbols_compile_error.json"),
+    ];
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("Identifier not found."))
+        .stdout(predicate::str::contains("\"debugSymbols\""));
+
+    Ok(())
+}
+
+#[test]
 fn profiled_under_benchmarks() -> anyhow::Result<()> {
     crate::common::setup()?;
 
