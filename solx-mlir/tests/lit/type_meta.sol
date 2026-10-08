@@ -1,5 +1,8 @@
 // RUN: slang --emit-mlir=sol %s | FileCheck %s
 
+// CHECK: sol.func @{{.*abstract_contract_interface_id.*}}() -> !sol.fixedbytes<4>
+// CHECK:   sol.constant 665904267 : ui32
+
 // CHECK: sol.func @{{.*contract_creation_code.*}}() -> !sol.string<Memory>
 // CHECK:   sol.object_code "{{[^"]*}}Other{{[0-9_]*}}" : !sol.string<Memory>
 
@@ -102,3 +105,27 @@ contract NonFunctionMembers {
 }
 
 library Registry {}
+
+abstract contract AbstractBase {
+    function inherited() external virtual;
+}
+
+abstract contract AbstractThing is AbstractBase {
+    uint256 public stored;
+
+    function f() public virtual;
+
+    function g(uint256) external virtual returns (bool) {
+        return true;
+    }
+
+    function i() internal virtual {}
+
+    receive() external payable {}
+}
+
+contract AbstractMembers {
+    function abstract_contract_interface_id() public pure returns (bytes4) {
+        return type(AbstractThing).interfaceId;
+    }
+}
