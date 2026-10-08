@@ -12,10 +12,10 @@ pub struct Function {
     pub name: String,
     /// Whether this is a function, constructor, fallback, receive, modifier, getter or free function.
     pub kind: FunctionKind,
-    /// The declared visibility, otherwise `internal` for a modifier or free function and `public`
-    /// for a getter.
+    /// The visibility Slang assigns: the declared one, otherwise `internal` for a modifier or free
+    /// function, `public` for a constructor and `external` for a getter.
     pub visibility: Visibility,
-    /// The declared state mutability, `view` for a getter as in its ABI entry.
+    /// The state mutability Slang assigns, `view` for a getter.
     pub mutability: Mutability,
     /// The 4-byte selector in lowercase hex, for an externally visible function or a getter.
     #[serde(default, skip_serializing_if = "Option::is_none")]

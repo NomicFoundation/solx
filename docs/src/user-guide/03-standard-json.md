@@ -241,7 +241,7 @@ The output JSON contains all artifacts produced by **Slang**. The example below 
       // Corresponds to "debugSymbols" in the outputSelection settings.
       "debugSymbols": {
         // Contracts, interfaces and libraries in source order, each with the functions, modifiers and public state
-        // variable getters it declares itself, and for a contract or library its C3 linearisation.
+        // variable getters it declares itself, and for a contract or interface its C3 linearisation.
         "contracts": [/* ... */],
         // File-level functions.
         "freeFunctions": [/* ... */],

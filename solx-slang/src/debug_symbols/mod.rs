@@ -10,6 +10,9 @@ use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind as SlangFunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
+use slang_solidity_v2::ast::FunctionType;
+use slang_solidity_v2::ast::FunctionTypeMutability;
+use slang_solidity_v2::ast::FunctionTypeVisibility;
 use slang_solidity_v2::ast::FunctionVisibility;
 use slang_solidity_v2::ast::InterfaceDefinition;
 use slang_solidity_v2::ast::LibraryDefinition;
@@ -17,6 +20,7 @@ use slang_solidity_v2::ast::NodeLocation;
 use slang_solidity_v2::ast::SourceUnit;
 use slang_solidity_v2::ast::SourceUnitMember;
 use slang_solidity_v2::ast::StateVariableDefinition;
+use slang_solidity_v2::ast::Type;
 
 use solx_standard_json::output::source::debug_symbols::DebugSymbols;
 use solx_standard_json::output::source::debug_symbols::contract::Base;
@@ -82,47 +86,31 @@ impl SymbolTable {
             kind: ContractKind::Contract,
             is_abstract: contract.is_abstract(),
             range: Self::range(contract),
-            bases: Some(
-                contract
-                    .linearised_bases()
-                    .iter()
-                    .map(|base| match base {
-                        ContractBase::Contract(base) => {
-                            Self::base(base.get_file_id().as_str(), base.name().name())
-                        }
-                        ContractBase::Interface(base) => {
-                            Self::base(base.get_file_id().as_str(), base.name().name())
-                        }
-                    })
-                    .collect(),
-            ),
+            bases: Some(Self::bases(contract.linearised_bases())),
             functions: Self::own_functions(contract.members().iter()),
         }
     }
 
-    /// An interface, without a linearisation.
+    /// An interface with its C3 linearisation.
     fn interface(interface: &InterfaceDefinition) -> Contract {
         Contract {
             name: interface.name().name().to_owned(),
             kind: ContractKind::Interface,
             is_abstract: false,
             range: Self::range(interface),
-            bases: None,
+            bases: Some(Self::bases(interface.linearised_bases())),
             functions: Self::own_functions(interface.members().iter()),
         }
     }
 
-    /// A library. A library cannot inherit, so its linearisation is itself.
+    /// A library, which Slang gives no linearisation.
     fn library(library: &LibraryDefinition) -> Contract {
         Contract {
             name: library.name().name().to_owned(),
             kind: ContractKind::Library,
             is_abstract: false,
             range: Self::range(library),
-            bases: Some(vec![Self::base(
-                library.get_file_id().as_str(),
-                library.name().name(),
-            )]),
+            bases: None,
             functions: Self::own_functions(library.members().iter()),
         }
     }
@@ -133,6 +121,20 @@ impl SymbolTable {
             .calculate_text_range()
             .expect("every definition covers source text");
         [range.start, range.len()]
+    }
+
+    fn bases(linearised_bases: Vec<ContractBase>) -> Vec<Base> {
+        linearised_bases
+            .iter()
+            .map(|base| match base {
+                ContractBase::Contract(base) => {
+                    Self::base(base.get_file_id().as_str(), base.name().name())
+                }
+                ContractBase::Interface(base) => {
+                    Self::base(base.get_file_id().as_str(), base.name().name())
+                }
+            })
+            .collect()
     }
 
     fn base(file: &str, name: &str) -> Base {
@@ -157,10 +159,13 @@ impl SymbolTable {
                     };
                     Some(Self::function(&function, kind))
                 }
-                ContractMember::StateVariableDefinition(variable)
-                    if variable.is_externally_visible() =>
-                {
-                    Some(Self::getter(&variable))
+                ContractMember::StateVariableDefinition(state_variable) => {
+                    match state_variable.getter_type() {
+                        Some(Type::Function(getter)) => {
+                            Some(Self::getter(&state_variable, &getter))
+                        }
+                        _ => None,
+                    }
                 }
                 _ => None,
             })
@@ -194,16 +199,26 @@ impl SymbolTable {
     }
 
     /// The getter of a public state variable, located at the variable's definition.
-    fn getter(variable: &StateVariableDefinition) -> Function {
+    fn getter(state_variable: &StateVariableDefinition, getter: &FunctionType) -> Function {
         Function {
-            name: variable.name().name().to_owned(),
+            name: state_variable.name().name().to_owned(),
             kind: FunctionKind::Getter,
-            visibility: Visibility::Public,
-            mutability: Mutability::View,
-            selector: variable
+            visibility: match getter.visibility() {
+                FunctionTypeVisibility::Public => Visibility::Public,
+                FunctionTypeVisibility::External => Visibility::External,
+                FunctionTypeVisibility::Internal => Visibility::Internal,
+                FunctionTypeVisibility::Private => Visibility::Private,
+            },
+            mutability: match getter.mutability() {
+                FunctionTypeMutability::Pure => Mutability::Pure,
+                FunctionTypeMutability::View => Mutability::View,
+                FunctionTypeMutability::NonPayable => Mutability::NonPayable,
+                FunctionTypeMutability::Payable => Mutability::Payable,
+            },
+            selector: state_variable
                 .compute_selector()
                 .map(SourceUnitScope::selector_hex),
-            range: Self::range(variable),
+            range: Self::range(state_variable),
             implemented: true,
         }
     }
