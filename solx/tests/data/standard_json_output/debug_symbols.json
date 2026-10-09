@@ -14,7 +14,7 @@
             "name": "supportsInterface",
             "kind": "function",
             "visibility": "external",
-            "mutability": "view",
+            "stateMutability": "view",
             "selector": "01ffc9a7",
             "range": [81, 67],
             "implemented": false
@@ -35,7 +35,7 @@
             "name": "count",
             "kind": "function",
             "visibility": "external",
-            "mutability": "view",
+            "stateMutability": "view",
             "selector": "06661abd",
             "range": [188, 49],
             "implemented": false
@@ -57,7 +57,7 @@
             "name": "supportsInterface",
             "kind": "function",
             "visibility": "public",
-            "mutability": "pure",
+            "stateMutability": "pure",
             "selector": "01ffc9a7",
             "range": [282, 114],
             "implemented": true
@@ -66,7 +66,7 @@
             "name": "hook",
             "kind": "function",
             "visibility": "internal",
-            "mutability": "nonpayable",
+            "stateMutability": "nonpayable",
             "range": [402, 60],
             "implemented": false
           }
@@ -121,7 +121,7 @@
             "name": "statements",
             "kind": "function",
             "visibility": "external",
-            "mutability": "nonpayable",
+            "stateMutability": "nonpayable",
             "selector": "ac3f58a8",
             "range": [865, 64],
             "implemented": false
@@ -130,7 +130,7 @@
             "name": "yul",
             "kind": "function",
             "visibility": "external",
-            "mutability": "pure",
+            "stateMutability": "pure",
             "selector": "d541c441",
             "range": [935, 63],
             "implemented": false
@@ -150,7 +150,7 @@
             "name": "constructor",
             "kind": "constructor",
             "visibility": "public",
-            "mutability": "payable",
+            "stateMutability": "payable",
             "range": [1024, 36],
             "implemented": true
           },
@@ -158,7 +158,7 @@
             "name": "pay",
             "kind": "function",
             "visibility": "external",
-            "mutability": "payable",
+            "stateMutability": "payable",
             "selector": "ef48eee6",
             "range": [1066, 109],
             "implemented": true
@@ -190,7 +190,7 @@
             "name": "atMost",
             "kind": "modifier",
             "visibility": "internal",
-            "mutability": "nonpayable",
+            "stateMutability": "nonpayable",
             "range": [1360, 85],
             "implemented": true
           },
@@ -198,7 +198,7 @@
             "name": "positive",
             "kind": "modifier",
             "visibility": "internal",
-            "mutability": "nonpayable",
+            "stateMutability": "nonpayable",
             "range": [1451, 71],
             "implemented": true
           },
@@ -206,7 +206,7 @@
             "name": "statements",
             "kind": "function",
             "visibility": "external",
-            "mutability": "nonpayable",
+            "stateMutability": "nonpayable",
             "selector": "ac3f58a8",
             "range": [1528, 676],
             "implemented": true
@@ -215,7 +215,7 @@
             "name": "expressions",
             "kind": "function",
             "visibility": "external",
-            "mutability": "nonpayable",
+            "stateMutability": "nonpayable",
             "selector": "952126f4",
             "range": [2210, 859],
             "implemented": true
@@ -224,7 +224,7 @@
             "name": "yul",
             "kind": "function",
             "visibility": "external",
-            "mutability": "pure",
+            "stateMutability": "pure",
             "selector": "d541c441",
             "range": [3075, 786],
             "implemented": true
@@ -237,7 +237,7 @@
         "name": "half",
         "kind": "free",
         "visibility": "internal",
-        "mutability": "pure",
+        "stateMutability": "pure",
         "range": [468, 69],
         "implemented": true
       },
@@ -245,7 +245,7 @@
         "name": "add",
         "kind": "free",
         "visibility": "internal",
-        "mutability": "pure",
+        "stateMutability": "pure",
         "range": [566, 113],
         "implemented": true
       },
@@ -253,7 +253,7 @@
         "name": "sub",
         "kind": "free",
         "visibility": "internal",
-        "mutability": "pure",
+        "stateMutability": "pure",
         "range": [681, 113],
         "implemented": true
       }
@@ -746,7 +746,7 @@
             "name": "add",
             "kind": "function",
             "visibility": "internal",
-            "mutability": "pure",
+            "stateMutability": "pure",
             "range": [172, 96],
             "implemented": true
           },
@@ -754,7 +754,7 @@
             "name": "triple",
             "kind": "function",
             "visibility": "public",
-            "mutability": "pure",
+            "stateMutability": "pure",
             "selector": "f40a049d",
             "range": [274, 86],
             "implemented": true
@@ -777,7 +777,7 @@
             "name": "hook",
             "kind": "function",
             "visibility": "internal",
-            "mutability": "nonpayable",
+            "stateMutability": "nonpayable",
             "range": [401, 98],
             "implemented": true
           }
@@ -799,7 +799,7 @@
             "name": "hook",
             "kind": "function",
             "visibility": "internal",
-            "mutability": "nonpayable",
+            "stateMutability": "nonpayable",
             "range": [541, 98],
             "implemented": true
           }
@@ -823,7 +823,7 @@
             "name": "count",
             "kind": "getter",
             "visibility": "external",
-            "mutability": "view",
+            "stateMutability": "view",
             "selector": "06661abd",
             "range": [708, 30],
             "implemented": true
@@ -832,7 +832,7 @@
             "name": "balances",
             "kind": "getter",
             "visibility": "external",
-            "mutability": "view",
+            "stateMutability": "view",
             "selector": "27e235e3",
             "range": [743, 44],
             "implemented": true
@@ -841,7 +841,7 @@
             "name": "history",
             "kind": "getter",
             "visibility": "external",
-            "mutability": "view",
+            "stateMutability": "view",
             "selector": "a7a38f0b",
             "range": [792, 25],
             "implemented": true
@@ -850,7 +850,7 @@
             "name": "MAX",
             "kind": "getter",
             "visibility": "external",
-            "mutability": "view",
+            "stateMutability": "view",
             "selector": "d49d5181",
             "range": [822, 32],
             "implemented": true
@@ -859,7 +859,7 @@
             "name": "created",
             "kind": "getter",
             "visibility": "external",
-            "mutability": "view",
+            "stateMutability": "view",
             "selector": "325a19f1",
             "range": [859, 37],
             "implemented": true
@@ -868,7 +868,7 @@
             "name": "onlyOwner",
             "kind": "modifier",
             "visibility": "internal",
-            "mutability": "nonpayable",
+            "stateMutability": "nonpayable",
             "range": [902, 77],
             "implemented": true
           },
@@ -876,7 +876,7 @@
             "name": "constructor",
             "kind": "constructor",
             "visibility": "public",
-            "mutability": "payable",
+            "stateMutability": "payable",
             "range": [985, 57],
             "implemented": true
           },
@@ -884,7 +884,7 @@
             "name": "inc",
             "kind": "function",
             "visibility": "public",
-            "mutability": "nonpayable",
+            "stateMutability": "nonpayable",
             "selector": "371303c0",
             "range": [1048, 107],
             "implemented": true
@@ -893,7 +893,7 @@
             "name": "inc",
             "kind": "function",
             "visibility": "external",
-            "mutability": "nonpayable",
+            "stateMutability": "nonpayable",
             "selector": "812600df",
             "range": [1161, 93],
             "implemented": true
@@ -902,7 +902,7 @@
             "name": "hook",
             "kind": "function",
             "visibility": "internal",
-            "mutability": "nonpayable",
+            "stateMutability": "nonpayable",
             "range": [1260, 111],
             "implemented": true
           },
@@ -910,7 +910,7 @@
             "name": "reset",
             "kind": "function",
             "visibility": "private",
-            "mutability": "nonpayable",
+            "stateMutability": "nonpayable",
             "range": [1377, 51],
             "implemented": true
           },
@@ -918,7 +918,7 @@
             "name": "fallback",
             "kind": "fallback",
             "visibility": "external",
-            "mutability": "payable",
+            "stateMutability": "payable",
             "range": [1434, 30],
             "implemented": true
           },
@@ -926,7 +926,7 @@
             "name": "receive",
             "kind": "receive",
             "visibility": "external",
-            "mutability": "payable",
+            "stateMutability": "payable",
             "range": [1470, 29],
             "implemented": true
           }
@@ -938,7 +938,7 @@
         "name": "double",
         "kind": "free",
         "visibility": "internal",
-        "mutability": "pure",
+        "stateMutability": "pure",
         "range": [77, 71],
         "implemented": true
       }

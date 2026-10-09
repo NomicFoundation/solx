@@ -16,7 +16,7 @@ pub struct Function {
     /// function, `public` for a constructor and `external` for a getter.
     pub visibility: Visibility,
     /// The state mutability Slang assigns, `view` for a getter.
-    pub mutability: Mutability,
+    pub state_mutability: StateMutability,
     /// The 4-byte selector in lowercase hex, for an externally visible function or a getter.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
@@ -69,7 +69,7 @@ pub enum Visibility {
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Mutability {
+pub enum StateMutability {
     /// `pure`.
     Pure,
     /// `view`.

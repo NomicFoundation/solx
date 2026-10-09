@@ -28,7 +28,7 @@ use solx_standard_json::output::source::debug_symbols::contract::Contract;
 use solx_standard_json::output::source::debug_symbols::contract::ContractKind;
 use solx_standard_json::output::source::debug_symbols::function::Function;
 use solx_standard_json::output::source::debug_symbols::function::FunctionKind;
-use solx_standard_json::output::source::debug_symbols::function::Mutability;
+use solx_standard_json::output::source::debug_symbols::function::StateMutability;
 use solx_standard_json::output::source::debug_symbols::function::Visibility;
 
 use crate::scope::source_unit::SourceUnitScope;
@@ -184,11 +184,11 @@ impl DebugSymbolsBuilder {
                 FunctionVisibility::Internal => Visibility::Internal,
                 FunctionVisibility::Private => Visibility::Private,
             },
-            mutability: match attributes.mutability() {
-                FunctionMutability::Pure => Mutability::Pure,
-                FunctionMutability::View => Mutability::View,
-                FunctionMutability::NonPayable => Mutability::NonPayable,
-                FunctionMutability::Payable => Mutability::Payable,
+            state_mutability: match attributes.mutability() {
+                FunctionMutability::Pure => StateMutability::Pure,
+                FunctionMutability::View => StateMutability::View,
+                FunctionMutability::NonPayable => StateMutability::NonPayable,
+                FunctionMutability::Payable => StateMutability::Payable,
             },
             selector: function
                 .compute_selector()
@@ -209,11 +209,11 @@ impl DebugSymbolsBuilder {
                 FunctionTypeVisibility::Internal => Visibility::Internal,
                 FunctionTypeVisibility::Private => Visibility::Private,
             },
-            mutability: match getter.mutability() {
-                FunctionTypeMutability::Pure => Mutability::Pure,
-                FunctionTypeMutability::View => Mutability::View,
-                FunctionTypeMutability::NonPayable => Mutability::NonPayable,
-                FunctionTypeMutability::Payable => Mutability::Payable,
+            state_mutability: match getter.mutability() {
+                FunctionTypeMutability::Pure => StateMutability::Pure,
+                FunctionTypeMutability::View => StateMutability::View,
+                FunctionTypeMutability::NonPayable => StateMutability::NonPayable,
+                FunctionTypeMutability::Payable => StateMutability::Payable,
             },
             selector: state_variable
                 .compute_selector()
