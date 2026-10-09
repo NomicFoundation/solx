@@ -3,22 +3,22 @@
 // CHECK: sol.state_var @{{.*functionPointerState.*}} slot 0 offset 0 : !sol.func_ref<() -> ui256>
 // CHECK: sol.state_var @{{.*functionPointerField.*}} slot 1 offset 0 : !sol.struct<(!sol.func_ref<() -> ui256>), Storage>
 
-// CHECK: sol.func private @{{.*g.*}}() -> ui256 attributes {{.*}}id = {{[0-9]+}}
-
-// CHECK: sol.func private @{{.*invoke.*}}(%[[ARGUMENT:.*]]: !sol.func_ref<() -> ui256>) -> ui256
-// CHECK:   sol.store %[[ARGUMENT]], %[[SLOT:.*]] : !sol.func_ref<() -> ui256>, !sol.ptr<!sol.func_ref<() -> ui256>, Stack>
-// CHECK:   %[[POINTER:.*]] = sol.load %[[SLOT]] : !sol.ptr<!sol.func_ref<() -> ui256>, Stack>, !sol.func_ref<() -> ui256>
-// CHECK:   sol.icall %[[POINTER]]() : !sol.func_ref<() -> ui256>, () -> ui256
-
 // CHECK: sol.func @{{.*run.*}}
 // CHECK:   %[[G:.*]] = sol.func_constant @{{.*g.*}} : !sol.func_ref<() -> ui256>
 // CHECK:   sol.store %[[G]], %[[SLOT:.*]] : !sol.func_ref<() -> ui256>, !sol.ptr<!sol.func_ref<() -> ui256>, Stack>
 // CHECK:   %[[POINTER:.*]] = sol.load %[[SLOT]] : !sol.ptr<!sol.func_ref<() -> ui256>, Stack>, !sol.func_ref<() -> ui256>
 // CHECK:   sol.icall %[[POINTER]]() : !sol.func_ref<() -> ui256>, () -> ui256
 
+// CHECK: sol.func @{{.*g.*}}() -> ui256 attributes {{.*}}id = {{[0-9]+}}
+
 // CHECK: sol.func @{{.*run_argument.*}}
 // CHECK:   sol.func_constant @{{.*g.*}} : !sol.func_ref<() -> ui256>
 // CHECK:   sol.call @{{.*invoke.*}}(%{{.*}}) : (!sol.func_ref<() -> ui256>) -> ui256
+
+// CHECK: sol.func @{{.*invoke.*}}(%[[ARGUMENT:.*]]: !sol.func_ref<() -> ui256>) -> ui256
+// CHECK:   sol.store %[[ARGUMENT]], %[[SLOT:.*]] : !sol.func_ref<() -> ui256>, !sol.ptr<!sol.func_ref<() -> ui256>, Stack>
+// CHECK:   %[[POINTER:.*]] = sol.load %[[SLOT]] : !sol.ptr<!sol.func_ref<() -> ui256>, Stack>, !sol.func_ref<() -> ui256>
+// CHECK:   sol.icall %[[POINTER]]() : !sol.func_ref<() -> ui256>, () -> ui256
 
 // CHECK: sol.func @{{.*run_arguments_results.*}}
 // CHECK:   %[[PAIR:.*]] = sol.func_constant @{{.*pair.*}} : !sol.func_ref<(ui256, ui256) -> (ui256, ui256)>
@@ -67,10 +67,28 @@
 // CHECK:   sol.store %{{.*}}, %{{.*}} : !sol.func_ref<() -> ui256>, !sol.ptr<!sol.func_ref<() -> ui256>, Storage>
 
 // CHECK: sol.contract @{{.*Lib.*}} {
-// CHECK: sol.func private @{{.*run_library.*}}
+// CHECK: sol.func @{{.*run_library.*}}
 // CHECK:   sol.func_constant @{{.*double.*}} : !sol.func_ref<(ui256) -> ui256>
 // CHECK:   sol.icall %{{[0-9]+}}(%{{.*}}) : !sol.func_ref<(ui256) -> ui256>, (ui256) -> ui256
-// CHECK: } {kind = #Library}
+// CHECK: } {kind = #Library, runtime}
+
+// CHECK: sol.contract @{{.*Stored.*}} {
+// CHECK: sol.state_var @{{.*stored.*}} slot 0 offset 0 : !sol.func_ref<() -> ui256>
+// CHECK: sol.func_constant @"kept()_{{[0-9]+}}" : !sol.func_ref<() -> ui256>
+// CHECK: sol.func_constant @"retained()_{{[0-9]+}}" : !sol.func_ref<() -> ui256>
+// CHECK: sol.func_constant @"inherited()_{{[0-9]+}}" : !sol.func_ref<() -> ui256>
+// CHECK: sol.func_constant @"reachedOnlyInDeploy()_{{[0-9]+}}" : !sol.func_ref<() -> ui256>
+// CHECK: sol.func_constant @"uncalledType(uint256)_{{[0-9]+}}" : !sol.func_ref<(ui256) -> ui256>
+// CHECK: } {kind = #Contract}
+// CHECK: sol.contract @{{.*Stored.*}} {
+// CHECK: sol.func @"run_stored()_{{[0-9]+}}"
+// CHECK:   sol.icall %{{.*}}() : !sol.func_ref<() -> ui256>, () -> ui256
+// CHECK: sol.func @"inherited()_{{[0-9]+}}"() -> ui256
+// CHECK: sol.func @"kept()_{{[0-9]+}}"() -> ui256
+// CHECK: sol.func @"retained()_{{[0-9]+}}"() -> ui256
+// CHECK: sol.func @"reachedOnlyInDeploy()_{{[0-9]+}}"() -> ui256
+// CHECK: sol.func @"uncalledType(uint256)_{{[0-9]+}}"(%{{.*}}: ui256) -> ui256
+// CHECK: } {{.*}}indirect_callees = [@"inherited()_{{[0-9]+}}", @"kept()_{{[0-9]+}}", @"retained()_{{[0-9]+}}", @"reachedOnlyInDeploy()_{{[0-9]+}}", @"uncalledType(uint256)_{{[0-9]+}}"]
 
 contract C {
     struct S {
@@ -161,8 +179,36 @@ library Lib {
         return a * 2;
     }
 
-    function run_library(uint256 x) internal pure returns (uint256) {
+    function run_library(uint256 x) public pure returns (uint256) {
         function (uint256) internal pure returns (uint256) functionPointer = double;
         return functionPointer(x);
+    }
+}
+
+abstract contract StoredBase {
+    function inherited() internal virtual returns (uint256) {}
+}
+
+contract Stored is StoredBase {
+    function () internal returns (uint256) stored;
+
+    constructor() {
+        stored = kept;
+        stored = Stored.retained;
+        stored = super.inherited;
+        function () internal returns (uint256) unstored = reachedOnlyInDeploy;
+        function (uint256) internal pure returns (uint256) unused = uncalledType;
+    }
+
+    function kept() internal returns (uint256) {}
+
+    function retained() internal returns (uint256) {}
+
+    function reachedOnlyInDeploy() internal returns (uint256) {}
+
+    function uncalledType(uint256) internal pure returns (uint256) {}
+
+    function run_stored() public returns (uint256) {
+        return stored();
     }
 }

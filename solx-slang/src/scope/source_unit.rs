@@ -15,6 +15,7 @@ use solx_mlir::Contract;
 use solx_mlir::Function;
 use solx_mlir::Type as MlirType;
 
+use crate::contract::indirect_callees::IndirectCallees;
 use crate::contract::object::Object;
 use crate::contract::storage_slot::StorageSlot;
 use crate::debug_locations::DebugLocations;
@@ -26,7 +27,7 @@ pub struct SourceUnitScope<'context> {
     /// The owned MLIR context, surrendered by the conversion into it.
     pub mlir: Context<'context>,
     /// What the nodes lowered here resolve to: their locations when debug info was requested for
-    /// the object, the unknown location otherwise.
+    /// the segment, the unknown location otherwise.
     pub debug_locations: DebugLocations<'context>,
     /// The mangled symbol and MLIR signature of each function, filled at its first naming.
     pub function_signatures: HashMap<NodeId, Function<'context>>,
@@ -37,7 +38,7 @@ pub struct SourceUnitScope<'context> {
 }
 
 impl<'context> SourceUnitScope<'context> {
-    /// Wraps the MLIR context for one source unit's emission.
+    /// Wraps the MLIR context for one segment's emission.
     pub fn new(mlir: Context<'context>, debug_locations: DebugLocations<'context>) -> Self {
         Self {
             mlir,
@@ -49,14 +50,16 @@ impl<'context> SourceUnitScope<'context> {
     }
 
     /// Opens the contract scope around `emit`: the `sol.contract` an enclosed member is defined
-    /// into and the object whose hierarchy it resolves against, with the `this` type installed on
-    /// the MLIR context for its duration.
+    /// into, the object whose hierarchy it resolves against and its `storage_layout`, and the
+    /// deploy code's indirect callees, which fix the code segment it lowers, with the `this` type
+    /// installed on the MLIR context for its duration.
     pub fn contract(
         &mut self,
         contract_type: MlirType<'context>,
         contract: Contract<'context>,
         object: &Object,
-        storage_layout: HashMap<NodeId, StorageSlot>,
+        storage_layout: &HashMap<NodeId, StorageSlot>,
+        indirect_callees: IndirectCallees<'_>,
         emit: impl FnOnce(&mut ContractScope<'_, 'context>),
     ) {
         self.mlir.current_contract_type = Some(contract_type);
@@ -65,6 +68,7 @@ impl<'context> SourceUnitScope<'context> {
             contract,
             object,
             storage_layout,
+            indirect_callees,
         ));
         self.mlir.current_contract_type = None;
     }

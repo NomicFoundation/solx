@@ -41,9 +41,6 @@ impl<'context> Function<'context> {
     /// The `mlir_name` of a synthesized parameterless constructor.
     pub const CONSTRUCTOR_NAME: &'static str = "@constructor()";
 
-    /// The `sym_visibility` that lets `symbol-dce` remove a function nothing references.
-    pub const PRIVATE_VISIBILITY: &'static str = "private";
-
     /// Records a function's mangled name and interned signature.
     pub fn new(mlir_name: String, function_type: FunctionType<'context>) -> Self {
         Self {
@@ -103,12 +100,6 @@ impl<'context> Function<'context> {
         if let Some(selector_value) = selector {
             operation_builder = operation_builder
                 .selector(Type::selector_attribute(selector_value, context.melior));
-        }
-        if selector.is_none() && !matches!(dispatch, FunctionDispatch::Kind(_)) {
-            operation_builder = operation_builder.sym_visibility(StringAttribute::new(
-                context.melior,
-                Self::PRIVATE_VISIBILITY,
-            ));
         }
         if selector.is_some()
             || matches!(dispatch, FunctionDispatch::Kind(FunctionKind::Constructor))

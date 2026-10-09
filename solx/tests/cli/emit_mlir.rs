@@ -115,7 +115,7 @@ fn runtime_location_aliases() -> anyhow::Result<()> {
         .expect("llvm runtime dialect header missing");
     assert!(
         stdout[runtime_index..].contains("\n#loc"),
-        "the runtime module is printed detached, with its locations as `#loc` aliases"
+        "the runtime module is printed with its locations as `#loc` aliases"
     );
 
     Ok(())

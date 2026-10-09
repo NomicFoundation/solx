@@ -15,8 +15,7 @@ use crate::FunctionOrigin;
 /// The debug-info compile unit a module's subprograms point at, built once per module.
 ///
 /// The compile unit is fused onto the module's own location, which is where MLIR looks for it and
-/// where the Sol-to-Yul lowering finds it for the functions it generates. Fusing it onto the
-/// contract too carries it into the runtime module, with nothing to copy.
+/// where the Sol-to-Yul lowering finds it for the functions it generates.
 #[derive(Clone, Copy)]
 pub struct DebugInfoCompileUnit<'context> {
     /// The distinct `DICompileUnitAttr` every subprogram in this module points at.
@@ -53,11 +52,7 @@ impl<'context> DebugInfoCompileUnit<'context> {
         Self { attribute }
     }
 
-    /// `location` with the compile unit fused onto it, for the module and the `sol.contract`.
-    ///
-    /// Unlike a subprogram, a fused compile unit does not replace the enclosing scope during
-    /// translation, so it is safe on a location the Sol-to-Yul lowering copies onto other
-    /// operations.
+    /// `location` with the compile unit fused onto it, for the module.
     pub fn fuse_compile_unit(
         self,
         melior: &'context melior::Context,

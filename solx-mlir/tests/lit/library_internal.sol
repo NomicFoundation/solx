@@ -1,23 +1,15 @@
 // RUN: slang --emit-mlir=sol %s | FileCheck %s
 
-// CHECK: sol.contract @{{.*Lib.*}} {
-// CHECK: sol.func private @{{.*chain.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #NonPayable}
-// CHECK:   sol.call @{{.*link.*}}(%{{.*}}) : (ui256) -> ui256
-// CHECK: sol.func private @{{.*link.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #NonPayable}
-// CHECK:   sol.revert "Overrun(uint256)" %{{.*}} : ui256 {call}
-// CHECK:   sol.emit "Consumed(uint256)" indexed = [%{{.*}}] : ui256
-// CHECK:   sol.malloc : !sol.struct<(ui256, ui256), Memory>
-// CHECK: } {kind = #Library}
-
 // CHECK: sol.contract @{{.*User.*}} {
 // CHECK: sol.func @{{.*consume.*}}
 // CHECK:   sol.call @{{.*chain.*}}(%{{.*}}) : (ui256) -> ui256
-// CHECK: sol.func private @{{.*chain.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #NonPayable}
+// CHECK: sol.func @{{.*chain.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #NonPayable}
 // CHECK:   sol.call @{{.*link.*}}(%{{.*}}) : (ui256) -> ui256
-// CHECK: sol.func private @{{.*link.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #NonPayable}
+// CHECK: sol.func @{{.*link.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #NonPayable}
 // CHECK:   sol.revert "Overrun(uint256)" %{{.*}} : ui256 {call}
 // CHECK:   sol.emit "Consumed(uint256)" indexed = [%{{.*}}] : ui256
-// CHECK: } {kind = #Contract}
+// CHECK:   sol.malloc : !sol.struct<(ui256, ui256), Memory>
+// CHECK: } {kind = #Contract, runtime}
 
 library Lib {
     enum Kind { Zero, One }

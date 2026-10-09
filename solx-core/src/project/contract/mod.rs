@@ -5,11 +5,8 @@
 pub mod ir;
 pub mod metadata;
 
-use std::cell::OnceCell;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-
-use anyhow::Context as _;
 
 use crate::build::contract::object::Object as EVMContractObject;
 use crate::error::Error;
@@ -83,11 +80,11 @@ impl Contract {
         match &self.ir {
             Some(IR::LLVMIR(llvm_ir)) => llvm_ir.source.len(),
             Some(IR::MLIR(mlir)) => {
-                mlir.source.len()
+                mlir.bitcode.len()
                     + mlir
                         .runtime_code
                         .as_ref()
-                        .map_or(0, |runtime| runtime.source.len())
+                        .map_or(0, |runtime| runtime.bitcode.len())
             }
             None => 0,
         }
@@ -97,7 +94,6 @@ impl Contract {
     /// Compiles the specified contract to EVM, returning its build artifacts.
     ///
     pub fn compile_to_evm(
-        melior: &OnceCell<melior::Context>,
         contract_name: solx_utils::ContractName,
         contract_ir: IR,
         code_segment: solx_utils::CodeSegment,
@@ -213,19 +209,6 @@ impl Contract {
                     }
                 };
 
-                let melior = melior.get_or_init(|| {
-                    let run_context_creation = profiler.start_evm_translation_unit(
-                        contract_name.full_path.as_str(),
-                        None,
-                        "CreateMLIRContext",
-                        optimizer_mode.as_str(),
-                        spill_area_size,
-                    );
-                    let melior = solx_mlir::Context::create_melior_context();
-                    run_context_creation.borrow_mut().finish();
-                    melior
-                });
-
                 let immutables = match code_segment {
                     solx_utils::CodeSegment::Deploy => immutables.unwrap_or_else(|| {
                         BTreeMap::from([(
@@ -235,31 +218,24 @@ impl Contract {
                     }),
                     solx_utils::CodeSegment::Runtime => BTreeMap::new(),
                 };
-                let run_mlir_parsing = profiler.start_evm_translation_unit(
+                let run_bitcode_parsing = profiler.start_evm_translation_unit(
                     contract_name.full_path.as_str(),
-                    Some(code_segment),
-                    "ParseMLIR",
+                    code_segment,
+                    "ParseBitcode",
                     optimizer_mode.as_str(),
                     spill_area_size,
                 );
-                let mlir_module = solx_mlir::Context::parse_source(melior, &mlir.source)
-                    .context("MLIR translation")?;
-                run_mlir_parsing.borrow_mut().finish();
-
-                let run_mlir_translation = profiler.start_evm_translation_unit(
-                    contract_name.full_path.as_str(),
-                    Some(code_segment),
-                    "MLIRToLLVMIR",
-                    optimizer_mode.as_str(),
-                    spill_area_size,
+                let memory_buffer = inkwell::memory_buffer::MemoryBuffer::create_from_memory_range(
+                    mlir.bitcode.as_slice(),
+                    code_identifier.as_str(),
+                    false,
                 );
-                let raw_llvm =
-                    solx_mlir::Context::translate_module_to_llvm(mlir_module, &immutables)
-                        .context("MLIR translation")?;
-                run_mlir_translation.borrow_mut().finish();
-                let context = unsafe { inkwell::context::Context::new(raw_llvm.context) };
-                let module = unsafe { inkwell::module::Module::new(raw_llvm.module) };
+                let llvm = inkwell::context::Context::create();
+                let module =
+                    inkwell::module::Module::parse_bitcode_from_buffer(&memory_buffer, &llvm)
+                        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
                 module.set_name(code_identifier.as_str());
+                run_bitcode_parsing.borrow_mut().finish();
 
                 let (
                     selector_debug_info,
@@ -282,13 +258,14 @@ impl Contract {
                 };
 
                 let mut context = solx_codegen_evm::Context::new(
-                    &context,
+                    &llvm,
                     module,
                     llvm_options,
                     code_segment,
                     optimizer,
                     output_config,
                 );
+                context.set_immutables(&immutables);
                 if output_selection.check_selection(
                     contract_name.path.as_str(),
                     contract_name.name.as_deref(),

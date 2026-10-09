@@ -72,7 +72,7 @@ A type has one inherent `impl` block, with public items before private ones.
 
 1. Codegen is one traversal. A definition is materialized the first time something names it, marked before its body is emitted, and nothing walks the program ahead of emission to collect or pre-register.
 
-2. A module defines at least what its bodies reference and the pass pipeline removes the excess. The frontend never computes "exactly what is needed".
+2. A segment's module defines what that segment reaches: the deploy module from the constructor, the runtime module from its entry points and every function whose pointer the deploy code takes. No pass removes unused symbols.
 
 3. Caches are memos filled on first use, living on the object that owns the fact. A cache that must be complete before a phase is a hidden pre-pass.
 
@@ -110,7 +110,7 @@ A type has one inherent `impl` block, with public items before private ones.
 
 1. A LIT fixture pins op shape. A tester case under [`tests/solidity/`](./tests/solidity/) pins behavior.
 
-2. A fixture has one RUN line, `slang --emit-mlir=sol %s | FileCheck %s`, and no prose. The CHECKs are the whole statement. A debug-location fixture runs `slang --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'`.
+2. A fixture has one RUN line, `slang --emit-mlir=sol %s | FileCheck %s`, and no prose. The CHECKs are the whole statement. A debug-location fixture runs `slang --emit-mlir=sol --debug-info --debug-info-runtime %s | FileCheck %s --implicit-check-not='loc(unknown)'`.
 
 3. One fixture per construct. A new case joins the fixture that owns its construct.
 

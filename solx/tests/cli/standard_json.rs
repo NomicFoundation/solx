@@ -570,7 +570,8 @@ fn select_mlir() -> anyhow::Result<()> {
 
     result
         .success()
-        .stdout(predicate::str::contains("mlir").and(predicate::str::contains("object")));
+        .stdout(predicate::str::contains("mlir").and(predicate::str::contains("object")))
+        .stdout(predicate::str::contains("bitcode").not());
 
     Ok(())
 }

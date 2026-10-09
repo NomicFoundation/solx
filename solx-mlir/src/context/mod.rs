@@ -10,8 +10,6 @@ pub mod pass_timing;
 pub mod yul_function;
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::ffi::CString;
 use std::sync::Once;
 
 use melior::dialect::DialectRegistry;
@@ -20,7 +18,6 @@ use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::Location;
 use melior::ir::Module;
-use melior::ir::Operation;
 use melior::ir::attribute::ArrayAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationLike;
@@ -31,10 +28,8 @@ use solx_utils::Profiler;
 
 use crate::Block;
 use crate::DebugInfoCompileUnit;
-use crate::DebugInfoRequest;
 use crate::FunctionOrigin;
 use crate::Type;
-use crate::llvm_module::RawLlvmModule;
 
 use self::pass_timing::PassTiming;
 
@@ -44,8 +39,6 @@ pub struct Context<'context> {
     pub melior: &'context melior::Context,
     /// The MLIR module being built.
     pub module: Module<'context>,
-    /// Which of the module's code segments debug info is requested for.
-    pub debug_info_request: DebugInfoRequest,
     /// The debug-info compile unit every subprogram in this module points at. Absent without debug
     /// info, where no function gets a subprogram.
     pub debug_info_compile_unit: Option<DebugInfoCompileUnit<'context>>,
@@ -63,8 +56,6 @@ pub struct Context<'context> {
 impl<'context> Context<'context> {
     /// The dialects emission builds in, which op, type and attribute construction does not load.
     const EMITTED_DIALECTS: [&'static str; 2] = ["sol", "yul"];
-    /// The op a code segment's module is.
-    const BUILTIN_MODULE: &'static str = "builtin.module";
     /// The DWARF version a module with debug info declares, where LLVM would default to 4.
     const DWARF_VERSION: u32 = 5;
     /// The data layout the LLVM translation reads off the module.
@@ -75,8 +66,6 @@ impl<'context> Context<'context> {
     const EVM_VERSION: &'static str = "sol.evm_version";
     /// The revert-string policy the `convert-sol-to-yul` pass reads off the module.
     const REVERT_STRINGS: &'static str = "sol.revert_strings";
-    /// The attribute a `builtin.module` carries its own identifier in.
-    const MODULE_SYMBOL: &'static str = "sym_name";
 
     /// Creates a single-threaded MLIR context.
     ///
@@ -111,8 +100,14 @@ impl<'context> Context<'context> {
         melior
     }
 
+    /// Whether LLVM is built with threads. Without them its locks do nothing, so only one thread
+    /// at a time may use LLVM and MLIR.
+    pub fn is_multithreaded() -> bool {
+        inkwell::support::is_multithreaded()
+    }
+
     /// Creates a new MLIR state with an empty module at `location`, with a compile unit of
-    /// `file_name` fused onto it when `debug_info_request` asks for either segment. `location` is
+    /// `file_name` fused onto it with `emit_debug_info`. `location` is
     /// the object's definition, which is where the Sol-to-Yul lowering puts the functions it
     /// generates, or the unknown location without debug info. The location cursor starts at
     /// `location`.
@@ -121,16 +116,15 @@ impl<'context> Context<'context> {
         evm_version: solx_utils::EVMVersion,
         revert_strings: solx_utils::RevertStrings,
         location: Location<'context>,
-        debug_info_request: DebugInfoRequest,
+        emit_debug_info: bool,
         file_name: &str,
     ) -> Self {
         for dialect in Self::EMITTED_DIALECTS {
             melior.get_or_load_dialect(dialect);
         }
 
-        let debug_info_compile_unit = debug_info_request
-            .any()
-            .then(|| DebugInfoCompileUnit::new(melior, file_name));
+        let debug_info_compile_unit =
+            emit_debug_info.then(|| DebugInfoCompileUnit::new(melior, file_name));
         let module_location = match debug_info_compile_unit {
             Some(debug_info_compile_unit) => {
                 debug_info_compile_unit.fuse_compile_unit(melior, location)
@@ -163,11 +157,13 @@ impl<'context> Context<'context> {
             Self::TARGET_TRIPLE,
             StringAttribute::new(melior, target.triple()).into(),
         );
+        if emit_debug_info {
+            Self::declare_dwarf_version(melior, &module);
+        }
 
         Self {
             melior,
             module,
-            debug_info_request,
             debug_info_compile_unit,
             current_location: location,
             current_contract_type: None,
@@ -183,10 +179,6 @@ impl<'context> Context<'context> {
     }
 
     /// Run the Sol-to-LLVM conversion pass pipeline on a module in-place.
-    ///
-    /// The first `symbol-dce` removes the functions unreachable in the contract before anything
-    /// walks them. Splitting the contract into a creation and a runtime object can leave a
-    /// function unreachable in the runtime object; the second takes care of that.
     ///
     /// # Errors
     ///
@@ -212,9 +204,6 @@ impl<'context> Context<'context> {
 
         unsafe {
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateTransformsSymbolDCE(),
-            ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateSolModifierInliningPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
@@ -222,9 +211,6 @@ impl<'context> Context<'context> {
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionConvertSolToYulPass(),
-            ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateTransformsSymbolDCE(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionConvertYulToStandardPass(),
@@ -261,43 +247,36 @@ impl<'context> Context<'context> {
         Ok(pass_timings)
     }
 
-    /// Returns the deploy and runtime modules as separate LLVM dialect strings.
+    /// Runs the pass pipeline on a code segment's module and translates it to LLVM bitcode,
+    /// returned with `dependencies`, the objects the code may embed, whose identifier must match
+    /// the segment's object.
     ///
-    /// The Sol conversion pass produces a nested module:
-    /// ```text
-    /// module @Contract { deploy __entry + module @Contract_deployed { runtime __entry } }
-    /// ```
-    /// Each is translated to its own LLVM IR module and emits its own bytecode segment. The outer
-    /// carries the deploy entry that runs the constructor and returns the runtime bytecode.
-    ///
-    /// Dependency identifiers must match the emitted deploy and runtime module symbols.
-    ///
-    /// Each segment's text is printed with locations ([`Self::printing_flags`]) when debug info
-    /// is requested for it, and the Sol text when it is for either.
+    /// With `capture_mlir`, the Sol text and the LLVM dialect text are printed too, with locations
+    /// ([`Self::printing_flags`]) when debug info is requested for the segment.
     ///
     /// `pass_timing` records the time of every pass in `profiler`, under
     /// `Compiler_RunSolPasses:<code_identifier>/`.
     ///
     /// # Errors
     ///
-    /// Returns an error if the pass pipeline fails, the runtime module is
-    /// not found, or a module cannot be printed.
+    /// Returns an error if the pass pipeline fails, or the module cannot be printed or translated.
     pub fn finalize_module(
         self,
-        deploy_dependencies: solx_utils::Dependencies,
-        runtime_dependencies: solx_utils::Dependencies,
-        capture_sol: bool,
+        dependencies: solx_utils::Dependencies,
+        capture_mlir: bool,
         pass_timing: bool,
         profiler: &mut Profiler,
-    ) -> anyhow::Result<crate::output::MlirOutput> {
-        let code_identifier = deploy_dependencies.identifier.as_str();
+    ) -> anyhow::Result<crate::output::SegmentOutput> {
+        let code_identifier = dependencies.identifier.as_str();
         let mut module = self.module;
 
-        let sol_source = capture_sol
+        let sol_source = capture_mlir
             .then(|| {
                 module
                     .as_operation()
-                    .to_string_with_flags(Self::printing_flags(self.debug_info_request.any()))
+                    .to_string_with_flags(Self::printing_flags(
+                        self.debug_info_compile_unit.is_some(),
+                    ))
             })
             .transpose()
             .map_err(|error| anyhow::anyhow!("Sol dialect module printing: {error}"))?;
@@ -308,99 +287,49 @@ impl<'context> Context<'context> {
         run_sol_passes.borrow_mut().finish();
         Self::record_pass_timings(profiler, sol_passes_label.as_str(), pass_timings);
 
-        if self.debug_info_request.deploy {
-            Self::declare_dwarf_version(self.melior, &module);
-        }
+        let source = capture_mlir
+            .then(|| {
+                module
+                    .as_operation()
+                    .to_string_with_flags(Self::printing_flags(
+                        self.debug_info_compile_unit.is_some(),
+                    ))
+            })
+            .transpose()
+            .map_err(|error| anyhow::anyhow!("LLVM dialect module printing: {error}"))?;
 
-        let run_object_extraction = profiler.start_pipeline_element(
-            format!("Compiler_ExtractMLIRObjects:{code_identifier}").as_str(),
-        );
-        let runtime_llvm = Self::take_nested_module(
-            self.melior,
-            &mut module,
-            runtime_dependencies.identifier.as_str(),
-            self.debug_info_request.runtime,
-        )?;
-        let deploy_llvm = module
-            .as_operation()
-            .to_string_with_flags(Self::printing_flags(self.debug_info_request.deploy))
-            .map_err(|error| anyhow::anyhow!("deploy module printing: {error}"))?;
-        run_object_extraction.borrow_mut().finish();
+        let run_translation = profiler
+            .start_pipeline_element(format!("Compiler_MLIRToLLVMIR:{code_identifier}").as_str());
+        let bitcode = Self::translate_to_bitcode(&module)?;
+        run_translation.borrow_mut().finish();
 
-        Ok(crate::output::MlirOutput {
+        Ok(crate::output::SegmentOutput {
             sol_source,
-            deploy_source: deploy_llvm,
-            deploy_dependencies,
-            runtime_source: runtime_llvm,
-            runtime_dependencies,
+            source,
+            bitcode,
+            dependencies,
         })
     }
 
-    /// Parses MLIR source text (LLVM dialect) into a verified module.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the source cannot be parsed or fails verification.
-    pub fn parse_source<'melior>(
-        melior: &'melior melior::Context,
-        source: &str,
-    ) -> anyhow::Result<Module<'melior>> {
-        let module = Module::parse(melior, source)
-            .ok_or_else(|| anyhow::anyhow!("failed to parse MLIR source text"))?;
-
-        if !module.as_operation().verify() {
-            anyhow::bail!("MLIR module verification failed");
-        }
-
-        Ok(module)
-    }
-
-    /// Translates a parsed LLVM-dialect module to raw LLVM pointers.
-    ///
-    /// The module is consumed because lowering `llvm.setimmutable` erases the operations it reads,
-    /// and the translation copies everything it needs.
+    /// Translates an LLVM dialect module to LLVM IR and returns its bitcode, which codegen parses
+    /// into the LLVM context it compiles in.
     ///
     /// # Errors
     ///
     /// Returns an error if the module cannot be translated to LLVM IR.
-    pub fn translate_module_to_llvm(
-        module: Module,
-        immutables: &BTreeMap<String, BTreeSet<u64>>,
-    ) -> anyhow::Result<RawLlvmModule> {
-        let ids: Vec<CString> = immutables
-            .keys()
-            .map(|id| CString::new(id.as_str()).expect("an immutable id carries no NUL byte"))
-            .collect();
-        let (id_pointers, offsets): (Vec<*const std::ffi::c_char>, Vec<u64>) = ids
-            .iter()
-            .zip(immutables.values())
-            .flat_map(|(id, offsets)| offsets.iter().map(|offset| (id.as_ptr(), *offset)))
-            .unzip();
-
-        unsafe {
-            crate::ffi::mlirEvmLowerSetImmutables(
-                module.to_raw(),
-                id_pointers.as_ptr(),
-                offsets.as_ptr(),
-                offsets.len() as u64,
-            );
-
-            let raw_operation = module.as_operation().to_raw();
-            let llvm_context = inkwell::llvm_sys::core::LLVMContextCreate();
-
-            let llvm_module =
-                mlir_sys::mlirTranslateModuleToLLVMIR(raw_operation, llvm_context as *mut _);
-
-            if llvm_module.is_null() {
-                inkwell::llvm_sys::core::LLVMContextDispose(llvm_context);
-                anyhow::bail!("mlirTranslateModuleToLLVMIR returned null");
-            }
-
-            Ok(RawLlvmModule {
-                context: llvm_context,
-                module: llvm_module as *mut _,
-            })
+    fn translate_to_bitcode(module: &Module) -> anyhow::Result<Vec<u8>> {
+        let llvm = inkwell::context::Context::create();
+        let raw_module = unsafe {
+            mlir_sys::mlirTranslateModuleToLLVMIR(
+                module.as_operation().to_raw(),
+                llvm.raw() as *mut _,
+            )
+        };
+        if raw_module.is_null() {
+            anyhow::bail!("mlirTranslateModuleToLLVMIR returned null");
         }
+        let llvm_module = unsafe { inkwell::module::Module::new(raw_module as *mut _) };
+        Ok(llvm_module.write_bitcode_to_memory().as_slice().to_vec())
     }
 
     /// The location a `sol.func` or `yul.func` carries: the location cursor with a subprogram of
@@ -418,10 +347,9 @@ impl<'context> Context<'context> {
         }
     }
 
-    /// The flags a module text is printed with. `print_locations` prints locations in the
-    /// non-pretty form, the one that re-parses, so they survive the round-trip to the worker
-    /// processes; the default flags drop them. Each distinct location is written once as a `#locN`
-    /// alias, except on block arguments, which the printer allows no alias.
+    /// The flags a module text is printed with. `print_locations` prints locations, which the
+    /// default flags drop, in the form that re-parses. Each distinct location is written once as a
+    /// `#locN` alias, except on block arguments, which the printer allows no alias.
     fn printing_flags(print_locations: bool) -> OperationPrintingFlags {
         let flags = OperationPrintingFlags::new();
         if print_locations {
@@ -434,9 +362,8 @@ impl<'context> Context<'context> {
     /// Appends to `module` the `llvm.module_flags` declaring [`Self::DWARF_VERSION`], at the
     /// module's location.
     ///
-    /// MLIR's translation sets `Debug Info Version` but no DWARF version. Each module a worker
-    /// translates becomes its own LLVM module, so each segment that carries debug info declares
-    /// its own.
+    /// MLIR's translation sets `Debug Info Version` but no DWARF version. Each segment's module
+    /// becomes its own LLVM module, so each segment that carries debug info declares its own.
     fn declare_dwarf_version(melior: &'context melior::Context, module: &Module<'context>) {
         let flag = unsafe {
             Attribute::from_raw(crate::ffi::solxCreateDwarfVersionFlagAttr(
@@ -475,54 +402,5 @@ impl<'context> Context<'context> {
                 pass_timing.duration,
             );
         }
-    }
-
-    /// With `print_locations`, the module declares the DWARF version and is detached before it is
-    /// printed: the printer emits an alias table only for a top-level op, so a detached module
-    /// writes each repeated location once and re-parses on its own. Without, it is printed in
-    /// place, which spares the printer the scan that builds the table.
-    fn take_nested_module(
-        melior: &'context melior::Context,
-        module: &mut Module<'context>,
-        target: &str,
-        print_locations: bool,
-    ) -> anyhow::Result<String> {
-        let body = module.body();
-        std::iter::successors(body.first_operation_mut(), |operation| {
-            operation.next_in_block_mut()
-        })
-        .find_map(|mut operation| {
-            if operation.name().as_string_ref().as_str() != Ok(Self::BUILTIN_MODULE) {
-                return None;
-            }
-            let symbol: StringAttribute = operation
-                .attribute(Self::MODULE_SYMBOL)
-                .ok()?
-                .try_into()
-                .ok()?;
-            if symbol.value() != target {
-                return None;
-            }
-
-            let text = if print_locations {
-                operation.remove_from_parent();
-                let runtime =
-                    Module::from_operation(unsafe { Operation::from_raw(operation.to_raw()) })
-                        .expect("a `builtin.module` op is a module");
-                Self::declare_dwarf_version(melior, &runtime);
-                runtime
-                    .as_operation()
-                    .to_string_with_flags(Self::printing_flags(true))
-                    .map_err(|error| anyhow::anyhow!("runtime module printing: {error}"))
-            } else {
-                let text = operation.to_string();
-                operation.remove_from_parent();
-                drop(unsafe { Operation::from_raw(operation.to_raw()) });
-                Ok(text)
-            };
-
-            Some(text)
-        })
-        .ok_or_else(|| anyhow::anyhow!("no module with sym_name `{target}` in Sol pass output"))?
     }
 }

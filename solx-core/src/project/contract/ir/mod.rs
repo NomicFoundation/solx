@@ -15,7 +15,7 @@ use self::mlir::MLIR;
 pub enum IR {
     /// The LLVM IR source code.
     LLVMIR(LLVMIR),
-    /// The MLIR source code.
+    /// The LLVM bitcode from the MLIR pipeline.
     MLIR(MLIR),
 }
 

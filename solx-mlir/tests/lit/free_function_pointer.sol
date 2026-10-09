@@ -1,10 +1,10 @@
 // RUN: slang --emit-mlir=sol %s | FileCheck %s
 
-// CHECK: sol.func private @{{.*invoke.*}}(%{{.*}}: !sol.func_ref<(ui256) -> ui256>, %{{.*}}: ui256) -> ui256
 // CHECK: sol.func @{{.*run.*}}(%{{.*}}: ui256) -> ui256 attributes {{.*}}selector = -1538984471 : i32
 // CHECK:   %[[F:.*]] = sol.func_constant @{{.*increment.*}} : !sol.func_ref<(ui256) -> ui256>
 // CHECK:   %[[R:.*]] = sol.call @{{.*invoke.*}}(%[[F]], %{{.*}}) : (!sol.func_ref<(ui256) -> ui256>, ui256) -> ui256
 // CHECK:   sol.return %[[R]] : ui256
+// CHECK: sol.func @{{.*invoke.*}}(%{{.*}}: !sol.func_ref<(ui256) -> ui256>, %{{.*}}: ui256) -> ui256
 
 function increment(uint256 a) pure returns (uint256) {
     return a + 1;

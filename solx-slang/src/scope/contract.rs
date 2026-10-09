@@ -1,6 +1,7 @@
 //!
 //! The contract scope: the enclosing source unit scope, the `sol.contract` the members are
-//! defined into, and the object whose hierarchy a member resolves against.
+//! defined into, the object whose hierarchy a member resolves against, and the code segment it
+//! lowers.
 //!
 
 use std::collections::HashMap;
@@ -19,15 +20,18 @@ use solx_mlir::Block;
 use solx_mlir::Context;
 use solx_mlir::Contract;
 use solx_mlir::Function;
+use solx_utils::CodeSegment;
 
 use crate::contract::constructor::ConstructorBuilder;
+use crate::contract::indirect_callees::IndirectCallees;
 use crate::contract::object::Object;
 use crate::contract::storage_slot::StorageSlot;
 use crate::scope::function::FunctionScope;
 use crate::scope::source_unit::SourceUnitScope;
 
 /// The contract scope: the enclosing source unit scope, the `sol.contract` the members are
-/// defined into, and the object whose hierarchy a member resolves against.
+/// defined into, the object whose hierarchy a member resolves against, and the code segment it
+/// lowers.
 pub struct ContractScope<'source_unit, 'context> {
     /// The source unit scope this contract is lowered within.
     pub source_unit: &'source_unit mut SourceUnitScope<'context>,
@@ -35,33 +39,42 @@ pub struct ContractScope<'source_unit, 'context> {
     pub contract: Contract<'context>,
     /// The object being emitted, whose linearisation resolves the references its bodies make.
     pub object: &'source_unit Object,
+    /// The code segment being emitted: the deploy code, which runs the constructor, or the
+    /// runtime code, which dispatches calls.
+    pub segment: CodeSegment,
     /// The definition ids of the functions defined so far.
     pub defined_functions: HashSet<NodeId>,
-    /// The state-variable slots keyed by definition id.
-    pub storage_layout: HashMap<NodeId, StorageSlot>,
+    /// The deploy code's indirect callees, taken by this segment or reachable from it.
+    pub indirect_callees: IndirectCallees<'source_unit>,
+    /// The state-variable slots keyed by definition id, computed once for both segments.
+    pub storage_layout: &'source_unit HashMap<NodeId, StorageSlot>,
     /// Mutable state for emitting the object's constructor chain.
     pub constructor: ConstructorBuilder<'context>,
 }
 
 impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
-    /// Opens a contract scope within `source_unit`.
+    /// Opens a contract scope within `source_unit`, with the object's `storage_layout` and the
+    /// deploy code's indirect callees, which fix the code segment it lowers.
     pub fn new(
         source_unit: &'source_unit mut SourceUnitScope<'context>,
         contract: Contract<'context>,
         object: &'source_unit Object,
-        storage_layout: HashMap<NodeId, StorageSlot>,
+        storage_layout: &'source_unit HashMap<NodeId, StorageSlot>,
+        indirect_callees: IndirectCallees<'source_unit>,
     ) -> Self {
         Self {
             source_unit,
             contract,
             object,
+            segment: indirect_callees.segment(),
             defined_functions: HashSet::new(),
+            indirect_callees,
             storage_layout,
             constructor: ConstructorBuilder::new(object.contracts()),
         }
     }
 
-    /// Opens the function scope around `emit`: whether the frame is a constructor, a fresh
+    /// Opens the function scope around `emit`: a fresh
     /// variable environment, the declared return types a `return` converts to, and checked
     /// arithmetic, with the MLIR cursor on `entry` for the body's duration. The location cursor is
     /// the caller's, the function's own node; each part of the body with a node of its own narrows
@@ -69,14 +82,12 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
     pub fn function(
         &mut self,
         entry: Block<'context>,
-        is_constructor: bool,
         signature: &Function<'context>,
         emit: impl FnOnce(&mut FunctionScope<'_, '_, 'context>),
     ) {
         let enclosing = self.source_unit.mlir.current_block.replace(entry);
         emit(&mut FunctionScope::new(
             self,
-            is_constructor,
             &signature.function_type.results,
         ));
         self.source_unit.mlir.current_block = enclosing;
@@ -84,7 +95,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
 
     /// Runs `emit` with the location cursor on `node`'s first byte, so the ops it emits carry it,
     /// and restores the enclosing cursor afterwards. The node's source range is read only when the
-    /// object requested debug info.
+    /// segment requested debug info.
     pub fn at_node<R>(&mut self, node: &impl NodeLocation, emit: impl FnOnce(&mut Self) -> R) -> R {
         let location = self.source_unit.debug_locations.location(node);
         let enclosing = std::mem::replace(&mut self.source_unit.mlir.current_location, location);

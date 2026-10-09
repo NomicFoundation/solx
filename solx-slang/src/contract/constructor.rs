@@ -139,7 +139,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         );
 
         self.constructor.current = None;
-        self.function(entry, true, &Function::constructor(), |scope| {
+        self.function(entry, &Function::constructor(), |scope| {
             scope.state_variable_initializers();
             scope.base_constructor_call();
             scope.current_block().r#return(&[], scope);

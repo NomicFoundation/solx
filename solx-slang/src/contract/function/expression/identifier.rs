@@ -12,6 +12,7 @@ use slang_solidity_v2::ast::Type;
 use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
+use solx_utils::CodeSegment;
 
 use crate::contract::object::Object;
 use crate::scope::function::FunctionScope;
@@ -19,8 +20,8 @@ use crate::scope::source_unit::SourceUnitScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// A constant folds to its initializer converted to the declared type, since the initializer
-    /// alone may carry another (a string literal initializing a `bytesN`); an immutable outside a
-    /// constructor loads its linked value (`sol.load_immutable`); a function name materialises the
+    /// alone may carry another (a string literal initializing a `bytesN`); an immutable in the
+    /// runtime code loads its linked value (`sol.load_immutable`); a function name materialises the
     /// internal pointer of the function the object runs for it; a library name is
     /// its linked address (`sol.lib_addr`); every other identifier loads from its place.
     pub fn identifier(&mut self, node: &Identifier) -> Value<'context> {
@@ -37,7 +38,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             Some(Definition::StateVariable(state_variable))
                 if let StateVariableMutability::Immutable =
                     state_variable.attributes().mutability()
-                    && !self.is_constructor =>
+                    && self.contract.segment == CodeSegment::Runtime =>
             {
                 let element_type = self.resolve_type(
                     &state_variable
@@ -53,9 +54,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             }
             Some(Definition::Function(function)) => {
                 let function = self.contract.virtual_function(&function);
-                self.contract
-                    .function_definition(&function)
-                    .pointer_constant(self)
+                self.contract.pointer_constant(&function)
             }
             Some(Definition::Library(library)) => {
                 Value::library_address(Object::Library(library).identifier().as_str(), self)

@@ -12,7 +12,6 @@ pub(crate) mod contract;
 pub(crate) mod debug_locations;
 pub(crate) mod scope;
 pub(crate) mod slang;
-pub(crate) mod source_unit;
 pub(crate) mod r#type;
 
 pub use self::slang::Slang;

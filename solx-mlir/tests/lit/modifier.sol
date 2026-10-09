@@ -36,7 +36,7 @@
 // CHECK: sol.func @{{.*}}other{{.*}}(%arg0: ui256) -> ui256
 // CHECK:   sol.modifier_invocation @[[BOUNDED]] {
 // CHECK-NOT: sol.modifier @[[BOUNDED]](
-// CHECK: } {kind = #Contract}
+// CHECK: } {kind = #Contract, runtime}
 
 contract C {
     modifier bounded(uint256 limit) {
