@@ -57,10 +57,15 @@ fn present_on_compile_error() -> anyhow::Result<()> {
         crate::common::standard_json!("debug_symbols_compile_error.json"),
     ];
     let result = crate::cli::execute_solx(args)?;
-    result
+    let result = result
         .success()
-        .stdout(predicate::str::contains("Identifier not found."))
-        .stdout(predicate::str::contains("\"debugSymbols\""));
+        .stdout(predicate::str::contains("Identifier not found."));
+    let output: serde_json::Value =
+        solx_utils::deserialize_from_slice(result.get_output().stdout.as_slice())?;
+    assert_eq!(
+        output["sources"]["Main.sol"]["debugSymbols"]["contracts"][0]["bases"],
+        serde_json::json!([{ "path": "Main.sol", "name": "C" }]),
+    );
 
     Ok(())
 }

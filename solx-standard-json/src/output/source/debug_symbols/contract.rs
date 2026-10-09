@@ -19,7 +19,8 @@ pub struct Contract {
     pub is_abstract: bool,
     /// The `[byteOffset, byteLength]` of the whole definition.
     pub range: [usize; 2],
-    /// The C3 linearisation, the definition itself first. Present for contracts and interfaces.
+    /// The C3 linearisation, the definition itself first, leaving out a base that does not resolve.
+    /// Present for contracts and interfaces.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bases: Option<Vec<Base>>,
     /// The members the definition itself declares, in declaration order.
