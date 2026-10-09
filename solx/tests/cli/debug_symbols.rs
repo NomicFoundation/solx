@@ -9,8 +9,7 @@ fn matches_expected() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let expected: serde_json::Value = solx_utils::deserialize_from_str(
-        std::fs::read_to_string(crate::common::standard_json_output!("debug_symbols.json"))?
-            .as_str(),
+        std::fs::read_to_string(crate::common::debug_symbols!("debug_symbols.json"))?.as_str(),
     )?;
 
     let result = crate::cli::execute_solx(&[
