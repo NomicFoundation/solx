@@ -1,0 +1,29 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "Base.sol": {
+      "urls": [
+        "tests/data/contracts/solidity/debug_symbols/Base.sol"
+      ]
+    },
+    "Main.sol": {
+      "urls": [
+        "tests/data/contracts/solidity/debug_symbols/Main.sol"
+      ]
+    },
+    "Kinds.sol": {
+      "urls": [
+        "tests/data/contracts/solidity/debug_symbols/Kinds.sol"
+      ]
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "*": {
+        "": [
+          "debugSymbols"
+        ]
+      }
+    }
+  }
+}

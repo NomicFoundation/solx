@@ -25,6 +25,7 @@ use solx_utils::RevertStrings;
 
 use crate::debug_locations::resolver::Resolver;
 use crate::debug_locations::sources::Sources;
+use crate::debug_symbols::DebugSymbolsBuilder;
 use crate::scope::source_unit::SourceUnitScope;
 
 use self::import_resolver::SourceImportResolver;
@@ -153,14 +154,18 @@ impl Slang {
 
         for file in unit.files() {
             let file_id = file.id();
-            if !input_json.settings.output_selection.check_selection(
-                file_id.as_str(),
-                None,
-                solx_standard_json::InputSelector::AST,
-            ) {
-                continue;
-            }
-            if let Some(output_source) = output.sources.get_mut(file_id.as_str()) {
+            let is_selected = |selector| {
+                input_json.settings.output_selection.check_selection(
+                    file_id.as_str(),
+                    None,
+                    selector,
+                )
+            };
+            let output_source = output
+                .sources
+                .get_mut(file_id.as_str())
+                .expect("every compiled file is an input source");
+            if is_selected(solx_standard_json::InputSelector::AST) {
                 let run_ast_serialization = profiler.start_pipeline_element(
                     format!("{}_SerializeAST:{file_id}", Self::NAME).as_str(),
                 );
@@ -169,6 +174,13 @@ impl Slang {
                         .map_err(|error| anyhow::anyhow!("AST serialization: {error}"))?,
                 );
                 run_ast_serialization.borrow_mut().finish();
+            }
+            if is_selected(solx_standard_json::InputSelector::DebugSymbols) {
+                let run_debug_symbols = profiler.start_pipeline_element(
+                    format!("{}_BuildDebugSymbols:{file_id}", Self::NAME).as_str(),
+                );
+                output_source.debug_symbols = Some(DebugSymbolsBuilder::build(&file.ast()));
+                run_debug_symbols.borrow_mut().finish();
             }
         }
 

@@ -23,7 +23,7 @@ impl Selection {
     /// Wildcard selection.
     pub const WILDCARD: &'static str = "*";
 
-    /// Any contract selection, used for file-level AST.
+    /// Any contract selection, used for file-level outputs such as the AST.
     pub const ANY_CONTRACT: &'static str = "";
 
     ///
@@ -37,11 +37,15 @@ impl Selection {
         if selectors.contains(&Selector::AST) {
             per_file_selectors.insert(Selector::AST);
         }
+        if selectors.contains(&Selector::DebugSymbols) {
+            per_file_selectors.insert(Selector::DebugSymbols);
+        }
         if selectors.contains(&Selector::Benchmarks) {
             per_file_selectors.insert(Selector::Benchmarks);
         }
         let mut per_contract_selectors = selectors;
         per_contract_selectors.remove(&Selector::AST);
+        per_contract_selectors.remove(&Selector::DebugSymbols);
 
         if !per_file_selectors.is_empty() {
             contract_level.insert(Self::ANY_CONTRACT.to_owned(), per_file_selectors);
@@ -63,7 +67,10 @@ impl Selection {
             let Some(file) = self.inner.get(file_key) else {
                 return false;
             };
-            if matches!(selector, Selector::AST | Selector::Benchmarks) {
+            if matches!(
+                selector,
+                Selector::AST | Selector::DebugSymbols | Selector::Benchmarks
+            ) {
                 return [Self::ANY_CONTRACT, path].into_iter().any(|contract_key| {
                     file.get(contract_key)
                         .is_some_and(|any| any.contains(&Selector::Any) || any.contains(&selector))
@@ -119,20 +126,6 @@ impl Selection {
                     }
                 })
         })
-    }
-
-    ///
-    /// Normalizes the selection by converting multi-item selectors into single-item selectors.
-    ///
-    pub fn normalize(&mut self) {
-        for file in self.inner.values_mut() {
-            for contract in file.values_mut() {
-                *contract = contract
-                    .iter()
-                    .flat_map(|selector| selector.into_single_selectors())
-                    .collect::<BTreeSet<_>>();
-            }
-        }
     }
 
     ///
@@ -204,5 +197,19 @@ impl Selection {
     ///
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::Selection;
+    use super::selector::Selector;
+
+    #[test]
+    fn new_selects_debug_symbols_per_file() {
+        let selection = Selection::new(BTreeSet::from([Selector::DebugSymbols]));
+        assert!(selection.check_selection("A.sol", None, Selector::DebugSymbols));
     }
 }
