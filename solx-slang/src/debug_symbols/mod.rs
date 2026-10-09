@@ -159,13 +159,13 @@ impl DebugSymbolsBuilder {
                     };
                     Some(Self::function(&function, kind))
                 }
-                ContractMember::StateVariableDefinition(state_variable) => {
-                    match state_variable.getter_type() {
-                        Some(Type::Function(getter)) => {
-                            Some(Self::getter(&state_variable, &getter))
-                        }
-                        _ => None,
-                    }
+                ContractMember::StateVariableDefinition(state_variable)
+                    if state_variable.is_externally_visible() =>
+                {
+                    let Some(Type::Function(getter)) = state_variable.getter_type() else {
+                        unreachable!("slang types a public state variable's getter as a function");
+                    };
+                    Some(Self::getter(&state_variable, &getter))
                 }
                 _ => None,
             })
