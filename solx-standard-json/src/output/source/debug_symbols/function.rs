@@ -22,7 +22,7 @@ pub struct Function {
     pub selector: Option<String>,
     /// The definition range, the state variable's for a getter.
     pub range: [usize; 2],
-    /// Whether the function has a body.
+    /// Whether the function has a body, `true` for a getter, whose body the compiler generates.
     pub implemented: bool,
 }
 
