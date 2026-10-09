@@ -32,13 +32,13 @@ macro_rules! standard_json {
 }
 pub(crate) use standard_json;
 
-/// Returns a path under `tests/data/standard_json_output/` for expected standard JSON output files.
-macro_rules! standard_json_output {
+/// Returns a path under `tests/data/debug_symbols/` for expected `debugSymbols` outputs.
+macro_rules! debug_symbols {
     ($relative:literal) => {
-        concat!("tests/data/standard_json_output/", $relative)
+        concat!("tests/data/debug_symbols/", $relative)
     };
 }
-pub(crate) use standard_json_output;
+pub(crate) use debug_symbols;
 
 pub const TEST_SOLIDITY_CONTRACT: &str = contract!("solidity/SlangTest.sol");
 pub const TEST_YUL_CONTRACT: &str = contract!("yul/Test.yul");
