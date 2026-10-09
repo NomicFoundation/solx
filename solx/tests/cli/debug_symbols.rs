@@ -84,3 +84,41 @@ fn profiled_under_benchmarks() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn selected_by_wildcard() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("debug_symbols_wildcard.json"),
+    ];
+    let result = crate::cli::execute_solx(args)?.success();
+    let output: serde_json::Value =
+        solx_utils::deserialize_from_slice(result.get_output().stdout.as_slice())?;
+    for path in ["Base.sol", "Main.sol"] {
+        assert!(
+            output["sources"][path]["debugSymbols"].is_object(),
+            "`*` selects debugSymbols for {path}"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn selected_per_file() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("debug_symbols_per_file.json"),
+    ];
+    let result = crate::cli::execute_solx(args)?.success();
+    let output: serde_json::Value =
+        solx_utils::deserialize_from_slice(result.get_output().stdout.as_slice())?;
+    assert!(output["sources"]["Main.sol"]["debugSymbols"].is_object());
+    assert!(output["sources"]["Base.sol"]["debugSymbols"].is_null());
+
+    Ok(())
+}
