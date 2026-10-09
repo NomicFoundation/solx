@@ -298,8 +298,7 @@ entries:
         version: '>=0.7.5'
       calldata_array_short.sol:
         hash: '0x39c008c2b709c312e82ab39bd5b6e45c'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         version: '>=0.7.5'
       calldata_array_short_no_revert_string.sol:
         hash: '0x566da3b56564be7b8f134785e734c61c'
@@ -335,8 +334,7 @@ entries:
         version: '>=0.7.6'
       calldata_nested_array_reencode.sol:
         hash: '0x122bb21805d1612c7cbabcf48b1407c8'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         version: '>=0.8.14'
       calldata_nested_array_static_reencode.sol:
         hash: '0x7335b3149d6aa87de47cf0cf575c112a'
@@ -632,8 +630,7 @@ entries:
         version: '>=0.7.0'
       array_storage_length_access.sol:
         hash: '0x6f5ee1edec468554252d9ace7be3d0bf'
-        enabled: false
-        comment: 'TODO: gas settings'
+        enabled: true
         version: '>=0.6.0'
       array_storage_pop_zero_length.sol:
         hash: '0x8988c19da4681600e72e735045dc2953'
@@ -641,18 +638,15 @@ entries:
         version: '>=0.8.0'
       array_storage_push_empty.sol:
         hash: '0x2089cc4561efa207c3a3ea2fac0ebfee'
-        enabled: false
-        comment: 'TODO: gas settings'
+        enabled: true
         version: '>=0.6.0'
       array_storage_push_empty_length_address.sol:
         hash: '0x8102c708679c612ad3a2374394d14f39'
-        enabled: false
-        comment: 'TODO: gas settings'
+        enabled: true
         version: '>=0.6.0'
       array_storage_push_pop.sol:
         hash: '0xabee48148c5a9f9a08984689fd35d4ed'
-        enabled: false
-        comment: 'TODO: gas settings'
+        enabled: true
         version: '>=0.6.0'
       arrays_complex_from_and_to_storage.sol:
         hash: '0xf8be9ec15b74744063837e21cb79a3fe'
@@ -3196,8 +3190,7 @@ entries:
         version: '>=0.7.0'
       external_call_to_nonexisting_debugstrings.sol:
         hash: '0x649b5549e5a7a8bdb63a087993e5f4c8'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         version: '>=0.7.0'
       external_call_value.sol:
         hash: '0x11d302a12ed7172f2c5c2dd54e468a8e'
@@ -5226,8 +5219,7 @@ entries:
     entries:
       array_slices.sol:
         hash: '0x2407c820fbb3feffcdc23d0705694713'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         version: '>=0.6.3'
       bubble.sol:
         hash: '0xe698753c8a8b29b85a46af7ae5f394c3'
@@ -5235,33 +5227,27 @@ entries:
         version: '>=0.4.22'
       calldata_array_dynamic_invalid.sol:
         hash: '0x7f01b721ad5a80b4b9db3f4ac07f5cba'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         version: '>=0.7.5'
       calldata_array_dynamic_static_short_decode.sol:
         hash: '0xb12dde5a7bbf45579504e5011314e355'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         version: '>=0.7.5'
       calldata_array_dynamic_static_short_reencode.sol:
         hash: '0xbf11a16063599daf628829e3a0db4005'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         version: '>=0.7.5'
       calldata_array_invalid_length.sol:
         hash: '0x4e64502c6f398a04b9330d1b02257851'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         version: '>=0.7.5'
       calldata_arrays_too_large.sol:
         hash: '0x278bb1b60564cb7eae92ee43426e501b'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         version: '>=0.7.5'
       calldata_tail_short.sol:
         hash: '0xd5859d6d4a58b19561630225710c9bb0'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         version: '>=0.7.5'
       calldata_too_short_v1.sol:
         hash: '0x32f4443629274eed274f78594b644df2'
@@ -5270,8 +5256,7 @@ entries:
         version: '>=0.7.5'
       called_contract_has_code.sol:
         hash: '0xcb9795076e8a6ef50ef75dec7b8f1106'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         version: '>=0.6.3'
       empty_v1.sol:
         hash: '0x86a63b38e411580adedc03b1aafa34e5'
@@ -5292,8 +5277,7 @@ entries:
         version: '>=0.7.5'
       ether_non_payable_function.sol:
         hash: '0x34f0b65e079f1b490dd9d922d5cf336e'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         modes:
         - Y >=0.8.1
         - E
@@ -5305,8 +5289,7 @@ entries:
         version: '>=0.7.5'
       function_entry_checks_v2.sol:
         hash: '0x6b258f9082da74eb0fe5c832b2b2e37a'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         version: '>=0.7.5'
       invalid_abi_decoding_calldata_v1.sol:
         hash: '0xa3ae16bfe3ed4f33bf39973be3574df1'
@@ -5320,21 +5303,18 @@ entries:
         version: '>=0.7.5'
       library_non_view_call.sol:
         hash: '0xd9b55fe1b39daf159e6ebf19c4997370'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         modes:
-        - Y+ >=0.8.1
-        - E+
+        - Y >=0.8.1
+        - E
         version: '>=0.6.3'
       short_input_array.sol:
         hash: '0x780633eac999147705e0ae87a15e38f5'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         version: '>=0.7.5'
       short_input_bytes.sol:
         hash: '0xdb750c0e57dc32dbe8add909b9ef09bb'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         version: '>=0.7.5'
       transfer.sol:
         hash: '0xfa00dd5aa00bb6e0800335054d4a1c4f'
@@ -5342,8 +5322,7 @@ entries:
         version: '>=0.6.3'
       unknown_sig_no_fallback.sol:
         hash: '0x1767776171d38a0523edd4dcf6b3170a'
-        enabled: false
-        comment: Uses debug strings
+        enabled: true
         version: '>=0.6.3'
   reverts:
     enabled: true
@@ -7125,8 +7104,7 @@ entries:
         version: '>=0.8.24'
       selfdestruct_post_cancun_redeploy.sol:
         hash: '0xc5e74e07b4978ae00ee8768923f0d429'
-        enabled: false
-        comment: 'The expected event values are CREATE2 addresses derived from the EVMHost account layout'
+        enabled: true
       selfdestruct_pre_cancun.sol:
         hash: '0xe60a63017f466b830b204516a80af900'
         enabled: false
