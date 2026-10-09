@@ -37,11 +37,15 @@ impl Selection {
         if selectors.contains(&Selector::AST) {
             per_file_selectors.insert(Selector::AST);
         }
+        if selectors.contains(&Selector::DebugSymbols) {
+            per_file_selectors.insert(Selector::DebugSymbols);
+        }
         if selectors.contains(&Selector::Benchmarks) {
             per_file_selectors.insert(Selector::Benchmarks);
         }
         let mut per_contract_selectors = selectors;
         per_contract_selectors.remove(&Selector::AST);
+        per_contract_selectors.remove(&Selector::DebugSymbols);
 
         if !per_file_selectors.is_empty() {
             contract_level.insert(Self::ANY_CONTRACT.to_owned(), per_file_selectors);
@@ -193,5 +197,19 @@ impl Selection {
     ///
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::Selection;
+    use super::selector::Selector;
+
+    #[test]
+    fn new_selects_debug_symbols_per_file() {
+        let selection = Selection::new(BTreeSet::from([Selector::DebugSymbols]));
+        assert!(selection.check_selection("A.sol", None, Selector::DebugSymbols));
     }
 }
