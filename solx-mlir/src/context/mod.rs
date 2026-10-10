@@ -188,6 +188,8 @@ impl<'context> Context<'context> {
     /// walks them. Splitting the contract into a creation and a runtime object can leave a
     /// function unreachable in the runtime object; the second takes care of that.
     ///
+    /// The canonicalizers run per function; there is little to canonicalize outside one.
+    ///
     /// # Errors
     ///
     /// Returns an error if any pass in the pipeline fails or the resulting module fails
@@ -217,9 +219,12 @@ impl<'context> Context<'context> {
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateSolModifierInliningPass(),
             ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateTransformsCanonicalizer(),
-            ));
+            pass_manager
+                .nested_under("sol.contract")
+                .nested_under("sol.func")
+                .add_pass(melior::pass::Pass::from_raw(
+                    crate::ffi::mlirCreateTransformsCanonicalizer(),
+                ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionConvertSolToYulPass(),
             ));
@@ -229,9 +234,18 @@ impl<'context> Context<'context> {
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionConvertYulToStandardPass(),
             ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateTransformsCanonicalizer(),
-            ));
+            pass_manager
+                .nested_under("func.func")
+                .add_pass(melior::pass::Pass::from_raw(
+                    crate::ffi::mlirCreateTransformsCanonicalizer(),
+                ));
+            // The runtime object is a module nested in the creation object's.
+            pass_manager
+                .nested_under("builtin.module")
+                .nested_under("func.func")
+                .add_pass(melior::pass::Pass::from_raw(
+                    crate::ffi::mlirCreateTransformsCanonicalizer(),
+                ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionSCFToControlFlowPass(),
             ));
