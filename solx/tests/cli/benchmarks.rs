@@ -35,6 +35,7 @@ fn records_every_pipeline_stage() -> anyhow::Result<()> {
 
     result
         .success()
+        .stdout(predicate::str::contains("Compiler_ReadInput").count(1))
         .stdout(predicate::str::contains("Slang_RunStandardJSON").count(1))
         .stdout(predicate::str::contains("Slang_ParseAndBind").count(1))
         .stdout(predicate::str::contains("Slang_SerializeAST:").count(1))
