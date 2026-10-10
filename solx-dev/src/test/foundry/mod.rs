@@ -36,6 +36,7 @@ pub fn test(
         )
     })?;
 
+    let evm_version = solx_utils::EVMVersion::Osaka.to_string();
     let mut benchmark_inputs = Vec::with_capacity(config.projects.len() * 4);
     let mut attempted_projects = Vec::with_capacity(config.projects.len());
     let mut build_correctness_table = BTreeMap::new();
@@ -130,7 +131,7 @@ pub fn test(
                 crate::utils::sed_file(
                     solidity_file.as_path(),
                     &[
-                        format!(r#"s/pragma solidity.*/pragma solidity ={solidity_version};/g"#)
+                        format!(r#"s/pragma solidity.*/pragma solidity >={solidity_version};/g"#)
                             .as_str(),
                     ],
                 )?;
@@ -223,10 +224,8 @@ pub fn test(
             if codegen == "viaIR" {
                 forge_build_command.arg("--via-ir");
             }
-            forge_build_command.args([
-                "--evm-version",
-                solx_utils::EVMVersion::Prague.to_string().as_str(),
-            ]);
+            forge_build_command.args(["--evm-version", evm_version.as_str()]);
+            forge_build_command.arg("--no-lint");
             forge_build_command.arg("--optimize");
             forge_build_command.arg("--no-metadata");
             forge_build_command.arg("--force");
@@ -244,10 +243,11 @@ pub fn test(
                     toolchain_name.bright_white().bold()
                 )
                 .as_str(),
-                false,
+                true,
             ) {
                 Ok(build_output) => build_output,
-                Err(_) => {
+                Err(error) => {
+                    eprintln!("{error}");
                     build_correctness_table
                         .entry(project_name.clone())
                         .or_insert_with(BTreeMap::new)
@@ -327,10 +327,8 @@ pub fn test(
             if codegen == "viaIR" {
                 forge_build_sizes_command.arg("--via-ir");
             }
-            forge_build_sizes_command.args([
-                "--evm-version",
-                solx_utils::EVMVersion::Prague.to_string().as_str(),
-            ]);
+            forge_build_sizes_command.args(["--evm-version", evm_version.as_str()]);
+            forge_build_sizes_command.arg("--no-lint");
             forge_build_sizes_command.arg("--optimize");
             forge_build_sizes_command.arg("--no-metadata");
             forge_build_sizes_command.arg("--sizes");
@@ -365,14 +363,12 @@ pub fn test(
             if codegen == "viaIR" {
                 forge_test_command.arg("--via-ir");
             }
-            forge_test_command.args(["--fuzz-runs", "0"]);
+            // The fewest fuzz runs forge accepts.
+            forge_test_command.args(["--fuzz-runs", "1"]);
             forge_test_command.args(["--fuzz-seed", "0xdeadbeef"]);
             // Invariant campaigns ignore `--fuzz-runs`; one run mirrors its intent.
             forge_test_command.env("FOUNDRY_INVARIANT_RUNS", "1");
-            forge_test_command.args([
-                "--evm-version",
-                solx_utils::EVMVersion::Prague.to_string().as_str(),
-            ]);
+            forge_test_command.args(["--evm-version", evm_version.as_str()]);
             forge_test_command.arg("--optimize");
             forge_test_command.arg("--no-metadata");
             forge_test_command.arg("--json");
@@ -432,14 +428,12 @@ pub fn test(
             if codegen == "viaIR" {
                 forge_test_gas_command.arg("--via-ir");
             }
-            forge_test_gas_command.args(["--fuzz-runs", "0"]);
+            // The fewest fuzz runs forge accepts.
+            forge_test_gas_command.args(["--fuzz-runs", "1"]);
             forge_test_gas_command.args(["--fuzz-seed", "0xdeadbeef"]);
             // Invariant campaigns ignore `--fuzz-runs`; one run mirrors its intent.
             forge_test_gas_command.env("FOUNDRY_INVARIANT_RUNS", "1");
-            forge_test_gas_command.args([
-                "--evm-version",
-                solx_utils::EVMVersion::Prague.to_string().as_str(),
-            ]);
+            forge_test_gas_command.args(["--evm-version", evm_version.as_str()]);
             forge_test_gas_command.arg("--optimize");
             forge_test_gas_command.arg("--no-metadata");
             forge_test_gas_command.arg("--gas-report");
