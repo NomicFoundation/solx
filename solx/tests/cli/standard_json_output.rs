@@ -274,7 +274,7 @@ fn warning_output_has_correct_severity() -> anyhow::Result<()> {
 }
 
 #[test_case("syntax/missing-version-pragma")]
-fn warning_output_has_error_code_and_contracts(error_code: &str) -> anyhow::Result<()> {
+fn warning_output_has_slang_error_code_and_contracts(slang_error_code: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
@@ -286,10 +286,53 @@ fn warning_output_has_error_code_and_contracts(error_code: &str) -> anyhow::Resu
     result
         .success()
         .stdout(predicate::str::contains(format!(
-            "\"errorCode\":\"{error_code}\""
+            "\"slangErrorCode\":\"{slang_error_code}\""
         )))
+        .stdout(predicate::str::contains("\"errorCode\"").not())
         .stdout(predicate::str::contains("\"severity\":\"warning\""))
         .stdout(predicate::str::contains("\"bytecode\""));
+
+    Ok(())
+}
+
+#[test_case("syntax/unexpected-terminal")]
+fn error_output_has_slang_error_code(slang_error_code: &str) -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("solidity_invalid.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains(format!(
+            "\"slangErrorCode\":\"{slang_error_code}\""
+        )))
+        .stdout(predicate::str::contains("\"errorCode\"").not())
+        .stdout(predicate::str::contains("\"severity\":\"error\""));
+
+    Ok(())
+}
+
+#[test]
+fn runtime_code_size_warning_has_error_code() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("solidity_runtime_code_size.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains(format!(
+            "\"errorCode\":\"{}\"",
+            solx_utils::Warning::CODE_RUNTIME_CODE_SIZE
+        )))
+        .stdout(predicate::str::contains("\"slangErrorCode\"").not());
 
     Ok(())
 }
