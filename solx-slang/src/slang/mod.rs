@@ -196,13 +196,7 @@ impl Slang {
                 &file.ast(),
                 evm_version,
                 revert_strings,
-                |contract_name, selector| {
-                    input_json.settings.output_selection.check_selection(
-                        file_id.as_str(),
-                        Some(contract_name),
-                        selector,
-                    )
-                },
+                &input_json.settings.output_selection,
                 &sources,
                 benchmarks,
                 &mut profiler,

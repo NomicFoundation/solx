@@ -38,7 +38,7 @@ This writes the LLVM IR and assembly files for every contract, with automatic ov
 The `--benchmarks` flag prints timing information for each pipeline stage:
 
 ```bash
-slang contract.sol --benchmarks
+slang contract.sol --bin --benchmarks
 ```
 
 Output includes per-contract compilation timing in microseconds.
