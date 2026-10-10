@@ -298,6 +298,7 @@ Emits benchmarks of the compilation pipeline.
 ```console
 $ slang 'Simple.sol' --benchmarks
 Benchmarks:
+Compiler_ReadInput: [..]us
 Slang_RunStandardJSON: [..]us
 Compiler_BuildProject: [..]us
 Compiler_Compile: [..]us

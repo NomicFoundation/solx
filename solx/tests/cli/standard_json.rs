@@ -436,6 +436,28 @@ fn select_single() -> anyhow::Result<()> {
 }
 
 #[test]
+fn select_benchmarks() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("select_benchmarks.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("\"Compiler_ReadInput\"").count(1))
+        .stdout(predicate::str::contains("\"Slang_RunStandardJSON\"").count(1))
+        .stdout(predicate::str::contains("\"Compiler_BuildProject\"").count(1))
+        .stdout(predicate::str::contains("\"Compiler_Compile\"").count(1))
+        .stdout(predicate::str::contains("\"Compiler_Link\"").count(1))
+        .stdout(predicate::str::contains("\"Compiler_WriteOutput\"").count(1));
+
+    Ok(())
+}
+
+#[test]
 fn select_none() -> anyhow::Result<()> {
     crate::common::setup()?;
 
