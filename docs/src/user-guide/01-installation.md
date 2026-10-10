@@ -38,7 +38,7 @@ The table below outlines the supported platforms and architectures:
 | arm64  |   ✅   |   ✅   |    ❌    |
 
 > Please avoid using outdated distributions of operating systems, as they may lack the necessary dependencies or include outdated versions of them.
-> **Slang** is only tested on recent versions of popular distributions, such as MacOS 11.0 and Windows 10.
+> **Slang** is only tested on recent versions of popular distributions, such as MacOS 12.0 and Windows 10.
 
 
 

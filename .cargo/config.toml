@@ -7,13 +7,13 @@ incremental = true
 [target.x86_64-apple-darwin]
 rustflags = [
     "-W", "missing_docs",
-    "-C", "link-arg=-mmacosx-version-min=11.0",
+    "-C", "link-arg=-mmacosx-version-min=12.0",
 ]
 
 [target.aarch64-apple-darwin]
 rustflags = [
     "-W", "missing_docs",
-    "-C", "link-arg=-mmacosx-version-min=11.0",
+    "-C", "link-arg=-mmacosx-version-min=12.0",
 ]
 
 [profile.release]
