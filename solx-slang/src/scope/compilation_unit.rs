@@ -114,8 +114,8 @@ impl CompilationUnitScope<'_> {
     }
 
     /// The standard-JSON output of `definition`: its ABI, and the deploy and runtime code of the
-    /// object it deploys, lowered off the melior context in `melior`. `None` when Slang cannot
-    /// compute its ABI.
+    /// object it deploys, lowered off the melior context in `melior` when the selection requests an
+    /// output only codegen produces. `None` when Slang cannot compute its ABI.
     fn definition(
         &self,
         melior: &OnceCell<melior::Context>,
@@ -124,7 +124,10 @@ impl CompilationUnitScope<'_> {
     ) -> Option<DefinitionOutput> {
         let abi_value = definition.abi()?.into_value();
         let method_identifiers = definition.method_identifiers();
-        let Some(object) = definition.into_object() else {
+        let Some(object) = definition
+            .into_object()
+            .filter(|_| self.output_selection.is_codegen_set_for_any())
+        else {
             let contract = Contract::new_abi(abi_value, method_identifiers);
             return Some(Ok((contract, Vec::new())));
         };
