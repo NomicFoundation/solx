@@ -242,6 +242,30 @@ pub fn test(
                     ],
                 )?;
             }
+            if let Some(config_overlay) = project.config_overlay.as_deref() {
+                let config_file_name = config_file_name.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Hardhat project {project_name} has a config overlay but no hardhat.config.ts or hardhat.config.js"
+                    )
+                })?;
+                let base_config_file_name = config_file_name.replace(".config.", ".config.base.");
+                std::fs::rename(
+                    project_directory.join(config_file_name),
+                    project_directory.join(base_config_file_name.as_str()),
+                )
+                .map_err(|error| {
+                    anyhow::anyhow!(
+                        "Renaming {config_file_name} of Hardhat project {project_name} to {base_config_file_name}: {error}"
+                    )
+                })?;
+                std::fs::copy(config_overlay, project_directory.join("hardhat.config.ts")).map_err(
+                    |error| {
+                        anyhow::anyhow!(
+                            "Installing config overlay {config_overlay:?} into Hardhat project {project_name}: {error}"
+                        )
+                    },
+                )?;
+            }
 
             let compiler_shim = compiler_shims
                 .get(identifier.as_str())
@@ -260,6 +284,9 @@ pub fn test(
             if toolchain_name.contains("solx") {
                 npm_compile_command.env("USE_SOLX", "true");
                 npm_compile_command.env("SOLX", &*compiler_path_str);
+                if let Some(build_profile) = project.build_profile.as_deref() {
+                    npm_compile_command.args(["--", "--build-profile", build_profile]);
+                }
             }
             npm_compile_command.env("VIA_IR", (codegen == "viaIR").to_string());
             let build_timestamp_start = Instant::now();
@@ -297,6 +324,7 @@ pub fn test(
             // toolchains can be identity-checked.
             if toolchain_name.contains("solx") {
                 compiler_shim.verify(toolchain_name.as_str(), project_name.as_str())?;
+                stub_slang_build_info_asts(project_directory.as_path())?;
             }
 
             let mut npm_test_command = Command::new("npm");
@@ -312,6 +340,9 @@ pub fn test(
             if toolchain_name.contains("solx") {
                 npm_test_command.env("USE_SOLX", "true");
                 npm_test_command.env("SOLX", &*compiler_path_str);
+                if let Some(build_profile) = project.build_profile.as_deref() {
+                    npm_test_command.args(["--", "--build-profile", build_profile]);
+                }
             }
             npm_test_command.env("VIA_IR", (codegen == "viaIR").to_string());
             let test_timestamp_start = Instant::now();
@@ -470,5 +501,43 @@ pub fn test(
         anyhow::bail!(errors.join("\n"));
     }
 
+    Ok(())
+}
+
+///
+/// Replaces every non-solc AST in the project's build infos with an empty solc source unit, since
+/// EDR refuses to start on an AST it cannot read and slang emits its own format.
+///
+/// TODO: remove once Hardhat runs get slang stack traces (NomicFoundation/solx#806).
+///
+fn stub_slang_build_info_asts(project_directory: &std::path::Path) -> anyhow::Result<()> {
+    let pattern = project_directory.join("artifacts/build-info/*.json");
+    for path in glob::glob(pattern.to_string_lossy().as_ref())
+        .expect("Always valid")
+        .filter_map(Result::ok)
+    {
+        let content = std::fs::read_to_string(path.as_path())
+            .map_err(|error| anyhow::anyhow!("Reading build info {path:?}: {error}"))?;
+        let mut build_info: serde_json::Value = serde_json::from_str(content.as_str())
+            .map_err(|error| anyhow::anyhow!("Parsing build info {path:?}: {error}"))?;
+        let Some(sources) = build_info
+            .pointer_mut("/output/sources")
+            .and_then(serde_json::Value::as_object_mut)
+        else {
+            continue;
+        };
+        let mut is_stubbed = false;
+        for source in sources.values_mut() {
+            if source.pointer("/ast/nodeType").is_some() {
+                continue;
+            }
+            source["ast"] = serde_json::json!({ "nodeType": "SourceUnit", "nodes": [] });
+            is_stubbed = true;
+        }
+        if is_stubbed {
+            std::fs::write(path.as_path(), build_info.to_string())
+                .map_err(|error| anyhow::anyhow!("Writing build info {path:?}: {error}"))?;
+        }
+    }
     Ok(())
 }
