@@ -363,6 +363,25 @@ fn select_evm_bytecode() -> anyhow::Result<()> {
 }
 
 #[test]
+fn select_abi() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("select_abi.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("\"abi\""))
+        .stdout(predicate::str::contains("\"bytecode\"").not())
+        .stdout(predicate::str::contains("Compiler_CreateMLIRContext").not());
+
+    Ok(())
+}
+
+#[test]
 fn select_evm_deployed_bytecode() -> anyhow::Result<()> {
     crate::common::setup()?;
 
