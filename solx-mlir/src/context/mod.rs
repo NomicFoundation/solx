@@ -80,28 +80,30 @@ impl<'context> Context<'context> {
 
     /// Creates a single-threaded MLIR context.
     ///
-    /// `register_all_llvm_translations` MUST be called before any
-    /// MLIR-to-LLVM translation. Without it, `mlirTranslateModuleToLLVMIR`
-    /// returns null. This function enforces that invariant.
+    /// Only the dialects the frontend emits and the passes need are registered. Registering all
+    /// of them would link every dialect library into the binary.
+    ///
+    /// The LLVM translations MUST be registered before any MLIR-to-LLVM translation. Without
+    /// them, `mlirTranslateModuleToLLVMIR` returns null. This function enforces that invariant.
     pub fn create_melior_context() -> melior::Context {
         let registry = DialectRegistry::new();
-        melior::utility::register_all_dialects(&registry);
-
         unsafe {
-            crate::ffi::mlirDialectHandleInsertDialect(
+            for handle in [
                 crate::ffi::mlirGetDialectHandle__sol__(),
-                registry.to_raw(),
-            );
-            crate::ffi::mlirDialectHandleInsertDialect(
                 crate::ffi::mlirGetDialectHandle__yul__(),
-                registry.to_raw(),
-            );
+                mlir_sys::mlirGetDialectHandle__llvm__(),
+                mlir_sys::mlirGetDialectHandle__func__(),
+                mlir_sys::mlirGetDialectHandle__cf__(),
+                mlir_sys::mlirGetDialectHandle__arith__(),
+            ] {
+                crate::ffi::mlirDialectHandleInsertDialect(handle, registry.to_raw());
+            }
         }
 
         let melior = melior::Context::new();
         melior.enable_multi_threading(false);
         melior.append_dialect_registry(&registry);
-        melior::utility::register_all_llvm_translations(&melior);
+        unsafe { crate::ffi::solxRegisterLLVMTranslations(melior.to_raw()) };
 
         static REGISTER_PASSES: Once = Once::new();
         REGISTER_PASSES.call_once(|| unsafe {

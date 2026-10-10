@@ -28,6 +28,11 @@ unsafe extern "C" {
     /// Registers all Sol dialect passes.
     pub fn mlirRegisterSolPasses();
 
+    // ---- LLVM translation (from dialect_stubs.cpp) ----
+
+    /// Registers the MLIR-to-LLVM-IR translation.
+    pub fn solxRegisterLLVMTranslations(context: MlirContext);
+
     // ---- Pass manager instrumentation (from dialect_stubs.cpp) ----
 
     /// Times every pass `pass_manager` runs; `callback` receives each report entry when
