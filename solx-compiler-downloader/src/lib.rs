@@ -108,11 +108,17 @@ impl Downloader {
                         "Copying".bright_green().bold(),
                     );
 
-                    std::fs::copy(source_path.as_str(), executable.destination.as_str()).map_err(
-                        |error| {
-                            anyhow::anyhow!("Executable {source_path:?} copying error: {error}",)
-                        },
-                    )?;
+                    if let Some(parent) = destination_path.parent() {
+                        std::fs::create_dir_all(parent).map_err(|error| {
+                            anyhow::anyhow!(
+                                "Executable {destination_path:?} parent directory creation error: {error}",
+                            )
+                        })?;
+                    }
+
+                    std::fs::copy(source_path.as_str(), &destination_path).map_err(|error| {
+                        anyhow::anyhow!("Executable {source_path:?} copying error: {error}",)
+                    })?;
                     continue;
                 }
                 Protocol::HTTPS => {
