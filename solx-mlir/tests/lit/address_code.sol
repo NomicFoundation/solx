@@ -12,10 +12,16 @@
 // CHECK:   %[[LENGTH_RECEIVER:.*]] = sol.address_cast %{{.*}} : !sol.address<payable> to !sol.address
 // CHECK:   sol.code_size %[[LENGTH_RECEIVER]] : !sol.address -> ui256
 
+// CHECK: sol.func @{{.*bytecode_length_parenthesized.*}}
+// CHECK:   %[[PAREN_RECEIVER:.*]] = sol.address_cast %{{.*}} : !sol.address<payable> to !sol.address
+// CHECK:   sol.code_size %[[PAREN_RECEIVER]] : !sol.address -> ui256
+
 contract C {
     function bytecode(address payable a) public view returns (bytes memory) { return a.code; }
 
     function bytecode_hash(address payable a) public view returns (bytes32) { return a.codehash; }
 
     function bytecode_length(address payable a) public view returns (uint256) { return a.code.length; }
+
+    function bytecode_length_parenthesized(address payable a) public view returns (uint256) { return (a.code).length; }
 }

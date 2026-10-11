@@ -51,6 +51,11 @@
 // CHECK:   %[[MEMSEL:.*]] = sol.bytes_cast %[[MEM]] : ui32 to !sol.fixedbytes<4>
 // CHECK:   sol.encode selector(%[[MEMSEL]]) %{{.*}} : !sol.fixedbytes<4> !sol.string<Memory> : !sol.string<Memory>
 
+// CHECK: sol.func @{{.*encodeCallParenthesized.*}}
+// CHECK:   %[[PAREN:.*]] = sol.constant 3017696395 : ui32
+// CHECK:   %[[PARENSEL:.*]] = sol.bytes_cast %[[PAREN]] : ui32 to !sol.fixedbytes<4>
+// CHECK:   sol.encode selector(%[[PARENSEL]]) %{{.*}} : !sol.fixedbytes<4> ui256 : !sol.string<Memory>
+
 // CHECK: sol.func @{{.*encodeCallPointer.*}}
 // CHECK:   %[[PTR:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.ext_func_ref<(ui256) -> ui256>, Stack>, !sol.ext_func_ref<(ui256) -> ui256>
 // CHECK:   %[[PTRSEL:.*]] = sol.ext_func_selector %[[PTR]] : !sol.ext_func_ref<(ui256) -> ui256> -> !sol.fixedbytes<4>
@@ -102,6 +107,11 @@
 // CHECK:   %[[HASHSEL:.*]] = sol.bytes_cast %[[HASH]] : !sol.fixedbytes<32> to !sol.fixedbytes<4>
 // CHECK:   sol.encode selector(%[[HASHSEL]]) %{{.*}} : !sol.fixedbytes<4> ui256 : !sol.string<Memory>
 
+// CHECK: sol.func @{{.*encodeWithSignatureParenthesized.*}}
+// CHECK:   %[[PSIG:.*]] = sol.constant 801029432 : ui32
+// CHECK:   %[[PSIGSEL:.*]] = sol.bytes_cast %[[PSIG]] : ui32 to !sol.fixedbytes<4>
+// CHECK:   sol.encode selector(%[[PSIGSEL]]) %{{.*}} : !sol.fixedbytes<4> ui256 : !sol.string<Memory>
+
 contract C {
     bytes stored;
 
@@ -119,9 +129,13 @@ contract C {
 
     function encodeWithSignatureDynamic(string memory s, uint256 x) public pure returns (bytes memory) { return abi.encodeWithSignature(s, x); }
 
+    function encodeWithSignatureParenthesized(uint256 x) public pure returns (bytes memory) { return abi.encodeWithSignature(("foo(uint256)"), x); }
+
     function encodeCall(uint256 x) public pure returns (bytes memory) { return abi.encodeCall(I.f, (x)); }
 
     function encodeCallUnparenthesized(uint256 x) public pure returns (bytes memory) { return abi.encodeCall(I.f, x); }
+
+    function encodeCallParenthesized(uint256 x) public pure returns (bytes memory) { return abi.encodeCall((I.f), (x)); }
 
     function encodeCallWidened(uint8 x) public pure returns (bytes memory) { return abi.encodeCall(I.f, (x)); }
 

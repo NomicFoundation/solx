@@ -16,6 +16,10 @@
 // CHECK:   %[[COND:.*]] = sol.cmp gt
 // CHECK:   sol.require %[[COND]], "must be positive"()
 
+// CHECK: sol.func @{{.*check_msg_parenthesized.*}}
+// CHECK:   %[[COND:.*]] = sol.cmp gt
+// CHECK:   sol.require %[[COND]], "must be at least one"()
+
 // CHECK: sol.func @{{.*check_named_arguments.*}}
 // CHECK:   sol.require %{{.*}}, "MyErr(uint256,uint256)"(%{{.*}}, %{{.*}}) {call}
 
@@ -35,6 +39,11 @@ contract C {
 
     function check_msg(uint256 x) public pure returns (uint256) {
         require(x > 0, "must be positive");
+        return x;
+    }
+
+    function check_msg_parenthesized(uint256 x) public pure returns (uint256) {
+        require(x > 0, ("must be at least one"));
         return x;
     }
 
