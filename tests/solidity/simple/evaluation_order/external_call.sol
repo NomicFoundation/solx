@@ -14,6 +14,10 @@
 //!     "name": "selectorReceiver",
 //!     "inputs": [ { "method": "selectorReceiver", "calldata": [] } ],
 //!     "expected": [ "1" ]
+//! }, {
+//!     "name": "enumArgument",
+//!     "inputs": [ { "method": "enumArgument", "calldata": [] } ],
+//!     "expected": { "return_data": [ "0x4e487b7100000000000000000000000000000000000000000000000000000000", "0x0000002100000000000000000000000000000000000000000000000000000000" ], "exception": true }
 //! } ] }
 
 // SPDX-License-Identifier: MIT
@@ -21,6 +25,8 @@
 pragma solidity >=0.8.0;
 
 contract Test {
+    enum Choice { First, Second }
+
     uint256 order;
 
     function t(uint256 n) internal returns (uint256) {
@@ -31,6 +37,8 @@ contract Test {
     function target(uint256 a) external payable returns (uint256) {
         return a;
     }
+
+    function take(Choice) external {}
 
     function callee() internal returns (function(uint256) external payable returns (uint256)) {
         t(1);
@@ -69,5 +77,13 @@ contract Test {
         order = 0;
         receiver().target.selector;
         return order;
+    }
+
+    function enumArgument() public {
+        Choice dirty;
+        assembly {
+            dirty := 2
+        }
+        Test(address(0)).take(dirty);
     }
 }

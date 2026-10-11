@@ -124,6 +124,9 @@ dialect_ops! {
     Value::mulmod(x: value, y: value, modulus: value) -> value {
         MulModOperation.x(x).y(y).r#mod(modulus)
     }
+    Value::divisor(self) -> value {
+        DivisorOperation.value(self)
+    }
 
     Value::encode | encode_packed (inputs: values, selector: optional_value) -> value {
         EncodeOperation.ins(many(inputs)).res(memory()).selector(optional_value(selector))

@@ -1,7 +1,7 @@
 // RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.contract @{{.*User.*}} {
-// CHECK: sol.func @{{.*}} attributes {{.*}}kind = #Constructor
+// CHECK: sol.func @{{.*}} attributes {{.*}}kind = #Initializer
 // CHECK:   sol.call @{{.*seed.*}}(%{{.*}}) : (ui256) -> ui256
 // CHECK: sol.func private @{{.*seed.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #Pure}
 // CHECK:   sol.call @{{.*step.*}}(%{{.*}}) : (ui256) -> ui256

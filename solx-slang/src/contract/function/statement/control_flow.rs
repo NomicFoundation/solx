@@ -95,7 +95,13 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         let values = match node.expression() {
             Some(expression) if !self.return_types.is_empty() => {
                 let targets: Vec<_> = self.return_types.iter().copied().map(Some).collect();
-                self.converted_values(&expression, &targets)
+                let values = self.evaluated_values(&expression, &targets);
+                let return_types = self.return_types.clone();
+                values
+                    .into_iter()
+                    .zip(return_types)
+                    .map(|(value, target)| value.convert(target, self))
+                    .collect()
             }
             Some(expression) => {
                 self.expression_effect(&expression);

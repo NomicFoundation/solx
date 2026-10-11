@@ -28,6 +28,8 @@ sol_dialect_attribute! {
         Fallback = 1,
         /// Receive function.
         Receive = 2,
+        /// The function that runs the state variable initializers.
+        Initializer = 3,
     }
 }
 

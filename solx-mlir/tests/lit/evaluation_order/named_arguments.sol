@@ -9,6 +9,15 @@
 // CHECK:   %[[C:.*]] = sol.call @"t(uint256)_{{[0-9]+}}"
 // CHECK:   sol.call @{{.*triple.*}}(%[[A]], %[[B]], %[[C]])
 
+// CHECK: sol.func @{{.*emit_event.*}}
+// CHECK:   sol.constant 3 : ui8
+// CHECK:   %[[EVENT_C:.*]] = sol.call @"t(uint256)_{{[0-9]+}}"
+// CHECK:   sol.constant 1 : ui8
+// CHECK:   %[[EVENT_A:.*]] = sol.call @"t(uint256)_{{[0-9]+}}"
+// CHECK:   sol.constant 2 : ui8
+// CHECK:   %[[EVENT_B:.*]] = sol.call @"t(uint256)_{{[0-9]+}}"
+// CHECK:   sol.emit "Triple(uint256,uint256,uint256)" indexed = [%[[EVENT_C]]] non_indexed = [%[[EVENT_A]], %[[EVENT_B]]]
+
 // CHECK: sol.func @{{.*struct_constructor.*}}
 // CHECK:   sol.constant 1 : ui8
 // CHECK:   %[[FIELD_A:.*]] = sol.call @"t(uint256)_{{[0-9]+}}"

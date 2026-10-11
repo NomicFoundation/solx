@@ -54,8 +54,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     }
 
     /// The shared `addmod`/`mulmod` lowering: the three operands widened to the word width the
-    /// built-in works at rather than their own narrower types, evaluated right to left, then
-    /// combined by `operator`.
+    /// built-in works at rather than their own narrower types, evaluated right to left with the
+    /// modulus checked before the other two, then combined by `operator`.
     pub fn modular(
         &mut self,
         arguments: &[Expression],
@@ -67,7 +67,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         ) -> Value<'context>,
     ) -> Value<'context> {
         let word = MlirType::word(self.melior);
-        let modulus = self.converted(&arguments[2], word);
+        let modulus = self.converted(&arguments[2], word).divisor(self);
         let right = self.converted(&arguments[1], word);
         let left = self.converted(&arguments[0], word);
         operator(left, right, modulus, self)

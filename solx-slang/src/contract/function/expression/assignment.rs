@@ -15,7 +15,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// `lhs = rhs` and the compound `lhs op= rhs`. A multi-element tuple destructures and yields
     /// nothing, tuple assignment being value-less; every other form yields the stored value. The right
     /// operand is evaluated before the left place, matching legacy's right-before-left order; a tuple
-    /// evaluates all values then all places left-first and commits the stores right-first. Whether the
+    /// evaluates all values then all places left-first and commits the stores right-first. A value
+    /// bound for a memory reference converts before the left place is resolved. Whether the
     /// place is a reference (its own address, taking a `sol.copy` that bridges type and data location)
     /// or a scalar slot (a `store` of the value converted to the slot's own type) is read from the
     /// resolved place. The lone exception is a string or hex literal at a bytes-like target: it folds
@@ -27,7 +28,15 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         let left_type = left.get_type();
 
         if let Some(Type::Tuple(_)) = &left_type {
-            let values = self.expression_values(&right);
+            let targets = self.expression_types(&left);
+            let mut values = self.expression_values(&right);
+            for (value, target) in values.iter_mut().zip(targets) {
+                if let Some(target) = target
+                    && target.data_location() == solx_utils::DataLocation::Memory
+                {
+                    *value = value.convert(target, self);
+                }
+            }
             let places = self.expression_places(&left);
             for (place, value) in places.into_iter().zip(values).rev() {
                 if let Some((place, r#type)) = place {
@@ -47,7 +56,11 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 let value = self.converted(&right, r#type);
                 return Some(place.assign(value, r#type, self));
             }
-            let value = self.expression(&right);
+            let value = if element_type.data_location() == solx_utils::DataLocation::Memory {
+                self.converted(&right, element_type)
+            } else {
+                self.expression(&right)
+            };
             let (place, r#type) = self.expression_place(&left);
             return Some(place.assign(value, r#type, self));
         }

@@ -14,6 +14,14 @@
 //!     "name": "tuple_store",
 //!     "inputs": [ { "method": "tupleStore", "calldata": [] } ],
 //!     "expected": [ "1" ]
+//! }, {
+//!     "name": "memory_copy",
+//!     "inputs": [ { "method": "memoryCopy", "calldata": [] } ],
+//!     "expected": [ "1" ]
+//! }, {
+//!     "name": "destructure_copy",
+//!     "inputs": [ { "method": "destructureCopy", "calldata": [] } ],
+//!     "expected": [ "1" ]
 //! } ] }
 
 // SPDX-License-Identifier: MIT
@@ -23,6 +31,7 @@ pragma solidity >=0.8.0;
 contract Test {
     uint256 sequence;
     mapping(uint256 => uint256) values;
+    uint256[] stored;
 
     function leftIndex() internal returns (uint256) {
         sequence = sequence * 10 + 1;
@@ -54,6 +63,11 @@ contract Test {
         return 50;
     }
 
+    function overwriteStored() internal returns (uint256) {
+        stored[0] = 99;
+        return 0;
+    }
+
     function scalar() public returns (uint256, uint256) {
         sequence = 0;
         values[leftIndex()] = rightValue();
@@ -77,5 +91,20 @@ contract Test {
         uint256 value;
         (value, value) = (1, 2);
         return value;
+    }
+
+    function memoryCopy() public returns (uint256) {
+        stored.push(1);
+        uint256[][] memory copies = new uint256[][](1);
+        copies[overwriteStored()] = stored;
+        return copies[0][0];
+    }
+
+    function destructureCopy() public returns (uint256) {
+        stored.push(1);
+        uint256[][] memory copies = new uint256[][](1);
+        uint256 value;
+        (copies[overwriteStored()], value) = (stored, 1);
+        return copies[0][0];
     }
 }

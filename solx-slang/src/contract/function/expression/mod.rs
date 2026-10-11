@@ -174,6 +174,21 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         }
     }
 
+    /// The types of the places `expression_places` resolves, a blank element denoting none.
+    pub fn expression_types(&mut self, node: &Expression) -> Vec<Option<MlirType<'context>>> {
+        match node {
+            Expression::TupleExpression(inner) => inner
+                .items()
+                .iter()
+                .flat_map(|item| match item.expression() {
+                    Some(element) => self.expression_types(&element),
+                    None => vec![None],
+                })
+                .collect(),
+            _ => vec![Some(self.typing(node.get_type()))],
+        }
+    }
+
     /// Emits an expression for its side effects, discarding the values. `new C;` denotes a creation
     /// function rather than performing one, so it evaluates nothing, as does a builtin or a type,
     /// while an uncalled builtin or function member evaluates only its operand; a modifier's `_;`
@@ -277,20 +292,14 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     }
 
     /// Emits an expression and converts its value to `target_type`, be it an implicit reconciliation
-    /// to the binder's type or an explicit `T(x)` cast. A string literal reaching a bytes-like target
-    /// folds to that constant directly, since a materialized `sol.string_lit` value cannot be
-    /// reinterpreted.
+    /// to the binder's type or an explicit `T(x)` cast.
     pub fn converted(
         &mut self,
         expression: &Expression,
         target_type: MlirType<'context>,
     ) -> Value<'context> {
-        if let Expression::StringExpression(literal) = expression
-            && target_type.is_bytes_like()
-        {
-            return Value::left_aligned_bytes(literal.value(), target_type, self);
-        }
-        self.expression(expression).convert(target_type, self)
+        self.evaluated(expression, target_type)
+            .convert(target_type, self)
     }
 
     /// Evaluates both operands right-first for legacy compatibility, converts them to the binder's
@@ -307,11 +316,10 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         (left, right)
     }
 
-    /// Lowers a multi-value expression to values converted to `targets`, a nested tuple flattening into
-    /// the same list as `tuple_values` and a string-literal element folding to its bytes-like constant
-    /// as `converted` does. A call or conditional converts each result it yields; a `None` target passes
-    /// its value through, for a blank destructuring slot.
-    pub fn converted_values(
+    /// Lowers a multi-value expression to its values at their own types, a nested tuple flattening
+    /// into the same list as `tuple_values` and a string-literal element folding to its bytes-like
+    /// constant as `converted` does.
+    pub fn evaluated_values(
         &mut self,
         node: &Expression,
         targets: &[Option<MlirType<'context>>],
@@ -321,21 +329,15 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 let mut values = Vec::with_capacity(targets.len());
                 for item in tuple.items().iter() {
                     let element = item.expression().expect("slang validates tuple elements");
-                    values.extend(self.converted_values(&element, &targets[values.len()..]));
+                    values.extend(self.evaluated_values(&element, &targets[values.len()..]));
                 }
                 values
             }
-            Expression::FunctionCallExpression(_) | Expression::ConditionalExpression(_) => self
-                .expression_values(node)
-                .into_iter()
-                .zip(targets)
-                .map(|(value, target)| match target {
-                    Some(target) => value.convert(*target, self),
-                    None => value,
-                })
-                .collect(),
+            Expression::FunctionCallExpression(_) | Expression::ConditionalExpression(_) => {
+                self.expression_values(node)
+            }
             _ => match targets[0] {
-                Some(target) => vec![self.converted(node, target)],
+                Some(target) => vec![self.evaluated(node, target)],
                 None => vec![self.expression(node)],
             },
         }
@@ -351,5 +353,20 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             }
             _ => None,
         }
+    }
+
+    /// Emits an expression at its own type. A string literal reaching a bytes-like target folds to
+    /// that constant directly, since a materialized `sol.string_lit` value cannot be reinterpreted.
+    fn evaluated(
+        &mut self,
+        expression: &Expression,
+        target_type: MlirType<'context>,
+    ) -> Value<'context> {
+        if let Expression::StringExpression(literal) = expression
+            && target_type.is_bytes_like()
+        {
+            return Value::left_aligned_bytes(literal.value(), target_type, self);
+        }
+        self.expression(expression)
     }
 }

@@ -12,6 +12,16 @@
 // CHECK:   sol.store %[[RIGHT_SECOND]],
 // CHECK:   sol.store %[[RIGHT_FIRST]],
 
+// CHECK: sol.func @{{.*destructureCopy.*}}
+// CHECK:   %[[DESTRUCTURE_COPY:.*]] = sol.data_loc_cast
+// CHECK:   sol.call @{{.*overwriteStored.*}}
+// CHECK:   sol.store %[[DESTRUCTURE_COPY]],
+
+// CHECK: sol.func @{{.*memoryCopy.*}}
+// CHECK:   %[[MEMORY_COPY:.*]] = sol.data_loc_cast
+// CHECK:   sol.call @{{.*overwriteStored.*}}
+// CHECK:   sol.store %[[MEMORY_COPY]],
+
 // CHECK: sol.func @{{.*scalar.*}}
 // CHECK:   sol.call @{{.*rightValue.*}}
 // CHECK:   sol.call @{{.*leftIndex.*}}

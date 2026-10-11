@@ -48,11 +48,12 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         }
     }
 
-    /// A multi-typed variable declaration, destructuring a tuple or a call through `converted_values`,
-    /// so a string-literal tuple element folds to its bytes-like constant. A blank slot evaluates its
-    /// operand but binds nothing.
+    /// A multi-typed variable declaration, destructuring a tuple or a call through `evaluated_values`,
+    /// so a string-literal tuple element folds to its bytes-like constant. As in legacy, the values
+    /// convert and bind from the last declaration to the first. A blank slot evaluates its operand
+    /// but binds nothing.
     pub fn multi_typed_declaration(&mut self, node: &MultiTypedDeclaration) {
-        let elements = node.elements();
+        let elements: Vec<_> = node.elements().iter().collect();
         let targets: Vec<_> = elements
             .iter()
             .map(|member| {
@@ -61,11 +62,13 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                     .map(|declaration| self.typing(declaration.get_type()))
             })
             .collect();
-        let values = self.converted_values(&node.value(), &targets);
-        for ((member, target), value) in elements.iter().zip(targets).zip(values) {
+        let values = self.evaluated_values(&node.value(), &targets);
+        for ((member, target), value) in elements.iter().zip(targets).zip(values).rev() {
             if let Some(declaration) = member.member() {
                 let target = target.expect("a bound slot has a declared type");
-                self.define_local(declaration.name().name(), target, |_scope| value);
+                self.define_local(declaration.name().name(), target, |scope| {
+                    value.convert(target, scope)
+                });
             }
         }
     }

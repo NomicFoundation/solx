@@ -26,8 +26,8 @@ use crate::scope::contract::ContractScope;
 pub struct FunctionScope<'contract, 'source_unit, 'context> {
     /// The contract scope this function body is lowered within.
     pub contract: &'contract mut ContractScope<'source_unit, 'context>,
-    /// Whether this frame is a constructor, which reads an immutable through its creation cell
-    /// rather than from the linked code.
+    /// Whether this frame is a constructor or the initializer, which read an immutable through its
+    /// creation cell rather than from the linked code.
     pub is_constructor: bool,
     /// The lexically scoped variable bindings.
     pub environment: Environment<'context>,

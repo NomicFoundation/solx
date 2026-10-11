@@ -98,9 +98,7 @@
 // CHECK:   sol.encode selector(%[[SIGSEL]]) %{{.*}} : !sol.fixedbytes<4> ui256 : !sol.string<Memory>
 
 // CHECK: sol.func @{{.*encodeWithSignatureDynamic.*}}
-// CHECK:   %[[HASH:.*]] = "sol.keccak256"(%{{.*}}) : (!sol.string<Memory>) -> !sol.fixedbytes<32>
-// CHECK:   %[[HASHSEL:.*]] = sol.bytes_cast %[[HASH]] : !sol.fixedbytes<32> to !sol.fixedbytes<4>
-// CHECK:   sol.encode selector(%[[HASHSEL]]) %{{.*}} : !sol.fixedbytes<4> ui256 : !sol.string<Memory>
+// CHECK:   sol.encode selector(%{{.*}}) %{{.*}} : !sol.string<Memory> ui256 : !sol.string<Memory>
 
 contract C {
     bytes stored;

@@ -2,7 +2,7 @@
 
 // CHECK: sol.immutable @{{.*x.*}} : ui256
 
-// CHECK: sol.func @{{.*}}() attributes {{.*}}kind = #{{.*}}Constructor
+// CHECK: sol.func @{{.*}}() attributes {{.*}}kind = #{{.*}}Initializer
 // CHECK:   %[[XP:.*]] = sol.addr_of @{{.*x.*}} : !sol.ptr<ui256, Immutable>
 // CHECK:   sol.constant 42 : ui8
 // CHECK:   sol.store %{{.*}}, %[[XP]] : ui256, !sol.ptr<ui256, Immutable>
