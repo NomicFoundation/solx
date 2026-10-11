@@ -108,7 +108,15 @@ impl Downloader {
                         "Copying".bright_green().bold(),
                     );
 
-                    std::fs::copy(source_path.as_str(), executable.destination.as_str()).map_err(
+                    if let Some(parent) = destination_path.parent() {
+                        std::fs::create_dir_all(parent).map_err(|error| {
+                            anyhow::anyhow!(
+                                "Executable {destination_path:?} parent directory creation error: {error}",
+                            )
+                        })?;
+                    }
+
+                    std::fs::copy(source_path.as_str(), &destination_path).map_err(
                         |error| {
                             anyhow::anyhow!("Executable {source_path:?} copying error: {error}",)
                         },
@@ -278,5 +286,99 @@ impl Downloader {
         }
 
         anyhow::bail!("Downloading failed after {max_attempts} attempts");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::io::Write;
+
+    use super::Downloader;
+    use super::HttpClient;
+
+    /// The `Protocol::File` branch must copy the source executable to the
+    /// destination path that already includes `std::env::consts::EXE_SUFFIX`.
+    ///
+    /// On Windows `EXE_SUFFIX` is `.exe`, so the produced file must be
+    /// `<destination>.exe`. On Unix `EXE_SUFFIX` is empty, so this test only
+    /// guards against regressions there, but it still passes. On Windows CI it
+    /// would have failed before the fix and passes afterwards.
+    #[test]
+    fn file_protocol_preserves_platform_executable_suffix() {
+        let base = std::env::temp_dir().join(format!(
+            "solx-downloader-test-{}-{}",
+            std::process::id(),
+            "file-protocol"
+        ));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("temporary directory creation error");
+
+        // The `Protocol::File` branch appends `EXE_SUFFIX` to `source`, so the
+        // on-disk source file must already carry the suffix.
+        let source_config = base.join("solc_source");
+        let source_on_disk = base.join(format!("solc_source{}", std::env::consts::EXE_SUFFIX));
+        {
+            let mut file =
+                std::fs::File::create(&source_on_disk).expect("source file creation error");
+            file.write_all(b"fake-compiler-binary")
+                .expect("source file writing error");
+        }
+
+        // The destination configured in JSON has no suffix; the code computes
+        // `destination + EXE_SUFFIX` as `destination_path`.
+        let destination_config = base.join("solc_destination");
+        let expected_path = base.join(format!("solc_destination{}", std::env::consts::EXE_SUFFIX));
+
+        let mut platforms = HashMap::new();
+        for platform in [
+            "linux-amd64",
+            "linux-arm64",
+            "macos-amd64",
+            "macos-arm64",
+            "windows-amd64",
+        ] {
+            platforms.insert(platform.to_string(), platform.to_string());
+        }
+
+        let config_json = format!(
+            r#"{{
+                "executables": [
+                    {{
+                        "is_enabled": true,
+                        "protocol": "file",
+                        "source": {},
+                        "destination": {},
+                        "version": null,
+                        "platforms": {{
+                            "linux-amd64": "linux-amd64",
+                            "linux-arm64": "linux-arm64",
+                            "macos-amd64": "macos-amd64",
+                            "macos-arm64": "macos-arm64",
+                            "windows-amd64": "windows-amd64"
+                        }}
+                    }}
+                ]
+            }}"#,
+            serde_json::to_string(&source_config.to_string_lossy().into_owned()).unwrap(),
+            serde_json::to_string(&destination_config.to_string_lossy().into_owned()).unwrap(),
+        );
+
+        let config_path = base.join("config.json");
+        std::fs::write(&config_path, config_json).expect("config file writing error");
+
+        let client = HttpClient::builder()
+            .build()
+            .expect("HTTP client building error");
+        Downloader::new(client)
+            .download(&config_path)
+            .expect("downloader execution error");
+
+        assert!(
+            expected_path.exists(),
+            "the copied executable must be located at {expected_path:?} (with the platform suffix)",
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
