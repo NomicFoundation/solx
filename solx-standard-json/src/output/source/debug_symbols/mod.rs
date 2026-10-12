@@ -20,7 +20,7 @@ pub struct DebugSymbols {
     pub contracts: Vec<Contract>,
     /// The free functions, in source order.
     pub free_functions: Vec<Function>,
-    /// The ranges of the AST's sequence and collection nodes, sorted and deduplicated. A choice or
-    /// terminal, such as an expression that is a bare identifier, has no range of its own.
-    pub spans: Vec<[usize; 2]>,
+    /// The ranges of the AST's sequence and collection nodes that cover text, sorted and
+    /// deduplicated.
+    pub ranges: Vec<[usize; 2]>,
 }

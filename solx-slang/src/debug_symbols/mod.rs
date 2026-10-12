@@ -2,7 +2,7 @@
 //! The per-source symbol table for debuggers and stack tracers, read off Slang's semantic model.
 //!
 
-mod spans;
+mod ranges;
 
 use std::ops::Range;
 
@@ -29,7 +29,7 @@ use solx_standard_json::output::source::debug_symbols::function::visibility::Vis
 use crate::abi::AbiDefinition;
 use crate::scope::source_unit::SourceUnitScope;
 
-use self::spans::Spans;
+use self::ranges::Ranges;
 
 /// The symbol table of a source unit, filled member by member in source order.
 #[derive(Default)]
@@ -42,7 +42,7 @@ pub struct DebugSymbolsBuilder {
 
 impl DebugSymbolsBuilder {
     /// The symbol table of `unit`: its contracts, interfaces and libraries with their own members,
-    /// its free functions, and the spans of its nonterminal nodes.
+    /// its free functions, and the ranges of its nonterminal nodes.
     pub fn build(unit: &SourceUnit) -> DebugSymbols {
         let mut table = Self::default();
         for member in unit.members().iter() {
@@ -51,7 +51,7 @@ impl DebugSymbolsBuilder {
         DebugSymbols {
             contracts: table.contracts,
             free_functions: table.free_functions,
-            spans: Spans::collect(unit),
+            ranges: Ranges::collect(unit),
         }
     }
 

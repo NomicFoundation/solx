@@ -74,7 +74,7 @@
       }
     ],
     "freeFunctions": [],
-    "spans": [
+    "ranges": [
       [32, 23],
       [32, 432],
       [39, 15],
@@ -258,7 +258,7 @@
         "implemented": true
       }
     ],
-    "spans": [
+    "ranges": [
       [32, 41],
       [32, 3831],
       [39, 33],
@@ -943,7 +943,7 @@
         "implemented": true
       }
     ],
-    "spans": [
+    "ranges": [
       [32, 23],
       [32, 1490],
       [39, 15],

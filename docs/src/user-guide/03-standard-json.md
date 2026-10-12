@@ -240,14 +240,13 @@ The output JSON contains all artifacts produced by **Slang**. The example below 
       // Optional, Slang-only: Symbol table for debuggers and stack tracers (object). Every range is [byteOffset, byteLength].
       // Corresponds to "debugSymbols" in the outputSelection settings.
       "debugSymbols": {
-        // Contracts, interfaces and libraries in source order, each with the functions, modifiers and public state
-        // variable getters it declares itself, and for a contract or interface its C3 linearisation.
+        // Required: Contracts, interfaces and libraries in source order, each with the functions, modifiers and public
+        // state variable getters it declares itself, and for a contract or interface its C3 linearisation.
         "contracts": [/* ... */],
-        // File-level functions.
+        // Required: File-level functions.
         "freeFunctions": [/* ... */],
-        // Ranges of the AST's sequence and collection nodes, sorted and deduplicated. A choice or terminal, such as an
-        // expression that is a bare identifier, has no range of its own.
-        "spans": [/* ... */]
+        // Required: Ranges of the AST's sequence and collection nodes that cover text, sorted and deduplicated.
+        "ranges": [/* ... */]
       }
     }
   },
