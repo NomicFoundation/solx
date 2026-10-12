@@ -23,10 +23,10 @@ use crate::scope::function::FunctionScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// A struct field loads from its place; an enum member is its ordinal; a `super` member is the
-    /// internal pointer of the override the object runs after the enclosing contract; an
+    /// internal pointer of the override the object runs after the enclosing contract; a qualified
+    /// member resolves as the name it qualifies, a function among them by its declaration; an
     /// externally visible function reached through a contract instance or `this` is the pointer
-    /// dispatching it; a qualified member resolves as the name it qualifies, a function among them
-    /// by its declaration; every other member access is an environment or EVM intrinsic.
+    /// dispatching it; every other member access is an environment or EVM intrinsic.
     pub fn member_access(&mut self, node: &MemberAccessExpression) -> Value<'context> {
         let operand = node.operand();
 
@@ -59,6 +59,13 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             return self.contract.pointer_constant(&function);
         }
 
+        if Self::is_qualified_member(&operand, &node.member()) {
+            let Some(Definition::Function(function)) = node.member().resolve_to_definition() else {
+                return self.identifier(&node.member());
+            };
+            return self.contract.pointer_constant(&function);
+        }
+
         if let Some(Type::Function(function_type)) = node.get_type()
             && FunctionReferenceKind::from(function_type.visibility())
                 == FunctionReferenceKind::External
@@ -76,13 +83,6 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 self.typing(node.get_type()),
                 self,
             );
-        }
-
-        if Self::is_qualified_member(&operand, &node.member()) {
-            let Some(Definition::Function(function)) = node.member().resolve_to_definition() else {
-                return self.identifier(&node.member());
-            };
-            return self.contract.pointer_constant(&function);
         }
 
         match node.member().resolve_to_built_in() {
