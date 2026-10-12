@@ -1,4 +1,4 @@
-//! { "cases": [ {
+//! { "modes": [ "E" ], "cases": [ {
 //!     "name": "calldata_uint",
 //!     "inputs": [ { "method": "copyUint", "calldata": [ "0x20", "1", "256" ] } ],
 //!     "expected": { "return_data": [], "exception": true }
@@ -26,6 +26,18 @@
 //!     "name": "storage_packed_to_unpacked_int",
 //!     "inputs": [ { "method": "copyPackedStorageToUnpacked", "calldata": [] } ],
 //!     "expected": [ "-1" ]
+//! }, {
+//!     "name": "calldata_uint_to_memory",
+//!     "inputs": [ { "method": "copyUintToMemory", "calldata": [ "0x20", "1", "256" ] } ],
+//!     "expected": [ "0x20", "1", "0" ]
+//! }, {
+//!     "name": "calldata_int_to_memory",
+//!     "inputs": [ { "method": "copyIntToMemory", "calldata": [ "0x20", "1", "128" ] } ],
+//!     "expected": [ "0x20", "1", "-128" ]
+//! }, {
+//!     "name": "calldata_nested_to_memory",
+//!     "inputs": [ { "method": "copyNestedToMemory", "calldata": [ "0x20", "1", "0x20", "1", "256" ] } ],
+//!     "expected": { "return_data": [], "exception": true }
 //! } ] }
 
 // SPDX-License-Identifier: MIT
@@ -35,7 +47,8 @@ pragma solidity >=0.8.0;
 // An array copy into storage with an element-type conversion reads the source
 // element as its own type: a dirty calldata element reverts, a dirty memory
 // element is canonicalized, a storage element is sign-extended before it is
-// widened.
+// widened. A calldata array copied into memory is cleaned element by element,
+// unless its elements are dynamically encoded, which decodes and validates them.
 contract Test {
   uint16[] s16;
   int8[] si8;
@@ -80,5 +93,17 @@ contract Test {
     si8.push(-1);
     si136 = si8;
     return si136[0];
+  }
+
+  function copyUintToMemory(uint8[] calldata a) external pure returns (uint8[] memory) {
+    return a;
+  }
+
+  function copyIntToMemory(int8[] calldata a) external pure returns (int8[] memory) {
+    return a;
+  }
+
+  function copyNestedToMemory(uint8[][] calldata a) external pure returns (uint8[][] memory) {
+    return a;
   }
 }
