@@ -27,6 +27,12 @@
 // CHECK:   %[[ARGUMENT:.*]] = sol.cast %{{.*}} : ui8 to ui256
 // CHECK:   sol.ext_icall %[[POINTER]](%[[ARGUMENT]]) gas %[[GAS]] value %[[VALUE]] : <(ui256) -> ui256>, (ui256) -> (i1, ui256)
 
+// CHECK: sol.func @{{.*call_qualified.*}}
+// CHECK:   %[[SLOT:.*]] = sol.addr_of @{{.*stored_pointer.*}} : !sol.ptr<!sol.ext_func_ref<(ui256) -> ui256>, Storage>
+// CHECK:   %[[POINTER:.*]] = sol.load %[[SLOT]] : !sol.ptr<!sol.ext_func_ref<(ui256) -> ui256>, Storage>, !sol.ext_func_ref<(ui256) -> ui256>
+// CHECK:   %[[ARGUMENT:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
+// CHECK:   sol.ext_icall %[[POINTER]](%[[ARGUMENT]]) gas %{{.*}} value %{{.*}} : <(ui256) -> ui256>, (ui256) -> (i1, ui256)
+
 // CHECK: sol.func @{{.*call_storage.*}}
 // CHECK:   %[[POINTER:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.ext_func_ref<(!sol.array<? x ui256, Memory>) -> ui256>, Stack>, !sol.ext_func_ref<(!sol.array<? x ui256, Memory>) -> ui256>
 // CHECK:   %[[SLOT:.*]] = sol.addr_of @{{.*}} : !sol.array<? x ui256, Storage>
@@ -61,6 +67,7 @@
 
 contract C {
     uint256[] stored;
+    function(uint256) external returns (uint256) stored_pointer;
 
     function target(uint256 a) external returns (uint256) {
         return a;
@@ -108,6 +115,10 @@ contract C {
 
     function call_storage(function(uint256[] memory) external returns (uint256) p) public returns (uint256) {
         return p(stored);
+    }
+
+    function call_qualified(uint256 x) public returns (uint256) {
+        return C.stored_pointer(x);
     }
 
     function call_options(function(uint256) external payable returns (uint256) p, uint256 v, uint256 g) public returns (uint256) {
