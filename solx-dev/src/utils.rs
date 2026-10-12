@@ -196,6 +196,113 @@ pub fn clone_repository(
 }
 
 ///
+/// Commits the project checkout after setup, so that `reset_checkout` can
+/// restore it before each toolchain runs.
+///
+/// `git add --all` respects the project's own .gitignore, so installed
+/// dependency trees stay untracked.
+///
+pub fn commit_checkout(directory: &str, description: &str) -> anyhow::Result<()> {
+    let mut add_command = Command::new("git");
+    add_command.args(["-C", directory, "add", "--all"]);
+    command(&mut add_command, description)?;
+
+    let mut commit_command = Command::new("git");
+    commit_command.args([
+        "-C",
+        directory,
+        "-c",
+        "user.name=solx-dev",
+        "-c",
+        "user.email=solx-dev@localhost",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "--quiet",
+        "--no-verify",
+        "--allow-empty",
+        "--message",
+        "solx-dev: project setup",
+    ]);
+    command(&mut commit_command, description)
+}
+
+///
+/// Resets the checkout to the commit made by `commit_checkout`: restores all
+/// tracked files (submodules included) and removes every untracked and
+/// ignored output — build caches, artifacts, reports, persisted fuzz
+/// failures — keeping only `node_modules`, which is never modified.
+///
+pub fn reset_checkout(directory: &str, description: &str) -> anyhow::Result<()> {
+    let mut checkout_command = Command::new("git");
+    checkout_command.args(["-C", directory, "checkout", "--", "."]);
+    command(&mut checkout_command, description)?;
+
+    let mut submodule_command = Command::new("git");
+    submodule_command.args([
+        "-C",
+        directory,
+        "submodule",
+        "--quiet",
+        "foreach",
+        "--recursive",
+        "git",
+        "checkout",
+        "--",
+        ".",
+    ]);
+    command(&mut submodule_command, description)?;
+
+    let mut clean_command = Command::new("git");
+    clean_command.args([
+        "-C",
+        directory,
+        "clean",
+        "--force",
+        "-d",
+        "-x",
+        "--quiet",
+        "-e",
+        "node_modules",
+    ]);
+    command(&mut clean_command, description)
+}
+
+///
+/// Lists the tracked files matching `pathspec`, including submodule contents.
+///
+pub fn git_tracked_files(directory: &str, pathspec: &str) -> anyhow::Result<Vec<PathBuf>> {
+    let mut command = Command::new("git");
+    command.args([
+        "-C",
+        directory,
+        "ls-files",
+        "--recurse-submodules",
+        "--",
+        pathspec,
+    ]);
+
+    let output = command
+        .output()
+        .map_err(|error| anyhow::anyhow!("{command:?} process spawning error: {error:?}"))?;
+    if output.status.code() != Some(solx_utils::EXIT_CODE_SUCCESS) {
+        anyhow::bail!(
+            "{command:?} subprocess failed {}:\n{}",
+            match output.status.code() {
+                Some(code) => format!("with exit code {code:?}"),
+                None => "without exit code".to_owned(),
+            },
+            String::from_utf8_lossy(output.stderr.as_slice()),
+        );
+    }
+
+    Ok(String::from_utf8_lossy(output.stdout.as_slice())
+        .lines()
+        .map(PathBuf::from)
+        .collect())
+}
+
+///
 /// Removes the project directory after building and testing.
 ///
 pub fn remove(project_directory: &Path, project_name: &str) -> anyhow::Result<()> {
