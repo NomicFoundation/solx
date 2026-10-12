@@ -4,33 +4,29 @@
 
 mod spans;
 
+use std::ops::Range;
+
 use slang_solidity_v2::ast::ContractBase;
-use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind as SlangFunctionKind;
-use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::FunctionType;
-use slang_solidity_v2::ast::FunctionTypeMutability;
 use slang_solidity_v2::ast::FunctionTypeVisibility;
 use slang_solidity_v2::ast::FunctionVisibility;
-use slang_solidity_v2::ast::InterfaceDefinition;
-use slang_solidity_v2::ast::LibraryDefinition;
-use slang_solidity_v2::ast::NodeLocation;
 use slang_solidity_v2::ast::SourceUnit;
 use slang_solidity_v2::ast::SourceUnitMember;
 use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type;
 
+use solx_mlir::ContractKind;
 use solx_standard_json::output::source::debug_symbols::DebugSymbols;
-use solx_standard_json::output::source::debug_symbols::contract::Base;
 use solx_standard_json::output::source::debug_symbols::contract::Contract;
-use solx_standard_json::output::source::debug_symbols::contract::ContractKind;
+use solx_standard_json::output::source::debug_symbols::contract::base::Base;
 use solx_standard_json::output::source::debug_symbols::function::Function;
-use solx_standard_json::output::source::debug_symbols::function::FunctionKind;
-use solx_standard_json::output::source::debug_symbols::function::StateMutability;
-use solx_standard_json::output::source::debug_symbols::function::Visibility;
+use solx_standard_json::output::source::debug_symbols::function::kind::FunctionKind;
+use solx_standard_json::output::source::debug_symbols::function::visibility::Visibility;
 
+use crate::abi::AbiDefinition;
 use crate::scope::source_unit::SourceUnitScope;
 
 use self::spans::Spans;
@@ -61,65 +57,49 @@ impl DebugSymbolsBuilder {
 
     /// Adds a source unit member, if it is a definition the table lists.
     fn member(&mut self, member: &SourceUnitMember) {
-        match member {
-            SourceUnitMember::ContractDefinition(contract) => {
-                self.contracts.push(Self::contract(contract));
-            }
-            SourceUnitMember::InterfaceDefinition(interface) => {
-                self.contracts.push(Self::interface(interface));
-            }
-            SourceUnitMember::LibraryDefinition(library) => {
-                self.contracts.push(Self::library(library));
-            }
-            SourceUnitMember::FunctionDefinition(function) => {
-                self.free_functions
-                    .push(Self::function(function, FunctionKind::Free));
-            }
-            _ => {}
+        if let SourceUnitMember::FunctionDefinition(function) = member {
+            self.free_functions
+                .push(Self::function(function, FunctionKind::Free));
+        }
+        if let Some(definition) = AbiDefinition::from_member(member) {
+            self.contracts.push(Self::contract(&definition));
         }
     }
 
-    /// A contract with its C3 linearisation.
-    fn contract(contract: &ContractDefinition) -> Contract {
-        Contract {
-            name: contract.name().name().to_owned(),
-            kind: ContractKind::Contract,
-            is_abstract: contract.is_abstract(),
-            range: Self::range(contract),
-            bases: Some(Self::bases(contract.linearised_bases())),
-            functions: Self::own_functions(contract.members().iter()),
-        }
-    }
-
-    /// An interface with its C3 linearisation.
-    fn interface(interface: &InterfaceDefinition) -> Contract {
-        Contract {
-            name: interface.name().name().to_owned(),
-            kind: ContractKind::Interface,
-            is_abstract: false,
-            range: Self::range(interface),
-            bases: Some(Self::bases(interface.linearised_bases())),
-            functions: Self::own_functions(interface.members().iter()),
-        }
-    }
-
-    /// A library, which Slang gives no linearisation.
-    fn library(library: &LibraryDefinition) -> Contract {
-        Contract {
-            name: library.name().name().to_owned(),
-            kind: ContractKind::Library,
-            is_abstract: false,
-            range: Self::range(library),
-            bases: None,
-            functions: Self::own_functions(library.members().iter()),
+    /// A contract, interface or library with its own members.
+    fn contract(definition: &AbiDefinition) -> Contract {
+        let name = definition.name().name().to_owned();
+        match definition {
+            AbiDefinition::Contract(node) => Contract {
+                name,
+                kind: ContractKind::Contract,
+                r#abstract: node.is_abstract(),
+                range: Self::range(node.get_text_range()),
+                bases: Some(Self::bases(node.linearised_bases())),
+                functions: Self::own_functions(node.members().iter()),
+            },
+            AbiDefinition::Interface(node) => Contract {
+                name,
+                kind: ContractKind::Interface,
+                r#abstract: false,
+                range: Self::range(node.get_text_range()),
+                bases: Some(Self::bases(node.linearised_bases())),
+                functions: Self::own_functions(node.members().iter()),
+            },
+            AbiDefinition::Library(node) => Contract {
+                name,
+                kind: ContractKind::Library,
+                r#abstract: false,
+                range: Self::range(node.get_text_range()),
+                // Slang gives a library no linearisation.
+                bases: None,
+                functions: Self::own_functions(node.members().iter()),
+            },
         }
     }
 
     /// A definition's `[offset, length]`.
-    fn range(node: &impl NodeLocation) -> [usize; 2] {
-        let range = node
-            .calculate_text_range()
-            .expect("every definition covers source text");
+    fn range(range: &Range<usize>) -> [usize; 2] {
         [range.start, range.len()]
     }
 
@@ -184,16 +164,11 @@ impl DebugSymbolsBuilder {
                 FunctionVisibility::Internal => Visibility::Internal,
                 FunctionVisibility::Private => Visibility::Private,
             },
-            state_mutability: match attributes.mutability() {
-                FunctionMutability::Pure => StateMutability::Pure,
-                FunctionMutability::View => StateMutability::View,
-                FunctionMutability::NonPayable => StateMutability::NonPayable,
-                FunctionMutability::Payable => StateMutability::Payable,
-            },
+            state_mutability: attributes.mutability().into(),
             selector: function
                 .compute_selector()
-                .map(SourceUnitScope::selector_hex),
-            range: Self::range(function),
+                .map(|selector| format!("{selector:08x}")),
+            range: Self::range(function.get_text_range()),
             implemented: function.body().is_some(),
         }
     }
@@ -209,16 +184,11 @@ impl DebugSymbolsBuilder {
                 FunctionTypeVisibility::Internal => Visibility::Internal,
                 FunctionTypeVisibility::Private => Visibility::Private,
             },
-            state_mutability: match getter.mutability() {
-                FunctionTypeMutability::Pure => StateMutability::Pure,
-                FunctionTypeMutability::View => StateMutability::View,
-                FunctionTypeMutability::NonPayable => StateMutability::NonPayable,
-                FunctionTypeMutability::Payable => StateMutability::Payable,
-            },
+            state_mutability: getter.mutability().into(),
             selector: state_variable
                 .compute_selector()
-                .map(SourceUnitScope::selector_hex),
-            range: Self::range(state_variable),
+                .map(|selector| format!("{selector:08x}")),
+            range: Self::range(state_variable.get_text_range()),
             implemented: true,
         }
     }
