@@ -292,8 +292,9 @@ impl Build {
         standard_json: &mut solx_standard_json::Output,
         output_selection: &solx_standard_json::InputSelection,
         is_bytecode_linked: bool,
-        benchmarks: Vec<(String, u64)>,
+        profiler: &mut solx_utils::Profiler,
     ) -> anyhow::Result<()> {
+        let run_solx_write_output = profiler.start_pipeline_element("Compiler_WriteOutput");
         for (path, ast_json) in self.ast_jsons.iter_mut().flatten() {
             if let Some(source) = standard_json.sources.get_mut(path.as_str())
                 && let Some(ast_json) = ast_json.take().filter(|_| {
@@ -380,13 +381,14 @@ impl Build {
         if standard_json.has_errors() {
             standard_json.contracts.clear();
         }
+        run_solx_write_output.borrow_mut().finish();
 
         if output_selection.check_selection(
             solx_standard_json::InputSelection::WILDCARD,
             Some(solx_standard_json::InputSelection::ANY_CONTRACT),
             solx_standard_json::InputSelector::Benchmarks,
         ) {
-            standard_json.benchmarks.extend(benchmarks);
+            standard_json.benchmarks.extend(profiler.to_vec());
         }
         Ok(())
     }
