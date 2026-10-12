@@ -169,6 +169,19 @@
 //!                     ]
 //!                 }
 //!             ]
+//!         },
+//!         {
+//!             "name": "dirty_read",
+//!             "inputs": [
+//!                 {
+//!                     "method": "readDirtyS1()",
+//!                     "caller": "0x1212121212121212121212121212120000000012",
+//!                     "calldata": [],
+//!                     "expected": [
+//!                         "2"
+//!                     ]
+//!                 }
+//!             ]
 //!         }
 //!     ]
 //! }
@@ -199,6 +212,14 @@ contract Test {
 
   function getS1() public view returns (bool) {
     return s1;
+  }
+
+  function readDirtyS1() public returns (uint256 r) {
+    assembly {
+      sstore(s1.slot, shl(mul(s1.offset, 8), 2))
+    }
+    bool v = s1;
+    assembly { r := v }
   }
 
   function initS2() public {
