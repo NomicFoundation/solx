@@ -10,20 +10,6 @@ type Price is uint128;
 
 uint256 constant LIMIT = 10;
 
-struct Point {
-    uint256 x;
-    uint256 y;
-}
-
-enum Side {
-    Buy,
-    Sell
-}
-
-event Moved(uint256 indexed x);
-
-error TooFar(uint256 by);
-
 function half(uint256 x) pure returns (uint256) {
     return x / 2;
 }
@@ -57,6 +43,20 @@ contract Callee {
 abstract contract Child is Callee(1), IKinds {}
 
 contract Kinds {
+    struct Point {
+        uint256 x;
+        uint256 y;
+    }
+
+    enum Side {
+        Buy,
+        Sell
+    }
+
+    event Moved(uint256 indexed x);
+
+    error TooFar(uint256 by);
+
     function(uint256) internal pure returns (uint256) private scale = half;
     address payable private sink;
 

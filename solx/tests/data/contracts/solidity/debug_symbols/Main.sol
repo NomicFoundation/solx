@@ -7,16 +7,6 @@ function double(uint256 x) pure returns (uint256) {
     return x * 2;
 }
 
-library MathLib {
-    function add(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a + b;
-    }
-
-    function triple(uint256 x) public pure returns (uint256) {
-        return x * 3;
-    }
-}
-
 abstract contract Left is Root {
     function hook(uint256 x) internal virtual override returns (uint256) {
         return x + 1;
@@ -29,13 +19,24 @@ abstract contract Right is Root {
     }
 }
 
+library MathLib {
+    function add(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a + b;
+    }
+
+    function triple(uint256 x) public pure returns (uint256) {
+        return x * 3;
+    }
+}
+
 contract Counter is Left, Right {
     address private owner;
     uint256 public override count;
     mapping(address => uint256) public balances;
     uint256[] public history;
     uint256 public constant MAX = 1;
-    uint256 public immutable created = 7;
+    uint256 internal hidden;
+    uint256 unmarked;
 
     modifier onlyOwner() {
         require(msg.sender == owner);
@@ -66,6 +67,8 @@ contract Counter is Left, Right {
     fallback() external payable {}
 
     receive() external payable {}
+
+    uint256 public immutable created = 7;
 }
 
 pragma abicoder v2;

@@ -27,6 +27,12 @@ fn matches_expected() -> anyhow::Result<()> {
         .collect::<serde_json::Map<_, _>>();
     assert_eq!(serde_json::Value::Object(actual), expected);
 
+    for symbols in expected.as_object().expect("Always present").values() {
+        let parsed: solx_standard_json::output::source::debug_symbols::DebugSymbols =
+            serde_json::from_value(symbols.clone())?;
+        assert_eq!(&serde_json::to_value(parsed)?, symbols);
+    }
+
     Ok(())
 }
 
@@ -34,15 +40,15 @@ fn matches_expected() -> anyhow::Result<()> {
 fn absent_unless_selected() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        "--standard-json",
+    for input in [
         crate::common::standard_json!("select_ast_only.json"),
-    ];
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains("\"ast\""))
-        .stdout(predicate::str::contains("\"debugSymbols\"").not());
+        crate::common::standard_json!("debug_symbols_contract_level.json"),
+    ] {
+        let result = crate::cli::execute_solx(&["--standard-json", input])?;
+        result
+            .success()
+            .stdout(predicate::str::contains("\"debugSymbols\"").not());
+    }
 
     Ok(())
 }
@@ -88,17 +94,13 @@ fn selected_by_wildcard() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::standard_json!("debug_symbols_wildcard.json"),
+        crate::common::standard_json!("select_all_wildcard.json"),
     ];
     let result = crate::cli::execute_solx(args)?.success();
     let output: serde_json::Value =
         solx_utils::deserialize_from_slice(result.get_output().stdout.as_slice())?;
-    for path in ["Base.sol", "Main.sol"] {
-        assert!(
-            output["sources"][path]["debugSymbols"].is_object(),
-            "`*` selects debugSymbols for {path}"
-        );
-    }
+    assert!(output["sources"]["A"]["debugSymbols"].is_object());
+    assert!(output["sources"]["A"]["ast"].is_object());
 
     Ok(())
 }

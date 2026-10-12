@@ -15,6 +15,9 @@
       "urls": [
         "tests/data/contracts/solidity/debug_symbols/Kinds.sol"
       ]
+    },
+    "Bare.sol": {
+      "content": "contract Bare {}\n"
     }
   },
   "settings": {
