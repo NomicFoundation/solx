@@ -21,6 +21,7 @@
 
 // CHECK: sol.func @{{.*identity.*}}
 // CHECK:   %[[VALUE:.*]] = sol.load
+// CHECK-NEXT:   sol.store %[[VALUE]], %{{.*}}
 // CHECK-NEXT:   sol.return %[[VALUE]]
 
 // CHECK: sol.func @{{.*interface_to_address.*}}
