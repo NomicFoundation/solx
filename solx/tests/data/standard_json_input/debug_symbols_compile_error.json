@@ -2,7 +2,7 @@
   "language": "Solidity",
   "sources": {
     "Main.sol": {
-      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract C is Missing {\n    function f() public {}\n}\n"
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ninterface I {\n    uint256 public x;\n}\n"
     }
   },
   "settings": {
