@@ -94,6 +94,20 @@
 //!                         ],
 //!                         "exception": true
 //!                     }
+//!                 },
+//!                 {
+//!                     "method": "storageArrayToMemory(uint256)",
+//!                     "caller": "0x1212121212121212121212121212120000000012",
+//!                     "calldata": [
+//!                         "3"
+//!                     ],
+//!                     "expected": {
+//!                         "return_data": [
+//!                             "0x4e487b7100000000000000000000000000000000000000000000000000000000",
+//!                             "0x0000002100000000000000000000000000000000000000000000000000000000"
+//!                         ],
+//!                         "exception": true
+//!                     }
 //!                 }
 //!             ]
 //!         }
@@ -106,6 +120,8 @@ pragma solidity >=0.8.0;
 
 contract Test {
   enum E { A, B, Test }
+
+  E[] es;
 
   function id(E a) public returns (E) {
     return a;
@@ -121,5 +137,15 @@ contract Test {
 
   function toUint(E x) public returns (uint) {
     return uint(x);
+  }
+
+  function storageArrayToMemory(uint x) public returns (uint r) {
+    es.push(E.A);
+    assembly {
+      mstore(0, es.slot)
+      sstore(keccak256(0, 32), x)
+    }
+    E[] memory m = es;
+    assembly { r := mload(add(m, 32)) }
   }
 }

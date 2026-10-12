@@ -253,6 +253,18 @@
 //!                         "777",
 //!                         "888"
 //!                     ]
+//!                 },
+//!                 {
+//!                     "method": "ei_b20_array_dynamic_storage()",
+//!                     "caller": "0x1212121212121212121212121212120000000012",
+//!                     "calldata": [],
+//!                     "expected": [
+//!                         "0x20",
+//!                         "96",
+//!                         "0x20",
+//!                         "1",
+//!                         "0x1234000000000000000000000000"
+//!                     ]
 //!                 }
 //!             ]
 //!         }
@@ -270,6 +282,7 @@ contract Test {
   }
 
   uint256[] dyn256;
+  bytes20[] dyn20;
 
   uint8[4] static8x4;
   uint8[31] static8x31;
@@ -287,6 +300,8 @@ contract Test {
     dyn256.push(11);
     dyn256.push(22);
     dyn256.push(33);
+
+    dyn20.push(bytes20(uint160(0x1234)));
 
     static8x4[0] = 1;
     static8x4[1] = 2;
@@ -338,6 +353,10 @@ contract Test {
 
   function ei_u256_array_dynamic_storage() public view returns (bytes memory) {
     return abi.encode(dyn256);
+  }
+
+  function ei_b20_array_dynamic_storage() public view returns (bytes memory) {
+    return abi.encode(dyn20);
   }
 
   function ei_u8_array_static_storage_4() public view returns (bytes memory) {
