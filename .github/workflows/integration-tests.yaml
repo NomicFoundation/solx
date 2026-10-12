@@ -54,7 +54,7 @@ jobs:
       options: -m 110g
     env:
       # renovate: datasource=github-releases depName=foundry-rs/foundry
-      FOUNDRY_VERSION: "v1.8.3"
+      FOUNDRY_VERSION: "v1.8.4"
     steps:
       - name: Checkout PR
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
