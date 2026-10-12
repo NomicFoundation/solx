@@ -107,7 +107,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                     });
                 }
 
-                let return_pointers: Vec<Place> = function
+                scope.return_pointers = function
                     .returns()
                     .map(|returns| {
                         returns
@@ -143,7 +143,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                         let values: Vec<_> = scope
                             .return_types
                             .iter()
-                            .zip(&return_pointers)
+                            .zip(&scope.return_pointers)
                             .map(|(&return_type, pointer)| pointer.load(return_type, scope))
                             .collect();
                         scope.current_block().r#return(&values, scope);
