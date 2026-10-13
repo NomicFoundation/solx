@@ -17,13 +17,13 @@ use slang_solidity_v2::utils::LanguageVersion;
 use solx_standard_json::CollectableError;
 use solx_standard_json::OutputError;
 use solx_standard_json::output::error::source_location::SourceLocation;
+use solx_standard_json::output::source::debug_symbols::DebugSymbols;
 use solx_utils::EVMVersion;
 use solx_utils::Profiler;
 use solx_utils::Remapping;
 use solx_utils::RevertStrings;
 
 use crate::debug_locations::sources::Sources;
-use crate::debug_symbols::DebugSymbolsBuilder;
 use crate::scope::compilation_unit::CompilationUnitScope;
 
 use self::import_resolver::SourceImportResolver;
@@ -191,7 +191,7 @@ impl Slang {
                 .sources
                 .get_mut(file_id.as_str())
                 .expect("every compiled file is an input source")
-                .debug_symbols = Some(DebugSymbolsBuilder::build(&file.ast()));
+                .debug_symbols = Some(DebugSymbols::from(&file.ast()));
             run_debug_symbols.borrow_mut().finish();
         }
 

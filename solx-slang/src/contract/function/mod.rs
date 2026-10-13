@@ -19,6 +19,7 @@ use solx_mlir::FunctionOrigin;
 use solx_mlir::Place;
 use solx_mlir::StateMutability;
 use solx_mlir::Value;
+use solx_standard_json::output::source::debug_symbols::function::Function as DebugSymbolsFunction;
 
 use crate::contract::object::Object;
 use crate::contract::segment::Segment;
@@ -71,7 +72,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 .extend(self.segment.constructor().parameter_types());
         }
 
-        let name = SourceUnitScope::function_name(function);
+        let name = DebugSymbolsFunction::source_name(function);
         self.at_node(function, |scope| {
             let entry = signature.define(
                 name.as_str(),
@@ -187,20 +188,6 @@ impl<'context> SourceUnitScope<'context> {
     /// The name a constructor has in the source, its keyword, which a synthesized constructor
     /// takes too.
     pub const CONSTRUCTOR_KEYWORD: &'static str = "constructor";
-
-    /// The function's source name: the keyword for a constructor, fallback or receive function.
-    pub fn function_name(function: &FunctionDefinition) -> String {
-        match function.kind() {
-            FunctionKind::Constructor => Self::CONSTRUCTOR_KEYWORD.to_owned(),
-            FunctionKind::Fallback => "fallback".to_owned(),
-            FunctionKind::Receive => "receive".to_owned(),
-            FunctionKind::Regular | FunctionKind::Modifier => function
-                .name()
-                .expect("slang names every regular function and modifier")
-                .name()
-                .to_owned(),
-        }
-    }
 
     /// The function's symbol: its internal signature qualified by the node id, since internal
     /// signatures alone collide.

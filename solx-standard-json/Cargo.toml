@@ -18,6 +18,8 @@ num.workspace = true
 rayon.workspace = true
 hex.workspace = true
 
+slang_solidity_v2.workspace = true
+
 solx-mlir = { path = "../solx-mlir" }
 solx-utils = { path = "../solx-utils" }
 
