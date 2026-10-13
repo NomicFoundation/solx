@@ -56,10 +56,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             && let Some(Definition::Function(function)) = node.member().resolve_to_definition()
         {
             let function = self.contract.super_function(&function, &enclosing_contract);
-            return self
-                .contract
-                .function_definition(&function)
-                .pointer_constant(self);
+            return self.contract.pointer_constant(&function);
         }
 
         if let Some(Type::Function(function_type)) = node.get_type()
@@ -85,10 +82,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             let Some(Definition::Function(function)) = node.member().resolve_to_definition() else {
                 return self.identifier(&node.member());
             };
-            return self
-                .contract
-                .function_definition(&function)
-                .pointer_constant(self);
+            return self.contract.pointer_constant(&function);
         }
 
         match node.member().resolve_to_built_in() {

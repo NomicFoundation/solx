@@ -6,7 +6,7 @@
 // CHECK-NOT: kind = #{{.*}}Fallback
 // CHECK: sol.func @{{.*}}() attributes {kind = #{{.*}}Receive, state_mutability = #{{.*}}Payable
 // CHECK-NOT: kind = #{{.*}}Fallback
-// CHECK: } {kind = #Contract}
+// CHECK: } {kind = #Contract, runtime}
 
 abstract contract Base {
     fallback() external virtual {}

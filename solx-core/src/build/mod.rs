@@ -167,7 +167,8 @@ impl Build {
                         output.runtime_source.clear();
                     }
                     solx_mlir::Dialect::Llvm => {
-                        output.sol_source = None;
+                        output.deploy_sol_source = None;
+                        output.runtime_sol_source = None;
                     }
                 }
             }

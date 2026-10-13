@@ -1,5 +1,5 @@
 //!
-//! Resolving one object's nodes to MLIR locations.
+//! Resolving one segment's nodes to MLIR locations.
 //!
 
 use std::collections::HashMap;
@@ -14,7 +14,7 @@ use solx_utils::LineIndex;
 
 use crate::debug_locations::sources::Sources;
 
-/// Resolves one object's nodes to MLIR locations through the compilation's sources.
+/// Resolves one segment's nodes to MLIR locations through the compilation's sources.
 pub struct Resolver<'context> {
     /// The MLIR context the locations are built in.
     melior: &'context melior::Context,

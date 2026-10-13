@@ -11,12 +11,12 @@
 // CHECK-NEXT:   sol.return
 // CHECK: sol.func @{{.*discarded_member.*}}()
 // CHECK-NEXT:   sol.return
-// CHECK: } {kind = #Contract}
+// CHECK: } {kind = #Contract, runtime}
 
 // CHECK: sol.contract @{{.*Library.*}} {
 // CHECK: sol.func @{{.*SEEN.*}}() -> ui256 attributes {orig_fn_type = () -> ui256, selector = -764320198 : i32, state_mutability = #Pure}
 // CHECK:   sol.constant 9 : ui8
-// CHECK: } {kind = #Library}
+// CHECK: } {kind = #Library, runtime}
 
 contract C {
     using Library for uint256;

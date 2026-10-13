@@ -12,7 +12,7 @@
 // CHECK:   sol.return %[[ARGUMENT]]
 // CHECK: sol.func @{{.*}}qualified_call{{.*}}
 // CHECK:   sol.call @[[DECLARATION:.*]]() : () -> ui256
-// CHECK: sol.func private @[[DECLARATION]]() -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability
+// CHECK: sol.func @[[DECLARATION]]() -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability
 // CHECK:   sol.constant 1
 
 abstract contract Base {

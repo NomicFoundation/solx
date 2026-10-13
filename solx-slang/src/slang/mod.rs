@@ -4,7 +4,6 @@
 
 mod import_resolver;
 
-use std::cell::OnceCell;
 use std::collections::BTreeMap;
 
 use slang_solidity_v2::compilation::CompilationUnit;
@@ -23,9 +22,8 @@ use solx_utils::Profiler;
 use solx_utils::Remapping;
 use solx_utils::RevertStrings;
 
-use crate::debug_locations::resolver::Resolver;
 use crate::debug_locations::sources::Sources;
-use crate::scope::source_unit::SourceUnitScope;
+use crate::scope::compilation_unit::CompilationUnitScope;
 
 use self::import_resolver::SourceImportResolver;
 
@@ -188,51 +186,19 @@ impl Slang {
             Some(solx_standard_json::InputSelection::ANY_CONTRACT),
             solx_standard_json::InputSelector::Benchmarks,
         );
-        let melior = OnceCell::new();
-        for file in unit.files() {
-            let file_id = file.id();
-            let (contracts, uncomputable_abis) = SourceUnitScope::source_unit(
-                &melior,
-                &file.ast(),
-                evm_version,
-                revert_strings,
-                |contract_name, selector| {
-                    input_json.settings.output_selection.check_selection(
-                        file_id.as_str(),
-                        Some(contract_name),
-                        selector,
-                    )
-                },
-                &sources,
-                benchmarks,
-                &mut profiler,
-            )?;
-            output
-                .errors
-                .extend(uncomputable_abis.iter().map(|(name, member)| {
-                    let (file_id, text_range) = Resolver::source_range(member);
-                    OutputError::new_error_with_data(
-                        Some(file_id.as_str()),
-                        None,
-                        format!("Slang cannot compute the ABI of `{name}`."),
-                        Some(SourceLocation::new(
-                            file_id.to_string(),
-                            text_range.start as isize,
-                            text_range.end as isize,
-                        )),
-                        Some(&input_json.sources),
-                    )
-                }));
-            output
-                .contracts
-                .entry(file_id.to_string())
-                .or_default()
-                .extend(contracts);
-        }
 
         if benchmarks {
             output.benchmarks = profiler.to_vec();
         }
+        let scope = CompilationUnitScope {
+            output_selection: &input_json.settings.output_selection,
+            evm_version,
+            revert_strings,
+            sources: &sources,
+            input_sources: &input_json.sources,
+            report_benchmarks: benchmarks,
+        };
+        scope.compilation_unit(&unit, &mut output)?;
 
         Ok(output)
     }
