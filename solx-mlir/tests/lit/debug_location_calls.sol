@@ -1,7 +1,7 @@
 // RUN: slang --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'
 
-// CHECK: #[[CALLER:loc[0-9]*]] = loc("{{.*}}debug_location_calls.sol":95:5)
-// CHECK: #[[TWICE:loc[0-9]*]] = loc("{{.*}}debug_location_calls.sol":74:1)
+// CHECK: #[[CALLER:loc[0-9]*]] = loc("{{.*}}debug_location_calls.sol":97:5)
+// CHECK: #[[TWICE:loc[0-9]*]] = loc("{{.*}}debug_location_calls.sol":76:1)
 
 // CHECK: sol.func @{{.*base.*}}()
 // CHECK:   sol.call @{{.*base.*}}() {{.*}} loc(#[[SUPER_CALL:loc[0-9]*]])
@@ -14,10 +14,12 @@
 // CHECK:   sol.call @{{.*halve.*}}(%{{.*}}) {{.*}} loc(#[[LIBRARY_CALL:loc[0-9]*]])
 // CHECK: sol.func private @{{.*halve.*}}(
 // CHECK:   sol.cdiv %{{.*}}, %{{.*}} : ui256 loc(#[[QUOTIENT:loc[0-9]*]])
-// CHECK: sol.func @{{.*emits.*}}(%arg0: ui256 loc("{{.*}}debug_location_calls.sol":103:5))
+// CHECK: sol.func @{{.*emits.*}}(%arg0: ui256 loc("{{.*}}debug_location_calls.sol":105:5))
 // CHECK:   sol.store %arg0, %{{.*}} loc(#[[AMOUNT:loc[0-9]*]])
+// CHECK:   sol.enum_cast %{{.*}} : !sol.enum<0> to !sol.enum<0> loc(#[[EMIT:loc[0-9]*]])
+// CHECK:   "sol.keccak256"(%{{.*}}) {{.*}} loc(#[[EMIT]])
 // CHECK:   sol.load %{{.*}} loc(#[[READ_AMOUNT:loc[0-9]*]])
-// CHECK:   sol.emit "Moved(uint256)" {{.*}} loc(#[[EMIT:loc[0-9]*]])
+// CHECK:   sol.emit "Moved(uint256,string,uint8)" {{.*}} loc(#[[EMIT]])
 // CHECK: sol.func @{{.*forwards.*}}(
 // CHECK:   sol.cast %{{.*}} : ui8 to ui256 loc(#[[OPTION:loc[0-9]*]])
 // CHECK: sol.func @{{.*points.*}}(
@@ -28,7 +30,7 @@
 // CHECK:   sol.ext_call "{{.*run.*}}"({{.*}} loc(#[[EXTERNAL_CALL]])
 // CHECK: sol.func @{{.*reverts.*}}()
 // CHECK:   sol.revert loc(#[[REVERT:loc[0-9]*]])
-// CHECK: sol.func @{{.*run.*}}(%arg0: ui256 loc("{{.*}}debug_location_calls.sol":95:5))
+// CHECK: sol.func @{{.*run.*}}(%arg0: ui256 loc("{{.*}}debug_location_calls.sol":97:5))
 // CHECK:   sol.store %arg0, %{{.*}} loc(#[[A:loc[0-9]*]])
 // CHECK:   sol.constant 1 : ui8 loc(#[[ONE:loc[0-9]*]])
 // CHECK:   sol.load %{{.*}} loc(#[[READ_A:loc[0-9]*]])
@@ -36,35 +38,35 @@
 // CHECK:   sol.cadd %{{.*}}, %{{.*}} : ui256 loc(#[[CALL]])
 // CHECK:   sol.return %{{.*}} : ui256 loc(#[[RETURN:loc[0-9]*]])
 // CHECK: } loc(#[[CALLER_FN:loc[0-9]*]])
-// CHECK: sol.func private @{{.*twice.*}}(%arg0: ui256 loc("{{.*}}debug_location_calls.sol":74:1))
+// CHECK: sol.func private @{{.*twice.*}}(%arg0: ui256 loc("{{.*}}debug_location_calls.sol":76:1))
 // CHECK:   sol.store %arg0, %{{.*}} loc(#[[X:loc[0-9]*]])
 // CHECK:   sol.load %{{.*}} loc(#[[PRODUCT:loc[0-9]*]])
 // CHECK:   sol.cmul %{{.*}}, %{{.*}} : ui256 loc(#[[PRODUCT]])
 // CHECK:   sol.return %{{.*}} : ui256 loc(#[[BODY_RETURN:loc[0-9]*]])
 // CHECK: } loc(#[[TWICE_FN:loc[0-9]*]])
 
-// CHECK-DAG: #[[A]] = loc("{{.*}}debug_location_calls.sol":95:18)
-// CHECK-DAG: #[[CALL]] = loc("{{.*}}debug_location_calls.sol":96:16)
-// CHECK-DAG: #[[READ_A]] = loc("{{.*}}debug_location_calls.sol":96:22)
-// CHECK-DAG: #[[ONE]] = loc("{{.*}}debug_location_calls.sol":96:27)
-// CHECK-DAG: #[[RETURN]] = loc("{{.*}}debug_location_calls.sol":96:9)
-// CHECK-DAG: #[[X]] = loc("{{.*}}debug_location_calls.sol":74:16)
-// CHECK-DAG: #[[PRODUCT]] = loc("{{.*}}debug_location_calls.sol":75:12)
-// CHECK-DAG: #[[BODY_RETURN]] = loc("{{.*}}debug_location_calls.sol":75:5)
-// CHECK-DAG: #[[AMOUNT]] = loc("{{.*}}debug_location_calls.sol":103:20)
-// CHECK-DAG: #[[READ_AMOUNT]] = loc("{{.*}}debug_location_calls.sol":104:20)
-// CHECK-DAG: #[[EMIT]] = loc("{{.*}}debug_location_calls.sol":104:9)
-// CHECK-DAG: #[[REVERT]] = loc("{{.*}}debug_location_calls.sol":100:9)
-// CHECK-DAG: #[[SUPER_CALL]] = loc("{{.*}}debug_location_calls.sol":120:16)
-// CHECK-DAG: #[[BASE_RETURN]] = loc("{{.*}}debug_location_calls.sol":86:9)
-// CHECK-DAG: #[[NEW]] = loc("{{.*}}debug_location_calls.sol":112:16)
-// CHECK-DAG: #[[ATTACHED_CALL]] = loc("{{.*}}debug_location_calls.sol":116:29)
-// CHECK-DAG: #[[LIBRARY_CALL]] = loc("{{.*}}debug_location_calls.sol":116:16)
-// CHECK-DAG: #[[QUOTIENT]] = loc("{{.*}}debug_location_calls.sol":80:16)
-// CHECK-DAG: #[[POINTER]] = loc("{{.*}}debug_location_calls.sol":124:60)
-// CHECK-DAG: #[[POINTER_CALL]] = loc("{{.*}}debug_location_calls.sol":125:16)
-// CHECK-DAG: #[[EXTERNAL_CALL]] = loc("{{.*}}debug_location_calls.sol":108:16)
-// CHECK-DAG: #[[OPTION]] = loc("{{.*}}debug_location_calls.sol":129:9)
+// CHECK-DAG: #[[A]] = loc("{{.*}}debug_location_calls.sol":97:18)
+// CHECK-DAG: #[[CALL]] = loc("{{.*}}debug_location_calls.sol":98:16)
+// CHECK-DAG: #[[READ_A]] = loc("{{.*}}debug_location_calls.sol":98:22)
+// CHECK-DAG: #[[ONE]] = loc("{{.*}}debug_location_calls.sol":98:27)
+// CHECK-DAG: #[[RETURN]] = loc("{{.*}}debug_location_calls.sol":98:9)
+// CHECK-DAG: #[[X]] = loc("{{.*}}debug_location_calls.sol":76:16)
+// CHECK-DAG: #[[PRODUCT]] = loc("{{.*}}debug_location_calls.sol":77:12)
+// CHECK-DAG: #[[BODY_RETURN]] = loc("{{.*}}debug_location_calls.sol":77:5)
+// CHECK-DAG: #[[AMOUNT]] = loc("{{.*}}debug_location_calls.sol":105:20)
+// CHECK-DAG: #[[READ_AMOUNT]] = loc("{{.*}}debug_location_calls.sol":106:20)
+// CHECK-DAG: #[[EMIT]] = loc("{{.*}}debug_location_calls.sol":106:9)
+// CHECK-DAG: #[[REVERT]] = loc("{{.*}}debug_location_calls.sol":102:9)
+// CHECK-DAG: #[[SUPER_CALL]] = loc("{{.*}}debug_location_calls.sol":122:16)
+// CHECK-DAG: #[[BASE_RETURN]] = loc("{{.*}}debug_location_calls.sol":88:9)
+// CHECK-DAG: #[[NEW]] = loc("{{.*}}debug_location_calls.sol":114:16)
+// CHECK-DAG: #[[ATTACHED_CALL]] = loc("{{.*}}debug_location_calls.sol":118:29)
+// CHECK-DAG: #[[LIBRARY_CALL]] = loc("{{.*}}debug_location_calls.sol":118:16)
+// CHECK-DAG: #[[QUOTIENT]] = loc("{{.*}}debug_location_calls.sol":82:16)
+// CHECK-DAG: #[[POINTER]] = loc("{{.*}}debug_location_calls.sol":126:60)
+// CHECK-DAG: #[[POINTER_CALL]] = loc("{{.*}}debug_location_calls.sol":127:16)
+// CHECK-DAG: #[[EXTERNAL_CALL]] = loc("{{.*}}debug_location_calls.sol":110:16)
+// CHECK-DAG: #[[OPTION]] = loc("{{.*}}debug_location_calls.sol":131:9)
 
 // CHECK-DAG: #[[CALLER_FN]] = loc(fused<#[[CALLER_SP:di_subprogram[0-9]*]]>[#[[CALLER]]])
 // CHECK-DAG: #[[CALLER_SP]] = #llvm.di_subprogram<{{.*}}name = "run", linkageName = "run", {{.*}}type = #di_subroutine_type>
@@ -101,7 +103,7 @@ contract C is B {
     }
 
     function emits(uint256 a) public {
-        emit Moved(a);
+        emit Moved(a, "moved", Kind.Up);
     }
 
     function reenters() public view returns (uint256) {
@@ -129,5 +131,7 @@ contract C is B {
         this.run{gas: g};
     }
 
-    event Moved(uint256 amount);
+    event Moved(uint256 amount, string indexed note, Kind indexed kind);
 }
+
+enum Kind { Up }

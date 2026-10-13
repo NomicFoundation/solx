@@ -6,7 +6,6 @@ pub mod assembly;
 pub mod expression;
 pub mod statement;
 
-use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
@@ -89,7 +88,6 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             );
 
             if is_constructor {
-                scope.constructor.current = Some(function.node_id());
                 scope.constructor.bind_parameters(function, entry);
             }
 
@@ -129,7 +127,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                     .unwrap_or_default();
 
                 if is_most_derived_constructor {
-                    scope.state_variable_initializers();
+                    scope.base_constructor_arguments();
                 }
                 if is_constructor {
                     scope.base_constructor_call();
@@ -171,14 +169,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 let arguments_block = scope.current_block().modifier_invocation(&modifier, scope);
                 scope.region(arguments_block, |scope| {
                     if let Some(arguments) = invocation.arguments() {
-                        let values: Vec<_> = scope
-                            .arguments_declaration(
-                                &ArgumentsDeclaration::PositionalArguments(arguments),
-                                &definition.parameters(),
-                            )
-                            .into_iter()
-                            .map(|(_, value)| value)
-                            .collect();
+                        let arguments: Vec<_> = arguments.iter().collect();
+                        let values = scope
+                            .converted_arguments(&arguments, &modifier.function_type.parameters);
                         scope.current_block().r#yield(&values, scope);
                     }
                 });

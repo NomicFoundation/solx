@@ -14,7 +14,7 @@ pub enum FunctionDispatch {
     /// The identifier an internal function pointer dispatches to; never zero, which the dialect
     /// reserves for the null function pointer, since slang numbers nodes from one.
     Identifier(NodeId),
-    /// The dialect kind of a constructor, fallback or receive function.
+    /// The dialect kind of a constructor, initializer, fallback or receive function.
     Kind(FunctionKind),
     /// A state-variable getter or a base constructor, reached by its symbol alone.
     Symbol,

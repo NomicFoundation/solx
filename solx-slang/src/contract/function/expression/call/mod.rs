@@ -72,7 +72,8 @@ pub enum Call {
     /// function rather than the override the object would resolve.
     Qualified(FunctionDefinition),
     /// An attached call to a selectorless library or free function: the receiver leads the
-    /// argument list of an internal `sol.call`.
+    /// argument list of an internal `sol.call` and is evaluated after the rest of it, as the
+    /// callee legacy evaluates last.
     Attached(Expression, FunctionDefinition),
     /// A call through a function-typed value, internal or external.
     FunctionPointer(Expression, FunctionType),
@@ -159,9 +160,11 @@ impl Call {
             }
             Self::Qualified(function_definition) => scope.call(&function_definition, &arguments),
             Self::Attached(receiver, function_definition) => {
-                let operands: Vec<Expression> =
-                    std::iter::once(receiver).chain(arguments).collect();
-                scope.call(&function_definition, &operands)
+                let signature = scope.contract.function_definition(&function_definition);
+                let parameters = &signature.function_type.parameters;
+                let mut operands = scope.converted_arguments(&arguments, &parameters[1..]);
+                operands.insert(0, scope.converted(&receiver, parameters[0]));
+                Function::call(&signature, &operands, scope)
             }
             Self::FunctionPointer(callee, function_type) => {
                 Self::function_pointer(&callee, &function_type, &arguments, options.as_ref(), scope)
@@ -598,11 +601,10 @@ impl Call {
                             let signature = error
                                 .compute_canonical_signature()
                                 .expect("canonical signature is computable for a custom error");
-                            let values: Vec<_> = scope
-                                .arguments_declaration(&error_call.arguments(), &error.parameters())
-                                .into_iter()
-                                .map(|(_, value)| value)
-                                .collect();
+                            let values = scope.arguments_declaration(
+                                &error_call.arguments(),
+                                &error.parameters(),
+                            );
                             (values, Some(signature), true)
                         } else {
                             let string_memory_type =
@@ -764,7 +766,7 @@ impl Call {
 
     /// Dispatches an attached library call (`x.f(y)`): the receiver leads the argument list and
     /// the address follows it, the declared signature types the callee, and the externalized one
-    /// the results.
+    /// the results and the receiver, which converts where it is evaluated.
     fn attached_library<'context>(
         receiver: Expression,
         definition: &FunctionDefinition,
@@ -775,27 +777,20 @@ impl Call {
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> (Value<'context>, Vec<Value<'context>>) {
         let function = scope.contract.source_unit.function_signature(definition);
-        let options = Options::new(options, scope);
-        let mut converted = scope.external_arguments(
-            std::slice::from_ref(&receiver),
-            &function.function_type.parameters[..1],
-        );
-        converted
-            .extend(scope.external_arguments(arguments, &function.function_type.parameters[1..]));
-        let address = Self::library_address(definition, scope);
         let Some(Type::Function(externalized_type)) = definition.externalized_type() else {
             unreachable!("slang externalizes every selector-bearing function's type");
         };
-        let result_types = scope
-            .contract
-            .source_unit
-            .function_type(&externalized_type)
-            .results;
+        let externalized = scope.contract.source_unit.function_type(&externalized_type);
+        let options = Options::new(options, scope);
+        let mut converted = vec![scope.converted(&receiver, externalized.parameters[0])];
+        converted
+            .extend(scope.external_arguments(arguments, &function.function_type.parameters[1..]));
+        let address = Self::library_address(definition, scope);
         let is_static = StateMutability::from(definition.attributes().mutability()).is_static();
         Self::external_dispatch(
             &function,
             &converted,
-            &result_types,
+            &externalized.results,
             address,
             selector,
             &options,
@@ -930,13 +925,7 @@ impl Call {
                         selector_type,
                         scope,
                     ),
-                    signature => {
-                        let signature = scope.converted(
-                            signature,
-                            MlirType::string(scope.melior, solx_utils::DataLocation::Memory),
-                        );
-                        Value::keccak256(signature, scope).bytes_cast(selector_type, scope)
-                    }
+                    signature => scope.expression(signature),
                 };
                 let values = iter
                     .map(|argument| scope.expression(argument))
@@ -1046,21 +1035,13 @@ impl Call {
                         std::mem::discriminant(other)
                     ),
                 };
+                let value = value_argument.map(|argument| scope.evaluated(argument, element_type));
                 let new_slot = place.push(slot_type, scope);
 
-                let Some(value_argument) = value_argument else {
+                let Some(value) = value else {
                     return vec![new_slot];
                 };
-                let place = Place::from(new_slot);
-                if let Expression::StringExpression(_) = value_argument
-                    && element_type.is_bytes_like()
-                {
-                    let value = scope.converted(value_argument, element_type);
-                    place.assign(value, element_type, scope);
-                    return Vec::new();
-                }
-                let value = scope.expression(value_argument);
-                place.assign(value, element_type, scope);
+                Place::from(new_slot).assign(value, element_type, scope);
                 Vec::new()
             }
             Some(BuiltIn::BytesConcat | BuiltIn::StringConcat) => {

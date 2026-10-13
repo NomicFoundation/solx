@@ -1,22 +1,25 @@
 //!
-//! Constructor emission in Slang's linearisation order.
+//! Creation code emission: the initializer and the constructor chain in Slang's linearisation
+//! order.
 //!
 
 use std::collections::HashMap;
 use std::vec::IntoIter;
 
-use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::ModifierInvocations;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::PositionalArguments;
 
 use solx_mlir::Block;
 use solx_mlir::Function;
 use solx_mlir::FunctionDispatch;
 use solx_mlir::FunctionKind;
 use solx_mlir::FunctionOrigin;
+use solx_mlir::FunctionType;
+use solx_mlir::Place;
 use solx_mlir::StateMutability;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
@@ -35,53 +38,37 @@ use crate::scope::source_unit::SourceUnitScope;
 /// `Middle(seed + 1)` and `Root(seed)`, Middle receives its declared argument and an extra
 /// parameter carrying `seed`, which it passes to Root.
 ///
-/// The builder advances through the contracts as calls are emitted, collecting their base
-/// argument expressions. Each constructor evaluates the expressions supplied in its scope.
-/// Arguments for the next constructor become its declared operands; the remaining values
-/// become extra operands and parameters. On entry, those forwarded values are rebound to
-/// the new block's arguments.
-///
-/// As in legacy solc, the creation entry point runs state variable initializers across the
-/// hierarchy in base-to-derived order before evaluating base constructor arguments or
-/// executing constructor bodies. This applies to both declared and synthesized entry points.
+/// As in legacy solc, the creation entry point, declared or synthesized, evaluates every base
+/// constructor's argument list before any body runs, in linearisation order whichever
+/// constructor supplies it. A list names the parameters of the constructor that supplies it,
+/// so each base's evaluated arguments live in stack slots that later lists read and write
+/// under those names. On entry, the forwarded values are rebound to the new block's arguments.
 pub struct ConstructorBuilder<'context> {
     /// The contracts of the object's linearisation, consumed in call order.
     pub contracts: IntoIter<ContractDefinition>,
-    /// Base constructor argument expressions grouped by the constructor that supplies them.
-    /// `Some(node_id)` identifies that constructor's definition. `None` groups inheritance
-    /// arguments from contracts without a declared constructor.
-    pub arguments: HashMap<Option<NodeId>, Vec<Arguments>>,
-    /// Evaluated arguments grouped by their destination constructor, carried through
-    /// intermediate constructors as extra parameters until their destination is reached.
-    pub forwarded: Vec<(NodeId, Vec<Value<'context>>)>,
-    /// The linearisation index of each contract by definition id.
-    pub positions: HashMap<NodeId, usize>,
-    /// The declared constructor being emitted, or `None` for the synthesized creation entry point.
-    pub current: Option<NodeId>,
+    /// Base constructor argument lists by the constructor each is for.
+    pub arguments: HashMap<NodeId, Arguments>,
+    /// The base constructors still to be called, in call order, each with its evaluated
+    /// arguments, which the constructors before it carry as extra parameters.
+    pub forwarded: Vec<(FunctionDefinition, Vec<Value<'context>>)>,
 }
 
 /// The argument list a base constructor receives.
 pub struct Arguments {
-    /// The base constructor that receives the arguments.
-    pub function: FunctionDefinition,
+    /// The constructor that supplies the list, whose parameters it may name, if its contract
+    /// declares one.
+    pub provider: Option<NodeId>,
     /// The argument list as written.
-    pub arguments: ArgumentsDeclaration,
+    pub arguments: PositionalArguments,
 }
 
 impl<'context> ConstructorBuilder<'context> {
     /// Creates a constructor sequence for the contracts of an object's linearisation.
     pub fn new(contracts: Vec<ContractDefinition>) -> Self {
-        let positions = contracts
-            .iter()
-            .enumerate()
-            .map(|(index, contract)| (contract.node_id(), index))
-            .collect();
         Self {
             contracts: contracts.into_iter(),
             arguments: HashMap::new(),
             forwarded: Vec::new(),
-            positions,
-            current: None,
         }
     }
 
@@ -102,22 +89,28 @@ impl<'context> ConstructorBuilder<'context> {
             }
         }
     }
-
-    /// Extracts the evaluated arguments destined for `target`.
-    pub fn take_arguments(&mut self, target: NodeId) -> Vec<Value<'context>> {
-        if let Some(position) = self
-            .forwarded
-            .iter()
-            .position(|(node_id, _)| *node_id == target)
-        {
-            self.forwarded.remove(position).1
-        } else {
-            Vec::new()
-        }
-    }
 }
 
 impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
+    /// Emits the function that runs the state variable initializers, which the creation code
+    /// calls ahead of the constructor's checks, as legacy runs the initializers first.
+    pub fn initializer(&mut self) {
+        let signature = Function::new("@initializer()".to_owned(), FunctionType::default());
+        let entry = signature.define(
+            "initializer",
+            None,
+            FunctionDispatch::Kind(FunctionKind::Initializer),
+            FunctionOrigin::Synthesized,
+            StateMutability::NonPayable,
+            self,
+            self.contract.body,
+        );
+        self.function(entry, true, &signature, |scope| {
+            scope.state_variable_initializers();
+            scope.current_block().r#return(&[], scope);
+        });
+    }
+
     /// Emits the creation entry point, synthesizing one when the contract declares none.
     pub fn constructor(&mut self) {
         let Some(contract) = self.next_contract() else {
@@ -138,18 +131,16 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             self.contract.body,
         );
 
-        self.constructor.current = None;
         self.function(entry, true, &Function::constructor(), |scope| {
-            scope.state_variable_initializers();
+            scope.base_constructor_arguments();
             scope.base_constructor_call();
             scope.current_block().r#return(&[], scope);
         });
     }
 
-    /// Collects the base constructor argument lists supplied by `contract` in linearisation order.
+    /// Collects the base constructor argument lists supplied by `contract`.
     fn inheritance_arguments(&mut self, contract: &ContractDefinition) {
         let constructor = contract.constructor();
-        let mut arguments = Vec::new();
         for (base, list) in contract
             .inheritance_types()
             .iter()
@@ -177,27 +168,14 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 && let Some(list) = list
                 && let Some(function) = base.constructor()
             {
-                arguments.push((
-                    self.constructor
-                        .positions
-                        .get(&base.node_id())
-                        .copied()
-                        .unwrap_or_default(),
+                self.constructor.arguments.insert(
+                    function.node_id(),
                     Arguments {
-                        function,
-                        arguments: ArgumentsDeclaration::PositionalArguments(list),
+                        provider: constructor.as_ref().map(FunctionDefinition::node_id),
+                        arguments: list,
                     },
-                ));
+                );
             }
-        }
-        if !arguments.is_empty() {
-            arguments.sort_by_key(|(position, _)| *position);
-            let provider = constructor.as_ref().map(FunctionDefinition::node_id);
-            self.constructor
-                .arguments
-                .entry(provider)
-                .or_default()
-                .extend(arguments.into_iter().map(|(_, argument)| argument));
         }
     }
 
@@ -220,53 +198,81 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
 }
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
-    /// Evaluates base constructor arguments provided here, forwards arguments needed by bases
-    /// below, and emits the call to the next constructor in the linearisation. The conversions of a
-    /// base's arguments and the call to it carry that base constructor's location, since both are
-    /// part of running it.
+    /// Evaluates every base constructor's argument list into stack slots, which are read only
+    /// once every list has run. A list runs with its provider's parameters bound to the
+    /// provider's slots. The conversions and slots of a base's arguments carry that base
+    /// constructor's location, since they are part of running it.
+    pub fn base_constructor_arguments(&mut self) {
+        let mut chain: Vec<(
+            FunctionDefinition,
+            Vec<(Place<'context>, MlirType<'context>)>,
+        )> = Vec::new();
+        while let Some(constructor) = self.contract.next_constructor() {
+            let signature = self.contract.source_unit.function_signature(&constructor);
+            let slots = self
+                .contract
+                .constructor
+                .arguments
+                .remove(&constructor.node_id())
+                .map(|list| {
+                    let arguments: Vec<_> = list.arguments.iter().collect();
+                    self.nested(|scope| {
+                        if let Some((provider, slots)) = chain
+                            .iter()
+                            .find(|(base, _)| Some(base.node_id()) == list.provider)
+                        {
+                            for (parameter, &(place, element_type)) in
+                                provider.parameters().iter().zip(slots)
+                            {
+                                if let Some(identifier) = parameter.name() {
+                                    scope.environment.define_variable(
+                                        identifier.name(),
+                                        place,
+                                        element_type,
+                                    );
+                                }
+                            }
+                        }
+                        scope.at_node(&constructor, |scope| {
+                            scope
+                                .converted_arguments(
+                                    &arguments,
+                                    &signature.function_type.parameters,
+                                )
+                                .into_iter()
+                                .map(|value| {
+                                    let place = Place::stack(value.r#type(), scope);
+                                    place.store(value, scope);
+                                    (place, value.r#type())
+                                })
+                                .collect()
+                        })
+                    })
+                })
+                .unwrap_or_default();
+            chain.push((constructor, slots));
+        }
+        for (constructor, slots) in chain {
+            let values = self.at_node(&constructor, |scope| {
+                slots
+                    .into_iter()
+                    .map(|(place, element_type)| place.load(element_type, scope))
+                    .collect()
+            });
+            self.contract
+                .constructor
+                .forwarded
+                .push((constructor, values));
+        }
+    }
+
+    /// Calls the next constructor of the chain with its arguments and forwards the ones for the
+    /// bases below it. The call carries that constructor's location.
     pub fn base_constructor_call(&mut self) {
-        if let Some(arguments) = self
-            .contract
-            .constructor
-            .arguments
-            .remove(&self.contract.constructor.current)
-        {
-            for argument in arguments {
-                let values: Vec<Value<'context>> = self.at_node(&argument.function, |scope| {
-                    scope
-                        .arguments_declaration(&argument.arguments, &argument.function.parameters())
-                        .into_iter()
-                        .map(|(_, value)| value)
-                        .collect()
-                });
-                self.contract
-                    .constructor
-                    .forwarded
-                    .push((argument.function.node_id(), values));
-            }
-        }
-
-        let Some(callee) = self.contract.next_constructor() else {
+        if self.contract.constructor.forwarded.is_empty() {
             return;
-        };
-
-        if let Some(arguments) = self.contract.constructor.arguments.remove(&None) {
-            for argument in arguments {
-                let values: Vec<Value<'context>> = self.at_node(&argument.function, |scope| {
-                    scope
-                        .arguments_declaration(&argument.arguments, &argument.function.parameters())
-                        .into_iter()
-                        .map(|(_, value)| value)
-                        .collect()
-                });
-                self.contract
-                    .constructor
-                    .forwarded
-                    .push((argument.function.node_id(), values));
-            }
         }
-
-        let mut operands = self.contract.constructor.take_arguments(callee.node_id());
+        let (callee, mut operands) = self.contract.constructor.forwarded.remove(0);
         operands.extend(
             self.contract
                 .constructor

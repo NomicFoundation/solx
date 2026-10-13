@@ -95,7 +95,7 @@ unsafe extern "C" {
         mutability: u32,
     ) -> mlir_sys::MlirAttribute;
 
-    /// Creates a `FunctionKindAttr` (0=Constructor, 1=Fallback, 2=Receive).
+    /// Creates a `FunctionKindAttr` (0=Constructor, 1=Fallback, 2=Receive, 3=Initializer).
     pub fn solxCreateFunctionKindAttr(context: MlirContext, kind: u32) -> mlir_sys::MlirAttribute;
 
     /// Creates an `EvmVersionAttr`.

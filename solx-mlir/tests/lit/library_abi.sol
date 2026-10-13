@@ -1,12 +1,14 @@
 // RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*attached_calldata_receiver.*}}
+// CHECK:   %[[RECEIVER:.*]] = sol.data_loc_cast %{{.*}} : !sol.string<CallData>, !sol.string<Memory>
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
-// CHECK:   sol.ext_call "{{.*look.*}}"(%{{.*}}) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c1335285351_ui256 {callee_type = (!sol.string<CallData>) -> ui256, delegate_call, library_call, static_call} : !sol.address, (!sol.string<CallData>) -> (i1, ui256)
+// CHECK:   sol.ext_call "{{.*look.*}}"(%[[RECEIVER]]) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c1335285351_ui256 {callee_type = (!sol.string<CallData>) -> ui256, delegate_call, library_call, static_call} : !sol.address, (!sol.string<Memory>) -> (i1, ui256)
 
 // CHECK: sol.func @{{.*attached_calldata_result.*}}
+// CHECK:   %[[RECEIVER:.*]] = sol.data_loc_cast %{{.*}} : !sol.string<CallData>, !sol.string<Memory>
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
-// CHECK:   sol.ext_call "{{.*tail.*}}"(%{{.*}}) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c3126462307_ui256 {callee_type = (!sol.string<CallData>) -> !sol.string<CallData>, delegate_call, library_call, static_call} : !sol.address, (!sol.string<CallData>) -> (i1, !sol.string<Memory>)
+// CHECK:   sol.ext_call "{{.*tail.*}}"(%[[RECEIVER]]) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c3126462307_ui256 {callee_type = (!sol.string<CallData>) -> !sol.string<CallData>, delegate_call, library_call, static_call} : !sol.address, (!sol.string<Memory>) -> (i1, !sol.string<Memory>)
 
 // CHECK: sol.func @{{.*attached_storage_receiver.*}}
 // CHECK:   %[[SLOT:.*]] = sol.addr_of @{{.*stored.*}} : !sol.string<Storage>

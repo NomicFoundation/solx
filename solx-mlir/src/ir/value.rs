@@ -143,12 +143,9 @@ impl<'context> Value<'context> {
         integer.bytes_cast(target_type, context)
     }
 
-    /// Emits the cast reconciling `self` to `target_type`, be it a computed common type or an
-    /// explicit `T(x)`. The enum, address, and string-to-`bytesN` arms, reachable only under an
-    /// explicit cast, precede the bytes and scalar arms an enum, address, or string would otherwise
-    /// fall into.
+    /// Casts `self` to `target_type`; a same-type enum is range-checked.
     pub fn convert(mut self, target_type: Type<'context>, context: &Context<'context>) -> Self {
-        if self.r#type() == target_type {
+        if self.r#type() == target_type && !target_type.is_enum() {
             return self;
         }
         if self.r#type().is_enum() || target_type.is_enum() {

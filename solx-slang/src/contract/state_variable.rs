@@ -1,6 +1,6 @@
 //!
 //! State variable emission: the place a declaration resolves to and the inline initializers the
-//! constructor runs.
+//! creation code runs.
 //!
 
 use slang_solidity_v2::ast::Expression;
@@ -16,7 +16,7 @@ use crate::scope::source_unit::SourceUnitScope;
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
     /// Emits every state variable's inline initializer (`T x = <expr>;`) in storage order over the
-    /// hierarchy as the constructor prologue, storing each into its place. Reference-typed slots
+    /// hierarchy as the initializer's body, storing each into its place. Reference-typed slots
     /// take a `sol.copy`; value-typed places convert to the declared element type and `sol.store`.
     /// Each initializer's place and store carry its declaration's location.
     pub fn state_variable_initializers(&mut self) {

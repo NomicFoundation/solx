@@ -21,11 +21,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         let signature = error
             .compute_canonical_signature()
             .expect("canonical signature is computable for a custom error");
-        let values: Vec<_> = self
-            .arguments_declaration(&node.arguments(), &error.parameters())
-            .into_iter()
-            .map(|(_, value)| value)
-            .collect();
+        let values = self.arguments_declaration(&node.arguments(), &error.parameters());
         self.current_block()
             .revert_custom(Some(signature.as_str()), &values, self);
     }

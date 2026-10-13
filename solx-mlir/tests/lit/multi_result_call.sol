@@ -5,9 +5,9 @@
 // CHECK: sol.func @{{.*sum_pair.*}}
 // CHECK: %{{[0-9]+}}:2 = sol.call
 // CHECK-NEXT: sol.alloca
-// CHECK-NEXT: sol.store %{{[0-9]+}}#0
-// CHECK-NEXT: sol.alloca
 // CHECK-NEXT: sol.store %{{[0-9]+}}#1
+// CHECK-NEXT: sol.alloca
+// CHECK-NEXT: sol.store %{{[0-9]+}}#0
 
 contract C {
     function pair() public pure returns (uint256, uint256) {

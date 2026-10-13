@@ -25,8 +25,8 @@ use crate::scope::source_unit::SourceUnitScope;
 
 impl<'context> SourceUnitScope<'context> {
     /// Emits `object`'s `sol.contract` over `storage_layout`. The location cursor starts on the
-    /// definition; a member with a node of its own narrows it, and the synthesized constructor
-    /// keeps it.
+    /// definition; a member with a node of its own narrows it, and the initializer and the
+    /// synthesized constructor keep it.
     pub fn object_definition(
         &mut self,
         object: &Object,
@@ -49,9 +49,9 @@ impl<'context> SourceUnitScope<'context> {
 }
 
 impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
-    /// Emits the object's members: the state-variable declarations, the constructor, the functions
-    /// of its resolved hierarchy, and the getters of its public state variables. Each
-    /// state-variable declaration carries its own location.
+    /// Emits the object's members: the state-variable declarations, the initializer, the
+    /// constructor, the functions of its resolved hierarchy, and the getters of its public state
+    /// variables. Each state-variable declaration carries its own location.
     fn members(&mut self) {
         for state_variable in self.object.state_variables().iter() {
             match state_variable.attributes().mutability() {
@@ -95,6 +95,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 StateVariableMutability::Constant => {}
             }
         }
+        self.initializer();
         self.constructor();
         for function in self.object.functions() {
             self.function_definition(&function);

@@ -5,13 +5,13 @@
 // CHECK:   sol.call @{{.*double.*}}(%[[RECEIVER]]) : (ui256) -> ui256
 
 // CHECK: sol.func @{{.*named.*}}
-// CHECK:   %[[RECEIVER:.*]] = sol.load
 // CHECK:   sol.constant 4 : ui8
+// CHECK:   %[[RECEIVER:.*]] = sol.load
 // CHECK:   sol.call @{{.*bump.*}}(%[[RECEIVER]], %{{.*}}) : (ui256, ui256) -> ui256
 
 // CHECK: sol.func @{{.*plain.*}}
-// CHECK:   %[[RECEIVER:.*]] = sol.load
 // CHECK:   %[[ARG:.*]] = sol.cast
+// CHECK:   %[[RECEIVER:.*]] = sol.load
 // CHECK:   sol.call @{{.*bump.*}}(%[[RECEIVER]], %[[ARG]]) : (ui256, ui256) -> ui256
 
 // CHECK: sol.func @{{.*storage_receiver.*}}

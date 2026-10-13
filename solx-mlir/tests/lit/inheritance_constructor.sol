@@ -4,8 +4,12 @@
 // CHECK: sol.func @{{.*}}(%arg0: ui256) attributes {kind = #{{.*}}Constructor, orig_fn_type = (ui256) -> (), state_mutability = #{{.*}}Payable
 // CHECK:   sol.store %arg0, %[[LEAF_PARAMETER:.*]] : ui256, !sol.ptr<ui256, Stack>
 // CHECK:   %[[MIDDLE_ARGUMENT:.*]] = sol.cadd
+// CHECK:   sol.store %[[MIDDLE_ARGUMENT]], %[[MIDDLE_SLOT:.*]] : ui256, !sol.ptr<ui256, Stack>
 // CHECK:   %[[SEED:.*]] = sol.load %[[LEAF_PARAMETER]] : !sol.ptr<ui256, Stack>, ui256
-// CHECK:   sol.call @[[MIDDLE:.*]](%[[MIDDLE_ARGUMENT]], %[[SEED]]) : (ui256, ui256) -> ()
+// CHECK:   sol.store %[[SEED]], %[[ROOT_SLOT:.*]] : ui256, !sol.ptr<ui256, Stack>
+// CHECK:   %[[MIDDLE_FORWARDED:.*]] = sol.load %[[MIDDLE_SLOT]] : !sol.ptr<ui256, Stack>, ui256
+// CHECK:   %[[ROOT_FORWARDED:.*]] = sol.load %[[ROOT_SLOT]] : !sol.ptr<ui256, Stack>, ui256
+// CHECK:   sol.call @[[MIDDLE:.*]](%[[MIDDLE_FORWARDED]], %[[ROOT_FORWARDED]]) : (ui256, ui256) -> ()
 // CHECK: sol.func private @[[MIDDLE]](%arg0: ui256, %arg1: ui256) attributes {state_mutability = #{{.*}}NonPayable
 // CHECK:   sol.store %arg0, %[[MIDDLE_PARAMETER:.*]] : ui256, !sol.ptr<ui256, Stack>
 // CHECK:   sol.call @[[ROOT:.*]](%arg1) : (ui256) -> ()

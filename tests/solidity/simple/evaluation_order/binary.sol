@@ -26,6 +26,14 @@
 //!     "name": "mulmod",
 //!     "inputs": [ { "method": "mulmodOrder", "calldata": [] } ],
 //!     "expected": [ "2", "534" ]
+//! }, {
+//!     "name": "addmod_zero_modulus",
+//!     "inputs": [ { "method": "addmodZeroModulus", "calldata": [ "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0" ] } ],
+//!     "expected": { "return_data": [ "0x4e487b7100000000000000000000000000000000000000000000000000000000", "0x0000001200000000000000000000000000000000000000000000000000000000" ], "exception": true }
+//! }, {
+//!     "name": "comparison_enum",
+//!     "inputs": [ { "method": "comparisonEnum", "calldata": [] } ],
+//!     "expected": { "return_data": [ "0x4e487b7100000000000000000000000000000000000000000000000000000000", "0x0000002100000000000000000000000000000000000000000000000000000000" ], "exception": true }
 //! } ] }
 
 // SPDX-License-Identifier: MIT
@@ -33,6 +41,8 @@
 pragma solidity >=0.8.0;
 
 contract Test {
+    enum Choice { First, Second }
+
     uint256 sequence;
 
     function left() internal returns (uint256) {
@@ -48,6 +58,10 @@ contract Test {
     function modulus() internal returns (uint256) {
         sequence = sequence * 10 + 5;
         return 5;
+    }
+
+    function failChoice() internal pure returns (Choice) {
+        revert("fail");
     }
 
     function arithmetic() public returns (uint256, uint256) {
@@ -90,5 +104,17 @@ contract Test {
         sequence = 0;
         uint256 result = mulmod(left(), right(), modulus());
         return (result, sequence);
+    }
+
+    function addmodZeroModulus(uint256 value, uint256 modulus) public pure returns (uint256) {
+        return addmod(value + 1, 1, modulus);
+    }
+
+    function comparisonEnum() public pure returns (bool) {
+        Choice dirty;
+        assembly {
+            dirty := 2
+        }
+        return failChoice() == dirty;
     }
 }
