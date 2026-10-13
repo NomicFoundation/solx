@@ -133,15 +133,13 @@ impl Slang {
             .extend(unit.diagnostics().iter().map(|diagnostic| {
                 let file_id = diagnostic.file_id();
                 let text_range = diagnostic.text_range();
-                let r#type = match diagnostic.severity() {
-                    DiagnosticSeverity::Error => "Error",
-                    DiagnosticSeverity::Warning => "Warning",
+                let new_slang_diagnostic = match diagnostic.severity() {
+                    DiagnosticSeverity::Error => OutputError::new_slang_error,
+                    DiagnosticSeverity::Warning => OutputError::new_slang_warning,
                 };
-                OutputError::new(
+                new_slang_diagnostic(
                     Some(file_id.as_str()),
-                    r#type,
-                    None,
-                    Some(diagnostic.code()),
+                    diagnostic.code(),
                     diagnostic.message(),
                     Some(SourceLocation::new(
                         file_id.to_string(),

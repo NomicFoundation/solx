@@ -24,7 +24,7 @@ pub struct Error {
     /// The `solc` numeric error code, which tools such as forge parse as a number.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_code: Option<String>,
-    /// The code of the Slang diagnostic.
+    /// A Slang diagnostic code such as `syntax/unexpected-terminal`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub slang_error_code: Option<String>,
     /// The formatted error message.
@@ -165,6 +165,54 @@ impl Error {
             "Warning",
             error_code,
             None,
+            message,
+            source_location,
+            sources,
+        )
+    }
+
+    ///
+    /// Creates a new error from a Slang diagnostic.
+    ///
+    pub fn new_slang_error<S>(
+        path: Option<&str>,
+        slang_error_code: &str,
+        message: S,
+        source_location: Option<SourceLocation>,
+        sources: Option<&BTreeMap<String, InputSource>>,
+    ) -> Self
+    where
+        S: std::fmt::Display,
+    {
+        Self::new(
+            path,
+            "Error",
+            None,
+            Some(slang_error_code),
+            message,
+            source_location,
+            sources,
+        )
+    }
+
+    ///
+    /// Creates a new warning from a Slang diagnostic.
+    ///
+    pub fn new_slang_warning<S>(
+        path: Option<&str>,
+        slang_error_code: &str,
+        message: S,
+        source_location: Option<SourceLocation>,
+        sources: Option<&BTreeMap<String, InputSource>>,
+    ) -> Self
+    where
+        S: std::fmt::Display,
+    {
+        Self::new(
+            path,
+            "Warning",
+            None,
+            Some(slang_error_code),
             message,
             source_location,
             sources,

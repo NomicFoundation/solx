@@ -317,21 +317,19 @@ fn error_output_has_slang_error_code(slang_error_code: &str) -> anyhow::Result<(
 }
 
 #[test]
-fn runtime_code_size_warning_has_error_code() -> anyhow::Result<()> {
+fn bytecode_size_warnings_have_error_code() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
         "--standard-json",
-        crate::common::standard_json!("solidity_runtime_code_size.json"),
+        crate::common::standard_json!("solidity_bytecode_size.json"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
-        .stdout(predicate::str::contains(format!(
-            "\"errorCode\":\"{}\"",
-            solx_utils::Warning::CODE_RUNTIME_CODE_SIZE
-        )))
+        .stdout(predicate::str::contains("\"errorCode\":\"3860\""))
+        .stdout(predicate::str::contains("\"errorCode\":\"5574\""))
         .stdout(predicate::str::contains("\"slangErrorCode\"").not());
 
     Ok(())
