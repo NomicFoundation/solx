@@ -17,9 +17,12 @@ fn default() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     let stdout = String::from_utf8(result.success().get_output().stdout.clone())?;
 
-    let sol_index = stdout
-        .find("MLIR Dialect sol:")
-        .expect("sol dialect header missing");
+    let sol_deploy_index = stdout
+        .find("MLIR Dialect sol (deploy):")
+        .expect("sol deploy dialect header missing");
+    let sol_runtime_index = stdout
+        .find("MLIR Dialect sol (runtime):")
+        .expect("sol runtime dialect header missing");
     let deploy_index = stdout
         .find("MLIR Dialect llvm (deploy):")
         .expect("llvm deploy dialect header missing");
@@ -27,8 +30,10 @@ fn default() -> anyhow::Result<()> {
         .find("MLIR Dialect llvm (runtime):")
         .expect("llvm runtime dialect header missing");
     assert!(
-        sol_index < deploy_index && deploy_index < runtime_index,
-        "expected sol stage before llvm deploy and runtime stages in pipeline order"
+        sol_deploy_index < sol_runtime_index
+            && sol_runtime_index < deploy_index
+            && deploy_index < runtime_index,
+        "expected sol stages before llvm stages in pipeline order, each deploy before runtime"
     );
     assert!(stdout.contains("sol.contract"));
     assert!(stdout.contains("llvm.func"));
@@ -50,7 +55,8 @@ fn filter_sol_only() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
-        .stdout(predicate::str::contains("MLIR Dialect sol:"))
+        .stdout(predicate::str::contains("MLIR Dialect sol (deploy):"))
+        .stdout(predicate::str::contains("MLIR Dialect sol (runtime):"))
         .stdout(predicate::str::contains("sol.contract"))
         .stdout(predicate::str::contains("MLIR Dialect llvm").not());
 
@@ -73,7 +79,7 @@ fn filter_llvm_only() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("MLIR Dialect llvm (deploy):"))
         .stdout(predicate::str::contains("MLIR Dialect llvm (runtime):"))
         .stdout(predicate::str::contains("llvm.func"))
-        .stdout(predicate::str::contains("MLIR Dialect sol:").not());
+        .stdout(predicate::str::contains("MLIR Dialect sol").not());
 
     Ok(())
 }
@@ -115,7 +121,7 @@ fn runtime_location_aliases() -> anyhow::Result<()> {
         .expect("llvm runtime dialect header missing");
     assert!(
         stdout[runtime_index..].contains("\n#loc"),
-        "the runtime module is printed detached, with its locations as `#loc` aliases"
+        "the runtime module is printed with its locations as `#loc` aliases"
     );
 
     Ok(())

@@ -5,6 +5,7 @@
 pub mod build_system;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use self::build_system::BuildSystem;
 
@@ -30,6 +31,12 @@ pub struct Project {
     /// Environment variables required for every command.
     #[serde(default)]
     pub env: HashMap<String, String>,
+    /// Build profile solx toolchains compile and test with.
+    #[serde(default)]
+    pub build_profile: Option<String>,
+    /// Config installed as `hardhat.config.ts`, importing the project's own as `hardhat.config.base.<ext>`.
+    #[serde(default)]
+    pub config_overlay: Option<PathBuf>,
     /// Whether the project is disabled.
     #[serde(default)]
     pub disabled: bool,

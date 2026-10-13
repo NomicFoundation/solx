@@ -1,6 +1,6 @@
 // RUN: slang --emit-mlir=sol %s | FileCheck %s
 
-// CHECK: sol.immutable @{{.*x.*}} : ui256
+// CHECK: sol.immutable @{{.*x.*}} index 0 : ui256
 // CHECK: sol.state_var @{{.*y.*}} slot 0 offset 0 : ui256
 
 // CHECK: sol.func @{{.*}}(%arg0: ui256) attributes {{.*}}kind = #{{.*}}Constructor

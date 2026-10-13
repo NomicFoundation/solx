@@ -39,7 +39,9 @@
 // CHECK:   %[[ADDR:.*]] = sol.address_cast %[[ZERO]] : ui160 to !sol.address
 // CHECK:   sol.address_cast %[[ADDR]] : !sol.address to !sol.contract<{{.*I.*}}>
 
-// CHECK: sol.func private @{{.*named_storage.*}}
+// CHECK: sol.func @{{.*stored_length.*}}
+// CHECK:   sol.call @{{.*named_storage.*}}
+// CHECK: sol.func @{{.*named_storage.*}}
 // CHECK:   sol.default_storage : !sol.array<? x ui256, Storage>
 
 // CHECK: sol.func @{{.*unnamed_array.*}}
@@ -96,6 +98,10 @@ contract C {
 
     function named_storage() internal view returns (uint256[] storage r) {
         r = stored;
+    }
+
+    function stored_length() public view returns (uint256) {
+        return named_storage().length;
     }
 
     function named_calldata(uint256[] calldata a) external pure returns (uint256[] calldata r) {

@@ -231,6 +231,7 @@ impl<'arguments> Compiler<'arguments> {
     ) -> anyhow::Result<EVMBuild> {
         let mut profiler = solx_utils::Profiler::default();
 
+        let run_solx_read_input = profiler.start_pipeline_element("Compiler_ReadInput");
         let mut input = solx_standard_json::Input::try_from_paths(
             language,
             paths,
@@ -248,6 +249,7 @@ impl<'arguments> Compiler<'arguments> {
             ),
             llvm_options.clone(),
         )?;
+        run_solx_read_input.borrow_mut().finish();
 
         let run_frontend_standard_json =
             profiler.start_pipeline_element(format!("{}_RunStandardJSON", Slang::NAME).as_str());
@@ -314,7 +316,10 @@ impl<'arguments> Compiler<'arguments> {
         messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
         output_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<()> {
+        let mut profiler = solx_utils::Profiler::default();
+        let run_solx_read_input = profiler.start_pipeline_element("Compiler_ReadInput");
         let mut input = solx_standard_json::Input::try_from(json_path.as_deref())?;
+        run_solx_read_input.borrow_mut().finish();
         let linker_symbols = input.settings.libraries.as_linker_symbols()?;
 
         let optimizer_settings = solx_codegen_evm::OptimizerSettings::try_from_mode(
@@ -326,7 +331,6 @@ impl<'arguments> Compiler<'arguments> {
         let metadata_hash_type = input.settings.metadata.bytecode_hash;
         let append_cbor = input.settings.metadata.append_cbor;
 
-        let mut profiler = solx_utils::Profiler::default();
         let (mut output, project) = match input.language {
             solx_standard_json::InputLanguage::Solidity
             | solx_standard_json::InputLanguage::Yul => {
@@ -404,7 +408,7 @@ impl<'arguments> Compiler<'arguments> {
                 &mut output,
                 &input.settings.output_selection,
                 false,
-                profiler.to_vec(),
+                &mut profiler,
             )?;
             output.write_and_exit(&input.settings.output_selection);
         }
@@ -416,7 +420,7 @@ impl<'arguments> Compiler<'arguments> {
         } else {
             build
         };
-        build.write_to_standard_json(&mut output, &output_selection, true, profiler.to_vec())?;
+        build.write_to_standard_json(&mut output, &output_selection, true, &mut profiler)?;
         output.write_and_exit(&output_selection);
     }
 

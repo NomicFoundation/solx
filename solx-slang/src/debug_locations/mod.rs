@@ -12,7 +12,7 @@ use slang_solidity_v2::ast::NodeLocation;
 use self::resolver::Resolver;
 use self::sources::Sources;
 
-/// What one object's nodes resolve to: their locations when the object requested debug info, and
+/// What one segment's nodes resolve to: their locations when the segment requested debug info, and
 /// otherwise the unknown location, with no source range read.
 pub enum DebugLocations<'context> {
     /// Without debug info: every node resolves to the unknown location, built once.

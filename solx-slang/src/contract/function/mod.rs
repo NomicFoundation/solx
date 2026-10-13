@@ -21,6 +21,7 @@ use solx_mlir::StateMutability;
 use solx_mlir::Value;
 
 use crate::contract::object::Object;
+use crate::contract::segment::Segment;
 use crate::scope::contract::ContractScope;
 use crate::scope::function::FunctionScope;
 use crate::scope::source_unit::SourceUnitScope;
@@ -44,19 +45,22 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         let body = function
             .body()
             .expect("slang admits a call naming a function declaration nothing implements");
-        let selector = match (self.object, function.enclosing_definition()) {
-            (Object::Contract(contract), Some(Definition::Contract(_)))
-                if matches!(contract.resolve_virtual(function), Some(VirtualTarget::Function(resolved))
-                    if resolved.node_id() == function.node_id()) =>
-            {
-                function.compute_selector()
-            }
-            (Object::Library(library), Some(Definition::Library(enclosing)))
-                if library.node_id() == enclosing.node_id() =>
-            {
-                function.compute_selector()
-            }
-            _ => None,
+        let selector = match self.segment {
+            Segment::Deploy { .. } => None,
+            Segment::Runtime { .. } => match (self.object, function.enclosing_definition()) {
+                (Object::Contract(contract), Some(Definition::Contract(_)))
+                    if matches!(contract.resolve_virtual(function), Some(VirtualTarget::Function(resolved))
+                        if resolved.node_id() == function.node_id()) =>
+                {
+                    function.compute_selector()
+                }
+                (Object::Library(library), Some(Definition::Library(enclosing)))
+                    if library.node_id() == enclosing.node_id() =>
+                {
+                    function.compute_selector()
+                }
+                _ => None,
+            },
         };
 
         let mut signature = self.source_unit.function_signature(function);
@@ -64,7 +68,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             signature
                 .function_type
                 .parameters
-                .extend(self.constructor.parameter_types());
+                .extend(self.segment.constructor().parameter_types());
         }
 
         let identifier = function.name();
@@ -89,11 +93,12 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             );
 
             if is_constructor {
-                scope.constructor.current = Some(function.node_id());
-                scope.constructor.bind_parameters(function, entry);
+                let constructor = scope.segment.constructor();
+                constructor.current = Some(function.node_id());
+                constructor.bind_parameters(function, entry);
             }
 
-            scope.function(entry, is_constructor, &signature, |scope| {
+            scope.function(entry, &signature, |scope| {
                 for (index, parameter) in function.parameters().iter().enumerate() {
                     let Some(identifier) = parameter.name() else {
                         continue;
