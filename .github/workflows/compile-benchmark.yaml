@@ -160,6 +160,8 @@ jobs:
       # 20 min (hyperfine σ on this corpus is well under 1%). The per-binary
       # validation pass in run.sh doubles as cache warmup.
       - name: Run benchmark
+        env:
+          RUNNER_NAME: ${{ runner.name }}
         run: |
           ./tests/benchmark/run.sh \
             --bin pr=./target/x86_64-unknown-linux-gnu/release/slang \
