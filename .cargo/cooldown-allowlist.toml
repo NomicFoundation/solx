@@ -9,3 +9,8 @@ version = "1.20.0"
 [[allow.exact]]
 crate = "rustls"
 version = "0.23.45"
+
+# RUSTSEC-2026-0344: ruzstd 0.9.1 is the fix, published 2026-10-11.
+[[allow.exact]]
+crate = "ruzstd"
+version = "0.9.1"
