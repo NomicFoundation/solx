@@ -53,7 +53,7 @@ jobs:
     runs-on: solx-linux-amd64-self-hosted
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
-      options: -m 110g
+      options: -m 48g
     # Warm caches: ~10 min builds + ~20 min benchmark. Worst case: a PR that
     # bumps solx-llvm (or its build scripts) builds both the PR and main LLVM
     # cold, sequentially.
