@@ -15,7 +15,8 @@ fn default() -> anyhow::Result<()> {
 
     result
         .success()
-        .stdout(predicate::str::contains("Benchmarks").count(2));
+        .stdout(predicate::str::contains("Benchmarks").count(1))
+        .stdout(predicate::str::contains("Compiler_CreateMLIRContext").not());
 
     Ok(())
 }

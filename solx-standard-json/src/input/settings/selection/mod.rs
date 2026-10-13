@@ -156,6 +156,17 @@ impl Selection {
     }
 
     ///
+    /// Checks if an output only codegen produces is requested for at least one contract.
+    ///
+    pub fn is_codegen_set_for_any(&self) -> bool {
+        self.inner
+            .values()
+            .flat_map(BTreeMap::values)
+            .flatten()
+            .any(Selector::is_codegen)
+    }
+
+    ///
     /// Checks if the debug info is requested for at least one contract.
     ///
     /// Used to reject debug info requests for non-Solidity input, so umbrella selectors

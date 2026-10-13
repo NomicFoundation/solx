@@ -30,7 +30,8 @@ impl<'context> SourceUnitScope<'context> {
     /// Lowers every contract and library the unit deploys into standard-JSON contract outputs
     /// keyed by definition name, each in its own MLIR module off the frontend's melior context. An
     /// abstract contract and an interface deploy nothing and produce no module, only their ABI and
-    /// method identifiers.
+    /// method identifiers, and so does every definition when the selection requests no output
+    /// only codegen produces.
     ///
     /// A definition whose ABI Slang cannot compute produces no output and is returned by name
     /// next to the outputs, as the member declaring it.
@@ -50,11 +51,15 @@ impl<'context> SourceUnitScope<'context> {
         unit: &SourceUnit,
         evm_version: EVMVersion,
         revert_strings: RevertStrings,
-        selected: impl Fn(&str, solx_standard_json::InputSelector) -> bool,
+        output_selection: &solx_standard_json::InputSelection,
         sources: &Sources<'_>,
         pass_timing: bool,
         profiler: &mut Profiler,
     ) -> anyhow::Result<(BTreeMap<String, Contract>, UncomputableAbis)> {
+        let selected = |name: &str, selector| {
+            output_selection.check_selection(unit.get_file_id().as_str(), Some(name), selector)
+        };
+
         let mut contracts = BTreeMap::new();
         let mut uncomputable_abis = UncomputableAbis::new();
         for member in unit.members().iter() {
@@ -69,7 +74,10 @@ impl<'context> SourceUnitScope<'context> {
             let storage_layout = abi.storage_layout();
             let abi_value = abi.into_value();
             let method_identifiers = definition.method_identifiers();
-            let Some(object) = definition.into_object() else {
+            let Some(object) = definition
+                .into_object()
+                .filter(|_| output_selection.is_codegen_set_for_any())
+            else {
                 contracts.insert(name, Contract::new_abi(abi_value, method_identifiers));
                 continue;
             };

@@ -123,6 +123,24 @@ pub enum Selector {
 
 impl Selector {
     ///
+    /// Checks if only codegen produces the output.
+    ///
+    pub fn is_codegen(&self) -> bool {
+        !matches!(
+            self,
+            Self::AST
+                | Self::ABI
+                | Self::Metadata
+                | Self::DeveloperDocumentation
+                | Self::UserDocumentation
+                | Self::StorageLayout
+                | Self::TransientStorageLayout
+                | Self::MethodIdentifiers
+                | Self::Benchmarks
+        )
+    }
+
+    ///
     /// Converts a multi-item selector into a group of single-item selectors.
     ///
     pub fn into_single_selectors(self) -> Vec<Self> {
