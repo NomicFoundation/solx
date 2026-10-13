@@ -65,6 +65,12 @@ impl<'context> Context<'context> {
     const EMITTED_DIALECTS: [&'static str; 2] = ["sol", "yul"];
     /// The op a code segment's module is.
     const BUILTIN_MODULE: &'static str = "builtin.module";
+    /// The op a contract is before the Sol lowering.
+    const SOL_CONTRACT: &'static str = "sol.contract";
+    /// The op a function is before the Sol lowering.
+    const SOL_FUNC: &'static str = "sol.func";
+    /// The op a function is after the Yul lowering.
+    const FUNC_FUNC: &'static str = "func.func";
     /// The DWARF version a module with debug info declares, where LLVM would default to 4.
     const DWARF_VERSION: u32 = 5;
     /// The data layout the LLVM translation reads off the module.
@@ -188,6 +194,8 @@ impl<'context> Context<'context> {
     /// walks them. Splitting the contract into a creation and a runtime object can leave a
     /// function unreachable in the runtime object; the second takes care of that.
     ///
+    /// The canonicalizers run per function; there is little to canonicalize outside one.
+    ///
     /// # Errors
     ///
     /// Returns an error if any pass in the pipeline fails or the resulting module fails
@@ -217,9 +225,12 @@ impl<'context> Context<'context> {
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateSolModifierInliningPass(),
             ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateTransformsCanonicalizer(),
-            ));
+            pass_manager
+                .nested_under(Self::SOL_CONTRACT)
+                .nested_under(Self::SOL_FUNC)
+                .add_pass(melior::pass::Pass::from_raw(
+                    crate::ffi::mlirCreateTransformsCanonicalizer(),
+                ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionConvertSolToYulPass(),
             ));
@@ -229,9 +240,18 @@ impl<'context> Context<'context> {
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionConvertYulToStandardPass(),
             ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateTransformsCanonicalizer(),
-            ));
+            pass_manager
+                .nested_under(Self::FUNC_FUNC)
+                .add_pass(melior::pass::Pass::from_raw(
+                    crate::ffi::mlirCreateTransformsCanonicalizer(),
+                ));
+            // The runtime object's module is nested in the creation object's module.
+            pass_manager
+                .nested_under(Self::BUILTIN_MODULE)
+                .nested_under(Self::FUNC_FUNC)
+                .add_pass(melior::pass::Pass::from_raw(
+                    crate::ffi::mlirCreateTransformsCanonicalizer(),
+                ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionSCFToControlFlowPass(),
             ));
