@@ -11,11 +11,24 @@
 //!     "expected": [
 //!         "0x036b6384b5eca791c62761152d0c79bb0604c104a5fb6f4eb0703f3154bb3db0"
 //!     ]
+//! }, {
+//!     "name": "transient",
+//!     "inputs": [
+//!         {
+//!             "method": "mainTransient",
+//!             "calldata": [
+//!                 "5"
+//!             ]
+//!         }
+//!     ],
+//!     "expected": [
+//!         "0x036b6384b5eca791c62761152d0c79bb0604c104a5fb6f4eb0703f3154bb3db0"
+//!     ]
 //! } ] }
 
 // SPDX-License-Identifier: MIT
 
-pragma solidity >=0.4.16;
+pragma solidity >=0.8.24;
 
 contract Test {
     function main(uint256 a) external returns(bytes32 result) {
@@ -121,6 +134,113 @@ contract Test {
             sstore(97, 97)
             sstore(98, 98)
             sstore(99, 99)
+            result := keccak256(0, 32)
+        }
+    }
+
+    function mainTransient(uint256 a) external returns(bytes32 result) {
+        assembly {
+            mstore(0, a)
+            tstore(0, 7)
+            tstore(1, 1)
+            tstore(2, 2)
+            tstore(3, 3)
+            tstore(4, 4)
+            tstore(5, 5)
+            tstore(6, 6)
+            tstore(7, 7)
+            tstore(8, 8)
+            tstore(9, 9)
+            tstore(10, 10)
+            tstore(11, 11)
+            tstore(12, 12)
+            tstore(13, 13)
+            tstore(14, 14)
+            tstore(15, 15)
+            tstore(16, 16)
+            tstore(17, 17)
+            tstore(18, 18)
+            tstore(19, 19)
+            tstore(20, 20)
+            tstore(21, 21)
+            tstore(22, 22)
+            tstore(23, 23)
+            tstore(24, 24)
+            tstore(25, 25)
+            tstore(26, 26)
+            tstore(27, 27)
+            tstore(28, 28)
+            tstore(29, 29)
+            tstore(30, 30)
+            tstore(31, 31)
+            tstore(32, 32)
+            tstore(33, 33)
+            tstore(34, 34)
+            tstore(35, 35)
+            tstore(36, 36)
+            tstore(37, 37)
+            tstore(38, 38)
+            tstore(39, 39)
+            tstore(40, 40)
+            tstore(41, 41)
+            tstore(42, 42)
+            tstore(43, 43)
+            tstore(44, 44)
+            tstore(45, 45)
+            tstore(46, 46)
+            tstore(47, 47)
+            tstore(48, 48)
+            tstore(49, 49)
+            tstore(50, 50)
+            tstore(51, 51)
+            tstore(52, 52)
+            tstore(53, 53)
+            tstore(54, 54)
+            tstore(55, 55)
+            tstore(56, 56)
+            tstore(57, 57)
+            tstore(58, 58)
+            tstore(59, 59)
+            tstore(60, 60)
+            tstore(61, 61)
+            tstore(62, 62)
+            tstore(63, 63)
+            tstore(64, 64)
+            tstore(65, 65)
+            tstore(66, 66)
+            tstore(67, 67)
+            tstore(68, 68)
+            tstore(69, 69)
+            tstore(70, 70)
+            tstore(71, 71)
+            tstore(72, 72)
+            tstore(73, 73)
+            tstore(74, 74)
+            tstore(75, 75)
+            tstore(76, 76)
+            tstore(77, 77)
+            tstore(78, 78)
+            tstore(79, 79)
+            tstore(80, 80)
+            tstore(81, 81)
+            tstore(82, 82)
+            tstore(83, 83)
+            tstore(84, 84)
+            tstore(85, 85)
+            tstore(86, 86)
+            tstore(87, 87)
+            tstore(88, 88)
+            tstore(89, 89)
+            tstore(90, 90)
+            tstore(91, 91)
+            tstore(92, 92)
+            tstore(93, 93)
+            tstore(94, 94)
+            tstore(95, 95)
+            tstore(96, 96)
+            tstore(97, 97)
+            tstore(98, 98)
+            tstore(99, 99)
             result := keccak256(0, 32)
         }
     }
