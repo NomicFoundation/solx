@@ -57,7 +57,7 @@ jobs:
 
   sanitizer:
     needs: [label-check, cooldown-check]
-    runs-on: solx-linux-amd64-self-hosted
+    runs-on: solx-f4-staging
     # checks: write for the rust-unit-tests action's test-results check run.
     permissions:
       contents: read
@@ -116,6 +116,10 @@ jobs:
         with:
           target: ${{ env.TARGET }}
           sanitizer: ${{ env.RUST_SANITIZER }}
+
+      - name: Container memory peak
+        if: always()
+        run: echo "memory.peak $(( $(cat /sys/fs/cgroup/memory.peak) / 1024 / 1024 / 1024 )) GiB"
 
   pr-checks:
     name: PR Checks (Sanitizer)
