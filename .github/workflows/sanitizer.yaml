@@ -98,6 +98,7 @@ jobs:
           build-type: RelWithDebInfo
           enable-assertions: 'true'
           enable-utils: 'true'
+          trim-libraries: 'true'
 
       - name: Move TableGen LLVM aside
         run: |
@@ -110,6 +111,7 @@ jobs:
           build-type: RelWithDebInfo
           sanitizer: ${{ env.LLVM_SANITIZER }}
           enable-assertions: 'true'
+          trim-libraries: 'true'
 
       - name: Run tests
         uses: ./.github/actions/rust-unit-tests

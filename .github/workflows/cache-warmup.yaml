@@ -121,6 +121,7 @@ jobs:
           build-type: RelWithDebInfo
           enable-assertions: 'true'
           sanitizer: 'Address'
+          trim-libraries: 'true'
 
       - name: Touch LLVM ccache
         if: always()
@@ -165,6 +166,7 @@ jobs:
           build-type: RelWithDebInfo
           enable-assertions: 'false'
           enable-coverage: 'true'
+          trim-libraries: 'true'
 
       - name: Touch LLVM ccache
         if: always()

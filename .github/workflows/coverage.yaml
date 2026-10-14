@@ -89,6 +89,7 @@ jobs:
           build-type: 'RelWithDebInfo'
           enable-assertions: 'false'
           enable-coverage: 'true'
+          trim-libraries: 'true'
 
       - name: Build solx
         id: build-solx

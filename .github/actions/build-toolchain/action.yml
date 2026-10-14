@@ -40,6 +40,7 @@ runs:
         build-type: RelWithDebInfo
         enable-assertions: 'true'
         enable-utils: 'true'
+        trim-libraries: 'true'
 
     # Fresh llvm-sys objects under MSYS2 GCC 16 cannot link against the
     # static libstdc++.a that solx-dev bundles into the LLVM tree; dropping

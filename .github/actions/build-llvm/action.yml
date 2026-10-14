@@ -57,6 +57,12 @@ inputs:
     description: 'LLVM build type. Possible values are `Debug`, `Release`, `RelWithDebInfo`, or `MinSizeRel`. [default: Release]'
     required: false
     default: 'Release'
+  trim-libraries:
+    description: >-
+      Install only the MLIR libraries solx links instead of every upstream dialect.
+      For configurations whose install prefix only feeds solx.
+    required: false
+    default: 'false'
   enable-artifact-cache:
     description: >-
       Enable the whole-artifact cache layer (restore/save of target-llvm/target-final).
@@ -100,6 +106,7 @@ runs:
         [ '${{ inputs.enable-tests }}' = 'true' ] && UTILS='true'
         [ "$UTILS" = 'true' ] && KEY="${KEY}-utils"
         [ '${{ inputs.enable-tests }}' = 'true' ] && KEY="${KEY}-tests"
+        [ '${{ inputs.trim-libraries }}' = 'true' ] && KEY="${KEY}-trimmed"
         KEY="${KEY}-dev${DEV_HASH}-${SHA}"
         [ -n '${{ steps.msys-toolchain.outputs.hash }}' ] && KEY="${KEY}-msys${{ steps.msys-toolchain.outputs.hash }}"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
@@ -212,6 +219,7 @@ runs:
         [ "${{ inputs.enable-assertions }}" = "true" ] && ENABLE_ASSERTIONS="--enable-assertions"
         [ "${{ inputs.enable-coverage }}" = "true" ] && ENABLE_COVERAGE="--enable-coverage"
         [ "${{ inputs.sanitizer }}" != "" ] && SANITIZER="--sanitizer ${{ inputs.sanitizer }}"
+        [ "${{ inputs.trim-libraries }}" = "true" ] && TRIM_LIBRARIES="--trim-libraries"
         if [ "${{ inputs.enable-valgrind }}" = "true" ]; then
           ENABLE_VALGRIND="--enable-valgrind"
           if [ "${{ inputs.valgrind-options }}" != "" ]; then
@@ -234,7 +242,7 @@ runs:
         fi
 
         ./target/release/solx-dev llvm build --build-type ${{ inputs.build-type }} --install-distribution \
-          --ccache-variant=ccache ${ENABLE_UTILS} ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${SANITIZER} \
+          --ccache-variant=ccache ${ENABLE_UTILS} ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${SANITIZER} ${TRIM_LIBRARIES} \
           --extra-args "-DCMAKE_EXPORT_COMPILE_COMMANDS='Off'" "-DLLVM_PARALLEL_LINK_JOBS='${LINK_JOBS}'" "-DLLVM_OPTIMIZED_TABLEGEN='On'"
 
     # `continue-on-error` keeps a failing ccache install (→ ccache not on PATH)
