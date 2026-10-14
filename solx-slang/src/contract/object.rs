@@ -2,16 +2,21 @@
 //! The deployable object a module emits: a contract or a library.
 //!
 
+use std::collections::HashMap;
+
 use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::LibraryDefinition;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::compilation::FileId;
 
 use solx_mlir::ContractKind;
+
+use crate::contract::storage_slot::StorageSlot;
 
 /// The deployable object a module emits, each variant carrying the definition its kind
 /// dispatches from.
@@ -149,6 +154,21 @@ impl Object {
         match self {
             Self::Contract(node) => node.linearised_state_variables(),
             Self::Library(node) => node.state_variables(),
+        }
+    }
+
+    /// The storage slot of each state variable the object stores, persistent and transient in
+    /// one map keyed by definition id, or `None` when Slang cannot lay out its storage.
+    pub fn storage_layout(&self) -> Option<HashMap<NodeId, StorageSlot>> {
+        match self {
+            Self::Contract(node) => Some(
+                node.compute_storage_items()?
+                    .into_iter()
+                    .chain(node.compute_transient_storage_items()?)
+                    .map(|item| (item.node_id(), StorageSlot::from(&item)))
+                    .collect(),
+            ),
+            Self::Library(_) => Some(HashMap::new()),
         }
     }
 }

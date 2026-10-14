@@ -4,7 +4,6 @@
 //!
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 
 use slang_solidity_v2::abi::ContractAbi;
 use slang_solidity_v2::ast::ContractDefinition;
@@ -13,28 +12,15 @@ use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::InterfaceDefinition;
 use slang_solidity_v2::ast::LibraryDefinition;
-use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::SourceUnitMember;
 use slang_solidity_v2::ast::StateVariableDefinition;
 
 use crate::contract::object::Object;
-use crate::contract::storage_slot::StorageSlot;
 
 /// The `abi` field of a standard-JSON contract.
 pub struct Abi(ContractAbi);
 
 impl Abi {
-    /// The storage slot of each state variable the definition stores, persistent and transient in
-    /// one map keyed by definition id.
-    pub fn storage_layout(&self) -> HashMap<NodeId, StorageSlot> {
-        self.0
-            .storage_layout()
-            .iter()
-            .chain(self.0.transient_storage_layout().iter())
-            .map(|item| (item.node_id(), StorageSlot::from(item)))
-            .collect()
-    }
-
     /// The value the standard-JSON output stores: Slang's entries in solc's JSON-ABI spelling.
     pub fn into_value(self) -> serde_json::Value {
         serde_json::to_value(&self.0).expect("Slang's ABI serializer writes only string-keyed maps")
