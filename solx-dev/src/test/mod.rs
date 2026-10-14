@@ -7,6 +7,7 @@ use itertools::Itertools;
 pub mod foundry;
 pub mod hardhat;
 pub mod solx_tester;
+pub mod sourcify;
 
 /// Codegen variants every enabled compiler is tested with.
 pub(crate) const CODEGENS: [&str; 1] = ["legacy"];
