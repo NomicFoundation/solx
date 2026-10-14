@@ -122,14 +122,13 @@ impl CompilationUnitScope<'_> {
         definition: AbiDefinition,
         name: &str,
     ) -> Option<DefinitionOutput> {
-        let abi = definition.abi()?;
-        let storage_layout = abi.storage_layout();
-        let abi_value = abi.into_value();
+        let abi_value = definition.abi()?.into_value();
         let method_identifiers = definition.method_identifiers();
         let Some(object) = definition.into_object() else {
             let contract = Contract::new_abi(abi_value, method_identifiers);
             return Some(Ok((contract, Vec::new())));
         };
+        let storage_layout = object.storage_layout()?;
         let selected = |selector| {
             self.output_selection
                 .check_selection(object.file_id().as_str(), Some(name), selector)
