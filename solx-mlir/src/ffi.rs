@@ -3,7 +3,7 @@
 //!
 //! These functions are provided by the `libMLIRCAPISol`, `libMLIRSolTransforms`,
 //! `libMLIRSolToYul`, `libMLIRYulToStandard`, and `libMLIRCAPIYul` static
-//! libraries built from solx-llvm.
+//! libraries built from solx-llvm, and by the C++ wrappers this crate compiles.
 //!
 
 use mlir_sys::MlirContext;
@@ -21,6 +21,20 @@ unsafe extern "C" {
 
     /// Returns the dialect handle for the Yul dialect.
     pub fn mlirGetDialectHandle__yul__() -> MlirDialectHandle;
+
+    // ---- Upstream registration and translation (from mlir_entry_points.cpp) ----
+
+    /// Inserts the upstream dialects and extensions the Sol pipeline lowers through.
+    pub fn solxRegisterDialects(registry: MlirDialectRegistry);
+
+    /// Registers the builtin and LLVM dialect translations to LLVM IR.
+    pub fn solxRegisterLLVMTranslations(context: MlirContext);
+
+    /// Translates an LLVM dialect module to an LLVM IR module, or null on failure.
+    pub fn solxTranslateModuleToLLVMIR(
+        module: mlir_sys::MlirOperation,
+        context: mlir_sys::LLVMContextRef,
+    ) -> mlir_sys::LLVMModuleRef;
 
     // ---- Sol dialect passes ----
 
@@ -53,27 +67,27 @@ unsafe extern "C" {
     // ---- Sol-to-Yul conversion ----
 
     /// Creates the `convert-sol-to-yul` pass.
-    pub fn mlirCreateConversionConvertSolToYulPass() -> MlirPass;
+    pub fn solxCreateConvertSolToYulPass() -> MlirPass;
 
     /// Creates the `convert-yul-to-std` pass.
-    pub fn mlirCreateConversionConvertYulToStandardPass() -> MlirPass;
+    pub fn solxCreateConvertYulToStandardPass() -> MlirPass;
 
     // ---- Standard-to-LLVM conversion passes ----
 
     /// Creates the `convert-func-to-llvm` pass.
-    pub fn mlirCreateConversionConvertFuncToLLVMPass() -> MlirPass;
+    pub fn solxCreateConvertFuncToLLVMPass() -> MlirPass;
 
     /// Creates the `convert-scf-to-cf` pass.
-    pub fn mlirCreateConversionSCFToControlFlowPass() -> MlirPass;
+    pub fn solxCreateSCFToControlFlowPass() -> MlirPass;
 
     /// Creates the `convert-cf-to-llvm` pass.
-    pub fn mlirCreateConversionConvertControlFlowToLLVMPass() -> MlirPass;
+    pub fn solxCreateConvertControlFlowToLLVMPass() -> MlirPass;
 
     /// Creates the `convert-arith-to-llvm` pass.
-    pub fn mlirCreateConversionArithToLLVMConversionPass() -> MlirPass;
+    pub fn solxCreateArithToLLVMConversionPass() -> MlirPass;
 
     /// Creates the `reconcile-unrealized-casts` pass.
-    pub fn mlirCreateConversionReconcileUnrealizedCastsPass() -> MlirPass;
+    pub fn solxCreateReconcileUnrealizedCastsPass() -> MlirPass;
 
     // ---- Dialect loading ----
 
