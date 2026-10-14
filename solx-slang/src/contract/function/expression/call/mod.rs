@@ -583,7 +583,7 @@ impl Call {
                 let condition = scope.expression(condition_expression).is_nonzero(scope);
                 let (values, message, custom) = match iter
                     .next()
-                    .map(FunctionScope::unparenthesized)
+                    .map(Expression::unwrap_singleton_tuple)
                     .as_ref()
                 {
                     Some(Expression::StringExpression(string_expression)) => (
@@ -638,7 +638,7 @@ impl Call {
             BuiltIn::Revert => {
                 match arguments
                     .first()
-                    .map(FunctionScope::unparenthesized)
+                    .map(Expression::unwrap_singleton_tuple)
                     .as_ref()
                 {
                     Some(Expression::StringExpression(string_expression)) => {
@@ -932,9 +932,11 @@ impl Call {
             Some(BuiltIn::AbiEncodeWithSignature) => {
                 let mut iter = arguments.iter();
                 let selector_type = MlirType::selector(scope.melior);
-                let selector = match &FunctionScope::unparenthesized(
-                    iter.next().expect("slang validates non-empty arguments"),
-                ) {
+                let selector = match &iter
+                    .next()
+                    .expect("slang validates non-empty arguments")
+                    .unwrap_singleton_tuple()
+                {
                     Expression::StringExpression(signature) => Value::left_aligned_bytes(
                         solx_utils::Keccak256Hash::from_slice(&signature.value()).to_vec(),
                         selector_type,
@@ -1062,8 +1064,7 @@ impl Call {
                     return vec![new_slot];
                 };
                 let place = Place::from(new_slot);
-                if let Expression::StringExpression(_) =
-                    FunctionScope::unparenthesized(value_argument)
+                if let Expression::StringExpression(_) = value_argument.unwrap_singleton_tuple()
                     && element_type.is_bytes_like()
                 {
                     let value = scope.converted(value_argument, element_type);

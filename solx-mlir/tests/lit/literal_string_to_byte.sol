@@ -29,8 +29,7 @@ contract C {
         data[0] = ("x");
     }
 
-    function parenthesized_declaration() public pure returns (bytes1) {
+    function parenthesized_declaration() public pure {
         bytes1 b = ("x");
-        return b;
     }
 }

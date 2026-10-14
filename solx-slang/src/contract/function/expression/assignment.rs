@@ -40,7 +40,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         let element_type = self.typing(left_type);
 
         if let AssignmentExpressionOperator::Equal(_) = node.operator() {
-            if let Expression::StringExpression(_) = Self::unparenthesized(&right)
+            if let Expression::StringExpression(_) = right.unwrap_singleton_tuple()
                 && element_type.is_bytes_like()
             {
                 let (place, r#type) = self.expression_place(&left);

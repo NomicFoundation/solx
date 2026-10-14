@@ -99,7 +99,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 Value::code(address, self)
             }
             Some(BuiltIn::Length) => {
-                if let Expression::MemberAccessExpression(code) = Self::unparenthesized(&operand)
+                if let Expression::MemberAccessExpression(code) = operand.unwrap_singleton_tuple()
                     && code.member().resolve_to_built_in() == Some(BuiltIn::AddressCode)
                 {
                     let address =
@@ -239,7 +239,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// The ABI selector `.selector` yields: an operand naming a function or a public state
     /// variable folds to its selector constant, while a pointer value carries its own.
     pub fn external_selector(&mut self, operand: &Expression) -> Value<'context> {
-        let operand = &Self::unparenthesized(operand);
+        let operand = &operand.unwrap_singleton_tuple();
         if let Expression::MemberAccessExpression(access) = operand
             && let Some(callee) = access
                 .member()
@@ -260,7 +260,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// The contract a `super` operand resolves after: the one the keyword is written in.
     pub fn super_contract(operand: &Expression) -> Option<ContractDefinition> {
-        match Self::unparenthesized(operand) {
+        match operand.unwrap_singleton_tuple() {
             Expression::SuperKeyword(keyword) => Some(
                 keyword
                     .enclosing_contract()
@@ -295,7 +295,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// The definition `type(X)` names.
     fn meta_type_definition(operand: &Expression) -> Definition {
-        let Expression::TypeExpression(type_expression) = Self::unparenthesized(operand) else {
+        let Expression::TypeExpression(type_expression) = operand.unwrap_singleton_tuple() else {
             unreachable!("the type built-ins decorate a `type(..)` expression");
         };
         let TypeName::IdentifierPath(path) = type_expression.type_name() else {

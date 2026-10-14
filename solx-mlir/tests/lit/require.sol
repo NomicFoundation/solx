@@ -42,9 +42,8 @@ contract C {
         return x;
     }
 
-    function check_msg_parenthesized(uint256 x) public pure returns (uint256) {
+    function check_msg_parenthesized(uint256 x) public pure {
         require(x > 0, ("must be at least one"));
-        return x;
     }
 
     function check_error(uint256 a) public pure {

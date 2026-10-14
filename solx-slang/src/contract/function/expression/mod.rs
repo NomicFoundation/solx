@@ -134,7 +134,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// parenthesized place is a single-element tuple, peeled here; a multi-element tuple denotes
     /// several places, resolved by `expression_places`.
     pub fn expression_place(&mut self, node: &Expression) -> (Place<'context>, MlirType<'context>) {
-        let node = &Self::unparenthesized(node);
+        let node = &node.unwrap_singleton_tuple();
         match node {
             Expression::Identifier(inner) => self.identifier_place(inner),
             Expression::MemberAccessExpression(inner) => {
@@ -277,7 +277,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         expression: &Expression,
         target_type: MlirType<'context>,
     ) -> Value<'context> {
-        if let Expression::StringExpression(literal) = Self::unparenthesized(expression)
+        if let Expression::StringExpression(literal) = expression.unwrap_singleton_tuple()
             && target_type.is_bytes_like()
         {
             return Value::left_aligned_bytes(literal.value(), target_type, self);
@@ -335,27 +335,10 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// The definition a bare (`E`) or namespace-qualified (`Lib.E`) name resolves to.
     pub fn resolved_definition(expression: &Expression) -> Option<Definition> {
-        match Self::unparenthesized(expression) {
+        match expression.unwrap_singleton_tuple() {
             Expression::Identifier(identifier) => identifier.resolve_to_definition(),
             Expression::MemberAccessExpression(access) => access.member().resolve_to_definition(),
             _ => None,
-        }
-    }
-
-    /// The expression under any parentheses around it. Slang types a single-element tuple as its
-    /// element, so a site that reads an operand's kind reads it here.
-    pub fn unparenthesized(expression: &Expression) -> Expression {
-        match expression {
-            Expression::TupleExpression(tuple) if tuple.items().len() == 1 => {
-                let operand = tuple
-                    .items()
-                    .iter()
-                    .next()
-                    .and_then(|item| item.expression())
-                    .expect("slang parses no single omitted tuple element");
-                Self::unparenthesized(&operand)
-            }
-            _ => expression.clone(),
         }
     }
 }
