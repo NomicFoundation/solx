@@ -18,6 +18,7 @@ mod bin;
 mod bin_runtime;
 mod debug_info;
 mod debug_info_runtime;
+mod debug_symbols;
 mod devdoc;
 mod docs_examples;
 mod emit_llvm_ir;

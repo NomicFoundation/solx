@@ -9,6 +9,8 @@ use crate::ffi;
 
 sol_dialect_attribute! {
     /// Sol dialect contract kind.
+    #[derive(serde::Serialize, serde::Deserialize)]
+    #[serde(rename_all = "lowercase")]
     ContractKind => ffi::solxCreateContractKindAttr {
         /// Interface contract.
         Interface = 0,
@@ -33,6 +35,8 @@ sol_dialect_attribute! {
 
 sol_dialect_attribute! {
     /// Sol dialect state mutability.
+    #[derive(serde::Serialize, serde::Deserialize)]
+    #[serde(rename_all = "lowercase")]
     StateMutability => ffi::solxCreateStateMutabilityAttr {
         /// No state reads or writes.
         Pure = 0,

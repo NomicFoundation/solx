@@ -19,6 +19,7 @@ use solx_mlir::FunctionOrigin;
 use solx_mlir::Place;
 use solx_mlir::StateMutability;
 use solx_mlir::Value;
+use solx_standard_json::output::source::debug_symbols::function::Function as DebugSymbolsFunction;
 
 use crate::contract::object::Object;
 use crate::contract::segment::Segment;
@@ -71,19 +72,10 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 .extend(self.segment.constructor().parameter_types());
         }
 
-        let identifier = function.name();
-        let name = match function.kind() {
-            FunctionKind::Constructor => SourceUnitScope::CONSTRUCTOR_KEYWORD,
-            FunctionKind::Fallback => "fallback",
-            FunctionKind::Receive => "receive",
-            FunctionKind::Regular | FunctionKind::Modifier => identifier
-                .as_ref()
-                .expect("slang names every regular function and modifier")
-                .name(),
-        };
+        let name = DebugSymbolsFunction::source_name(function);
         self.at_node(function, |scope| {
             let entry = signature.define(
-                name,
+                name.as_str(),
                 selector,
                 FunctionDispatch::new(function, is_most_derived_constructor),
                 FunctionOrigin::Declared,

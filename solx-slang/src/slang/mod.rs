@@ -17,6 +17,7 @@ use slang_solidity_v2::utils::LanguageVersion;
 use solx_standard_json::CollectableError;
 use solx_standard_json::OutputError;
 use solx_standard_json::output::error::source_location::SourceLocation;
+use solx_standard_json::output::source::debug_symbols::DebugSymbols;
 use solx_utils::EVMVersion;
 use solx_utils::Profiler;
 use solx_utils::Remapping;
@@ -172,6 +173,26 @@ impl Slang {
 
         if output.has_errors() {
             return Ok(output);
+        }
+
+        for file in unit.files() {
+            let file_id = file.id();
+            if !input_json.settings.output_selection.check_selection(
+                file_id.as_str(),
+                None,
+                solx_standard_json::InputSelector::DebugSymbols,
+            ) {
+                continue;
+            }
+            let run_debug_symbols = profiler.start_pipeline_element(
+                format!("{}_BuildDebugSymbols:{file_id}", Self::NAME).as_str(),
+            );
+            output
+                .sources
+                .get_mut(file_id.as_str())
+                .expect("every compiled file is an input source")
+                .debug_symbols = Some(DebugSymbols::from(&file.ast()));
+            run_debug_symbols.borrow_mut().finish();
         }
 
         let revert_strings = input_json
