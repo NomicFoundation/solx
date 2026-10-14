@@ -40,11 +40,12 @@ done
 
 mkdir -p "${OUT_DIR}"
 
-# Record binary identities alongside the measurements.
+# Record binary identities and the runner alongside the measurements.
 : > "${OUT_DIR}/versions.txt"
 for i in "${!BIN_NAMES[@]}"; do
   echo "${BIN_NAMES[$i]}: $("${BIN_PATHS[$i]}" --version | head -1)" >> "${OUT_DIR}/versions.txt"
 done
+echo "runner: ${RUNNER_NAME:-$(hostname)}" >> "${OUT_DIR}/versions.txt"
 cat "${OUT_DIR}/versions.txt"
 
 # The standard-JSON protocol reports compilation failure inside the JSON

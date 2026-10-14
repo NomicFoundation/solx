@@ -3,3 +3,4 @@ self-hosted-runner:
   labels:
     - solx-linux-amd64
     - solx-linux-amd64-self-hosted
+    - solx-f4-staging
