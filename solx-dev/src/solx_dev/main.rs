@@ -101,6 +101,47 @@ fn main_inner() -> anyhow::Result<()> {
         Arguments::Test(TestArguments::SolxTester(arguments)) => {
             solx_dev::solx_tester(arguments)?;
         }
+        Arguments::Test(TestArguments::Sourcify(arguments)) => {
+            if arguments.shard_count == 0 || arguments.shard_index >= arguments.shard_count {
+                anyhow::bail!("--shard-index must be in [0, --shard-count)");
+            }
+
+            let test_config_path = solx_dev::absolute_path(arguments.test_config_path)?;
+            let test_config = solx_dev::SourcifyTestConfig::try_from(test_config_path)?;
+
+            let downloader_config_path = solx_dev::absolute_path(arguments.downloader_config_path)?;
+            let downloader = solx_compiler_downloader::Downloader::default();
+            downloader.download(downloader_config_path.as_path())?;
+
+            let threads = match arguments.threads {
+                Some(threads) => threads,
+                None => std::thread::available_parallelism()?.get(),
+            };
+            solx_dev::test_sourcify(
+                test_config,
+                arguments.corpus_dir,
+                arguments.corpus_path,
+                arguments.output_path,
+                arguments.solidity_version,
+                solx_dev::SourcifySlice {
+                    shard_count: arguments.shard_count,
+                    shard_index: arguments.shard_index,
+                    limit: arguments.limit,
+                },
+                solx_dev::SourcifyLimits {
+                    threads,
+                    timeout: std::time::Duration::from_secs(arguments.timeout),
+                    memory_limit_mib: arguments.memory_limit_mib,
+                },
+            )?;
+        }
+        Arguments::Test(TestArguments::SourcifyReport(arguments)) => {
+            solx_dev::report_sourcify(
+                arguments.results_paths,
+                arguments.output_path,
+                arguments.title,
+            )?;
+        }
     }
 
     Ok(())
