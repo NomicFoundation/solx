@@ -17,6 +17,7 @@
 
 pragma solidity >=0.8.0;
 
+// TODO: Fails at -Oz if mergebb merges away a block whose value is used outside it.
 contract Test {
     uint256 counter;
     uint256 other;
