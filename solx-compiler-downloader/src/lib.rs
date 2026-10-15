@@ -191,7 +191,7 @@ impl Downloader {
     ///
     /// Downloads a file from a URL to a destination path, with resume support and retries.
     ///
-    fn download_file(&self, url: &str, destination: impl AsRef<Path>) -> anyhow::Result<()> {
+    pub fn download_file(&self, url: &str, destination: impl AsRef<Path>) -> anyhow::Result<()> {
         std::fs::create_dir_all(destination.as_ref().parent().expect("Always exists"))?;
 
         let destination = destination.as_ref();

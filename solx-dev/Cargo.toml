@@ -31,3 +31,6 @@ sedregex = "0.2"
 solx-compiler-downloader = { path = "../solx-compiler-downloader" }
 solx-benchmark-converter = { path = "../solx-benchmark-converter" }
 solx-utils = { path = "../solx-utils" }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

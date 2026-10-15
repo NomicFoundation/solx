@@ -4848,6 +4848,7 @@ dependencies = [
  "glob",
  "hex",
  "itertools 0.15.0",
+ "libc",
  "path-slash",
  "regex",
  "sedregex",
