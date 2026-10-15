@@ -194,7 +194,6 @@ impl CompilationUnitScope<'_> {
                     let (file_id, text_range) = Resolver::source_range(&member);
                     output.errors.push(OutputError::new_error_with_data(
                         Some(file_id.as_str()),
-                        None,
                         format!("Slang cannot compute the ABI of `{name}`."),
                         Some(SourceLocation::new(
                             file_id.to_string(),

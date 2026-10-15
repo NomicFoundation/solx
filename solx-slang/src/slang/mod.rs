@@ -87,7 +87,6 @@ impl Slang {
             let Some(source_code) = source.content() else {
                 output.errors.push(OutputError::new_error_with_data(
                     Some(path.as_str()),
-                    None,
                     "Source content is unavailable.",
                     Some(SourceLocation::new(
                         path.to_owned(),
@@ -133,13 +132,13 @@ impl Slang {
             .extend(unit.diagnostics().iter().map(|diagnostic| {
                 let file_id = diagnostic.file_id();
                 let text_range = diagnostic.text_range();
-                let new_with_data = match diagnostic.severity() {
-                    DiagnosticSeverity::Error => OutputError::new_error_with_data,
-                    DiagnosticSeverity::Warning => OutputError::new_warning_with_data,
+                let new_slang_diagnostic = match diagnostic.severity() {
+                    DiagnosticSeverity::Error => OutputError::new_slang_error,
+                    DiagnosticSeverity::Warning => OutputError::new_slang_warning,
                 };
-                new_with_data(
+                new_slang_diagnostic(
                     Some(file_id.as_str()),
-                    Some(diagnostic.code()),
+                    diagnostic.code(),
                     diagnostic.message(),
                     Some(SourceLocation::new(
                         file_id.to_string(),
