@@ -2,9 +2,9 @@
 //! The compilation's source texts.
 //!
 
-use std::cell::OnceCell;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use slang_solidity_v2::compilation::FileId;
 
@@ -22,7 +22,7 @@ struct Source<'source> {
     /// The source's text.
     text: &'source str,
     /// The source's line index, built on first use.
-    line_index: OnceCell<LineIndex>,
+    line_index: OnceLock<LineIndex>,
 }
 
 impl<'source> Sources<'source> {
@@ -34,7 +34,7 @@ impl<'source> Sources<'source> {
                 .map(|(file_id, text)| {
                     let source = Source {
                         text,
-                        line_index: OnceCell::new(),
+                        line_index: OnceLock::new(),
                     };
                     (file_id, source)
                 })

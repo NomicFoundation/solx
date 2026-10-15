@@ -1,18 +1,18 @@
-// RUN: slang --emit-mlir=sol --debug-info %s | FileCheck %s --implicit-check-not='loc(unknown)'
+// RUN: slang --emit-mlir=sol --debug-info --debug-info-runtime %s | FileCheck %s --implicit-check-not='loc(unknown)'
 
 // CHECK: #[[CALLER:loc[0-9]*]] = loc("{{.*}}debug_location_calls.sol":95:5)
 // CHECK: #[[TWICE:loc[0-9]*]] = loc("{{.*}}debug_location_calls.sol":74:1)
 
 // CHECK: sol.func @{{.*base.*}}()
 // CHECK:   sol.call @{{.*base.*}}() {{.*}} loc(#[[SUPER_CALL:loc[0-9]*]])
-// CHECK: sol.func private @{{.*base.*}}()
+// CHECK: sol.func @{{.*base.*}}()
 // CHECK:   sol.return %{{.*}} : ui256 loc(#[[BASE_RETURN:loc[0-9]*]])
 // CHECK: sol.func @{{.*creates.*}}()
 // CHECK:   sol.new "{{.*}}:D" {{.*}} loc(#[[NEW:loc[0-9]*]])
 // CHECK: sol.func @{{.*delegates.*}}(
 // CHECK:   sol.call @{{.*halve.*}}(%{{.*}}) {{.*}} loc(#[[ATTACHED_CALL:loc[0-9]*]])
 // CHECK:   sol.call @{{.*halve.*}}(%{{.*}}) {{.*}} loc(#[[LIBRARY_CALL:loc[0-9]*]])
-// CHECK: sol.func private @{{.*halve.*}}(
+// CHECK: sol.func @{{.*halve.*}}(
 // CHECK:   sol.cdiv %{{.*}}, %{{.*}} : ui256 loc(#[[QUOTIENT:loc[0-9]*]])
 // CHECK: sol.func @{{.*emits.*}}(%arg0: ui256 loc("{{.*}}debug_location_calls.sol":103:5))
 // CHECK:   sol.store %arg0, %{{.*}} loc(#[[AMOUNT:loc[0-9]*]])
@@ -36,7 +36,7 @@
 // CHECK:   sol.cadd %{{.*}}, %{{.*}} : ui256 loc(#[[CALL]])
 // CHECK:   sol.return %{{.*}} : ui256 loc(#[[RETURN:loc[0-9]*]])
 // CHECK: } loc(#[[CALLER_FN:loc[0-9]*]])
-// CHECK: sol.func private @{{.*twice.*}}(%arg0: ui256 loc("{{.*}}debug_location_calls.sol":74:1))
+// CHECK: sol.func @{{.*twice.*}}(%arg0: ui256 loc("{{.*}}debug_location_calls.sol":74:1))
 // CHECK:   sol.store %arg0, %{{.*}} loc(#[[X:loc[0-9]*]])
 // CHECK:   sol.load %{{.*}} loc(#[[PRODUCT:loc[0-9]*]])
 // CHECK:   sol.cmul %{{.*}}, %{{.*}} : ui256 loc(#[[PRODUCT]])

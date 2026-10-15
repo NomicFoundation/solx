@@ -138,8 +138,8 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             self.contract.body,
         );
 
-        self.constructor.current = None;
-        self.function(entry, true, &Function::constructor(), |scope| {
+        self.segment.constructor().current = None;
+        self.function(entry, &Function::constructor(), |scope| {
             scope.state_variable_initializers();
             scope.base_constructor_call();
             scope.current_block().r#return(&[], scope);
@@ -178,7 +178,8 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 && let Some(function) = base.constructor()
             {
                 arguments.push((
-                    self.constructor
+                    self.segment
+                        .constructor()
                         .positions
                         .get(&base.node_id())
                         .copied()
@@ -193,7 +194,8 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         if !arguments.is_empty() {
             arguments.sort_by_key(|(position, _)| *position);
             let provider = constructor.as_ref().map(FunctionDefinition::node_id);
-            self.constructor
+            self.segment
+                .constructor()
                 .arguments
                 .entry(provider)
                 .or_default()
@@ -213,7 +215,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
 
     /// Advances to the next contract in linearisation order, collecting its inheritance arguments.
     fn next_contract(&mut self) -> Option<ContractDefinition> {
-        let contract = self.constructor.contracts.next()?;
+        let contract = self.segment.constructor().contracts.next()?;
         self.inheritance_arguments(&contract);
         Some(contract)
     }
@@ -225,12 +227,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// base's arguments and the call to it carry that base constructor's location, since both are
     /// part of running it.
     pub fn base_constructor_call(&mut self) {
-        if let Some(arguments) = self
-            .contract
-            .constructor
-            .arguments
-            .remove(&self.contract.constructor.current)
-        {
+        let constructor = self.contract.segment.constructor();
+        if let Some(arguments) = constructor.arguments.remove(&constructor.current) {
             for argument in arguments {
                 let values: Vec<Value<'context>> = self.at_node(&argument.function, |scope| {
                     scope
@@ -240,7 +238,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                         .collect()
                 });
                 self.contract
-                    .constructor
+                    .segment
+                    .constructor()
                     .forwarded
                     .push((argument.function.node_id(), values));
             }
@@ -250,7 +249,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             return;
         };
 
-        if let Some(arguments) = self.contract.constructor.arguments.remove(&None) {
+        if let Some(arguments) = self.contract.segment.constructor().arguments.remove(&None) {
             for argument in arguments {
                 let values: Vec<Value<'context>> = self.at_node(&argument.function, |scope| {
                     scope
@@ -260,16 +259,17 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                         .collect()
                 });
                 self.contract
-                    .constructor
+                    .segment
+                    .constructor()
                     .forwarded
                     .push((argument.function.node_id(), values));
             }
         }
 
-        let mut operands = self.contract.constructor.take_arguments(callee.node_id());
+        let constructor = self.contract.segment.constructor();
+        let mut operands = constructor.take_arguments(callee.node_id());
         operands.extend(
-            self.contract
-                .constructor
+            constructor
                 .forwarded
                 .iter()
                 .flat_map(|(_, values)| values.iter().copied()),

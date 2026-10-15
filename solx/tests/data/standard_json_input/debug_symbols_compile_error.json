@@ -1,0 +1,17 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "Main.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ninterface I {\n    uint256 public x;\n}\n"
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "*": {
+        "": [
+          "debugSymbols"
+        ]
+      }
+    }
+  }
+}

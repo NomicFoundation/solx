@@ -5,7 +5,12 @@
 crate = "ruint"
 version = "1.20.0"
 
-# RUSTSEC-2026-0285: rustls 0.23.45 is the fix, published 2026-09-14.
+# RUSTSEC-2026-0346, -0347, -0348, -0349: rustls 0.23.46 is the fix, published 2026-10-14.
 [[allow.exact]]
 crate = "rustls"
-version = "0.23.45"
+version = "0.23.46"
+
+# RUSTSEC-2026-0344: ruzstd 0.9.1 is the fix, published 2026-10-11.
+[[allow.exact]]
+crate = "ruzstd"
+version = "0.9.1"

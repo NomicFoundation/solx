@@ -138,7 +138,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 scope,
                 scope.contract.body,
             );
-            scope.function(entry, false, &signature, |scope| {
+            scope.function(entry, &signature, |scope| {
                 let values = match mutability {
                     StateVariableMutability::Constant => {
                         let initializer = state_variable

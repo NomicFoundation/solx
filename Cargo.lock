@@ -805,7 +805,7 @@ dependencies = [
  "clang-sys",
  "itertools 0.13.0",
  "log",
- "prettyplease",
+ "prettyplease 0.2.37",
  "proc-macro2",
  "quote",
  "regex",
@@ -824,13 +824,13 @@ dependencies = [
  "cexpr",
  "clang-sys",
  "log",
- "prettyplease",
+ "prettyplease 0.3.0",
  "proc-macro2",
  "quote",
  "regex",
  "rustc-hash",
  "shlex 2.0.1",
- "syn 2.0.117",
+ "syn 3.0.2",
 ]
 
 [[package]]
@@ -1050,9 +1050,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.5.1"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f360145194ee8e21db5ee7f3fcd4fe52210864c75c985dae33218202c8bbe040"
+checksum = "f74872d07caf508b30a21f6836e7d7016a2eaf7d9ff4f48deaa58cd8a0407630"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -1214,7 +1214,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1729,7 +1729,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2635,9 +2635,9 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libc"
-version = "0.2.189"
+version = "0.2.190"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
+checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
 
 [[package]]
 name = "libloading"
@@ -3032,7 +3032,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3318,6 +3318,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "prettyplease"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bfe0f4c752e450fc2faf62654f1c134747922825d5b04ca717b8874f41a40c0"
+dependencies = [
+ "proc-macro2",
+ "syn 3.0.2",
+]
+
+[[package]]
 name = "primeorder"
 version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3443,7 +3453,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4056,14 +4066,14 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
 name = "rustls"
-version = "0.23.45"
+version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
+checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "aws-lc-rs",
  "once_cell",
@@ -4113,7 +4123,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4142,9 +4152,9 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
 name = "ruzstd"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a252f5e20f038fe7b4ea53e073e65398d652c864cc162fc77c56c2f13717b888"
+checksum = "69e4ce4a039f42bf25920b95667e4d789e98749ab11bbb8d2c2936f788421bb5"
 dependencies = [
  "twox-hash",
 ]
@@ -4629,7 +4639,7 @@ dependencies = [
 [[package]]
 name = "slang_solidity_v2"
 version = "1.3.9"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=d2fe00e8436101d72ff3daf268bab94bec6638f4#d2fe00e8436101d72ff3daf268bab94bec6638f4"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=db1d7691bd88e26471bbdc588a1388ff16ad5f3e#db1d7691bd88e26471bbdc588a1388ff16ad5f3e"
 dependencies = [
  "rayon",
  "slang_solidity_v2_ast",
@@ -4643,7 +4653,7 @@ dependencies = [
 [[package]]
 name = "slang_solidity_v2_ast"
 version = "1.3.9"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=d2fe00e8436101d72ff3daf268bab94bec6638f4#d2fe00e8436101d72ff3daf268bab94bec6638f4"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=db1d7691bd88e26471bbdc588a1388ff16ad5f3e#db1d7691bd88e26471bbdc588a1388ff16ad5f3e"
 dependencies = [
  "itertools 0.15.0",
  "num-bigint",
@@ -4660,7 +4670,7 @@ dependencies = [
 [[package]]
 name = "slang_solidity_v2_common"
 version = "1.3.9"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=d2fe00e8436101d72ff3daf268bab94bec6638f4#d2fe00e8436101d72ff3daf268bab94bec6638f4"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=db1d7691bd88e26471bbdc588a1388ff16ad5f3e#db1d7691bd88e26471bbdc588a1388ff16ad5f3e"
 dependencies = [
  "indexmap 2.14.2",
  "itertools 0.15.0",
@@ -4674,12 +4684,12 @@ dependencies = [
 [[package]]
 name = "slang_solidity_v2_cst"
 version = "1.3.9"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=d2fe00e8436101d72ff3daf268bab94bec6638f4#d2fe00e8436101d72ff3daf268bab94bec6638f4"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=db1d7691bd88e26471bbdc588a1388ff16ad5f3e#db1d7691bd88e26471bbdc588a1388ff16ad5f3e"
 
 [[package]]
 name = "slang_solidity_v2_ir"
 version = "1.3.9"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=d2fe00e8436101d72ff3daf268bab94bec6638f4#d2fe00e8436101d72ff3daf268bab94bec6638f4"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=db1d7691bd88e26471bbdc588a1388ff16ad5f3e#db1d7691bd88e26471bbdc588a1388ff16ad5f3e"
 dependencies = [
  "semver 1.0.28",
  "slang_solidity_v2_common",
@@ -4689,7 +4699,7 @@ dependencies = [
 [[package]]
 name = "slang_solidity_v2_parser"
 version = "1.3.9"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=d2fe00e8436101d72ff3daf268bab94bec6638f4#d2fe00e8436101d72ff3daf268bab94bec6638f4"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=db1d7691bd88e26471bbdc588a1388ff16ad5f3e#db1d7691bd88e26471bbdc588a1388ff16ad5f3e"
 dependencies = [
  "lalrpop",
  "lalrpop-util",
@@ -4702,7 +4712,7 @@ dependencies = [
 [[package]]
 name = "slang_solidity_v2_semantic"
 version = "1.3.9"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=d2fe00e8436101d72ff3daf268bab94bec6638f4#d2fe00e8436101d72ff3daf268bab94bec6638f4"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=db1d7691bd88e26471bbdc588a1388ff16ad5f3e#db1d7691bd88e26471bbdc588a1388ff16ad5f3e"
 dependencies = [
  "num-bigint",
  "num-integer",
@@ -4811,7 +4821,6 @@ dependencies = [
  "clap",
  "hex",
  "inkwell",
- "melior",
  "normpath",
  "num",
  "path-slash",
@@ -4873,9 +4882,11 @@ name = "solx-slang"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "inkwell",
  "melior",
  "num",
  "num-traits",
+ "rayon",
  "ruint",
  "semver 1.0.28",
  "serde_json",
@@ -4912,6 +4923,7 @@ dependencies = [
  "semver 1.0.28",
  "serde",
  "serde_json",
+ "slang_solidity_v2",
  "solx-mlir",
  "solx-utils",
 ]
@@ -5000,7 +5012,6 @@ dependencies = [
  "cfg-if",
  "libc",
  "psm",
- "windows-sys 0.52.0",
  "windows-sys 0.59.0",
 ]
 
@@ -5132,10 +5143,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5806,7 +5817,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

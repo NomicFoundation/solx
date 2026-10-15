@@ -1,6 +1,6 @@
 // RUN: slang --emit-mlir=sol %s | FileCheck %s
 
-// CHECK: sol.immutable @{{.*x.*}} : ui256
+// CHECK: sol.immutable @{{.*x.*}} index 0 : ui256
 
 // CHECK: sol.func @{{.*}}() attributes {{.*}}kind = #{{.*}}Constructor
 // CHECK:   %[[XP:.*]] = sol.addr_of @{{.*x.*}} : !sol.ptr<ui256, Immutable>

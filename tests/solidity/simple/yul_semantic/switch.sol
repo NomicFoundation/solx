@@ -293,6 +293,50 @@
 //!             }
 //!         ]
 //!     }
+//! }, {
+//!     "name": "wide_case_zero",
+//!     "inputs": [
+//!         {
+//!             "method": "wide_case",
+//!             "calldata": [ "0" ]
+//!         }
+//!     ],
+//!     "expected": [
+//!         "0xdeadbeef14"
+//!     ]
+//! }, {
+//!     "name": "wide_case_two_pow_63",
+//!     "inputs": [
+//!         {
+//!             "method": "wide_case",
+//!             "calldata": [ "0x8000000000000000" ]
+//!         }
+//!     ],
+//!     "expected": [
+//!         "0xdeadbeef15"
+//!     ]
+//! }, {
+//!     "name": "wide_case_two_pow_255",
+//!     "inputs": [
+//!         {
+//!             "method": "wide_case",
+//!             "calldata": [ "0x8000000000000000000000000000000000000000000000000000000000000000" ]
+//!         }
+//!     ],
+//!     "expected": [
+//!         "0xdeadbeef16"
+//!     ]
+//! }, {
+//!     "name": "wide_case_default",
+//!     "inputs": [
+//!         {
+//!             "method": "wide_case",
+//!             "calldata": [ "1" ]
+//!         }
+//!     ],
+//!     "expected": [
+//!         "0xdeadbeef17"
+//!     ]
 //! } ] }
 
 // SPDX-License-Identifier: MIT
@@ -676,6 +720,24 @@ contract Test {
                         }
                 }
             return(0, 32)
+        }
+    }
+
+    function wide_case(uint a) external pure returns (uint r) {
+        assembly {
+            switch a
+                case 0 {
+                    r := 0xdeadbeef14
+                }
+                case 0x8000000000000000 {
+                    r := 0xdeadbeef15
+                }
+                case 0x8000000000000000000000000000000000000000000000000000000000000000 {
+                    r := 0xdeadbeef16
+                }
+                default {
+                    r := 0xdeadbeef17
+                }
         }
     }
 }

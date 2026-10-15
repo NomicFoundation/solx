@@ -2,15 +2,21 @@
 //! The deployable object a module emits: a contract or a library.
 //!
 
+use std::collections::HashMap;
+
 use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::LibraryDefinition;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableDefinition;
+use slang_solidity_v2::compilation::FileId;
 
 use solx_mlir::ContractKind;
+
+use crate::contract::storage_slot::StorageSlot;
 
 /// The deployable object a module emits, each variant carrying the definition its kind
 /// dispatches from.
@@ -39,14 +45,18 @@ impl Object {
         }
     }
 
+    /// The file that declares the object.
+    pub fn file_id(&self) -> &FileId {
+        match self {
+            Self::Contract(node) => node.get_file_id(),
+            Self::Library(node) => node.get_file_id(),
+        }
+    }
+
     /// The object's identifier, qualified by its file: linking keys objects by it, and two files
     /// may declare the same name.
     pub fn identifier(&self) -> String {
-        let file_id = match self {
-            Self::Contract(node) => node.get_file_id(),
-            Self::Library(node) => node.get_file_id(),
-        };
-        solx_utils::ContractName::full_path(file_id.as_str(), self.name().name())
+        solx_utils::ContractName::full_path(self.file_id().as_str(), self.name().name())
     }
 
     /// The objects the deploy code may embed, its runtime object leading.
@@ -119,13 +129,24 @@ impl Object {
         }
     }
 
-    /// A contract's functions over its hierarchy after resolving overrides and getter shadowing;
-    /// a library's own functions.
-    pub fn functions(&self) -> Vec<FunctionDefinition> {
+    /// The functions the runtime code dispatches to, `receive` and `fallback` among them: a
+    /// contract's over its hierarchy after resolving overrides and getter shadowing, a library's
+    /// own.
+    pub fn externally_visible_functions(&self) -> impl Iterator<Item = FunctionDefinition> + use<> {
         match self {
             Self::Contract(node) => node.linearised_functions(),
             Self::Library(node) => node.functions(),
         }
+        .into_iter()
+        .filter(FunctionDefinition::is_externally_visible)
+    }
+
+    /// The source bytes of the externally visible functions, by which the objects are scheduled
+    /// for lowering: the runtime module defines what they reach, so their size tracks the work.
+    pub fn estimated_lowering_cost(&self) -> usize {
+        self.externally_visible_functions()
+            .map(|function| function.get_text_range().len())
+            .sum()
     }
 
     /// The state variables the object declares over its hierarchy, in storage order.
@@ -133,6 +154,21 @@ impl Object {
         match self {
             Self::Contract(node) => node.linearised_state_variables(),
             Self::Library(node) => node.state_variables(),
+        }
+    }
+
+    /// The storage slot of each state variable the object stores, persistent and transient in
+    /// one map keyed by definition id, or `None` when Slang cannot lay out its storage.
+    pub fn storage_layout(&self) -> Option<HashMap<NodeId, StorageSlot>> {
+        match self {
+            Self::Contract(node) => Some(
+                node.compute_storage_items()?
+                    .into_iter()
+                    .chain(node.compute_transient_storage_items()?)
+                    .map(|item| (item.node_id(), StorageSlot::from(&item)))
+                    .collect(),
+            ),
+            Self::Library(_) => Some(HashMap::new()),
         }
     }
 }

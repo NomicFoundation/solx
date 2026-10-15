@@ -1,14 +1,15 @@
 //!
-//! The contract MLIR source code.
+//! The contract LLVM bitcode from the MLIR pipeline.
 //!
 
 ///
-/// The contract MLIR source code.
+/// The contract LLVM bitcode from the MLIR pipeline.
 ///
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct MLIR {
-    /// LLVM dialect text of this code segment.
-    pub source: String,
+    /// LLVM bitcode of this code segment.
+    #[serde(with = "serde_bytes")]
+    pub bitcode: Vec<u8>,
     /// Dependencies of this code segment.
     pub dependencies: solx_utils::Dependencies,
     /// Runtime code object that is only set in deploy code.

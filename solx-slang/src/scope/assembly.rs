@@ -102,7 +102,7 @@ impl<'function, 'contract, 'source_unit, 'context>
 
     /// Runs `emit` with the location cursor on `node`'s first byte, so the ops it emits carry it,
     /// and restores the enclosing cursor afterwards. The node's source range is read only when the
-    /// object requested debug info.
+    /// segment requested debug info.
     pub fn at_node<R>(&mut self, node: &impl NodeLocation, emit: impl FnOnce(&mut Self) -> R) -> R {
         let source_unit = &mut self.function.contract.source_unit;
         let location = source_unit.debug_locations.location(node);
