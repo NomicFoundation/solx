@@ -17,6 +17,9 @@
 // CHECK: sol.func @{{.*message_revert.*}}
 // CHECK:   sol.revert "oops"
 
+// CHECK: sol.func @{{.*message_revert_parenthesized.*}}
+// CHECK:   sol.revert "wrapped"
+
 // CHECK: sol.func @{{.*plain_revert.*}}
 // CHECK:   sol.revert{{$}}
 
@@ -37,6 +40,10 @@ contract C {
 
     function message_revert() public pure {
         revert("oops");
+    }
+
+    function message_revert_parenthesized() public pure {
+        revert(("wrapped"));
     }
 
     function empty_message_revert() public pure {

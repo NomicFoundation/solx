@@ -99,7 +99,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                 Value::code(address, self)
             }
             Some(BuiltIn::Length) => {
-                if let Expression::MemberAccessExpression(code) = &operand
+                if let Expression::MemberAccessExpression(code) = operand.unwrap_singleton_tuple()
                     && code.member().resolve_to_built_in() == Some(BuiltIn::AddressCode)
                 {
                     let address =
@@ -239,6 +239,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// The ABI selector `.selector` yields: an operand naming a function or a public state
     /// variable folds to its selector constant, while a pointer value carries its own.
     pub fn external_selector(&mut self, operand: &Expression) -> Value<'context> {
+        let operand = &operand.unwrap_singleton_tuple();
         if let Expression::MemberAccessExpression(access) = operand
             && let Some(callee) = access
                 .member()
@@ -248,20 +249,23 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             self.expression_effect(&access.operand());
             return Value::selector(callee.selector(), MlirType::selector(self.melior), self);
         }
+        if let Expression::Identifier(identifier) = operand
+            && let Some(Definition::Function(function)) = identifier.resolve_to_definition()
+            && let Some(selector) = function.compute_selector()
+        {
+            return Value::selector(selector, MlirType::selector(self.melior), self);
+        }
         self.expression(operand).external_function_selector(self)
     }
 
     /// The contract a `super` operand resolves after: the one the keyword is written in.
     pub fn super_contract(operand: &Expression) -> Option<ContractDefinition> {
-        match operand {
+        match operand.unwrap_singleton_tuple() {
             Expression::SuperKeyword(keyword) => Some(
                 keyword
                     .enclosing_contract()
                     .expect("slang resolves `super` in the contract it is written in"),
             ),
-            Expression::TupleExpression(inner) => {
-                Self::super_contract(&inner.items().iter().next()?.expression()?)
-            }
             _ => None,
         }
     }
@@ -291,7 +295,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 
     /// The definition `type(X)` names.
     fn meta_type_definition(operand: &Expression) -> Definition {
-        let Expression::TypeExpression(type_expression) = operand else {
+        let Expression::TypeExpression(type_expression) = operand.unwrap_singleton_tuple() else {
             unreachable!("the type built-ins decorate a `type(..)` expression");
         };
         let TypeName::IdentifierPath(path) = type_expression.type_name() else {

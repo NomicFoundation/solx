@@ -50,6 +50,10 @@
 // CHECK:   %[[POINTER:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.ext_func_ref<(ui256) -> ui256>, Stack>, !sol.ext_func_ref<(ui256) -> ui256>
 // CHECK:   sol.ext_func_selector %[[POINTER]] : !sol.ext_func_ref<(ui256) -> ui256> -> !sol.fixedbytes<4>
 
+// CHECK: sol.func @{{.*selector_of_bare.*}}
+// CHECK:   %[[BARE:.*]] = sol.constant 601347691 : ui32
+// CHECK:   sol.bytes_cast %[[BARE]] : ui32 to !sol.fixedbytes<4>
+
 // CHECK: sol.func @{{.*selector_of_decorated.*}}
 // CHECK:   %[[DECORATED:.*]] = sol.ext_func_constant %{{.*}} {selector = -1743665215 : i32} : !sol.address -> !sol.ext_func_ref<(ui256) -> ui256>
 // CHECK:   sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
@@ -58,6 +62,10 @@
 // CHECK: sol.func @{{.*selector_of_named.*}}
 // CHECK:   %[[SELECTOR:.*]] = sol.constant 2551302081 : ui32
 // CHECK:   sol.bytes_cast %[[SELECTOR]] : ui32 to !sol.fixedbytes<4>
+
+// CHECK: sol.func @{{.*selector_of_parenthesized.*}}
+// CHECK:   %[[PAREN:.*]] = sol.constant 3017696395 : ui32
+// CHECK:   sol.bytes_cast %[[PAREN]] : ui32 to !sol.fixedbytes<4>
 
 contract C {
     uint256[] stored;
@@ -84,6 +92,14 @@ contract C {
 
     function selector_of_decorated(uint256 g) public view returns (bytes4) {
         return this.target{gas: g}.selector;
+    }
+
+    function selector_of_bare() public pure returns (bytes4) {
+        return from_this.selector;
+    }
+
+    function selector_of_parenthesized() public pure returns (bytes4) {
+        return (I.f).selector;
     }
 
     function address_of(function(uint256) external returns (uint256) p) public pure returns (address) {

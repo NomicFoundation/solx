@@ -33,6 +33,9 @@
 // CHECK: sol.func @{{.*library_runtime_code.*}}() -> !sol.string<Memory>
 // CHECK:   sol.object_code "{{[^"]*}}Registry{{[0-9_]*}}_deployed" : !sol.string<Memory>
 
+// CHECK: sol.func @{{.*parenthesized_name.*}}() -> !sol.string<Memory>
+// CHECK:   sol.string_lit "Other" -> !sol.string<Memory>
+
 // CHECK: sol.func @{{.*interface_id_over_non_functions.*}}() -> !sol.fixedbytes<4>
 // CHECK:   sol.constant 1547088262 : ui32
 // CHECK:   sol.bytes_cast %{{.*}} : ui32 to !sol.fixedbytes<4>
@@ -87,6 +90,10 @@ contract Meta {
 
     function library_runtime_code() public pure returns (bytes memory) {
         return type(Registry).runtimeCode;
+    }
+
+    function parenthesized_name() public pure returns (string memory) {
+        return (type(Other)).name;
     }
 }
 

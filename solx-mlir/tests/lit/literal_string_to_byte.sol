@@ -8,10 +8,28 @@
 // CHECK:   %[[B:.*]] = sol.bytes_cast %[[C]] : ui8 to !sol.byte
 // CHECK:   sol.store %[[B]], %[[P]] : !sol.byte, !sol.ptr<!sol.byte, Storage>
 
+// CHECK: sol.func @{{.*parenthesized.*}}()
+// CHECK:   %[[PAREN:.*]] = sol.constant 120 : ui8
+// CHECK:   %[[PARENB:.*]] = sol.bytes_cast %[[PAREN]] : ui8 to !sol.byte
+// CHECK:   sol.store %[[PARENB]], %{{.*}} : !sol.byte, !sol.ptr<!sol.byte, Storage>
+
+// CHECK: sol.func @{{.*parenthesized_declaration.*}}()
+// CHECK:   %[[DECL:.*]] = sol.constant 120 : ui8
+// CHECK:   %[[DECLB:.*]] = sol.bytes_cast %[[DECL]] : ui8 to !sol.fixedbytes<1>
+// CHECK:   sol.store %[[DECLB]], %{{.*}} : !sol.fixedbytes<1>, !sol.ptr<!sol.fixedbytes<1>, Stack>
+
 contract C {
     bytes data;
 
     function f() public {
         data[0] = "x";
+    }
+
+    function parenthesized() public {
+        data[0] = ("x");
+    }
+
+    function parenthesized_declaration() public pure {
+        bytes1 b = ("x");
     }
 }

@@ -581,7 +581,11 @@ impl Call {
                 let condition_expression =
                     iter.next().expect("slang validates the arity of require");
                 let condition = scope.expression(condition_expression).is_nonzero(scope);
-                let (values, message, custom) = match iter.next() {
+                let (values, message, custom) = match iter
+                    .next()
+                    .map(Expression::unwrap_singleton_tuple)
+                    .as_ref()
+                {
                     Some(Expression::StringExpression(string_expression)) => (
                         Vec::new(),
                         Some(
@@ -632,7 +636,11 @@ impl Call {
                 None
             }
             BuiltIn::Revert => {
-                match arguments.first() {
+                match arguments
+                    .first()
+                    .map(Expression::unwrap_singleton_tuple)
+                    .as_ref()
+                {
                     Some(Expression::StringExpression(string_expression)) => {
                         let message = String::from_utf8(string_expression.value())
                             .expect("slang validates string literals are UTF-8");
@@ -924,7 +932,11 @@ impl Call {
             Some(BuiltIn::AbiEncodeWithSignature) => {
                 let mut iter = arguments.iter();
                 let selector_type = MlirType::selector(scope.melior);
-                let selector = match iter.next().expect("slang validates non-empty arguments") {
+                let selector = match &iter
+                    .next()
+                    .expect("slang validates non-empty arguments")
+                    .unwrap_singleton_tuple()
+                {
                     Expression::StringExpression(signature) => Value::left_aligned_bytes(
                         solx_utils::Keccak256Hash::from_slice(&signature.value()).to_vec(),
                         selector_type,
@@ -1052,7 +1064,7 @@ impl Call {
                     return vec![new_slot];
                 };
                 let place = Place::from(new_slot);
-                if let Expression::StringExpression(_) = value_argument
+                if let Expression::StringExpression(_) = value_argument.unwrap_singleton_tuple()
                     && element_type.is_bytes_like()
                 {
                     let value = scope.converted(value_argument, element_type);

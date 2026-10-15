@@ -44,6 +44,11 @@
 // CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
 // CHECK-NOT: sol.store
 
+// CHECK: sol.func {{.*}}pushLiteralParenthesized
+// CHECK:   %[[WORD_SLOT:.*]] = sol.push %{{.*}} : !sol.array<? x !sol.fixedbytes<32>, Storage> -> !sol.ptr<!sol.fixedbytes<32>, Storage>
+// CHECK:   %[[WORD:.*]] = sol.bytes_cast %{{.*}} : ui256 to !sol.fixedbytes<32>
+// CHECK:   sol.store %[[WORD]], %[[WORD_SLOT]] : !sol.fixedbytes<32>, !sol.ptr<!sol.fixedbytes<32>, Storage>
+
 // CHECK: sol.func {{.*}}pushNested
 // CHECK:   sol.push %{{.*}} : !sol.array<? x !sol.array<? x ui256, Storage>, Storage> -> !sol.array<? x ui256, Storage>
 // CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
@@ -80,6 +85,7 @@ contract C {
     bytes data;
     Y[] records;
     uint256[][] nested;
+    bytes32[] words;
 
     function pushValue(uint256 x) public {
         arr.push(x);
@@ -119,6 +125,10 @@ contract C {
 
     function pushNested() public {
         nested.push().push(2);
+    }
+
+    function pushLiteralParenthesized() public {
+        words.push(("abc"));
     }
 
     function pushByte(bytes1 element) public {
