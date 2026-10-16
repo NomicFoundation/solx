@@ -51,7 +51,7 @@ pub fn build(
                 "Ninja",
                 format!("-DCMAKE_INSTALL_PREFIX='{llvm_target_final_str}'",).as_str(),
                 format!("-DCMAKE_BUILD_TYPE='{build_type}'").as_str(),
-                "-DCMAKE_OSX_DEPLOYMENT_TARGET='11.0'",
+                "-DCMAKE_OSX_DEPLOYMENT_TARGET='12.0'",
             ])
             .args(crate::llvm::platforms::shared::shared_build_opts_projects())
             .args(crate::llvm::platforms::shared::shared_build_opts_targets())
