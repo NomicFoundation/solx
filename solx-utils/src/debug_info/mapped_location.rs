@@ -104,12 +104,12 @@ impl std::fmt::Display for MappedLocation {
                     writeln!(f, " {line} | {source_code_line}")?;
                     writeln!(
                         f,
-                        " {} | {} {}",
+                        " {} | {}{}",
                         " ".repeat(line_number_length),
-                        " ".repeat(column),
+                        " ".repeat(column - 1),
                         "^".repeat(std::cmp::min(
                             length,
-                            source_code_line.len().saturating_sub(column),
+                            (source_code_line.len() + 1).saturating_sub(column),
                         ))
                     )?;
                 }
@@ -140,6 +140,39 @@ mod tests {
                 (Some(2), Some(1), Some("c".to_owned())),
                 "{source:?}",
             );
+        }
+    }
+
+    #[test]
+    fn the_carets_sit_under_the_span() {
+        let source = "contract A { uint256[0] x; }\ncontract B is B {}\n";
+        let zero = source.find('0').expect("the source has a `0`") as isize;
+        let second_line = source.find("contract B").expect("the source has a `B`") as isize;
+        for (start, end, snippet) in [
+            (
+                zero,
+                zero + 1,
+                concat!(
+                    "  --> a.sol:1:22\n",
+                    "   |\n",
+                    " 1 | contract A { uint256[0] x; }\n",
+                    "   |                      ^\n",
+                ),
+            ),
+            (
+                second_line,
+                source.len() as isize - 1,
+                concat!(
+                    "  --> a.sol:2:1\n",
+                    "   |\n",
+                    " 2 | contract B is B {}\n",
+                    "   | ^^^^^^^^^^^^^^^^^^\n",
+                ),
+            ),
+        ] {
+            let location =
+                MappedLocation::from_solc_location("a.sol".to_owned(), start, end, Some(source));
+            assert_eq!(location.to_string(), snippet);
         }
     }
 }
