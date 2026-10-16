@@ -24,7 +24,7 @@ Launch a reader per lens. Each reader reads this repository's [`CLAUDE.md`](../.
 1. Removal: delete this clause and the code that only served it. A clause that breaks no build, fails no test and changes no output is the finding, and why none of the three can happen is the evidence.
 2. Trust: what does this clause check, derive or own that a lower layer already guarantees? The guarantee, read in that layer's code, is the evidence.
 3. Foreignness: where does the repository already do this another way? The sibling that does it is the evidence.
-4. Pinning: which claim of the change has no test that fails when the code is wrong? The mutation that leaves the test green is the evidence. A clause whose deletion changes the output while every test stays green is a missing test.
+4. Pinning: which claim of the change has no test that fails when the code is wrong? The mutation that leaves the test green is the evidence. A clause whose deletion changes the output while every test stays green is a missing test. A clause that lives only until a lower layer closes a known gap gets one test of what the user sees, not one per mutation.
 
 The invocation may add lenses. Each added lens is its own question and its own reader.
 
@@ -36,7 +36,7 @@ It reports each finding with:
 - the rule of `CLAUDE.md` it rests on, by section and number
 - what is wrong
 - the evidence
-- the fix
+- the fix, and what it does to every call site it touches
 
 A finding without evidence is not a finding. A finding without a rule is either a rule `CLAUDE.md` is missing or not a finding.
 
@@ -46,6 +46,7 @@ Every finding is re-read against the code before it goes further.
 
 - One whose evidence does not hold is dropped.
 - One whose fix a repository lint would undo does not hold either.
+- One whose fix makes the call sites it touches read worse than the code it replaces is dropped.
 - The same finding from several readers is reported once.
 - When two readers contradict on the same line, ask the user.
 
@@ -57,7 +58,7 @@ A decision is anything the review cannot settle from the code and `CLAUDE.md`:
 - a rule that reads two ways for this change
 - a change whose intent the diff does not show
 
-Each decision prompts the user, one at a time, every option naming the evidence for it. The user's answer is final.
+Each decision prompts the user, one at a time, every option naming the evidence for it and sketched at the call sites it changes. The user's answer is final.
 
 - Decisions are deduped like findings.
 - A design-related decision carries a proposal to add the rule to `CLAUDE.md`.
