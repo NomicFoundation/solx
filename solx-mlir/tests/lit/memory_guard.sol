@@ -1,14 +1,13 @@
-// RUN: slang --emit-mlir=llvm %s | FileCheck %s
+// RUN: slang --emit-mlir=yul %s | FileCheck %s
 
-// CHECK: module @{{.*:C"}}
-// CHECK: llvm.func @__entry()
-// CHECK: "llvm.intrcall"() <{id = {{[0-9]+}} : i32, name = "evm.memoryguard"}> : () -> i256
-// CHECK: llvm.module_flags [{{.*}}"evm-memory-guard", 128 : i64>, {{.*}}"evm-stack-region-size", 0 : i64>]
-// CHECK: module @{{.*:Reached_deployed"}}
-// CHECK-NOT: "evm-memory-guard"
-// CHECK: module @{{.*:Unreached"}}
-// CHECK: module @{{.*:Unreached_deployed"}}
-// CHECK: "evm-memory-guard"
+// CHECK: yul.object @{{.*:C"}}
+// CHECK: yul.func @__entry
+// CHECK: yul.memoryguard 128
+// CHECK: yul.object @{{.*:Reached_deployed"}}
+// CHECK-NOT: yul.memoryguard
+// CHECK: yul.object @{{.*:Unreached"}}
+// CHECK: yul.object @{{.*:Unreached_deployed"}}
+// CHECK: yul.memoryguard 128
 
 contract C {
   function f(uint256 a) public pure returns (uint256) {
