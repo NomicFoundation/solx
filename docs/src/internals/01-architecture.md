@@ -60,7 +60,7 @@ The compiler consists of three repositories:
 The frontend transforms Solidity source code into LLVM IR:
 
 1. The **Slang front-end** parses and binds the Solidity source.
-2. **slang-solx** lowers the bound AST to Sol-dialect MLIR, and the Sol→Yul→Standard passes translate it into LLVM IR.
+2. **slang-solx** lowers the bound AST to Sol-dialect MLIR, the Sol→Yul passes lower it to Yul-dialect MLIR, and the Yul translation emits LLVM IR.
 
 ### Middle-end
 

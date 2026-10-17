@@ -19,6 +19,7 @@
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Dialect/Yul/YulToLLVMIRTranslation.h"
 #include "mlir-c/BuiltinAttributes.h"
 #include "mlir-c/IR.h"
 #include "mlir/CAPI/IR.h"
@@ -268,6 +269,7 @@ MlirAttribute solxCreateDwarfVersionFlagAttr(MlirContext ctx,
 void solxRegisterLLVMTranslations(MlirContext ctx) {
     mlir::registerBuiltinDialectTranslation(*unwrap(ctx));
     mlir::registerLLVMDialectTranslation(*unwrap(ctx));
+    mlir::registerYulDialectTranslation(*unwrap(ctx));
 }
 
 } /* extern "C" */
