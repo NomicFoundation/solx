@@ -143,7 +143,7 @@ pub struct Arguments {
 
     /// Emit MLIR at each pipeline stage.
     /// Without a value (`--emit-mlir`), prints every dialect in pipeline
-    /// order. Pass `--emit-mlir=sol` or `--emit-mlir=llvm` to print one
+    /// order. Pass `--emit-mlir=sol` or `--emit-mlir=yul` to print one
     /// dialect. Can be used with --output-dir to write .mlir files.
     #[arg(
         long = "emit-mlir",
