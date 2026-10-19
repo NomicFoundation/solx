@@ -224,7 +224,7 @@ fn emit_mlir() -> anyhow::Result<()> {
 
     assert!(
         entries.len() >= 4,
-        "Expected at least 4 .mlir files (sol deploy + sol runtime + llvm deploy + llvm runtime)"
+        "Expected at least 4 .mlir files (sol deploy + sol runtime + yul deploy + yul runtime)"
     );
 
     let filenames: Vec<_> = entries
@@ -246,14 +246,14 @@ fn emit_mlir() -> anyhow::Result<()> {
     assert!(
         filenames
             .iter()
-            .any(|name| name.contains(".llvm.deploy.mlir")),
-        "Expected a .llvm.deploy.mlir file, found: {filenames:?}"
+            .any(|name| name.contains(".yul.deploy.mlir")),
+        "Expected a .yul.deploy.mlir file, found: {filenames:?}"
     );
     assert!(
         filenames
             .iter()
-            .any(|name| name.contains(".llvm.runtime.mlir")),
-        "Expected a .llvm.runtime.mlir file, found: {filenames:?}"
+            .any(|name| name.contains(".yul.runtime.mlir")),
+        "Expected a .yul.runtime.mlir file, found: {filenames:?}"
     );
 
     Ok(())
@@ -298,14 +298,14 @@ fn emit_mlir_filter_sol() -> anyhow::Result<()> {
     assert!(
         !filenames
             .iter()
-            .any(|name| name.contains(".llvm.deploy.mlir")),
-        "Did not expect a .llvm.deploy.mlir file, found: {filenames:?}"
+            .any(|name| name.contains(".yul.deploy.mlir")),
+        "Did not expect a .yul.deploy.mlir file, found: {filenames:?}"
     );
     assert!(
         !filenames
             .iter()
-            .any(|name| name.contains(".llvm.runtime.mlir")),
-        "Did not expect a .llvm.runtime.mlir file, found: {filenames:?}"
+            .any(|name| name.contains(".yul.runtime.mlir")),
+        "Did not expect a .yul.runtime.mlir file, found: {filenames:?}"
     );
 
     Ok(())
