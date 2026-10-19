@@ -14,3 +14,8 @@ version = "0.23.46"
 [[allow.exact]]
 crate = "ruzstd"
 version = "0.9.1"
+
+# RUSTSEC-2026-0367, -0368, -0369: rust_xlsxwriter 0.100.0 adopts zip 9, published 2026-10-17.
+[[allow.exact]]
+crate = "rust_xlsxwriter"
+version = "0.100.0"
