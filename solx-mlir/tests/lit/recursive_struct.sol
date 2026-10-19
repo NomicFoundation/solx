@@ -13,8 +13,8 @@
 // CHECK:   sol.state_var @{{.*}}slots{{.*}} slot 15 offset 0 : !sol.struct<"Slots_[[SLOTS:[0-9]+]]", Storage, (!sol.mapping<ui256, !sol.array<2 x !sol.struct<"Slots_[[SLOTS]]", Storage>, Storage>>)>
 
 // CHECK:   sol.func @{{.*}}build{{.*}}(%arg0: ui256) -> ui256
-// CHECK:     sol.malloc zero_init : !sol.struct<"Node_[[NODE]]", Memory, {{.*}}>
-// CHECK:     sol.malloc %{{.*}} zero_init : ui256 !sol.array<? x !sol.struct<"Node_[[NODE]]", Memory, {{.*}}>, Memory>
+// CHECK:     sol.malloc zero_init : () -> !sol.struct<"Node_[[NODE]]", Memory, {{.*}}>
+// CHECK:     sol.malloc %{{.*}} zero_init : (ui256) -> !sol.array<? x !sol.struct<"Node_[[NODE]]", Memory, {{.*}}>, Memory>
 // CHECK:     sol.copy %{{.*}}, %{{.*}} : !sol.struct<"Node_[[NODE]]", Memory, {{.*}}>, !sol.struct<"Node_[[NODE]]", Storage, {{.*}}>
 // CHECK:     sol.push %{{.*}} : !sol.array<? x !sol.struct<"Node_[[NODE]]", Storage, {{.*}}>, Storage> -> !sol.struct<"Node_[[NODE]]", Storage, {{.*}}>
 // CHECK:     sol.pop %{{.*}} : !sol.array<? x !sol.struct<"Node_[[NODE]]", Storage, {{.*}}>, Storage>

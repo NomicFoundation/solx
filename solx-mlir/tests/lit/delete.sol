@@ -14,15 +14,15 @@
 // CHECK:   sol.store %{{.*}}, %[[ENTRY]] : ui256, !sol.ptr<ui256, Storage>
 
 // CHECK: sol.func @{{.*delete_memory_array.*}}
-// CHECK:   sol.malloc zero_init : !sol.array<? x ui256, Memory>
+// CHECK:   sol.malloc zero_init : () -> !sol.array<? x ui256, Memory>
 // CHECK:   sol.store %{{.*}}, %{{.*}} : !sol.array<? x ui256, Memory>, !sol.ptr<!sol.array<? x ui256, Memory>, Stack>
 
 // CHECK: sol.func @{{.*delete_memory_string.*}}
-// CHECK:   sol.malloc : !sol.string<Memory>
+// CHECK:   sol.malloc : () -> !sol.string<Memory>
 // CHECK:   sol.store %{{.*}}, %{{.*}} : !sol.string<Memory>, !sol.ptr<!sol.string<Memory>, Stack>
 
 // CHECK: sol.func @{{.*delete_memory_struct.*}}
-// CHECK:   sol.malloc zero_init : !sol.struct<(ui256, ui256), Memory>
+// CHECK:   sol.malloc zero_init : () -> !sol.struct<(ui256, ui256), Memory>
 // CHECK:   sol.store %{{.*}}, %{{.*}} : !sol.struct<(ui256, ui256), Memory>, !sol.ptr<!sol.struct<(ui256, ui256), Memory>, Stack>
 
 // CHECK: sol.func @{{.*delete_scalar.*}}

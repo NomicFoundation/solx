@@ -1,7 +1,7 @@
 // RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func {{.*}}build{{.*}}-> !sol.struct<(ui256, ui256), Memory>
-// CHECK:   sol.malloc :{{ +}}!sol.struct<(ui256, ui256), Memory>
+// CHECK:   sol.malloc : () -> !sol.struct<(ui256, ui256), Memory>
 // CHECK:   sol.constant 0 : ui64
 // CHECK:   sol.gep %{{.*}}, %{{.*}} : !sol.struct<(ui256, ui256), Memory>, ui64, !sol.ptr<ui256, Memory>
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Memory>
@@ -10,7 +10,7 @@
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Memory>
 
 // CHECK: sol.func {{.*}}build_named{{.*}}-> !sol.struct<(ui256, ui256), Memory>
-// CHECK:   %[[STRUCT:.*]] = sol.malloc :{{ +}}!sol.struct<(ui256, ui256), Memory>
+// CHECK:   %[[STRUCT:.*]] = sol.malloc : () -> !sol.struct<(ui256, ui256), Memory>
 // CHECK:   %[[FIRST:.*]] = sol.constant 0 : ui64
 // CHECK:   %[[A:.*]] = sol.gep %[[STRUCT]], %[[FIRST]] : !sol.struct<(ui256, ui256), Memory>, ui64, !sol.ptr<ui256, Memory>
 // CHECK:   %[[ONE:.*]] = sol.constant 1 : ui8

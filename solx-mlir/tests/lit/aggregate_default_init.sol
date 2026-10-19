@@ -1,25 +1,25 @@
 // RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*local_array.*}}
-// CHECK:   sol.malloc zero_init : !sol.array<? x ui256, Memory>
+// CHECK:   sol.malloc zero_init : () -> !sol.array<? x ui256, Memory>
 
 // CHECK: sol.func @{{.*local_bytes.*}}
-// CHECK:   sol.malloc : !sol.string<Memory>
+// CHECK:   sol.malloc : () -> !sol.string<Memory>
 
 // CHECK: sol.func @{{.*local_fixed_array.*}}
-// CHECK:   sol.malloc zero_init : !sol.array<3 x ui256, Memory>
+// CHECK:   sol.malloc zero_init : () -> !sol.array<3 x ui256, Memory>
 
 // CHECK: sol.func @{{.*local_string.*}}
-// CHECK:   sol.malloc : !sol.string<Memory>
+// CHECK:   sol.malloc : () -> !sol.string<Memory>
 
 // CHECK: sol.func @{{.*local_struct.*}}
-// CHECK:   sol.malloc zero_init : !sol.struct<(ui256, ui256), Memory>
+// CHECK:   sol.malloc zero_init : () -> !sol.struct<(ui256, ui256), Memory>
 
 // CHECK: sol.func @{{.*local_struct_with_array.*}}
-// CHECK:   sol.malloc zero_init : !sol.struct<(ui256, !sol.array<? x ui256, Memory>), Memory>
+// CHECK:   sol.malloc zero_init : () -> !sol.struct<(ui256, !sol.array<? x ui256, Memory>), Memory>
 
 // CHECK: sol.func @{{.*named_array.*}}
-// CHECK:   sol.malloc zero_init : !sol.array<? x ui256, Memory>
+// CHECK:   sol.malloc zero_init : () -> !sol.array<? x ui256, Memory>
 
 // CHECK: sol.func @{{.*named_calldata.*}}
 // CHECK:   sol.default_calldata : !sol.array<? x ui256, CallData>
@@ -46,7 +46,7 @@
 
 // CHECK: sol.func @{{.*unnamed_array.*}}
 // CHECK:   sol.alloca : !sol.ptr<!sol.array<? x ui256, Memory>, Stack>
-// CHECK:   sol.malloc zero_init : !sol.array<? x ui256, Memory>
+// CHECK:   sol.malloc zero_init : () -> !sol.array<? x ui256, Memory>
 // CHECK:   sol.return %{{.*}} : !sol.array<? x ui256, Memory>
 
 contract C {

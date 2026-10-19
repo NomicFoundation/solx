@@ -1,7 +1,7 @@
 // RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*discarded_allocation.*}}
-// CHECK:   sol.malloc %{{.*}} zero_init : ui256 !sol.array<? x ui256, Memory>
+// CHECK:   sol.malloc %{{.*}} zero_init : (ui256) -> !sol.array<? x ui256, Memory>
 
 // CHECK: sol.func @{{.*discarded_creation.*}}
 // CHECK:   sol.new "{{[^"]*}}Child{{[^"]*}}"

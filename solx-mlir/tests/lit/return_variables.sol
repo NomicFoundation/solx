@@ -24,7 +24,7 @@
 
 // CHECK: sol.func @{{.*unnamed_memory.*}}
 // CHECK:   %[[RETURN:.*]] = sol.alloca : !sol.ptr<!sol.array<2 x ui256, Memory>, Stack>
-// CHECK:   %[[RETURN_ZERO:.*]] = sol.malloc zero_init :  !sol.array<2 x ui256, Memory>
+// CHECK:   %[[RETURN_ZERO:.*]] = sol.malloc zero_init : () -> !sol.array<2 x ui256, Memory>
 // CHECK:   sol.store %[[RETURN_ZERO]], %[[RETURN]]
 // CHECK:   %[[X:.*]] = sol.alloca : !sol.ptr<!sol.array<2 x ui256, Memory>, Stack>
 // CHECK:   %[[X_VALUE:.*]] = sol.load %[[X]]

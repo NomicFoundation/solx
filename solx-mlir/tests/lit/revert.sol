@@ -1,12 +1,12 @@
 // RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*custom_error.*}}
-// CHECK:   sol.revert "TooLow(uint256,uint256)" %{{.*}}, %{{.*}} : ui256, ui256 {call}
+// CHECK:   sol.revert "TooLow(uint256,uint256)"(%{{.*}}, %{{.*}} : ui256, ui256) {call}
 
 // CHECK: sol.func @{{.*custom_error_named.*}}
 // CHECK:   %[[X:.*]] = sol.load
 // CHECK:   sol.constant 100
-// CHECK:   sol.revert "TooLow(uint256,uint256)" %[[X]], %{{.*}} : ui256, ui256 {call}
+// CHECK:   sol.revert "TooLow(uint256,uint256)"(%[[X]], %{{.*}} : ui256, ui256) {call}
 
 // CHECK: sol.func @{{.*empty_message_revert.*}}
 // CHECK:   sol.revert ""
@@ -25,7 +25,7 @@
 
 // CHECK: sol.func @{{.*runtime_message_revert.*}}
 // CHECK:   %[[MESSAGE:.*]] = sol.data_loc_cast %{{.*}} : !sol.string<CallData>, !sol.string<Memory>
-// CHECK:   sol.revert "Error(string)" %[[MESSAGE]] : !sol.string<Memory> {call}
+// CHECK:   sol.revert "Error(string)"(%[[MESSAGE]] : !sol.string<Memory>) {call}
 
 contract C {
     error TooLow(uint256 supplied, uint256 minimum);
