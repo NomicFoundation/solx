@@ -1,19 +1,10 @@
 # Allowlist for cargo-cooldown-check.
 # Add `[[allow.exact]]` entries to skip cooldown for a freshly published crate version.
 
-[[allow.exact]]
-crate = "ruint"
-version = "1.20.0"
-
 # RUSTSEC-2026-0346, -0347, -0348, -0349: rustls 0.23.46 is the fix, published 2026-10-14.
 [[allow.exact]]
 crate = "rustls"
 version = "0.23.46"
-
-# RUSTSEC-2026-0344: ruzstd 0.9.1 is the fix, published 2026-10-11.
-[[allow.exact]]
-crate = "ruzstd"
-version = "0.9.1"
 
 # RUSTSEC-2026-0367, -0368, -0369: rust_xlsxwriter 0.100.0 adopts zip 9, published 2026-10-17.
 [[allow.exact]]
