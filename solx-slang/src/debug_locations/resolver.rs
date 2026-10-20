@@ -2,6 +2,7 @@
 //! Resolving one segment's nodes to MLIR locations.
 //!
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::ops::Range;
 
@@ -10,16 +11,15 @@ use slang_solidity_v2::ast::NodeLocation;
 use slang_solidity_v2::compilation::FileId;
 
 use solx_mlir::DebugInfoFileName;
+use solx_standard_json::InputSource;
 use solx_utils::LineIndex;
-
-use crate::debug_locations::sources::Sources;
 
 /// Resolves one segment's nodes to MLIR locations through the compilation's sources.
 pub struct Resolver<'context> {
     /// The MLIR context the locations are built in.
     melior: &'context melior::Context,
     /// The compilation's sources.
-    sources: &'context Sources<'context>,
+    sources: &'context BTreeMap<String, InputSource>,
     /// Each source a node has been resolved in, named on first use.
     named_sources: HashMap<FileId, NamedSource<'context>>,
 }
@@ -34,7 +34,10 @@ struct NamedSource<'context> {
 
 impl<'context> Resolver<'context> {
     /// Resolves through `sources` in `melior`.
-    pub fn new(melior: &'context melior::Context, sources: &'context Sources<'context>) -> Self {
+    pub fn new(
+        melior: &'context melior::Context,
+        sources: &'context BTreeMap<String, InputSource>,
+    ) -> Self {
         Self {
             melior,
             sources,
@@ -72,7 +75,11 @@ impl<'context> Resolver<'context> {
             return named.location(offset);
         }
         let named = NamedSource {
-            line_index: self.sources.line_index(file_id),
+            line_index: self
+                .sources
+                .get(file_id.as_str())
+                .and_then(InputSource::line_index)
+                .expect("every node's file is a source of the compilation"),
             name: DebugInfoFileName::new(self.melior, file_id.as_str()),
         };
         let location = named.location(offset);

@@ -70,13 +70,14 @@ impl Error {
         formatted_message.push('\n');
         if let Some(source_location) = source_location.as_ref() {
             let path = path.unwrap_or(source_location.file.as_str());
-            let source_code =
-                sources.and_then(|sources| sources.get(path).and_then(|source| source.content()));
+            let source = sources
+                .and_then(|sources| sources.get(path))
+                .and_then(|source| source.content().zip(source.line_index()));
             let mapped_location = solx_utils::DebugInfoMappedLocation::from_solc_location(
                 path.to_owned(),
                 source_location.start,
                 source_location.end,
-                source_code,
+                source,
             );
             formatted_message.push_str(mapped_location.to_string().as_str());
             formatted_message.push('\n');

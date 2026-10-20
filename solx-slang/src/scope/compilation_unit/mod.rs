@@ -20,7 +20,6 @@ use solx_utils::Profiler;
 use solx_utils::RevertStrings;
 
 use crate::abi::AbiDefinition;
-use crate::debug_locations::sources::Sources;
 use crate::error::Error;
 use crate::scope::source_unit::SourceUnitScope;
 
@@ -35,9 +34,8 @@ pub struct CompilationUnitScope<'input> {
     pub evm_version: EVMVersion,
     /// How revert reasons are kept in the code.
     pub revert_strings: RevertStrings,
-    /// The sources the debug locations resolve against.
-    pub sources: &'input Sources<'input>,
-    /// The input's sources, which the reported errors quote.
+    /// The input's sources, which the debug locations resolve against and the reported errors
+    /// quote.
     pub input_sources: &'input BTreeMap<String, solx_standard_json::InputSource>,
     /// Whether the output reports the pipeline benchmarks.
     pub report_benchmarks: bool,
@@ -189,7 +187,7 @@ impl CompilationUnitScope<'_> {
             selected(solx_standard_json::InputSelector::BytecodeDebugInfo),
             selected(solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo),
             selected(solx_standard_json::InputSelector::MLIR),
-            self.sources,
+            self.input_sources,
             self.report_benchmarks,
             profiler,
         )
