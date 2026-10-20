@@ -55,12 +55,37 @@ fn records_every_pipeline_stage() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("/InitVerify/").count(2))
         .stdout(predicate::str::contains("/OptimizeVerify/").count(2))
         .stdout(predicate::str::contains("/EmitBytecode/").count(2))
+        .stdout(predicate::str::contains("/AssembleLink/").count(2))
         .stdout(predicate::str::contains(":deploy/ParseBitcode/").count(1))
         .stdout(predicate::str::contains(":runtime/ParseBitcode/").count(1))
         .stdout(predicate::str::contains(":deploy/WorkerRoundtrip(0)/").count(1))
         .stdout(predicate::str::contains(":runtime/WorkerRoundtrip(0)/").count(1))
         .stdout(predicate::str::contains("us\n"))
         .stdout(predicate::str::contains("ms").not());
+
+    Ok(())
+}
+
+#[test]
+fn links_in_the_worker_what_embeds_no_other_contract() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/LinkedMixedDeps.sol"),
+        "--benchmarks",
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    result
+        .success()
+        .stdout(predicate::str::contains("InnerContract:deploy/AssembleLink/").count(1))
+        .stdout(predicate::str::contains("InnerContract:runtime/AssembleLink/").count(1))
+        .stdout(predicate::str::contains("UpperContract:deploy/AssembleLink/").count(1))
+        .stdout(predicate::str::contains("UpperContract:runtime/AssembleLink/").count(1))
+        .stdout(predicate::str::contains("UpperLibrary:deploy/AssembleLink/").not())
+        .stdout(predicate::str::contains("UpperLibrary:runtime/AssembleLink/").not());
 
     Ok(())
 }

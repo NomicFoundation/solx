@@ -18,7 +18,7 @@ use solx_utils::SyncLock;
 use solx_standard_json::CollectableError;
 
 use self::contract::Contract;
-use self::contract::object::Object as ContractObject;
+use self::contract::object::stage::Stage as ObjectStage;
 
 ///
 /// The Solidity project build.
@@ -62,84 +62,48 @@ impl Build {
         let ast_jsons = self.ast_jsons.take();
 
         loop {
-            let assembled_objects_data = {
-                let all_objects = self
-                    .contracts
-                    .values()
-                    .flat_map(|contract| contract.objects_ref())
-                    .collect::<Vec<&ContractObject>>();
-                let objects_by_id: BTreeMap<&str, &ContractObject> = all_objects
-                    .iter()
-                    .map(|object| (object.identifier.as_str(), *object))
-                    .collect();
+            let assembled_by_id: BTreeMap<String, Vec<u8>> = self
+                .contracts
+                .values()
+                .flat_map(|contract| contract.objects_ref())
+                .filter_map(|object| {
+                    object
+                        .assembled_bytecode
+                        .clone()
+                        .map(|bytecode| (object.identifier.clone(), bytecode))
+                })
+                .collect();
 
-                let assembleable_objects = all_objects
-                    .iter()
-                    .filter(|object| {
-                        !object.is_assembled
-                            && object.dependencies.into_iter().all(|dependency| {
-                                objects_by_id
-                                    .get(dependency.as_str())
-                                    .expect("Every bytecode dependency has a compiled object")
-                                    .is_assembled
-                            })
-                    })
-                    .copied()
-                    .collect::<Vec<_>>();
-                if assembleable_objects.is_empty() {
-                    break;
-                }
-
-                let mut assembled_objects_data = Vec::with_capacity(assembleable_objects.len());
-                for object in assembleable_objects.into_iter() {
-                    let assembled_object = match object.assemble(&objects_by_id) {
-                        Ok(assembled_object) => assembled_object,
-                        Err(error) => {
-                            self.messages.lock_sync().push(
-                                solx_standard_json::OutputError::new_error_contract(
-                                    Some(object.contract_name.path.as_str()),
-                                    &error,
-                                ),
-                            );
-                            return Self::new(BTreeMap::new(), ast_jsons, self.messages);
-                        }
-                    };
-                    assembled_objects_data.push((
+            let assembleable_objects = self
+                .contracts
+                .values()
+                .flat_map(|contract| contract.objects_ref())
+                .filter(|object| {
+                    object.stage == ObjectStage::Compiled
+                        && object
+                            .dependencies
+                            .into_iter()
+                            .all(|dependency| assembled_by_id.contains_key(dependency))
+                })
+                .map(|object| {
+                    (
                         object.contract_name.full_path.to_owned(),
                         object.code_segment,
-                        assembled_object,
-                    ));
-                }
-                assembled_objects_data
-            };
+                    )
+                })
+                .collect::<Vec<_>>();
+            if assembleable_objects.is_empty() {
+                break;
+            }
 
-            for (full_path, code_segment, assembled_object) in assembled_objects_data.into_iter() {
-                let contract = self
+            for (full_path, code_segment) in assembleable_objects.into_iter() {
+                let object = self
                     .contracts
                     .get_mut(full_path.as_str())
-                    .expect("An assembled object's contract exists in this build");
-                let object = contract
+                    .expect("An assembleable object's contract exists in this build")
                     .object_mut_by_code_segment(code_segment)
-                    .expect("An assembled object exists in its contract");
-                object.bytecode = Some(assembled_object.as_slice().to_owned());
-                for undefined_reference in assembled_object
-                    .get_undefined_references_evm()
-                    .into_iter()
-                    .filter(|reference| !linker_symbols.contains_key(reference))
-                {
-                    let symbol_offsets =
-                        assembled_object.get_symbol_offsets_evm(undefined_reference.as_str());
-                    object
-                        .unlinked_symbols
-                        .insert(undefined_reference, symbol_offsets);
-                }
-                object.is_assembled = true;
-            }
-        }
-
-        for contract in self.contracts.values_mut() {
-            for object in contract.objects_mut().into_iter() {
-                if let Err(error) = object.link(&linker_symbols) {
+                    .expect("An assembleable object exists in its contract");
+                if let Err(error) = object.assemble(&assembled_by_id, &linker_symbols) {
                     self.messages.lock_sync().push(
                         solx_standard_json::OutputError::new_error_contract(
                             Some(object.contract_name.path.as_str()),
@@ -148,6 +112,23 @@ impl Build {
                     );
                     return Self::new(BTreeMap::new(), ast_jsons, self.messages);
                 }
+            }
+        }
+
+        for contract in self.contracts.values_mut() {
+            for object in contract.objects_mut().into_iter() {
+                if object.stage != ObjectStage::Linked
+                    && let Err(error) = object.link(&linker_symbols)
+                {
+                    self.messages.lock_sync().push(
+                        solx_standard_json::OutputError::new_error_contract(
+                            Some(object.contract_name.path.as_str()),
+                            &error,
+                        ),
+                    );
+                    return Self::new(BTreeMap::new(), ast_jsons, self.messages);
+                }
+                object.assembled_bytecode = None;
             }
         }
 
