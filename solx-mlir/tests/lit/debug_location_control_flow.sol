@@ -33,7 +33,7 @@
 
 // CHECK: sol.func @{{.*fails.*}}(
 // CHECK:   sol.load %{{.*}} loc(#[[CODE:loc[0-9]*]])
-// CHECK:   sol.revert "Failed(uint256)" {{.*}} loc(#[[FAILED:loc[0-9]*]])
+// CHECK:   sol.revert "Failed(uint256)"(%{{.*}} : ui256) {call} loc(#[[FAILED:loc[0-9]*]])
 
 // CHECK: sol.func @{{.*loops.*}}(%arg0: ui256 loc("{{.*}}debug_location_control_flow.sol":166:5))
 // CHECK:   sol.store %arg0, %{{.*}} loc(#[[N:loc[0-9]*]])

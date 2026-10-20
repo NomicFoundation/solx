@@ -37,7 +37,7 @@ fn default() -> anyhow::Result<()> {
     );
     assert!(stdout.contains("sol.contract"));
     assert!(stdout.contains("llvm.func"));
-    assert!(!stdout.contains("loc("));
+    assert!(!stdout.contains(" loc(") && !stdout.contains("#loc"));
 
     Ok(())
 }
@@ -98,7 +98,7 @@ fn locations_with_runtime_debug_info() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("sol.contract"))
-        .stdout(predicate::str::contains("loc("));
+        .stdout(predicate::str::contains(" loc("));
 
     Ok(())
 }

@@ -6,9 +6,9 @@
 // CHECK: sol.func @{{.*chain.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #NonPayable}
 // CHECK:   sol.call @{{.*link.*}}(%{{.*}}) : (ui256) -> ui256
 // CHECK: sol.func @{{.*link.*}}(%{{.*}}: ui256) -> ui256 attributes {id = {{[0-9]+}} : i64, state_mutability = #NonPayable}
-// CHECK:   sol.revert "Overrun(uint256)" %{{.*}} : ui256 {call}
+// CHECK:   sol.revert "Overrun(uint256)"(%{{.*}} : ui256) {call}
 // CHECK:   sol.emit "Consumed(uint256)" indexed = [%{{.*}}] : ui256
-// CHECK:   sol.malloc : !sol.struct<(ui256, ui256), Memory>
+// CHECK:   sol.malloc : () -> !sol.struct<(ui256, ui256), Memory>
 // CHECK: } {kind = #Contract, runtime}
 
 library Lib {
