@@ -23,6 +23,13 @@ pub enum RevertStrings {
     VerboseDebug = 3,
 }
 
+impl RevertStrings {
+    /// Whether the compiler's own reverts carry a message.
+    pub fn emits_debug_strings(self) -> bool {
+        matches!(self, Self::Debug | Self::VerboseDebug)
+    }
+}
+
 impl FromStr for RevertStrings {
     type Err = anyhow::Error;
 

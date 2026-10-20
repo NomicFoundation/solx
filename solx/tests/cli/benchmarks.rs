@@ -21,18 +21,22 @@ fn default() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn records_every_pipeline_stage() -> anyhow::Result<()> {
+#[test_case(crate::common::TEST_SOLIDITY_CONTRACT, None, 1; "stub creation code is canned")]
+#[test_case(crate::common::TEST_SOLIDITY_CONTRACT, Some("--debug-info"), 1; "stub creation code with debug info is canned")]
+#[test_case(crate::common::TEST_SOLIDITY_CONTRACT, Some("--emit-mlir=sol"), 2; "mlir output lowers stub creation code")]
+#[test_case(crate::common::contract!("solidity/PayableConstructor.sol"), None, 1; "an empty payable constructor is canned")]
+#[test_case(crate::common::contract!("solidity/Recursion.sol"), None, 2; "a constructor with parameters is lowered")]
+fn records_every_pipeline_stage(
+    path: &str,
+    flag: Option<&str>,
+    lowered_modules: usize,
+) -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT,
-        "--benchmarks",
-        "--bin",
-        "--ast-json",
-    ];
+    let mut args = vec![path, "--benchmarks", "--bin", "--ast-json"];
+    args.extend(flag);
 
-    let result = crate::cli::execute_solx(args)?;
+    let result = crate::cli::execute_solx(args.as_slice())?;
 
     result
         .success()
@@ -41,14 +45,17 @@ fn records_every_pipeline_stage() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("Slang_ParseAndBind").count(1))
         .stdout(predicate::str::contains("Slang_SerializeAST:").count(1))
         .stdout(predicate::str::contains("Compiler_CreateMLIRContext").count(1))
-        .stdout(predicate::str::contains("Compiler_EmitSol:").count(2))
-        .stdout(predicate::str::is_match(r"Compiler_RunSolPasses:\S*\.sol:\w+: \d+us")?.count(2))
+        .stdout(predicate::str::contains("Compiler_EmitSol:").count(lowered_modules))
+        .stdout(
+            predicate::str::is_match(r"Compiler_RunSolPasses:\S*\.sol:\w+: \d+us")?
+                .count(lowered_modules),
+        )
         .stdout(predicate::str::is_match(
             r"Compiler_RunSolPasses:\S*\.sol:\w+/[^:]+: \d+us",
         )?)
-        .stdout(predicate::str::contains("/Rest: ").count(2))
-        .stdout(predicate::str::contains("/Total: ").count(2))
-        .stdout(predicate::str::contains("Compiler_MLIRToLLVMIR:").count(2))
+        .stdout(predicate::str::contains("/Rest: ").count(lowered_modules))
+        .stdout(predicate::str::contains("/Total: ").count(lowered_modules))
+        .stdout(predicate::str::contains("Compiler_MLIRToLLVMIR:").count(lowered_modules))
         .stdout(predicate::str::contains("Compiler_BuildProject").count(1))
         .stdout(predicate::str::contains("Compiler_Compile").count(1))
         .stdout(predicate::str::contains("Compiler_Link").count(1))
@@ -100,9 +107,10 @@ fn lists_objects_in_source_order(path: &str, first: &str, second: &str) -> anyho
         stdout
             .lines()
             .position(|line| {
-                line.starts_with("Compiler_EmitSol:") && line.contains(&format!(".sol:{name}: "))
+                line.starts_with("Compiler_EmitSol:")
+                    && line.contains(&format!(".sol:{name}_deployed: "))
             })
-            .expect("every object's deploy code is emitted")
+            .expect("every object's runtime code is emitted")
     };
     assert!(
         emission(first) < emission(second),

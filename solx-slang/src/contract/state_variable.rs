@@ -3,9 +3,7 @@
 //! constructor runs.
 //!
 
-use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::StateVariableDefinition;
-use slang_solidity_v2::ast::StateVariableMutability;
 
 use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
@@ -20,23 +18,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// take a `sol.copy`; value-typed places convert to the declared element type and `sol.store`.
     /// Each initializer's place and store carry its declaration's location.
     pub fn state_variable_initializers(&mut self) {
-        let initializers: Vec<(StateVariableDefinition, Expression)> = self
-            .contract
-            .object
-            .state_variables()
-            .into_iter()
-            .filter(|state_variable| {
-                matches!(
-                    state_variable.attributes().mutability(),
-                    StateVariableMutability::Mutable | StateVariableMutability::Immutable
-                )
-            })
-            .filter_map(|state_variable| {
-                let initializer = state_variable.value()?;
-                Some((state_variable, initializer))
-            })
-            .collect();
-        for (state_variable, initializer) in initializers {
+        for (state_variable, initializer) in self.contract.object.initialized_state_variables() {
             self.at_node(&state_variable, |scope| {
                 let (storage_ref, element_type) = scope.state_variable_place(&state_variable);
                 if storage_ref.r#type() == element_type {

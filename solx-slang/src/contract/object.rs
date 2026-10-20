@@ -7,11 +7,15 @@ use std::collections::HashMap;
 use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::Identifier;
 use slang_solidity_v2::ast::LibraryDefinition;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::NodeLocation;
 use slang_solidity_v2::ast::StateVariableDefinition;
+use slang_solidity_v2::ast::StateVariableMutability;
 use slang_solidity_v2::compilation::FileId;
 
 use solx_mlir::ContractKind;
@@ -51,6 +55,44 @@ impl Object {
             Self::Contract(node) => node.get_file_id(),
             Self::Library(node) => node.get_file_id(),
         }
+    }
+
+    /// The byte offset of the definition's first byte in its file.
+    pub fn offset(&self) -> usize {
+        match self {
+            Self::Contract(node) => node.calculate_text_range(),
+            Self::Library(node) => node.calculate_text_range(),
+        }
+        .expect("slang locates every definition")
+        .start
+    }
+
+    /// The contract's own constructor.
+    pub fn constructor(&self) -> Option<FunctionDefinition> {
+        match self {
+            Self::Contract(node) => node.constructor(),
+            Self::Library(_) => None,
+        }
+    }
+
+    /// The byte offset of the own constructor's first byte, or the definition's when synthesized.
+    pub fn constructor_offset(&self) -> usize {
+        self.constructor().map_or(self.offset(), |constructor| {
+            constructor
+                .calculate_text_range()
+                .expect("slang locates every constructor")
+                .start
+        })
+    }
+
+    /// Whether the own constructor accepts value; a synthesized one is non-payable.
+    pub fn has_payable_constructor(&self) -> bool {
+        self.constructor().is_some_and(|constructor| {
+            matches!(
+                constructor.attributes().mutability(),
+                FunctionMutability::Payable
+            )
+        })
     }
 
     /// The object's identifier, qualified by its file: linking keys objects by it, and two files
@@ -154,6 +196,46 @@ impl Object {
         match self {
             Self::Contract(node) => node.linearised_state_variables(),
             Self::Library(node) => node.state_variables(),
+        }
+    }
+
+    /// The state variables with an inline initializer, in storage order over the hierarchy.
+    pub fn initialized_state_variables(&self) -> Vec<(StateVariableDefinition, Expression)> {
+        self.state_variables()
+            .into_iter()
+            .filter(|state_variable| {
+                matches!(
+                    state_variable.attributes().mutability(),
+                    StateVariableMutability::Mutable | StateVariableMutability::Immutable
+                )
+            })
+            .filter_map(|state_variable| {
+                let initializer = state_variable.value()?;
+                Some((state_variable, initializer))
+            })
+            .collect()
+    }
+
+    /// Whether the constructor chain does nothing, so the deploy code is the stub.
+    pub fn has_stub_creation_code(&self) -> bool {
+        match self {
+            Self::Contract(_) => {
+                self.contracts().iter().all(|contract| {
+                    contract.constructor().is_none_or(|constructor| {
+                        constructor.parameters().is_empty()
+                            && constructor.attributes().modifier_invocations().is_empty()
+                            && constructor
+                                .body()
+                                .is_some_and(|body| body.statements().is_empty())
+                    })
+                }) && self.state_variables().iter().all(|state_variable| {
+                    !matches!(
+                        state_variable.attributes().mutability(),
+                        StateVariableMutability::Immutable
+                    )
+                }) && self.initialized_state_variables().is_empty()
+            }
+            Self::Library(_) => false,
         }
     }
 

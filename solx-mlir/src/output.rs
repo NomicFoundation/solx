@@ -1,5 +1,5 @@
 //!
-//! MLIR pipeline output produced by [`crate::Context::finalize_module`].
+//! The bitcode of a contract's code segments, and the MLIR text captured for output.
 //!
 
 ///
@@ -59,4 +59,61 @@ pub struct SegmentOutput {
     pub bitcode: Vec<u8>,
     /// Objects the code may embed.
     pub dependencies: solx_utils::Dependencies,
+}
+
+impl SegmentOutput {
+    /// The optimized deploy code of a contract whose constructor chain does nothing, guarding
+    /// against value unless `payable`. With `emit_debug_info`, its locations are the `(line,
+    /// column)` of the contract and of its constructor in `source_file`.
+    pub fn creation_stub(
+        dependencies: solx_utils::Dependencies,
+        payable: bool,
+        source_file: &str,
+        contract: (usize, usize),
+        constructor: (usize, usize),
+        emit_debug_info: bool,
+    ) -> Self {
+        let deploy_identifier = dependencies.identifier.as_str();
+        let runtime_identifier = dependencies
+            .runtime
+            .as_deref()
+            .expect("deploy code returns a runtime object");
+        let text = if payable {
+            include_str!("creation_stub_payable.ll")
+        } else {
+            include_str!("creation_stub.ll")
+        }
+        .replace("DEPLOY_OBJECT", deploy_identifier)
+        .replace("RUNTIME_OBJECT", runtime_identifier)
+        .replace("SOURCE_FILE", source_file)
+        .replace("CONTRACT_LINE", contract.0.to_string().as_str())
+        .replace("CONTRACT_COLUMN", contract.1.to_string().as_str())
+        .replace("CONSTRUCTOR_LINE", constructor.0.to_string().as_str())
+        .replace("CONSTRUCTOR_COLUMN", constructor.1.to_string().as_str());
+
+        let llvm = inkwell::context::Context::create();
+        let buffer = inkwell::memory_buffer::MemoryBuffer::create_from_memory_range_copy(
+            text.as_bytes(),
+            deploy_identifier,
+        );
+        let module = llvm
+            .create_module_from_ir(buffer)
+            .expect("the creation stub is a constant LLVM module");
+        if emit_debug_info {
+            module.add_basic_value_flag(
+                "Dwarf Version",
+                inkwell::module::FlagBehavior::Warning,
+                llvm.i32_type().const_int(5, false),
+            );
+        } else {
+            module.strip_debug_info();
+        }
+
+        Self {
+            sol_source: None,
+            source: None,
+            bitcode: module.write_bitcode_to_memory().as_slice().to_vec(),
+            dependencies,
+        }
+    }
 }

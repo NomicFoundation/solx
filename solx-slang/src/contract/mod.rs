@@ -66,22 +66,37 @@ impl<'context> SourceUnitScope<'context> {
         });
 
         let mut indirect_callees = BTreeMap::new();
-        let deploy = SourceUnitScope::object_segment(
-            melior,
-            object,
-            storage_layout,
-            Segment::Deploy {
-                indirect_callees: &mut indirect_callees,
-                constructor: ConstructorBuilder::new(object.contracts()),
-            },
-            evm_version,
-            revert_strings,
-            emit_deploy_debug_info,
-            capture_mlir,
-            sources,
-            pass_timing,
-            profiler,
-        )?;
+        let deploy = if object.has_stub_creation_code()
+            && !revert_strings.emits_debug_strings()
+            && !capture_mlir
+        {
+            let line_index = sources.line_index(object.file_id());
+            SegmentOutput::creation_stub(
+                object.deploy_dependencies(),
+                object.has_payable_constructor(),
+                object.file_id().as_str(),
+                line_index.line_and_column(object.offset()),
+                line_index.line_and_column(object.constructor_offset()),
+                emit_deploy_debug_info,
+            )
+        } else {
+            SourceUnitScope::object_segment(
+                melior,
+                object,
+                storage_layout,
+                Segment::Deploy {
+                    indirect_callees: &mut indirect_callees,
+                    constructor: ConstructorBuilder::new(object.contracts()),
+                },
+                evm_version,
+                revert_strings,
+                emit_deploy_debug_info,
+                capture_mlir,
+                sources,
+                pass_timing,
+                profiler,
+            )?
+        };
         let runtime = SourceUnitScope::object_segment(
             melior,
             object,

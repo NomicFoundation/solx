@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 contract Simple {
-    uint256 private field_1;
+    uint256 private field_1 = 1;
     uint256 private field_2;
     uint256 private field_3;
 
