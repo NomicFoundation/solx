@@ -43,6 +43,34 @@ fn default(evm_version: solx_utils::EVMVersion) -> anyhow::Result<()> {
 }
 
 #[test]
+fn clz_follows_the_version() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &["--asm", crate::common::contract!("solidity/Clz.sol")];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains("CLZ"));
+
+    Ok(())
+}
+
+#[test_case(crate::common::standard_json!("solidity_clz.json"))]
+#[test_case(crate::common::standard_json!("solidity_clz_with_evm_version.json"))]
+fn clz_follows_the_version_standard_json(path: &str) -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &["--standard-json", path];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("CLZ"))
+        .stdout(predicate::str::contains("\"severity\":\"error\"").not());
+
+    Ok(())
+}
+
+#[test]
 fn built_in_names_follow_the_version() -> anyhow::Result<()> {
     crate::common::setup()?;
 
