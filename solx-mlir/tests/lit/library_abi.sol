@@ -2,29 +2,29 @@
 
 // CHECK: sol.func @{{.*attached_calldata_receiver.*}}
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
-// CHECK:   sol.ext_call "{{.*look.*}}"(%{{.*}}) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c1335285351_ui256 {callee_type = (!sol.string<CallData>) -> ui256, delegate_call, library_call, static_call} : !sol.address, (!sol.string<CallData>) -> (i1, ui256)
+// CHECK:   sol.ext_call "{{.*look.*}}"(%{{.*}}) at %[[ADDR]] value %{{c0_ui256.*}} selector %c1335285351_ui256 {callee_type = (!sol.string<CallData>) -> ui256, delegate_call, library_call, static_call} : !sol.address, (!sol.string<CallData>) -> (i1, ui256)
 
 // CHECK: sol.func @{{.*attached_calldata_result.*}}
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
-// CHECK:   sol.ext_call "{{.*tail.*}}"(%{{.*}}) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c3126462307_ui256 {callee_type = (!sol.string<CallData>) -> !sol.string<CallData>, delegate_call, library_call, static_call} : !sol.address, (!sol.string<CallData>) -> (i1, !sol.string<Memory>)
+// CHECK:   sol.ext_call "{{.*tail.*}}"(%{{.*}}) at %[[ADDR]] value %{{c0_ui256.*}} selector %c3126462307_ui256 {callee_type = (!sol.string<CallData>) -> !sol.string<CallData>, delegate_call, library_call, static_call} : !sol.address, (!sol.string<CallData>) -> (i1, !sol.string<Memory>)
 
 // CHECK: sol.func @{{.*attached_storage_receiver.*}}
 // CHECK:   %[[SLOT:.*]] = sol.addr_of @{{.*stored.*}} : !sol.string<Storage>
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
-// CHECK:   sol.ext_call "{{.*keep.*}}"(%[[SLOT]]) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c4077198112_ui256 {callee_type = (!sol.string<Storage>) -> ui256, delegate_call, library_call, static_call} : !sol.address, (!sol.string<Storage>) -> (i1, ui256)
+// CHECK:   sol.ext_call "{{.*keep.*}}"(%[[SLOT]]) at %[[ADDR]] value %{{c0_ui256.*}} selector %c4077198112_ui256 {callee_type = (!sol.string<Storage>) -> ui256, delegate_call, library_call, static_call} : !sol.address, (!sol.string<Storage>) -> (i1, ui256)
 
 // CHECK: sol.func @{{.*qualified_calldata_argument.*}}
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
-// CHECK:   sol.ext_call "{{.*look.*}}"(%{{.*}}) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c1335285351_ui256 {callee_type = (!sol.string<Memory>) -> ui256, delegate_call, library_call, static_call} : !sol.address, (!sol.string<CallData>) -> (i1, ui256)
+// CHECK:   sol.ext_call "{{.*look.*}}"(%{{.*}}) at %[[ADDR]] value %{{c0_ui256.*}} selector %c1335285351_ui256 {callee_type = (!sol.string<Memory>) -> ui256, delegate_call, library_call, static_call} : !sol.address, (!sol.string<CallData>) -> (i1, ui256)
 
 // CHECK: sol.func @{{.*qualified_calldata_return.*}}
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
-// CHECK:   sol.ext_call "{{.*tail.*}}"(%{{.*}}) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c3126462307_ui256 {callee_type = (!sol.string<Memory>) -> !sol.string<Memory>, delegate_call, library_call, static_call} : !sol.address, (!sol.string<CallData>) -> (i1, !sol.string<Memory>)
+// CHECK:   sol.ext_call "{{.*tail.*}}"(%{{.*}}) at %[[ADDR]] value %{{c0_ui256.*}} selector %c3126462307_ui256 {callee_type = (!sol.string<Memory>) -> !sol.string<Memory>, delegate_call, library_call, static_call} : !sol.address, (!sol.string<CallData>) -> (i1, !sol.string<Memory>)
 
 // CHECK: sol.func @{{.*qualified_storage.*}}
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
 // CHECK:   %[[SLOT:.*]] = sol.addr_of @{{.*stored.*}} : !sol.string<Storage>
-// CHECK:   sol.ext_call "{{.*keep.*}}"(%[[SLOT]]) at %[[ADDR]] gas %{{.*}} value %{{c0_ui256.*}} selector %c4077198112_ui256 {callee_type = (!sol.string<Storage>) -> ui256, delegate_call, library_call, static_call} : !sol.address, (!sol.string<Storage>) -> (i1, ui256)
+// CHECK:   sol.ext_call "{{.*keep.*}}"(%[[SLOT]]) at %[[ADDR]] value %{{c0_ui256.*}} selector %c4077198112_ui256 {callee_type = (!sol.string<Storage>) -> ui256, delegate_call, library_call, static_call} : !sol.address, (!sol.string<Storage>) -> (i1, ui256)
 
 library Lib {
     function keep(bytes storage b) external view returns (uint256) {
