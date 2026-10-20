@@ -39,6 +39,8 @@ pub struct Context<'context> {
     pub melior: &'context melior::Context,
     /// The MLIR module being built.
     pub module: Module<'context>,
+    /// The EVM version the module is compiled for.
+    pub evm_version: solx_utils::EVMVersion,
     /// The debug-info compile unit every subprogram in this module points at. Absent without debug
     /// info, where no function gets a subprogram.
     pub debug_info_compile_unit: Option<DebugInfoCompileUnit<'context>>,
@@ -72,6 +74,8 @@ impl<'context> Context<'context> {
     const EVM_VERSION: &'static str = "sol.evm_version";
     /// The revert-string policy the `convert-sol-to-yul` pass reads off the module.
     const REVERT_STRINGS: &'static str = "sol.revert_strings";
+    /// The LLVM function attribute the EVM backend picks its subtarget from.
+    const TARGET_FEATURES: &'static str = "target-features";
 
     /// Creates a single-threaded MLIR context.
     ///
@@ -165,6 +169,7 @@ impl<'context> Context<'context> {
         Self {
             melior,
             module,
+            evm_version,
             debug_info_compile_unit,
             current_location: location,
             current_contract_type: None,
@@ -308,7 +313,7 @@ impl<'context> Context<'context> {
 
         let run_translation = profiler
             .start_pipeline_element(format!("Compiler_MLIRToLLVMIR:{code_identifier}").as_str());
-        let bitcode = Self::translate_to_bitcode(&module)?;
+        let bitcode = Self::translate_to_bitcode(&module, self.evm_version)?;
         run_translation.borrow_mut().finish();
 
         Ok(crate::output::SegmentOutput {
@@ -319,13 +324,17 @@ impl<'context> Context<'context> {
         })
     }
 
-    /// Translates an LLVM dialect module to LLVM IR and returns its bitcode, which codegen parses
-    /// into the LLVM context it compiles in.
+    /// Translates an LLVM dialect module to LLVM IR, sets the subtarget features of `evm_version`
+    /// on every function, and returns its bitcode, which codegen parses into the LLVM context it
+    /// compiles in.
     ///
     /// # Errors
     ///
     /// Returns an error if the module cannot be translated to LLVM IR.
-    fn translate_to_bitcode(module: &Module) -> anyhow::Result<Vec<u8>> {
+    fn translate_to_bitcode(
+        module: &Module,
+        evm_version: solx_utils::EVMVersion,
+    ) -> anyhow::Result<Vec<u8>> {
         let llvm = inkwell::context::Context::create();
         let raw_module = unsafe {
             mlir_sys::mlirTranslateModuleToLLVMIR(
@@ -337,6 +346,14 @@ impl<'context> Context<'context> {
             anyhow::bail!("mlirTranslateModuleToLLVMIR returned null");
         }
         let llvm_module = unsafe { inkwell::module::Module::new(raw_module as *mut _) };
+        if let Some(target_features) = evm_version.llvm_target_features() {
+            for function in llvm_module.get_functions() {
+                function.add_attribute(
+                    inkwell::attributes::AttributeLoc::Function,
+                    llvm.create_string_attribute(Self::TARGET_FEATURES, target_features),
+                );
+            }
+        }
         Ok(llvm_module.write_bitcode_to_memory().as_slice().to_vec())
     }
 

@@ -1,0 +1,17 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "Clz.sol": {
+      "content": "// SPDX-License-Identifier: MIT\n\npragma solidity >=0.8.31;\n\ncontract Clz {\n    function f(uint256 v, uint256 n) external pure returns (uint256) {\n        return g(v, n);\n    }\n\n    function g(uint256 v, uint256 n) internal pure returns (uint256 r) {\n        if (n == 0) {\n            assembly {\n                r := clz(v)\n            }\n            return r;\n        }\n        return g(v >> 1, n - 1) + g(v, n - 1);\n    }\n}\n"
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.deployedBytecode.llvmAssembly"
+        ]
+      }
+    }
+  }
+}
