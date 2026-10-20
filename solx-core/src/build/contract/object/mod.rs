@@ -2,10 +2,14 @@
 //! Bytecode object.
 //!
 
+pub mod stage;
+
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use solx_standard_json::OutputError;
+
+use self::stage::Stage;
 
 ///
 /// Bytecode object.
@@ -44,8 +48,11 @@ pub struct Object {
     /// Linker symbols that were not provided at compile time.
     /// Such symbols must be resolved by tooling before deployment.
     pub unlinked_symbols: BTreeMap<String, Vec<u64>>,
-    /// Whether the object is already assembled.
-    pub is_assembled: bool,
+    /// The stage the object has reached, which the worker advances for the objects it links itself.
+    pub stage: Stage,
+    /// The assembled object before linking, which the objects embedding this one read.
+    #[serde(with = "serde_bytes")]
+    pub assembled_bytecode: Option<Vec<u8>>,
     /// Whether the size fallback was activated during the compilation.
     pub is_size_fallback: bool,
     /// Compilation warnings.
@@ -92,7 +99,8 @@ impl Object {
             metadata_bytes,
             dependencies,
             unlinked_symbols: BTreeMap::new(),
-            is_assembled: false,
+            stage: Stage::Compiled,
+            assembled_bytecode: None,
             is_size_fallback,
             warnings,
             benchmarks,
@@ -125,35 +133,51 @@ impl Object {
     }
 
     ///
-    /// Assembles the object.
+    /// The objects this one embeds, when a worker holds them all: nothing for a runtime object,
+    /// the assembled runtime object `runtime` for a deploy object. `None` for an object that
+    /// embeds another contract's object, which only the parent holds.
+    ///
+    pub fn embedded_objects(&self, runtime: Option<Vec<u8>>) -> Option<BTreeMap<String, Vec<u8>>> {
+        if !self.dependencies.objects.is_empty() {
+            return None;
+        }
+        match (self.dependencies.runtime.as_ref(), runtime) {
+            (None, _) => Some(BTreeMap::new()),
+            (Some(identifier), Some(runtime)) => {
+                Some(BTreeMap::from([(identifier.to_owned(), runtime)]))
+            }
+            (Some(_), None) => None,
+        }
+    }
+
+    ///
+    /// Assembles the object with the objects it embeds, taken from `assembled_by_id`, and records
+    /// the library references `linker_symbols` leaves unresolved.
     ///
     /// # Panics
     /// If bytecode is `None`.
     ///
     pub fn assemble(
-        &self,
-        objects_by_id: &BTreeMap<&str, &Self>,
-    ) -> anyhow::Result<inkwell::memory_buffer::MemoryBuffer> {
-        let memory_buffer = self.to_memory_buffer()?;
-
+        &mut self,
+        assembled_by_id: &BTreeMap<String, Vec<u8>>,
+        linker_symbols: &BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
+    ) -> anyhow::Result<()> {
         let mut memory_buffers = Vec::with_capacity(
             1 + usize::from(self.dependencies.runtime.is_some()) + self.dependencies.objects.len(),
         );
-        memory_buffers.push((self.identifier.to_owned(), memory_buffer));
+        memory_buffers.push((self.identifier.to_owned(), self.to_memory_buffer()?));
 
-        memory_buffers.extend(self.dependencies.into_iter().map(|dependency| {
-            let original_dependency_identifier = dependency.to_owned();
-            let dependency = objects_by_id
-                .get(dependency.as_str())
-                .expect("Dependency not found");
-            let dependency_bytecode = dependency.bytecode.as_deref().expect("Bytecode is not set");
+        for dependency in self.dependencies.into_iter() {
+            let bytecode = assembled_by_id
+                .get(dependency)
+                .expect("Every dependency is assembled before the objects embedding it");
             let memory_buffer = inkwell::memory_buffer::MemoryBuffer::create_from_memory_range(
-                dependency_bytecode,
-                dependency.identifier.as_str(),
+                bytecode.as_slice(),
+                dependency.as_str(),
                 false,
             );
-            (original_dependency_identifier, memory_buffer)
-        }));
+            memory_buffers.push((dependency.to_owned(), memory_buffer));
+        }
 
         let bytecode_buffers = memory_buffers
             .iter()
@@ -163,25 +187,41 @@ impl Object {
             .iter()
             .map(|(identifier, _memory_buffer)| identifier.as_str())
             .collect::<Vec<&str>>();
-        solx_codegen_evm::assemble(
+        let assembled = solx_codegen_evm::assemble(
             bytecode_buffers.as_slice(),
             bytecode_ids.as_slice(),
             self.code_segment,
-        )
+        )?;
+
+        for undefined_reference in assembled
+            .get_undefined_references_evm()
+            .into_iter()
+            .filter(|reference| !linker_symbols.contains_key(reference))
+        {
+            let symbol_offsets = assembled.get_symbol_offsets_evm(undefined_reference.as_str());
+            self.unlinked_symbols
+                .insert(undefined_reference, symbol_offsets);
+        }
+        self.assembled_bytecode = Some(assembled.as_slice().to_owned());
+        self.stage = Stage::Assembled;
+
+        Ok(())
     }
 
     ///
     /// Links the object with its linker symbols.
     ///
     /// # Panics
-    /// If bytecode is `None`.
+    /// If the object is not assembled.
     ///
     pub fn link(
         &mut self,
         linker_symbols: &BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
     ) -> anyhow::Result<()> {
         let memory_buffer = inkwell::memory_buffer::MemoryBuffer::create_from_memory_range(
-            self.bytecode.as_deref().expect("Bytecode is not set"),
+            self.assembled_bytecode
+                .as_deref()
+                .expect("Every object is assembled before it is linked"),
             self.identifier.as_str(),
             false,
         );
@@ -221,6 +261,7 @@ impl Object {
         }
         self.bytecode = Some(linked_object_with_placeholders.as_slice().to_owned());
         self.bytecode_hex = Some(bytecode_hex);
+        self.stage = Stage::Linked;
 
         Ok(())
     }
