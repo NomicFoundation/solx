@@ -317,3 +317,14 @@ pub fn macos_build_opts_ignore_dupicate_libs_warnings() -> Vec<String> {
         vec![]
     }
 }
+
+///
+/// Keeps LLVM off glibc's `mallinfo` and `mallinfo2`. glibc defines them in the same object as its
+/// `malloc`, so a static release binary that replaces `malloc` with mimalloc would link both.
+///
+pub fn linux_build_opts_malloc_statistics() -> Vec<String> {
+    vec![
+        "-DHAVE_MALLINFO='OFF'".to_owned(),
+        "-DHAVE_MALLINFO2='OFF'".to_owned(),
+    ]
+}

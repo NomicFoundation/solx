@@ -82,7 +82,8 @@ pub fn build(
             .args(crate::llvm::platforms::shared::shared_build_opts_valgrind(
                 enable_valgrind,
                 valgrind_options,
-            )),
+            ))
+            .args(crate::llvm::platforms::shared::linux_build_opts_malloc_statistics()),
         "LLVM building cmake",
     )?;
     crate::llvm::platforms::shared::build_and_install_llvm_binaries(
