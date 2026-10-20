@@ -103,6 +103,8 @@ impl Contract {
         mut optimizer_settings: solx_codegen_evm::OptimizerSettings,
         llvm_options: Vec<String>,
         output_config: Option<solx_codegen_evm::OutputConfig>,
+        runtime_assembled_bytecode: Option<Vec<u8>>,
+        linker_symbols: &BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
     ) -> Result<EVMContractObject, Error> {
         let mut profiler = solx_utils::Profiler::default();
 
@@ -297,7 +299,7 @@ impl Contract {
                         (Some(build.immutables.unwrap_or_default()), metadata_bytes)
                     }
                 };
-                let object = EVMContractObject::new(
+                let mut object = EVMContractObject::new(
                     code_identifier,
                     contract_name.clone(),
                     build.assembly,
@@ -313,6 +315,23 @@ impl Contract {
                     build.warnings,
                     profiler.to_vec(),
                 );
+
+                if output_bytecode
+                    && let Some(embedded) = object.embedded_objects(runtime_assembled_bytecode)
+                {
+                    let run_assemble_link = profiler.start_evm_translation_unit(
+                        contract_name.full_path.as_str(),
+                        code_segment,
+                        "AssembleLink",
+                        optimizer_mode.as_str(),
+                        spill_area_size,
+                    );
+                    object.assemble(&embedded, linker_symbols)?;
+                    object.link(linker_symbols)?;
+                    run_assemble_link.borrow_mut().finish();
+                    object.benchmarks = profiler.to_vec();
+                }
+
                 Ok(object)
             }
         }
