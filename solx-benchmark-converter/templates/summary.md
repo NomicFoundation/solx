@@ -23,7 +23,7 @@
 {% endfor -%}
 {% endfor -%}
 {% if let Some(compile) = compile %}
-**Compile time** — wall-clock tripwire, positive = PR slower (authoritative Δ in `ci:compile-benchmark`)
+**Compile time** — wall-clock tripwire, positive = PR slower (authoritative Δ in the compile-time benchmark comment)
 
 | Suite |{% for pipeline in compile.pipelines %} {{ pipeline }} (agg / median) |{% endfor %}
 |---|{% for pipeline in compile.pipelines %}---|{% endfor %}

@@ -8,7 +8,7 @@
 | solx-tester | ✅ 0 | ✅ 0 of 1 | ✅ 0 of 1 | — |
 | Foundry · 7 proj | ✅ 0 | ✅ 0 of 2 | ⚪ not collected | — |
 
-**Compile time** — wall-clock tripwire, positive = PR slower (authoritative Δ in `ci:compile-benchmark`)
+**Compile time** — wall-clock tripwire, positive = PR slower (authoritative Δ in the compile-time benchmark comment)
 
 | Suite | legacy (agg / median) |
 |---|---|

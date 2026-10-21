@@ -1,13 +1,25 @@
 name: Compile Benchmark
 
-# Times `solx --standard-json` over the fixtures in tests/benchmark/fixtures
-# with hyperfine, comparing the PR build against a main build and the latest
-# release binary, and posts the report as a PR comment. Label-gated like the
-# integration suite; report-only (no pass/fail gating on timings).
+# Times `slang --standard-json` over the fixtures in tests/benchmark/fixtures
+# with hyperfine, comparing the PR merged into its base branch against main and
+# a pinned prerelease binary, and posts the report as a PR comment. Report-only
+# (no pass/fail gating on timings).
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened]
+    # Later patterns override earlier ones: docs and CI-only changes skip the
+    # run, except the workflow and the composite actions it uses.
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!**/*.md'
+      - '!.github/**'
+      - '.github/workflows/compile-benchmark.yaml'
+      - '.github/actions/build-llvm/**'
+      - '.github/actions/checkout-submodules/**'
+      - '.github/actions/cooldown-check/**'
+      - '.github/actions/setup-sfw/**'
   workflow_dispatch:
 
 permissions:
@@ -23,29 +35,19 @@ defaults:
 
 jobs:
 
-  label-check:
-    if: >-
-      github.event_name == 'workflow_dispatch'
-      || (contains(github.event.pull_request.labels.*.name, 'ci:compile-benchmark')
-        && (github.event.action != 'labeled' || github.event.label.name == 'ci:compile-benchmark')
-        && !github.event.pull_request.head.repo.fork)
-    runs-on: ubuntu-24.04
-    steps:
-      - run: 'true'
-
   cooldown-check:
     name: Cargo cooldown check
+    # Fork PRs never reach the self-hosted runner.
+    if: github.event_name == 'workflow_dispatch' || !github.event.pull_request.head.repo.fork
     runs-on: ubuntu-24.04
-    needs: label-check
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: ./.github/actions/cooldown-check
 
   compile-benchmark:
-    needs: [label-check, cooldown-check]
+    needs: cooldown-check
     permissions:
       contents: read
       pull-requests: write
@@ -59,10 +61,12 @@ jobs:
     # cold, sequentially.
     timeout-minutes: 180
     steps:
+      # On pull_request, the default ref is GitHub's test merge of the PR into
+      # its base branch, so commits main gained since the PR branched off are
+      # not counted as the PR's effect.
       - name: Checkout PR
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           submodules: true
           persist-credentials: false
 
@@ -73,10 +77,12 @@ jobs:
       - name: Reset main checkout dir
         run: rm -rf temp-solx-main
 
+      # The merge commit's own main parent, so a push to main mid-run can't
+      # skew the comparison. A PR stacked on another branch compares to main.
       - name: Checkout main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          ref: ${{ github.event.pull_request.base.ref == 'main' && github.event.pull_request.base.sha || 'main' }}
           submodules: true
           persist-credentials: false
           path: temp-solx-main
@@ -94,7 +100,7 @@ jobs:
         with:
           optional: 'true'
 
-      # Release build without assertions: matches the released binary's
+      # Release build without assertions: matches the prerelease binary's
       # configuration so the three-way comparison is apples-to-apples.
       - name: Build LLVM
         id: build-llvm-pr
@@ -112,7 +118,7 @@ jobs:
           enable-assertions: 'false'
 
       # Env and target mirror .github/actions/build-rust so the pr/main
-      # binaries share the released binary's build configuration: the
+      # binaries share the prerelease binary's build configuration: the
       # statically linked glibc alone is worth ~5% on this workload.
       - name: Build solx (PR)
         env:
@@ -131,22 +137,18 @@ jobs:
           ${SFW_PREFIX:-} cargo fetch --locked
           ${SFW_PREFIX:-} cargo build --frozen --release --target x86_64-unknown-linux-gnu
 
-      - name: Download latest release binary
+      # A fixed reference point across PRs; bump both values to move it.
+      - name: Download prerelease binary
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          TAG: 5e6ec5e1
+          ASSET: slang-linux-amd64-gnu-debug-fast
         run: |
-          # Authenticated API call: the unauthenticated rate limit is per IP,
-          # which neighboring jobs on a shared self-hosted runner can exhaust.
-          # The asset download below redirects to S3 and needs no auth.
-          TAG=$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            https://api.github.com/repos/NomicFoundation/solx/releases/latest \
-            | python3 -c 'import json, sys; print(json.load(sys.stdin)["tag_name"])')
-          ASSET="solx-linux-amd64-gnu-v${TAG}"
           BASE="https://github.com/NomicFoundation/solx/releases/download/${TAG}"
-          curl -fsSL -o solx-release "${BASE}/${ASSET}"
-          curl -fsSL "${BASE}/${ASSET}.sha256" | sed "s|[^ ]*${ASSET}|solx-release|" | sha256sum -c -
-          chmod +x solx-release
-          ./solx-release --version
+          curl -fsSL -o slang-prerelease "${BASE}/${ASSET}"
+          # The .sha256 asset names the file by its CI-internal path.
+          curl -fsSL "${BASE}/${ASSET}.sha256" | sed "s|[^ ]*${ASSET}|slang-prerelease|" | sha256sum -c -
+          chmod +x slang-prerelease
+          ./slang-prerelease --version
 
       # The image's system interpreter is Debian-managed and steps run as
       # root, so install straight from apt (no sudo in the container).
@@ -162,13 +164,16 @@ jobs:
       - name: Run benchmark
         env:
           RUNNER_NAME: ${{ runner.name }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           ./tests/benchmark/run.sh \
             --bin pr=./target/x86_64-unknown-linux-gnu/release/slang \
             --bin main=./temp-solx-main/target/x86_64-unknown-linux-gnu/release/slang \
-            --bin release=./solx-release \
+            --bin prerelease=./slang-prerelease \
             --runs 3 --warmup 1 \
             --out benchmark-out
+          echo "commits: pr ${PR_HEAD_SHA:0:8}${PR_BASE_REF:+ merged into ${PR_BASE_REF}}, main $(git -C temp-solx-main rev-parse --short=8 HEAD)" >> benchmark-out/versions.txt
           python3 ./tests/benchmark/report.py --dir benchmark-out --out benchmark-out/report.md
 
       - name: Post benchmark report comment
