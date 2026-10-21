@@ -132,14 +132,14 @@ impl CompilationUnitScope<'_> {
         };
         let abi_value = definition.abi().ok_or(Uncomputable::Abi)?.into_value();
         let method_identifiers = definition.method_identifiers();
-        let storage_layout_value = selected(solx_standard_json::InputSelector::StorageLayout)
+        let storage_layout = selected(solx_standard_json::InputSelector::StorageLayout)
             .then(|| {
                 definition
                     .storage_layout()
                     .ok_or(Uncomputable::StorageLayout)
             })
             .transpose()?;
-        let transient_storage_layout_value =
+        let transient_storage_layout =
             selected(solx_standard_json::InputSelector::TransientStorageLayout)
                 .then(|| {
                     definition
@@ -151,17 +151,17 @@ impl CompilationUnitScope<'_> {
             let contract = Contract::new_abi(
                 abi_value,
                 method_identifiers,
-                storage_layout_value,
-                transient_storage_layout_value,
+                storage_layout,
+                transient_storage_layout,
             );
             return Ok(Ok((contract, Vec::new())));
         };
-        let storage_layout = object.storage_layout().ok_or(Uncomputable::StorageLayout)?;
+        let storage_slots = object.storage_slots().ok_or(Uncomputable::StorageLayout)?;
         let mut profiler = Profiler::default();
         let contract = SourceUnitScope::object(
             melior,
             &object,
-            &storage_layout,
+            &storage_slots,
             self.evm_version,
             self.revert_strings,
             selected(solx_standard_json::InputSelector::BytecodeDebugInfo),
@@ -177,8 +177,8 @@ impl CompilationUnitScope<'_> {
                 mlir,
                 abi_value,
                 method_identifiers,
-                storage_layout_value,
-                transient_storage_layout_value,
+                storage_layout,
+                transient_storage_layout,
             );
             let benchmarks = if self.report_benchmarks {
                 profiler.to_vec()
@@ -260,7 +260,8 @@ struct Lowered {
 enum Uncomputable {
     /// The JSON ABI.
     Abi,
-    /// The storage layout, which codegen also places the state variables by.
+    /// The storage layout, or on the codegen path the storage slots of persistent and transient
+    /// state variables together.
     StorageLayout,
     /// The transient storage layout.
     TransientStorageLayout,

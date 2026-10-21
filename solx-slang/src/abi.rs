@@ -83,7 +83,8 @@ impl AbiDefinition {
     pub fn storage_layout(&self) -> Option<serde_json::Value> {
         match self {
             Self::Contract(node) => node.compute_storage_layout(),
-            // TODO: Slang should compute the layout of interfaces and libraries itself.
+            // Slang rejects state variables in interfaces and non-constant ones in libraries.
+            // TODO: take these from Slang once it lays out interfaces and libraries.
             Self::Interface(_) | Self::Library(_) => Some(StorageLayout::default()),
         }
         .map(Self::storage_layout_value)
@@ -94,7 +95,8 @@ impl AbiDefinition {
     pub fn transient_storage_layout(&self) -> Option<serde_json::Value> {
         match self {
             Self::Contract(node) => node.compute_transient_storage_layout(),
-            // TODO: Slang should compute the layout of interfaces and libraries itself.
+            // Slang rejects state variables in interfaces and non-constant ones in libraries.
+            // TODO: take these from Slang once it lays out interfaces and libraries.
             Self::Interface(_) | Self::Library(_) => Some(StorageLayout::default()),
         }
         .map(Self::storage_layout_value)

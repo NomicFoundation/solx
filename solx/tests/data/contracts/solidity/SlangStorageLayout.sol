@@ -2,15 +2,11 @@
 
 pragma solidity >=0.8.28;
 
-interface IStorageLayout {
-    function balance() external view returns (uint256);
-}
+interface IStorageLayout {}
 
-library StorageLayoutLibrary {
-    function double(uint256 value) internal pure returns (uint256) {
-        return value * 2;
-    }
-}
+library StorageLayoutLibrary {}
+
+type Price is uint128;
 
 abstract contract StorageLayoutBase {
     uint8 small;
@@ -40,6 +36,8 @@ contract StorageLayout is StorageLayoutBase {
     bytes data;
     string name;
     Status status;
+    IStorageLayout oracle;
+    Price price;
     uint256 transient locked;
     address transient caller;
 

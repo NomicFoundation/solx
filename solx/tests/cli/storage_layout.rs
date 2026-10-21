@@ -69,22 +69,30 @@ fn matches_solc(contract: &str, expected: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn too_much_storage() -> anyhow::Result<()> {
+/// Only the outputs that need the storage slots fail.
+#[test_case("--storage-layout", true)]
+#[test_case("--bin", true)]
+#[test_case("--abi", false)]
+#[test_case("--hashes", false)]
+fn too_much_storage(flag: &str, fails: bool) -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
         crate::common::contract!("solidity/StorageOverflow.sol"),
-        "--storage-layout",
+        flag,
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    result
-        .failure()
-        .stderr(predicate::str::contains(
-            "Error: Slang cannot compute the storage layout of `Big`.",
-        ))
-        .stderr(predicate::str::contains("StorageOverflow.sol:5:1"));
+    if fails {
+        result
+            .failure()
+            .stderr(predicate::str::contains(
+                "Error: Slang cannot compute the storage layout of `Big`.",
+            ))
+            .stderr(predicate::str::contains("StorageOverflow.sol:5:1"));
+    } else {
+        result.success();
+    }
 
     Ok(())
 }
@@ -144,56 +152,38 @@ fn output_dir() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn with_transient() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT,
-        "--storage-layout",
-        "--transient-storage-layout",
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(
-            predicate::str::contains("Contract Storage Layout").and(predicate::str::contains(
-                "Contract Transient Storage Layout",
-            )),
-        );
-
-    Ok(())
-}
-
-/// Replaces each `astId` with `0` and each node id that ends a user-defined type identifier with
-/// `N`: solx's are Slang node ids, solc's are its AST ids.
+/// Numbers each `astId`, and each node id that ends a user-defined type identifier, by first
+/// appearance: solx's are Slang node ids, solc's are its AST ids.
 fn normalize(layouts: &serde_json::Value) -> anyhow::Result<serde_json::Value> {
     let json = serde_json::to_string(layouts)?;
+    let mut ast_ids = BTreeMap::new();
+    let mut type_ids = BTreeMap::new();
     let mut normalized = String::with_capacity(json.len());
     let mut rest = json.as_str();
     while !rest.is_empty() {
-        let identifier_start = if let Some(after) = rest.strip_prefix("\"astId\":") {
-            normalized.push_str("\"astId\":0");
-            Some(after)
+        let (prefix_length, ids) = if rest.starts_with("\"astId\":") {
+            ("\"astId\":".len(), &mut ast_ids)
         } else if USER_DEFINED_PREFIXES
             .iter()
             .any(|prefix| rest.starts_with(prefix))
         {
             let name_end = rest.find(')').expect("the name is parenthesized") + 1;
-            normalized.push_str(&rest[..name_end]);
-            normalized.push('N');
-            Some(&rest[name_end..])
-        } else {
-            None
-        };
-        if let Some(after) = identifier_start {
-            rest = after.trim_start_matches(|character: char| character.is_ascii_digit());
+            (name_end, &mut type_ids)
         } else {
             let mut characters = rest.chars();
             normalized.extend(characters.next());
             rest = characters.as_str();
-        }
+            continue;
+        };
+        normalized.push_str(&rest[..prefix_length]);
+        rest = &rest[prefix_length..];
+        let digits_end = rest
+            .find(|character: char| !character.is_ascii_digit())
+            .unwrap_or(rest.len());
+        let next = ids.len();
+        let number = *ids.entry(&rest[..digits_end]).or_insert(next);
+        normalized.push_str(number.to_string().as_str());
+        rest = &rest[digits_end..];
     }
     Ok(serde_json::from_str(normalized.as_str())?)
 }

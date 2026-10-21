@@ -159,7 +159,7 @@ impl Object {
 
     /// The storage slot of each state variable the object stores, persistent and transient in
     /// one map keyed by definition id, or `None` when Slang cannot lay out its storage.
-    pub fn storage_layout(&self) -> Option<HashMap<NodeId, StorageSlot>> {
+    pub fn storage_slots(&self) -> Option<HashMap<NodeId, StorageSlot>> {
         match self {
             Self::Contract(node) => Some(
                 node.compute_storage_items()?
