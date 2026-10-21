@@ -1,11 +1,12 @@
 //!
-//! The ABI outputs of a definition in standard-JSON form: the JSON ABI Slang computes and
-//! serializes in solc's spelling, and the `evm.methodIdentifiers` map.
+//! The ABI outputs of a definition in standard-JSON form: the JSON ABI and the storage layouts
+//! Slang computes and serializes in solc's spelling, and the `evm.methodIdentifiers` map.
 //!
 
 use std::collections::BTreeMap;
 
 use slang_solidity_v2::abi::ContractAbi;
+use slang_solidity_v2::abi::StorageLayout;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
@@ -14,6 +15,7 @@ use slang_solidity_v2::ast::InterfaceDefinition;
 use slang_solidity_v2::ast::LibraryDefinition;
 use slang_solidity_v2::ast::SourceUnitMember;
 use slang_solidity_v2::ast::StateVariableDefinition;
+use slang_solidity_v2::compilation::FileId;
 
 use crate::contract::object::Object;
 
@@ -57,6 +59,15 @@ impl AbiDefinition {
         }
     }
 
+    /// The file that declares the definition.
+    pub fn file_id(&self) -> &FileId {
+        match self {
+            Self::Contract(node) => node.get_file_id(),
+            Self::Interface(node) => node.get_file_id(),
+            Self::Library(node) => node.get_file_id(),
+        }
+    }
+
     /// The definition's JSON ABI, or `None` for an input Slang accepts without diagnosing but
     /// cannot answer, such as an interface with a contract base.
     pub fn abi(&self) -> Option<Abi> {
@@ -66,6 +77,27 @@ impl AbiDefinition {
             Self::Library(node) => node.compute_abi(),
         }
         .map(Abi)
+    }
+
+    /// The `storageLayout` value, or `None` when Slang cannot lay out the contract's storage.
+    pub fn storage_layout(&self) -> Option<serde_json::Value> {
+        match self {
+            Self::Contract(node) => node.compute_storage_layout(),
+            // TODO: Slang should compute the layout of interfaces and libraries itself.
+            Self::Interface(_) | Self::Library(_) => Some(StorageLayout::default()),
+        }
+        .map(Self::storage_layout_value)
+    }
+
+    /// The `transientStorageLayout` value, or `None` when Slang cannot lay out the contract's
+    /// transient storage.
+    pub fn transient_storage_layout(&self) -> Option<serde_json::Value> {
+        match self {
+            Self::Contract(node) => node.compute_transient_storage_layout(),
+            // TODO: Slang should compute the layout of interfaces and libraries itself.
+            Self::Interface(_) | Self::Library(_) => Some(StorageLayout::default()),
+        }
+        .map(Self::storage_layout_value)
     }
 
     /// The `evm.methodIdentifiers` map: each externally dispatchable function of the hierarchy
@@ -95,6 +127,11 @@ impl AbiDefinition {
             Self::Interface(_) => None,
             Self::Library(node) => Some(Object::Library(node)),
         }
+    }
+
+    fn storage_layout_value(layout: StorageLayout) -> serde_json::Value {
+        serde_json::to_value(&layout)
+            .expect("Slang's storage layout serializer writes only string-keyed maps")
     }
 
     /// A function that is not a regular, externally visible one, or a state variable that is not

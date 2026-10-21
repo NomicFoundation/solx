@@ -1,0 +1,306 @@
+{
+  "IStorageLayout": {
+    "storageLayout": {
+      "storage": [],
+      "types": null
+    },
+    "transientStorageLayout": {
+      "storage": [],
+      "types": null
+    }
+  },
+  "StorageLayout": {
+    "storageLayout": {
+      "storage": [
+        {
+          "astId": 22,
+          "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayout",
+          "label": "small",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_uint8"
+        },
+        {
+          "astId": 24,
+          "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayout",
+          "label": "owner",
+          "offset": 1,
+          "slot": "0",
+          "type": "t_address"
+        },
+        {
+          "astId": 26,
+          "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayout",
+          "label": "flag",
+          "offset": 21,
+          "slot": "0",
+          "type": "t_bool"
+        },
+        {
+          "astId": 28,
+          "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayout",
+          "label": "word",
+          "offset": 0,
+          "slot": "1",
+          "type": "t_uint256"
+        },
+        {
+          "astId": 52,
+          "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayout",
+          "label": "positions",
+          "offset": 0,
+          "slot": "2",
+          "type": "t_mapping(t_address,t_struct(Position)42_storage)"
+        },
+        {
+          "astId": 55,
+          "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayout",
+          "label": "history",
+          "offset": 0,
+          "slot": "3",
+          "type": "t_array(t_uint256)dyn_storage"
+        },
+        {
+          "astId": 59,
+          "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayout",
+          "label": "recent",
+          "offset": 0,
+          "slot": "4",
+          "type": "t_array(t_uint16)3_storage"
+        },
+        {
+          "astId": 61,
+          "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayout",
+          "label": "data",
+          "offset": 0,
+          "slot": "5",
+          "type": "t_bytes_storage"
+        },
+        {
+          "astId": 63,
+          "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayout",
+          "label": "name",
+          "offset": 0,
+          "slot": "6",
+          "type": "t_string_storage"
+        },
+        {
+          "astId": 66,
+          "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayout",
+          "label": "status",
+          "offset": 0,
+          "slot": "7",
+          "type": "t_enum(Status)34"
+        }
+      ],
+      "types": {
+        "t_address": {
+          "encoding": "inplace",
+          "label": "address",
+          "numberOfBytes": "20"
+        },
+        "t_array(t_uint16)3_storage": {
+          "base": "t_uint16",
+          "encoding": "inplace",
+          "label": "uint16[3]",
+          "numberOfBytes": "32"
+        },
+        "t_array(t_uint256)dyn_storage": {
+          "base": "t_uint256",
+          "encoding": "dynamic_array",
+          "label": "uint256[]",
+          "numberOfBytes": "32"
+        },
+        "t_bool": {
+          "encoding": "inplace",
+          "label": "bool",
+          "numberOfBytes": "1"
+        },
+        "t_bytes_storage": {
+          "encoding": "bytes",
+          "label": "bytes",
+          "numberOfBytes": "32"
+        },
+        "t_enum(Status)34": {
+          "encoding": "inplace",
+          "label": "enum StorageLayout.Status",
+          "numberOfBytes": "1"
+        },
+        "t_mapping(t_address,t_struct(Position)42_storage)": {
+          "encoding": "mapping",
+          "key": "t_address",
+          "label": "mapping(address => struct StorageLayout.Position)",
+          "numberOfBytes": "32",
+          "value": "t_struct(Position)42_storage"
+        },
+        "t_string_storage": {
+          "encoding": "bytes",
+          "label": "string",
+          "numberOfBytes": "32"
+        },
+        "t_struct(Position)42_storage": {
+          "encoding": "inplace",
+          "label": "struct StorageLayout.Position",
+          "members": [
+            {
+              "astId": 36,
+              "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayout",
+              "label": "amount",
+              "offset": 0,
+              "slot": "0",
+              "type": "t_uint128"
+            },
+            {
+              "astId": 38,
+              "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayout",
+              "label": "since",
+              "offset": 16,
+              "slot": "0",
+              "type": "t_uint64"
+            },
+            {
+              "astId": 41,
+              "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayout",
+              "label": "status",
+              "offset": 24,
+              "slot": "0",
+              "type": "t_enum(Status)34"
+            }
+          ],
+          "numberOfBytes": "32"
+        },
+        "t_uint128": {
+          "encoding": "inplace",
+          "label": "uint128",
+          "numberOfBytes": "16"
+        },
+        "t_uint16": {
+          "encoding": "inplace",
+          "label": "uint16",
+          "numberOfBytes": "2"
+        },
+        "t_uint256": {
+          "encoding": "inplace",
+          "label": "uint256",
+          "numberOfBytes": "32"
+        },
+        "t_uint64": {
+          "encoding": "inplace",
+          "label": "uint64",
+          "numberOfBytes": "8"
+        },
+        "t_uint8": {
+          "encoding": "inplace",
+          "label": "uint8",
+          "numberOfBytes": "1"
+        }
+      }
+    },
+    "transientStorageLayout": {
+      "storage": [
+        {
+          "astId": 68,
+          "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayout",
+          "label": "locked",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_uint256"
+        },
+        {
+          "astId": 70,
+          "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayout",
+          "label": "caller",
+          "offset": 0,
+          "slot": "1",
+          "type": "t_address"
+        }
+      ],
+      "types": {
+        "t_address": {
+          "encoding": "inplace",
+          "label": "address",
+          "numberOfBytes": "20"
+        },
+        "t_uint256": {
+          "encoding": "inplace",
+          "label": "uint256",
+          "numberOfBytes": "32"
+        }
+      }
+    }
+  },
+  "StorageLayoutBase": {
+    "storageLayout": {
+      "storage": [
+        {
+          "astId": 22,
+          "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayoutBase",
+          "label": "small",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_uint8"
+        },
+        {
+          "astId": 24,
+          "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayoutBase",
+          "label": "owner",
+          "offset": 1,
+          "slot": "0",
+          "type": "t_address"
+        },
+        {
+          "astId": 26,
+          "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayoutBase",
+          "label": "flag",
+          "offset": 21,
+          "slot": "0",
+          "type": "t_bool"
+        },
+        {
+          "astId": 28,
+          "contract": "tests/data/contracts/solidity/SlangStorageLayout.sol:StorageLayoutBase",
+          "label": "word",
+          "offset": 0,
+          "slot": "1",
+          "type": "t_uint256"
+        }
+      ],
+      "types": {
+        "t_address": {
+          "encoding": "inplace",
+          "label": "address",
+          "numberOfBytes": "20"
+        },
+        "t_bool": {
+          "encoding": "inplace",
+          "label": "bool",
+          "numberOfBytes": "1"
+        },
+        "t_uint256": {
+          "encoding": "inplace",
+          "label": "uint256",
+          "numberOfBytes": "32"
+        },
+        "t_uint8": {
+          "encoding": "inplace",
+          "label": "uint8",
+          "numberOfBytes": "1"
+        }
+      }
+    },
+    "transientStorageLayout": {
+      "storage": [],
+      "types": null
+    }
+  },
+  "StorageLayoutLibrary": {
+    "storageLayout": {
+      "storage": [],
+      "types": null
+    },
+    "transientStorageLayout": {
+      "storage": [],
+      "types": null
+    }
+  }
+}

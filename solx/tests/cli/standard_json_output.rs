@@ -477,7 +477,6 @@ fn evm_version_in_standard_json() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "solx does not emit this output yet"]
 fn storage_layout_output() -> anyhow::Result<()> {
     crate::common::setup()?;
 

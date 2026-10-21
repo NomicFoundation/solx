@@ -382,6 +382,27 @@ fn select_frontend() -> anyhow::Result<()> {
 }
 
 #[test]
+fn select_storage_layout() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("select_storage_layout.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    let result = result.success();
+    let output: serde_json::Value = serde_json::from_slice(result.get_output().stdout.as_slice())?;
+    for name in ["I", "L", "B", "C"] {
+        let contract = &output["contracts"]["A"][name];
+        assert!(contract["storageLayout"].is_object(), "{name}");
+        assert!(contract["transientStorageLayout"].is_object(), "{name}");
+    }
+
+    Ok(())
+}
+
+#[test]
 fn select_evm_deployed_bytecode() -> anyhow::Result<()> {
     crate::common::setup()?;
 

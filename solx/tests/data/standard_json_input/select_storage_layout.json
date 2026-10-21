@@ -1,0 +1,18 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A": {
+      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.0; interface I {} library L {} abstract contract B { uint256 x; } contract C is B { uint256 transient y; }"
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "*": {
+        "*": [
+          "storageLayout",
+          "transientStorageLayout"
+        ]
+      }
+    }
+  }
+}

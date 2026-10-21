@@ -5,7 +5,6 @@
 use predicates::prelude::*;
 
 #[test]
-#[ignore = "solx does not emit this output yet"]
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 

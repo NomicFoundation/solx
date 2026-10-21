@@ -165,7 +165,7 @@ impl Object {
                 node.compute_storage_items()?
                     .into_iter()
                     .chain(node.compute_transient_storage_items()?)
-                    .map(|item| (item.node_id(), StorageSlot::from(&item)))
+                    .map(|variable| (variable.node_id(), StorageSlot::from(&variable)))
                     .collect(),
             ),
             Self::Library(_) => Some(HashMap::new()),

@@ -115,26 +115,48 @@ impl CompilationUnitScope<'_> {
         }
     }
 
-    /// The standard-JSON output of `definition`: its ABI, and the deploy and runtime code of the
-    /// object it deploys, lowered off the melior context in `melior` when the selection requests an
-    /// output only codegen produces. `None` when Slang cannot compute its ABI.
+    /// The standard-JSON output of `definition`: its ABI, the storage layouts the selection
+    /// requests, and the deploy and runtime code of the object it deploys, lowered off the melior
+    /// context in `melior` when the selection requests an output only codegen produces. `Err`
+    /// names the first output Slang cannot compute.
     fn definition(
         &self,
         melior: &OnceCell<melior::Context>,
         definition: AbiDefinition,
         name: &str,
-    ) -> Option<DefinitionOutput> {
-        let abi_value = definition.abi()?.into_value();
-        let method_identifiers = definition.method_identifiers();
-        let Some(object) = definition.into_object().filter(|_| self.run_codegen) else {
-            let contract = Contract::new_abi(abi_value, method_identifiers);
-            return Some(Ok((contract, Vec::new())));
-        };
-        let storage_layout = object.storage_layout()?;
+    ) -> Result<DefinitionOutput, Uncomputable> {
+        let file_id = definition.file_id().clone();
         let selected = |selector| {
             self.output_selection
-                .check_selection(object.file_id().as_str(), Some(name), selector)
+                .check_selection(file_id.as_str(), Some(name), selector)
         };
+        let abi_value = definition.abi().ok_or(Uncomputable::Abi)?.into_value();
+        let method_identifiers = definition.method_identifiers();
+        let storage_layout_value = selected(solx_standard_json::InputSelector::StorageLayout)
+            .then(|| {
+                definition
+                    .storage_layout()
+                    .ok_or(Uncomputable::StorageLayout)
+            })
+            .transpose()?;
+        let transient_storage_layout_value =
+            selected(solx_standard_json::InputSelector::TransientStorageLayout)
+                .then(|| {
+                    definition
+                        .transient_storage_layout()
+                        .ok_or(Uncomputable::TransientStorageLayout)
+                })
+                .transpose()?;
+        let Some(object) = definition.into_object().filter(|_| self.run_codegen) else {
+            let contract = Contract::new_abi(
+                abi_value,
+                method_identifiers,
+                storage_layout_value,
+                transient_storage_layout_value,
+            );
+            return Ok(Ok((contract, Vec::new())));
+        };
+        let storage_layout = object.storage_layout().ok_or(Uncomputable::StorageLayout)?;
         let mut profiler = Profiler::default();
         let contract = SourceUnitScope::object(
             melior,
@@ -151,7 +173,13 @@ impl CompilationUnitScope<'_> {
         )
         .map(|mlir| {
             // `convert-sol-to-yul` builds the entry-point dispatcher from the same selectors.
-            let contract = Contract::new_mlir(mlir, abi_value, method_identifiers);
+            let contract = Contract::new_mlir(
+                mlir,
+                abi_value,
+                method_identifiers,
+                storage_layout_value,
+                transient_storage_layout_value,
+            );
             let benchmarks = if self.report_benchmarks {
                 profiler.to_vec()
             } else {
@@ -159,11 +187,11 @@ impl CompilationUnitScope<'_> {
             };
             (contract, benchmarks)
         });
-        Some(contract)
+        Ok(contract)
     }
 
     /// Adds each lowered definition's output and benchmarks to `output` in source order, and reports
-    /// each definition whose ABI Slang cannot compute.
+    /// each definition with an output Slang cannot compute.
     ///
     /// # Errors
     ///
@@ -180,7 +208,7 @@ impl CompilationUnitScope<'_> {
         } in lowered.into_values()
         {
             match contract {
-                Some(contract) => {
+                Ok(contract) => {
                     let (contract, object_benchmarks) = contract?;
                     let file_id = member
                         .calculate_file_id()
@@ -192,11 +220,14 @@ impl CompilationUnitScope<'_> {
                         .insert(name, contract);
                     output.benchmarks.extend(object_benchmarks);
                 }
-                None => {
+                Err(uncomputable) => {
                     let (file_id, text_range) = Resolver::source_range(&member);
                     output.errors.push(OutputError::new_error_with_data(
                         Some(file_id.as_str()),
-                        format!("Slang cannot compute the ABI of `{name}`."),
+                        format!(
+                            "Slang cannot compute the {} of `{name}`.",
+                            uncomputable.output_name()
+                        ),
                         Some(SourceLocation::new(
                             file_id.to_string(),
                             text_range.start as isize,
@@ -221,6 +252,27 @@ struct Lowered {
     member: SourceUnitMember,
     /// The definition's name, which keys its output.
     name: String,
-    /// The definition's output, or `None` when Slang cannot compute its ABI.
-    contract: Option<DefinitionOutput>,
+    /// The definition's output, or the output Slang cannot compute.
+    contract: Result<DefinitionOutput, Uncomputable>,
+}
+
+/// An output of a definition Slang accepts without diagnosing but cannot compute.
+enum Uncomputable {
+    /// The JSON ABI.
+    Abi,
+    /// The storage layout, which codegen also places the state variables by.
+    StorageLayout,
+    /// The transient storage layout.
+    TransientStorageLayout,
+}
+
+impl Uncomputable {
+    /// The output's name in the reported error.
+    fn output_name(&self) -> &'static str {
+        match self {
+            Self::Abi => "ABI",
+            Self::StorageLayout => "storage layout",
+            Self::TransientStorageLayout => "transient storage layout",
+        }
+    }
 }
