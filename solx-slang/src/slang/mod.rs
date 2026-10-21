@@ -13,6 +13,7 @@ use slang_solidity_v2::diagnostics::DiagnosticExtensions;
 use slang_solidity_v2::diagnostics::DiagnosticSeverity;
 use slang_solidity_v2::utils::EvmTarget;
 use slang_solidity_v2::utils::LanguageVersion;
+use slang_solidity_v2::utils::infer_language_versions;
 
 use solx_standard_json::CollectableError;
 use solx_standard_json::OutputError;
@@ -102,6 +103,7 @@ impl Slang {
 
         let language_version = match Self::language_version(
             input_json.settings.solidity_version.as_ref(),
+            &sources,
             &mut output.errors,
         ) {
             Ok(language_version) => language_version,
@@ -223,19 +225,36 @@ impl Slang {
         Ok(output)
     }
 
-    /// Picks the language version to compile as: the requested one, or the latest Slang supports.
+    /// Picks the language version to compile as: the requested one, or the latest Slang supports
+    /// that every source's `pragma solidity` admits.
     ///
-    /// A prerelease or build suffix is dropped with a warning pushed to `messages`.
+    /// Sources that admit no common version are compiled as the latest, where Slang reports each
+    /// incompatible pragma. A prerelease or build suffix is dropped with a warning pushed to
+    /// `messages`.
     ///
     /// # Errors
     ///
     /// Returns an error if Slang does not support the requested version.
     fn language_version(
         requested: Option<&semver::Version>,
+        sources: &BTreeMap<FileId, &str>,
         messages: &mut Vec<OutputError>,
     ) -> Result<LanguageVersion, String> {
         let Some(requested) = requested else {
-            return Ok(LanguageVersion::LATEST);
+            let constraints: Vec<_> = sources
+                .values()
+                .map(|source| infer_language_versions(source))
+                .collect();
+            return Ok(LanguageVersion::ALL
+                .iter()
+                .rev()
+                .copied()
+                .find(|&version| {
+                    constraints
+                        .iter()
+                        .all(|constraint| constraint.matches(version))
+                })
+                .unwrap_or(LanguageVersion::LATEST));
         };
         let mut version = requested.clone();
         if !version.pre.is_empty() || !version.build.is_empty() {
