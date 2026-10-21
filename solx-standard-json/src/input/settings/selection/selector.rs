@@ -123,3 +123,24 @@ pub enum Selector {
     #[serde(rename = "*")]
     Any,
 }
+
+impl Selector {
+    ///
+    /// Checks if only codegen produces the output.
+    ///
+    pub fn is_codegen(&self) -> bool {
+        !matches!(
+            self,
+            Self::AST
+                | Self::DebugSymbols
+                | Self::ABI
+                | Self::Metadata
+                | Self::DeveloperDocumentation
+                | Self::UserDocumentation
+                | Self::StorageLayout
+                | Self::TransientStorageLayout
+                | Self::MethodIdentifiers
+                | Self::Benchmarks
+        )
+    }
+}

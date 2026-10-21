@@ -296,12 +296,13 @@ Deploy LLVM IR:
 Emits benchmarks of the compilation pipeline.
 
 ```console
-$ slang 'Simple.sol' --benchmarks
+$ slang 'Simple.sol' --bin --benchmarks
 Benchmarks:
 Compiler_ReadInput: [..]us
 Slang_RunStandardJSON: [..]us
 Compiler_BuildProject: [..]us
 Compiler_Compile: [..]us
+Compiler_Link: [..]us
 Slang_ParseAndBind: [..]us
 Compiler_CreateMLIRContext: [..]us
 Compiler_EmitSol:Simple.sol:Simple: [..]us
@@ -314,14 +315,18 @@ Compiler_RunSolPasses:Simple.sol:Simple_deployed: [..]us
 Compiler_MLIRToLLVMIR:Simple.sol:Simple_deployed: [..]us
 
 ======= Simple.sol:Simple =======
+Binary:
+[..]
 Benchmarks:
     Simple.sol:Simple:runtime/ParseBitcode/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple_deployed:runtime/InitVerify/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple_deployed:runtime/OptimizeVerify/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple_deployed:runtime/EmitBytecode/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:runtime/WorkerRoundtrip(0)/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/ParseBitcode/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/InitVerify/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/OptimizeVerify/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple:deploy/EmitBytecode/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/WorkerRoundtrip(0)/M3B3/SpillArea(0): [..]us
 
 ```
