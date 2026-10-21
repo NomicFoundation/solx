@@ -169,6 +169,16 @@ mod tests {
                     "   | ^^^^^^^^^^^^^^^^^^\n",
                 ),
             ),
+            (
+                0,
+                source.len() as isize - 1,
+                concat!(
+                    "  --> a.sol:1:1\n",
+                    "   |\n",
+                    " 1 | contract A { uint256[0] x; }\n",
+                    "   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+                ),
+            ),
         ] {
             let location =
                 MappedLocation::from_solc_location("a.sol".to_owned(), start, end, Some(source));
