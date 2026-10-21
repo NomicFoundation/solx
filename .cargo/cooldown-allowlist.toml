@@ -10,3 +10,13 @@ version = "0.23.46"
 [[allow.exact]]
 crate = "rust_xlsxwriter"
 version = "0.100.0"
+
+# RUSTSEC-2026-0382: rustls-webpki 0.103.16 is the fix, published 2026-10-20.
+[[allow.exact]]
+crate = "rustls-webpki"
+version = "0.103.16"
+
+# RUSTSEC-2026-0383: webpki-root-certs 1.0.10 is the fix, published 2026-10-19.
+[[allow.exact]]
+crate = "webpki-root-certs"
+version = "1.0.10"
