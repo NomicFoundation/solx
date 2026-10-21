@@ -164,10 +164,8 @@ jobs:
           apt-get update -qq
           apt-get install -y hyperfine
 
-      # Corpus fixtures compile with production settings (optimizer + DWARF),
-      # so a full sweep is ~80 s per binary; 3 runs keep the step around
-      # 20 min (hyperfine σ on this corpus is well under 1%). The per-binary
-      # validation pass in run.sh doubles as cache warmup.
+      # A sweep is ~5 s per binary. ENS compiles in ~0.5 s, so its first
+      # timed runs come out slow without several warmups.
       - name: Run benchmark
         env:
           RUNNER_NAME: ${{ runner.name }}
@@ -179,7 +177,7 @@ jobs:
             --bin pr=./target/x86_64-unknown-linux-gnu/release/slang \
             --bin main=./temp-solx-main/target/x86_64-unknown-linux-gnu/release/slang \
             --bin prerelease=./slang-prerelease \
-            --runs 3 --warmup 1 \
+            --runs 10 --warmup 3 \
             --out benchmark-out
           python3 ./tests/benchmark/report.py --dir benchmark-out --out benchmark-out/report.md
 
