@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity >=0.8.4;
+pragma solidity >=0.8.13;
 
 /// @notice Emitted when the result overflows uint256.
     error PRBMath__MulDivFixedPointOverflow(uint256 prod1);
@@ -402,7 +402,7 @@ library PRBMath {
         // variables such that product = prod1 * 2^256 + prod0.
         uint256 prod0; // Least significant 256 bits of the product
         uint256 prod1; // Most significant 256 bits of the product
-        assembly {
+        assembly ("memory-safe") {
             let mm := mulmod(x, y, not(0))
             prod0 := mul(x, y)
             prod1 := sub(sub(mm, prod0), lt(mm, prod0))
@@ -427,7 +427,7 @@ library PRBMath {
 
         // Make division exact by subtracting the remainder from [prod1 prod0].
         uint256 remainder;
-        assembly {
+        assembly ("memory-safe") {
         // Compute remainder using mulmod.
             remainder := mulmod(x, y, denominator)
 
@@ -441,7 +441,7 @@ library PRBMath {
     unchecked {
         // Does not overflow because the denominator cannot be zero at this stage in the function.
         uint256 lpotdod = denominator & (~denominator + 1);
-        assembly {
+        assembly ("memory-safe") {
         // Divide denominator by lpotdod.
             denominator := div(denominator, lpotdod)
 
@@ -499,7 +499,7 @@ library PRBMath {
     function mulDivFixedPoint(uint256 x, uint256 y) internal pure returns (uint256 result) {
         uint256 prod0;
         uint256 prod1;
-        assembly {
+        assembly ("memory-safe") {
             let mm := mulmod(x, y, not(0))
             prod0 := mul(x, y)
             prod1 := sub(sub(mm, prod0), lt(mm, prod0))
@@ -511,7 +511,7 @@ library PRBMath {
 
         uint256 remainder;
         uint256 roundUpUnit;
-        assembly {
+        assembly ("memory-safe") {
             remainder := mulmod(x, y, SCALE)
             roundUpUnit := gt(remainder, 499999999999999999)
         }
@@ -523,7 +523,7 @@ library PRBMath {
         }
         }
 
-        assembly {
+        assembly ("memory-safe") {
             result := add(
             mul(
             or(
@@ -578,7 +578,7 @@ library PRBMath {
         uint256 sx;
         uint256 sy;
         uint256 sd;
-        assembly {
+        assembly ("memory-safe") {
             sx := sgt(x, sub(0, 1))
             sy := sgt(y, sub(0, 1))
             sd := sgt(denominator, sub(0, 1))
