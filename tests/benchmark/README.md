@@ -3,8 +3,8 @@
 Times `slang --standard-json <fixture>` with [hyperfine](https://github.com/sharkdp/hyperfine)
 over real-world standard-JSON inputs, comparing the PR merged into its base
 branch against a main build and a pinned prerelease binary. Runs in CI on every
-PR that changes code (`.github/workflows/compile-benchmark.yaml`) and posts the
-report as a PR comment. Report-only: timings never gate the PR.
+same-repo PR that changes code (`.github/workflows/compile-benchmark.yaml`) and
+posts the report as a PR comment. Report-only: timings never gate the PR.
 
 ## Running locally
 

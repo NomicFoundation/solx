@@ -8,18 +8,6 @@ name: Compile Benchmark
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    # Later patterns override earlier ones: docs and CI-only changes skip the
-    # run, except the workflow and the composite actions it uses.
-    paths:
-      - '**'
-      - '!docs/**'
-      - '!**/*.md'
-      - '!.github/**'
-      - '.github/workflows/compile-benchmark.yaml'
-      - '.github/actions/build-llvm/**'
-      - '.github/actions/checkout-submodules/**'
-      - '.github/actions/cooldown-check/**'
-      - '.github/actions/setup-sfw/**'
   workflow_dispatch:
 
 permissions:
@@ -35,11 +23,29 @@ defaults:
 
 jobs:
 
+  changes:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Full history for the filter's git-diff mode.
+          fetch-depth: 0
+      - uses: ./.github/actions/code-changes
+        id: filter
+
   cooldown-check:
     name: Cargo cooldown check
-    # Fork PRs never reach the self-hosted runner.
-    if: github.event_name == 'workflow_dispatch' || !github.event.pull_request.head.repo.fork
     runs-on: ubuntu-24.04
+    needs: changes
+    # On workflow_dispatch the filter sees only the last commit.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (needs.changes.outputs.code == 'true' && !github.event.pull_request.head.repo.fork)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -78,8 +84,9 @@ jobs:
         run: rm -rf temp-solx-main
 
       # The merge commit's own main parent, so a push to main mid-run can't
-      # skew the comparison. A PR stacked on another branch compares to main.
+      # skew the comparison.
       - name: Checkout main
+        id: checkout-main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.ref == 'main' && github.event.pull_request.base.sha || 'main' }}
@@ -137,16 +144,16 @@ jobs:
           ${SFW_PREFIX:-} cargo fetch --locked
           ${SFW_PREFIX:-} cargo build --frozen --release --target x86_64-unknown-linux-gnu
 
-      # A fixed reference point across PRs; bump both values to move it.
+      # A fixed reference point across PRs; bump all three values to move it.
       - name: Download prerelease binary
         env:
           TAG: 5e6ec5e1
           ASSET: slang-linux-amd64-gnu-debug-fast
+          SHA256: 0b47a9cc237a52dd1eb53bfb4dcfcc5cde755a48661a9df964d91f94c1a42b3f
         run: |
-          BASE="https://github.com/NomicFoundation/solx/releases/download/${TAG}"
-          curl -fsSL -o slang-prerelease "${BASE}/${ASSET}"
-          # The .sha256 asset names the file by its CI-internal path.
-          curl -fsSL "${BASE}/${ASSET}.sha256" | sed "s|[^ ]*${ASSET}|slang-prerelease|" | sha256sum -c -
+          curl -fsSL --retry 3 -o slang-prerelease \
+            "https://github.com/NomicFoundation/solx/releases/download/${TAG}/${ASSET}"
+          echo "${SHA256}  slang-prerelease" | sha256sum -c -
           chmod +x slang-prerelease
           ./slang-prerelease --version
 
@@ -166,6 +173,7 @@ jobs:
           RUNNER_NAME: ${{ runner.name }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          MAIN_SHA: ${{ steps.checkout-main.outputs.commit }}
         run: |
           ./tests/benchmark/run.sh \
             --bin pr=./target/x86_64-unknown-linux-gnu/release/slang \
@@ -173,7 +181,6 @@ jobs:
             --bin prerelease=./slang-prerelease \
             --runs 3 --warmup 1 \
             --out benchmark-out
-          echo "commits: pr ${PR_HEAD_SHA:0:8}${PR_BASE_REF:+ merged into ${PR_BASE_REF}}, main $(git -C temp-solx-main rev-parse --short=8 HEAD)" >> benchmark-out/versions.txt
           python3 ./tests/benchmark/report.py --dir benchmark-out --out benchmark-out/report.md
 
       - name: Post benchmark report comment
