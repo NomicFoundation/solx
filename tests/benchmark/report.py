@@ -4,7 +4,8 @@
 Reads every per-fixture hyperfine JSON in the given directory and writes a
 markdown report with one table per fixture. The second benchmarked command is
 the baseline (run.sh passes candidate first, baseline second): each row shows
-its slowdown/speedup relative to it.
+its slowdown/speedup relative to it, by median so that one slow run does not
+move the ratio.
 """
 
 import argparse
@@ -33,19 +34,20 @@ def main() -> int:
     for result_path in sorted(args.dir.glob("*.json")):
         results = json.loads(result_path.read_text())["results"]
         if len(results) > 1:
-            baseline = results[1]["mean"]
+            baseline = results[1]["median"]
         lines += [f"### {result_path.stem}", "",
-                  "| binary | mean ± σ | min … max | vs baseline |",
-                  "|---|---|---|---|"]
+                  "| binary | median | mean ± σ | min … max | vs baseline |",
+                  "|---|---|---|---|---|"]
         for result in results:
             relative = ""
             if len(results) > 1 and baseline > 0:
-                ratio = result["mean"] / baseline
+                ratio = result["median"] / baseline
                 marker = " ⚠️" if ratio > REGRESSION_HIGHLIGHT and result is results[0] else ""
                 relative = f"{ratio:.3f}×{marker}"
                 flagged = flagged or bool(marker)
             lines.append(
                 f"| {result['command']} "
+                f"| {result['median']:.3f} s "
                 f"| {result['mean']:.3f} s ± {result['stddev']:.3f} s "
                 f"| {result['min']:.3f} s … {result['max']:.3f} s "
                 f"| {relative} |"
