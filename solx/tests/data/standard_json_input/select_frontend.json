@@ -9,10 +9,17 @@
     "outputSelection": {
       "*": {
         "": [
+          "ast",
+          "debugSymbols",
           "benchmarks"
         ],
         "*": [
           "abi",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "transientStorageLayout",
           "evm.methodIdentifiers"
         ]
       }

@@ -60,8 +60,8 @@ impl Contract {
     }
 
     ///
-    /// Wraps the JSON ABI and ABI method identifiers of a definition that deploys nothing: an
-    /// interface or an abstract contract.
+    /// Wraps the JSON ABI and ABI method identifiers of a definition with no code to output: an
+    /// interface, an abstract contract, or any definition when no selected output needs codegen.
     ///
     pub fn new_abi(
         abi: serde_json::Value,

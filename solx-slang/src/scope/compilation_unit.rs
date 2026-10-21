@@ -40,6 +40,8 @@ pub struct CompilationUnitScope<'input> {
     pub input_sources: &'input BTreeMap<String, solx_standard_json::InputSource>,
     /// Whether the output reports the pipeline benchmarks.
     pub report_benchmarks: bool,
+    /// Whether the selection requests an output only codegen produces.
+    pub run_codegen: bool,
 }
 
 impl CompilationUnitScope<'_> {
@@ -124,10 +126,7 @@ impl CompilationUnitScope<'_> {
     ) -> Option<DefinitionOutput> {
         let abi_value = definition.abi()?.into_value();
         let method_identifiers = definition.method_identifiers();
-        let Some(object) = definition
-            .into_object()
-            .filter(|_| self.output_selection.is_codegen_set_for_any())
-        else {
+        let Some(object) = definition.into_object().filter(|_| self.run_codegen) else {
             let contract = Contract::new_abi(abi_value, method_identifiers);
             return Some(Ok((contract, Vec::new())));
         };

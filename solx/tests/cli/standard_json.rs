@@ -363,12 +363,12 @@ fn select_evm_bytecode() -> anyhow::Result<()> {
 }
 
 #[test]
-fn select_abi() -> anyhow::Result<()> {
+fn select_frontend() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
         "--standard-json",
-        crate::common::standard_json!("select_abi.json"),
+        crate::common::standard_json!("select_frontend.json"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
