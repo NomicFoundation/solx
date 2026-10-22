@@ -51,7 +51,7 @@ impl Contract {
             .collect();
         settings.insert(
             "outputSelection".to_owned(),
-            serde_json::json!({ "*": { "*": ["evm.bytecode.object", "evm.deployedBytecode.object"] } }),
+            serde_json::json!({ "*": { "*": ["evm.bytecode.object"] } }),
         );
 
         let input = serde_json::json!({

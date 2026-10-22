@@ -2,6 +2,8 @@
 //! `solx` test compiler.
 //!
 
+use std::collections::BTreeMap;
+
 ///
 /// `solx` test compiler.
 ///
@@ -25,4 +27,40 @@ pub struct Compiler {
     /// Whether the compiler is disabled.
     #[serde(default)]
     pub disabled: bool,
+}
+
+impl Compiler {
+    ///
+    /// The enabled compiler marked as the correctness candidate.
+    ///
+    pub fn candidate<'a>(
+        compilers: &'a BTreeMap<String, Self>,
+        configuration: &str,
+    ) -> anyhow::Result<&'a Self> {
+        compilers
+            .values()
+            .find(|compiler| !compiler.disabled && compiler.is_correctness_candidate)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "No candidate compiler specified in the {configuration} configuration"
+                )
+            })
+    }
+
+    ///
+    /// The enabled compiler marked as the correctness reference.
+    ///
+    pub fn reference<'a>(
+        compilers: &'a BTreeMap<String, Self>,
+        configuration: &str,
+    ) -> anyhow::Result<&'a Self> {
+        compilers
+            .values()
+            .find(|compiler| !compiler.disabled && compiler.is_correctness_reference)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "No reference compiler specified in the {configuration} configuration"
+                )
+            })
+    }
 }

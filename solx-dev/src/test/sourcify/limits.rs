@@ -2,7 +2,6 @@
 //! `solx` Sourcify sweep limits.
 //!
 
-use std::num::NonZeroUsize;
 use std::time::Duration;
 
 ///
@@ -11,7 +10,7 @@ use std::time::Duration;
 #[derive(Debug, Clone, Copy)]
 pub struct Limits {
     /// The number of concurrent compiler processes, or the available parallelism.
-    pub threads: Option<NonZeroUsize>,
+    pub threads: Option<usize>,
     /// The per-compilation timeout.
     pub timeout: Duration,
     /// The resident memory cap of each compiler with its workers in MiB.

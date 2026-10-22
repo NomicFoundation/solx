@@ -123,6 +123,14 @@ jobs:
           mv "${RUNNER_TEMP}/slang" "${RUNNER_TEMP}/solx-dev" target/release/
           df -h .
 
+      - name: Upload solx-dev
+        if: matrix.shard == 0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sourcify-sweep-solx-dev
+          path: target/release/solx-dev
+          if-no-files-found: error
+
       - name: Run the sweep shard
         id: sweep
         run: |
@@ -141,14 +149,6 @@ jobs:
         with:
           name: sourcify-sweep-results-shard-${{ matrix.shard }}
           path: ${{ runner.temp }}/results-shard-${{ matrix.shard }}.jsonl
-          if-no-files-found: error
-
-      - name: Upload solx-dev
-        if: matrix.shard == 0
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: sourcify-sweep-solx-dev
-          path: target/release/solx-dev
           if-no-files-found: error
 
   summarize:
@@ -174,20 +174,21 @@ jobs:
           path: ${{ runner.temp }}/shards
           merge-multiple: true
 
-      # A partial report is rendered from the shards that arrived; the completeness check at the
-      # end fails the job when any is missing.
+      # The report covers every shard that uploaded results; a shard that failed has already
+      # failed the run.
       - name: Combine shards and report
+        env:
+          SWEEP_RESULT: ${{ needs.sweep.result }}
         run: |
-          shards=$(find "${RUNNER_TEMP}/shards" -name 'results-shard-*.jsonl' | wc -l)
           title="Sourcify sweep"
-          if [ "${shards}" -ne "${SHARD_COUNT}" ]; then
-            title="${title} (${shards} of ${SHARD_COUNT} shards)"
+          if [ "${SWEEP_RESULT}" != "success" ]; then
+            title="${title} (partial: a shard failed)"
           fi
           cat "${RUNNER_TEMP}"/shards/results-shard-*.jsonl > "${RUNNER_TEMP}/results.jsonl"
           # Artifacts drop the executable bit.
           chmod +x "${RUNNER_TEMP}/bin/solx-dev"
           "${RUNNER_TEMP}/bin/solx-dev" test sourcify-report \
-            --results-paths "${RUNNER_TEMP}/results.jsonl" \
+            --results-path "${RUNNER_TEMP}/results.jsonl" \
             --output-path "${RUNNER_TEMP}/report.md" \
             --title "${title}"
           cat "${RUNNER_TEMP}/report.md" >> "${GITHUB_STEP_SUMMARY}"
@@ -206,11 +207,3 @@ jobs:
           path: |
             ${{ runner.temp }}/results.jsonl
             ${{ runner.temp }}/report.md
-
-      - name: Check shard completeness
-        run: |
-          shards=$(find "${RUNNER_TEMP}/shards" -name 'results-shard-*.jsonl' | wc -l)
-          if [ "${shards}" -ne "${SHARD_COUNT}" ]; then
-            echo "Expected ${SHARD_COUNT} shard result files, found ${shards}." >&2
-            exit 1
-          fi

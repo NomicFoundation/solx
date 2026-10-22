@@ -168,10 +168,9 @@ fn classify(status: std::process::ExitStatus, stdout: &[u8], stderr: &str, targe
         .flatten()
         .filter(|error| error.get("severity").and_then(serde_json::Value::as_str) == Some("error"))
         .map(|error| {
-            ["message", "formattedMessage"]
-                .into_iter()
-                .filter_map(|key| error.get(key).and_then(serde_json::Value::as_str))
-                .find(|message| !message.is_empty())
+            error
+                .get("message")
+                .and_then(serde_json::Value::as_str)
                 .unwrap_or_default()
                 .to_owned()
         })

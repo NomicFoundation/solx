@@ -38,6 +38,7 @@ pub use crate::output::Output;
 pub use crate::output::format::Format as OutputFormat;
 pub use crate::output::json::Json as OutputJson;
 pub use crate::output::summary::Summary;
+pub use crate::output::summary::summary_template::truncated::Truncated as SummaryTruncated;
 pub use crate::suite_kind::SuiteKind;
 pub use crate::suite_outcome::SuiteOutcome;
 pub use crate::summary_suite::SummarySuite;
