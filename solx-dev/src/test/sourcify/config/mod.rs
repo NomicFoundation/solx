@@ -2,10 +2,14 @@
 //! `solx` Sourcify sweep config.
 //!
 
+pub mod corpus;
+
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use crate::test::hardhat::config::compiler::Compiler;
+
+use self::corpus::Corpus;
 
 ///
 /// `solx` Sourcify sweep config.
@@ -16,17 +20,6 @@ pub struct Config {
     pub corpus: Corpus,
     /// The candidate and reference compilers.
     pub compilers: BTreeMap<String, Compiler>,
-}
-
-///
-/// The pinned corpus release.
-///
-#[derive(Debug, serde::Deserialize)]
-pub struct Corpus {
-    /// The `.tar.xz` release asset URL.
-    pub url: String,
-    /// The SHA-256 of the release asset.
-    pub sha256: String,
 }
 
 impl Config {

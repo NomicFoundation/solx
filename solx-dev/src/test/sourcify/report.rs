@@ -8,10 +8,11 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use super::record::Kind;
-use super::record::Leg;
-use super::record::Outcome;
+use super::compilation::normalize;
 use super::record::Record;
+use super::record::leg::Leg;
+use super::record::leg::kind::Kind;
+use super::record::outcome::Outcome;
 
 /// The number of failure signatures listed per census.
 const TOP_SIGNATURES: usize = 40;
@@ -26,14 +27,6 @@ static CRASH_LINE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(Assertion `.*?' failed|LLVM ERROR: [^\n]+|fatal error: [^\n]+|Unexpected [^\n]+)")
         .expect("Always valid")
 });
-static LIBRARY_HASH: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\$[0-9a-f]{64}\$").expect("Always valid"));
-static SOL_PATH: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"[^\s"'`]+\.sol\b"#).expect("Always valid"));
-static HEX_NUMBER: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"0x[0-9a-fA-F]+").expect("Always valid"));
-static DECIMAL_NUMBER: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\b\d+\b").expect("Always valid"));
 static UNRESOLVED_IMPORT: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^failed to resolve import (\S+) in (\S+)").expect("Always valid")
 });
@@ -63,7 +56,11 @@ pub fn report(
             let value: serde_json::Value = serde_json::from_str(line)
                 .map_err(|error| anyhow::anyhow!("Sweep results {path:?} parsing: {error}"))?;
             match value.get("meta").and_then(serde_json::Value::as_object) {
-                Some(line_meta) => meta.extend(line_meta.clone()),
+                Some(line_meta) if meta.is_empty() => meta = line_meta.clone(),
+                Some(line_meta) if line_meta != &meta => anyhow::bail!(
+                    "Sweep results {path:?} were produced by other compilers: {line_meta:?}, not {meta:?}"
+                ),
+                Some(_) => {}
                 None => {
                     records.push(serde_json::from_value::<Record>(value).map_err(|error| {
                         anyhow::anyhow!("Sweep results {path:?} parsing: {error}")
@@ -114,8 +111,7 @@ fn render(
             .count();
         if count > 0 {
             lines.push(format!(
-                "| {} | {count} | {:.2}% | {} |",
-                outcome.as_str(),
+                "| {outcome} | {count} | {:.2}% | {} |",
                 count as f64 / total as f64 * 100.0,
                 outcome.meaning()
             ));
@@ -174,20 +170,17 @@ fn census(failures: &[(&str, &Leg)], title: &str, lines: &mut Vec<String>) {
         return;
     }
     let mut buckets: BTreeMap<(Kind, String), Vec<&str>> = BTreeMap::new();
-    let mut kinds: Vec<(Kind, usize)> = Vec::new();
+    let mut kinds: BTreeMap<Kind, usize> = BTreeMap::new();
     for (identifier, leg) in failures.iter() {
         let (kind, signature) = refine(leg);
         buckets
             .entry((kind, signature))
             .or_default()
             .push(identifier);
-        match kinds.iter_mut().find(|(seen, _count)| *seen == kind) {
-            Some((_kind, count)) => *count += 1,
-            None => kinds.push((kind, 1)),
-        }
+        *kinds.entry(kind).or_default() += 1;
     }
-    // Stable: equal counts keep first-seen order.
-    kinds.sort_by(|(_, left), (_, right)| right.cmp(left));
+    let mut kinds: Vec<(Kind, usize)> = kinds.into_iter().collect();
+    kinds.sort_by_key(|(_kind, count)| std::cmp::Reverse(*count));
 
     lines.push(format!("### {title} ({})", failures.len()));
     lines.push(String::new());
@@ -195,7 +188,7 @@ fn census(failures: &[(&str, &Leg)], title: &str, lines: &mut Vec<String>) {
         "kinds: {}",
         kinds
             .iter()
-            .map(|(kind, count)| format!("`{}` {count}", kind.as_str()))
+            .map(|(kind, count)| format!("`{kind}` {count}"))
             .collect::<Vec<_>>()
             .join(", ")
     ));
@@ -204,24 +197,14 @@ fn census(failures: &[(&str, &Leg)], title: &str, lines: &mut Vec<String>) {
     lines.push("|---|---|---|---|".to_owned());
 
     let mut ranked: Vec<((Kind, String), Vec<&str>)> = buckets.into_iter().collect();
-    ranked.sort_by(
-        |(left_key, left_identifiers), (right_key, right_identifiers)| {
-            right_identifiers
-                .len()
-                .cmp(&left_identifiers.len())
-                .then_with(|| left_key.0.as_str().cmp(right_key.0.as_str()))
-                .then_with(|| left_key.1.cmp(&right_key.1))
-        },
-    );
+    // Stable: equal counts keep the key order of the buckets.
+    ranked.sort_by_key(|(_key, identifiers)| std::cmp::Reverse(identifiers.len()));
     for ((kind, signature), identifiers) in ranked.iter().take(TOP_SIGNATURES) {
-        let mut examples = identifiers.clone();
-        examples.sort();
         lines.push(format!(
-            "| {} | {} | {} | {} |",
+            "| {} | {kind} | {} | {} |",
             identifiers.len(),
-            kind.as_str(),
             signature.replace('|', "\\|"),
-            examples
+            identifiers
                 .iter()
                 .take(EXAMPLES)
                 .map(|identifier| format!("`{identifier}`"))
@@ -314,28 +297,4 @@ fn import_bucket(message: &str) -> String {
     } else {
         "import resolution: non-relative import (remapping or exact source name)".to_owned()
     }
-}
-
-///
-/// Collapses a diagnostic into a bucket key: its first two lines with paths, library hashes and
-/// numbers replaced.
-///
-fn normalize(text: &str) -> String {
-    let text = text.replace("\\n", "\n");
-    let lines: Vec<&str> = text
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .take(2)
-        .collect();
-    let line = if lines.is_empty() {
-        "<empty>".to_owned()
-    } else {
-        lines.join(" ")
-    };
-    let line = LIBRARY_HASH.replace_all(line.as_str(), "$$<hash>$$");
-    let line = SOL_PATH.replace_all(line.as_ref(), "<file>");
-    let line = HEX_NUMBER.replace_all(line.as_ref(), "0x…");
-    let line = DECIMAL_NUMBER.replace_all(line.as_ref(), "N");
-    line.chars().take(160).collect()
 }

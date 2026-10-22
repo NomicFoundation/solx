@@ -92,12 +92,14 @@ The test configurations list projects that are cloned and tested automatically. 
 
 ## Sourcify Corpus
 
-The Sourcify sweep compiles every verified Sourcify contract for solc 0.8.34 and 0.8.36 with `evmVersion` at least `cancun` (119,117 contracts) through `slang --standard-json`, and re-runs each failure with the latest solx release, so a `slang` gap is told apart from input neither compiles:
+The Sourcify sweep compiles each contract of a pinned Sourcify corpus with `slang --standard-json`.
+
+When `slang` fails without timing out, the latest solx release compiles the same contract. This tells a `slang` gap apart from input neither compiler accepts.
 
 ```shell
 cargo build --release --bin slang --bin solx-dev
 
-# The 10 committed fixtures
+# The committed fixtures
 ./target/release/solx-dev test sourcify --corpus-path tests/sourcify-sweep/fixtures
 ./target/release/solx-dev test sourcify-report --results-paths temp-sourcify-reports/results.jsonl
 
@@ -105,13 +107,20 @@ cargo build --release --bin slang --bin solx-dev
 ./target/release/solx-dev test sourcify --shard-count 24 --shard-index 0 --memory-limit-mib 6144
 ```
 
-[sourcify-tests.toml](https://github.com/NomicFoundation/solx/blob/main/solx-dev/sourcify-tests.toml) pins the corpus release and names the two compilers. Each contract becomes one standard JSON input with its sources inline, `evmVersion`, `libraries`, `remappings` and `viaIR` passed through verbatim, and bytecode as the only output. Every version pragma is rewritten to `pragma solidity >=<--solidity-version>;`, so both compilers accept the same input.
+[sourcify-tests.toml](https://github.com/NomicFoundation/solx/blob/main/solx-dev/sourcify-tests.toml) pins the corpus release and names the two compilers.
+
+Each contract becomes one standard JSON input:
+
+- its sources inline under their original paths
+- `evmVersion`, `libraries`, `remappings` and `viaIR` passed through verbatim
+- bytecode as the only output
+- every version pragma rewritten to `pragma solidity >=<--solidity-version>;`, so both compilers accept the same input
 
 | Outcome | Meaning |
 |---|---|
-| `ok` | No error diagnostics and bytecode for a contract of the target source |
+| `ok` | Successful exit, no error diagnostics and bytecode for a contract of the target source |
 | `slang-fail` | `slang` fails and the latest solx release compiles |
-| `both-fail` | Both fail: a corpus artifact or a documented compiler limitation |
+| `both-fail` | Both fail |
 | `timeout` | `slang` exceeded `--timeout` |
 
 The report ranks failures by normalized diagnostic, with example contracts. CI runs the sweep on every push to `main` and on pull requests labelled `ci:sourcify-sweep`, where the report becomes a pull request comment.

@@ -115,7 +115,7 @@ fn main_inner() -> anyhow::Result<()> {
 
             let threads = match arguments.threads {
                 Some(threads) => threads,
-                None => std::thread::available_parallelism()?.get(),
+                None => std::thread::available_parallelism()?,
             };
             solx_dev::test_sourcify(
                 test_config,

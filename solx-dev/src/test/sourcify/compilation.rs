@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use std::io::Read;
 use std::io::Write;
 use std::path::Path;
+use std::process::Child;
 use std::process::Command;
 use std::process::Stdio;
 use std::sync::LazyLock;
@@ -13,9 +14,13 @@ use std::time::Duration;
 use std::time::Instant;
 
 use regex::Regex;
+use sysinfo::Pid;
+use sysinfo::ProcessRefreshKind;
+use sysinfo::ProcessesToUpdate;
+use sysinfo::System;
 
-use super::record::Kind;
-use super::record::Leg;
+use super::record::leg::Leg;
+use super::record::leg::kind::Kind;
 
 /// The number of trailing standard error characters kept in a record.
 const STDERR_TAIL: usize = 2000;
@@ -26,6 +31,8 @@ const MAX_MESSAGES: usize = 5;
 /// The interval at which a running compiler is polled for exit.
 const POLL_INTERVAL: Duration = Duration::from_millis(20);
 
+static LIBRARY_HASH: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\$[0-9a-f]{64}\$").expect("Always valid"));
 static SOL_PATH: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"[^\s"'`]+\.sol\b"#).expect("Always valid"));
 static HEX_NUMBER: LazyLock<Regex> =
@@ -34,8 +41,6 @@ static DECIMAL_NUMBER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\b\d+\b").expect("Always valid"));
 static PANIC_WITH_MESSAGE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"panicked at [^\n]+:\n([^\n]*)").expect("Always valid"));
-static PANIC: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"panicked at [^\n]+").expect("Always valid"));
 
 ///
 /// Compiles a standard JSON input and classifies the result.
@@ -47,16 +52,15 @@ pub fn compile(
     input: Vec<u8>,
     target: &str,
     timeout: Duration,
-    memory_limit_mib: u64,
+    memory_limit_mib: Option<u64>,
 ) -> anyhow::Result<Leg> {
     let mut command = Command::new(compiler);
     command.arg("--standard-json");
     command.stdin(Stdio::piped());
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
-    if memory_limit_mib > 0 {
-        limit_address_space(&mut command, memory_limit_mib)?;
-    }
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(&mut command, 0);
     let mut process = command
         .spawn()
         .map_err(|error| anyhow::anyhow!("{command:?} process spawning error: {error}"))?;
@@ -70,15 +74,14 @@ pub fn compile(
     });
     let stdout_reader = std::thread::spawn(move || {
         let mut buffer = Vec::new();
-        let _ = stdout.read_to_end(&mut buffer);
-        buffer
+        stdout.read_to_end(&mut buffer).map(|_| buffer)
     });
     let stderr_reader = std::thread::spawn(move || {
         let mut buffer = Vec::new();
-        let _ = stderr.read_to_end(&mut buffer);
-        buffer
+        stderr.read_to_end(&mut buffer).map(|_| buffer)
     });
 
+    let mut system = System::new();
     let started = Instant::now();
     let status = loop {
         if let Some(status) = process
@@ -88,20 +91,35 @@ pub fn compile(
             break status;
         }
         if started.elapsed() > timeout {
-            let _ = process.kill();
-            let _ = process.wait();
-            // The readers are left behind: a surviving worker process may still hold the pipes.
+            kill(&mut process);
             return Ok(Leg {
                 kind: Kind::Timeout,
                 ..Leg::default()
             });
         }
+        if let Some(memory_limit_mib) = memory_limit_mib
+            && memory_usage(&mut system, &process) > memory_limit_mib * 1024 * 1024
+        {
+            kill(&mut process);
+            return Ok(Leg {
+                kind: Kind::Abort,
+                signature: Some(format!("memory limit of {memory_limit_mib} MiB exceeded")),
+                ..Leg::default()
+            });
+        }
         std::thread::sleep(POLL_INTERVAL);
     };
+
     let _ = writer.join();
-    let stdout = stdout_reader.join().expect("Never panics");
-    let stderr = String::from_utf8_lossy(stderr_reader.join().expect("Never panics").as_slice())
-        .into_owned();
+    let stdout = stdout_reader
+        .join()
+        .expect("Never panics")
+        .map_err(|error| anyhow::anyhow!("{command:?} stdout reading error: {error}"))?;
+    let stderr = stderr_reader
+        .join()
+        .expect("Never panics")
+        .map_err(|error| anyhow::anyhow!("{command:?} stderr reading error: {error}"))?;
+    let stderr = String::from_utf8_lossy(stderr.as_slice()).into_owned();
 
     Ok(classify(status, stdout.as_slice(), stderr.as_str(), target))
 }
@@ -120,13 +138,13 @@ fn classify(status: std::process::ExitStatus, stdout: &[u8], stderr: &str, targe
     if exit < 0 {
         let last_line = stderr_tail.trim().lines().last().unwrap_or_default();
         leg.kind = Kind::Abort;
-        leg.signature = Some(format!("signal {}: {}", -exit, signature(last_line)));
+        leg.signature = Some(format!("signal {}: {}", -exit, normalize(last_line)));
         leg.stderr = Some(stderr_tail);
         return leg;
     }
     if stderr.contains("panicked at") {
         leg.kind = Kind::Panic;
-        leg.signature = Some(signature(panic_message(stderr).as_str()));
+        leg.signature = Some(normalize(panic_message(stderr)));
         leg.stderr = Some(stderr_tail);
         return leg;
     }
@@ -138,7 +156,7 @@ fn classify(status: std::process::ExitStatus, stdout: &[u8], stderr: &str, targe
             stderr_tail.clone()
         };
         leg.kind = Kind::Error;
-        leg.signature = Some(signature(message.as_str()));
+        leg.signature = Some(normalize(message.as_str()));
         leg.stderr = Some(stderr_tail);
         return leg;
     };
@@ -160,12 +178,19 @@ fn classify(status: std::process::ExitStatus, stdout: &[u8], stderr: &str, targe
         .collect();
     if let Some(first) = messages.first() {
         leg.kind = Kind::Error;
-        leg.signature = Some(signature(first.as_str()));
+        leg.signature = Some(normalize(first.as_str()));
         leg.error_count = Some(messages.len());
         leg.messages = messages.into_iter().take(MAX_MESSAGES).collect();
         if !stderr_tail.trim().is_empty() {
             leg.stderr = Some(stderr_tail);
         }
+        return leg;
+    }
+
+    if exit != solx_utils::EXIT_CODE_SUCCESS {
+        leg.kind = Kind::Error;
+        leg.signature = Some(format!("exit {exit}: {}", normalize(stderr_tail.as_str())));
+        leg.stderr = Some(stderr_tail);
         return leg;
     }
 
@@ -195,40 +220,44 @@ fn classify(status: std::process::ExitStatus, stdout: &[u8], stderr: &str, targe
         leg.signature = Some("no errors reported but no bytecode for the target source".to_owned());
         leg.stderr = Some(stderr_tail);
         leg.emitted = Some(emitted);
-        return leg;
     }
-
-    leg.kind = Kind::Ok;
     leg
 }
 
 ///
-/// Collapses a diagnostic into a bucket key: first line, paths and numbers normalized.
+/// Collapses a diagnostic into a bucket key: its first two lines with paths, library hashes and
+/// numbers replaced.
 ///
-pub fn signature(message: &str) -> String {
-    let line = message.trim().lines().next().unwrap_or("<empty>");
-    let line = SOL_PATH.replace_all(line, "<file>");
+pub fn normalize(text: &str) -> String {
+    let text = text.replace("\\n", "\n");
+    let lines: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .take(2)
+        .collect();
+    let line = if lines.is_empty() {
+        "<empty>".to_owned()
+    } else {
+        lines.join(" ")
+    };
+    let line = LIBRARY_HASH.replace_all(line.as_str(), "$$<hash>$$");
+    let line = SOL_PATH.replace_all(line.as_ref(), "<file>");
     let line = HEX_NUMBER.replace_all(line.as_ref(), "0x…");
     let line = DECIMAL_NUMBER.replace_all(line.as_ref(), "N");
-    line.chars().take(200).collect()
+    line.chars().take(160).collect()
 }
 
 ///
 /// The panic message, which is the bucket key; the location stays in the recorded stderr tail.
 ///
-fn panic_message(stderr: &str) -> String {
-    if let Some(captures) = PANIC_WITH_MESSAGE.captures(stderr) {
-        let message = captures.get(1).expect("Always exists").as_str();
-        return if message.is_empty() {
-            "<no panic message>".to_owned()
-        } else {
-            message.to_owned()
-        };
-    }
-    if let Some(found) = PANIC.find(stderr) {
-        return found.as_str().to_owned();
-    }
-    stderr.trim().lines().last().unwrap_or_default().to_owned()
+fn panic_message(stderr: &str) -> &str {
+    PANIC_WITH_MESSAGE
+        .captures(stderr)
+        .and_then(|captures| captures.get(1))
+        .map(|message| message.as_str())
+        .filter(|message| !message.is_empty())
+        .unwrap_or("<no panic message>")
 }
 
 ///
@@ -261,35 +290,75 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
 }
 
 ///
-/// Caps the compiler's address space so an out-of-memory compilation aborts deterministically
-/// instead of taking the machine down.
+/// Kills the compiler with the worker processes it spawned, which share its process group and
+/// would otherwise keep compiling.
 ///
 #[cfg(unix)]
-fn limit_address_space(command: &mut Command, memory_limit_mib: u64) -> anyhow::Result<()> {
-    use std::os::unix::process::CommandExt;
-
-    let limit = (memory_limit_mib * 1024 * 1024) as libc::rlim_t;
-    // SAFETY: `setrlimit` is async-signal-safe and touches only the child's own limits.
+fn kill(process: &mut Child) {
+    // SAFETY: `killpg` only sends a signal to the group the compiler leads.
     unsafe {
-        command.pre_exec(move || {
-            let rlimit = libc::rlimit {
-                rlim_cur: limit,
-                rlim_max: limit,
-            };
-            if libc::setrlimit(libc::RLIMIT_AS, &rlimit) != 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        });
+        libc::killpg(process.id() as libc::pid_t, libc::SIGKILL);
     }
-    Ok(())
+    let _ = process.wait();
 }
 
 ///
-/// Caps the compiler's address space so an out-of-memory compilation aborts deterministically
-/// instead of taking the machine down.
+/// Kills the compiler with the worker processes it spawned, children first, as they would
+/// otherwise keep compiling.
 ///
 #[cfg(not(unix))]
-fn limit_address_space(_command: &mut Command, _memory_limit_mib: u64) -> anyhow::Result<()> {
-    anyhow::bail!("The compiler memory limit is only supported on Unix")
+fn kill(process: &mut Child) {
+    let mut system = System::new();
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing().without_tasks(),
+    );
+    for pid in descendants(&system, Pid::from_u32(process.id()))
+        .into_iter()
+        .rev()
+    {
+        if let Some(descendant) = system.process(pid) {
+            descendant.kill();
+        }
+    }
+    let _ = process.wait();
+}
+
+///
+/// The resident memory of the compiler and the worker processes it spawned, in bytes.
+///
+/// Threads are left out, as Linux would otherwise list each one as a process with the memory of
+/// the whole process.
+///
+fn memory_usage(system: &mut System, process: &Child) -> u64 {
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing().with_memory().without_tasks(),
+    );
+    descendants(system, Pid::from_u32(process.id()))
+        .into_iter()
+        .filter_map(|pid| system.process(pid))
+        .map(|process| process.memory())
+        .sum()
+}
+
+///
+/// The process and all its descendants, parents before children.
+///
+fn descendants(system: &System, root: Pid) -> Vec<Pid> {
+    let mut tree = vec![root];
+    let mut index = 0;
+    while let Some(&parent) = tree.get(index) {
+        tree.extend(
+            system
+                .processes()
+                .values()
+                .filter(|process| process.parent() == Some(parent))
+                .map(|process| process.pid()),
+        );
+        index += 1;
+    }
+    tree
 }

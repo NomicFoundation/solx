@@ -6,7 +6,8 @@ name: Sourcify Sweep
 # the PR carries the `ci:sourcify-sweep` label (adding the label starts a run).
 # Report-only: frontend failures never fail the run, only harness breakage does.
 #
-# The corpus release and both compilers are pinned in solx-dev/sourcify-tests.toml.
+# The corpus release is pinned in solx-dev/sourcify-tests.toml, and the reference
+# compiler in solx-compiler-downloader/dev-compilers.json.
 
 on:
   pull_request:

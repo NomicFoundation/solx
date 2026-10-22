@@ -2,6 +2,7 @@
 //! `solx` Sourcify sweep arguments.
 //!
 
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
 use clap::Args;
@@ -41,8 +42,8 @@ pub struct Sourcify {
     )]
     pub corpus_dir: PathBuf,
 
-    /// Local corpus to sweep instead of the pinned one: a corpus root with `contracts/`, or a
-    /// contracts directory such as `./tests/sourcify-sweep/fixtures`.
+    /// Local corpus to sweep instead of the pinned one, with a `contracts/` directory, such as
+    /// `./tests/sourcify-sweep/fixtures`.
     #[arg(long, help_heading = "Directories")]
     pub corpus_path: Option<PathBuf>,
 
@@ -78,16 +79,16 @@ pub struct Sourcify {
     //
     /// Number of concurrent compiler processes [default: available parallelism].
     #[arg(long, help_heading = "Limits")]
-    pub threads: Option<usize>,
+    pub threads: Option<NonZeroUsize>,
 
     /// Per-compilation timeout in seconds.
     #[arg(long, default_value_t = 300, help_heading = "Limits")]
     pub timeout: u64,
 
-    /// Address-space cap of each compiler process in MiB, so an out-of-memory compilation aborts
-    /// instead of taking the machine down; 0 for none.
-    #[arg(long, default_value_t = 0, help_heading = "Limits")]
-    pub memory_limit_mib: u64,
+    /// Resident memory cap of each compiler with its workers in MiB, so an out-of-memory
+    /// compilation is killed instead of taking the machine down.
+    #[arg(long, help_heading = "Limits")]
+    pub memory_limit_mib: Option<u64>,
 }
 
 ///
