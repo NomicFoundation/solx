@@ -149,7 +149,7 @@ fn classify(status: std::process::ExitStatus, stdout: &[u8], stderr: &str, targe
         return leg;
     }
 
-    let Ok(output) = serde_json::from_slice::<solx_standard_json::Output>(stdout) else {
+    let Ok(output) = serde_json::from_slice::<serde_json::Value>(stdout) else {
         let message = if stderr_tail.is_empty() {
             format!("exit {:?} without standard-JSON output", leg.exit)
         } else {
@@ -162,15 +162,18 @@ fn classify(status: std::process::ExitStatus, stdout: &[u8], stderr: &str, targe
     };
 
     let messages: Vec<String> = output
-        .errors
-        .iter()
-        .filter(|error| error.severity == "error")
+        .get("errors")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|error| error.get("severity").and_then(serde_json::Value::as_str) == Some("error"))
         .map(|error| {
-            if error.message.is_empty() {
-                error.formatted_message.clone()
-            } else {
-                error.message.clone()
-            }
+            ["message", "formattedMessage"]
+                .into_iter()
+                .filter_map(|key| error.get(key).and_then(serde_json::Value::as_str))
+                .find(|message| !message.is_empty())
+                .unwrap_or_default()
+                .to_owned()
         })
         .collect();
     if let Some(first) = messages.first() {
@@ -184,17 +187,22 @@ fn classify(status: std::process::ExitStatus, stdout: &[u8], stderr: &str, targe
         return leg;
     }
 
-    let is_target_compiled = output
-        .contracts
-        .get(target)
+    let contracts = output
+        .get("contracts")
+        .and_then(serde_json::Value::as_object);
+    let is_target_compiled = contracts
+        .and_then(|contracts| contracts.get(target))
+        .and_then(serde_json::Value::as_object)
         .is_some_and(|file| file.values().any(has_bytecode));
     if !is_target_compiled {
-        let emitted: BTreeMap<String, Vec<String>> = output
-            .contracts
-            .iter()
+        let emitted: BTreeMap<String, Vec<String>> = contracts
+            .into_iter()
+            .flatten()
             .map(|(path, file)| {
                 let names = file
-                    .iter()
+                    .as_object()
+                    .into_iter()
+                    .flatten()
                     .filter(|(_name, contract)| has_bytecode(contract))
                     .map(|(name, _contract)| name.to_owned())
                     .collect();
@@ -248,12 +256,11 @@ fn panic_message(stderr: &str) -> &str {
 ///
 /// Whether a standard JSON output contract has bytecode.
 ///
-fn has_bytecode(contract: &solx_standard_json::OutputContract) -> bool {
+fn has_bytecode(contract: &serde_json::Value) -> bool {
     contract
-        .evm
-        .as_ref()
-        .and_then(|evm| evm.bytecode.as_ref())
-        .is_some_and(|bytecode| bytecode.object.is_some())
+        .pointer("/evm/bytecode/object")
+        .and_then(serde_json::Value::as_str)
+        .is_some()
 }
 
 ///
