@@ -17,6 +17,7 @@ use slang_solidity_v2::compilation::FileId;
 use solx_mlir::ContractKind;
 
 use crate::contract::storage_slot::StorageSlot;
+use crate::error::Error;
 
 /// The deployable object a module emits, each variant carrying the definition its kind
 /// dispatches from.
@@ -158,17 +159,25 @@ impl Object {
     }
 
     /// The storage slot of each state variable the object stores, persistent and transient in
-    /// one map keyed by definition id, or `None` when Slang cannot lay out its storage.
-    pub fn storage_layout(&self) -> Option<HashMap<NodeId, StorageSlot>> {
+    /// one map keyed by definition id.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error of a storage Slang cannot lay out.
+    pub fn storage_slots(&self) -> Result<HashMap<NodeId, StorageSlot>, Error> {
         match self {
-            Self::Contract(node) => Some(
-                node.compute_storage_items()?
-                    .into_iter()
-                    .chain(node.compute_transient_storage_items()?)
-                    .map(|item| (item.node_id(), StorageSlot::from(&item)))
-                    .collect(),
-            ),
-            Self::Library(_) => Some(HashMap::new()),
+            Self::Contract(node) => node
+                .compute_storage_items()
+                .zip(node.compute_transient_storage_items())
+                .map(|(persistent, transient)| {
+                    persistent
+                        .into_iter()
+                        .chain(transient)
+                        .map(|variable| (variable.node_id(), StorageSlot::from(&variable)))
+                        .collect()
+                })
+                .ok_or_else(|| Error::StorageLayout(self.name().name().to_owned())),
+            Self::Library(_) => Ok(HashMap::new()),
         }
     }
 }

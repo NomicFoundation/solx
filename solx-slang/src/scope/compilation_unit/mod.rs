@@ -3,27 +3,28 @@
 //! lowered under. The definitions lower on the global thread pool, the costliest first.
 //!
 
+pub mod definition_output;
+
 use std::cell::OnceCell;
 use std::cmp::Reverse;
 use std::collections::BTreeMap;
 
 use rayon::iter::ParallelBridge;
 use rayon::iter::ParallelIterator;
-use slang_solidity_v2::ast::NodeLocation;
 use slang_solidity_v2::ast::SourceUnitMember;
 use slang_solidity_v2::compilation::CompilationUnit;
 
-use solx_standard_json::OutputError;
 use solx_standard_json::output::contract::Contract;
-use solx_standard_json::output::error::source_location::SourceLocation;
 use solx_utils::EVMVersion;
 use solx_utils::Profiler;
 use solx_utils::RevertStrings;
 
 use crate::abi::AbiDefinition;
-use crate::debug_locations::resolver::Resolver;
 use crate::debug_locations::sources::Sources;
+use crate::error::Error;
 use crate::scope::source_unit::SourceUnitScope;
+
+use self::definition_output::DefinitionOutput;
 
 /// The compilation unit scope: the standard-JSON input's settings every definition of the unit is
 /// lowered under.
@@ -56,8 +57,10 @@ impl CompilationUnitScope<'_> {
         unit: &CompilationUnit,
         output: &mut solx_standard_json::Output,
     ) -> anyhow::Result<()> {
-        let lowered = self.members(Self::members_by_cost(unit));
-        self.add_outputs(output, lowered)
+        for definition_output in self.members(Self::members_by_cost(unit))?.into_values() {
+            definition_output.write_to_standard_json(output, self.input_sources);
+        }
+        Ok(())
     }
 
     /// The members of every source, numbered in source order and sorted costliest first, so the
@@ -81,20 +84,21 @@ impl CompilationUnitScope<'_> {
     /// Lowers `members` on the global thread pool, or on this thread when LLVM is built without
     /// threads, keyed by their number in source order. A member that declares no definition yields
     /// nothing.
-    fn members(&self, members: Vec<(usize, SourceUnitMember)>) -> BTreeMap<usize, Lowered> {
+    ///
+    /// # Errors
+    ///
+    /// Returns the first error a lowering returned.
+    fn members(
+        &self,
+        members: Vec<(usize, SourceUnitMember)>,
+    ) -> anyhow::Result<BTreeMap<usize, DefinitionOutput>> {
         let lower = |melior: &OnceCell<melior::Context>,
                      (index, member): (usize, SourceUnitMember)| {
             let definition = AbiDefinition::from_member(&member)?;
-            let name = definition.name().name().to_owned();
-            let contract = self.definition(melior, definition, &name);
-            Some((
-                index,
-                Lowered {
-                    member,
-                    name,
-                    contract,
-                },
-            ))
+            Some(
+                self.definition(melior, definition, member)
+                    .map(|output| (index, output)),
+            )
         };
         // An LLVM built without threads has locks that do nothing, so only one thread at a time
         // may use LLVM and MLIR.
@@ -115,31 +119,71 @@ impl CompilationUnitScope<'_> {
         }
     }
 
-    /// The standard-JSON output of `definition`: its ABI, and the deploy and runtime code of the
-    /// object it deploys, lowered off the melior context in `melior` when the selection requests an
-    /// output only codegen produces. `None` when Slang cannot compute its ABI.
+    /// The output of `definition`, which `member` declares, lowered off the melior context in
+    /// `melior`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error of a lowering that failed.
     fn definition(
         &self,
         melior: &OnceCell<melior::Context>,
         definition: AbiDefinition,
-        name: &str,
-    ) -> Option<DefinitionOutput> {
-        let abi_value = definition.abi()?.into_value();
-        let method_identifiers = definition.method_identifiers();
-        let Some(object) = definition.into_object().filter(|_| self.run_codegen) else {
-            let contract = Contract::new_abi(abi_value, method_identifiers);
-            return Some(Ok((contract, Vec::new())));
+        member: SourceUnitMember,
+    ) -> anyhow::Result<DefinitionOutput> {
+        let name = definition.name().name().to_owned();
+        let mut profiler = Profiler::default();
+        let contract = match self.contract(melior, definition, &name, &mut profiler) {
+            Ok(contract) => Ok(contract?),
+            Err(error) => Err(error),
         };
-        let storage_layout = object.storage_layout()?;
+        let benchmarks = if self.report_benchmarks {
+            profiler.to_vec()
+        } else {
+            Vec::new()
+        };
+        Ok(DefinitionOutput::new(member, name, contract, benchmarks))
+    }
+
+    /// The standard-JSON contract of `definition`: its ABI, the storage layouts the selection
+    /// requests, and the deploy and runtime code of the object it deploys, lowered off the melior
+    /// context in `melior` and timed by `profiler` when the selection requests an output only
+    /// codegen produces. `Err` is the first output Slang cannot compute, and the inner error a
+    /// lowering that failed.
+    fn contract(
+        &self,
+        melior: &OnceCell<melior::Context>,
+        definition: AbiDefinition,
+        name: &str,
+        profiler: &mut Profiler,
+    ) -> Result<anyhow::Result<Contract>, Error> {
+        let file_id = definition.file_id().clone();
         let selected = |selector| {
             self.output_selection
-                .check_selection(object.file_id().as_str(), Some(name), selector)
+                .check_selection(file_id.as_str(), Some(name), selector)
         };
-        let mut profiler = Profiler::default();
+        let abi = definition.abi()?;
+        let method_identifiers = definition.method_identifiers();
+        let storage_layout = selected(solx_standard_json::InputSelector::StorageLayout)
+            .then(|| definition.storage_layout())
+            .transpose()?;
+        let transient_storage_layout =
+            selected(solx_standard_json::InputSelector::TransientStorageLayout)
+                .then(|| definition.transient_storage_layout())
+                .transpose()?;
+        let Some(object) = definition.into_object().filter(|_| self.run_codegen) else {
+            return Ok(Ok(Contract::new_abi(
+                abi,
+                method_identifiers,
+                storage_layout,
+                transient_storage_layout,
+            )));
+        };
+        let storage_slots = object.storage_slots()?;
         let contract = SourceUnitScope::object(
             melior,
             &object,
-            &storage_layout,
+            &storage_slots,
             self.evm_version,
             self.revert_strings,
             selected(solx_standard_json::InputSelector::BytecodeDebugInfo),
@@ -147,80 +191,18 @@ impl CompilationUnitScope<'_> {
             selected(solx_standard_json::InputSelector::MLIR),
             self.sources,
             self.report_benchmarks,
-            &mut profiler,
+            profiler,
         )
         .map(|mlir| {
             // `convert-sol-to-yul` builds the entry-point dispatcher from the same selectors.
-            let contract = Contract::new_mlir(mlir, abi_value, method_identifiers);
-            let benchmarks = if self.report_benchmarks {
-                profiler.to_vec()
-            } else {
-                Vec::new()
-            };
-            (contract, benchmarks)
+            Contract::new_mlir(
+                mlir,
+                abi,
+                method_identifiers,
+                storage_layout,
+                transient_storage_layout,
+            )
         });
-        Some(contract)
+        Ok(contract)
     }
-
-    /// Adds each lowered definition's output and benchmarks to `output` in source order, and reports
-    /// each definition whose ABI Slang cannot compute.
-    ///
-    /// # Errors
-    ///
-    /// Returns the first error a lowering returned.
-    fn add_outputs(
-        &self,
-        output: &mut solx_standard_json::Output,
-        lowered: BTreeMap<usize, Lowered>,
-    ) -> anyhow::Result<()> {
-        for Lowered {
-            member,
-            name,
-            contract,
-        } in lowered.into_values()
-        {
-            match contract {
-                Some(contract) => {
-                    let (contract, object_benchmarks) = contract?;
-                    let file_id = member
-                        .calculate_file_id()
-                        .expect("slang locates every definition");
-                    output
-                        .contracts
-                        .entry(file_id.to_string())
-                        .or_default()
-                        .insert(name, contract);
-                    output.benchmarks.extend(object_benchmarks);
-                }
-                None => {
-                    let (file_id, text_range) = Resolver::source_range(&member);
-                    output.errors.push(OutputError::new_error_with_data(
-                        Some(file_id.as_str()),
-                        format!("Slang cannot compute the ABI of `{name}`."),
-                        Some(SourceLocation::new(
-                            file_id.to_string(),
-                            text_range.start as isize,
-                            text_range.end as isize,
-                        )),
-                        Some(self.input_sources),
-                    ));
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-/// A definition's standard-JSON output and, when they are requested, the benchmarks its lowering
-/// recorded.
-type DefinitionOutput = anyhow::Result<(Contract, Vec<(String, u64)>)>;
-
-/// What lowering one source-unit member yields.
-struct Lowered {
-    /// The member declaring the definition, which locates it.
-    member: SourceUnitMember,
-    /// The definition's name, which keys its output.
-    name: String,
-    /// The definition's output, or `None` when Slang cannot compute its ABI.
-    contract: Option<DefinitionOutput>,
 }

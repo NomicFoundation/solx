@@ -157,10 +157,13 @@ The AST body is abbreviated here; it spans several thousand characters even for 
 
 Emits the contract ABI specification.
 
-Currently not supported. Usage:
+```console
+$ slang 'Simple.sol' --abi
 
-```bash
-slang 'Simple.sol' --abi
+======= Simple.sol:Simple =======
+Contract JSON ABI:
+[{"inputs":[],"name":"first","outputs":[{"internalType":"uint64","name":"","type":"uint64"}],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"second","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"pure","type":"function"}]
+
 ```
 
 
@@ -169,22 +172,29 @@ slang 'Simple.sol' --abi
 
 Emits the contract function signatures.
 
-Currently not supported. Usage:
+```console
+$ slang 'Simple.sol' --hashes
 
-```bash
-slang 'Simple.sol' --hashes
+======= Simple.sol:Simple =======
+Function signatures:
+3df4ddf4: first()
+5a8ac02d: second()
+
 ```
 
 
 
 ### `--storage-layout`
 
-Emits the contract storage layout.
+Emits the contract storage layout. Each `astId` is a Slang node identifier.
 
-Currently not supported. Usage:
+```console
+$ slang 'Simple.sol' --storage-layout
 
-```bash
-slang 'Simple.sol' --storage-layout
+======= Simple.sol:Simple =======
+Contract Storage Layout:
+{"storage":[{"astId":[..],"contract":"Simple.sol:Simple","label":"field_1","offset":0,"slot":"0","type":"t_uint256"},{"astId":[..],"contract":"Simple.sol:Simple","label":"field_2","offset":0,"slot":"1","type":"t_uint256"},{"astId":[..],"contract":"Simple.sol:Simple","label":"field_3","offset":0,"slot":"2","type":"t_uint256"}],"types":{"t_uint256":{"encoding":"inplace","label":"uint256","numberOfBytes":"32"}}}
+
 ```
 
 
@@ -193,10 +203,13 @@ slang 'Simple.sol' --storage-layout
 
 Emits the contract transient storage layout.
 
-Currently not supported. Usage:
+```console
+$ slang 'Simple.sol' --transient-storage-layout
 
-```bash
-slang 'Simple.sol' --transient-storage-layout
+======= Simple.sol:Simple =======
+Contract Transient Storage Layout:
+{"storage":[],"types":null}
+
 ```
 
 

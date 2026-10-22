@@ -381,6 +381,40 @@ fn select_frontend() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test_case("I", &[], &[])]
+#[test_case("L", &[], &[])]
+#[test_case("B", &["x"], &[])]
+#[test_case("C", &["x"], &["y"])]
+fn select_storage_layout(
+    name: &str,
+    storage: &[&str],
+    transient_storage: &[&str],
+) -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("select_storage_layout.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    let result = result.success();
+    let output: serde_json::Value = serde_json::from_slice(result.get_output().stdout.as_slice())?;
+    let contract = &output["contracts"]["A"][name];
+    let labels = |layout: &str| -> Vec<&str> {
+        contract[layout]["storage"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{name} has no {layout}"))
+            .iter()
+            .map(|variable| variable["label"].as_str().expect("the label is a string"))
+            .collect()
+    };
+    assert_eq!(labels("storageLayout"), storage);
+    assert_eq!(labels("transientStorageLayout"), transient_storage);
+
+    Ok(())
+}
+
 #[test]
 fn select_evm_deployed_bytecode() -> anyhow::Result<()> {
     crate::common::setup()?;

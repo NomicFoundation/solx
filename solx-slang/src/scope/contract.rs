@@ -43,17 +43,17 @@ pub struct ContractScope<'source_unit, 'context> {
     /// The definition ids of the functions defined so far.
     pub defined_functions: HashSet<NodeId>,
     /// The state-variable slots keyed by definition id, computed once for both segments.
-    pub storage_layout: &'source_unit HashMap<NodeId, StorageSlot>,
+    pub storage_slots: &'source_unit HashMap<NodeId, StorageSlot>,
 }
 
 impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
-    /// Opens a contract scope within `source_unit`, with the object's `storage_layout` and the
+    /// Opens a contract scope within `source_unit`, with the object's `storage_slots` and the
     /// `segment` it lowers.
     pub fn new(
         source_unit: &'source_unit mut SourceUnitScope<'context>,
         contract: Contract<'context>,
         object: &'source_unit Object,
-        storage_layout: &'source_unit HashMap<NodeId, StorageSlot>,
+        storage_slots: &'source_unit HashMap<NodeId, StorageSlot>,
         segment: Segment<'source_unit, 'context>,
     ) -> Self {
         Self {
@@ -62,7 +62,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             object,
             segment,
             defined_functions: HashSet::new(),
-            storage_layout,
+            storage_slots,
         }
     }
 
