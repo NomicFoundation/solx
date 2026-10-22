@@ -281,13 +281,14 @@ impl Project {
             solc_version,
             contracts,
             ast_jsons,
-            libraries: _,
+            libraries,
         } = self;
         let pool = EVMProcessPool::new(EVMProcessSession::new(
             evm_version,
             output_selection.clone(),
             llvm_options.clone(),
             output_config,
+            libraries.as_linker_symbols()?,
         ))?;
 
         let mut contracts: Vec<(String, Contract)> = contracts.into_iter().collect();
@@ -318,6 +319,7 @@ impl Project {
                 let transient_storage_layout = contract.transient_storage_layout.take();
                 let mlir = contract.mlir.take();
 
+                let mut deploy_embeds_runtime_only = false;
                 let (deploy_code_ir, runtime_code_ir): (ContractIR, ContractIR) = match contract.ir
                 {
                     Some(ContractIR::LLVMIR(runtime_code)) => {
@@ -340,6 +342,7 @@ impl Project {
                     Some(ContractIR::MLIR(mut deploy_code)) => {
                         let runtime_code: ContractMLIR =
                             *deploy_code.runtime_code.take().expect("Always exists");
+                        deploy_embeds_runtime_only = deploy_code.dependencies.objects.is_empty();
                         (deploy_code.into(), runtime_code.into())
                     }
                     None => {
@@ -375,6 +378,7 @@ impl Project {
                         None,
                         metadata_bytes,
                         optimizer_settings.clone(),
+                        None,
                     );
 
                     let result = Self::run_multi_pass_pipeline(&pool, &mut job);
@@ -385,6 +389,11 @@ impl Project {
                     .as_ref()
                     .ok()
                     .and_then(|output| output.object.immutables.to_owned());
+                let runtime_assembled_bytecode = runtime_object_result
+                    .as_ref()
+                    .ok()
+                    .filter(|_| deploy_embeds_runtime_only)
+                    .and_then(|output| output.object.assembled_bytecode.clone());
                 let deploy_object_result: crate::Result<EVMProcessOutput> = {
                     let mut job = EVMProcessJob::new(
                         contract_name.clone(),
@@ -393,6 +402,7 @@ impl Project {
                         immutables,
                         None,
                         optimizer_settings.clone(),
+                        runtime_assembled_bytecode,
                     );
 
                     Self::run_multi_pass_pipeline(&pool, &mut job)
