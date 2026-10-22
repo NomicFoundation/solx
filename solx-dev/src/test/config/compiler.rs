@@ -1,9 +1,9 @@
 //!
-//! `solx` Hardhat compiler.
+//! `solx` test compiler.
 //!
 
 ///
-/// `solx` Hardhat compiler.
+/// `solx` test compiler.
 ///
 #[derive(Debug, serde::Deserialize)]
 pub struct Compiler {

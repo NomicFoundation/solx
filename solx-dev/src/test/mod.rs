@@ -4,6 +4,7 @@
 
 use itertools::Itertools;
 
+pub mod config;
 pub mod foundry;
 pub mod hardhat;
 pub mod solx_tester;

@@ -2,45 +2,20 @@
 //! `solx` Sourcify sweep corpus.
 //!
 
+pub mod slice;
+
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
 use super::config::corpus::Corpus;
 
-///
-/// A round-robin slice of the sorted corpus, so CI shards split it evenly.
-///
-#[derive(Debug, Clone, Copy)]
-pub struct Slice {
-    /// The number of shards.
-    pub shard_count: usize,
-    /// The shard to keep.
-    pub shard_index: usize,
-    /// The maximum number of contracts to keep, if any.
-    pub limit: Option<usize>,
-}
-
-impl Slice {
-    ///
-    /// Sorts the corpus file names and keeps this slice of them.
-    ///
-    pub fn select(&self, mut names: Vec<String>) -> Vec<String> {
-        names.sort();
-        names
-            .into_iter()
-            .enumerate()
-            .filter(|(index, _name)| index % self.shard_count == self.shard_index)
-            .map(|(_index, name)| name)
-            .take(self.limit.unwrap_or(usize::MAX))
-            .collect()
-    }
-}
+use self::slice::Slice;
 
 ///
 /// Lists the slice of a local corpus, laid out as the pinned release with a `contracts/` directory.
 ///
-pub fn local(directory: &Path, slice: Slice) -> anyhow::Result<Vec<PathBuf>> {
+pub fn local(directory: &Path, slice: &Slice) -> anyhow::Result<Vec<PathBuf>> {
     let contracts_directory = directory.join("contracts");
     let names = std::fs::read_dir(contracts_directory.as_path())
         .and_then(|entries| {
@@ -68,7 +43,7 @@ pub fn local(directory: &Path, slice: Slice) -> anyhow::Result<Vec<PathBuf>> {
 /// Downloads the pinned corpus release into `directory`, verifies it, and extracts only the
 /// slice, which is a small part of the full corpus.
 ///
-pub fn pinned(corpus: &Corpus, directory: &Path, slice: Slice) -> anyhow::Result<Vec<PathBuf>> {
+pub fn pinned(corpus: &Corpus, directory: &Path, slice: &Slice) -> anyhow::Result<Vec<PathBuf>> {
     crate::utils::exists("tar")?;
     crate::utils::exists("sha256sum")?;
 
@@ -96,7 +71,14 @@ pub fn pinned(corpus: &Corpus, directory: &Path, slice: Slice) -> anyhow::Result
 
     let mut sha256sum = Command::new("sha256sum");
     sha256sum.arg(archive.as_path());
-    let checksum = output(&mut sha256sum)?;
+    let checksum = crate::utils::command_with_output(
+        &mut sha256sum,
+        format!(
+            "{} corpus checksum",
+            solx_utils::cargo_status_ok("Verifying")
+        )
+        .as_str(),
+    )?;
     let checksum = checksum.split_whitespace().next().unwrap_or_default();
     if checksum != corpus.sha256 {
         anyhow::bail!(
@@ -107,11 +89,14 @@ pub fn pinned(corpus: &Corpus, directory: &Path, slice: Slice) -> anyhow::Result
 
     let mut list = Command::new("tar");
     list.arg("-tJf").arg(archive.as_path());
-    let names: Vec<String> = output(&mut list)?
-        .lines()
-        .filter(|name| name.starts_with("./contracts/") && name.ends_with(".json"))
-        .map(str::to_owned)
-        .collect();
+    let names: Vec<String> = crate::utils::command_with_output(
+        &mut list,
+        format!("{} corpus records", solx_utils::cargo_status_ok("Listing")).as_str(),
+    )?
+    .lines()
+    .filter(|name| name.starts_with("./contracts/") && name.ends_with(".json"))
+    .map(str::to_owned)
+    .collect();
     let names = slice.select(names);
     if names.is_empty() {
         anyhow::bail!("No corpus records in {archive:?}");
@@ -146,21 +131,4 @@ pub fn pinned(corpus: &Corpus, directory: &Path, slice: Slice) -> anyhow::Result
     )?;
 
     Ok(names.into_iter().map(|name| extracted.join(name)).collect())
-}
-
-///
-/// Runs a command and returns its standard output.
-///
-fn output(command: &mut Command) -> anyhow::Result<String> {
-    let output = command
-        .output()
-        .map_err(|error| anyhow::anyhow!("{command:?} process spawning error: {error}"))?;
-    if !output.status.success() {
-        anyhow::bail!(
-            "{command:?} subprocess failed: {}",
-            String::from_utf8_lossy(output.stderr.as_slice())
-        );
-    }
-    String::from_utf8(output.stdout)
-        .map_err(|error| anyhow::anyhow!("{command:?} output is not UTF-8: {error}"))
 }

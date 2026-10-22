@@ -1,9 +1,5 @@
 name: Sourcify Sweep
 
-# Runs `solx-dev test sourcify` over the pinned Sourcify corpus with the slang
-# build of the commit, one shard per job, and reports the outcome table plus
-# the ranked failure census. Runs on every push to main, and on PR pushes while
-# the PR carries the `ci:sourcify-sweep` label (adding the label starts a run).
 # Report-only: frontend failures never fail the run, only harness breakage does.
 #
 # The corpus release is pinned in solx-dev/sourcify-tests.toml, and the reference
@@ -42,8 +38,11 @@ jobs:
         && (github.event.action != 'labeled' || github.event.label.name == 'ci:sourcify-sweep')
         && !github.event.pull_request.head.repo.fork)
     runs-on: ubuntu-24.04
+    outputs:
+      shards: ${{ steps.shards.outputs.list }}
     steps:
-      - run: 'true'
+      - id: shards
+        run: echo "list=$(jq -nc '[range(env.SHARD_COUNT | tonumber)]')" >> "${GITHUB_OUTPUT}"
 
   cooldown-check:
     name: Cargo cooldown check
@@ -82,8 +81,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Must stay in sync with SHARD_COUNT above.
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+        shard: ${{ fromJSON(needs.label-check.outputs.shards) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -106,13 +104,12 @@ jobs:
           prefix-key: sourcify-sweep-v1
           cache-on-failure: true
           # Every shard builds the same artifacts; one saver is enough.
-          save-if: ${{ matrix.shard == 0 }}
+          save-if: ${{ github.ref == 'refs/heads/main' && matrix.shard == 0 }}
 
       - name: Build slang and solx-dev
         run: |
           ${SFW_PREFIX:-} cargo fetch --locked
           ${SFW_PREFIX:-} cargo build --frozen --release --bin slang --bin solx-dev
-          ./target/release/slang --version
 
       # The sweep needs only the two binaries; the LLVM tree and the rest of
       # the target dir go so the corpus slice and 4 concurrent compiler
@@ -127,6 +124,7 @@ jobs:
           df -h .
 
       - name: Run the sweep shard
+        id: sweep
         run: |
           ./target/release/solx-dev test sourcify \
             --corpus-dir "${RUNNER_TEMP}/corpus" \
@@ -136,8 +134,10 @@ jobs:
             --threads 4 \
             --memory-limit-mib 6144
 
+      # Results are written one line per contract, so a shard that died keeps what it swept.
       - name: Upload shard results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ always() && steps.sweep.outcome != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sourcify-sweep-results-shard-${{ matrix.shard }}
           path: ${{ runner.temp }}/results-shard-${{ matrix.shard }}.jsonl
@@ -145,7 +145,7 @@ jobs:
 
       - name: Upload solx-dev
         if: matrix.shard == 0
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sourcify-sweep-solx-dev
           path: target/release/solx-dev
@@ -162,24 +162,26 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Download solx-dev
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: sourcify-sweep-solx-dev
           path: ${{ runner.temp }}/bin
 
       - name: Download shard results
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: sourcify-sweep-results-shard-*
           path: ${{ runner.temp }}/shards
           merge-multiple: true
 
+      # A partial report is rendered from the shards that arrived; the completeness check at the
+      # end fails the job when any is missing.
       - name: Combine shards and report
         run: |
           shards=$(find "${RUNNER_TEMP}/shards" -name 'results-shard-*.jsonl' | wc -l)
+          title="Sourcify sweep"
           if [ "${shards}" -ne "${SHARD_COUNT}" ]; then
-            echo "Expected ${SHARD_COUNT} shard result files, found ${shards}." >&2
-            exit 1
+            title="${title} (${shards} of ${SHARD_COUNT} shards)"
           fi
           cat "${RUNNER_TEMP}"/shards/results-shard-*.jsonl > "${RUNNER_TEMP}/results.jsonl"
           # Artifacts drop the executable bit.
@@ -187,7 +189,7 @@ jobs:
           "${RUNNER_TEMP}/bin/solx-dev" test sourcify-report \
             --results-paths "${RUNNER_TEMP}/results.jsonl" \
             --output-path "${RUNNER_TEMP}/report.md" \
-            --title "Sourcify sweep (slang vs latest solx release)"
+            --title "${title}"
           cat "${RUNNER_TEMP}/report.md" >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Post report comment
@@ -198,9 +200,17 @@ jobs:
           message-path: ${{ runner.temp }}/report.md
 
       - name: Upload combined results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sourcify-sweep-results
           path: |
             ${{ runner.temp }}/results.jsonl
             ${{ runner.temp }}/report.md
+
+      - name: Check shard completeness
+        run: |
+          shards=$(find "${RUNNER_TEMP}/shards" -name 'results-shard-*.jsonl' | wc -l)
+          if [ "${shards}" -ne "${SHARD_COUNT}" ]; then
+            echo "Expected ${SHARD_COUNT} shard result files, found ${shards}." >&2
+            exit 1
+          fi

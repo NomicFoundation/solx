@@ -3,14 +3,14 @@
 //!
 
 pub mod comparison;
-pub mod compiler;
 pub mod project;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use crate::test::config::compiler::Compiler;
+
 use self::comparison::Comparison;
-use self::compiler::Compiler;
 use self::project::Project;
 
 ///

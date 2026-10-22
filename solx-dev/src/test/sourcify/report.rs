@@ -27,9 +27,6 @@ static CRASH_LINE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(Assertion `.*?' failed|LLVM ERROR: [^\n]+|fatal error: [^\n]+|Unexpected [^\n]+)")
         .expect("Always valid")
 });
-static UNRESOLVED_IMPORT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^failed to resolve import (\S+) in (\S+)").expect("Always valid")
-});
 static MLIR_ERROR: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"error: ([^\n]+)").expect("Always valid"));
 static PANIC_LOCATION: LazyLock<Regex> =
@@ -52,7 +49,7 @@ pub fn report(
     for path in results_paths.iter() {
         let content = std::fs::read_to_string(path.as_path())
             .map_err(|error| anyhow::anyhow!("Sweep results {path:?} reading: {error}"))?;
-        for line in content.lines().filter(|line| !line.trim().is_empty()) {
+        for line in content.lines() {
             let value: serde_json::Value = serde_json::from_str(line)
                 .map_err(|error| anyhow::anyhow!("Sweep results {path:?} parsing: {error}"))?;
             match value.get("meta").and_then(serde_json::Value::as_object) {
@@ -72,7 +69,7 @@ pub fn report(
     if records.is_empty() {
         anyhow::bail!("No sweep results found in {results_paths:?}");
     }
-    // Shards finish in any order; sorting keeps the tie order of the census stable.
+    // Threads finish in any order; sorting fixes which contracts a bucket lists as examples.
     records.sort_by(|left, right| left.identifier.cmp(&right.identifier));
 
     let report = render(&meta, records.as_slice(), title.as_str());
@@ -94,7 +91,7 @@ fn render(
 ) -> String {
     let total = records.len();
     let mut lines = vec![format!("## {title}"), String::new()];
-    for name in ["slang", "baseline"] {
+    for name in ["candidate", "reference"] {
         if let Some(version) = meta.get(name).and_then(serde_json::Value::as_str) {
             lines.push(format!("- {name}: `{version}`"));
         }
@@ -121,23 +118,31 @@ fn render(
 
     let candidate_only: Vec<(&str, &Leg)> = records
         .iter()
-        .filter(|record| record.outcome == Outcome::SlangFail)
-        .map(|record| (record.identifier.as_str(), &record.slang))
+        .filter(|record| record.outcome == Outcome::CandidateFail)
+        .map(|record| (record.identifier.as_str(), &record.candidate))
         .collect();
     census(
         candidate_only.as_slice(),
         "Candidate-only failures",
         &mut lines,
     );
-    // For shared failures the baseline's diagnostic is the one that explains the contract.
+    // For shared failures the reference's diagnostic is the one that explains the contract.
     let shared: Vec<(&str, &Leg)> = records
         .iter()
         .filter(|record| record.outcome == Outcome::BothFail)
-        .filter_map(|record| Some((record.identifier.as_str(), record.baseline.as_ref()?)))
+        .map(|record| {
+            (
+                record.identifier.as_str(),
+                record
+                    .reference
+                    .as_ref()
+                    .expect("Always exists for both-fail"),
+            )
+        })
         .collect();
     census(
         shared.as_slice(),
-        "Failures shared with the baseline (baseline diagnostics)",
+        "Failures shared with the reference (reference diagnostics)",
         &mut lines,
     );
     let timeouts: Vec<&str> = records
@@ -235,27 +240,19 @@ fn refine(leg: &Leg) -> (Kind, String) {
     let recorded = leg.signature.as_deref().unwrap_or_default();
     let signature = match leg.kind {
         Kind::Error => {
-            if let Some(import) = leg
-                .messages
-                .iter()
-                .find(|message| message.starts_with("failed to resolve import"))
-            {
-                import_bucket(import.as_str())
+            let first = leg.messages.first().map_or(recorded, String::as_str);
+            if first.starts_with("Sol pass pipeline failed") {
+                let detail = MLIR_ERROR.captures(stderr).map_or(first, |captures| {
+                    captures.get(1).expect("Always exists").as_str()
+                });
+                format!("MLIR verifier: {}", normalize(detail))
+            } else if first.contains("worker exited without replying") {
+                let detail = CRASH_LINE
+                    .find(stderr)
+                    .map_or(first, |found| found.as_str());
+                format!("worker crash: {}", normalize(detail))
             } else {
-                let first = leg.messages.first().map_or(recorded, String::as_str);
-                if first.starts_with("Sol pass pipeline failed") {
-                    let detail = MLIR_ERROR.captures(stderr).map_or(first, |captures| {
-                        captures.get(1).expect("Always exists").as_str()
-                    });
-                    format!("MLIR verifier: {}", normalize(detail))
-                } else if first.contains("worker exited without replying") {
-                    let detail = CRASH_LINE
-                        .find(stderr)
-                        .map_or(first, |found| found.as_str());
-                    format!("worker crash: {}", normalize(detail))
-                } else {
-                    normalize(first)
-                }
+                normalize(first)
             }
         }
         Kind::Panic => {
@@ -279,22 +276,4 @@ fn refine(leg: &Leg) -> (Kind, String) {
         _ => recorded.to_owned(),
     };
     (leg.kind, signature)
-}
-
-///
-/// The bucket of an unresolved import, by what kind of path failed to resolve.
-///
-fn import_bucket(message: &str) -> String {
-    let Some(captures) = UNRESOLVED_IMPORT.captures(message) else {
-        return format!("import resolution: {}", normalize(message));
-    };
-    let import_path = captures.get(1).expect("Always exists").as_str();
-    let importer = captures.get(2).expect("Always exists").as_str();
-    if importer.contains("://") || import_path.contains("://") {
-        "import resolution: URL-style source path".to_owned()
-    } else if import_path.starts_with('.') {
-        "import resolution: relative import not found".to_owned()
-    } else {
-        "import resolution: non-relative import (remapping or exact source name)".to_owned()
-    }
 }

@@ -19,10 +19,10 @@
 )]
 #[serde(rename_all = "kebab-case")]
 pub enum Kind {
-    /// A successful exit, no error-severity diagnostics and bytecode for the target source.
+    /// No error-severity diagnostics and bytecode for the target source.
     #[default]
     Ok,
-    /// Error-severity diagnostics, a failing exit, or an exit without standard JSON output.
+    /// Error-severity diagnostics, or an exit without standard JSON output.
     Error,
     /// A clean exit without bytecode for the target source.
     NoBytecode,

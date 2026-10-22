@@ -127,12 +127,9 @@ pub fn test(
                 if !solidity_file.is_file() {
                     continue;
                 }
-                crate::utils::sed_file(
+                crate::utils::rewrite_version_pragmas_in_file(
                     solidity_file.as_path(),
-                    &[
-                        format!(r#"s/pragma solidity.*/pragma solidity >={solidity_version};/g"#)
-                            .as_str(),
-                    ],
+                    format!("pragma solidity >={solidity_version};").as_str(),
                 )?;
             }
 

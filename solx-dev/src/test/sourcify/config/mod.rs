@@ -7,7 +7,7 @@ pub mod corpus;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use crate::test::hardhat::config::compiler::Compiler;
+use crate::test::config::compiler::Compiler;
 
 use self::corpus::Corpus;
 

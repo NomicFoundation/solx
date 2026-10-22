@@ -2,17 +2,26 @@
 //! The LLVM builder utilities.
 //!
 
+use std::borrow::Cow;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
+use std::sync::LazyLock;
 
 use colored::Colorize;
 use path_slash::PathBufExt;
+use regex::Regex;
 
 use crate::llvm::path::Path as LlvmPath;
+
+/// Version-expression characters only, so `pragma solidity` in a comment never swallows code up
+/// to the next `;`.
+static VERSION_PRAGMA: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"pragma\s+solidity\s+[0-9xX*.^~<>=|\s-]+;").expect("Always valid")
+});
 
 /// The minimum required XCode version.
 pub const XCODE_MIN_VERSION: u32 = 11;
@@ -76,6 +85,33 @@ pub fn command_with_retries(
     }
 
     anyhow::bail!("{command:?} subprocess failed after {retries} retries");
+}
+
+///
+/// The subprocess runner.
+///
+/// Returns the standard output.
+///
+pub fn command_with_output(command: &mut Command, description: &str) -> anyhow::Result<String> {
+    eprintln!("{description}: {command:?}");
+
+    let output = command
+        .output()
+        .map_err(|error| anyhow::anyhow!("{command:?} process spawning error: {error:?}"))?;
+
+    if output.status.code() != Some(solx_utils::EXIT_CODE_SUCCESS) {
+        anyhow::bail!(
+            "{command:?} subprocess failed {}:\n{}",
+            match output.status.code() {
+                Some(code) => format!("with exit code {code:?}"),
+                None => "without exit code".to_owned(),
+            },
+            String::from_utf8_lossy(output.stderr.as_slice()),
+        );
+    }
+
+    String::from_utf8(output.stdout)
+        .map_err(|error| anyhow::anyhow!("{command:?} output is not UTF-8: {error}"))
 }
 
 ///
@@ -321,6 +357,26 @@ pub fn sed_file<P: AsRef<Path>>(file_path: P, patterns: &[&str]) -> anyhow::Resu
     if modified_content != content {
         std::fs::write(&file_path, modified_content.to_string())
             .map_err(|error| anyhow::anyhow!("Writing file {:?}: {error}", file_path.as_ref()))?;
+    }
+    Ok(())
+}
+
+///
+/// Replaces every version pragma in `source` with `pragma`.
+///
+pub fn rewrite_version_pragmas<'a>(source: &'a str, pragma: &str) -> Cow<'a, str> {
+    VERSION_PRAGMA.replace_all(source, regex::NoExpand(pragma))
+}
+
+///
+/// Replaces every version pragma in the file with `pragma`, writing it back when it changed.
+///
+pub fn rewrite_version_pragmas_in_file(path: &Path, pragma: &str) -> anyhow::Result<()> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|error| anyhow::anyhow!("Reading file {path:?}: {error}"))?;
+    if let Cow::Owned(rewritten) = rewrite_version_pragmas(content.as_str(), pragma) {
+        std::fs::write(path, rewritten)
+            .map_err(|error| anyhow::anyhow!("Writing file {path:?}: {error}"))?;
     }
     Ok(())
 }
