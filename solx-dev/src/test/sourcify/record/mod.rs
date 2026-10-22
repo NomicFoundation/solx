@@ -19,10 +19,10 @@ pub struct Record {
     /// The source path whose contracts must get bytecode.
     pub target: String,
     /// The candidate compiler leg.
-    pub slang: Leg,
+    pub candidate: Leg,
     /// The reference compiler leg, run only when the candidate fails without timing out.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub baseline: Option<Leg>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference: Option<Leg>,
     /// The overall outcome.
     pub outcome: Outcome,
 }

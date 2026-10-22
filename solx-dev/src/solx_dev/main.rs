@@ -102,7 +102,7 @@ fn main_inner() -> anyhow::Result<()> {
             solx_dev::solx_tester(arguments)?;
         }
         Arguments::Test(TestArguments::Sourcify(arguments)) => {
-            if arguments.shard_count == 0 || arguments.shard_index >= arguments.shard_count {
+            if arguments.shard_index >= arguments.shard_count.get() {
                 anyhow::bail!("--shard-index must be in [0, --shard-count)");
             }
 
@@ -113,14 +113,10 @@ fn main_inner() -> anyhow::Result<()> {
             let downloader = solx_compiler_downloader::Downloader::default();
             downloader.download(downloader_config_path.as_path())?;
 
-            let threads = match arguments.threads {
-                Some(threads) => threads,
-                None => std::thread::available_parallelism()?,
-            };
             solx_dev::test_sourcify(
                 test_config,
                 arguments.corpus_dir,
-                arguments.corpus_path,
+                arguments.local_corpus_dir,
                 arguments.output_path,
                 arguments.solidity_version,
                 solx_dev::SourcifySlice {
@@ -129,7 +125,7 @@ fn main_inner() -> anyhow::Result<()> {
                     limit: arguments.limit,
                 },
                 solx_dev::SourcifyLimits {
-                    threads,
+                    threads: arguments.threads,
                     timeout: std::time::Duration::from_secs(arguments.timeout),
                     memory_limit_mib: arguments.memory_limit_mib,
                 },

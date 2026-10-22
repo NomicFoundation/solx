@@ -100,7 +100,7 @@ When `slang` fails without timing out, the latest solx release compiles the same
 cargo build --release --bin slang --bin solx-dev
 
 # The committed fixtures
-./target/release/solx-dev test sourcify --corpus-path tests/sourcify-sweep/fixtures
+./target/release/solx-dev test sourcify --local-corpus-dir tests/sourcify-sweep/fixtures
 ./target/release/solx-dev test sourcify-report --results-paths temp-sourcify-reports/results.jsonl
 
 # One shard of the pinned corpus, as a CI job runs it
@@ -118,8 +118,8 @@ Each contract becomes one standard JSON input:
 
 | Outcome | Meaning |
 |---|---|
-| `ok` | Successful exit, no error diagnostics and bytecode for a contract of the target source |
-| `slang-fail` | `slang` fails and the latest solx release compiles |
+| `ok` | No error diagnostics and bytecode for a contract of the target source |
+| `candidate-fail` | `slang` fails and the latest solx release compiles |
 | `both-fail` | Both fail |
 | `timeout` | `slang` exceeded `--timeout` |
 

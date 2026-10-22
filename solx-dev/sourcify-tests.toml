@@ -6,9 +6,9 @@
 #   sha256 = "..."                  # SHA-256 of the release asset
 #
 # Compilers, as in hardhat-tests.toml: the candidate compiles every contract,
-# the reference re-runs the candidate's failures.
+# the reference re-runs the candidate's failures other than timeouts.
 #   [compilers.<id>]
-#   name = "slang"                  # Display name
+#   name = "slang"                  # Name in the report
 #   path = "./path/to/compiler"     # Path to compiler executable
 #   solidity_version = "0.8.36"     # Override --solidity-version for this compiler (optional)
 #   is_correctness_reference = true/false
@@ -22,11 +22,9 @@ sha256 = "0642e21776808674fb3fc50d352fc666dd7e8d062a322de51d44ab288fd0eb2e"
 [compilers.slang]
 name = "slang"
 path = "./target/release/slang"
-description = "slang built from the current commit"
 is_correctness_candidate = true
 
 [compilers.solx-latest]
 name = "solx-latest"
 path = "./temp-compilers/solx-latest"
-description = "solx downloaded from the latest release"
 is_correctness_reference = true

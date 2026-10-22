@@ -45,13 +45,16 @@ pub struct Sourcify {
     /// Local corpus to sweep instead of the pinned one, with a `contracts/` directory, such as
     /// `./tests/sourcify-sweep/fixtures`.
     #[arg(long, help_heading = "Directories")]
-    pub corpus_path: Option<PathBuf>,
+    pub local_corpus_dir: Option<PathBuf>,
 
+    //
+    // Output
+    //
     /// Results path, one JSON line per contract.
     #[arg(
         long,
         default_value = "./temp-sourcify-reports/results.jsonl",
-        help_heading = "Directories"
+        help_heading = "Output"
     )]
     pub output_path: PathBuf,
 
@@ -63,8 +66,8 @@ pub struct Sourcify {
     pub solidity_version: String,
 
     /// Number of round-robin shards the sorted corpus is split into.
-    #[arg(long, default_value_t = 1, help_heading = "Test Filtering")]
-    pub shard_count: usize,
+    #[arg(long, default_value_t = NonZeroUsize::MIN, help_heading = "Test Filtering")]
+    pub shard_count: NonZeroUsize,
 
     /// Shard to sweep, in `[0, --shard-count)`.
     #[arg(long, default_value_t = 0, help_heading = "Test Filtering")]

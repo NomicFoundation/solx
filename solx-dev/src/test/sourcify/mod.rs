@@ -8,6 +8,7 @@ pub mod compilation;
 pub mod config;
 pub mod contract;
 pub mod corpus;
+pub mod limits;
 pub mod record;
 pub mod report;
 
@@ -16,42 +17,33 @@ use std::io::Write;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-use std::time::Duration;
+use std::process::Command;
 use std::time::Instant;
+
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
+
+use crate::test::config::compiler::Compiler;
 
 use self::config::Config;
 use self::contract::Contract;
-use self::corpus::Slice;
+use self::corpus::slice::Slice;
+use self::limits::Limits;
 use self::record::Record;
 use self::record::leg::Leg;
 use self::record::leg::kind::Kind;
 use self::record::outcome::Outcome;
 
 ///
-/// The compiler invocation limits of a sweep.
-///
-#[derive(Debug, Clone, Copy)]
-pub struct Limits {
-    /// The number of concurrent compiler processes.
-    pub threads: NonZeroUsize,
-    /// The per-compilation timeout.
-    pub timeout: Duration,
-    /// The resident memory cap of each compiler with its workers in MiB.
-    pub memory_limit_mib: Option<u64>,
-}
-
-///
 /// Sweeps a slice of the corpus and writes one JSON line per contract to `output_path`, after a
-/// first line with both compilers' versions.
+/// first line with both compilers' names and versions.
 ///
 /// Compilation failures are results, not errors: only harness breakage fails the sweep.
 ///
 pub fn run(
     config: Config,
     corpus_directory: PathBuf,
-    corpus_path: Option<PathBuf>,
+    local_corpus_directory: Option<PathBuf>,
     output_path: PathBuf,
     solidity_version: String,
     slice: Slice,
@@ -70,9 +62,9 @@ pub fn run(
         .as_deref()
         .unwrap_or(solidity_version.as_str());
 
-    let contracts = match corpus_path {
-        Some(corpus_path) => corpus::local(corpus_path.as_path(), slice)?,
-        None => corpus::pinned(&config.corpus, corpus_directory.as_path(), slice)?,
+    let contracts = match local_corpus_directory {
+        Some(directory) => corpus::local(directory.as_path(), &slice)?,
+        None => corpus::pinned(&config.corpus, corpus_directory.as_path(), &slice)?,
     };
 
     if let Some(parent) = output_path.parent() {
@@ -83,40 +75,35 @@ pub fn run(
         .map_err(|error| anyhow::anyhow!("Creating {output_path:?}: {error}"))?;
     let meta = serde_json::json!({
         "meta": {
-            "slang": version(candidate_path.as_path())?,
-            "baseline": version(reference_path.as_path())?,
+            "candidate": version(candidate, candidate_path.as_path())?,
+            "reference": version(reference, reference_path.as_path())?,
         }
     });
     writeln!(output, "{meta}")
         .map_err(|error| anyhow::anyhow!("Writing {output_path:?}: {error}"))?;
 
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(limits.threads.map_or(0, NonZeroUsize::get))
+        .build()
+        .map_err(|error| anyhow::anyhow!("Thread pool building: {error}"))?;
     eprintln!(
         "{} {} contracts with {} threads",
         solx_utils::cargo_status_ok("Sweeping"),
         contracts.len(),
-        limits.threads
+        pool.current_num_threads()
     );
     let started = Instant::now();
     let mut counts = BTreeMap::new();
-    let next = AtomicUsize::new(0);
-    std::thread::scope(|scope| -> anyhow::Result<()> {
-        let (sender, receiver) = std::sync::mpsc::channel();
-        for _ in 0..limits.threads.get() {
-            let sender = sender.clone();
-            let next = &next;
-            let contracts = contracts.as_slice();
-            let candidate = (candidate_path.as_path(), candidate_version);
-            let reference = (reference_path.as_path(), reference_version);
-            scope.spawn(move || {
-                while let Some(path) = contracts.get(next.fetch_add(1, Ordering::Relaxed)) {
-                    let record = sweep_one(path.as_path(), candidate, reference, limits);
-                    if sender.send(record).is_err() {
-                        break;
-                    }
-                }
+    let (sender, receiver) = std::sync::mpsc::channel();
+    pool.in_place_scope(|scope| -> anyhow::Result<()> {
+        let candidate = (candidate_path.as_path(), candidate_version);
+        let reference = (reference_path.as_path(), reference_version);
+        let contracts = contracts.as_slice();
+        scope.spawn(move |_scope| {
+            contracts.par_iter().for_each_with(sender, |sender, path| {
+                let _ = sender.send(sweep_one(path.as_path(), candidate, reference, limits));
             });
-        }
-        drop(sender);
+        });
 
         for record in receiver {
             let record = record?;
@@ -128,21 +115,21 @@ pub fn run(
             .map_err(|error| anyhow::anyhow!("Writing {output_path:?}: {error}"))?;
             *counts.entry(record.outcome.to_string()).or_insert(0usize) += 1;
             let total: usize = counts.values().sum();
-            if record.outcome != Outcome::Ok || total.is_multiple_of(100) {
-                let detail = if record.outcome == Outcome::Ok {
-                    String::new()
-                } else {
-                    format!(
-                        " [{}] {}",
-                        record.slang.kind,
-                        record.slang.signature.as_deref().unwrap_or_default()
-                    )
-                };
+            if record.outcome != Outcome::Ok {
                 eprintln!(
-                    "[{total}/{}] {}: {}{detail}",
+                    "{} [{total}/{}] {}: {} [{}] {}",
+                    solx_utils::cargo_status_error("Failed"),
                     contracts.len(),
                     record.identifier,
-                    record.outcome
+                    record.outcome,
+                    record.candidate.kind,
+                    record.candidate.signature.as_deref().unwrap_or_default()
+                );
+            } else if total.is_multiple_of(100) {
+                eprintln!(
+                    "{} [{total}/{}]",
+                    solx_utils::cargo_status_ok("Sweeping"),
+                    contracts.len()
                 );
             }
         }
@@ -174,7 +161,7 @@ fn sweep_one(
 ) -> anyhow::Result<Record> {
     let contract = Contract::try_from(path.to_owned())?;
 
-    let slang = compilation::compile(
+    let candidate = compilation::compile(
         candidate_path,
         contract.standard_json_input(candidate_version),
         contract.target.as_str(),
@@ -182,23 +169,23 @@ fn sweep_one(
         limits.memory_limit_mib,
     )?;
 
-    let (baseline, outcome): (Option<Leg>, Outcome) = match slang.kind {
+    let (reference, outcome): (Option<Leg>, Outcome) = match candidate.kind {
         Kind::Ok => (None, Outcome::Ok),
         Kind::Timeout => (None, Outcome::Timeout),
         _ => {
-            let baseline = compilation::compile(
+            let reference = compilation::compile(
                 reference_path,
                 contract.standard_json_input(reference_version),
                 contract.target.as_str(),
                 limits.timeout,
                 limits.memory_limit_mib,
             )?;
-            let outcome = if baseline.kind == Kind::Ok {
-                Outcome::SlangFail
+            let outcome = if reference.kind == Kind::Ok {
+                Outcome::CandidateFail
             } else {
                 Outcome::BothFail
             };
-            (Some(baseline), outcome)
+            (Some(reference), outcome)
         }
     };
 
@@ -209,27 +196,30 @@ fn sweep_one(
             .to_string_lossy()
             .into_owned(),
         target: contract.target,
-        slang,
-        baseline,
+        candidate,
+        reference,
         outcome,
     })
 }
 
 ///
-/// The first line of the compiler's `--version`.
+/// The compiler's display name with the first line of its `--version`.
 ///
-fn version(compiler: &Path) -> anyhow::Result<String> {
-    let output = std::process::Command::new(compiler)
-        .arg("--version")
-        .output()
-        .map_err(|error| anyhow::anyhow!("{compiler:?} --version: {error}"))?;
-    if !output.status.success() {
-        anyhow::bail!("{compiler:?} --version failed with {}", output.status);
-    }
-    Ok(String::from_utf8_lossy(output.stdout.as_slice())
-        .lines()
-        .next()
-        .unwrap_or_default()
-        .trim()
-        .to_owned())
+fn version(compiler: &Compiler, path: &Path) -> anyhow::Result<String> {
+    let mut command = Command::new(path);
+    command.arg("--version");
+    let output = crate::utils::command_with_output(
+        &mut command,
+        format!(
+            "{} compiler {}",
+            solx_utils::cargo_status_ok("Identifying"),
+            compiler.name
+        )
+        .as_str(),
+    )?;
+    Ok(format!(
+        "{} ({})",
+        compiler.name,
+        output.lines().next().unwrap_or_default().trim()
+    ))
 }
