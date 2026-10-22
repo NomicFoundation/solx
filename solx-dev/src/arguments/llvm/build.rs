@@ -52,6 +52,15 @@ pub struct Build {
     #[arg(long, help_heading = "Build Features")]
     pub install_distribution: bool,
 
+    /// Install only the MLIR libraries solx links instead of every upstream
+    /// dialect. Intended for CI, where the install prefix only feeds solx.
+    #[arg(
+        long,
+        requires = "install_distribution",
+        help_heading = "Build Features"
+    )]
+    pub trim_libraries: bool,
+
     /// Whether to build the LLVM tests.
     #[arg(long, help_heading = "Build Features")]
     pub enable_tests: bool,

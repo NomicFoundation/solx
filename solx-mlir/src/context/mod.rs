@@ -75,14 +75,14 @@ impl<'context> Context<'context> {
 
     /// Creates a single-threaded MLIR context.
     ///
-    /// `register_all_llvm_translations` MUST be called before any
-    /// MLIR-to-LLVM translation. Without it, `mlirTranslateModuleToLLVMIR`
+    /// `solxRegisterLLVMTranslations` MUST be called before any
+    /// MLIR-to-LLVM translation. Without it, `solxTranslateModuleToLLVMIR`
     /// returns null. This function enforces that invariant.
     pub fn create_melior_context() -> melior::Context {
         let registry = DialectRegistry::new();
-        melior::utility::register_all_dialects(&registry);
 
         unsafe {
+            crate::ffi::solxRegisterDialects(registry.to_raw());
             crate::ffi::mlirDialectHandleInsertDialect(
                 crate::ffi::mlirGetDialectHandle__sol__(),
                 registry.to_raw(),
@@ -96,7 +96,7 @@ impl<'context> Context<'context> {
         let melior = melior::Context::new();
         melior.enable_multi_threading(false);
         melior.append_dialect_registry(&registry);
-        melior::utility::register_all_llvm_translations(&melior);
+        unsafe { crate::ffi::solxRegisterLLVMTranslations(melior.to_raw()) };
 
         static REGISTER_PASSES: Once = Once::new();
         REGISTER_PASSES.call_once(|| unsafe {
@@ -214,10 +214,10 @@ impl<'context> Context<'context> {
                     crate::ffi::mlirCreateTransformsCanonicalizer(),
                 ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionConvertSolToYulPass(),
+                crate::ffi::solxCreateConvertSolToYulPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionConvertYulToStandardPass(),
+                crate::ffi::solxCreateConvertYulToStandardPass(),
             ));
             pass_manager
                 .nested_under(Self::FUNC_FUNC)
@@ -225,19 +225,19 @@ impl<'context> Context<'context> {
                     crate::ffi::mlirCreateTransformsCanonicalizer(),
                 ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionSCFToControlFlowPass(),
+                crate::ffi::solxCreateSCFToControlFlowPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionConvertFuncToLLVMPass(),
+                crate::ffi::solxCreateConvertFuncToLLVMPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionArithToLLVMConversionPass(),
+                crate::ffi::solxCreateArithToLLVMConversionPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionConvertControlFlowToLLVMPass(),
+                crate::ffi::solxCreateConvertControlFlowToLLVMPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionReconcileUnrealizedCastsPass(),
+                crate::ffi::solxCreateReconcileUnrealizedCastsPass(),
             ));
         }
 
@@ -326,13 +326,13 @@ impl<'context> Context<'context> {
     fn translate_to_bitcode(module: &Module) -> anyhow::Result<Vec<u8>> {
         let llvm = inkwell::context::Context::create();
         let raw_module = unsafe {
-            mlir_sys::mlirTranslateModuleToLLVMIR(
+            crate::ffi::solxTranslateModuleToLLVMIR(
                 module.as_operation().to_raw(),
                 llvm.raw() as *mut _,
             )
         };
         if raw_module.is_null() {
-            anyhow::bail!("mlirTranslateModuleToLLVMIR returned null");
+            anyhow::bail!("solxTranslateModuleToLLVMIR returned null");
         }
         let llvm_module = unsafe { inkwell::module::Module::new(raw_module as *mut _) };
         Ok(llvm_module.write_bitcode_to_memory().as_slice().to_vec())

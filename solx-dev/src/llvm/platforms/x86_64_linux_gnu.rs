@@ -16,6 +16,7 @@ pub fn build(
     build_type: BuildType,
     enable_utils: bool,
     install_distribution: bool,
+    trim_libraries: bool,
     enable_tests: bool,
     enable_coverage: bool,
     extra_args: Vec<String>,
@@ -40,7 +41,7 @@ pub fn build(
     let llvm_target_final_str = llvm_target_final.to_string_lossy();
 
     let distribution_opts = if install_distribution {
-        crate::llvm::platforms::shared::build_opts_distribution(enable_utils)
+        crate::llvm::platforms::shared::build_opts_distribution(enable_utils, trim_libraries)
     } else {
         Vec::new()
     };
@@ -89,6 +90,7 @@ pub fn build(
         llvm_build_final.as_ref(),
         llvm_target_final.as_ref(),
         install_distribution,
+        trim_libraries,
     )?;
 
     Ok(())

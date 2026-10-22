@@ -55,6 +55,7 @@ fn main_inner() -> anyhow::Result<()> {
                 arguments.build_type,
                 arguments.enable_utils,
                 arguments.install_distribution,
+                arguments.trim_libraries,
                 arguments.enable_tests,
                 arguments.enable_coverage,
                 extra_args_unescaped,

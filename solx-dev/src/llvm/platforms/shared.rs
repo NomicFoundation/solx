@@ -191,6 +191,124 @@ pub fn shared_build_opts_coverage(enabled: bool) -> Vec<String> {
 }
 
 ///
+/// The MLIR libraries solx links, closed under their CMake link dependencies. A missing
+/// dependency fails configure with `... requires target "<name>" that is not in any export set`.
+///
+const MLIR_LIBRARIES: &[&str] = &[
+    "MLIRAffineAnalysis",
+    "MLIRAffineDialect",
+    "MLIRAffineTransforms",
+    "MLIRAffineUtils",
+    "MLIRAnalysis",
+    "MLIRArithAttrToLLVMConversion",
+    "MLIRArithDialect",
+    "MLIRArithToLLVM",
+    "MLIRArithTransforms",
+    "MLIRArithUtils",
+    "MLIRAsmParser",
+    "MLIRBufferizationDialect",
+    "MLIRBufferizationTransforms",
+    "MLIRBuiltinToLLVMIRTranslation",
+    "MLIRBytecodeOpInterface",
+    "MLIRBytecodeReader",
+    "MLIRBytecodeWriter",
+    "MLIRCAPIIR",
+    "MLIRCAPILLVM",
+    "MLIRCAPISol",
+    "MLIRCAPITransforms",
+    "MLIRCAPIYul",
+    "MLIRCallInterfaces",
+    "MLIRCastInterfaces",
+    "MLIRComplexDialect",
+    "MLIRControlFlowDialect",
+    "MLIRControlFlowInterfaces",
+    "MLIRControlFlowToLLVM",
+    "MLIRDLTIDialect",
+    "MLIRDataLayoutInterfaces",
+    "MLIRDestinationStyleOpInterface",
+    "MLIRDialect",
+    "MLIRDialectUtils",
+    "MLIRFuncDialect",
+    "MLIRFuncInlinerExtension",
+    "MLIRFuncToLLVM",
+    "MLIRFuncTransforms",
+    "MLIRFunctionInterfaces",
+    "MLIRGPUDialect",
+    "MLIRIR",
+    "MLIRIndexingMapOpInterface",
+    "MLIRInferIntRangeCommon",
+    "MLIRInferIntRangeInterface",
+    "MLIRInferTypeOpInterface",
+    "MLIRLLVMCommonConversion",
+    "MLIRLLVMDialect",
+    "MLIRLLVMIRTransforms",
+    "MLIRLLVMToLLVMIRTranslation",
+    "MLIRLinalgDialect",
+    "MLIRLoopLikeInterface",
+    "MLIRMaskableOpInterface",
+    "MLIRMaskingOpInterface",
+    "MLIRMathDialect",
+    "MLIRMemRefDialect",
+    "MLIRMemorySlotInterfaces",
+    "MLIRMeshDialect",
+    "MLIRNVVMDialect",
+    "MLIRPDLDialect",
+    "MLIRPDLInterpDialect",
+    "MLIRPDLToPDLInterp",
+    "MLIRParallelCombiningOpInterface",
+    "MLIRParser",
+    "MLIRPass",
+    "MLIRPresburger",
+    "MLIRReconcileUnrealizedCasts",
+    "MLIRRewrite",
+    "MLIRRewritePDL",
+    "MLIRRuntimeVerifiableOpInterface",
+    "MLIRSCFDialect",
+    "MLIRSCFToControlFlow",
+    "MLIRSCFTransforms",
+    "MLIRSCFUtils",
+    "MLIRShapedOpInterfaces",
+    "MLIRShardingInterface",
+    "MLIRSideEffectInterfaces",
+    "MLIRSolDialect",
+    "MLIRSolToYul",
+    "MLIRSolTransforms",
+    "MLIRSparseTensorDialect",
+    "MLIRSparseTensorEnums",
+    "MLIRSubsetOpInterface",
+    "MLIRSupport",
+    "MLIRTargetLLVMIRExport",
+    "MLIRTensorDialect",
+    "MLIRTensorTransforms",
+    "MLIRTensorUtils",
+    "MLIRTilingInterface",
+    "MLIRTransformUtils",
+    "MLIRTransforms",
+    "MLIRTranslateLib",
+    "MLIRUBDialect",
+    "MLIRValueBoundsOpInterface",
+    "MLIRVectorDialect",
+    "MLIRVectorInterfaces",
+    "MLIRVectorUtils",
+    "MLIRViewLikeInterface",
+    "MLIRYulDialect",
+    "MLIRYulToStandard",
+    "MLIRYulTransforms",
+];
+
+///
+/// The generated C API headers of dialects outside `MLIR_LIBRARIES`, which mlir-sys's
+/// bindgen includes and nothing in a trimmed build generates. A missing one fails the
+/// `mlir-sys` build script with `fatal error: 'mlir/Dialect/<name>/...capi.h.inc' file not found`.
+///
+const MLIR_TRIMMED_HEADER_TARGETS: &[&str] = &[
+    "MLIRAsyncPassIncGen",
+    "MLIRGPUPassIncGen",
+    "MLIRLinalgPassIncGen",
+    "MLIRSparseTensorPassIncGen",
+];
+
+///
 /// Configure an `install-distribution` that ships only what solx needs,
 /// skipping the ~200 LLVM tool binaries (`opt`, `llc`, ...).
 ///
@@ -224,7 +342,10 @@ pub fn shared_build_opts_coverage(enabled: bool) -> Vec<String> {
 /// distribution component errors at configure time. How `target-final/bin/
 /// llvm-lit` reaches the install prefix today is independent of this PR.
 ///
-pub fn build_opts_distribution(enable_utils: bool) -> Vec<String> {
+/// With `trim_libraries`, `MLIR_LIBRARIES` replaces `mlir-libraries`, which
+/// builds every upstream dialect.
+///
+pub fn build_opts_distribution(enable_utils: bool, trim_libraries: bool) -> Vec<String> {
     let mut components = vec![
         "llvm-libraries",
         "llvm-headers",
@@ -232,10 +353,14 @@ pub fn build_opts_distribution(enable_utils: bool) -> Vec<String> {
         "lld-libraries",
         "lld-headers",
         "lld-cmake-exports",
-        "mlir-libraries",
         "mlir-headers",
         "mlir-cmake-exports",
     ];
+    if trim_libraries {
+        components.extend(MLIR_LIBRARIES);
+    } else {
+        components.push("mlir-libraries");
+    }
     if enable_utils {
         components.push("FileCheck");
     }
@@ -250,7 +375,8 @@ pub fn build_opts_distribution(enable_utils: bool) -> Vec<String> {
 /// Install LLVM. `install_distribution = false` runs the unfiltered
 /// `ninja install` (full toolset); `true` runs `ninja install-distribution`
 /// and then builds and copies `REQUIRED_LLVM_BINARIES`, whose install rules
-/// are suppressed by `LLVM_BUILD_TOOLS=Off`.
+/// are suppressed by `LLVM_BUILD_TOOLS=Off`. With `trim_libraries`, it first
+/// generates `MLIR_TRIMMED_HEADER_TARGETS` so `mlir-headers` installs them.
 ///
 /// Both ninja args and the destination path use forward-slash form on
 /// Windows; callers are expected to pass already-normalized paths (existing
@@ -264,10 +390,21 @@ pub fn build_and_install_llvm_binaries(
     build_dir: &Path,
     target_dir: &Path,
     install_distribution: bool,
+    trim_libraries: bool,
 ) -> anyhow::Result<()> {
     if !install_distribution {
         crate::utils::ninja(build_dir, "install")?;
         return Ok(());
+    }
+    let build_dir_str = build_dir.to_string_lossy();
+    if trim_libraries {
+        crate::utils::command(
+            Command::new("ninja")
+                .arg("-C")
+                .arg(&*build_dir_str)
+                .args(MLIR_TRIMMED_HEADER_TARGETS.iter()),
+            "Generating MLIR C API headers",
+        )?;
     }
     crate::utils::ninja(build_dir, "install-distribution")?;
 
@@ -276,7 +413,6 @@ pub fn build_and_install_llvm_binaries(
     } else {
         ""
     };
-    let build_dir_str = build_dir.to_string_lossy();
     let dest_dir = target_dir.join("bin");
     std::fs::create_dir_all(&dest_dir)?;
 
