@@ -8,63 +8,33 @@ use predicates::prelude::*;
 use tempfile::TempDir;
 use test_case::test_case;
 
-/// The prefixes of the type identifiers that end with the node id of a definition.
-const USER_DEFINED_PREFIXES: [&str; 4] = [
-    "t_contract(",
-    "t_enum(",
-    "t_struct(",
-    "t_userDefinedValueType(",
-];
-
 /// The expected files hold solc's storage layouts verbatim.
 #[test_case(
-    crate::common::contract!("solidity/SlangStorageLayout.sol"),
+    crate::common::standard_json!("slang_storage_layout.json"),
+    "tests/data/contracts/solidity/SlangStorageLayout.sol",
     crate::common::storage_layout!("SlangStorageLayout.json")
 )]
-fn matches_solc(contract: &str, expected: &str) -> anyhow::Result<()> {
+fn matches_solc(input: &str, source: &str, expected: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[contract, "--storage-layout", "--transient-storage-layout"];
+    let args = &["--standard-json", input];
 
     let result = crate::cli::execute_solx(args)?;
-    let output = result.success().get_output().stdout.clone();
-    let output = String::from_utf8(output)?;
+    let result = result.success();
+    let output: serde_json::Value = serde_json::from_slice(result.get_output().stdout.as_slice())?;
 
     let expected: BTreeMap<String, serde_json::Value> =
         serde_json::from_str(std::fs::read_to_string(expected)?.as_str())?;
-    let expected = expected
-        .into_iter()
-        .map(|(name, layouts)| Ok((name, normalize(&layouts)?)))
-        .collect::<anyhow::Result<BTreeMap<_, _>>>()?;
-
-    let mut actual = BTreeMap::new();
-    let mut lines = output.lines();
-    while let Some(line) = lines.next() {
-        let Some(name) = line
-            .strip_prefix("======= ")
-            .and_then(|line| line.strip_suffix(" ======="))
-            .and_then(|full_path| full_path.rsplit(':').next())
-        else {
-            continue;
-        };
-        assert_eq!(lines.next(), Some("Contract Storage Layout:"), "{name}");
-        let storage_layout: serde_json::Value =
-            serde_json::from_str(lines.next().expect("storage layout JSON"))?;
-        assert_eq!(
-            lines.next(),
-            Some("Contract Transient Storage Layout:"),
-            "{name}"
-        );
-        let transient_storage_layout: serde_json::Value =
-            serde_json::from_str(lines.next().expect("transient storage layout JSON"))?;
-        let layouts = serde_json::json!({
-            "storageLayout": storage_layout,
-            "transientStorageLayout": transient_storage_layout,
+    for (name, mut expected) in expected {
+        let contract = &output["contracts"][source][name.as_str()];
+        let mut actual = serde_json::json!({
+            "storageLayout": contract["storageLayout"],
+            "transientStorageLayout": contract["transientStorageLayout"],
         });
-        actual.insert(name.to_owned(), normalize(&layouts)?);
+        renumber(&mut actual, &mut BTreeMap::new());
+        renumber(&mut expected, &mut BTreeMap::new());
+        assert_eq!(actual, expected, "{name}");
     }
-
-    assert_eq!(actual, expected);
 
     Ok(())
 }
@@ -152,38 +122,45 @@ fn output_dir() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Numbers each `astId`, and each node id that ends a user-defined type identifier, by first
-/// appearance: solx's are Slang node ids, solc's are its AST ids.
-fn normalize(layouts: &serde_json::Value) -> anyhow::Result<serde_json::Value> {
-    let json = serde_json::to_string(layouts)?;
-    let mut ast_ids = BTreeMap::new();
-    let mut type_ids = BTreeMap::new();
-    let mut normalized = String::with_capacity(json.len());
-    let mut rest = json.as_str();
-    while !rest.is_empty() {
-        let (prefix_length, ids) = if rest.starts_with("\"astId\":") {
-            ("\"astId\":".len(), &mut ast_ids)
-        } else if USER_DEFINED_PREFIXES
-            .iter()
-            .any(|prefix| rest.starts_with(prefix))
-        {
-            let name_end = rest.find(')').expect("the name is parenthesized") + 1;
-            (name_end, &mut type_ids)
-        } else {
-            let mut characters = rest.chars();
-            normalized.extend(characters.next());
-            rest = characters.as_str();
-            continue;
-        };
-        normalized.push_str(&rest[..prefix_length]);
-        rest = &rest[prefix_length..];
-        let digits_end = rest
-            .find(|character: char| !character.is_ascii_digit())
-            .unwrap_or(rest.len());
-        let next = ids.len();
-        let number = *ids.entry(&rest[..digits_end]).or_insert(next);
-        normalized.push_str(number.to_string().as_str());
-        rest = &rest[digits_end..];
+/// Numbers every node id by first appearance: the `astId` of a variable or member, and the id
+/// that closes a definition's type identifier, as a `types` key or a reference. solx's are Slang
+/// node ids, solc's are its AST ids.
+fn renumber(value: &mut serde_json::Value, ids: &mut BTreeMap<String, usize>) {
+    match value {
+        serde_json::Value::Object(object) => {
+            *object = std::mem::take(object)
+                .into_iter()
+                .map(|(key, mut value)| {
+                    if key == "astId" {
+                        value = number(value.to_string(), ids).into();
+                    } else {
+                        renumber(&mut value, ids);
+                    }
+                    (renumber_identifier(key.as_str(), ids), value)
+                })
+                .collect();
+        }
+        serde_json::Value::Array(array) => array.iter_mut().for_each(|value| renumber(value, ids)),
+        serde_json::Value::String(string) => *string = renumber_identifier(string, ids),
+        _ => {}
     }
-    Ok(serde_json::from_str(normalized.as_str())?)
+}
+
+/// Numbers the id that closes each definition's type identifier in `text`. The length that closes
+/// a fixed-size array stays.
+fn renumber_identifier(text: &str, ids: &mut BTreeMap<String, usize>) -> String {
+    let definition =
+        regex::Regex::new(r"(t_(?:contract|enum|struct|userDefinedValueType)\([^)]*\))(\d+)")
+            .expect("the pattern is valid");
+    definition
+        .replace_all(text, |captures: &regex::Captures| {
+            format!("{}{}", &captures[1], number(captures[2].to_owned(), ids))
+        })
+        .into_owned()
+}
+
+/// The number of `id`, assigned on its first appearance.
+fn number(id: String, ids: &mut BTreeMap<String, usize>) -> usize {
+    let next = ids.len();
+    *ids.entry(id).or_insert(next)
 }

@@ -4636,6 +4636,7 @@ dependencies = [
  "libc",
  "object 0.40.0",
  "predicates",
+ "regex",
  "semver 1.0.28",
  "serde",
  "serde_json",

@@ -1,0 +1,15 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "tests/data/contracts/solidity/SlangAbi.sol": {
+      "urls": ["tests/data/contracts/solidity/SlangAbi.sol"]
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "tests/data/contracts/solidity/SlangAbi.sol": {
+        "*": ["abi"]
+      }
+    }
+  }
+}

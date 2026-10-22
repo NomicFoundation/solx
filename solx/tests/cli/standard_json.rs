@@ -381,8 +381,15 @@ fn select_frontend() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn select_storage_layout() -> anyhow::Result<()> {
+#[test_case("I", &[], &[])]
+#[test_case("L", &[], &[])]
+#[test_case("B", &["x"], &[])]
+#[test_case("C", &["x"], &["y"])]
+fn select_storage_layout(
+    name: &str,
+    storage: &[&str],
+    transient_storage: &[&str],
+) -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
@@ -393,26 +400,17 @@ fn select_storage_layout() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     let result = result.success();
     let output: serde_json::Value = serde_json::from_slice(result.get_output().stdout.as_slice())?;
-    for (name, storage, transient_storage) in [
-        ("I", vec![], vec![]),
-        ("L", vec![], vec![]),
-        ("B", vec!["x"], vec![]),
-        ("C", vec!["x"], vec!["y"]),
-    ] {
-        let contract = &output["contracts"]["A"][name];
-        for (layout, expected) in [
-            ("storageLayout", storage),
-            ("transientStorageLayout", transient_storage),
-        ] {
-            let labels: Vec<&str> = contract[layout]["storage"]
-                .as_array()
-                .unwrap_or_else(|| panic!("{name} has no {layout}"))
-                .iter()
-                .map(|variable| variable["label"].as_str().expect("the label is a string"))
-                .collect();
-            assert_eq!(labels, expected, "{name} {layout}");
-        }
-    }
+    let contract = &output["contracts"]["A"][name];
+    let labels = |layout: &str| -> Vec<&str> {
+        contract[layout]["storage"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{name} has no {layout}"))
+            .iter()
+            .map(|variable| variable["label"].as_str().expect("the label is a string"))
+            .collect()
+    };
+    assert_eq!(labels("storageLayout"), storage);
+    assert_eq!(labels("transientStorageLayout"), transient_storage);
 
     Ok(())
 }
