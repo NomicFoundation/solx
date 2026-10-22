@@ -6,7 +6,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
-use super::config::Corpus;
+use super::config::corpus::Corpus;
 
 ///
 /// A round-robin slice of the sorted corpus, so CI shards split it evenly.
@@ -38,21 +38,20 @@ impl Slice {
 }
 
 ///
-/// Lists the slice of a local corpus directory: either a corpus root with `contracts/` or the
-/// contracts directory itself.
+/// Lists the slice of a local corpus, laid out as the pinned release with a `contracts/` directory.
 ///
 pub fn local(directory: &Path, slice: Slice) -> anyhow::Result<Vec<PathBuf>> {
-    let contracts_directory = if directory.join("contracts").is_dir() {
-        directory.join("contracts")
-    } else {
-        directory.to_owned()
-    };
+    let contracts_directory = directory.join("contracts");
     let names = std::fs::read_dir(contracts_directory.as_path())
+        .and_then(|entries| {
+            entries
+                .map(|entry| entry.map(|entry| entry.file_name().to_string_lossy().into_owned()))
+                .collect::<std::io::Result<Vec<String>>>()
+        })
         .map_err(|error| {
             anyhow::anyhow!("Corpus directory {contracts_directory:?} reading: {error}")
         })?
-        .filter_map(Result::ok)
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .into_iter()
         .filter(|name| name.ends_with(".json"))
         .collect();
     let names = slice.select(names);
