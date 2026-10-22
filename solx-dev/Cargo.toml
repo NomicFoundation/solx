@@ -32,7 +32,6 @@ sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 
 solx-compiler-downloader = { path = "../solx-compiler-downloader" }
 solx-benchmark-converter = { path = "../solx-benchmark-converter" }
-solx-standard-json = { path = "../solx-standard-json" }
 solx-utils = { path = "../solx-utils" }
 
 [target.'cfg(unix)'.dependencies]
