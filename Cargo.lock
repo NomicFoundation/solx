@@ -4907,6 +4907,7 @@ dependencies = [
  "solx-mlir",
  "solx-standard-json",
  "solx-utils",
+ "thiserror",
 ]
 
 [[package]]
