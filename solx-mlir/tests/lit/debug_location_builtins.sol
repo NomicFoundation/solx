@@ -3,7 +3,7 @@
 // CHECK: sol.func @{{.*decodes.*}}(
 // CHECK:   sol.decode %{{.*}} loc(#[[DECODE:loc[0-9]*]])
 // CHECK: sol.func @{{.*encodes.*}}(
-// CHECK:   sol.encode %{{.*}} -> !sol.string<Memory> loc(#[[ENCODE:loc[0-9]*]])
+// CHECK:   sol.encode %{{.*}} : (ui256) -> !sol.string<Memory> loc(#[[ENCODE:loc[0-9]*]])
 // CHECK:   sol.encode %{{.*}} {packed} loc(#[[ENCODE_PACKED:loc[0-9]*]])
 // CHECK:   sol.encode selector(%{{.*}}) {{.*}} loc(#[[ENCODE_WITH_SELECTOR:loc[0-9]*]])
 // CHECK:   sol.encode selector(%{{.*}}) {{.*}} loc(#[[ENCODE_WITH_SIGNATURE:loc[0-9]*]])
