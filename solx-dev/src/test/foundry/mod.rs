@@ -115,28 +115,6 @@ pub fn test(
                 ),
             )?;
 
-            eprintln!(
-                "{} pragmas in Foundry project {}",
-                solx_utils::cargo_status_ok("Fixing"),
-                project_name.bright_white().bold()
-            );
-            for solidity_file in
-                glob::glob(format!("{}/**/*.sol", project_directory.to_string_lossy()).as_str())
-                    .expect("Always valid")
-                    .filter_map(Result::ok)
-            {
-                if !solidity_file.is_file() {
-                    continue;
-                }
-                crate::utils::sed_file(
-                    solidity_file.as_path(),
-                    &[
-                        format!(r#"s/pragma solidity.*/pragma solidity >={solidity_version};/g"#)
-                            .as_str(),
-                    ],
-                )?;
-            }
-
             if project.requires_yarn {
                 crate::utils::exists("npm")?;
 
@@ -177,6 +155,30 @@ pub fn test(
                     )
                     .as_str(),
                     16,
+                )?;
+            }
+
+            // The pragmas are rewritten after the dependencies are installed, so that
+            // the sources under node_modules are covered as well.
+            eprintln!(
+                "{} pragmas in Foundry project {}",
+                solx_utils::cargo_status_ok("Fixing"),
+                project_name.bright_white().bold()
+            );
+            for solidity_file in
+                glob::glob(format!("{}/**/*.sol", project_directory.to_string_lossy()).as_str())
+                    .expect("Always valid")
+                    .filter_map(Result::ok)
+            {
+                if !solidity_file.is_file() {
+                    continue;
+                }
+                crate::utils::sed_file(
+                    solidity_file.as_path(),
+                    &[
+                        format!(r#"s/pragma solidity.*/pragma solidity >={solidity_version};/g"#)
+                            .as_str(),
+                    ],
                 )?;
             }
 
