@@ -101,7 +101,10 @@ cargo build --release --bin slang --bin solx-dev
 
 # The committed fixtures
 ./target/release/solx-dev test sourcify --local-corpus-dir tests/sourcify-sweep/fixtures
-./target/release/solx-dev test sourcify-report --results-paths temp-sourcify-reports/results.jsonl
+./target/release/solx-dev test sourcify-report --results-path temp-sourcify-reports/results.jsonl
+
+# The first 100 contracts of the pinned corpus
+./target/release/solx-dev test sourcify --limit 100
 
 # One shard of the pinned corpus, as a CI job runs it
 ./target/release/solx-dev test sourcify --shard-count 24 --shard-index 0 --memory-limit-mib 6144

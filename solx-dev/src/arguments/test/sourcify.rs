@@ -82,7 +82,7 @@ pub struct Sourcify {
     //
     /// Number of concurrent compiler processes [default: available parallelism].
     #[arg(long, help_heading = "Limits")]
-    pub threads: Option<NonZeroUsize>,
+    pub threads: Option<usize>,
 
     /// Per-compilation timeout in seconds.
     #[arg(long, default_value_t = 300, help_heading = "Limits")]
@@ -99,9 +99,9 @@ pub struct Sourcify {
 ///
 #[derive(Args)]
 pub struct SourcifyReport {
-    /// Results paths written by `test sourcify`, e.g. one per shard.
-    #[arg(long, num_args = 1.., required = true)]
-    pub results_paths: Vec<PathBuf>,
+    /// Results path written by `test sourcify`, or several shards' results concatenated.
+    #[arg(long)]
+    pub results_path: PathBuf,
 
     /// Markdown report path [default: standard output].
     #[arg(long)]

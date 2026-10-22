@@ -10,7 +10,6 @@
 #   [compilers.<id>]
 #   name = "slang"                  # Name in the report
 #   path = "./path/to/compiler"     # Path to compiler executable
-#   solidity_version = "0.8.36"     # Override --solidity-version for this compiler (optional)
 #   is_correctness_reference = true/false
 #   is_correctness_candidate = true/false
 

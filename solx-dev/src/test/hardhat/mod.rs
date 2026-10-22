@@ -12,6 +12,8 @@ use std::time::Instant;
 use colored::Colorize;
 use itertools::Itertools;
 
+use crate::test::config::compiler::Compiler;
+
 use self::config::Config;
 use self::config::project::build_system::BuildSystem;
 use self::output::test::Test as TestOutput;
@@ -40,22 +42,10 @@ pub fn test(
     let mut attempted_projects = Vec::with_capacity(config.projects.len());
     let mut build_correctness_table = BTreeMap::new();
     let mut test_correctness_table = BTreeMap::new();
-    let correctness_reference_compiler = config
-        .compilers
-        .values()
-        .find(|compiler| !compiler.disabled && compiler.is_correctness_reference)
-        .ok_or_else(|| {
-            anyhow::anyhow!("No reference compiler specified in the Hardhat test configuration")
-        })?
+    let correctness_reference_compiler = Compiler::reference(&config.compilers, "Hardhat test")?
         .name
         .clone();
-    let correctness_candidate_compiler = config
-        .compilers
-        .values()
-        .find(|compiler| !compiler.disabled && compiler.is_correctness_candidate)
-        .ok_or_else(|| {
-            anyhow::anyhow!("No candidate compiler specified in the Hardhat test configuration")
-        })?
+    let correctness_candidate_compiler = Compiler::candidate(&config.compilers, "Hardhat test")?
         .name
         .clone();
 

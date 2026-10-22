@@ -14,7 +14,6 @@ pub mod report;
 
 use std::collections::BTreeMap;
 use std::io::Write;
-use std::num::NonZeroUsize;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -38,8 +37,6 @@ use self::record::outcome::Outcome;
 /// Sweeps a slice of the corpus and writes one JSON line per contract to `output_path`, after a
 /// first line with both compilers' names and versions.
 ///
-/// Compilation failures are results, not errors: only harness breakage fails the sweep.
-///
 pub fn run(
     config: Config,
     corpus_directory: PathBuf,
@@ -49,18 +46,10 @@ pub fn run(
     slice: Slice,
     limits: Limits,
 ) -> anyhow::Result<()> {
-    let candidate = config.candidate()?;
-    let reference = config.reference()?;
+    let candidate = Compiler::candidate(&config.compilers, "Sourcify sweep")?;
+    let reference = Compiler::reference(&config.compilers, "Sourcify sweep")?;
     let candidate_path = crate::utils::absolute_path(candidate.path.as_str())?;
     let reference_path = crate::utils::absolute_path(reference.path.as_str())?;
-    let candidate_version = candidate
-        .solidity_version
-        .as_deref()
-        .unwrap_or(solidity_version.as_str());
-    let reference_version = reference
-        .solidity_version
-        .as_deref()
-        .unwrap_or(solidity_version.as_str());
 
     let contracts = match local_corpus_directory {
         Some(directory) => corpus::local(directory.as_path(), &slice)?,
@@ -82,8 +71,11 @@ pub fn run(
     writeln!(output, "{meta}")
         .map_err(|error| anyhow::anyhow!("Writing {output_path:?}: {error}"))?;
 
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(limits.threads.map_or(0, NonZeroUsize::get))
+    let mut thread_pool_builder = rayon::ThreadPoolBuilder::new();
+    if let Some(threads) = limits.threads {
+        thread_pool_builder = thread_pool_builder.num_threads(threads);
+    }
+    let pool = thread_pool_builder
         .build()
         .map_err(|error| anyhow::anyhow!("Thread pool building: {error}"))?;
     eprintln!(
@@ -96,13 +88,26 @@ pub fn run(
     let mut counts = BTreeMap::new();
     let (sender, receiver) = std::sync::mpsc::channel();
     pool.in_place_scope(|scope| -> anyhow::Result<()> {
-        let candidate = (candidate_path.as_path(), candidate_version);
-        let reference = (reference_path.as_path(), reference_version);
         let contracts = contracts.as_slice();
+        let candidate_path = candidate_path.as_path();
+        let reference_path = reference_path.as_path();
+        let solidity_version = solidity_version.as_str();
+        // A send fails only once the receiver has stopped on an error, which ends the sweep.
         scope.spawn(move |_scope| {
-            contracts.par_iter().for_each_with(sender, |sender, path| {
-                let _ = sender.send(sweep_one(path.as_path(), candidate, reference, limits));
-            });
+            contracts
+                .par_iter()
+                .try_for_each_with(sender, |sender, path| {
+                    sender
+                        .send(sweep_one(
+                            path.as_path(),
+                            candidate_path,
+                            reference_path,
+                            solidity_version,
+                            limits,
+                        ))
+                        .map_err(|_disconnected| ())
+                })
+                .ok();
         });
 
         for record in receiver {
@@ -150,20 +155,22 @@ pub fn run(
 }
 
 ///
-/// Compiles one corpus contract with the candidate, and with the reference if the candidate
-/// fails without timing out.
+/// The reference is skipped after a timeout, which would otherwise cost the slowest contracts
+/// twice over for an outcome the record already names.
 ///
 fn sweep_one(
     path: &Path,
-    (candidate_path, candidate_version): (&Path, &str),
-    (reference_path, reference_version): (&Path, &str),
+    candidate_path: &Path,
+    reference_path: &Path,
+    solidity_version: &str,
     limits: Limits,
 ) -> anyhow::Result<Record> {
     let contract = Contract::try_from(path.to_owned())?;
+    let input = contract.standard_json_input(solidity_version);
 
     let candidate = compilation::compile(
         candidate_path,
-        contract.standard_json_input(candidate_version),
+        input.clone(),
         contract.target.as_str(),
         limits.timeout,
         limits.memory_limit_mib,
@@ -175,7 +182,7 @@ fn sweep_one(
         _ => {
             let reference = compilation::compile(
                 reference_path,
-                contract.standard_json_input(reference_version),
+                input,
                 contract.target.as_str(),
                 limits.timeout,
                 limits.memory_limit_mib,

@@ -15,6 +15,7 @@ doctest = false
 
 [dependencies]
 anyhow.workspace = true
+askama = "0.16"
 clap.workspace = true
 colored.workspace = true
 serde.workspace = true

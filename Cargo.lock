@@ -4885,6 +4885,7 @@ name = "solx-dev"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "askama",
  "clap",
  "colored",
  "fs_extra",

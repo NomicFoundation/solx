@@ -22,36 +22,6 @@ pub struct Config {
     pub compilers: BTreeMap<String, Compiler>,
 }
 
-impl Config {
-    ///
-    /// The enabled compiler marked as the correctness candidate.
-    ///
-    pub fn candidate(&self) -> anyhow::Result<&Compiler> {
-        self.compilers
-            .values()
-            .find(|compiler| !compiler.disabled && compiler.is_correctness_candidate)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "No candidate compiler specified in the Sourcify sweep configuration"
-                )
-            })
-    }
-
-    ///
-    /// The enabled compiler marked as the correctness reference.
-    ///
-    pub fn reference(&self) -> anyhow::Result<&Compiler> {
-        self.compilers
-            .values()
-            .find(|compiler| !compiler.disabled && compiler.is_correctness_reference)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "No reference compiler specified in the Sourcify sweep configuration"
-                )
-            })
-    }
-}
-
 impl TryFrom<PathBuf> for Config {
     type Error = anyhow::Error;
 

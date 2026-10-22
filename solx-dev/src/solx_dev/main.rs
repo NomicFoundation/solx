@@ -133,7 +133,7 @@ fn main_inner() -> anyhow::Result<()> {
         }
         Arguments::Test(TestArguments::SourcifyReport(arguments)) => {
             solx_dev::report_sourcify(
-                arguments.results_paths,
+                arguments.results_path,
                 arguments.output_path,
                 arguments.title,
             )?;
