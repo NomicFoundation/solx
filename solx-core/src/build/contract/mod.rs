@@ -1030,7 +1030,7 @@ impl Contract {
             } else {
                 None
             },
-            // immutable_references
+            // immutables (immutable_references)
             selector_immutable_references
                 .filter(|selector| output_selection.check_selection(path, name, *selector))
                 .map(|_| {
@@ -1045,32 +1045,24 @@ impl Contract {
     }
 
     ///
-    /// Converts the runtime code's immutable offsets to solc's `immutableReferences`.
+    /// Keys the runtime code's immutable offsets as solc's `immutableReferences` does.
     ///
     /// The library address keeps its name as the key, as solc reports it with `viaIR`.
     ///
-    fn immutable_references(immutables: &BTreeMap<String, BTreeSet<u64>>) -> serde_json::Value {
+    fn immutable_references(
+        immutables: &BTreeMap<String, BTreeSet<u64>>,
+    ) -> BTreeMap<String, BTreeSet<u64>> {
         immutables
             .iter()
             .map(|(symbol, offsets)| {
-                let references = offsets
-                    .iter()
-                    .map(|start| {
-                        serde_json::json!({
-                            "start": start,
-                            "length": solx_utils::BYTE_LENGTH_FIELD,
-                        })
-                    })
-                    .collect();
                 let key = if symbol == solx_codegen_evm::LIBRARY_DEPLOY_ADDRESS_TAG {
                     symbol.as_str()
                 } else {
                     solx_slang::Slang::immutable_reference_key(symbol)
                 };
-                (key.to_owned(), serde_json::Value::Array(references))
+                (key.to_owned(), offsets.to_owned())
             })
-            .collect::<serde_json::Map<_, _>>()
-            .into()
+            .collect()
     }
 
     ///

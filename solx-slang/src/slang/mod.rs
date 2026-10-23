@@ -231,7 +231,7 @@ impl Slang {
     }
 
     /// The `immutableReferences` key of the immutable the runtime code loads as `symbol`: the node
-    /// id of its declaration, as `astId` is in the storage layout.
+    /// id of its declaration, which is also its `astId`.
     pub fn immutable_reference_key(symbol: &str) -> &str {
         SourceUnitScope::state_variable_node_id(symbol)
     }
