@@ -3,6 +3,7 @@
 //!
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::NodeId;
@@ -20,6 +21,8 @@ pub enum Segment<'source_unit, 'context> {
     Deploy {
         /// The functions whose pointer the deploy code takes, keyed by definition id.
         indirect_callees: &'source_unit mut BTreeMap<NodeId, FunctionDefinition>,
+        /// The object's internal function pointer identifiers, keyed by definition id.
+        function_identifiers: &'source_unit mut HashMap<NodeId, u64>,
         /// Mutable state for emitting the object's constructor chain.
         constructor: ConstructorBuilder<'context>,
     },
@@ -27,6 +30,8 @@ pub enum Segment<'source_unit, 'context> {
     Runtime {
         /// The functions whose pointer the deploy code took, keyed by definition id.
         indirect_callees: &'source_unit BTreeMap<NodeId, FunctionDefinition>,
+        /// The object's internal function pointer identifiers, keyed by definition id.
+        function_identifiers: &'source_unit mut HashMap<NodeId, u64>,
     },
 }
 
@@ -52,6 +57,25 @@ impl<'source_unit, 'context> Segment<'source_unit, 'context> {
         }
     }
 
+    /// The identifier a pointer to `function` dispatches to, numbered from one in the order the
+    /// object first defines its functions, so that no source outside the object changes its
+    /// bytecode. Both segments number in one map: the runtime code calls the pointers the deploy
+    /// code stores.
+    pub fn function_identifier(&mut self, function: &FunctionDefinition) -> u64 {
+        let (Self::Deploy {
+            function_identifiers,
+            ..
+        }
+        | Self::Runtime {
+            function_identifiers,
+            ..
+        }) = self;
+        let next = function_identifiers.len() as u64 + 1;
+        *function_identifiers
+            .entry(function.node_id())
+            .or_insert(next)
+    }
+
     /// The functions a pointer the deploy code stored can reach, which the runtime `sol.contract`
     /// lists.
     pub fn runtime_indirect_callees(
@@ -59,7 +83,9 @@ impl<'source_unit, 'context> Segment<'source_unit, 'context> {
     ) -> impl Iterator<Item = &'source_unit FunctionDefinition> {
         match *self {
             Self::Deploy { .. } => None,
-            Self::Runtime { indirect_callees } => Some(indirect_callees.values()),
+            Self::Runtime {
+                indirect_callees, ..
+            } => Some(indirect_callees.values()),
         }
         .into_iter()
         .flatten()

@@ -74,10 +74,13 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
 
         let name = DebugSymbolsFunction::source_name(function);
         self.at_node(function, |scope| {
+            let dispatch = FunctionDispatch::new(function, is_most_derived_constructor, || {
+                scope.segment.function_identifier(function)
+            });
             let entry = signature.define(
                 name.as_str(),
                 selector,
-                FunctionDispatch::new(function, is_most_derived_constructor),
+                dispatch,
                 FunctionOrigin::Declared,
                 StateMutability::from(function.attributes().mutability()),
                 scope,

@@ -66,12 +66,14 @@ impl<'context> SourceUnitScope<'context> {
         });
 
         let mut indirect_callees = BTreeMap::new();
+        let mut function_identifiers = HashMap::new();
         let deploy = SourceUnitScope::object_segment(
             melior,
             object,
             storage_slots,
             Segment::Deploy {
                 indirect_callees: &mut indirect_callees,
+                function_identifiers: &mut function_identifiers,
                 constructor: ConstructorBuilder::new(object.contracts()),
             },
             evm_version,
@@ -88,6 +90,7 @@ impl<'context> SourceUnitScope<'context> {
             storage_slots,
             Segment::Runtime {
                 indirect_callees: &indirect_callees,
+                function_identifiers: &mut function_identifiers,
             },
             evm_version,
             revert_strings,
@@ -232,7 +235,9 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         }
         match self.segment {
             Segment::Deploy { .. } => self.constructor(),
-            Segment::Runtime { indirect_callees } => {
+            Segment::Runtime {
+                indirect_callees, ..
+            } => {
                 for function in self.object.externally_visible_functions() {
                     self.function_definition(&function);
                 }

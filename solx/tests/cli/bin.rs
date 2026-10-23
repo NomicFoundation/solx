@@ -231,3 +231,36 @@ fn interface_empty_yul() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn internal_function_pointers_ignore_other_sources() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let contract = crate::common::contract!("solidity/InternalFunctionPointer.sol");
+    let alone = internal_function_pointer_binary(&[contract])?;
+    // `Abstract.sol` sorts before the contract's file, which shifts every Slang node id in it.
+    let with_preceding_source = internal_function_pointer_binary(&[
+        crate::common::contract!("solidity/Abstract.sol"),
+        contract,
+    ])?;
+
+    assert_eq!(alone, with_preceding_source);
+
+    Ok(())
+}
+
+/// The binary of `InternalFunctionPointer` compiled together with `sources`.
+fn internal_function_pointer_binary(sources: &[&str]) -> anyhow::Result<String> {
+    let mut args = sources.to_vec();
+    args.extend(["--bin", "--metadata-hash", "none"]);
+
+    let result = crate::cli::execute_solx(&args)?;
+    let stdout = String::from_utf8(result.success().get_output().stdout.clone())?;
+
+    stdout
+        .lines()
+        .skip_while(|line| !line.ends_with(":InternalFunctionPointer ======="))
+        .nth(2)
+        .map(str::to_owned)
+        .ok_or_else(|| anyhow::anyhow!("no binary of InternalFunctionPointer in:\n{stdout}"))
+}
