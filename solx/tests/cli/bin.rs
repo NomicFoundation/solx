@@ -238,9 +238,10 @@ fn internal_function_pointers_ignore_other_sources() -> anyhow::Result<()> {
 
     let contract = crate::common::contract!("solidity/InternalFunctionPointer.sol");
     let alone = internal_function_pointer_binary(&[contract])?;
-    // `Abstract.sol` sorts before the contract's file, which shifts every Slang node id in it.
+    // `FuzzedLinkerError.sol` sorts before the contract's file, which shifts every Slang node id
+    // in it, and defines functions of its own.
     let with_preceding_source = internal_function_pointer_binary(&[
-        crate::common::contract!("solidity/Abstract.sol"),
+        crate::common::contract!("solidity/FuzzedLinkerError.sol"),
         contract,
     ])?;
 
@@ -260,7 +261,9 @@ fn internal_function_pointer_binary(sources: &[&str]) -> anyhow::Result<String> 
     stdout
         .lines()
         .skip_while(|line| !line.ends_with(":InternalFunctionPointer ======="))
-        .nth(2)
+        .skip_while(|line| *line != "Binary:")
+        .nth(1)
+        .filter(|binary| !binary.is_empty() && binary.bytes().all(|byte| byte.is_ascii_hexdigit()))
         .map(str::to_owned)
         .ok_or_else(|| anyhow::anyhow!("no binary of InternalFunctionPointer in:\n{stdout}"))
 }
