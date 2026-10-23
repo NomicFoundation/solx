@@ -29,6 +29,59 @@ fn pinned_pragma() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test]
+fn inferred_from_pragma() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--bin",
+        crate::common::contract!("solidity/PinnedPragma.sol"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains(cbor_solc_version_hex("0.8.20")));
+
+    Ok(())
+}
+
+#[test]
+fn inferred_across_sources() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--bin",
+        crate::common::contract!("solidity/PragmaCaret.sol"),
+        crate::common::contract!("solidity/PragmaRange.sol"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains(cbor_solc_version_hex("0.8.24")));
+
+    Ok(())
+}
+
+#[test]
+fn inferred_no_common_version() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--bin",
+        crate::common::contract!("solidity/PinnedPragma.sol"),
+        crate::common::contract!("solidity/PragmaCaret.sol"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.failure().stderr(predicate::str::contains(
+        "This pragma is incompatible with the compilation language version",
+    ));
+
+    Ok(())
+}
+
 #[test_case("0.8.20+commit.a1b79de6" ; "build")]
 #[test_case("0.8.20-nightly.2023.5.1" ; "prerelease")]
 #[test_case("0.8.20-nightly.2023.5.1+commit.a1b79de6" ; "prerelease_and_build")]
@@ -160,6 +213,23 @@ fn standard_json() -> anyhow::Result<()> {
     let args = &[
         "--standard-json",
         crate::common::standard_json!("solidity_version.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains(cbor_solc_version_hex("0.8.20")));
+
+    Ok(())
+}
+
+#[test]
+fn standard_json_inferred() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("solidity_version_inferred.json"),
     ];
 
     let result = crate::cli::execute_solx(args)?;

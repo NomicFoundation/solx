@@ -111,7 +111,7 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
     // Optional, Slang-only: Solidity version the sources are compiled as.
     // Slang accepts the syntax and built-ins available in that version, and every `pragma solidity` must allow it.
     // Supported versions: from "0.8.0" up to the latest one Slang supports.
-    // Default: the latest version Slang supports.
+    // Default: the latest version every `pragma solidity` allows, or the latest one Slang supports if the pragmas allow no common version.
     "solidityVersion": "0.8.37",
     // Optional: Select the desired output.
     // Default: no flags are selected, and no output is generated.

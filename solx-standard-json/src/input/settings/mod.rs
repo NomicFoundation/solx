@@ -32,7 +32,8 @@ pub struct Settings {
     /// The target EVM version.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub evm_version: Option<solx_utils::EVMVersion>,
-    /// The Solidity language version to compile as. Defaults to the latest one the frontend supports.
+    /// The Solidity language version to compile as. Defaults to the latest one the frontend supports
+    /// that every `pragma solidity` allows.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub solidity_version: Option<semver::Version>,
     /// Whether to compile Solidity via IR.

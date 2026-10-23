@@ -163,7 +163,7 @@ pub struct Arguments {
     pub evm_version: Option<solx_utils::EVMVersion>,
 
     /// Solidity language version to compile as, from 0.8.0 up.
-    /// The default is the latest version the frontend supports.
+    /// The default is the latest version the frontend supports that every `pragma solidity` allows.
     #[arg(long, value_name = "VERSION", help_heading = "Compilation Settings")]
     pub solidity_version: Option<semver::Version>,
 

@@ -488,7 +488,7 @@ The options in this section configure the **Slang** compilation pipeline.
 
 Sets the Solidity version the sources are compiled as. Slang accepts the syntax and built-ins available in that version, and every `pragma solidity` must allow it. The version is also recorded in the metadata.
 
-Versions from 0.8.0 up to the latest one Slang supports are accepted, and the latest is the default.
+Versions from 0.8.0 up to the latest one Slang supports are accepted. The default is the latest one every `pragma solidity` allows, or the latest one Slang supports if the pragmas allow no common version.
 
 Usage:
 
