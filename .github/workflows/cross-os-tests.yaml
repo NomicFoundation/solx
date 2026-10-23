@@ -1,0 +1,117 @@
+name: Cross-OS Tests
+
+# Runs the full solx-tester suite on free macOS and Windows runners, for
+# failures only those platforms show: process management, IPC, paths,
+# toolchain quirks.
+#
+# The build-toolchain action keeps the LLVM params identical to test.yaml's
+# legs, so LLVM comes from the finished-install caches saved on main.
+#
+# TODO(Stage 3): before opening the PR, switch the trigger to
+# pull_request label `ci:cross-os` + workflow_dispatch + weekly cron on
+# main. The push trigger below is temporary, for verification runs on this
+# branch.
+
+on:
+  push:
+    branches:
+      - cross-os-tester
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Job id and job env match test.yaml's build-and-test job: rust-cache keys
+  # hash both, and the Windows leg restores that job's cache.
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            timeout-minutes: 45
+          - runner: windows-2025
+            target: x86_64-pc-windows-gnu
+            shell: msys2 {0}
+            timeout-minutes: 90
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout-minutes }}
+    defaults:
+      run:
+        shell: ${{ matrix.shell || 'bash' }}
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+
+      - name: Build toolchain
+        uses: ./.github/actions/build-toolchain
+
+      # bindgen's embedded clang needs to know it's targeting MinGW,
+      # otherwise it can't parse MinGW-specific __attribute__ extensions
+      # in stdlib.h (rust-lang/rust-bindgen#1760).
+      - name: Set bindgen target for MinGW
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "BINDGEN_EXTRA_CLANG_ARGS=--target=x86_64-w64-windows-gnu" >> "${GITHUB_ENV}"
+
+      # The Windows disk cannot hold LLVM sources, build trees, and a Rust
+      # workspace build at once. solidity/ stays: solx-tester reads the
+      # Ethereum corpus from solidity/test at run time.
+      - name: Free disk space (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "Before cleanup:" && df -h .
+          rm -rf solx-llvm target-llvm/build-final
+          echo "After cleanup:" && df -h .
+
+      # Read-only: only test.yaml saves. Its macOS cache holds debug
+      # artifacts alone, so only Windows has release builds to reuse.
+      - name: Cache cargo artifacts
+        if: runner.os == 'Windows'
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          prefix-key: slang-tests-v2
+          save-if: 'false'
+
+      - name: Install build target
+        if: matrix.target != ''
+        uses: ./.github/actions/setup-rust
+        with:
+          target: ${{ matrix.target }}
+
+      # RUSTC_BOOTSTRAP and the Windows linker flag match test.yaml's release
+      # build, so the restored dependency artifacts stay fresh.
+      - name: Build slang, solx-dev and solx-tester
+        env:
+          RUSTC_BOOTSTRAP: 1
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            export RUSTFLAGS="-C link-arg=-fuse-ld=lld"
+          fi
+          ${SFW_PREFIX:-} cargo fetch --locked
+          ${SFW_PREFIX:-} cargo build --frozen --release ${TARGET:+--target "${TARGET}"} \
+            --bin slang --bin solx-dev --bin solx-tester
+
+      - name: Run solx-tester
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          dir="target/${TARGET:+${TARGET}/}release"
+          ext=""
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            ext=".exe"
+          fi
+          "./${dir}/solx-dev${ext}" test solx-tester \
+            --binary "./${dir}/solx-tester${ext}" \
+            --solidity-compiler "./${dir}/slang${ext}"
