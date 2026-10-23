@@ -185,7 +185,7 @@ jobs:
             "${OBJECTS[@]}" > ./llvm/${LCOV_FILE}
 
       # solx-llvm fork coverage for the LLVM team: same profdata, restricted
-      # via positional source paths to the fork-specific dirs instead of the
+      # via positional source paths to the fork-specific sources instead of the
       # ignore regex that keeps them out of the solx report above.
       - name: Generate LLVM fork coverage reports
         id: fork-coverage
@@ -203,11 +203,21 @@ jobs:
             "${GITHUB_WORKSPACE}/solx-llvm/mlir/lib/Dialect/Yul"
             "${GITHUB_WORKSPACE}/solx-llvm/mlir/lib/Conversion/SolToYul"
             "${GITHUB_WORKSPACE}/solx-llvm/mlir/lib/Conversion/YulToStandard"
+            "${GITHUB_WORKSPACE}/solx-llvm/mlir/lib/CAPI/Dialect/Sol.cpp"
+            "${GITHUB_WORKSPACE}/solx-llvm/mlir/lib/CAPI/Dialect/SolPasses.cpp"
+            "${GITHUB_WORKSPACE}/solx-llvm/mlir/lib/CAPI/Dialect/Yul.cpp"
+            "${GITHUB_WORKSPACE}/solx-llvm/mlir/lib/CAPI/Dialect/YulPasses.cpp"
+            "${GITHUB_WORKSPACE}/solx-llvm/lld/lld-c"
+            "${GITHUB_WORKSPACE}/solx-llvm/lld/ELF/Arch/EVM.cpp"
+            "${GITHUB_WORKSPACE}/solx-llvm/llvm/lib/Analysis/VMAliasAnalysis.cpp"
+            "${GITHUB_WORKSPACE}/solx-llvm/llvm/lib/Support/KECCAK.cpp"
+            "${GITHUB_WORKSPACE}/solx-llvm/llvm/lib/Transforms/Scalar/MergeIdenticalBB.cpp"
+            "${GITHUB_WORKSPACE}/solx-llvm/llvm/lib/Transforms/Scalar/SHA3ConstFolding.cpp"
           )
           # llvm-cov only warns on a nonexistent source path, silently dropping
           # the area from every report; fail instead.
           for path in "${FORK_PATHS[@]}"; do
-            [ -d "${path}" ] || { echo "::error::fork source dir missing: ${path}"; exit 1; }
+            [ -e "${path}" ] || { echo "::error::fork source path missing: ${path}"; exit 1; }
           done
           llvm-cov show --show-directory-coverage \
             --format=html --output-dir="${OUTPUT_HTML_DIR_LLVM}" \
