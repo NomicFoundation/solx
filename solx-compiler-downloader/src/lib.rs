@@ -93,34 +93,6 @@ impl Downloader {
             })?;
 
             match executable.protocol {
-                Protocol::File => {
-                    source_path += std::env::consts::EXE_SUFFIX;
-                    if source_path == destination_path.to_string_lossy() {
-                        println!(
-                            "    {} executable {destination_path:?}. The source and destination are the same.",
-                            "Skipping".bright_green().bold(),
-                        );
-                        continue;
-                    }
-
-                    println!(
-                        "     {} executable `{source_path}` => {destination_path:?}",
-                        "Copying".bright_green().bold(),
-                    );
-
-                    if let Some(parent) = destination_path.parent() {
-                        std::fs::create_dir_all(parent).map_err(|error| {
-                            anyhow::anyhow!(
-                                "Executable {destination_path:?} parent directory creation error: {error}",
-                            )
-                        })?;
-                    }
-
-                    std::fs::copy(source_path.as_str(), &destination_path).map_err(|error| {
-                        anyhow::anyhow!("Executable {source_path:?} copying error: {error}",)
-                    })?;
-                    continue;
-                }
                 Protocol::HTTPS => {
                     source_path += std::env::consts::EXE_SUFFIX;
 
