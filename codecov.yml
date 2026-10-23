@@ -8,34 +8,45 @@ coverage:
     patch:
       default: false  # disable the patch status that measures patch changes
 
-# The Codecov app's PR comment. `components` adds the per-area solx-llvm
-# fork table (see component_management below); `flags` splits solx vs
-# llvm-fork.
+# The Codecov app's PR comment, with a per-crate table.
 comment:
-  layout: "header, diff, flags, components, files"
+  layout: "header, diff, components, files"
 
-# solx-llvm fork coverage (uploaded under the `llvm-fork` flag) split by the
-# areas the LLVM team cares about. Paths are as they appear in the lcov from
-# coverage.yaml, i.e. relative to the solx checkout with the submodule prefix.
 component_management:
   individual_components:
-    - component_id: llvm-evm-backend
-      name: LLVM EVM backend
+    - component_id: solx
       paths:
-        - solx-llvm/llvm/lib/Target/EVM/**
-    - component_id: mlir-sol-dialect
-      name: MLIR Sol dialect
+        - solx/**
+    - component_id: solx-core
       paths:
-        - solx-llvm/mlir/lib/Dialect/Sol/**
-    - component_id: mlir-yul-dialect
-      name: MLIR Yul dialect
+        - solx-core/**
+    - component_id: solx-slang
       paths:
-        - solx-llvm/mlir/lib/Dialect/Yul/**
-    - component_id: mlir-sol-to-yul
-      name: MLIR SolToYul
+        - solx-slang/**
+    - component_id: solx-mlir
       paths:
-        - solx-llvm/mlir/lib/Conversion/SolToYul/**
-    - component_id: mlir-yul-to-standard
-      name: MLIR YulToStandard
+        - solx-mlir/**
+    - component_id: solx-codegen-evm
       paths:
-        - solx-llvm/mlir/lib/Conversion/YulToStandard/**
+        - solx-codegen-evm/**
+    - component_id: solx-standard-json
+      paths:
+        - solx-standard-json/**
+    - component_id: solx-utils
+      paths:
+        - solx-utils/**
+    - component_id: solx-dev
+      paths:
+        - solx-dev/**
+    - component_id: solx-tester
+      paths:
+        - solx-tester/**
+    - component_id: solx-solc-test-adapter
+      paths:
+        - solx-solc-test-adapter/**
+    - component_id: solx-benchmark-converter
+      paths:
+        - solx-benchmark-converter/**
+    - component_id: solx-compiler-downloader
+      paths:
+        - solx-compiler-downloader/**

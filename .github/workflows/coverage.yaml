@@ -188,6 +188,7 @@ jobs:
       # via positional source paths to the fork-specific dirs instead of the
       # ignore regex that keeps them out of the solx report above.
       - name: Generate LLVM fork coverage reports
+        id: fork-coverage
         run: |
           # First binary is positional: with -object only, llvm-cov consumes
           # the first positional SOURCE path as the covered binary.
@@ -214,6 +215,10 @@ jobs:
           llvm-cov export --format=lcov \
             -instr-profile="${PROFDATA_FILE}" \
             "${OBJECTS[@]}" "${FORK_PATHS[@]}" > "./llvm/${LCOV_FILE_LLVM}"
+          # Paths relative to the solx-llvm root, as its own Codecov project
+          # knows them.
+          sed -i "s|^SF:${GITHUB_WORKSPACE}/solx-llvm/|SF:|" "./llvm/${LCOV_FILE_LLVM}"
+          echo "solx-llvm-sha=$(git -C solx-llvm rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
 
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -237,6 +242,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: 'llvm/codecov.lcov'
+          flags: solx
           # Upload only the lcov above; don't walk the tree or run the gcov
           # plugin over the thousands of solx-llvm test fixtures.
           disable_search: true
@@ -244,21 +250,19 @@ jobs:
           slug: ${{ github.repository }}
           fail_ci_if_error: true
 
-      # Separate flagged upload so the fork coverage can be filtered apart
-      # from the solx crates in the Codecov UI (see component_management in
-      # codecov.yml for the per-area split).
+      # Codecov renders a file's source from the commit it was uploaded to,
+      # so the fork coverage goes to solx-llvm's project under the pinned
+      # commit. Main pushes only: Codecov merges every upload to a commit,
+      # and PRs would mix their runs into the pin's numbers.
       - name: Upload LLVM fork coverage to Codecov
+        if: github.event_name == 'push'
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+          token: ${{ secrets.CODECOV_TOKEN_SOLX_LLVM }}
           files: 'llvm/${{ env.LCOV_FILE_LLVM }}'
-          flags: llvm-fork
-          # Enumerate the network with `git ls-files --recurse-submodules` so
-          # solx-llvm paths survive server-side path fixing; without this the
-          # fork files are silently dropped at ingest (not in the git tree).
-          recurse_submodules: true
+          override_commit: ${{ steps.fork-coverage.outputs.solx-llvm-sha }}
+          root_dir: solx-llvm
           disable_search: true
           plugins: noop
-          slug: ${{ github.repository }}
+          slug: NomicFoundation/solx-llvm
           fail_ci_if_error: true
