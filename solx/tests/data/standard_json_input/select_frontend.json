@@ -9,6 +9,7 @@
     "outputSelection": {
       "*": {
         "": [
+          "id",
           "ast",
           "debugSymbols",
           "benchmarks"

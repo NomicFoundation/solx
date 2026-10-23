@@ -660,12 +660,14 @@ fn select_ast_only() -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    result
+    let result = result
         .success()
         .stdout(predicate::str::contains("\"ast\""))
         .stdout(predicate::str::contains("\"evm\"").not())
         .stdout(predicate::str::contains("\"bytecode\"").not())
         .stdout(predicate::str::contains("\"abi\"").not());
+    let output: serde_json::Value = serde_json::from_slice(result.get_output().stdout.as_slice())?;
+    assert_eq!(output["sources"]["A"]["id"], 0);
 
     Ok(())
 }
