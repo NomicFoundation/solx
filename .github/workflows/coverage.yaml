@@ -39,7 +39,7 @@ jobs:
     # Backstop against hung compiles (the tester drives a pipeline still in
     # development); sized for a cold instrumented LLVM build when a solx-llvm
     # bump lands before cache-warmup has run for that SHA.
-    timeout-minutes: 180
+    timeout-minutes: 240
     permissions:
       contents: read
       packages: read
