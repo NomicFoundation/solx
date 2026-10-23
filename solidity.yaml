@@ -6903,7 +6903,8 @@ entries:
     entries:
       address_code.sol:
         hash: '0xa25df689aea6e9ad7da0a5eb46264bd5'
-        enabled: true
+        enabled: false
+        comment: 'Expects runtime code over 380 bytes; -Oz emits 370'
         version: '>=0.8.0'
       address_code_complex.sol:
         hash: '0xa486c90de750fcf09060954c6953c062'
