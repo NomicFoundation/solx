@@ -24,6 +24,14 @@ macro_rules! abi {
 }
 pub(crate) use abi;
 
+/// Returns a path under `tests/data/storage_layout/` for expected storage layout files.
+macro_rules! storage_layout {
+    ($relative:literal) => {
+        concat!("tests/data/storage_layout/", $relative)
+    };
+}
+pub(crate) use storage_layout;
+
 /// Returns a path under `tests/data/standard_json_input/` for standard JSON input files.
 macro_rules! standard_json {
     ($relative:literal) => {

@@ -50,14 +50,14 @@ impl<'context> SourceUnitScope<'context> {
     }
 
     /// Opens the contract scope around `emit`: the `sol.contract` an enclosed member is defined
-    /// into, the object whose hierarchy it resolves against and its `storage_layout`, and the
+    /// into, the object whose hierarchy it resolves against and its `storage_slots`, and the
     /// segment it lowers, with the `this` type installed on the MLIR context for its duration.
     pub fn contract(
         &mut self,
         contract_type: MlirType<'context>,
         contract: Contract<'context>,
         object: &Object,
-        storage_layout: &HashMap<NodeId, StorageSlot>,
+        storage_slots: &HashMap<NodeId, StorageSlot>,
         segment: Segment<'_, 'context>,
         emit: impl FnOnce(&mut ContractScope<'_, 'context>),
     ) {
@@ -66,7 +66,7 @@ impl<'context> SourceUnitScope<'context> {
             self,
             contract,
             object,
-            storage_layout,
+            storage_slots,
             segment,
         ));
         self.mlir.current_contract_type = None;

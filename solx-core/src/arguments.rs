@@ -124,7 +124,7 @@ pub struct Arguments {
     #[arg(long = "storage-layout", help_heading = "Output Selection")]
     pub output_storage_layout: bool,
 
-    /// Emit storage layout of the compiled project.
+    /// Emit transient storage layout of the compiled project.
     #[arg(long = "transient-storage-layout", help_heading = "Output Selection")]
     pub output_transient_storage_layout: bool,
 
@@ -501,6 +501,12 @@ impl Arguments {
         }
         if self.output_hashes {
             selectors.insert(solx_standard_json::InputSelector::MethodIdentifiers);
+        }
+        if self.output_storage_layout {
+            selectors.insert(solx_standard_json::InputSelector::StorageLayout);
+        }
+        if self.output_transient_storage_layout {
+            selectors.insert(solx_standard_json::InputSelector::TransientStorageLayout);
         }
 
         solx_standard_json::InputSelection::new(selectors)

@@ -34,5 +34,6 @@ gimli.workspace = true
 hex.workspace = true
 inkwell.workspace = true
 object.workspace = true
+regex.workspace = true
 
 solx-codegen-evm = { path = "../solx-codegen-evm" }

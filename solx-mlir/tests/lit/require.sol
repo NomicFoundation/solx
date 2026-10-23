@@ -6,22 +6,22 @@
 
 // CHECK: sol.func @{{.*check_error.*}}
 // CHECK:   %[[COND:.*]] = sol.cmp gt
-// CHECK:   sol.require %[[COND]], "MyError(uint256)"(%{{.*}}) {call}
+// CHECK:   sol.require %[[COND]], "MyError(uint256)"(%{{.*}} : ui256) {call}
 
 // CHECK: sol.func @{{.*check_library_error.*}}
 // CHECK:   %[[COND:.*]] = sol.cmp gt
-// CHECK:   sol.require %[[COND]], "LibraryError(uint256)"(%{{.*}}) {call}
+// CHECK:   sol.require %[[COND]], "LibraryError(uint256)"(%{{.*}} : ui256) {call}
 
 // CHECK: sol.func @{{.*check_msg.*}}
 // CHECK:   %[[COND:.*]] = sol.cmp gt
-// CHECK:   sol.require %[[COND]], "must be positive"
+// CHECK:   sol.require %[[COND]], "must be positive"{{$}}
 
 // CHECK: sol.func @{{.*check_msg_parenthesized.*}}
 // CHECK:   %[[COND:.*]] = sol.cmp gt
-// CHECK:   sol.require %[[COND]], "must be at least one"
+// CHECK:   sol.require %[[COND]], "must be at least one"{{$}}
 
 // CHECK: sol.func @{{.*check_named_arguments.*}}
-// CHECK:   sol.require %{{.*}}, "MyErr(uint256,uint256)"(%{{.*}}, %{{.*}}) {call}
+// CHECK:   sol.require %{{.*}}, "MyErr(uint256,uint256)"(%{{.*}}, %{{.*}} : ui256, ui256) {call}
 
 error MyError(uint256 x);
 

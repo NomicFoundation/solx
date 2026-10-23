@@ -3,7 +3,7 @@
 //!
 
 use ruint::aliases::U256;
-use slang_solidity_v2::abi::StorageItem;
+use slang_solidity_v2::abi::StorageVariable;
 
 /// Storage location of a state variable in contract storage.
 #[derive(Debug, Clone)]
@@ -15,11 +15,11 @@ pub struct StorageSlot {
     pub byte_offset: u32,
 }
 
-impl From<&StorageItem> for StorageSlot {
-    fn from(item: &StorageItem) -> Self {
+impl From<&StorageVariable> for StorageSlot {
+    fn from(variable: &StorageVariable) -> Self {
         Self {
-            slot: item.slot(),
-            byte_offset: item.offset() as u32,
+            slot: variable.slot(),
+            byte_offset: variable.offset() as u32,
         }
     }
 }
