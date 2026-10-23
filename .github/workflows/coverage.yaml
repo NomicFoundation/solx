@@ -31,6 +31,7 @@ jobs:
       - uses: ./.github/actions/cooldown-check
 
   coverage:
+    needs: cooldown-check
     # Fork PRs get no repo secrets, so the Codecov uploads (which run with
     # fail_ci_if_error) would fail without CODECOV_TOKEN.
     if: ${{ github.event_name == 'push' || !github.event.pull_request.head.repo.fork }}
