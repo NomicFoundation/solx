@@ -135,8 +135,10 @@ impl Selection {
                     || contract.contains(&Selector::EVM)
                     || contract.contains(&Selector::Bytecode)
                     || contract.contains(&Selector::BytecodeObject)
+                    || contract.contains(&Selector::BytecodeLinkReferences)
                     || contract.contains(&Selector::RuntimeBytecode)
                     || contract.contains(&Selector::RuntimeBytecodeObject)
+                    || contract.contains(&Selector::RuntimeBytecodeLinkReferences)
                     || contract.contains(&Selector::RuntimeBytecodeImmutableReferences)
                 {
                     return true;
