@@ -5,6 +5,7 @@
 pub mod object;
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -1030,14 +1031,46 @@ impl Contract {
                 None
             },
             // immutable_references
-            selector_immutable_references.and_then(|selector| {
-                if output_selection.check_selection(path, name, selector) {
-                    Some(serde_json::json!({}))
-                } else {
-                    None
-                }
-            }),
+            selector_immutable_references
+                .filter(|selector| output_selection.check_selection(path, name, *selector))
+                .map(|_| {
+                    object_result
+                        .as_ref()
+                        .and_then(|result| result.as_ref().ok())
+                        .and_then(|object| object.immutables.as_ref())
+                        .map(Self::immutable_references)
+                        .unwrap_or_default()
+                }),
         )
+    }
+
+    ///
+    /// Converts the runtime code's immutable offsets to solc's `immutableReferences`.
+    ///
+    /// The library address keeps its name as the key, as solc reports it with `viaIR`.
+    ///
+    fn immutable_references(immutables: &BTreeMap<String, BTreeSet<u64>>) -> serde_json::Value {
+        immutables
+            .iter()
+            .map(|(symbol, offsets)| {
+                let references = offsets
+                    .iter()
+                    .map(|start| {
+                        serde_json::json!({
+                            "start": start,
+                            "length": solx_utils::BYTE_LENGTH_FIELD,
+                        })
+                    })
+                    .collect();
+                let key = if symbol == solx_codegen_evm::LIBRARY_DEPLOY_ADDRESS_TAG {
+                    symbol.as_str()
+                } else {
+                    solx_slang::Slang::immutable_reference_key(symbol)
+                };
+                (key.to_owned(), serde_json::Value::Array(references))
+            })
+            .collect::<serde_json::Map<_, _>>()
+            .into()
     }
 
     ///

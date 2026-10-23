@@ -470,6 +470,66 @@ fn select_evm_deployed_bytecode_link_references() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test_case("C", 2, &[])]
+#[test_case("L", 0, &["library_deploy_address"])]
+fn select_evm_deployed_bytecode_immutable_references(
+    name: &str,
+    node_id_keys: usize,
+    named_keys: &[&str],
+) -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let compile = |input: &str| -> anyhow::Result<serde_json::Value> {
+        let result = crate::cli::execute_solx(&["--standard-json", input])?;
+        let result = result.success();
+        Ok(serde_json::from_slice(
+            result.get_output().stdout.as_slice(),
+        )?)
+    };
+    let output = compile(crate::common::standard_json!(
+        "select_evm_deployed_bytecode_immutable_references.json"
+    ))?;
+    let output_alone = compile(crate::common::standard_json!(
+        "select_evm_deployed_bytecode_immutable_references_only.json"
+    ))?;
+
+    let deployed_bytecode = &output["contracts"]["A"][name]["evm"]["deployedBytecode"];
+    let object = deployed_bytecode["object"]
+        .as_str()
+        .expect("the object is a string");
+    let code = hex::decode(
+        regex::Regex::new(r"__\$[0-9a-f]{34}\$__")?
+            .replace_all(object, "0".repeat(40))
+            .as_bytes(),
+    )?;
+    let immutable_references = deployed_bytecode["immutableReferences"]
+        .as_object()
+        .expect("the immutable references are an object");
+    let (node_ids, names): (Vec<&String>, Vec<&String>) = immutable_references
+        .keys()
+        .partition(|key| key.parse::<usize>().is_ok());
+    assert_eq!(node_ids.len(), node_id_keys);
+    assert_eq!(names, named_keys);
+    for (key, references) in immutable_references.iter() {
+        for reference in references.as_array().expect("the references are an array") {
+            let start = reference["start"].as_u64().expect("the start is a number") as usize;
+            assert_eq!(reference["length"], 32);
+            assert_eq!(
+                code[start - 1],
+                0x7f,
+                "{key} at {start} is not a PUSH32 operand"
+            );
+            assert_eq!(&code[start..start + 32], &[0; 32]);
+        }
+    }
+    assert_eq!(
+        output_alone["contracts"]["A"][name]["evm"]["deployedBytecode"]["immutableReferences"],
+        deployed_bytecode["immutableReferences"],
+    );
+
+    Ok(())
+}
+
 #[test]
 fn select_single() -> anyhow::Result<()> {
     crate::common::setup()?;

@@ -83,4 +83,12 @@ impl<'context> SourceUnitScope<'context> {
             state_variable.node_id(),
         )
     }
+
+    /// The node id a `state_variable_symbol` ends with.
+    pub fn state_variable_node_id(symbol: &str) -> &str {
+        symbol
+            .rsplit_once('_')
+            .map(|(_, node_id)| node_id)
+            .unwrap_or_else(|| panic!("`{symbol}` is not a state variable symbol"))
+    }
 }
