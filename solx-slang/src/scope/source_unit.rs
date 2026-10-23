@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::num::NonZeroU64;
 use std::ops::Deref;
 
 use slang_solidity_v2::ast::FunctionDefinition;
@@ -58,6 +59,7 @@ impl<'context> SourceUnitScope<'context> {
         contract: Contract<'context>,
         object: &Object,
         storage_slots: &HashMap<NodeId, StorageSlot>,
+        function_identifiers: &mut HashMap<NodeId, NonZeroU64>,
         segment: Segment<'_, 'context>,
         emit: impl FnOnce(&mut ContractScope<'_, 'context>),
     ) {
@@ -67,6 +69,7 @@ impl<'context> SourceUnitScope<'context> {
             contract,
             object,
             storage_slots,
+            function_identifiers,
             segment,
         ));
         self.mlir.current_contract_type = None;

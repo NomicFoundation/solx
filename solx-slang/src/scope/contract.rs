@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::num::NonZeroU64;
 use std::ops::Deref;
 
 use slang_solidity_v2::ast::ContractDefinition;
@@ -44,6 +45,9 @@ pub struct ContractScope<'source_unit, 'context> {
     pub defined_functions: HashSet<NodeId>,
     /// The state-variable slots keyed by definition id, computed once for both segments.
     pub storage_slots: &'source_unit HashMap<NodeId, StorageSlot>,
+    /// The internal function pointer identifiers keyed by definition id, shared by both segments:
+    /// the runtime code calls the pointers the deploy code stores.
+    pub function_identifiers: &'source_unit mut HashMap<NodeId, NonZeroU64>,
 }
 
 impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
@@ -54,6 +58,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         contract: Contract<'context>,
         object: &'source_unit Object,
         storage_slots: &'source_unit HashMap<NodeId, StorageSlot>,
+        function_identifiers: &'source_unit mut HashMap<NodeId, NonZeroU64>,
         segment: Segment<'source_unit, 'context>,
     ) -> Self {
         Self {
@@ -63,6 +68,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             segment,
             defined_functions: HashSet::new(),
             storage_slots,
+            function_identifiers,
         }
     }
 

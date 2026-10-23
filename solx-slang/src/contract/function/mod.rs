@@ -15,6 +15,7 @@ use slang_solidity_v2::ast::VirtualTarget;
 
 use solx_mlir::Function;
 use solx_mlir::FunctionDispatch;
+use solx_mlir::FunctionKind as MlirFunctionKind;
 use solx_mlir::FunctionOrigin;
 use solx_mlir::Place;
 use solx_mlir::StateMutability;
@@ -72,11 +73,23 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 .extend(self.segment.constructor().parameter_types());
         }
 
+        // Only the most derived constructor is the object's creation entry point; the chain calls
+        // every base constructor.
+        let dispatch = match function.kind() {
+            FunctionKind::Constructor if is_most_derived_constructor => {
+                FunctionDispatch::Kind(MlirFunctionKind::Constructor)
+            }
+            FunctionKind::Constructor => FunctionDispatch::Symbol,
+            FunctionKind::Fallback => FunctionDispatch::Kind(MlirFunctionKind::Fallback),
+            FunctionKind::Receive => FunctionDispatch::Kind(MlirFunctionKind::Receive),
+            FunctionKind::Regular => {
+                FunctionDispatch::Identifier(self.function_identifier(function))
+            }
+            FunctionKind::Modifier => FunctionDispatch::Modifier,
+        };
+
         let name = DebugSymbolsFunction::source_name(function);
         self.at_node(function, |scope| {
-            let dispatch = FunctionDispatch::new(function, is_most_derived_constructor, || {
-                scope.segment.function_identifier(function)
-            });
             let entry = signature.define(
                 name.as_str(),
                 selector,
