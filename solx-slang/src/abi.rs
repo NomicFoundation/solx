@@ -1,11 +1,11 @@
 //!
-//! The ABI outputs of a definition in standard-JSON form: the JSON ABI Slang computes and
-//! serializes in solc's spelling, and the `evm.methodIdentifiers` map.
+//! The ABI outputs of a definition in standard-JSON form: the JSON ABI and the storage layouts
+//! Slang computes and serializes in solc's spelling, and the `evm.methodIdentifiers` map.
 //!
 
 use std::collections::BTreeMap;
 
-use slang_solidity_v2::abi::ContractAbi;
+use slang_solidity_v2::abi::StorageLayout;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
@@ -14,18 +14,10 @@ use slang_solidity_v2::ast::InterfaceDefinition;
 use slang_solidity_v2::ast::LibraryDefinition;
 use slang_solidity_v2::ast::SourceUnitMember;
 use slang_solidity_v2::ast::StateVariableDefinition;
+use slang_solidity_v2::compilation::FileId;
 
 use crate::contract::object::Object;
-
-/// The `abi` field of a standard-JSON contract.
-pub struct Abi(ContractAbi);
-
-impl Abi {
-    /// The value the standard-JSON output stores: Slang's entries in solc's JSON-ABI spelling.
-    pub fn into_value(self) -> serde_json::Value {
-        serde_json::to_value(&self.0).expect("Slang's ABI serializer writes only string-keyed maps")
-    }
-}
+use crate::error::Error;
 
 /// A source-unit member that has an ABI, whether or not it deploys an object.
 pub enum AbiDefinition {
@@ -57,15 +49,64 @@ impl AbiDefinition {
         }
     }
 
-    /// The definition's JSON ABI, or `None` for an input Slang accepts without diagnosing but
-    /// cannot answer, such as an interface with a contract base.
-    pub fn abi(&self) -> Option<Abi> {
+    /// The file that declares the definition.
+    pub fn file_id(&self) -> &FileId {
         match self {
+            Self::Contract(node) => node.get_file_id(),
+            Self::Interface(node) => node.get_file_id(),
+            Self::Library(node) => node.get_file_id(),
+        }
+    }
+
+    /// The `abi` value: Slang's entries in solc's JSON-ABI spelling.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error of an input Slang accepts without diagnosing but cannot answer, such as
+    /// an interface with a contract base.
+    pub fn abi(&self) -> Result<serde_json::Value, Error> {
+        let abi = match self {
             Self::Contract(node) => node.compute_abi(),
             Self::Interface(node) => node.compute_abi(),
             Self::Library(node) => node.compute_abi(),
         }
-        .map(Abi)
+        .ok_or_else(|| Error::Abi(self.name().name().to_owned()))?;
+        Ok(serde_json::to_value(&abi)
+            .expect("Slang's ABI serializer writes only string-keyed maps"))
+    }
+
+    /// The `storageLayout` value.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error of a storage Slang cannot lay out.
+    pub fn storage_layout(&self) -> Result<serde_json::Value, Error> {
+        let layout = match self {
+            Self::Contract(node) => node.compute_storage_layout(),
+            // Slang rejects state variables in interfaces and non-constant ones in libraries.
+            // TODO: take these from Slang once it lays out interfaces and libraries.
+            Self::Interface(_) | Self::Library(_) => Some(StorageLayout::default()),
+        }
+        .ok_or_else(|| Error::StorageLayout(self.name().name().to_owned()))?;
+        Ok(serde_json::to_value(&layout)
+            .expect("Slang's storage layout serializer writes only string-keyed maps"))
+    }
+
+    /// The `transientStorageLayout` value.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error of a transient storage Slang cannot lay out.
+    pub fn transient_storage_layout(&self) -> Result<serde_json::Value, Error> {
+        let layout = match self {
+            Self::Contract(node) => node.compute_transient_storage_layout(),
+            // Slang rejects state variables in interfaces and non-constant ones in libraries.
+            // TODO: take these from Slang once it lays out interfaces and libraries.
+            Self::Interface(_) | Self::Library(_) => Some(StorageLayout::default()),
+        }
+        .ok_or_else(|| Error::TransientStorageLayout(self.name().name().to_owned()))?;
+        Ok(serde_json::to_value(&layout)
+            .expect("Slang's storage layout serializer writes only string-keyed maps"))
     }
 
     /// The `evm.methodIdentifiers` map: each externally dispatchable function of the hierarchy

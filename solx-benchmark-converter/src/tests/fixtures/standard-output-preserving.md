@@ -9,7 +9,7 @@
 | Foundry · 2 proj | ✅ 0 (3 pre-existing) | ✅ 0 of 4 | ⚪ jitter 2 of 4, median 0.1% (not gated) | [foundry-report.xlsx ↓](https://example.com/artifacts/foundry) |
 | Hardhat | ✅ 0 (2 pre-existing) | ⚪ not collected | ⚪ not collected | [hardhat-report.xlsx ↓](https://example.com/artifacts/hardhat) |
 
-**Compile time** — wall-clock tripwire, positive = PR slower (authoritative Δ in `ci:compile-benchmark`)
+**Compile time** — wall-clock tripwire, positive = PR slower (authoritative Δ in the compile-time benchmark comment)
 
 | Suite | legacy (agg / median) | viaIR (agg / median) |
 |---|---|---|

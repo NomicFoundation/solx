@@ -1,0 +1,28 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A": {
+      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.0; contract C {}"
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "*": {
+        "": [
+          "ast",
+          "debugSymbols",
+          "benchmarks"
+        ],
+        "*": [
+          "abi",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "transientStorageLayout",
+          "evm.methodIdentifiers"
+        ]
+      }
+    }
+  }
+}

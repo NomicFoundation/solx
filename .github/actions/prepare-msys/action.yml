@@ -51,6 +51,9 @@ runs:
     # Added to GITHUB_PATH after mingw64\bin, so it lands earlier in PATH:
     # non-msys2 steps must resolve python3 to the stock CPython, not the
     # pip-less MinGW python that mingw-w64-x86_64-python puts in mingw64\bin.
+    # TODO: Move to Python 3.15 once publish-unit-test-result-action requires
+    # lxml >= 6.1.3, the first release with CPython 3.15 Windows wheels, and
+    # drop the matching rule in renovate.json.
     - name: Install Python
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       with:

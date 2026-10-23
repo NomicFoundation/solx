@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity >=0.8.4;
+pragma solidity >=0.8.13;
 
 import "./PRBMath.sol";
 
@@ -55,7 +55,7 @@ library PRBMathUD60x18 {
         if (x > MAX_WHOLE_UD60x18) {
             revert PRBMathUD60x18__CeilOverflow(x);
         }
-        assembly {
+        assembly ("memory-safe") {
         // Equivalent to "x % SCALE" but faster.
             let remainder := mod(x, SCALE)
 
@@ -141,7 +141,7 @@ library PRBMathUD60x18 {
     /// @param x The unsigned 60.18-decimal fixed-point number to floor.
     /// @param result The greatest integer less than or equal to x, as an unsigned 60.18-decimal fixed-point number.
     function floor(uint256 x) internal pure returns (uint256 result) {
-        assembly {
+        assembly ("memory-safe") {
         // Equivalent to "x % SCALE" but faster.
             let remainder := mod(x, SCALE)
 
@@ -155,7 +155,7 @@ library PRBMathUD60x18 {
     /// @param x The unsigned 60.18-decimal fixed-point number to get the fractional part of.
     /// @param result The fractional part of x as an unsigned 60.18-decimal fixed-point number.
     function frac(uint256 x) internal pure returns (uint256 result) {
-        assembly {
+        assembly ("memory-safe") {
             result := mod(x, SCALE)
         }
     }
@@ -258,7 +258,7 @@ library PRBMathUD60x18 {
         // Note that the "mul" in this block is the assembly multiplication operation, not the "mul" function defined
         // in this contract.
         // prettier-ignore
-        assembly {
+        assembly ("memory-safe") {
             switch x
             case 1 { result := mul(SCALE, sub(0, 18)) }
             case 10 { result := mul(SCALE, sub(1, 18)) }

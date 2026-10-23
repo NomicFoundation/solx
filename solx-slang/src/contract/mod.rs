@@ -37,7 +37,7 @@ use crate::scope::contract::ContractScope;
 use crate::scope::source_unit::SourceUnitScope;
 
 impl<'context> SourceUnitScope<'context> {
-    /// Lowers `object` over `storage_layout` off the melior context in `melior`, created on first
+    /// Lowers `object` over `storage_slots` off the melior context in `melior`, created on first
     /// use, each segment into a module of its own: the deploy segment first, whose indirect
     /// callees the runtime segment defines.
     ///
@@ -47,7 +47,7 @@ impl<'context> SourceUnitScope<'context> {
     pub fn object(
         melior: &OnceCell<melior::Context>,
         object: &Object,
-        storage_layout: &HashMap<NodeId, StorageSlot>,
+        storage_slots: &HashMap<NodeId, StorageSlot>,
         evm_version: EVMVersion,
         revert_strings: RevertStrings,
         emit_deploy_debug_info: bool,
@@ -69,7 +69,7 @@ impl<'context> SourceUnitScope<'context> {
         let deploy = SourceUnitScope::object_segment(
             melior,
             object,
-            storage_layout,
+            storage_slots,
             Segment::Deploy {
                 indirect_callees: &mut indirect_callees,
                 constructor: ConstructorBuilder::new(object.contracts()),
@@ -85,7 +85,7 @@ impl<'context> SourceUnitScope<'context> {
         let runtime = SourceUnitScope::object_segment(
             melior,
             object,
-            storage_layout,
+            storage_slots,
             Segment::Runtime {
                 indirect_callees: &indirect_callees,
             },
@@ -100,13 +100,13 @@ impl<'context> SourceUnitScope<'context> {
         Ok(MlirOutput::new(deploy, runtime))
     }
 
-    /// Emits the `sol.contract` of `segment` over `storage_layout`. The location cursor starts on
+    /// Emits the `sol.contract` of `segment` over `storage_slots`. The location cursor starts on
     /// the definition; a member with a node of its own narrows it, and the synthesized constructor
     /// keeps it.
     fn object_definition(
         &mut self,
         object: &Object,
-        storage_layout: &HashMap<NodeId, StorageSlot>,
+        storage_slots: &HashMap<NodeId, StorageSlot>,
         segment: Segment<'_, 'context>,
     ) {
         let identifier = object.identifier();
@@ -123,7 +123,7 @@ impl<'context> SourceUnitScope<'context> {
                 Block::from(self.module.body()),
             ),
             object,
-            storage_layout,
+            storage_slots,
             segment,
             |scope| scope.members(),
         );
@@ -140,7 +140,7 @@ impl<'context> SourceUnitScope<'context> {
     fn object_segment(
         melior: &'context melior::Context,
         object: &Object,
-        storage_layout: &HashMap<NodeId, StorageSlot>,
+        storage_slots: &HashMap<NodeId, StorageSlot>,
         segment: Segment<'_, 'context>,
         evm_version: EVMVersion,
         revert_strings: RevertStrings,
@@ -173,7 +173,7 @@ impl<'context> SourceUnitScope<'context> {
         let run_emission = profiler.start_pipeline_element(
             format!("Compiler_EmitSol:{}", dependencies.identifier).as_str(),
         );
-        scope.object_definition(object, storage_layout, segment);
+        scope.object_definition(object, storage_slots, segment);
         run_emission.borrow_mut().finish();
         Context::from(scope).finalize_module(dependencies, capture_mlir, pass_timing, profiler)
     }
@@ -191,7 +191,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
                 StateVariableMutability::Mutable | StateVariableMutability::Transient => self
                     .at_node(state_variable, |scope| {
                         let slot = scope
-                            .storage_layout
+                            .storage_slots
                             .get(&state_variable.node_id())
                             .expect("slang lays out every state variable");
                         let element_type = scope.source_unit.resolve(

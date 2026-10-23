@@ -197,6 +197,8 @@ disabled = true
 url = "https://github.com/foundry-rs/forge-std"
 commit = "0844d7e1fc5e60d77b68e469bff60265f236c398"
 description = "Forge Standard Library is a collection of helpful contracts and libraries for use with Forge and Foundry."
+[projects.forge-std.env]
+FOUNDRY_NO_MATCH_TEST = "test_RevertIf_ModError" # unused `%` by zero does not panic until NomicFoundation/solx#825
 
 [projects.tokenlon]
 url = "https://github.com/consenlabs/tokenlon-contracts"

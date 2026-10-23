@@ -219,6 +219,10 @@ impl Slang {
             sources: &sources,
             input_sources: &input_json.sources,
             report_benchmarks: benchmarks,
+            run_codegen: input_json
+                .settings
+                .output_selection
+                .is_codegen_set_for_any(),
         };
         scope.compilation_unit(&unit, &mut output)?;
 

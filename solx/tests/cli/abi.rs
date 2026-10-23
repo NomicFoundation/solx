@@ -9,41 +9,30 @@ use test_case::test_case;
 
 /// The expected files hold solc's ABI verbatim.
 #[test_case(
-    crate::common::contract!("solidity/SlangTest.sol"),
+    crate::common::standard_json!("slang_test_abi.json"),
+    "tests/data/contracts/solidity/SlangTest.sol",
     crate::common::abi!("SlangTest.json")
 )]
 #[test_case(
-    crate::common::contract!("solidity/SlangAbi.sol"),
+    crate::common::standard_json!("slang_abi.json"),
+    "tests/data/contracts/solidity/SlangAbi.sol",
     crate::common::abi!("SlangAbi.json")
 )]
-fn matches_solc(contract: &str, expected: &str) -> anyhow::Result<()> {
+fn matches_solc(input: &str, source: &str, expected: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[contract, "--abi"];
+    let args = &["--standard-json", input];
 
     let result = crate::cli::execute_solx(args)?;
-    let output = result.success().get_output().stdout.clone();
-    let output = String::from_utf8(output)?;
+    let result = result.success();
+    let output: serde_json::Value = serde_json::from_slice(result.get_output().stdout.as_slice())?;
 
     let expected: BTreeMap<String, serde_json::Value> =
         serde_json::from_str(std::fs::read_to_string(expected)?.as_str())?;
-
-    let mut actual = BTreeMap::new();
-    let mut lines = output.lines();
-    while let Some(line) = lines.next() {
-        let Some(name) = line
-            .strip_prefix("======= ")
-            .and_then(|line| line.strip_suffix(" ======="))
-            .and_then(|full_path| full_path.rsplit(':').next())
-        else {
-            continue;
-        };
-        assert_eq!(lines.next(), Some("Contract JSON ABI:"), "{name}");
-        let abi: serde_json::Value = serde_json::from_str(lines.next().expect("ABI JSON"))?;
-        actual.insert(name.to_owned(), abi);
+    for (name, expected) in expected {
+        let actual = &output["contracts"][source][name.as_str()]["abi"];
+        assert_eq!(*actual, expected, "{name}");
     }
-
-    assert_eq!(actual, expected);
 
     Ok(())
 }

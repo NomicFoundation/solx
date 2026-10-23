@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Compile-time benchmark driver: times `<solx> --standard-json <fixture>` for
-# each fixture in the fixtures directory across one or more solx binaries,
+# Compile-time benchmark driver: times `<slang> --standard-json <fixture>` for
+# each fixture in the fixtures directory across one or more slang binaries,
 # using hyperfine. Raw hyperfine JSON lands in --out; report.py renders the
 # markdown report from it.
 #
@@ -11,7 +11,7 @@
 #
 # The first --bin is the candidate; report.py treats the second as the
 # baseline for the Δ column. Example:
-#   run.sh --bin pr=./target/release/solx --bin main=./temp-solx-main/target/release/solx
+#   run.sh --bin pr=./target/release/slang --bin main=./temp-solx-main/target/release/slang
 
 set -euo pipefail
 
@@ -46,6 +46,9 @@ for i in "${!BIN_NAMES[@]}"; do
   echo "${BIN_NAMES[$i]}: $("${BIN_PATHS[$i]}" --version | head -1)" >> "${OUT_DIR}/versions.txt"
 done
 echo "runner: ${RUNNER_NAME:-$(hostname)}" >> "${OUT_DIR}/versions.txt"
+if [ -n "${PR_HEAD_SHA:-}" ]; then
+  echo "commits: pr ${PR_HEAD_SHA:0:8}${PR_BASE_REF:+ merged into ${PR_BASE_REF}}, main ${MAIN_SHA:0:8}" >> "${OUT_DIR}/versions.txt"
+fi
 cat "${OUT_DIR}/versions.txt"
 
 # The standard-JSON protocol reports compilation failure inside the JSON
