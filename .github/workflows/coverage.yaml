@@ -32,8 +32,8 @@ jobs:
 
   coverage:
     needs: cooldown-check
-    # Fork PRs get no repo secrets, so the Codecov uploads (which run with
-    # fail_ci_if_error) would fail without CODECOV_TOKEN.
+    # Fork PRs are rare; their coverage reaches Codecov with the main push
+    # after merge.
     if: ${{ github.event_name == 'push' || !github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-24.04
     # Backstop against hung compiles (the tester drives a pipeline still in
