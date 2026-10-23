@@ -24,6 +24,7 @@ use solx_utils::Profiler;
 use solx_utils::Remapping;
 use solx_utils::RevertStrings;
 
+use crate::metadata::Metadata;
 use crate::scope::compilation_unit::CompilationUnitScope;
 
 use self::import_resolver::SourceImportResolver;
@@ -220,6 +221,13 @@ impl Slang {
                 .settings
                 .output_selection
                 .is_codegen_set_for_any(),
+            metadata: Metadata::new(
+                &unit,
+                &input_json.sources,
+                &input_json.settings,
+                evm_version,
+                language_version,
+            ),
         };
         scope.compilation_unit(&unit, &mut output)?;
 

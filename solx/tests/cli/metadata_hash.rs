@@ -8,8 +8,8 @@ use solx_utils::MetadataHashType;
 /// A two-entry CBOR map whose first entry is `ipfs` with a 34-byte value.
 const CBOR_IPFS_HASH_PREFIX: &str = "a264697066735822";
 
-/// The key of the compiler's own section in the metadata.
-const SECTION_KEY: &str = "\"slang\":{";
+/// The compiler's entry in the metadata.
+const COMPILER_KEY: &str = "\"compiler\":{\"name\":\"slang\"";
 
 #[test]
 fn none() -> anyhow::Result<()> {
@@ -42,7 +42,34 @@ fn ipfs() -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    result.success().stdout(predicate::str::contains("a164"));
+    result
+        .success()
+        .stdout(predicate::str::contains(CBOR_IPFS_HASH_PREFIX));
+
+    Ok(())
+}
+
+#[test]
+fn ipfs_distinguishes_identical_code() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/InheritedCode.sol"),
+        "--bin-runtime",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    let stdout = String::from_utf8(result.success().get_output().stdout.clone())?;
+    let runtime = |name: &str| {
+        stdout
+            .lines()
+            .skip_while(|line| !line.ends_with(format!(":{name} =======").as_str()))
+            .skip_while(|line| *line != "Binary of the runtime part:")
+            .nth(1)
+            .unwrap_or_else(|| panic!("`{name}` has a runtime binary"))
+    };
+
+    assert_ne!(runtime("Base"), runtime("Derived"));
 
     Ok(())
 }
@@ -65,21 +92,19 @@ fn none_prints_compiler_section() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
-        .stdout(predicate::str::contains(SECTION_KEY))
+        .stdout(predicate::str::contains(COMPILER_KEY))
         .stdout(predicate::str::contains(CBOR_IPFS_HASH_PREFIX).not());
 
     Ok(())
 }
 
 #[test]
-#[ignore = "solx does not lower Yul yet"]
 fn ipfs_hashes_printed_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let hash_type = MetadataHashType::IPFS.to_string();
     let args = &[
-        crate::common::TEST_YUL_CONTRACT,
-        "--yul",
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--metadata",
         "--metadata-hash",
         hash_type.as_str(),
@@ -135,8 +160,8 @@ fn ipfs_hashes_standard_json_metadata() -> anyhow::Result<()> {
         .expect("the runtime bytecode is selected");
 
     assert!(
-        metadata.contains(SECTION_KEY),
-        "the metadata carries the compiler's own section"
+        metadata.contains(COMPILER_KEY),
+        "the metadata names the compiler"
     );
     let (_, hash) = runtime
         .rsplit_once(CBOR_IPFS_HASH_PREFIX)

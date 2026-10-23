@@ -52,6 +52,13 @@ impl IPFS {
     }
 
     ///
+    /// Returns the base58 CIDv0, the form `dweb:/ipfs/` URLs use.
+    ///
+    pub fn as_base58(&self) -> &str {
+        self.string_base58.as_str()
+    }
+
+    ///
     /// Extracts the binary representation.
     ///
     pub fn to_vec(&self) -> Vec<u8> {

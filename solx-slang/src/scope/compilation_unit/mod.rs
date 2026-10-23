@@ -21,6 +21,7 @@ use solx_utils::RevertStrings;
 
 use crate::abi::AbiDefinition;
 use crate::error::Error;
+use crate::metadata::Metadata;
 use crate::scope::source_unit::SourceUnitScope;
 
 use self::definition_output::DefinitionOutput;
@@ -41,6 +42,8 @@ pub struct CompilationUnitScope<'input> {
     pub report_benchmarks: bool,
     /// Whether the selection requests an output only codegen produces.
     pub run_codegen: bool,
+    /// The metadata settings every contract shares.
+    pub metadata: Metadata<'input>,
 }
 
 impl CompilationUnitScope<'_> {
@@ -143,10 +146,10 @@ impl CompilationUnitScope<'_> {
         Ok(DefinitionOutput::new(member, name, contract, benchmarks))
     }
 
-    /// The standard-JSON contract of `definition`: its ABI, the storage layouts the selection
-    /// requests, and the deploy and runtime code of the object it deploys, lowered off the melior
-    /// context in `melior` and timed by `profiler` when the selection requests an output only
-    /// codegen produces. `Err` is the first output Slang cannot compute, and the inner error a
+    /// The standard-JSON contract of `definition`: its ABI and metadata, the storage layouts the
+    /// selection requests, and the deploy and runtime code of the object it deploys, lowered off
+    /// the melior context in `melior` and timed by `profiler` when the selection requests an output
+    /// only codegen produces. `Err` is the first output Slang cannot compute, and the inner error a
     /// lowering that failed.
     fn contract(
         &self,
@@ -161,6 +164,7 @@ impl CompilationUnitScope<'_> {
                 .check_selection(file_id.as_str(), Some(name), selector)
         };
         let abi = definition.abi()?;
+        let metadata = self.metadata.contract(&definition, &abi);
         let method_identifiers = definition.method_identifiers();
         let storage_layout = selected(solx_standard_json::InputSelector::StorageLayout)
             .then(|| definition.storage_layout())
@@ -172,6 +176,7 @@ impl CompilationUnitScope<'_> {
         let Some(object) = definition.into_object().filter(|_| self.run_codegen) else {
             return Ok(Ok(Contract::new_abi(
                 abi,
+                metadata,
                 method_identifiers,
                 storage_layout,
                 transient_storage_layout,
@@ -196,6 +201,7 @@ impl CompilationUnitScope<'_> {
             Contract::new_mlir(
                 mlir,
                 abi,
+                metadata,
                 method_identifiers,
                 storage_layout,
                 transient_storage_layout,

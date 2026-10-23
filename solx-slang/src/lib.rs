@@ -11,6 +11,7 @@ pub(crate) mod abi;
 pub(crate) mod contract;
 pub(crate) mod debug_locations;
 pub(crate) mod error;
+pub(crate) mod metadata;
 pub(crate) mod scope;
 pub(crate) mod slang;
 pub(crate) mod r#type;
