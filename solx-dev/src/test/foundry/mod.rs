@@ -80,7 +80,8 @@ pub fn test(
         .collect();
 
     let build_system = "yarn";
-    let yarn_version = if projects.iter().any(|(_, project)| project.requires_yarn) {
+    let (yarn_version, node_version) = if projects.iter().any(|(_, project)| project.requires_yarn)
+    {
         crate::utils::exists("npm")?;
 
         let yarn_version = config.build_systems.get(build_system).ok_or_else(|| {
@@ -104,11 +105,10 @@ pub fn test(
             .as_str(),
             16,
         )?;
-        yarn_version.as_str()
+        (yarn_version.as_str(), crate::utils::tool_version("node")?)
     } else {
-        ""
+        ("", String::new())
     };
-    let node_version = crate::utils::tool_version("node");
     let projects_cache = ProjectCache::new(projects_cache_directory.as_path())?;
 
     for (project_name, project) in projects {
@@ -117,20 +117,7 @@ pub fn test(
         project_directory.push(project_name.as_str());
         let project_directory_str = project_directory.to_string_lossy();
 
-        // The setup code is part of the key, so a harness change never reuses older setups.
-        let key_material = [
-            include_str!("mod.rs"),
-            include_str!("../../utils.rs"),
-            project.url.as_str(),
-            project.commit.as_deref().unwrap_or_default(),
-            if project.requires_yarn {
-                yarn_version
-            } else {
-                ""
-            },
-            node_version.as_str(),
-        ]
-        .join("\0");
+        let key_material = project.cache_key_material(yarn_version, node_version.as_str());
         let set_up = |checkout: &std::path::Path| -> anyhow::Result<()> {
             let checkout_str = checkout.to_string_lossy();
             crate::utils::clone_repository(

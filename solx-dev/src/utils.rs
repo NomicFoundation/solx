@@ -367,20 +367,21 @@ pub fn path_windows_to_unix<P: AsRef<Path> + PathBufExt>(path: P) -> anyhow::Res
 }
 
 ///
-/// Returns `name --version`, or an empty string if `name` cannot run.
+/// Returns the output of `name --version`.
 ///
-pub fn tool_version(name: &str) -> String {
-    Command::new(name)
-        .arg("--version")
-        .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .map(|output| {
-            String::from_utf8_lossy(output.stdout.as_slice())
-                .trim()
-                .to_owned()
-        })
-        .unwrap_or_default()
+pub fn tool_version(name: &str) -> anyhow::Result<String> {
+    let mut command = Command::new(name);
+    command.arg("--version");
+    Ok(command_with_output(
+        &mut command,
+        format!(
+            "{} version of {name}",
+            solx_utils::cargo_status_ok("Checking")
+        )
+        .as_str(),
+    )?
+    .trim()
+    .to_owned())
 }
 
 ///
@@ -563,6 +564,16 @@ mod tests {
         );
 
         std::fs::remove_dir_all(directory).expect("Always valid");
+    }
+
+    #[test]
+    fn tool_version_fails_for_missing_tool() {
+        assert!(
+            super::tool_version("git")
+                .expect("Always valid")
+                .starts_with("git version")
+        );
+        assert!(super::tool_version("solx-dev-missing-tool").is_err());
     }
 
     #[test]
