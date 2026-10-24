@@ -246,10 +246,11 @@ jobs:
           git config --global url."https://github.com/".insteadOf git@github.com:
           git config --global url."https://".insteadOf git://
 
+      # The projects cache sits beside the checkout, so it survives actions/checkout's clean and persists on the runner.
       - name: Run Hardhat tests
         id: hardhat_tests
         continue-on-error: true
-        run: ./target/release/solx-dev test hardhat
+        run: ./target/release/solx-dev test hardhat --projects-cache-dir "${GITHUB_WORKSPACE}/../projects-cache/hardhat"
 
       - name: Upload Hardhat report
         if: always() && hashFiles('temp-hardhat-reports/hardhat-report.xlsx') != ''
@@ -262,7 +263,7 @@ jobs:
       - name: Run Foundry tests
         id: foundry_tests
         continue-on-error: true
-        run: ./target/release/solx-dev test foundry
+        run: ./target/release/solx-dev test foundry --projects-cache-dir "${GITHUB_WORKSPACE}/../projects-cache/foundry"
 
       - name: Upload Foundry report
         if: always() && hashFiles('temp-foundry-reports/foundry-report.xlsx') != ''
