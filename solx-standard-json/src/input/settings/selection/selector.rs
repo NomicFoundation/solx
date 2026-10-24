@@ -9,6 +9,9 @@
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
 pub enum Selector {
+    /// The source identifier, emitted for every source whether selected or not.
+    #[serde(rename = "id")]
+    Identifier,
     /// The AST JSON.
     #[serde(rename = "ast")]
     AST,
@@ -131,7 +134,8 @@ impl Selector {
     pub fn is_codegen(&self) -> bool {
         !matches!(
             self,
-            Self::AST
+            Self::Identifier
+                | Self::AST
                 | Self::DebugSymbols
                 | Self::ABI
                 | Self::Metadata

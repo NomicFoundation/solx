@@ -119,6 +119,8 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
       "<path>": {
         // Available file-level options, must be listed under "<path>"."":
         "": [
+          // Identifier of each source file, emitted whether selected or not.
+          "id",
           // AST of all source files.
           "ast",
           // Slang-only: Symbol table of each source file for debuggers and stack tracers.

@@ -374,6 +374,7 @@ fn select_frontend() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
+        .stdout(predicate::str::contains("\"A\":{\"id\":0"))
         .stdout(predicate::str::contains("\"abi\""))
         .stdout(predicate::str::contains("\"bytecode\"").not())
         .stdout(predicate::str::contains("Compiler_CreateMLIRContext").not());
