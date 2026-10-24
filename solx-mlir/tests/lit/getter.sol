@@ -21,7 +21,7 @@
 // CHECK:   sol.return %[[OV]] : !sol.address
 
 // CHECK: sol.func @{{.*price.*}}() -> ui256 attributes {{.*}}selector = -1607093762 : i32
-// CHECK:   %[[IV:.*]] = sol.load_immutable @{{.*price.*}} : ui256
+// CHECK:   %[[IV:.*]] = sol.load_immutable @"{{[0-9]+}}" : ui256
 // CHECK:   sol.return %[[IV]] : ui256
 
 // CHECK: sol.func @{{.*data.*}}() -> !sol.string<Memory> attributes {{.*}}selector = 1943314746 : i32

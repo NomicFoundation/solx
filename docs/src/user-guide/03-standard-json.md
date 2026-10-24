@@ -184,7 +184,7 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
           "evm.deployedBytecode.llvmIr",
           // Link references for linkers that are to resolve library addresses at deploy time.
           "evm.deployedBytecode.linkReferences",
-          // Resolved automatically by Slang/LLVM, but emitted as an empty object to preserve compatibility with some toolkits.
+          // Offsets of the immutable values in the runtime bytecode, keyed by the Slang node identifier of each immutable, and a library's own address as `library_deploy_address`.
           "evm.deployedBytecode.immutableReferences",
           // ELF-wrapped DWARF debug info produced by Slang/LLVM. Only available for Solidity source code input.
           "evm.deployedBytecode.debugInfo",
@@ -352,10 +352,9 @@ The output JSON contains all artifacts produced by **Slang**. The example below 
             // Optional: Benchmarks of each stage of the compilation on a per-translation unit basis (array).
             // Corresponds to "benchmarks" in the outputSelection settings.
             "benchmarks": [/* ... */],
-            // Optional: Resolved by LLVM automatically, so always returned as an empty object (object).
-            // Included only to preserve compatibility with some toolkits.
+            // Optional: Offsets of the immutable values in the runtime bytecode, keyed by the Slang node identifier of each immutable, and a library's own address as `library_deploy_address` (object).
             // Corresponds to "evm.deployedBytecode.immutableReferences" in the outputSelection settings.
-            "immutableReferences": {},
+            "immutableReferences": {/* ... */},
             // Optional: Always empty string, included only to preserve compatibility with some toolkits (string).
             // Corresponds to "evm.deployedBytecode.opcodes" in the outputSelection settings.
             "opcodes": "",

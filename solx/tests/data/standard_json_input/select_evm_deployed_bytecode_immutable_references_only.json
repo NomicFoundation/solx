@@ -1,0 +1,17 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A": {
+      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.8.0;\nlibrary L { event E(uint256 x); function f(uint256 x) external { emit E(x); } }\ninterface I { function g(uint256 x) external returns (uint256); }\ncontract C {\n    uint256 immutable a;\n    address immutable owner_address;\n    constructor(uint256 x) { a = x; owner_address = msg.sender; }\n    function g(uint256 x) external returns (uint256) { require(msg.sender == owner_address); return a + x; }\n    function h() external view returns (uint256) { return a; }\n}\n"
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.deployedBytecode.immutableReferences"
+        ]
+      }
+    }
+  }
+}

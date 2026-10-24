@@ -453,20 +453,28 @@ fn select_evm_bytecode_opcodes() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn select_evm_deployed_bytecode_link_references() -> anyhow::Result<()> {
+#[test_case(crate::common::standard_json!("select_evm_bytecode_link_references.json"), "bytecode")]
+#[test_case(
+    crate::common::standard_json!("select_evm_deployed_bytecode_link_references.json"),
+    "deployedBytecode"
+)]
+fn select_evm_link_references(input: &str, segment: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        "--standard-json",
-        crate::common::standard_json!("select_evm_deployed_bytecode_link_references.json"),
-    ];
+    let args = &["--standard-json", input];
 
     let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains("linkReferences"))
-        .stdout(predicate::str::contains("bytecode").not());
+    let result = result.success();
+    let output: serde_json::Value = serde_json::from_slice(result.get_output().stdout.as_slice())?;
+    let bytecode = &output["contracts"]["A"]["C"]["evm"][segment];
+    assert_eq!(bytecode["object"], serde_json::Value::Null);
+    let references = bytecode["linkReferences"]["A"]["L"]
+        .as_array()
+        .expect("C links L");
+    assert!(!references.is_empty());
+    for reference in references {
+        assert_eq!(reference["length"], 20);
+    }
 
     Ok(())
 }

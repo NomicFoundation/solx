@@ -125,7 +125,8 @@ impl Selection {
     }
 
     ///
-    /// Checks if the bytecode is requested for at least one contract.
+    /// Checks if the bytecode, or an output read off the emitted bytecode, is requested for at
+    /// least one contract.
     ///
     pub fn is_bytecode_set_for_any(&self) -> bool {
         for file in self.inner.values() {
@@ -134,8 +135,11 @@ impl Selection {
                     || contract.contains(&Selector::EVM)
                     || contract.contains(&Selector::Bytecode)
                     || contract.contains(&Selector::BytecodeObject)
+                    || contract.contains(&Selector::BytecodeLinkReferences)
                     || contract.contains(&Selector::RuntimeBytecode)
                     || contract.contains(&Selector::RuntimeBytecodeObject)
+                    || contract.contains(&Selector::RuntimeBytecodeLinkReferences)
+                    || contract.contains(&Selector::RuntimeBytecodeImmutableReferences)
                 {
                     return true;
                 }
