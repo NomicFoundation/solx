@@ -3,7 +3,7 @@
 // CHECK: sol.func @{{.*bareReceiverOptions.*}}
 // CHECK:   %[[BARE_RECEIVER:.*]] = sol.call @"bareReceiver()_{{[0-9]+}}"
 // CHECK:   %[[BARE_VALUE:.*]] = sol.call @"t(uint256)_{{[0-9]+}}"
-// CHECK:   sol.bare_call %[[BARE_RECEIVER]] gas %{{.*}} value %[[BARE_VALUE]]
+// CHECK:   sol.bare_call %[[BARE_RECEIVER]] value %[[BARE_VALUE]]
 
 // CHECK: sol.func @{{.*pointerCallee.*}}
 // CHECK:   %[[POINTER:.*]] = sol.call @"callee()_{{[0-9]+}}"
@@ -15,7 +15,7 @@
 // CHECK:   %[[RECEIVER_ADDRESS:.*]] = sol.address_cast %[[RECEIVER]]
 // CHECK:   %[[VALUE:.*]] = sol.call @"t(uint256)_{{[0-9]+}}"
 // CHECK:   %[[ARGUMENT:.*]] = sol.call @"t(uint256)_{{[0-9]+}}"
-// CHECK:   sol.ext_call "{{.*target.*}}"(%[[ARGUMENT]]) at %[[RECEIVER_ADDRESS]] gas %{{.*}} value %[[VALUE]]
+// CHECK:   sol.ext_call "{{.*target.*}}"(%[[ARGUMENT]]) at %[[RECEIVER_ADDRESS]] value %[[VALUE]]
 
 // CHECK: sol.func @{{.*selectorReceiver.*}}
 // CHECK:   %{{.*}} = sol.call @"receiver()_{{[0-9]+}}"

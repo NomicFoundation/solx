@@ -16,9 +16,8 @@
 // CHECK: sol.func @{{.*call.*}}
 // CHECK:   %[[POINTER:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.ext_func_ref<(ui256) -> ui256>, Stack>, !sol.ext_func_ref<(ui256) -> ui256>
 // CHECK:   %[[ARGUMENT:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
-// CHECK:   %[[LEFT:.*]] = sol.gasleft : ui256
 // CHECK:   %[[ZERO:.*]] = sol.constant 0 : ui256
-// CHECK:   sol.ext_icall %[[POINTER]](%[[ARGUMENT]]) gas %[[LEFT]] value %[[ZERO]] : <(ui256) -> ui256>, (ui256) -> (i1, ui256)
+// CHECK:   sol.ext_icall %[[POINTER]](%[[ARGUMENT]]) value %[[ZERO]] : <(ui256) -> ui256>, (ui256) -> (i1, ui256)
 
 // CHECK: sol.func @{{.*call_options.*}}
 // CHECK:   %[[POINTER:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.ext_func_ref<(ui256) -> ui256>, Stack>, !sol.ext_func_ref<(ui256) -> ui256>
@@ -30,12 +29,12 @@
 // CHECK: sol.func @{{.*call_storage.*}}
 // CHECK:   %[[POINTER:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.ext_func_ref<(!sol.array<? x ui256, Memory>) -> ui256>, Stack>, !sol.ext_func_ref<(!sol.array<? x ui256, Memory>) -> ui256>
 // CHECK:   %[[SLOT:.*]] = sol.addr_of @{{.*}} : !sol.array<? x ui256, Storage>
-// CHECK:   sol.ext_icall %[[POINTER]](%[[SLOT]]) gas %{{.*}} value %{{.*}} : <(!sol.array<? x ui256, Memory>) -> ui256>, (!sol.array<? x ui256, Storage>) -> (i1, ui256)
+// CHECK:   sol.ext_icall %[[POINTER]](%[[SLOT]]) value %{{.*}} : <(!sol.array<? x ui256, Memory>) -> ui256>, (!sol.array<? x ui256, Storage>) -> (i1, ui256)
 
 // CHECK: sol.func @{{.*call_view.*}}
 // CHECK:   %[[POINTER:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.ext_func_ref<(ui256) -> ui256>, Stack>, !sol.ext_func_ref<(ui256) -> ui256>
 // CHECK:   %[[ARGUMENT:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
-// CHECK:   sol.ext_icall %[[POINTER]](%[[ARGUMENT]]) gas %{{.*}} value %{{.*}} {static_call} : <(ui256) -> ui256>, (ui256) -> (i1, ui256)
+// CHECK:   sol.ext_icall %[[POINTER]](%[[ARGUMENT]]) value %{{.*}} {static_call} : <(ui256) -> ui256>, (ui256) -> (i1, ui256)
 
 // CHECK: sol.func @{{.*from_instance.*}}
 // CHECK:   %[[RECEIVER:.*]] = sol.address_cast %{{.*}} : !sol.contract<{{.*I.*}}> to !sol.address

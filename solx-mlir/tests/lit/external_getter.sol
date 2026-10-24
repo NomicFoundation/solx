@@ -2,23 +2,23 @@
 
 // CHECK: %[[T:.*]] = sol.this : !sol.contract<{{.*}}>
 // CHECK: %[[A:.*]] = sol.address_cast %[[T]] : !sol.contract<{{.*}}> to !sol.address
-// CHECK: sol.ext_call "{{.*}}"() at %[[A]] gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = () -> ui256, static_call} : !sol.address, () -> (i1, ui256)
+// CHECK: sol.ext_call "{{.*}}"() at %[[A]] value %{{.*}} selector %{{.*}} {callee_type = () -> ui256, static_call} : !sol.address, () -> (i1, ui256)
 
 // CHECK: %[[T:.*]] = sol.this : !sol.contract<{{.*}}>
 // CHECK: %[[A:.*]] = sol.address_cast %[[T]] : !sol.contract<{{.*}}> to !sol.address
-// CHECK: sol.ext_call "{{.*}}"(%{{.*}}) at %[[A]] gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256, static_call} : !sol.address, (ui256) -> (i1, ui256)
+// CHECK: sol.ext_call "{{.*}}"(%{{.*}}) at %[[A]] value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256, static_call} : !sol.address, (ui256) -> (i1, ui256)
 
 // CHECK: %[[T:.*]] = sol.this : !sol.contract<{{.*}}>
 // CHECK: %[[A:.*]] = sol.address_cast %[[T]] : !sol.contract<{{.*}}> to !sol.address
-// CHECK: sol.ext_call "{{.*}}"(%{{.*}}) at %[[A]] gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256, static_call} : !sol.address, (ui256) -> (i1, ui256)
+// CHECK: sol.ext_call "{{.*}}"(%{{.*}}) at %[[A]] value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256, static_call} : !sol.address, (ui256) -> (i1, ui256)
 
 // CHECK: %[[T:.*]] = sol.this : !sol.contract<{{.*}}>
 // CHECK: %[[A:.*]] = sol.address_cast %[[T]] : !sol.contract<{{.*}}> to !sol.address
-// CHECK: %{{.*}}, %[[R:.*]]:2 = sol.ext_call "{{.*}}"() at %[[A]] gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = () -> (ui256, ui256), static_call} : !sol.address, () -> (i1, ui256, ui256)
+// CHECK: %{{.*}}, %[[R:.*]]:2 = sol.ext_call "{{.*}}"() at %[[A]] value %{{.*}} selector %{{.*}} {callee_type = () -> (ui256, ui256), static_call} : !sol.address, () -> (i1, ui256, ui256)
 // CHECK: sol.return %[[R]]#0, %[[R]]#1 : ui256, ui256
 
-// CHECK: sol.ext_call "{{.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256, static_call} : !sol.address, (ui256) -> (i1, ui256)
-// CHECK: sol.ext_call "{{.*}}"(%{{.*}}) at %{{.*}} gas %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256, static_call} : !sol.address, (ui256) -> (i1, ui256)
+// CHECK: sol.ext_call "{{.*}}"(%{{.*}}) at %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256, static_call} : !sol.address, (ui256) -> (i1, ui256)
+// CHECK: sol.ext_call "{{.*}}"(%{{.*}}) at %{{.*}} value %{{.*}} selector %{{.*}} {callee_type = (ui256) -> ui256, static_call} : !sol.address, (ui256) -> (i1, ui256)
 
 contract Elementary {
     uint256 public x;

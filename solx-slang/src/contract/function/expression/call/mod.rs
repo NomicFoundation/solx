@@ -841,7 +841,7 @@ impl Call {
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> (Value<'context>, Vec<Value<'context>>) {
         let selector = Value::selector(selector, MlirType::word(scope.melior), scope);
-        let gas = options.gas(scope);
+        let gas = options.gas();
         let amount = options.amount(scope);
         Function::external_call(
             function,
@@ -882,7 +882,7 @@ impl Call {
                     &arguments[0],
                     MlirType::string(scope.melior, solx_utils::DataLocation::Memory),
                 );
-                let gas = options.gas(scope);
+                let gas = options.gas();
                 match built_in {
                     BuiltIn::AddressCall => {
                         Value::bare_call(address, gas, options.amount(scope), input, scope)
@@ -1132,7 +1132,7 @@ impl Call {
         let pointer = scope.expression(callee);
         let options = Options::new(options, scope);
         let converted = scope.external_arguments(arguments, &parameters);
-        let gas = options.gas(scope);
+        let gas = options.gas();
         let amount = options.amount(scope);
         let is_static = StateMutability::from(function_type.mutability()).is_static();
         Value::external_call(

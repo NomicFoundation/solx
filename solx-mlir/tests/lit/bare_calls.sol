@@ -1,13 +1,13 @@
 // RUN: slang --emit-mlir=sol %s | FileCheck %s
 
 // CHECK: sol.func @{{.*bare_call.*}}
-// CHECK:   sol.bare_call %{{.*}} gas %{{.*}} value %{{.*}} input %{{.*}} : !sol.address, ui256, ui256, !sol.string<Memory> -> i1, !sol.string<Memory>
+// CHECK:   sol.bare_call %{{.*}} value %{{.*}} input %{{.*}} : !sol.address, ui256, !sol.string<Memory> -> i1, !sol.string<Memory>
 
 // CHECK: sol.func @{{.*bare_delegate.*}}
-// CHECK:   sol.bare_delegate_call %{{.*}} gas %{{.*}} input %{{.*}} : !sol.address, ui256, !sol.string<Memory> -> i1, !sol.string<Memory>
+// CHECK:   sol.bare_delegate_call %{{.*}} input %{{.*}} : !sol.address, !sol.string<Memory> -> i1, !sol.string<Memory>
 
 // CHECK: sol.func @{{.*bare_static.*}}
-// CHECK:   sol.bare_static_call %{{.*}} gas %{{.*}} input %{{.*}} : !sol.address, ui256, !sol.string<Memory> -> i1, !sol.string<Memory>
+// CHECK:   sol.bare_static_call %{{.*}} input %{{.*}} : !sol.address, !sol.string<Memory> -> i1, !sol.string<Memory>
 
 // CHECK: sol.func @{{.*call_calldata.*}}
 // CHECK:   sol.data_loc_cast %{{.*}} : !sol.string<CallData>, !sol.string<Memory>
@@ -26,8 +26,17 @@
 // CHECK: sol.func @{{.*call_value.*}}
 // CHECK:   %[[RECEIVER:.*]] = sol.address_cast %{{.*}} : !sol.address<payable> to !sol.address
 // CHECK:   %[[V:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
-// CHECK:   %[[LEFT:.*]] = sol.gasleft
-// CHECK:   sol.bare_call %[[RECEIVER]] gas %[[LEFT]] value %[[V]] input
+// CHECK:   sol.bare_call %[[RECEIVER]] value %[[V]] input
+
+// CHECK: sol.func @{{.*delegate_gas.*}}
+// CHECK:   %[[RECEIVER:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.address, Stack>, !sol.address
+// CHECK:   %[[G:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
+// CHECK:   sol.bare_delegate_call %[[RECEIVER]] gas %[[G]] input
+
+// CHECK: sol.func @{{.*static_gas.*}}
+// CHECK:   %[[RECEIVER:.*]] = sol.load %{{.*}} : !sol.ptr<!sol.address, Stack>, !sol.address
+// CHECK:   %[[G:.*]] = sol.load %{{.*}} : !sol.ptr<ui256, Stack>, ui256
+// CHECK:   sol.bare_static_call %[[RECEIVER]] gas %[[G]] input
 
 contract C {
     bytes data;
@@ -61,6 +70,16 @@ contract C {
 
     function call_gas(address a, uint256 g, bytes memory d) public returns (bool) {
         (bool ok, ) = a.call{gas: g}(d);
+        return ok;
+    }
+
+    function delegate_gas(address a, uint256 g, bytes memory d) public returns (bool) {
+        (bool ok, ) = a.delegatecall{gas: g}(d);
+        return ok;
+    }
+
+    function static_gas(address a, uint256 g, bytes memory d) public view returns (bool) {
+        (bool ok, ) = a.staticcall{gas: g}(d);
         return ok;
     }
 }

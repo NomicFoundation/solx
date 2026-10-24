@@ -172,16 +172,16 @@ dialect_ops! {
     Value::library_address(object_name: str) -> value {
         LibAddrOperation._name(str_attr(object_name)).val(address())
     }
-    Value::bare_call(address: value, gas: value, amount: value, input: value) -> values {
-        BareCallOperation.addr(address).gas(gas).val(amount).inp(input)
+    Value::bare_call(address: value, gas: optional_value, amount: value, input: value) -> values {
+        BareCallOperation.addr(address).gas(optional_value(gas)).val(amount).inp(input)
             .status(boolean()).ret_data(memory())
     }
-    Value::bare_delegate_call(address: value, gas: value, input: value) -> values {
-        BareDelegateCallOperation.addr(address).gas(gas).inp(input)
+    Value::bare_delegate_call(address: value, gas: optional_value, input: value) -> values {
+        BareDelegateCallOperation.addr(address).gas(optional_value(gas)).inp(input)
             .status(boolean()).ret_data(memory())
     }
-    Value::bare_static_call(address: value, gas: value, input: value) -> values {
-        BareStaticCallOperation.addr(address).gas(gas).inp(input)
+    Value::bare_static_call(address: value, gas: optional_value, input: value) -> values {
+        BareStaticCallOperation.addr(address).gas(optional_value(gas)).inp(input)
             .status(boolean()).ret_data(memory())
     }
     Value::send(address: value, amount: value) -> value {
@@ -218,11 +218,11 @@ dialect_ops! {
     }
     Function::external_call(
         callee: function, arguments: values, result_types: types,
-        address: value, selector: value, gas: value, amount: value,
+        address: value, selector: value, gas: optional_value, amount: value,
         library: flag, static_call: flag, try_call: flag,
     ) -> status_and_values {
         ExtCallOperation.callee(str_attr(&callee.mlir_name)).ins(many(arguments)).addr(address)
-            .gas(gas).val(amount).selector(selector)
+            .gas(optional_value(gas)).val(amount).selector(selector)
             .callee_type(ty_attr(signature(callee)))
             .status(boolean()).outs(many(result_types))
             .delegate_call(library).library_call(library)
@@ -233,11 +233,11 @@ dialect_ops! {
         ICallOperation.callee(self).outs(many(result_types)).callee_operands(many(operands))
     }
     Value::external_call(
-        self, operands: values, result_types: types, gas: value, amount: value,
+        self, operands: values, result_types: types, gas: optional_value, amount: value,
         static_call: flag, try_call: flag,
     ) -> status_and_values {
         ExtICallOperation.callee(self).outs(status_and(result_types))
-            .callee_operands(many(operands)).gas(gas).value(amount)
+            .callee_operands(many(operands)).gas(optional_value(gas)).value(amount)
             .static_call(static_call).try_call(try_call)
     }
     Value::create_contract | create_contract_try (
