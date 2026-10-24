@@ -32,7 +32,6 @@ use crate::contract::object::Object;
 use crate::contract::segment::Segment;
 use crate::contract::storage_slot::StorageSlot;
 use crate::debug_locations::DebugLocations;
-use crate::debug_locations::sources::Sources;
 use crate::scope::contract::ContractScope;
 use crate::scope::source_unit::SourceUnitScope;
 
@@ -53,7 +52,7 @@ impl<'context> SourceUnitScope<'context> {
         emit_deploy_debug_info: bool,
         emit_runtime_debug_info: bool,
         capture_mlir: bool,
-        sources: &Sources<'_>,
+        sources: &BTreeMap<String, solx_standard_json::InputSource>,
         pass_timing: bool,
         profiler: &mut Profiler,
     ) -> anyhow::Result<MlirOutput> {
@@ -146,7 +145,7 @@ impl<'context> SourceUnitScope<'context> {
         revert_strings: RevertStrings,
         emit_debug_info: bool,
         capture_mlir: bool,
-        sources: &Sources<'_>,
+        sources: &BTreeMap<String, solx_standard_json::InputSource>,
         pass_timing: bool,
         profiler: &mut Profiler,
     ) -> anyhow::Result<SegmentOutput> {

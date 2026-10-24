@@ -24,7 +24,6 @@ use solx_utils::Profiler;
 use solx_utils::Remapping;
 use solx_utils::RevertStrings;
 
-use crate::debug_locations::sources::Sources;
 use crate::scope::compilation_unit::CompilationUnitScope;
 
 use self::import_resolver::SourceImportResolver;
@@ -202,7 +201,6 @@ impl Slang {
             .as_ref()
             .and_then(|debug| debug.revert_strings)
             .unwrap_or(RevertStrings::Default);
-        let sources = Sources::new(&sources);
         let benchmarks = input_json.settings.output_selection.check_selection(
             solx_standard_json::InputSelection::WILDCARD,
             Some(solx_standard_json::InputSelection::ANY_CONTRACT),
@@ -216,7 +214,6 @@ impl Slang {
             output_selection: &input_json.settings.output_selection,
             evm_version,
             revert_strings,
-            sources: &sources,
             input_sources: &input_json.sources,
             report_benchmarks: benchmarks,
             run_codegen: input_json

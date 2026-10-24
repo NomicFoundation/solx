@@ -63,12 +63,12 @@ impl MappedLocation {
         path: String,
         start: isize,
         end: isize,
-        source_code: Option<&str>,
+        source: Option<(&str, &LineIndex)>,
     ) -> Self {
-        match source_code {
-            Some(source_code) if start >= 0 && end >= start => {
+        match source {
+            Some((source_code, line_index)) if start >= 0 && end >= start => {
                 let start = start as usize;
-                let (line, column) = LineIndex::new(source_code).line_and_column(start);
+                let (line, column) = line_index.line_and_column(start);
                 let from_line_start = &source_code[start + 1 - column..];
                 let source_line = from_line_start
                     .find(['\n', '\r'])
@@ -123,6 +123,7 @@ impl std::fmt::Display for MappedLocation {
 
 #[cfg(test)]
 mod tests {
+    use super::LineIndex;
     use super::MappedLocation;
 
     #[test]
@@ -133,7 +134,7 @@ mod tests {
                 "a.sol".to_owned(),
                 offset,
                 offset + 1,
-                Some(source),
+                Some((source, &LineIndex::new(source))),
             );
             assert_eq!(
                 (location.line, location.column, location.source_code_line),
@@ -180,9 +181,47 @@ mod tests {
                 ),
             ),
         ] {
-            let location =
-                MappedLocation::from_solc_location("a.sol".to_owned(), start, end, Some(source));
+            let location = MappedLocation::from_solc_location(
+                "a.sol".to_owned(),
+                start,
+                end,
+                Some((source, &LineIndex::new(source))),
+            );
             assert_eq!(location.to_string(), snippet);
         }
+    }
+
+    #[test]
+    fn an_unknown_or_inverted_range_keeps_the_bare_path() {
+        let source = "ab\nc\n";
+        for (start, end) in [(-1, -1), (-1, 2), (3, 2)] {
+            let location = MappedLocation::from_solc_location(
+                "a.sol".to_owned(),
+                start,
+                end,
+                Some((source, &LineIndex::new(source))),
+            );
+            assert_eq!(
+                (location.line, location.column, location.source_code_line),
+                (None, None, None),
+                "{start}..{end}",
+            );
+        }
+    }
+
+    #[test]
+    fn a_range_past_the_end_resolves_to_the_last_line() {
+        let source = "ab\nc\n";
+        let past_the_end = source.len() as isize + 4;
+        let location = MappedLocation::from_solc_location(
+            "a.sol".to_owned(),
+            past_the_end,
+            past_the_end + 1,
+            Some((source, &LineIndex::new(source))),
+        );
+        assert_eq!(
+            (location.line, location.column, location.source_code_line),
+            (Some(3), Some(5), Some("".to_owned())),
+        );
     }
 }
