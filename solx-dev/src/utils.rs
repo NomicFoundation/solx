@@ -196,6 +196,31 @@ pub fn clone_repository(
 }
 
 ///
+/// Lists the tracked files of the repository at `directory` matching `pathspec`, submodules included.
+///
+pub fn git_tracked_files(directory: &Path, pathspec: &str) -> anyhow::Result<Vec<PathBuf>> {
+    let mut command = Command::new("git");
+    command.arg("-C");
+    command.arg(directory);
+    command.args(["ls-files", "-z", "--recurse-submodules", "--", pathspec]);
+    let output = command
+        .output()
+        .map_err(|error| anyhow::anyhow!("{command:?} process spawning error: {error:?}"))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "{command:?} subprocess failed with {}:\n{}",
+            output.status,
+            String::from_utf8_lossy(output.stderr.as_slice()),
+        );
+    }
+    Ok(String::from_utf8_lossy(output.stdout.as_slice())
+        .split('\0')
+        .filter(|path| !path.is_empty())
+        .map(|path| directory.join(path))
+        .collect())
+}
+
+///
 /// Removes the project directory after building and testing.
 ///
 pub fn remove(project_directory: &Path, project_name: &str) -> anyhow::Result<()> {
@@ -270,6 +295,23 @@ pub fn path_windows_to_unix<P: AsRef<Path> + PathBufExt>(path: P) -> anyhow::Res
     path.to_slash()
         .map(|pathbuf| PathBuf::from(pathbuf.to_string()))
         .ok_or_else(|| anyhow::anyhow!("Windows-to-Unix path conversion error"))
+}
+
+///
+/// Returns `name --version`, or an empty string if `name` cannot run.
+///
+pub fn tool_version(name: &str) -> String {
+    Command::new(name)
+        .arg("--version")
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| {
+            String::from_utf8_lossy(output.stdout.as_slice())
+                .trim()
+                .to_owned()
+        })
+        .unwrap_or_default()
 }
 
 ///
