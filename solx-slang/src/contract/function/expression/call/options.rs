@@ -10,9 +10,9 @@ use solx_mlir::Value;
 
 use crate::scope::function::FunctionScope;
 
-/// The gas, value and salt a call forwards. An option the call omits stays absent and materializes
-/// its default at the op: the named options evaluate after the callee, the defaults after the
-/// arguments.
+/// The gas, value and salt a call forwards. The named options evaluate after the callee. An omitted
+/// value materializes as zero after the arguments, and an omitted gas stays absent: the call
+/// forwards all the gas left at the call itself.
 #[derive(Default)]
 pub struct Options<'context> {
     /// The gas the call forwards.
@@ -52,9 +52,9 @@ impl<'context> Options<'context> {
         forwarded
     }
 
-    /// The gas operand: all the caller has left where the call names none.
-    pub fn gas(&self, scope: &mut FunctionScope<'_, '_, 'context>) -> Value<'context> {
-        self.gas.unwrap_or_else(|| Value::gas_left(scope))
+    /// The gas operand, absent where the call forwards all the gas left at the call.
+    pub fn gas(&self) -> Option<Value<'context>> {
+        self.gas
     }
 
     /// The value operand, zero where the call transfers none.
