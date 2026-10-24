@@ -125,6 +125,30 @@ pub fn compile(
 }
 
 ///
+/// Collapses a diagnostic into a bucket key: its first two lines with paths, library hashes and
+/// numbers replaced.
+///
+pub fn normalize(text: &str) -> String {
+    let text = text.replace("\\n", "\n");
+    let lines: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .take(2)
+        .collect();
+    let line = if lines.is_empty() {
+        "<empty>".to_owned()
+    } else {
+        lines.join(" ")
+    };
+    let line = LIBRARY_HASH.replace_all(line.as_str(), "$$<hash>$$");
+    let line = SOL_PATH.replace_all(line.as_ref(), "<file>");
+    let line = HEX_NUMBER.replace_all(line.as_ref(), "0x…");
+    let line = DECIMAL_NUMBER.replace_all(line.as_ref(), "N");
+    line.chars().take(160).collect()
+}
+
+///
 /// Classifies a finished compiler run: ok | error | no-bytecode | panic | abort.
 ///
 fn classify(status: std::process::ExitStatus, stdout: &[u8], stderr: &str, target: &str) -> Leg {
@@ -214,30 +238,6 @@ fn classify(status: std::process::ExitStatus, stdout: &[u8], stderr: &str, targe
         leg.emitted = Some(emitted);
     }
     leg
-}
-
-///
-/// Collapses a diagnostic into a bucket key: its first two lines with paths, library hashes and
-/// numbers replaced.
-///
-pub fn normalize(text: &str) -> String {
-    let text = text.replace("\\n", "\n");
-    let lines: Vec<&str> = text
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .take(2)
-        .collect();
-    let line = if lines.is_empty() {
-        "<empty>".to_owned()
-    } else {
-        lines.join(" ")
-    };
-    let line = LIBRARY_HASH.replace_all(line.as_str(), "$$<hash>$$");
-    let line = SOL_PATH.replace_all(line.as_ref(), "<file>");
-    let line = HEX_NUMBER.replace_all(line.as_ref(), "0x…");
-    let line = DECIMAL_NUMBER.replace_all(line.as_ref(), "N");
-    line.chars().take(160).collect()
 }
 
 ///
