@@ -113,12 +113,14 @@ jobs:
         id: build-llvm-pr
         uses: ./.github/actions/build-llvm
         with:
+          local-cache-dir: ../llvm-cache
           build-type: Release
           enable-assertions: 'false'
 
       - name: Build LLVM (main)
         uses: ./.github/actions/build-llvm
         with:
+          local-cache-dir: ../llvm-cache
           working-dir: temp-solx-main
           mirror-key: ${{ steps.build-llvm-pr.outputs.cache-key }}
           build-type: Release

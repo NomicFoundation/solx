@@ -95,6 +95,7 @@ jobs:
       - name: Build LLVM for TableGen
         uses: ./.github/actions/build-llvm
         with:
+          local-cache-dir: ../llvm-cache
           build-type: RelWithDebInfo
           enable-assertions: 'true'
           enable-utils: 'true'
@@ -107,6 +108,7 @@ jobs:
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
+          local-cache-dir: ../llvm-cache
           build-type: RelWithDebInfo
           sanitizer: ${{ env.LLVM_SANITIZER }}
           enable-assertions: 'true'
