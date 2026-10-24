@@ -225,6 +225,24 @@ fn error_output_has_source_location() -> anyhow::Result<()> {
 }
 
 #[test]
+fn error_location_uses_its_own_source() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("solidity_invalid_second_source.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("--> B.sol:6:19"))
+        .stdout(predicate::str::contains("\\n 6 |         return 1 +;\\n"));
+
+    Ok(())
+}
+
+#[test]
 fn error_output_component_is_general() -> anyhow::Result<()> {
     crate::common::setup()?;
 

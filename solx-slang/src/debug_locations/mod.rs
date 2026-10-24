@@ -1,6 +1,6 @@
 //!
-//! Source locations for debug info: the source range of each node, the compilation's sources, and
-//! the location the ops lowered from each construct carry.
+//! Source locations for debug info: the source range of each node and the location the ops lowered
+//! from each construct carry.
 //!
 
 pub mod resolver;
