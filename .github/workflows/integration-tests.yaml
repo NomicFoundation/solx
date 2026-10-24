@@ -3,7 +3,7 @@ name: Integration Tests
 on:
   pull_request:
     # `closed` only cancels a run still in progress.
-    types: [opened, synchronize, reopened, ready_for_review, labeled, closed]
+    types: [opened, synchronize, reopened, closed]
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
@@ -11,14 +11,9 @@ on:
 permissions:
   contents: read
 
-# A new push or a close cancels the run in progress. Other labels get a group
-# of their own, so adding one can't cancel it.
+# A new push or a close cancels the run in progress.
 concurrency:
-  group: >-
-    ${{ github.workflow }}-${{ github.event.pull_request.number }}-${{
-      github.event.action == 'labeled'
-      && !contains(fromJSON('["ci:integration", "ci:integration-benchmark-full"]'), github.event.label.name)
-      && github.event.label.name || 'run' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 defaults:
@@ -27,15 +22,10 @@ defaults:
 
 jobs:
 
-  # Ready PRs always run; a draft runs only with `ci:integration`.
   trigger-check:
     if: >-
       !github.event.pull_request.head.repo.fork
       && github.event.action != 'closed'
-      && (github.event.action != 'labeled'
-        || contains(fromJSON('["ci:integration", "ci:integration-benchmark-full"]'), github.event.label.name))
-      && (!github.event.pull_request.draft
-        || contains(github.event.pull_request.labels.*.name, 'ci:integration'))
     runs-on: ubuntu-26.04
     steps:
       - run: 'true'
@@ -151,16 +141,25 @@ jobs:
         continue-on-error: true
         run: ./target/release/solx-dev test solx-tester --solidity-compiler ./target/release/slang
 
-      # When `ci:integration-benchmark-full` is present, enable every
+      # When the PR carries `ci:integration-benchmark-full`, enable every
       # otherwise-disabled compiler (solc, solx-latest) and its comparison
       # columns in the Foundry and Hardhat benchmark configs, so the reports
       # cover the full matrix instead of just solx (PR) vs solx-main. Scoped to
       # `[compilers.*]` and `[[comparisons]]`; disabled `[projects.*]` (hangs /
       # unsupported Solidity) are deliberately left off. Edits only this
-      # throwaway CI checkout.
+      # throwaway CI checkout. The labels are read live, so re-running the job
+      # picks up a label added after the push.
       - name: Enable full benchmark (all compilers + comparisons)
-        if: contains(github.event.pull_request.labels.*.name, 'ci:integration-benchmark-full')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
+          labels=$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" | jq -r '.[].name')
+          if ! grep -qx 'ci:integration-benchmark-full' <<< "${labels}"; then
+            exit 0
+          fi
           for cfg in solx-dev/foundry-tests.toml solx-dev/hardhat-tests.toml; do
             awk '
               /^\[/ { in_section = ($0 ~ /^\[compilers\./ || $0 ~ /^\[\[comparisons\]\]/) }
