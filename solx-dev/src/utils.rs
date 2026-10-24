@@ -367,6 +367,23 @@ pub fn path_windows_to_unix<P: AsRef<Path> + PathBufExt>(path: P) -> anyhow::Res
 }
 
 ///
+/// Returns `name --version`, or an empty string if `name` cannot run.
+///
+pub fn tool_version(name: &str) -> String {
+    Command::new(name)
+        .arg("--version")
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| {
+            String::from_utf8_lossy(output.stdout.as_slice())
+                .trim()
+                .to_owned()
+        })
+        .unwrap_or_default()
+}
+
+///
 /// Checks if the tool exists in the system.
 ///
 pub fn exists(name: &str) -> anyhow::Result<()> {
