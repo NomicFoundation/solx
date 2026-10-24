@@ -1,17 +1,17 @@
 // RUN: slang --emit-mlir=sol %s | FileCheck %s
 
-// CHECK: sol.immutable @{{.*x.*}} index 0 : ui256
+// CHECK: sol.immutable @"[[X:[0-9]+]]" index 0 : ui256
 // CHECK: sol.state_var @{{.*y.*}} slot 0 offset 0 : ui256
 
 // CHECK: sol.func @{{.*}}(%arg0: ui256) attributes {{.*}}kind = #{{.*}}Constructor
-// CHECK:   %[[XW:.*]] = sol.addr_of @{{.*x.*}} : !sol.ptr<ui256, Immutable>
+// CHECK:   %[[XW:.*]] = sol.addr_of @"[[X]]" : !sol.ptr<ui256, Immutable>
 // CHECK:   sol.store %{{.*}}, %[[XW]] : ui256, !sol.ptr<ui256, Immutable>
-// CHECK:   %[[XR:.*]] = sol.addr_of @{{.*x.*}} : !sol.ptr<ui256, Immutable>
+// CHECK:   %[[XR:.*]] = sol.addr_of @"[[X]]" : !sol.ptr<ui256, Immutable>
 // CHECK:   %[[XV:.*]] = sol.load %[[XR]] : !sol.ptr<ui256, Immutable>, ui256
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
 
 // CHECK: sol.func @{{.*get.*}}() -> ui256 attributes {{.*}}selector = 1833756220 : i32
-// CHECK:   %[[V:.*]] = sol.load_immutable @{{.*x.*}} : ui256
+// CHECK:   %[[V:.*]] = sol.load_immutable @"[[X]]" : ui256
 // CHECK:   sol.return %[[V]] : ui256
 
 contract Immutable {

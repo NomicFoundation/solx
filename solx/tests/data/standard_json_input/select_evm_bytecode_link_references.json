@@ -1,0 +1,20 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A": {
+      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.8.0;\nlibrary L { event E(uint256 x); function f(uint256 x) external { emit E(x); } }\ncontract C { function g(uint256 x) external { L.f(x); } }\n"
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.bytecode.linkReferences"
+        ]
+      }
+    },
+    "metadata": {
+      "useLiteralContent": true
+    }
+  }
+}

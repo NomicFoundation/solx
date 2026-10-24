@@ -2,10 +2,13 @@
 //! The `solc --standard-json` output contract EVM bytecode.
 //!
 
+pub mod immutable_reference;
 pub mod link_reference;
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
+use self::immutable_reference::ImmutableReference;
 use self::link_reference::LinkReference;
 
 ///
@@ -48,9 +51,9 @@ pub struct Bytecode {
     /// Generated sources placeholder.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub generated_sources: Option<Vec<serde_json::Value>>,
-    /// Immutable generated_sources placeholder.
+    /// Immutable references.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub immutable_references: Option<serde_json::Value>,
+    pub immutable_references: Option<BTreeMap<String, Vec<ImmutableReference>>>,
 }
 
 impl Bytecode {
@@ -70,7 +73,7 @@ impl Bytecode {
         source_map: Option<String>,
         function_debug_data: Option<BTreeMap<String, serde_json::Value>>,
         generated_sources: Option<Vec<serde_json::Value>>,
-        immutable_references: Option<serde_json::Value>,
+        immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
     ) -> Self {
         let link_references = unlinked_symbols.map(|unlinked_symbols| {
             let mut link_references = BTreeMap::new();
@@ -91,6 +94,20 @@ impl Bytecode {
                     );
             }
             link_references
+        });
+        let immutable_references = immutables.map(|immutables| {
+            immutables
+                .into_iter()
+                .map(|(key, offsets)| {
+                    (
+                        key,
+                        offsets
+                            .into_iter()
+                            .map(ImmutableReference::new)
+                            .collect::<Vec<ImmutableReference>>(),
+                    )
+                })
+                .collect()
         });
 
         Self {

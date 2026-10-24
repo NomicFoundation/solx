@@ -75,12 +75,16 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
 }
 
 impl<'context> SourceUnitScope<'context> {
-    /// The state variable's symbol: its name qualified by the node id, since names alone collide.
+    /// The state variable's symbol. An immutable's is the node id alone, which is its key in
+    /// `immutableReferences`; the rest qualify the name with it, since names alone collide.
     pub fn state_variable_symbol(state_variable: &StateVariableDefinition) -> String {
-        format!(
-            "{}_{}",
-            state_variable.name().name(),
-            state_variable.node_id(),
-        )
+        match state_variable.attributes().mutability() {
+            StateVariableMutability::Immutable => state_variable.node_id().to_string(),
+            _ => format!(
+                "{}_{}",
+                state_variable.name().name(),
+                state_variable.node_id(),
+            ),
+        }
     }
 }
