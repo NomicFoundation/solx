@@ -169,7 +169,12 @@ A PR body is one or two sentences saying what the PR delivers, with short bullet
 
 It is forbidden to post low-level code changes, the process of how the work was done, or anything derivable from the PR diff.
 
-Two labels switch on optional CI: `ci:sanitizer` for the address sanitizer tests, `ci:integration` for the integration tests.
+These labels switch on optional CI:
+
+- `ci:sanitizer` for the address sanitizer tests
+- `ci:integration` for the integration tests, and `ci:integration-benchmark-full` with it to compare every compiler in the Foundry and Hardhat benchmarks
+- `ci:release` for a dry run of the release pipeline
+- `ci:sourcify-sweep` for the Sourcify sweep
 
 A change to [`renovate.json`](./renovate.json) is validated before pushing, with the checks CI repeats in its `renovate-config-check` job, at the Renovate version that job pins:
 
