@@ -1,11 +1,26 @@
 name: 'Install msys2'
 description: 'Prepares msys2 for Windows builds.'
+inputs:
+  packages:
+    description: 'Packages to install with pacman.'
+    required: false
+    default: >-
+      base-devel
+      git
+      mingw-w64-x86_64-clang
+      mingw-w64-x86_64-lld
+      mingw-w64-x86_64-cmake
+      mingw-w64-x86_64-ninja
+      mingw-w64-x86_64-gcc
+      mingw-w64-x86_64-gcc-libs
+      mingw-w64-x86_64-headers-git
+      mingw-w64-x86_64-python
 runs:
   using: composite
   steps:
-    # MSYS2 is pinned via the setup-msys2 action version: each release
+    # The MSYS2 base is pinned via the setup-msys2 action version: each release
     # hardcodes a specific msys2-installer release in its bundled index.js
-    # (v2.31.1 → 2026-03-22). `update: false` skips the per-run `pacman -Syu`
+    # (v2.33.0 → 2026-09-27). `update: false` skips the per-run `pacman -Syu`
     # that would otherwise pull whatever MSYS2 head looks like today. Two
     # reasons:
     #
@@ -20,21 +35,24 @@ runs:
     - name: Setup msys2 (pinned)
       uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
       id: msys2
+      # MSYS2 mirrors intermittently stall or rate-limit package downloads.
+      continue-on-error: true
       with:
         path-type: inherit
         update: false
-        cache: false
-        install: >-
-          base-devel
-          git
-          mingw-w64-x86_64-clang
-          mingw-w64-x86_64-lld
-          mingw-w64-x86_64-cmake
-          mingw-w64-x86_64-ninja
-          mingw-w64-x86_64-gcc
-          mingw-w64-x86_64-gcc-libs
-          mingw-w64-x86_64-headers-git
-          mingw-w64-x86_64-python
+        cache: true
+        install: ${{ inputs.packages }}
+
+    # setup-msys2 has the shell and keyring in place before it downloads
+    # packages, and pacman resumes the partial downloads.
+    - name: Retry msys2 package install
+      if: steps.msys2.outcome == 'failure'
+      shell: msys2 {0}
+      env:
+        PACKAGES: ${{ inputs.packages }}
+      run: |
+        sleep 30
+        pacman --noconfirm -S --needed --overwrite '*' ${PACKAGES}
 
     - name: Prepare env
       shell: msys2 {0}
