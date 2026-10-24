@@ -3,6 +3,7 @@
 //!
 
 use std::collections::BTreeMap;
+use std::num::NonZeroU64;
 
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::NodeId;
@@ -81,5 +82,16 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         let signature = self.function_definition(function);
         self.segment.record_deploy_indirect_callee(function);
         signature.pointer_constant(self)
+    }
+
+    /// The identifier a pointer to `function` dispatches to, numbered from one in the order the
+    /// object first defines its functions, so that no source outside the object changes its
+    /// bytecode.
+    pub fn function_identifier(&mut self, function: &FunctionDefinition) -> NonZeroU64 {
+        let next = NonZeroU64::MIN.saturating_add(self.function_identifiers.len() as u64);
+        *self
+            .function_identifiers
+            .entry(function.node_id())
+            .or_insert(next)
     }
 }

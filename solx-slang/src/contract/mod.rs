@@ -13,6 +13,7 @@ pub mod storage_slot;
 use std::cell::OnceCell;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::num::NonZeroU64;
 
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableMutability;
@@ -66,10 +67,12 @@ impl<'context> SourceUnitScope<'context> {
         });
 
         let mut indirect_callees = BTreeMap::new();
+        let mut function_identifiers = HashMap::new();
         let deploy = SourceUnitScope::object_segment(
             melior,
             object,
             storage_slots,
+            &mut function_identifiers,
             Segment::Deploy {
                 indirect_callees: &mut indirect_callees,
                 constructor: ConstructorBuilder::new(object.contracts()),
@@ -86,6 +89,7 @@ impl<'context> SourceUnitScope<'context> {
             melior,
             object,
             storage_slots,
+            &mut function_identifiers,
             Segment::Runtime {
                 indirect_callees: &indirect_callees,
             },
@@ -107,6 +111,7 @@ impl<'context> SourceUnitScope<'context> {
         &mut self,
         object: &Object,
         storage_slots: &HashMap<NodeId, StorageSlot>,
+        function_identifiers: &mut HashMap<NodeId, NonZeroU64>,
         segment: Segment<'_, 'context>,
     ) {
         let identifier = object.identifier();
@@ -124,6 +129,7 @@ impl<'context> SourceUnitScope<'context> {
             ),
             object,
             storage_slots,
+            function_identifiers,
             segment,
             |scope| scope.members(),
         );
@@ -141,6 +147,7 @@ impl<'context> SourceUnitScope<'context> {
         melior: &'context melior::Context,
         object: &Object,
         storage_slots: &HashMap<NodeId, StorageSlot>,
+        function_identifiers: &mut HashMap<NodeId, NonZeroU64>,
         segment: Segment<'_, 'context>,
         evm_version: EVMVersion,
         revert_strings: RevertStrings,
@@ -173,7 +180,7 @@ impl<'context> SourceUnitScope<'context> {
         let run_emission = profiler.start_pipeline_element(
             format!("Compiler_EmitSol:{}", dependencies.identifier).as_str(),
         );
-        scope.object_definition(object, storage_slots, segment);
+        scope.object_definition(object, storage_slots, function_identifiers, segment);
         run_emission.borrow_mut().finish();
         Context::from(scope).finalize_module(dependencies, capture_mlir, pass_timing, profiler)
     }

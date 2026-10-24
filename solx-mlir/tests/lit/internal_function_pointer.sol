@@ -81,13 +81,13 @@
 // CHECK: sol.func_constant @"uncalled_type(uint256)_{{[0-9]+}}" : !sol.func_ref<(ui256) -> ui256>
 // CHECK: } {kind = #Contract}
 // CHECK: sol.contract @{{.*Stored.*}} {
-// CHECK: sol.func @"run_stored()_{{[0-9]+}}"
+// CHECK: sol.func @"run_stored()_{{[0-9]+}}"() -> ui256 attributes {id = 6 : i64,
 // CHECK:   sol.icall %{{.*}}() : !sol.func_ref<() -> ui256>, () -> ui256
-// CHECK: sol.func @"inherited()_{{[0-9]+}}"() -> ui256
-// CHECK: sol.func @"kept()_{{[0-9]+}}"() -> ui256
-// CHECK: sol.func @"retained()_{{[0-9]+}}"() -> ui256
-// CHECK: sol.func @"reached_only_in_deploy()_{{[0-9]+}}"() -> ui256
-// CHECK: sol.func @"uncalled_type(uint256)_{{[0-9]+}}"(%{{.*}}: ui256) -> ui256
+// CHECK: sol.func @"inherited()_{{[0-9]+}}"() -> ui256 attributes {id = 3 : i64,
+// CHECK: sol.func @"kept()_{{[0-9]+}}"() -> ui256 attributes {id = 1 : i64,
+// CHECK: sol.func @"retained()_{{[0-9]+}}"() -> ui256 attributes {id = 2 : i64,
+// CHECK: sol.func @"reached_only_in_deploy()_{{[0-9]+}}"() -> ui256 attributes {id = 4 : i64,
+// CHECK: sol.func @"uncalled_type(uint256)_{{[0-9]+}}"(%{{.*}}: ui256) -> ui256 attributes {id = 5 : i64,
 // CHECK: } {{.*}}creation_func_refs = [@"inherited()_{{[0-9]+}}", @"kept()_{{[0-9]+}}", @"retained()_{{[0-9]+}}", @"reached_only_in_deploy()_{{[0-9]+}}", @"uncalled_type(uint256)_{{[0-9]+}}"]
 
 contract C {
