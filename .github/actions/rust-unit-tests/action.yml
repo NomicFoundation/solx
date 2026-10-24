@@ -51,6 +51,8 @@ runs:
     - name: Prepare test env
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: |
+        # The CI image installs the pinned tools under /root/.cargo; container jobs run with HOME=/github/home.
+        if [ -f /root/.cargo/.crates2.json ]; then export CARGO_INSTALL_ROOT=/root/.cargo; fi
         ${SFW_PREFIX:-} cargo install cargo2junit@0.1.15 --locked
         if [ '${{ inputs.enable-coverage }}' = 'true' ]; then
           ${SFW_PREFIX:-} cargo install cargo-llvm-cov@0.8.4 --locked
