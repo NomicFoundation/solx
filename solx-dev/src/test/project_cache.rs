@@ -14,7 +14,7 @@ use colored::Colorize;
 ///
 /// An entry counts only once its `.ready` stamp exists, so an interrupted setup is redone.
 /// Entries expire by age, which also refreshes dependencies that the configuration leaves
-/// unversioned.
+/// unversioned. Pruning touches only names shaped like entries, so other directories survive.
 ///
 pub struct ProjectCache {
     /// The cache directory.
@@ -23,7 +23,10 @@ pub struct ProjectCache {
 
 impl ProjectCache {
     /// Age after which an entry is set up again.
-    pub const MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+    const MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+
+    /// Bytes of the key hash in an entry name.
+    const KEY_LENGTH: usize = 8;
 
     ///
     /// Opens the cache, removing expired entries and the remains of interrupted setups.
@@ -54,11 +57,14 @@ impl ProjectCache {
         setup: impl FnOnce(&Path) -> anyhow::Result<()>,
     ) -> anyhow::Result<PathBuf> {
         let key = solx_utils::Keccak256Hash::from_slice(key_material.as_bytes());
-        let entry_name = format!("{project_name}-{}", &key.as_str()[2..18]);
+        let entry_name = format!(
+            "{project_name}-{}",
+            hex::encode(&key.as_bytes()[..Self::KEY_LENGTH])
+        );
         let entry = self.directory.join(entry_name.as_str());
         let stamp = Self::stamp_path(entry.as_path());
 
-        if stamp.exists() {
+        if stamp.exists() && entry.is_dir() {
             eprintln!(
                 "{} cached checkout of project {}",
                 solx_utils::cargo_status_ok("Reusing"),
@@ -67,6 +73,7 @@ impl ProjectCache {
             return Ok(entry);
         }
 
+        Self::remove_stamp(stamp.as_path())?;
         crate::utils::remove(entry.as_path(), project_name)?;
         setup(entry.as_path())?;
         std::fs::File::create(stamp.as_path()).map_err(|error| {
@@ -79,7 +86,7 @@ impl ProjectCache {
     }
 
     ///
-    /// Removes entries older than `MAX_AGE` at `now`, and directories without a stamp.
+    /// Removes entries older than `MAX_AGE` at `now`, and entries without a stamp.
     ///
     fn prune(&self, now: SystemTime) -> anyhow::Result<()> {
         let entries = std::fs::read_dir(self.directory.as_path()).map_err(|error| {
@@ -91,7 +98,12 @@ impl ProjectCache {
         })?;
         for entry in entries {
             let path = entry?.path();
-            if !path.is_dir() {
+            let entry_name = path
+                .file_name()
+                .expect("Always exists")
+                .to_string_lossy()
+                .into_owned();
+            if !path.is_dir() || !Self::is_entry_name(entry_name.as_str()) {
                 continue;
             }
             let stamp = Self::stamp_path(path.as_path());
@@ -104,22 +116,37 @@ impl ProjectCache {
             if !is_expired {
                 continue;
             }
-            let entry_name = path
-                .file_name()
-                .expect("Always exists")
-                .to_string_lossy()
-                .into_owned();
+            // The stamp goes first, so an interrupted removal leaves an unstamped entry to prune.
+            Self::remove_stamp(stamp.as_path())?;
             crate::utils::remove(path.as_path(), entry_name.as_str())?;
-            if stamp.exists() {
-                std::fs::remove_file(stamp.as_path()).map_err(|error| {
-                    anyhow::anyhow!(
-                        "{} project cache stamp {stamp:?}: {error}",
-                        solx_utils::cargo_status_ok("Removing"),
-                    )
-                })?;
-            }
         }
         Ok(())
+    }
+
+    ///
+    /// Removes `stamp` if it exists.
+    ///
+    fn remove_stamp(stamp: &Path) -> anyhow::Result<()> {
+        if !stamp.exists() {
+            return Ok(());
+        }
+        std::fs::remove_file(stamp).map_err(|error| {
+            anyhow::anyhow!(
+                "{} project cache stamp {stamp:?}: {error}",
+                solx_utils::cargo_status_ok("Removing"),
+            )
+        })
+    }
+
+    ///
+    /// Whether `name` has the `<project>-<key>` shape that `checkout` gives entries.
+    ///
+    fn is_entry_name(name: &str) -> bool {
+        name.rsplit_once('-').is_some_and(|(project_name, key)| {
+            !project_name.is_empty()
+                && key.len() == Self::KEY_LENGTH * 2
+                && key.bytes().all(|byte| byte.is_ascii_hexdigit())
+        })
     }
 
     ///
@@ -192,7 +219,9 @@ mod tests {
         let entry = cache
             .checkout("project", "key", |entry| {
                 is_setup_rerun = true;
-                write_file(entry)
+                std::fs::create_dir(entry)?;
+                std::fs::write(entry.join("file"), "content")?;
+                Ok(())
             })
             .expect("Always valid");
         assert!(
@@ -205,18 +234,80 @@ mod tests {
     }
 
     #[test]
+    fn expired_entry_is_set_up_again() {
+        let directory = test_directory("expired");
+        let cache = ProjectCache::new(directory.as_path()).expect("Always valid");
+        let entry = cache
+            .checkout("project", "key", write_file)
+            .expect("Always valid");
+        std::fs::File::options()
+            .write(true)
+            .open(ProjectCache::stamp_path(entry.as_path()))
+            .expect("Always valid")
+            .set_modified(SystemTime::now() - ProjectCache::MAX_AGE - Duration::from_secs(60))
+            .expect("Always valid");
+
+        let cache = ProjectCache::new(directory.as_path()).expect("Always valid");
+        let mut is_setup_rerun = false;
+        cache
+            .checkout("project", "key", |entry| {
+                is_setup_rerun = true;
+                write_file(entry)
+            })
+            .expect("Always valid");
+        assert!(is_setup_rerun, "opening the cache must expire old entries");
+
+        std::fs::remove_dir_all(directory).expect("Always valid");
+    }
+
+    #[test]
+    fn stamp_without_entry_is_set_up_again() {
+        let directory = test_directory("orphan");
+        let cache = ProjectCache::new(directory.as_path()).expect("Always valid");
+        let entry = cache
+            .checkout("project", "key", write_file)
+            .expect("Always valid");
+        std::fs::remove_dir_all(entry.as_path()).expect("Always valid");
+
+        let cache = ProjectCache::new(directory.as_path()).expect("Always valid");
+        let result = cache.checkout("project", "key", |entry| {
+            std::fs::create_dir(entry)?;
+            anyhow::bail!("setup failed")
+        });
+        assert!(result.is_err());
+        let entry = cache
+            .checkout("project", "key", write_file)
+            .expect("Always valid");
+        assert!(entry.join("file").exists());
+
+        std::fs::remove_dir_all(directory).expect("Always valid");
+    }
+
+    #[test]
+    fn prune_keeps_directories_it_did_not_create() {
+        let directory = test_directory("foreign");
+        write_file(directory.join("target").as_path()).expect("Always valid");
+
+        ProjectCache::new(directory.as_path()).expect("Always valid");
+        assert!(directory.join("target").join("file").exists());
+
+        std::fs::remove_dir_all(directory).expect("Always valid");
+    }
+
+    #[test]
     fn prune_removes_expired_and_unstamped_entries() {
         let directory = test_directory("prune");
         let cache = ProjectCache::new(directory.as_path()).expect("Always valid");
         let entry = cache
             .checkout("project", "key", write_file)
             .expect("Always valid");
-        write_file(directory.join("interrupted").as_path()).expect("Always valid");
+        let interrupted = directory.join("project-0123456789abcdef");
+        write_file(interrupted.as_path()).expect("Always valid");
 
         cache.prune(SystemTime::now()).expect("Always valid");
         assert!(entry.exists(), "a fresh entry must survive");
         assert!(
-            !directory.join("interrupted").exists(),
+            !interrupted.exists(),
             "an entry without a stamp must be removed"
         );
 
