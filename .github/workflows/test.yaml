@@ -274,6 +274,25 @@ jobs:
         with:
           target: ${{ matrix.target || '' }}
 
+      # Temporary: break down what rust-cache saves per OS.
+      - name: Measure cargo cache contents
+        if: always()
+        shell: bash
+        run: |
+          gib() { awk '{ s += $1 } END { printf "%8.2f GiB\n", s / 1048576 }'; }
+          sum_files() { find target/debug "$@" -type f -exec du -k {} + | gib; }
+          for dir in target/debug target/debug/* "${HOME}/.cargo/registry" "${HOME}/.cargo/git" "${HOME}/.cargo/bin"; do
+            [ -e "${dir}" ] && printf '%s %s\n' "$(du -sk "${dir}" | gib)" "${dir}"
+          done
+          echo "--- target/debug by file kind"
+          printf '%s  *.o (%s files)\n' "$(sum_files -name '*.o')" "$(find target/debug -name '*.o' | wc -l)"
+          printf '%s  *.rlib\n' "$(sum_files -name '*.rlib')"
+          printf '%s  *.rmeta\n' "$(sum_files -name '*.rmeta')"
+          printf '%s  *.dSYM\n' "$(find target/debug -path '*.dSYM/*' -type f -exec du -k {} + | gib)"
+          printf '%s  *.d\n' "$(sum_files -name '*.d')"
+          echo "--- 15 largest files in target/debug"
+          find target/debug -type f -exec du -k {} + | sort -n | tail -15
+
       - name: Verify lit tools run outside MSYS2
         if: runner.os == 'Windows'
         shell: bash
