@@ -6,6 +6,7 @@ use itertools::Itertools;
 
 pub mod foundry;
 pub mod hardhat;
+pub mod project_cache;
 pub mod solx_tester;
 
 /// Codegen variants every enabled compiler is tested with.
