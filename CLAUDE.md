@@ -169,11 +169,10 @@ A PR body is one or two sentences saying what the PR delivers, with short bullet
 
 It is forbidden to post low-level code changes, the process of how the work was done, or anything derivable from the PR diff.
 
-The integration tests run on every ready PR. These labels switch on optional CI:
+The integration tests run on every PR. These labels switch on optional CI:
 
 - `ci:sanitizer` for the address sanitizer tests
-- `ci:integration` for the integration tests on a draft PR
-- `ci:integration-benchmark-full` to compare every compiler in the Foundry and Hardhat benchmarks
+- `ci:integration-benchmark-full` to compare every compiler in the Foundry and Hardhat benchmarks, from the next push or re-run
 - `ci:release` for a dry run of the release pipeline
 - `ci:sourcify-sweep` for the Sourcify sweep
 
