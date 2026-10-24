@@ -127,7 +127,9 @@ jobs:
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          prefix-key: cargo-checks-v1
+          prefix-key: cargo-checks-v2
+          # Restoring target/ takes longer than the dependency build it saves.
+          cache-targets: false
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
@@ -265,7 +267,9 @@ jobs:
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          prefix-key: slang-tests-v2
+          prefix-key: slang-tests-v3
+          # Outside Windows, restoring target/ takes longer than the dependency build it saves.
+          cache-targets: ${{ runner.os == 'Windows' }}
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
