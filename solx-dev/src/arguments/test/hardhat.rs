@@ -48,7 +48,7 @@ pub struct Hardhat {
     /// Set-up Hardhat project checkouts reused across runs.
     #[arg(
         long,
-        default_value = "./temp-projects-cache",
+        default_value = "./temp-hardhat-projects-cache",
         help_heading = "Directories"
     )]
     pub projects_cache_dir: PathBuf,

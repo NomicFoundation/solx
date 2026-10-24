@@ -32,6 +32,7 @@ pub fn test(
 ) -> anyhow::Result<()> {
     crate::utils::exists("git")?;
     crate::utils::exists("npm")?;
+    crate::utils::exists("node")?;
 
     std::fs::create_dir_all(projects_directory.as_path()).map_err(|error| {
         anyhow::anyhow!(
@@ -108,8 +109,7 @@ pub fn test(
             16,
         )?;
     }
-
-    let node_version = crate::utils::tool_version("node");
+    let node_version = crate::utils::tool_version("node")?;
     let projects_cache = ProjectCache::new(projects_cache_directory.as_path())?;
 
     for (project_name, project) in projects {
@@ -119,22 +119,7 @@ pub fn test(
         let project_directory_str = project_directory.to_string_lossy();
 
         let build_system = project.build_system.to_string();
-        // The setup code is part of the key, so a harness change never reuses older setups.
-        let key_material = [
-            include_str!("mod.rs"),
-            include_str!("../../utils.rs"),
-            project.url.as_str(),
-            project.commit.as_deref().unwrap_or_default(),
-            build_system.as_str(),
-            config
-                .build_systems
-                .get(&project.build_system)
-                .map(String::as_str)
-                .unwrap_or_default(),
-            project.dependencies.join(" ").as_str(),
-            node_version.as_str(),
-        ]
-        .join("\0");
+        let key_material = project.cache_key_material(&config.build_systems, node_version.as_str());
         let set_up = |checkout: &std::path::Path| -> anyhow::Result<()> {
             crate::utils::clone_repository(
                 project.url.as_str(),
