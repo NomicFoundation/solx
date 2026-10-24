@@ -2,14 +2,23 @@ name: Integration Tests
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    # `closed` only cancels a run still in progress.
+    types: [opened, synchronize, reopened, ready_for_review, labeled, closed]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
 
 permissions:
   contents: read
 
-# Cancel the workflow if any new changes pushed to a feature branch or the trunk
+# A new push or a close cancels the run in progress. Other labels get a group
+# of their own, so adding one can't cancel it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: >-
+    ${{ github.workflow }}-${{ github.event.pull_request.number }}-${{
+      github.event.action == 'labeled'
+      && !contains(fromJSON('["ci:integration", "ci:integration-benchmark-full"]'), github.event.label.name)
+      && github.event.label.name || 'run' }}
   cancel-in-progress: true
 
 defaults:
@@ -18,12 +27,15 @@ defaults:
 
 jobs:
 
-  label-check:
+  # Ready PRs always run; a draft runs only with `ci:integration`.
+  trigger-check:
     if: >-
-      contains(github.event.pull_request.labels.*.name, 'ci:integration')
+      !github.event.pull_request.head.repo.fork
+      && github.event.action != 'closed'
       && (github.event.action != 'labeled'
         || contains(fromJSON('["ci:integration", "ci:integration-benchmark-full"]'), github.event.label.name))
-      && !github.event.pull_request.head.repo.fork
+      && (!github.event.pull_request.draft
+        || contains(github.event.pull_request.labels.*.name, 'ci:integration'))
     runs-on: ubuntu-26.04
     steps:
       - run: 'true'
@@ -31,7 +43,7 @@ jobs:
   cooldown-check:
     name: Cargo cooldown check
     runs-on: ubuntu-26.04
-    needs: label-check
+    needs: trigger-check
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -40,7 +52,7 @@ jobs:
       - uses: ./.github/actions/cooldown-check
 
   integration:
-    needs: [label-check, cooldown-check]
+    needs: [trigger-check, cooldown-check]
     # Well above a cold full-matrix run (~4h with LLVM builds), well below the
     # 6h default that a single hung compile would otherwise squat the runner for.
     timeout-minutes: 300
@@ -135,6 +147,7 @@ jobs:
 
       - name: Run solx-tester tests (PR)
         id: solx_tester_tests
+        timeout-minutes: 30
         continue-on-error: true
         run: ./target/release/solx-dev test solx-tester --solidity-compiler ./target/release/slang
 
@@ -158,6 +171,7 @@ jobs:
 
       - name: Run solx-tester benchmarks (main)
         id: solx_tester_bench_main
+        timeout-minutes: 30
         continue-on-error: true
         working-directory: temp-solx-main
         run: |
@@ -168,6 +182,7 @@ jobs:
 
       - name: Run solx-tester benchmarks (PR)
         id: solx_tester_bench_pr
+        timeout-minutes: 30
         continue-on-error: true
         run: |
           ./target/release/solx-dev test solx-tester \
@@ -249,6 +264,7 @@ jobs:
       # Beside the checkout, so it survives actions/checkout's clean and persists on the runner.
       - name: Run Hardhat tests
         id: hardhat_tests
+        timeout-minutes: 60
         continue-on-error: true
         run: ./target/release/solx-dev test hardhat --projects-cache-dir "${GITHUB_WORKSPACE}/../projects-cache"
 
@@ -262,6 +278,7 @@ jobs:
 
       - name: Run Foundry tests
         id: foundry_tests
+        timeout-minutes: 120
         continue-on-error: true
         run: ./target/release/solx-dev test foundry --projects-cache-dir "${GITHUB_WORKSPACE}/../projects-cache"
 
