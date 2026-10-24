@@ -3,10 +3,11 @@ description: >-
   Shared CI prologue for the standard toolchain configuration: submodule
   checkout, Socket Firewall, platform prep (MSYS2 on Windows, disk cleanup
   on macOS), then the LLVM build. The build parameters below define the
-  standard-config cache keys shared by test.yaml and cache-warmup.yaml —
-  changing them here re-keys both workflows together. Workflows needing a
-  different LLVM configuration (sanitizer, coverage, integration, release)
-  call build-llvm directly and pair with their own cache-warmup job.
+  standard-config cache keys shared by test.yaml, cross-os-tests.yaml, and
+  cache-warmup.yaml — changing them here re-keys all of those workflows
+  together. Workflows needing a different LLVM configuration (sanitizer,
+  coverage, integration, release) call build-llvm directly and pair with
+  their own cache-warmup job.
 
 inputs:
   llvm:
