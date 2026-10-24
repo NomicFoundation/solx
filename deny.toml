@@ -1,6 +1,18 @@
 [advisories]
 yanked = "deny"
 
+# RUSTSEC-2026-0387: crypto-bigint 0.5 has secret-dependent branches in operations
+# meant to be constant-time, and the only patched release is 0.7.6. The crate
+# arrives solely through revm -> alloy-eip7702/alloy-primitives -> k256 0.13 ->
+# elliptic-curve 0.13, and the newest alloy-primitives (1.7.3) and alloy-eip7702
+# (0.6.3) still require k256 ^0.13; k256 0.14 is the first to use crypto-bigint
+# 0.7. Only solx-tester links it, where the integers are test fixtures and the
+# signatures it checks are public test data, so the side channel has no secret to
+# leak. Drop this entry once alloy and revm move to k256 0.14.
+ignore = [
+    { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5 is pinned by k256 0.13 under revm; the tester handles no secrets, see comment above" },
+]
+
 [licenses]
 allow = [
     "GPL-3.0-only",
