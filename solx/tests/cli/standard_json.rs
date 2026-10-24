@@ -2,7 +2,6 @@
 //! CLI tests for the eponymous option.
 //!
 
-use std::collections::BTreeMap;
 use std::io::Read;
 
 use predicates::prelude::*;
@@ -475,99 +474,6 @@ fn select_evm_link_references(input: &str, segment: &str) -> anyhow::Result<()> 
     for reference in references {
         assert_eq!(reference["length"], 20);
     }
-
-    Ok(())
-}
-
-#[test_case("C", &[("a", 2), ("owner_address", 1)])]
-#[test_case("L", &[("library_deploy_address", 1)])]
-#[test_case("I", &[])]
-fn select_evm_deployed_bytecode_immutable_references(
-    name: &str,
-    expected: &[(&str, usize)],
-) -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    fn state_variable_ids(node: &serde_json::Value, ids: &mut BTreeMap<String, String>) {
-        match node {
-            serde_json::Value::Object(object) => {
-                if object
-                    .get("type")
-                    .is_some_and(|kind| kind == "StateVariableDefinition")
-                {
-                    ids.insert(
-                        object["name"]["text"]
-                            .as_str()
-                            .expect("the name is a string")
-                            .to_owned(),
-                        object["id"].to_string(),
-                    );
-                }
-                object
-                    .values()
-                    .for_each(|value| state_variable_ids(value, ids));
-            }
-            serde_json::Value::Array(array) => {
-                array
-                    .iter()
-                    .for_each(|value| state_variable_ids(value, ids));
-            }
-            _ => {}
-        }
-    }
-
-    let compile = |input: &str| -> anyhow::Result<serde_json::Value> {
-        let result = crate::cli::execute_solx(&["--standard-json", input])?;
-        let result = result.success();
-        Ok(serde_json::from_slice(
-            result.get_output().stdout.as_slice(),
-        )?)
-    };
-    let output = compile(crate::common::standard_json!(
-        "select_evm_deployed_bytecode_immutable_references.json"
-    ))?;
-    let output_alone = compile(crate::common::standard_json!(
-        "select_evm_deployed_bytecode_immutable_references_only.json"
-    ))?;
-
-    let mut ids = BTreeMap::new();
-    state_variable_ids(&output["sources"]["A"]["ast"], &mut ids);
-    let expected: BTreeMap<String, usize> = expected
-        .iter()
-        .map(|(key, count)| (ids.get(*key).cloned().unwrap_or(key.to_string()), *count))
-        .collect();
-
-    let deployed_bytecode = &output["contracts"]["A"][name]["evm"]["deployedBytecode"];
-    let code = hex::decode(
-        deployed_bytecode["object"]
-            .as_str()
-            .expect("the object is a string"),
-    )?;
-    let immutable_references = deployed_bytecode["immutableReferences"]
-        .as_object()
-        .expect("the immutable references are an object");
-    let counts: BTreeMap<String, usize> = immutable_references
-        .iter()
-        .map(|(key, references)| {
-            let references = references.as_array().expect("the references are an array");
-            for reference in references {
-                let start = reference["start"].as_u64().expect("the start is a number") as usize;
-                assert_eq!(reference["length"], 32);
-                assert_eq!(
-                    code[start - 1],
-                    0x7f,
-                    "{key} at {start} is not a PUSH32 operand"
-                );
-                assert_eq!(&code[start..start + 32], &[0; 32]);
-            }
-            (key.to_owned(), references.len())
-        })
-        .collect();
-    assert_eq!(counts, expected);
-    assert_eq!(
-        output_alone["contracts"]["A"][name]["evm"]["deployedBytecode"]["immutableReferences"],
-        deployed_bytecode["immutableReferences"],
-    );
 
     Ok(())
 }

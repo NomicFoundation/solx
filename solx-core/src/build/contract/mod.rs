@@ -5,7 +5,6 @@
 pub mod object;
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -880,6 +879,76 @@ impl Contract {
     }
 
     ///
+    /// Writes data to the file, checking the `overwrite` flag.
+    ///
+    pub fn write_to_file<C: AsRef<[u8]>>(
+        output_path: &Path,
+        data: C,
+        overwrite: bool,
+    ) -> anyhow::Result<()> {
+        if output_path.exists() && !overwrite {
+            anyhow::bail!(
+                "Refusing to overwrite an existing file {output_path:?} (use --overwrite to force)."
+            );
+        } else {
+            std::fs::write(output_path, data)
+                .map_err(|error| anyhow::anyhow!("File {output_path:?} writing: {error}"))?;
+        }
+        Ok(())
+    }
+
+    ///
+    /// Returns references to objects.
+    ///
+    pub fn objects_ref(&self) -> Vec<&Object> {
+        let mut objects = Vec::with_capacity(2);
+        if let Some(deploy_object) = self.deploy_object_result.as_ref() {
+            objects.push(deploy_object.as_ref().expect("Always exists"));
+        }
+        if let Some(runtime_object) = self.runtime_object_result.as_ref() {
+            objects.push(runtime_object.as_ref().expect("Always exists"));
+        }
+        objects
+    }
+
+    ///
+    /// Returns mutable references to objects.
+    ///
+    pub fn objects_mut(&mut self) -> Vec<&mut Object> {
+        let mut objects = Vec::with_capacity(2);
+        if let Some(deploy_object) = self.deploy_object_result.as_mut() {
+            objects.push(deploy_object.as_mut().expect("Always exists"));
+        }
+        if let Some(runtime_object) = self.runtime_object_result.as_mut() {
+            objects.push(runtime_object.as_mut().expect("Always exists"));
+        }
+        objects
+    }
+
+    ///
+    /// Returns a mutable reference to the specified object.
+    ///
+    pub fn object_mut_by_code_segment(
+        &mut self,
+        code_segment: solx_utils::CodeSegment,
+    ) -> Option<&mut Object> {
+        match code_segment {
+            solx_utils::CodeSegment::Deploy => Some(
+                self.deploy_object_result
+                    .as_mut()?
+                    .as_mut()
+                    .expect("Always exists"),
+            ),
+            solx_utils::CodeSegment::Runtime => Some(
+                self.runtime_object_result
+                    .as_mut()?
+                    .as_mut()
+                    .expect("Always exists"),
+            ),
+        }
+    }
+
+    ///
     /// Builds the bytecode output for a single code segment.
     ///
     fn build_bytecode_output(
@@ -1037,101 +1106,9 @@ impl Contract {
                     object_result
                         .as_ref()
                         .and_then(|result| result.as_ref().ok())
-                        .and_then(|object| object.immutables.as_ref())
-                        .map(Self::immutable_references)
+                        .and_then(|object| object.immutables.clone())
                         .unwrap_or_default()
                 }),
         )
-    }
-
-    ///
-    /// Keys the runtime code's immutable offsets as solc's `immutableReferences` does.
-    ///
-    /// The library address keeps its name as the key, as solc reports it with `viaIR`.
-    ///
-    fn immutable_references(
-        immutables: &BTreeMap<String, BTreeSet<u64>>,
-    ) -> BTreeMap<String, BTreeSet<u64>> {
-        immutables
-            .iter()
-            .map(|(symbol, offsets)| {
-                let key = if symbol == solx_codegen_evm::LIBRARY_DEPLOY_ADDRESS_TAG {
-                    symbol.as_str()
-                } else {
-                    solx_slang::Slang::immutable_reference_key(symbol)
-                };
-                (key.to_owned(), offsets.to_owned())
-            })
-            .collect()
-    }
-
-    ///
-    /// Writes data to the file, checking the `overwrite` flag.
-    ///
-    pub fn write_to_file<C: AsRef<[u8]>>(
-        output_path: &Path,
-        data: C,
-        overwrite: bool,
-    ) -> anyhow::Result<()> {
-        if output_path.exists() && !overwrite {
-            anyhow::bail!(
-                "Refusing to overwrite an existing file {output_path:?} (use --overwrite to force)."
-            );
-        } else {
-            std::fs::write(output_path, data)
-                .map_err(|error| anyhow::anyhow!("File {output_path:?} writing: {error}"))?;
-        }
-        Ok(())
-    }
-
-    ///
-    /// Returns references to objects.
-    ///
-    pub fn objects_ref(&self) -> Vec<&Object> {
-        let mut objects = Vec::with_capacity(2);
-        if let Some(deploy_object) = self.deploy_object_result.as_ref() {
-            objects.push(deploy_object.as_ref().expect("Always exists"));
-        }
-        if let Some(runtime_object) = self.runtime_object_result.as_ref() {
-            objects.push(runtime_object.as_ref().expect("Always exists"));
-        }
-        objects
-    }
-
-    ///
-    /// Returns mutable references to objects.
-    ///
-    pub fn objects_mut(&mut self) -> Vec<&mut Object> {
-        let mut objects = Vec::with_capacity(2);
-        if let Some(deploy_object) = self.deploy_object_result.as_mut() {
-            objects.push(deploy_object.as_mut().expect("Always exists"));
-        }
-        if let Some(runtime_object) = self.runtime_object_result.as_mut() {
-            objects.push(runtime_object.as_mut().expect("Always exists"));
-        }
-        objects
-    }
-
-    ///
-    /// Returns a mutable reference to the specified object.
-    ///
-    pub fn object_mut_by_code_segment(
-        &mut self,
-        code_segment: solx_utils::CodeSegment,
-    ) -> Option<&mut Object> {
-        match code_segment {
-            solx_utils::CodeSegment::Deploy => Some(
-                self.deploy_object_result
-                    .as_mut()?
-                    .as_mut()
-                    .expect("Always exists"),
-            ),
-            solx_utils::CodeSegment::Runtime => Some(
-                self.runtime_object_result
-                    .as_mut()?
-                    .as_mut()
-                    .expect("Always exists"),
-            ),
-        }
     }
 }

@@ -26,7 +26,6 @@ use solx_utils::RevertStrings;
 
 use crate::debug_locations::sources::Sources;
 use crate::scope::compilation_unit::CompilationUnitScope;
-use crate::scope::source_unit::SourceUnitScope;
 
 use self::import_resolver::SourceImportResolver;
 
@@ -228,12 +227,6 @@ impl Slang {
         scope.compilation_unit(&unit, &mut output)?;
 
         Ok(output)
-    }
-
-    /// The `immutableReferences` key of the immutable the runtime code loads as `symbol`: the node
-    /// id of its declaration, which is also its `astId`.
-    pub fn immutable_reference_key(symbol: &str) -> &str {
-        SourceUnitScope::state_variable_node_id(symbol)
     }
 
     /// Picks the language version to compile as: the requested one, or the latest Slang supports
