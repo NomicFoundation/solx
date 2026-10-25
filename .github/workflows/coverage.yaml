@@ -267,7 +267,7 @@ jobs:
       # commit. Main pushes only: Codecov merges every upload to a commit,
       # and PRs would mix their runs into the pin's numbers.
       - name: Upload LLVM fork coverage to Codecov
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN_SOLX_LLVM }}
