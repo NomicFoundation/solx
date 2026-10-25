@@ -21,6 +21,20 @@ pub const XCODE_MIN_VERSION: u32 = 11;
 pub const XCODE_VERSION_15: u32 = 15;
 
 ///
+/// Describes how a subprocess exited, naming the signal that killed it on Unix.
+///
+fn exit_description(status: std::process::ExitStatus) -> String {
+    if let Some(code) = status.code() {
+        return format!("with exit code {code:?}");
+    }
+    #[cfg(unix)]
+    if let Some(signal) = std::os::unix::process::ExitStatusExt::signal(&status) {
+        return format!("killed by signal {signal}");
+    }
+    "without exit code".to_owned()
+}
+
+///
 /// The subprocess runner.
 ///
 /// Passes all output through.
@@ -33,13 +47,7 @@ pub fn command(command: &mut Command, description: &str) -> anyhow::Result<()> {
         .map_err(|error| anyhow::anyhow!("{command:?} process spawning error: {error:?}"))?;
 
     if status.code() != Some(solx_utils::EXIT_CODE_SUCCESS) {
-        anyhow::bail!(
-            "{command:?} subprocess failed {}",
-            match status.code() {
-                Some(code) => format!("with exit code {code:?}"),
-                None => "without exit code".to_owned(),
-            },
-        );
+        anyhow::bail!("{command:?} subprocess failed {}", exit_description(status));
     }
 
     Ok(())
@@ -65,13 +73,7 @@ pub fn command_with_retries(
         if status.code() == Some(solx_utils::EXIT_CODE_SUCCESS) {
             return Ok(());
         } else {
-            eprintln!(
-                "{command:?} subprocess failed {}",
-                match status.code() {
-                    Some(code) => format!("with exit code {code:?}"),
-                    None => "without exit code".to_owned(),
-                },
-            );
+            eprintln!("{command:?} subprocess failed {}", exit_description(status));
         }
     }
 
@@ -117,10 +119,7 @@ pub fn command_with_json_output<T: serde::de::DeserializeOwned>(
     if !ignore_failure && result.status.code() != Some(solx_utils::EXIT_CODE_SUCCESS) {
         anyhow::bail!(
             "{command:?} subprocess failed {}:\n{}\n{}",
-            match result.status.code() {
-                Some(code) => format!("with exit code {code:?}"),
-                None => "without exit code".to_owned(),
-            },
+            exit_description(result.status),
             String::from_utf8_lossy(result.stdout.as_slice()),
             String::from_utf8_lossy(result.stderr.as_slice()),
         );
@@ -357,4 +356,19 @@ pub fn get_xcode_version() -> anyhow::Result<u32> {
         .parse()
         .map_err(|error| anyhow::anyhow!("Failed to parse XCode version: {error}"))?;
     Ok(xcode_version)
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::process::Command;
+
+    #[test]
+    fn command_names_the_killing_signal() {
+        let error = super::command(Command::new("sh").args(["-c", "kill -SEGV $$"]), "Crashing")
+            .expect_err("a signal death is a failure");
+        assert!(
+            error.to_string().ends_with("killed by signal 11"),
+            "{error}"
+        );
+    }
 }
