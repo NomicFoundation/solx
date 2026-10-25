@@ -19,6 +19,9 @@ use colored::Colorize;
 pub struct ProjectCache {
     /// Holds one `<project>-<key>` directory per entry, with its `.ready` stamp beside it.
     directory: PathBuf,
+    /// Held while the cache is open, as two runs given one cache directory would prune each
+    /// other's setups in progress.
+    _lock: std::fs::File,
 }
 
 impl ProjectCache {
@@ -39,7 +42,34 @@ impl ProjectCache {
             )
         })?;
         let directory = crate::utils::absolute_path(directory)?;
-        let cache = Self { directory };
+        let lock_path = directory.join(".lock");
+        let lock = std::fs::File::create(lock_path.as_path()).map_err(|error| {
+            anyhow::anyhow!(
+                "{} project cache lock {lock_path:?}: {error}",
+                solx_utils::cargo_status_ok("Creating"),
+            )
+        })?;
+        let locked = match lock.try_lock() {
+            Ok(()) => Ok(()),
+            Err(std::fs::TryLockError::WouldBlock) => {
+                eprintln!(
+                    "{} for project cache {directory:?} used by another process",
+                    solx_utils::cargo_status_ok("Waiting"),
+                );
+                lock.lock()
+            }
+            Err(std::fs::TryLockError::Error(error)) => Err(error),
+        };
+        locked.map_err(|error| {
+            anyhow::anyhow!(
+                "{} project cache lock {lock_path:?}: {error}",
+                solx_utils::cargo_status_ok("Acquiring"),
+            )
+        })?;
+        let cache = Self {
+            directory,
+            _lock: lock,
+        };
         cache.prune(SystemTime::now())?;
         Ok(cache)
     }
@@ -88,6 +118,8 @@ impl ProjectCache {
     ///
     /// Removes entries older than `MAX_AGE` at `now`, and entries without a stamp.
     ///
+    /// An entry that cannot be removed only warns, as no project of this run needs it gone.
+    ///
     fn prune(&self, now: SystemTime) -> anyhow::Result<()> {
         let entries = std::fs::read_dir(self.directory.as_path()).map_err(|error| {
             anyhow::anyhow!(
@@ -117,8 +149,14 @@ impl ProjectCache {
                 continue;
             }
             // The stamp goes first, so an interrupted removal leaves an unstamped entry to prune.
-            Self::remove_stamp(stamp.as_path())?;
-            crate::utils::remove(path.as_path(), entry_name.as_str())?;
+            if let Err(error) = Self::remove_stamp(stamp.as_path())
+                .and_then(|()| crate::utils::remove(path.as_path(), entry_name.as_str()))
+            {
+                eprintln!(
+                    "{} project cache entry {path:?}: {error}",
+                    solx_utils::cargo_status_error("Pruning"),
+                );
+            }
         }
         Ok(())
     }
@@ -254,6 +292,7 @@ mod tests {
             .set_modified(SystemTime::now() - ProjectCache::MAX_AGE - Duration::from_secs(60))
             .expect("Always valid");
 
+        drop(cache);
         let cache = ProjectCache::new(directory.as_path()).expect("Always valid");
         let mut is_setup_rerun = false;
         cache
@@ -276,6 +315,7 @@ mod tests {
             .expect("Always valid");
         std::fs::remove_dir_all(entry.as_path()).expect("Always valid");
 
+        drop(cache);
         let cache = ProjectCache::new(directory.as_path()).expect("Always valid");
         let result = cache.checkout("project", "key", |entry| {
             std::fs::create_dir(entry)?;
@@ -339,6 +379,57 @@ mod tests {
             !ProjectCache::stamp_path(entry.as_path()).exists(),
             "an expired entry's stamp must be removed"
         );
+
+        std::fs::remove_dir_all(directory).expect("Always valid");
+    }
+
+    #[test]
+    fn prune_continues_past_unremovable_entry() {
+        let directory = test_directory("unremovable");
+        let cache = ProjectCache::new(directory.as_path()).expect("Always valid");
+        let unremovable = directory.join("project-0123456789abcdef");
+        write_file(unremovable.as_path()).expect("Always valid");
+        // A directory where the stamp file should be makes removing the stamp fail, even as root.
+        std::fs::create_dir(ProjectCache::stamp_path(unremovable.as_path())).expect("Always valid");
+        let entry = cache
+            .checkout("project", "key", write_file)
+            .expect("Always valid");
+
+        cache
+            .prune(SystemTime::now() + ProjectCache::MAX_AGE + Duration::from_secs(1))
+            .expect("an entry that cannot be removed must not fail the run");
+        assert!(unremovable.exists());
+        assert!(
+            !entry.exists(),
+            "the other expired entries must still be removed"
+        );
+
+        std::fs::remove_dir_all(directory).expect("Always valid");
+    }
+
+    #[test]
+    fn second_process_waits_for_open_cache() {
+        let directory = test_directory("lock");
+        let cache = ProjectCache::new(directory.as_path()).expect("Always valid");
+
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let waiter = {
+            let directory = directory.clone();
+            std::thread::spawn(move || {
+                let cache = ProjectCache::new(directory.as_path()).expect("Always valid");
+                sender.send(()).expect("Always valid");
+                cache
+            })
+        };
+        assert!(
+            receiver.recv_timeout(Duration::from_millis(200)).is_err(),
+            "a second open must wait while the cache is open"
+        );
+        drop(cache);
+        receiver
+            .recv_timeout(Duration::from_secs(10))
+            .expect("closing the cache must let the second open through");
+        drop(waiter.join().expect("Always valid"));
 
         std::fs::remove_dir_all(directory).expect("Always valid");
     }
