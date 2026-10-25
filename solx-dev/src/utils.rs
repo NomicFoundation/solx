@@ -232,6 +232,47 @@ pub fn clone_repository(
 }
 
 ///
+/// Lists the tracked files of the repository at `directory` matching `pathspec`, submodules included.
+///
+pub fn git_tracked_files(directory: &Path, pathspec: &str) -> anyhow::Result<Vec<PathBuf>> {
+    let mut command = Command::new("git");
+    command.arg("-C");
+    command.arg(directory);
+    command.args(["ls-files", "-z", "--recurse-submodules", "--", pathspec]);
+    Ok(command_with_output(
+        &mut command,
+        format!("{} tracked files", solx_utils::cargo_status_ok("Listing")).as_str(),
+    )?
+    .split('\0')
+    .filter(|path| !path.is_empty())
+    .map(|path| directory.join(path))
+    .collect())
+}
+
+///
+/// Replaces `destination` with a copy of `source`.
+///
+/// `cp -a` keeps the relative symlinks under `node_modules/.bin`, which Node resolves
+/// against the link target.
+///
+pub fn copy_project(source: &Path, destination: &Path, project_name: &str) -> anyhow::Result<()> {
+    remove(destination, project_name)?;
+    let mut copy_command = Command::new("cp");
+    copy_command.arg("-a");
+    copy_command.arg(source);
+    copy_command.arg(destination);
+    command(
+        &mut copy_command,
+        format!(
+            "{} project {}",
+            solx_utils::cargo_status_ok("Copying"),
+            project_name.bright_white().bold()
+        )
+        .as_str(),
+    )
+}
+
+///
 /// Removes the project directory after building and testing.
 ///
 pub fn remove(project_directory: &Path, project_name: &str) -> anyhow::Result<()> {
@@ -413,4 +454,122 @@ pub fn get_xcode_version() -> anyhow::Result<u32> {
         .parse()
         .map_err(|error| anyhow::anyhow!("Failed to parse XCode version: {error}"))?;
     Ok(xcode_version)
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::path::Path;
+    use std::process::Command;
+
+    fn test_directory(name: &str) -> std::path::PathBuf {
+        let directory =
+            std::env::temp_dir().join(format!("solx-dev-utils-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(directory.as_path());
+        std::fs::create_dir_all(directory.as_path()).expect("Always valid");
+        directory
+    }
+
+    fn git(directory: &Path, arguments: &[&str]) {
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(directory)
+            .args(["-c", "protocol.file.allow=always"])
+            .args(["-c", "user.name=solx", "-c", "user.email=solx@localhost"])
+            .args(arguments)
+            .status()
+            .expect("Always valid");
+        assert!(status.success(), "git {arguments:?} failed");
+    }
+
+    fn commit_file(repository: &Path, path: &str) {
+        std::fs::create_dir_all(repository.join(path).parent().expect("Always exists"))
+            .expect("Always valid");
+        std::fs::write(repository.join(path), "pragma solidity 0.8.0;").expect("Always valid");
+        git(repository, &["add", path]);
+        git(repository, &["commit", "--quiet", "-m", path]);
+    }
+
+    #[test]
+    fn git_tracked_files_follows_submodules_and_skips_untracked() {
+        let directory = test_directory("tracked");
+        let dependency = directory.join("dependency");
+        let project = directory.join("project");
+        git(directory.as_path(), &["init", "--quiet", "dependency"]);
+        commit_file(dependency.as_path(), "src/Dependency.sol");
+        git(directory.as_path(), &["init", "--quiet", "project"]);
+        commit_file(project.as_path(), "src/Project.sol");
+        commit_file(project.as_path(), "README.md");
+        git(
+            project.as_path(),
+            &[
+                "submodule",
+                "--quiet",
+                "add",
+                dependency.to_string_lossy().as_ref(),
+                "lib/dependency",
+            ],
+        );
+        git(project.as_path(), &["commit", "--quiet", "-m", "submodule"]);
+        commit_file(project.as_path(), "node_modules/.keep");
+        std::fs::write(project.join("node_modules/Installed.sol"), "").expect("Always valid");
+
+        let mut files = super::git_tracked_files(project.as_path(), "*.sol")
+            .expect("Always valid")
+            .into_iter()
+            .map(|path| {
+                path.strip_prefix(project.as_path())
+                    .expect("Always valid")
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect::<Vec<_>>();
+        files.sort();
+        assert_eq!(
+            files,
+            ["lib/dependency/src/Dependency.sol", "src/Project.sol"]
+        );
+
+        std::fs::remove_dir_all(directory).expect("Always valid");
+    }
+
+    #[test]
+    fn copy_is_isolated_and_keeps_symlinks() {
+        let directory = test_directory("copy");
+        let source = directory.join("source");
+        std::fs::create_dir_all(source.as_path()).expect("Always valid");
+        std::fs::write(source.join("file"), "content").expect("Always valid");
+        std::os::unix::fs::symlink("file", source.join("link")).expect("Always valid");
+
+        let destination = directory.join("work");
+        super::copy_project(source.as_path(), destination.as_path(), "project")
+            .expect("Always valid");
+        std::fs::write(destination.join("file"), "edited").expect("Always valid");
+        std::fs::write(destination.join("output"), "new").expect("Always valid");
+        assert_eq!(
+            std::fs::read_to_string(source.join("file")).expect("Always valid"),
+            "content",
+            "edits to a copy must not reach the source"
+        );
+
+        super::copy_project(source.as_path(), destination.as_path(), "project")
+            .expect("Always valid");
+        assert_eq!(
+            std::fs::read_to_string(destination.join("file")).expect("Always valid"),
+            "content"
+        );
+        assert!(
+            !destination.join("output").exists(),
+            "a copy must not keep the previous toolchain's outputs"
+        );
+        assert!(
+            destination
+                .join("link")
+                .symlink_metadata()
+                .expect("Always valid")
+                .file_type()
+                .is_symlink()
+        );
+
+        std::fs::remove_dir_all(directory).expect("Always valid");
+    }
 }
