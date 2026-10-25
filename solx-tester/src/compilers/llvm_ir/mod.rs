@@ -146,10 +146,7 @@ impl Compiler for LLVMIRCompiler {
             .map(|(path, source)| {
                 (
                     path.to_owned(),
-                    solx_standard_json::InputSource {
-                        content: Some(source.to_owned()),
-                        urls: None,
-                    },
+                    solx_standard_json::InputSource::new(source.to_owned()),
                 )
             })
             .collect();

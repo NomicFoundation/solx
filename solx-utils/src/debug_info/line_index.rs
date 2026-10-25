@@ -9,6 +9,7 @@
 /// with a binary search. A line ends at `\n`, `\r\n` or a lone `\r`, the terminators Slang's lexer
 /// recognizes.
 ///
+#[derive(Debug)]
 pub struct LineIndex {
     /// The offset of each line's first byte, in order.
     line_starts: Vec<usize>,

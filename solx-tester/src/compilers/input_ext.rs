@@ -33,15 +33,7 @@ pub fn new_input_for_solc(
 ) -> solx_standard_json::Input {
     let sources = sources
         .into_iter()
-        .map(|(path, content)| {
-            (
-                path,
-                solx_standard_json::InputSource {
-                    content: Some(content),
-                    urls: None,
-                },
-            )
-        })
+        .map(|(path, content)| (path, solx_standard_json::InputSource::new(content)))
         .collect();
 
     solx_standard_json::Input {

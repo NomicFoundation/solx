@@ -4,6 +4,9 @@
 
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::OnceLock;
+
+use solx_utils::LineIndex;
 
 ///
 /// The `solc --standard-json` input source.
@@ -17,6 +20,10 @@ pub struct Source {
     /// The source file URLs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub urls: Option<Vec<String>>,
+
+    /// The content's line index.
+    #[serde(skip)]
+    line_index: OnceLock<LineIndex>,
 }
 
 impl Source {
@@ -25,6 +32,17 @@ impl Source {
 
     /// Stdin output identifier.
     pub const STDIN_OUTPUT_IDENTIFIER: &'static str = "<stdin>";
+
+    ///
+    /// A shortcut constructor.
+    ///
+    pub fn new(content: String) -> Self {
+        Self {
+            content: Some(content),
+            urls: None,
+            line_index: OnceLock::new(),
+        }
+    }
 
     ///
     /// Reads the source from the file system.
@@ -39,10 +57,7 @@ impl Source {
                 .map_err(|error| anyhow::anyhow!("File {path:?} reading: {error}"))
         }?;
 
-        Ok(Self {
-            content: Some(content),
-            urls: None,
-        })
+        Ok(Self::new(content))
     }
 
     ///
@@ -95,6 +110,14 @@ impl Source {
     pub fn content(&self) -> Option<&str> {
         self.content.as_deref()
     }
+
+    ///
+    /// The line index of the content, built on first use.
+    ///
+    pub fn line_index(&self) -> Option<&LineIndex> {
+        let content = self.content.as_deref()?;
+        Some(self.line_index.get_or_init(|| LineIndex::new(content)))
+    }
 }
 
 impl From<&Path> for Source {
@@ -102,6 +125,7 @@ impl From<&Path> for Source {
         Self {
             content: None,
             urls: Some(vec![path.to_string_lossy().to_string()]),
+            line_index: OnceLock::new(),
         }
     }
 }

@@ -1,16 +1,18 @@
 //!
-//! Source locations for debug info: the source range of each node, the compilation's sources, and
-//! the location the ops lowered from each construct carry.
+//! Source locations for debug info: the source range of each node and the location the ops lowered
+//! from each construct carry.
 //!
 
 pub mod resolver;
-pub mod sources;
+
+use std::collections::BTreeMap;
 
 use melior::ir::Location;
 use slang_solidity_v2::ast::NodeLocation;
 
+use solx_standard_json::InputSource;
+
 use self::resolver::Resolver;
-use self::sources::Sources;
 
 /// What one segment's nodes resolve to: their locations when the segment requested debug info, and
 /// otherwise the unknown location, with no source range read.
@@ -26,7 +28,7 @@ impl<'context> DebugLocations<'context> {
     /// absent.
     pub fn new(
         melior: &'context melior::Context,
-        sources: Option<&'context Sources<'context>>,
+        sources: Option<&'context BTreeMap<String, InputSource>>,
     ) -> Self {
         match sources {
             Some(sources) => Self::Enabled(Resolver::new(melior, sources)),
