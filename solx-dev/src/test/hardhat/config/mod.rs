@@ -12,7 +12,7 @@ use crate::test::config::compiler::Compiler;
 
 use self::comparison::Comparison;
 use self::project::Project;
-use self::project::build_system::BuildSystem;
+use crate::test::config::build_system::BuildSystem;
 
 ///
 /// `solx` Hardhat config.

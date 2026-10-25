@@ -2,12 +2,10 @@
 //! `solx` Hardhat project.
 //!
 
-pub mod build_system;
-
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use self::build_system::BuildSystem;
+use crate::test::config::build_system::BuildSystem;
 
 ///
 /// `solx` Hardhat project.
@@ -51,6 +49,7 @@ impl Project {
     pub fn cache_key_material(&self, build_system_version: &str, node_version: &str) -> String {
         [
             include_str!("../../mod.rs"),
+            include_str!("../../../config/build_system.rs"),
             include_str!("../../../../utils.rs"),
             self.url.as_str(),
             self.commit.as_deref().unwrap_or_default(),

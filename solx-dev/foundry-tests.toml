@@ -3,6 +3,8 @@
 # Build systems:
 #   [build_systems]
 #   yarn = "<x.y.z>"                # Pinned version installed globally once per run.
+#   pnpm = "<x.y.z>"
+#   bun  = "<x.y.z>"
 #
 # Compilers:
 #   [compilers.<id>]
@@ -23,7 +25,7 @@
 #   url = "https://github.com/..."  # Git repository URL
 #   commit = "abc123..."            # Git commit SHA to pin (optional, HEAD if omitted)
 #   description = "..."             # Project description
-#   requires_yarn = true/false      # Run yarn install before building
+#   build_system = "yarn"           # npm, yarn, pnpm, or bun that installs packages, from the lockfile if present (optional)
 #   disabled = true/false           # Whether to skip this project
 #   [projects.<name>.env]
 #   VAR = "value"                   # Environment variables for build/test
@@ -36,6 +38,7 @@
 
 [build_systems]
 yarn = "1.22.22"
+bun = "1.4.3"
 
 [compilers.solc]
 name = "00.solc-0.8.34"
@@ -116,7 +119,7 @@ description = "Basic ERC-20 contract designed to be inherited and extended."
 url = "https://github.com/Timidan/Foundry-Hardhat-Diamonds"
 commit = "e9fdadc94d35c77611fd5788b99d0840cab7d3f8"
 description = "A minimal template for Diamonds EIP-2535."
-requires_yarn = true
+build_system = "yarn"
 
 [projects.lido-core]
 url = "https://github.com/lidofinance/core"
@@ -143,7 +146,7 @@ description = "Modern, opinionated, and gas optimized building blocks for smart 
 url = "https://github.com/paulrberg/prb-math"
 commit = "b21433de7519fe021b176fa0b99dd3b360f28f70"
 description = "Solidity library for advanced fixed-point math operations."
-requires_yarn = true
+build_system = "bun"
 
 [projects.solady]
 url = "https://github.com/Vectorized/solady"
@@ -171,7 +174,7 @@ description = "A decentralized art factory and marketplace. Fork with fixed test
 url = "https://github.com/lens-protocol/core"
 commit = "d4c662aac780e669cd23769730cdc4f0189ee5be"
 description = "Lens protocol, non-custodial social graph."
-requires_yarn = true
+build_system = "npm"
 [projects.lens-core.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
@@ -216,7 +219,7 @@ description = "A new automated market maker protocol."
 url = "https://github.com/beefyfinance/beefy-contracts"
 commit = "a6d9a475e8af7947cd2ca5bec77016bfd92193c2"
 description = "Official url for strategies and vaults from Beefy."
-requires_yarn = true
+build_system = "yarn"
 [projects.beefy.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
@@ -243,7 +246,7 @@ disabled = true # compilation hangs, required to disable fuzzing tests
 url = "https://github.com/lens-protocol/lens-v3"
 commit = "8a71192c9479091f8fc6fff5e17a0a11530ac50d"
 description = "Lens Protocol V3"
-requires_yarn = true
+build_system = "yarn"
 [projects.lens-v3.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
@@ -251,13 +254,12 @@ EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 url = "https://github.com/morpho-org/morpho-blue"
 commit = "57d444d9e243be21a80e8d4bf8794ebce4a089d9"
 description = "Morpho Blue Protocol"
-requires_yarn = true
 
 [projects.aave-v3]
 url = "https://github.com/aave-dao/aave-v3-origin"
 commit = "1e3d70c4151a94166ebc59e2eaa4aff6e6ba6978"
 description = "A non-custodial liquidity protocol on Ethereum."
-requires_yarn = true
+build_system = "npm"
 [projects.aave-v3.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 

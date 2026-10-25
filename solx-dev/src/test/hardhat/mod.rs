@@ -12,11 +12,11 @@ use std::time::Instant;
 use colored::Colorize;
 use itertools::Itertools;
 
+use crate::test::config::build_system::BuildSystem;
 use crate::test::config::compiler::Compiler;
 use crate::test::project_cache::ProjectCache;
 
 use self::config::Config;
-use self::config::project::build_system::BuildSystem;
 use self::output::test::Test as TestOutput;
 
 ///
@@ -78,36 +78,14 @@ pub fn test(
         })
         .collect();
 
-    for build_system in projects
-        .iter()
-        .map(|(_, project)| &project.build_system)
-        .collect::<std::collections::BTreeSet<_>>()
-    {
-        let Some(version) = config.build_systems.get(build_system) else {
-            if *build_system != BuildSystem::Npm {
-                anyhow::bail!("Hardhat test configuration missing `build_systems.{build_system}`");
-            }
-            continue;
-        };
-        let npm_spec = format!("{build_system}@{version}");
-        let mut npm_install_build_system = Command::new("npm");
-        npm_install_build_system.args(["--loglevel", "error"]);
-        npm_install_build_system.arg("--force");
-        npm_install_build_system.arg("--yes");
-        npm_install_build_system.arg("install");
-        npm_install_build_system.arg("--global");
-        npm_install_build_system.arg(&npm_spec);
-        crate::utils::command_with_retries(
-            &mut npm_install_build_system,
-            format!(
-                "{} build system {} for Hardhat projects",
-                solx_utils::cargo_status_ok("Installing"),
-                build_system.to_string().bright_yellow().bold()
-            )
-            .as_str(),
-            16,
-        )?;
-    }
+    BuildSystem::install_globally(
+        projects
+            .iter()
+            .map(|(_, project)| project.build_system)
+            .collect(),
+        &config.build_systems,
+        "Hardhat",
+    )?;
     let node_version = crate::utils::tool_version("node")?;
     let projects_cache = ProjectCache::new(projects_cache_directory.as_path())?;
 
@@ -117,7 +95,6 @@ pub fn test(
         project_directory.push(project_name.as_str());
         let project_directory_str = project_directory.to_string_lossy();
 
-        let build_system = project.build_system.to_string();
         let key_material = project.cache_key_material(
             config
                 .build_systems
@@ -138,62 +115,17 @@ pub fn test(
                 ),
             )?;
 
-            let mut build_system_install_command = Command::new(build_system.as_str());
-            build_system_install_command.current_dir(checkout);
-            match project.build_system {
-                BuildSystem::Npm => {
-                    build_system_install_command.args(["--loglevel", "error"]);
-                    build_system_install_command.arg("--force");
-                    build_system_install_command.arg("--yes");
-                }
-                BuildSystem::Pnpm => {
-                    build_system_install_command.arg("--ignore-scripts");
-                }
-                _ => {}
-            }
-            build_system_install_command.arg("install");
-            crate::utils::command_with_retries(
-                &mut build_system_install_command,
-                format!(
-                    "{} dependencies for Hardhat project {project_name}",
-                    solx_utils::cargo_status_ok("Installing")
-                )
-                .as_str(),
-                16,
+            project.build_system.install_dependencies(
+                checkout,
+                project_name.as_str(),
+                "Hardhat",
             )?;
 
-            let mut dependency_override_command = Command::new(build_system.as_str());
-            dependency_override_command.current_dir(checkout);
-            match project.build_system {
-                BuildSystem::Npm => {
-                    dependency_override_command.args(["--loglevel", "error"]);
-                    dependency_override_command.arg("--force");
-                    dependency_override_command.arg("--yes");
-                }
-                BuildSystem::Yarn => {
-                    dependency_override_command.arg("--silent");
-                }
-                BuildSystem::Pnpm => {
-                    dependency_override_command.arg("--ignore-scripts");
-                }
-                _ => {}
-            }
-            dependency_override_command.arg("install");
-            dependency_override_command.args(project.dependencies.as_slice());
-            dependency_override_command.arg("--save-dev");
-            crate::utils::command_with_retries(
-                &mut dependency_override_command,
-                format!(
-                    "{} dependences with {} for Hardhat project {project_name}",
-                    solx_utils::cargo_status_ok("Overriding"),
-                    project
-                        .dependencies
-                        .iter()
-                        .map(|dependency| dependency.bright_yellow().bold())
-                        .join(", ")
-                )
-                .as_str(),
-                16,
+            project.build_system.add_dev_dependencies(
+                checkout,
+                project.dependencies.as_slice(),
+                project_name.as_str(),
+                "Hardhat",
             )
         };
         let set_up_directory =
