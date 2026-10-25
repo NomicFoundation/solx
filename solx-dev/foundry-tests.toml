@@ -121,12 +121,6 @@ commit = "e9fdadc94d35c77611fd5788b99d0840cab7d3f8"
 description = "A minimal template for Diamonds EIP-2535."
 build_system = "yarn"
 
-[projects.lido-core]
-url = "https://github.com/lidofinance/core"
-commit = "96738395ca3bffd6513700a45d4c9389662c5835"
-description = "Lido DAO smart contracts"
-disabled = true # written in Solidity v0.4
-
 [projects.rollcall]
 url = "https://github.com/withtally/rollcall"
 commit = "f81b68cf02e0a2a8f2d30746cc1e3afd42e8e1eb"
@@ -194,7 +188,6 @@ EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 url = "https://github.com/maple-labs/fixed-term-loan"
 commit = "8fb3675288897cb0b5748a5bbe90a12055bf9fa1"
 description = "A set of contracts to facilitate on-chain loans."
-disabled = true
 
 [projects.forge-std]
 url = "https://github.com/foundry-rs/forge-std"
@@ -240,7 +233,6 @@ url = "https://github.com/ProjectOpenSea/seaport"
 commit = "7f966fe7bd75932beb0366f6485aa720512b1259"
 description = "A marketplace protocol for safely and efficiently buying and selling NFTs."
 category = "huge"
-disabled = true # compilation hangs, required to disable fuzzing tests
 
 [projects.lens-v3]
 url = "https://github.com/lens-protocol/lens-v3"
