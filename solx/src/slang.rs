@@ -6,6 +6,13 @@ use std::io::Write;
 
 use clap::Parser;
 
+/// The allocator, which with `override` and `build.rs` also takes the LLVM and MLIR C++
+/// allocations over from the system. Debug builds keep the system allocator, which the address
+/// sanitizer replaces with its own.
+#[cfg(not(debug_assertions))]
+#[global_allocator]
+static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 ///
 /// The application entry point.
 ///
