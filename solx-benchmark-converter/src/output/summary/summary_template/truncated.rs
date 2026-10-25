@@ -23,9 +23,14 @@ impl<'a, T> Truncated<'a, T> {
     /// the rest as overflow. Callers that want the surviving items to be the
     /// most significant rank the slice before passing it.
     pub fn new(items: &'a [T]) -> Self {
+        Self::with_cap(items, Self::MAX_LISTED)
+    }
+
+    /// Caps a listing at `cap`, for a listing whose cap is its own.
+    pub fn with_cap(items: &'a [T], cap: usize) -> Self {
         Self {
-            shown: &items[..items.len().min(Self::MAX_LISTED)],
-            extra: items.len().saturating_sub(Self::MAX_LISTED),
+            shown: &items[..items.len().min(cap)],
+            extra: items.len().saturating_sub(cap),
         }
     }
 

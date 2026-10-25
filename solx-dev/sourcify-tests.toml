@@ -1,0 +1,29 @@
+# Sourcify sweep configuration for `solx-dev test sourcify`.
+#
+# Corpus:
+#   [corpus]
+#   url = "https://..."             # Release asset unpacking to ./corpus.json + ./contracts/<chain>_<address>.json
+#   sha256 = "..."                  # SHA-256 of the release asset
+#
+# Compilers, as in hardhat-tests.toml: the candidate compiles every contract,
+# the reference re-runs the candidate's failures other than timeouts.
+#   [compilers.<id>]
+#   name = "slang"                  # Name in the report
+#   path = "./path/to/compiler"     # Path to compiler executable
+#   is_correctness_reference = true/false
+#   is_correctness_candidate = true/false
+
+# Every verified Sourcify contract for solc 0.8.34 and 0.8.36 with evmVersion >= cancun.
+[corpus]
+url = "https://github.com/nebasuke/sourcify-corpora/releases/download/sourcify-corpus-solc-0.8.34-0.8.36-20260920/sourcify-corpus-solc-0.8.34-0.8.36-20260920.tar.xz"
+sha256 = "0642e21776808674fb3fc50d352fc666dd7e8d062a322de51d44ab288fd0eb2e"
+
+[compilers.slang]
+name = "slang"
+path = "./target/release/slang"
+is_correctness_candidate = true
+
+[compilers.solx-latest]
+name = "solx-latest"
+path = "./temp-compilers/solx-latest"
+is_correctness_reference = true

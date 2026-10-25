@@ -90,6 +90,44 @@ cargo build --release --bin solx-dev
 
 The test configurations list projects that are cloned and tested automatically. See [foundry-tests.toml](https://github.com/NomicFoundation/solx/blob/main/solx-dev/foundry-tests.toml) and [hardhat-tests.toml](https://github.com/NomicFoundation/solx/blob/main/solx-dev/hardhat-tests.toml) for the full list of tested projects.
 
+## Sourcify Corpus
+
+The Sourcify sweep compiles each contract of a pinned Sourcify corpus with `slang --standard-json`.
+
+When `slang` fails without timing out, the latest solx release compiles the same contract. This tells a `slang` gap apart from input neither compiler accepts.
+
+```shell
+cargo build --release --bin slang --bin solx-dev
+
+# The committed fixtures
+./target/release/solx-dev test sourcify --local-corpus-dir tests/sourcify-sweep/fixtures
+./target/release/solx-dev test sourcify-report --results-path temp-sourcify-reports/results.jsonl
+
+# The first 100 contracts of the pinned corpus
+./target/release/solx-dev test sourcify --limit 100
+
+# One shard of the pinned corpus, as a CI job runs it
+./target/release/solx-dev test sourcify --shard-count 24 --shard-index 0 --memory-limit-mib 6144
+```
+
+[sourcify-tests.toml](https://github.com/NomicFoundation/solx/blob/main/solx-dev/sourcify-tests.toml) pins the corpus release and names the two compilers.
+
+Each contract becomes one standard JSON input:
+
+- its sources inline under their original paths
+- `evmVersion`, `libraries`, `remappings` and `viaIR` passed through verbatim
+- bytecode as the only output
+- every version pragma rewritten to `pragma solidity >=<--solidity-version>;`, so both compilers accept the same input
+
+| Outcome | Meaning |
+|---|---|
+| `ok` | No error diagnostics and bytecode for a contract of the target source |
+| `candidate-fail` | `slang` fails and the latest solx release compiles |
+| `both-fail` | Both fail |
+| `timeout` | `slang` exceeded `--timeout` |
+
+The report ranks failures by normalized diagnostic, with example contracts. CI runs the sweep on every push to `main` and on pull requests labelled `ci:sourcify-sweep`, where the report becomes a pull request comment.
+
 ## Test Collection
 
 This section describes the format of test files used by **solx-tester**.
