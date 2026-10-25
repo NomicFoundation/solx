@@ -121,7 +121,7 @@ config_overlay = "./solx-dev/hardhat-overlays/hardhat-v3.config.ts"
 
 [projects.openzeppelin]
 url = "https://github.com/OpenZeppelin/openzeppelin-contracts"
-commit = "6c2ab375a9c7db0fa8c21fba1ed3b2057f75dd75"
+commit = "b04d141ba4fec9b0f970ce4c7746b0a02e50000b"
 description = "A library for secure smart contract development."
 dependencies = [ "@nomicfoundation/hardhat-slang-solx@3.0.2" ]
 build_profile = "slang-solx"
