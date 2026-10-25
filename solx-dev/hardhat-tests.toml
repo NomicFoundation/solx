@@ -40,8 +40,6 @@
 #   disabled = true/false           # Whether to skip this comparison
 
 [build_systems]
-yarn = "1.22.22"
-pnpm = "12.14.0"
 bun = "1.4.3"
 
 [compilers.solc]
@@ -104,13 +102,6 @@ left = "03.solx-viaIR"
 right = "00.solc-0.8.34-viaIR"
 disabled = false
 
-[projects.hardhat-v2]
-url = "https://github.com/antonbaliasnikov/hardhat-template"
-commit = "05f2ce84c7da0ce4ce986107c15cb7a197e04daf"
-description = "An example Hardhat v2 project with solx support."
-build_system = "bun"
-dependencies = [ "hardhat@2.29.1" ]
-
 [projects.hardhat-v3]
 url = "https://github.com/antonbaliasnikov/solx-hh3"
 commit = "bfe0366f7f5936ec9e5e76fa37fe21d284a53c88"
@@ -128,14 +119,6 @@ build_profile = "slang-solx"
 config_overlay = "./solx-dev/hardhat-overlays/openzeppelin.config.ts"
 [projects.openzeppelin.env]
 COMPILER = "0.8.34"
-
-[projects.zksafe]
-url = "https://github.com/antonbaliasnikov/zksafe"
-commit = "4f2d7db24d114367c32f1f9b6be62ace160edba6"
-description = "A Safe module for privacy of Safe transaction signing."
-build_system = "pnpm"
-[projects.zksafe.env]
-EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
 [projects.ens-contracts]
 url = "https://github.com/antonbaliasnikov/ens-contracts"
