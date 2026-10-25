@@ -102,7 +102,7 @@ disabled = false
 
 [projects.openzeppelin]
 url = "https://github.com/OpenZeppelin/openzeppelin-contracts"
-commit = "b04d141ba4fec9b0f970ce4c7746b0a02e50000b"
+commit = "97430aa29ac10a70ee0c18f2a905c4925363b58f"
 description = "A library for secure smart contract development."
 
 [projects.lil-web3]
@@ -233,6 +233,9 @@ url = "https://github.com/ProjectOpenSea/seaport"
 commit = "7f966fe7bd75932beb0366f6485aa720512b1259"
 description = "A marketplace protocol for safely and efficiently buying and selling NFTs."
 category = "huge"
+disabled = true # a recursive internal dispatch is stack too deep until NomicFoundation/solx#715
+[projects.seaport.env]
+EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
 [projects.lens-v3]
 url = "https://github.com/lens-protocol/lens-v3"
