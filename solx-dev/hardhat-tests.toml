@@ -134,7 +134,6 @@ url = "https://github.com/antonbaliasnikov/zksafe"
 commit = "4f2d7db24d114367c32f1f9b6be62ace160edba6"
 description = "A Safe module for privacy of Safe transaction signing."
 build_system = "pnpm"
-disabled = true # some verification failures
 [projects.zksafe.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
@@ -143,18 +142,4 @@ url = "https://github.com/antonbaliasnikov/ens-contracts"
 commit = "85ddeb9ff8def53e580a1fa70b156fe1c88775da"
 description = "The core contracts of the ENS protocol."
 build_system = "bun"
-disabled = true
-
-[projects.olympus]
-url = "https://github.com/antonbaliasnikov/olympus-contracts"
-commit = "825a5e49ba21c3a15c2335584bb58bd3ced435e7"
-description = "A collection of contracts for Olympus DAO."
-build_system = "yarn"
-disabled = true
-
-[projects.synthetix]
-url = "https://github.com/antonbaliasnikov/synthetix"
-commit = "1609d156708eb77025478cbcd92b98de51faf1e3"
-description = "A crypto-backed synthetic asset platform."
-build_system = "npm"
 disabled = true
