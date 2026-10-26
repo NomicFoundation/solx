@@ -25,4 +25,5 @@ runs:
         components: ${{ inputs.components }}
         cache: false
         rustflags: ""
+        build-warnings: ""
         override: false
