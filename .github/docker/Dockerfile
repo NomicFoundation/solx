@@ -1,5 +1,5 @@
 # CI runner image for solx — replaces the third-party Matter Labs image.
-# Provides system toolchain (compiler, cmake, ninja, LLVM tools, Rust) needed
+# Provides system toolchain (compiler, cmake, ninja, LLVM tools, rustup) needed
 # to build the custom LLVM EVM backend and solx itself inside CI jobs.
 #
 # The custom LLVM 21.1 backend is NOT baked into this image — it is built from
@@ -11,8 +11,8 @@
 #   dev  — devcontainer additions on base (non-root user, shared rustup).
 #          Built locally by .devcontainer/devcontainer.json (`target: dev`),
 #          so it needs no access to the private published image.
-#   ci   — CI-only tooling on base (rustup and cargo tools, valgrind for solx-llvm
-#          regression tests, cargo coverage/report tools). Must stay the final
+#   ci   — CI-only tooling on base (rustup, valgrind for solx-llvm regression
+#          tests, cargo coverage/report tools). Must stay the final
 #          stage: docker-ci-image.yaml publishes the default target.
 
 FROM ubuntu:26.04@sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b1115fb944 AS base
@@ -54,8 +54,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # llvm-cov / llvm-profdata must read the profraw format emitted by
 # instrumented Rust binaries, and the coverage LLVM built with this clang
 # links its profile runtime into the same binary. Keep the major equal to
-# rustc's embedded LLVM (rustc 1.99.1: LLVM 23); the coverage job fails with
-# both versions named when they diverge.
+# rustc's embedded LLVM.
 # clang-format/clang-tidy (and python3-venv/psutil above) are not used by solx
 # itself; they serve solx-llvm's regression CI, which runs in this image.
 RUN curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
@@ -175,9 +174,9 @@ RUN curl -fsSL -o valgrind-${VALGRIND_VERSION}.tar.bz2 \
     && cd valgrind-${VALGRIND_VERSION} && ./configure && make -j"$(nproc)" && make install \
     && cd .. && rm -rf valgrind-${VALGRIND_VERSION}.tar.bz2 valgrind-${VALGRIND_VERSION}
 
-# ── Rust: rustup and cargo tools, no toolchain ──────────────────────────────
+# ── Rust: rustup and cargo tools ────────────────────────────────────────────
 # Container jobs run with HOME=/github/home, where rustup installs the
-# toolchain rust-toolchain.toml pins, so a toolchain here would never be used.
+# toolchain rust-toolchain.toml pins.
 # RUST_VERSION only builds the tools below; raise it when one needs a newer
 # rustc. Lives in ci, not base: the dev stage ships its own shared rustup.
 # When updating tool versions here, also update the matching pins in:
@@ -194,14 +193,18 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         --locked \
     && rustup default none \
     && rustup toolchain uninstall "${RUST_VERSION}" \
-    && rm -rf "$HOME/.cargo/registry" "$HOME/.cargo/git"
+    && rm -rf "$HOME/.cargo/registry"
 
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Smoke-test: ensure key tools are on PATH
 RUN set -eux \
     && rustup --version \
-    && command -v cargo2junit cargo-llvm-cov cargo-udeps \
+    && command -v cargo2junit \
+    && command -v cargo-llvm-cov \
+    && command -v cargo-udeps \
+    && test -f /root/.cargo/.crates2.json \
+    && hyperfine --version \
     && cmake --version \
     && ninja --version \
     && clang --version \
