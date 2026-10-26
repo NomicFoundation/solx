@@ -7,7 +7,6 @@
 use std::collections::BTreeMap;
 
 use slang_solidity_v2::compilation::CompilationUnit;
-use slang_solidity_v2::utils::LanguageVersion;
 
 use solx_utils::EVMVersion;
 
@@ -28,19 +27,17 @@ pub struct Metadata<'input> {
 
 impl<'input> Metadata<'input> {
     /// Collects the settings of `input_settings` that change what the frontend produces, with the
-    /// EVM and language versions resolved.
+    /// EVM version resolved and the language version `unit` is compiled as.
     pub fn new(
         unit: &'input CompilationUnit,
         input_sources: &'input BTreeMap<String, solx_standard_json::InputSource>,
         input_settings: &solx_standard_json::InputSettings,
         evm_version: EVMVersion,
-        language_version: LanguageVersion,
     ) -> Self {
         let mut metadata = serde_json::Map::new();
         metadata.insert(
             "bytecodeHash".to_owned(),
-            serde_json::to_value(input_settings.metadata.bytecode_hash)
-                .expect("a hash type serializes to a string"),
+            input_settings.metadata.bytecode_hash.to_string().into(),
         );
         if !input_settings.metadata.append_cbor {
             metadata.insert("appendCBOR".to_owned(), false.into());
@@ -54,9 +51,12 @@ impl<'input> Metadata<'input> {
             .as_inner()
             .iter()
             .flat_map(|(path, libraries)| {
-                libraries
-                    .iter()
-                    .map(move |(name, address)| (format!("{path}:{name}"), address.as_str().into()))
+                libraries.iter().map(move |(name, address)| {
+                    (
+                        solx_utils::ContractName::full_path(path, name),
+                        address.as_str().into(),
+                    )
+                })
             })
             .collect::<serde_json::Map<_, _>>();
 
@@ -71,7 +71,9 @@ impl<'input> Metadata<'input> {
         settings.insert("evmVersion".to_owned(), evm_version.to_string().into());
         settings.insert(
             "solidityVersion".to_owned(),
-            semver::Version::from(language_version).to_string().into(),
+            semver::Version::from(unit.language_version())
+                .to_string()
+                .into(),
         );
         settings.insert("libraries".to_owned(), libraries.into());
         settings.insert("metadata".to_owned(), metadata.into());
@@ -95,16 +97,22 @@ impl<'input> Metadata<'input> {
             .expect("Slang computes the dependencies of every file of the unit")
             .iter()
             .map(|dependency| {
-                let content = self
+                let input_source = self
                     .input_sources
                     .get(dependency.as_str())
-                    .and_then(solx_standard_json::InputSource::content)
-                    .expect("every file of the unit is an input source with content");
-                let keccak256 = solx_utils::Keccak256Hash::from_slice(content.as_bytes());
+                    .expect("every file of the unit is an input source");
+                let keccak256 = input_source
+                    .keccak256()
+                    .expect("every file of the unit has content");
                 let source = if self.use_literal_content {
+                    let content = input_source
+                        .content()
+                        .expect("every file of the unit has content");
                     serde_json::json!({ "keccak256": keccak256.as_str(), "content": content })
                 } else {
-                    let ipfs = solx_utils::IPFSHash::from_slice(content.as_bytes());
+                    let ipfs = input_source
+                        .ipfs()
+                        .expect("every file of the unit has content");
                     serde_json::json!({
                         "keccak256": keccak256.as_str(),
                         "urls": [format!("dweb:/ipfs/{}", ipfs.as_base58())],

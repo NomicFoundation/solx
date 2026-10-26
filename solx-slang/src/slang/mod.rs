@@ -226,7 +226,6 @@ impl Slang {
                 &input_json.sources,
                 &input_json.settings,
                 evm_version,
-                language_version,
             ),
         };
         scope.compilation_unit(&unit, &mut output)?;

@@ -51,10 +51,12 @@ impl<'a> Metadata<'a> {
             .expect("Always valid");
         settings.insert(
             "optimizer".to_owned(),
-            serde_json::json!({
-                "mode": self.optimizer_settings.middle_end_as_char().to_string(),
-                "sizeFallback": self.optimizer_settings.is_fallback_to_size_enabled(),
-            }),
+            serde_json::to_value(solx_standard_json::InputOptimizer {
+                enabled: None,
+                mode: Some(self.optimizer_settings.middle_end_as_char()),
+                size_fallback: Some(self.optimizer_settings.is_fallback_to_size_enabled()),
+            })
+            .expect("Always valid"),
         );
         if !self.llvm_options.is_empty() {
             settings.insert("llvmOptions".to_owned(), self.llvm_options.into());
