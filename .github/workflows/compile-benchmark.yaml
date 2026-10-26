@@ -164,8 +164,9 @@ jobs:
           apt-get update -qq
           apt-get install -y hyperfine
 
-      # A sweep is ~5 s per binary. ENS compiles in ~0.5 s and single runs
-      # spike by up to 8%, so it takes 10 runs to keep one spike from showing.
+      # The fixtures over 2 MB take most of a sweep and run 3 times. ENS compiles
+      # in ~0.5 s and single runs spike by up to 8%, so the rest take 10 runs to
+      # keep one spike from showing.
       - name: Run benchmark
         env:
           RUNNER_NAME: ${{ runner.name }}

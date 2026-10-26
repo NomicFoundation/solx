@@ -21,45 +21,36 @@ relative column in the report.
 
 ## Fixtures
 
-The fixtures are the exact standard-JSON inputs the compiler receives from Hardhat,
-captured by the hardhat repo's `bench:dump-standard-json` (the solx
-regression benchmark's "Dump solx standard JSON" step) and vendored here in
-the corpus layout `fixtures/<scenario>/<variant>.json`. `fixtures/manifest.json`
-is the dump's provenance record (per-file sha256, hardhat commit, CI run URL,
-scenario repo+commit pins) — it describes the full corpus, of which this
-directory vendors the legacy-DWARF subset:
+The fixtures are the exact standard-JSON inputs slang receives from Hardhat in the
+scenarios of the hardhat repo's slang regression benchmark, one file per compilation
+job, captured by `bench:dump-standard-json --compiler slang`. A full dispatch of the
+"Slang Regression Benchmark" workflow uploads them as the `slang-standard-json`
+artifact; refresh by copying that artifact over `fixtures/`. `fixtures/manifest.json`
+is the dump's provenance record: hardhat commit, run URL, scenario repo and commit
+pins, per-file sha256, and the env vars each scenario compiles with, which `run.sh`
+sets because standard JSON has no field for them.
 
-| fixture | contracts | notes |
-|---|---|---|
-| `ens-verifiable-factory-solx/solx-legacy-dwarf.json` | 52 | |
-| `openzeppelin-contracts-0.34/solx-legacy-dwarf.json` | 422 | the heavy cell (~50 s/compile on the CI runner) |
-| `uniswap-v4-core-solx/solx-legacy-dwarf.json` | 157 | |
+| scenario | jobs | contracts | notes |
+|---|---|---|---|
+| `1inch-aqua-solx` | 1 | 57 | |
+| `aave-v4-solx` | 3 | 211 | src only; `EVM_DISABLE_MEMORY_SAFE_ASM_CHECK` |
+| `ens-verifiable-factory-solx` | 1 | 62 | |
+| `graph-horizon-solx` | 1 | 253 | `EVM_DISABLE_MEMORY_SAFE_ASM_CHECK` |
+| `lidofinance-core-solx` | 2 | 166 | src only; `EVM_DISABLE_MEMORY_SAFE_ASM_CHECK` |
+| `openzeppelin-contracts-0.34` | 1 | 841 | |
+| `solady-solx` | 1 | 314 | |
+| `uniswap-v4-core-solx` | 1 | 174 | |
 
-These compile with production settings — optimizer enabled and DWARF debug
-info — unlike hand-packed inputs, so timings here are comparable to what the
-Hardhat solx benchmark measures (minus Hardhat's own overhead).
+These compile with the settings Hardhat ships (optimizer enabled, DWARF debug info,
+debug symbols), so timings here are comparable to what the Hardhat slang benchmark
+measures, minus Hardhat's own overhead.
 
-Not yet vendored: `aave-v4-solx` — its profile compiles through multiple
-per-file-override jobs that all overwrite the same `SLANG_STANDARD_JSON_DEBUG`
-path, so which job the dump captures is machine-dependent; it returns once
-the hardhat-side dump captures every job. Note its dumps require
-`EVM_DISABLE_MEMORY_SAFE_ASM_CHECK=1` to compile (scenario-level env in the
-hardhat benchmark; env vars are not part of standard JSON) — the validation
-pass in `run.sh` fails loudly if a fixture needs an env var it doesn't get.
-
-Long-term, the corpus is published by the hardhat workflow to
-`nomic-foundation-automation/hardhat-benchmark-results` under `solx-corpus/`
-(main runs only); once populated, refresh by copying from a pinned commit of
-that repo instead of a CI artifact.
-
-Env vars a fixture compiles with (standard JSON has no field for them) come
-from its scenario's `compilerEnv` in `manifest.json`. Fixtures over 2 MB are
-timed `--large-runs` times (default 3) instead of `--runs`.
+Fixtures over 2 MB are timed `--large-runs` times (default 3) instead of `--runs`.
 
 ## Extending
 
 - **More fixtures**: drop any valid standard-JSON input into a
-  `fixtures/<name>/` subdirectory; `run.sh` picks up every
-  `fixtures/*/*.json`. The per-binary validation pass rejects fixtures that
+  `fixtures/<name>/` subdirectory and add `<name>` under `scenarios` in
+  `manifest.json`; `run.sh` picks up every `fixtures/*/*.json`. The per-binary validation pass rejects fixtures that
   don't compile clean (the standard-JSON protocol reports errors inside the
   JSON with exit code 0, so hyperfine alone would silently time failures).
