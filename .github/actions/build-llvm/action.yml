@@ -102,6 +102,9 @@ runs:
         [ '${{ inputs.enable-tests }}' = 'true' ] && KEY="${KEY}-tests"
         KEY="${KEY}-dev${DEV_HASH}-${SHA}"
         [ -n '${{ steps.msys-toolchain.outputs.hash }}' ] && KEY="${KEY}-msys${{ steps.msys-toolchain.outputs.hash }}"
+        # Linux builds with the runner image's clang, whose profile runtime
+        # must match rustc's for coverage.
+        [ '${{ runner.os }}' = 'Linux' ] && KEY="${KEY}-clang$(clang -dumpversion | cut -d. -f1)"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
     - name: Mirror LLVM from sibling checkout
