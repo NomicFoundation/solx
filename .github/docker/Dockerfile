@@ -183,7 +183,7 @@ RUN curl -fsSL -o valgrind-${VALGRIND_VERSION}.tar.bz2 \
 # (build-rust, rust-unit-tests). On a bump, re-check the LLVM section
 # comment in base (rustc's embedded LLVM major moves).
 # renovate: datasource=rust-version depName=rust
-ARG RUST_VERSION=1.98.1
+ARG RUST_VERSION=1.99.1
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         | sh -s -- -y --default-toolchain "${RUST_VERSION}" --profile default \
     && . "$HOME/.cargo/env" \
