@@ -24,13 +24,13 @@ jobs:
       && (github.event.action != 'labeled'
         || contains(fromJSON('["ci:integration", "ci:integration-benchmark-full"]'), github.event.label.name))
       && !github.event.pull_request.head.repo.fork
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - run: 'true'
 
   cooldown-check:
     name: Cargo cooldown check
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: label-check
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

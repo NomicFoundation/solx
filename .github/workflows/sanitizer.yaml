@@ -22,13 +22,13 @@ jobs:
     if: >-
       contains(github.event.pull_request.labels.*.name, 'ci:sanitizer')
       && !github.event.pull_request.head.repo.fork
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - run: 'true'
 
   changes:
     needs: label-check
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     outputs:
@@ -44,7 +44,7 @@ jobs:
 
   cooldown-check:
     name: Cargo cooldown check
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: [label-check, changes]
     # A custom if: overrides the implicit skip cascade from needs
     # (actions/runner#491), so the label gate must be restated here.
@@ -123,7 +123,7 @@ jobs:
 
   pr-checks:
     name: PR Checks (Sanitizer)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     if: always()
     needs:
       - label-check
