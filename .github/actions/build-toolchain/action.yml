@@ -13,6 +13,10 @@ inputs:
     description: Whether to build LLVM
     required: false
     default: 'true'
+  refresh-ccache:
+    description: Passed to build-llvm
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -40,6 +44,7 @@ runs:
         build-type: RelWithDebInfo
         enable-assertions: 'true'
         enable-utils: 'true'
+        refresh-ccache: ${{ inputs.refresh-ccache }}
 
     # Fresh llvm-sys objects under MSYS2 GCC 16 cannot link against the
     # static libstdc++.a that solx-dev bundles into the LLVM tree; dropping

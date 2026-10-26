@@ -97,6 +97,10 @@ jobs:
   cargo-checks:
     needs: changes
     if: needs.changes.outputs.code == 'true'
+    permissions:
+      actions: read
+      contents: read
+      packages: read
     runs-on: ubuntu-26.04
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:7cc8aba2983f6feb71f046876611b48e9649e72acdfcdbcad756e2030c3a356a
@@ -185,6 +189,7 @@ jobs:
     needs: [changes, cooldown-check]
     # checks: write for the rust-unit-tests action's test-results check run.
     permissions:
+      actions: read
       contents: read
       checks: write
       packages: read

@@ -5,8 +5,8 @@ name: 'Build LLVM'
 description: 'Builds backend LLVM framework'
 outputs:
   cache-hit:
-    description: 'Whether the LLVM artifacts were reused, from the cache or a sibling mirror, and no build ran'
-    value: ${{ steps.llvm-artifact-cache.outputs.cache-hit || steps.llvm-mirror.outputs.mirrored }}
+    description: 'Whether the LLVM artifacts were reused, from the cache, a trusted artifact or a sibling mirror, and no build ran'
+    value: ${{ steps.llvm-plan.outputs.build != 'true' }}
   cache-key:
     description: 'Artifact cache key; a sibling invocation''s `mirror-key`'
     value: ${{ steps.llvm-cache.outputs.key }}
@@ -66,6 +66,12 @@ inputs:
       When disabled, `cache-hit` reports a mirror hit or nothing at all.
     required: false
     default: 'true'
+  refresh-ccache:
+    description: >-
+      Build with ccache even when the artifacts are reused, unless a main run
+      already built this key with ccache.
+    required: false
+    default: 'false'
 
 runs:
   using: "composite"
@@ -129,15 +135,76 @@ runs:
         path: ${{ inputs.working-dir != '.' && format('{0}/target-llvm/target-final', inputs.working-dir) || 'target-llvm/target-final' }}
         key: ${{ steps.llvm-cache.outputs.key }}
 
+    # Accept only artifacts built from reviewed code: merge-queue runs, and main runs of this repository.
+    - name: Look up trusted LLVM artifact
+      if: inputs.enable-artifact-cache == 'true' && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
+      id: llvm-artifact-lookup
+      continue-on-error: true
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        KEY: ${{ steps.llvm-cache.outputs.key }}
+      run: |
+        api() { curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/$1"; }
+        for RUN_ID in $(api "actions/artifacts?name=${KEY}&per_page=20" | jq -r '.artifacts[] | select(.expired | not) | .workflow_run.id'); do
+          RUN=$(api "actions/runs/${RUN_ID}")
+          if jq -e --argjson repo "${GITHUB_REPOSITORY_ID}" '.head_repository.id == $repo and (.event == "merge_group" or (.head_branch == "main" and (.event | IN("push", "schedule", "workflow_dispatch"))))' <<<"${RUN}" >/dev/null; then
+            echo "run-id=${RUN_ID}" | tee -a "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          echo "Skipping the artifact of run ${RUN_ID}: $(jq -r '.event + " on " + .head_branch' <<<"${RUN}")"
+        done
+
+    - name: Download LLVM artifact
+      if: steps.llvm-artifact-lookup.outputs.run-id != ''
+      id: llvm-artifact-download
+      continue-on-error: true
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        name: ${{ steps.llvm-cache.outputs.key }}
+        run-id: ${{ steps.llvm-artifact-lookup.outputs.run-id }}
+        github-token: ${{ github.token }}
+        path: ${{ inputs.working-dir != '.' && format('{0}/', inputs.working-dir) || '' }}target-llvm/artifact-download
+
+    # Archive paths stay relative: tar reads the `D:` of a Windows path as a remote host.
+    - name: Unpack LLVM artifact
+      if: steps.llvm-artifact-download.outcome == 'success'
+      id: llvm-artifact-unpack
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      working-directory: ${{ inputs.working-dir }}
+      run: |
+        if tar -xf target-llvm/artifact-download/llvm.tar -C target-llvm; then
+          echo "unpacked=true" | tee -a "${GITHUB_OUTPUT}"
+        else
+          rm -rf target-llvm/target-final
+        fi
+        rm -rf target-llvm/artifact-download
+
+    - name: Look up ccache stamp
+      if: inputs.refresh-ccache == 'true' && steps.llvm-cache.outputs.key != ''
+      id: ccache-stamp
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/llvm-ccache-stamp
+        key: llvm-ccache-stamp-${{ steps.llvm-cache.outputs.key }}
+        lookup-only: true
+
+    - name: Decide whether to build LLVM
+      id: llvm-plan
+      shell: bash
+      run: |
+        echo "reused=${{ steps.llvm-artifact-cache.outputs.cache-hit == 'true' || steps.llvm-mirror.outputs.mirrored == 'true' || steps.llvm-artifact-unpack.outputs.unpacked == 'true' }}" | tee -a "${GITHUB_OUTPUT}"
+        echo "build=${{ !(steps.llvm-artifact-cache.outputs.cache-hit == 'true' || steps.llvm-mirror.outputs.mirrored == 'true' || steps.llvm-artifact-unpack.outputs.unpacked == 'true') || (inputs.refresh-ccache == 'true' && steps.ccache-stamp.outputs.cache-hit != 'true') }}" | tee -a "${GITHUB_OUTPUT}"
+
     # Ninja build tool is not available on MacOS x64 runners by default. See:
     # https://github.com/actions/runner-images/issues/514
     - name: Install Ninja on MacOS x64
-      if: runner.os == 'macOS' && runner.arch == 'X64' && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
+      if: runner.os == 'macOS' && runner.arch == 'X64' && steps.llvm-plan.outputs.build == 'true'
       shell: 'bash'
       run: HOMEBREW_NO_AUTO_UPDATE=1 brew install ninja
 
     - name: Install LLVM builder
-      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
+      if: steps.llvm-plan.outputs.build == 'true'
       working-directory: ${{ inputs.working-dir }}
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       env:
@@ -145,10 +212,10 @@ runs:
       run: ${SFW_PREFIX:-} cargo fetch --locked && ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-dev
 
     # ccache is layered behind the SHA-keyed artifact cache: it only runs on
-    # artifact-cache miss (i.e. submodule bump) and provides object-level reuse
-    # across neighbouring solx-llvm commits.
+    # artifact-cache miss (i.e. submodule bump) or a ccache refresh, and
+    # provides object-level reuse across neighbouring solx-llvm commits.
     - name: Define ccache key
-      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
+      if: steps.llvm-plan.outputs.build == 'true'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       id: ccache-key
       run: |
@@ -172,7 +239,7 @@ runs:
     # The solx-ci-runner container doesn't ship sudo (steps run as root), so
     # we invoke apt-get directly. `-qq` silences routine output.
     - name: Prepare ccache installation
-      if: runner.os == 'Linux' && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
+      if: runner.os == 'Linux' && steps.llvm-plan.outputs.build == 'true'
       shell: 'bash'
       run: apt-get update -qq
 
@@ -182,7 +249,7 @@ runs:
     # KEEP-IN-SYNC with CCACHE_* env on Build LLVM and Show ccache stats steps
     # (GHA composite actions don't support YAML anchors).
     - name: Set up compiler cache
-      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
+      if: steps.llvm-plan.outputs.build == 'true'
       uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
       env:
         CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
@@ -198,7 +265,7 @@ runs:
         save: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Build LLVM
-      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
+      if: steps.llvm-plan.outputs.build == 'true'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       working-directory: ${{ inputs.working-dir }}
       env:
@@ -243,7 +310,7 @@ runs:
     # `continue-on-error` keeps a failing ccache install (→ ccache not on PATH)
     # from masking the real Build LLVM failure in the step summary.
     - name: Show ccache stats
-      if: always() && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
+      if: always() && steps.llvm-plan.outputs.build == 'true'
       continue-on-error: true
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       env:
@@ -259,3 +326,41 @@ runs:
       with:
         path: ${{ inputs.working-dir != '.' && format('{0}/target-llvm/target-final', inputs.working-dir) || 'target-llvm/target-final' }}
         key: ${{ steps.llvm-cache.outputs.key }}
+
+    # Cache Warmup's `refresh-ccache` looks this up to tell whether main's ccache covers the key.
+    - name: Write ccache stamp
+      if: steps.llvm-plan.outputs.build == 'true' && github.ref == 'refs/heads/main' && steps.llvm-cache.outputs.key != ''
+      shell: bash
+      run: |
+        mkdir -p '${{ runner.temp }}/llvm-ccache-stamp'
+        touch '${{ runner.temp }}/llvm-ccache-stamp/stamp'
+
+    - name: Save ccache stamp
+      if: steps.llvm-plan.outputs.build == 'true' && github.ref == 'refs/heads/main' && steps.llvm-cache.outputs.key != ''
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/llvm-ccache-stamp
+        key: llvm-ccache-stamp-${{ steps.llvm-cache.outputs.key }}
+
+    # upload-artifact zips without file modes, so the tree travels as a tar.
+    - name: Pack LLVM artifact
+      if: inputs.enable-artifact-cache == 'true' && steps.llvm-plan.outputs.reused != 'true' && (github.event_name == 'merge_group' || github.ref == 'refs/heads/main')
+      id: llvm-artifact-pack
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      working-directory: ${{ inputs.working-dir }}
+      run: tar -cf target-llvm/llvm.tar -C target-llvm target-final
+
+    - name: Upload LLVM artifact
+      if: steps.llvm-artifact-pack.outcome == 'success'
+      continue-on-error: true
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ${{ steps.llvm-cache.outputs.key }}
+        path: ${{ inputs.working-dir != '.' && format('{0}/', inputs.working-dir) || '' }}target-llvm/llvm.tar
+        retention-days: 7
+
+    - name: Remove LLVM artifact archive
+      if: always() && steps.llvm-artifact-pack.outcome != 'skipped'
+      shell: bash
+      working-directory: ${{ inputs.working-dir }}
+      run: rm -f target-llvm/llvm.tar
