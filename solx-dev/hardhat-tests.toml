@@ -25,7 +25,7 @@
 #   url = "https://github.com/..."  # Git repository URL
 #   commit = "abc123..."            # Git commit SHA to pin (optional, HEAD if omitted)
 #   description = "..."             # Project description
-#   build_system = "npm"            # npm, yarn, pnpm, or bun (default: npm)
+#   build_system = "npm"            # npm, yarn, pnpm, or bun, installing from the lockfile if present (default: npm)
 #   dependencies = ["pkg@version"]  # Additional npm dependencies to install
 #   build_profile = "..."           # Build profile solx toolchains compile and test with
 #   config_overlay = "./path.ts"    # Installed as hardhat.config.ts; imports the project's config as hardhat.config.base.<ext>
@@ -40,8 +40,6 @@
 #   disabled = true/false           # Whether to skip this comparison
 
 [build_systems]
-yarn = "1.22.22"
-pnpm = "12.14.0"
 bun = "1.4.3"
 
 [compilers.solc]
@@ -104,13 +102,6 @@ left = "03.solx-viaIR"
 right = "00.solc-0.8.34-viaIR"
 disabled = false
 
-[projects.hardhat-v2]
-url = "https://github.com/antonbaliasnikov/hardhat-template"
-commit = "05f2ce84c7da0ce4ce986107c15cb7a197e04daf"
-description = "An example Hardhat v2 project with solx support."
-build_system = "bun"
-dependencies = [ "hardhat@2.29.1" ]
-
 [projects.hardhat-v3]
 url = "https://github.com/antonbaliasnikov/solx-hh3"
 commit = "bfe0366f7f5936ec9e5e76fa37fe21d284a53c88"
@@ -121,7 +112,7 @@ config_overlay = "./solx-dev/hardhat-overlays/hardhat-v3.config.ts"
 
 [projects.openzeppelin]
 url = "https://github.com/OpenZeppelin/openzeppelin-contracts"
-commit = "6c2ab375a9c7db0fa8c21fba1ed3b2057f75dd75"
+commit = "b04d141ba4fec9b0f970ce4c7746b0a02e50000b"
 description = "A library for secure smart contract development."
 dependencies = [ "@nomicfoundation/hardhat-slang-solx@3.0.2" ]
 build_profile = "slang-solx"
@@ -129,32 +120,9 @@ config_overlay = "./solx-dev/hardhat-overlays/openzeppelin.config.ts"
 [projects.openzeppelin.env]
 COMPILER = "0.8.34"
 
-[projects.zksafe]
-url = "https://github.com/antonbaliasnikov/zksafe"
-commit = "4f2d7db24d114367c32f1f9b6be62ace160edba6"
-description = "A Safe module for privacy of Safe transaction signing."
-build_system = "pnpm"
-disabled = true # some verification failures
-[projects.zksafe.env]
-EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
-
 [projects.ens-contracts]
 url = "https://github.com/antonbaliasnikov/ens-contracts"
 commit = "85ddeb9ff8def53e580a1fa70b156fe1c88775da"
 description = "The core contracts of the ENS protocol."
 build_system = "bun"
-disabled = true
-
-[projects.olympus]
-url = "https://github.com/antonbaliasnikov/olympus-contracts"
-commit = "825a5e49ba21c3a15c2335584bb58bd3ced435e7"
-description = "A collection of contracts for Olympus DAO."
-build_system = "yarn"
-disabled = true
-
-[projects.synthetix]
-url = "https://github.com/antonbaliasnikov/synthetix"
-commit = "1609d156708eb77025478cbcd92b98de51faf1e3"
-description = "A crypto-backed synthetic asset platform."
-build_system = "npm"
 disabled = true

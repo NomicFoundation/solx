@@ -96,16 +96,10 @@
       "enabled": false
     },
     {
-      "description": "Pin yarn to 1.x (Classic). Yarn 2+ (Berry) is a different product and the Hardhat/Foundry fixtures we run use Yarn 1 semantics; never auto-bump across that line.",
+      "description": "Pin yarn to 1.x (Classic). Yarn 2+ (Berry) is a different product and the Foundry fixtures we run use Yarn 1 semantics; never auto-bump across that line.",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["yarn"],
       "allowedVersions": "<2"
-    },
-    {
-      "description": "The `hardhat@x.y.z` entries in solx-dev/hardhat-tests.toml are pinned Hardhat v2 fixtures; don't bump them across the v2→v3 line.",
-      "matchManagers": ["custom.regex"],
-      "matchDepNames": ["hardhat"],
-      "allowedVersions": "<3"
     },
     {
       "description": "These pins feed the integration harness; label so the gated suite runs.",
