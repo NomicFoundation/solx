@@ -24,7 +24,7 @@ defaults:
 jobs:
 
   changes:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     outputs:
@@ -40,7 +40,7 @@ jobs:
 
   cooldown-check:
     name: Cargo cooldown check
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: changes
     # On workflow_dispatch the filter sees only the last commit.
     if: >-

@@ -71,7 +71,7 @@ jobs:
           && !github.event.pull_request.head.repo.fork)
     permissions:
       contents: read
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - run: 'true'
 
@@ -82,7 +82,7 @@ jobs:
     name: Cargo cooldown check
     permissions:
       contents: read
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: [label-check]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -99,7 +99,7 @@ jobs:
     needs: [label-check]
     permissions:
       contents: read
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       matrix: ${{ steps.prepare-matrix.outputs.matrix }}
       prerelease-suffix: ${{ steps.prerelease-suffix.outputs.prerelease-suffix }}
@@ -222,7 +222,7 @@ jobs:
     needs: [label-check]
     permissions:
       contents: read
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       tag: ${{ steps.latest_release.outputs.tag }}
     steps:
@@ -257,7 +257,7 @@ jobs:
       contents: read
       packages: read
     name: Prepare release bundle
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
     needs: [prepare-matrix, build]
@@ -369,7 +369,7 @@ jobs:
     name: Review release bundle
     needs: [prepare]
     if: "!cancelled() && needs.prepare.result == 'success'"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
 
       - name: Download release bundle
@@ -432,7 +432,7 @@ jobs:
 
   notify-deploy:
     name: Notify pre-deploy to Slack
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: [prepare, review, cooldown-check]
     if: >-
       !cancelled()
@@ -511,7 +511,7 @@ jobs:
       && needs.cooldown-check.result == 'success'
     # Only tag releases require the manual approval gate; pre-releases publish unattended.
     environment: ${{ github.ref_type == 'tag' && 'solx-release' || '' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
 
       - name: Notify deployment approved to Slack

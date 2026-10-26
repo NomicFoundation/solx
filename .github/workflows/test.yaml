@@ -20,7 +20,7 @@ jobs:
 
   # Detect whether code (non-doc) files changed
   changes:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     outputs:
@@ -72,7 +72,7 @@ jobs:
   validate-devcontainer:
     needs: changes
     if: needs.changes.outputs.devcontainer == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
 
       - name: Checkout source
@@ -97,7 +97,7 @@ jobs:
   cargo-checks:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:cd5a37f2630fdf1898ddb2ca11f8c2ecc4d572c60011fe923b27b1625f92ba15
       # Host tooling bind-mounted so the free-disk-space-linux action can reclaim
@@ -138,7 +138,7 @@ jobs:
 
   cooldown-check:
     name: Cargo cooldown check
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: changes
     if: >-
       needs.changes.outputs.code == 'true'
@@ -151,7 +151,7 @@ jobs:
 
   renovate-config-check:
     name: Renovate config check
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: changes
     if: needs.changes.outputs.code == 'true'
     permissions:
@@ -297,7 +297,7 @@ jobs:
 
   actionlint:
     name: Lint GitHub Actions workflows
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
@@ -315,7 +315,7 @@ jobs:
 
   zizmor:
     name: Audit GitHub Actions security (zizmor)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
@@ -333,7 +333,7 @@ jobs:
 
   pr-checks:
     name: PR Checks (Tests)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     if: always()
     needs:
       - changes
