@@ -2,8 +2,7 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended",
-    "customManagers:githubActionsVersions",
-    "customManagers:dockerfileVersions"
+    "customManagers:githubActionsVersions"
   ],
   "timezone": "UTC",
   "schedule": ["before 9am on Monday"],
@@ -122,6 +121,7 @@
     },
     {
       "description": "The integration harness builds solx with this toolchain; label so the gated suite runs.",
+      "matchManagers": ["rust-toolchain"],
       "matchFileNames": ["rust-toolchain.toml"],
       "addLabels": ["ci:integration"]
     },
