@@ -38,7 +38,7 @@ fn link_mimalloc() {
 ///
 fn link_windows_new_delete() {
     let mimalloc_include =
-        std::env::var("DEP_MIMALLOC_INCLUDE_DIR").expect("Always set by libmimalloc-sys");
+        std::env::var("DEP_MIMALLOC_INCLUDE").expect("Always set by mimalloc-sys");
     cc::Build::new()
         .cpp(true)
         .file("allocator_windows.cpp")

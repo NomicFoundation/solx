@@ -17,8 +17,8 @@ serde.workspace = true
 serde_json.workspace = true
 semver.workspace = true
 libc = "0.2"
-libmimalloc-sys = "0.1"
-mimalloc = { version = "0.1", features = ["override"] }
+mimalloc = { git = "https://github.com/microsoft/mimalloc", tag = "v3.6.0", features = ["override"] }
+mimalloc-sys = { git = "https://github.com/microsoft/mimalloc", tag = "v3.6.0" }
 
 solx-core = { path = "../solx-core" }
 solx-slang = { path = "../solx-slang" }
@@ -27,7 +27,7 @@ solx-utils = { path = "../solx-utils" }
 
 [package.metadata.cargo-udeps.ignore]
 # Used by release builds and build.rs, which debug builds skip.
-normal = ["libmimalloc-sys", "mimalloc"]
+normal = ["mimalloc-sys", "mimalloc"]
 
 [build-dependencies]
 cc = "1.2.60"
