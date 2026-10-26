@@ -122,6 +122,20 @@ pub fn test(
                     project_name.bright_white().bold()
                 ),
             )?;
+            if let Some(patch) = project.patch.as_deref() {
+                let mut git_apply_command = Command::new("git");
+                git_apply_command.args(["-C", &*checkout_str, "apply"]);
+                git_apply_command.arg(crate::utils::absolute_path(patch)?);
+                crate::utils::command(
+                    &mut git_apply_command,
+                    format!(
+                        "{} Foundry project {}",
+                        solx_utils::cargo_status_ok("Patching"),
+                        project_name.bright_white().bold()
+                    )
+                    .as_str(),
+                )?;
+            }
             if project.requires_yarn {
                 let mut yarn_install_command = Command::new(build_system);
                 yarn_install_command.args(["--cwd", &*checkout_str]);

@@ -1,0 +1,27 @@
+ERC6551Test draws its owner and its unauthorized caller with _randomNonZeroAddress(), whose
+generator hashes the free memory pointer slot at 0x40, so every draw depends on how much memory
+the compiled code has reserved. With the current memory layout the unauthorized caller happens to
+equal the owner and the expected revert never comes. Both are drawn as unique addresses instead.
+
+diff --git a/test/ERC6551.t.sol b/test/ERC6551.t.sol
+index 9f83c8d..bbe6643 100644
+--- a/test/ERC6551.t.sol
++++ b/test/ERC6551.t.sol
+@@ -103,7 +103,7 @@ contract ERC6551Test is SoladyTest {
+     }
+ 
+     function _testTemps() internal returns (_TestTemps memory t) {
+-        t.owner = _randomNonZeroAddress();
++        t.owner = _randomUniqueNonZeroAddress();
+         t.tokenId = _testTempsMint(t.owner);
+         t.chainId = block.chainid;
+         t.salt = bytes32(_random());
+@@ -258,7 +258,7 @@ contract ERC6551Test is SoladyTest {
+         assertEq(Target(target).datahash(), keccak256(data));
+         assertEq(target.balance, 123);
+ 
+-        vm.prank(_randomNonZeroAddress());
++        vm.prank(_randomUniqueNonZeroAddress());
+         vm.expectRevert(ERC6551.Unauthorized.selector);
+         t.account.execute(target, 123, abi.encodeWithSignature("setData(bytes)", data), 0);
+ 
