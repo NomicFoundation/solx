@@ -570,7 +570,7 @@ Binary:
 
 The byte array starting with `a2` at the end of the bytecode is a CBOR-encoded compiler version data and the hash of the contract metadata.
 
-The last two bytes of the metadata (`0x0048`) are not a part of the CBOR payload, but the length of it, which must be known to correctly decode the payload.
+The last two bytes of the metadata (`0x0034`) are not a part of the CBOR payload, but the length of it, which must be known to correctly decode the payload.
 
 JSON representation of the CBOR payload:
 
@@ -579,10 +579,8 @@ JSON representation of the CBOR payload:
     // Optional: included if `--metadata-hash` is set to `ipfs`.
     "ipfs": "1220bec8fa0149a786c5810200ef5a436a154cff832af68ace5beeabcbb82166cb92",
 
-    // Required: consists of semicolon-separated pairs of colon-separated compiler names and versions.
-    // `slang:<version>` is always included.
-    // `solc:<version>` is the Solidity language version and is only included for Solidity and Yul contracts, but not included for LLVM IR ones.
-    "solc": "slang:0.2.0;solc:0.8.37"
+    // Required: the Slang version as three bytes: major, minor and patch.
+    "slang": "000200"
 }
 ```
 
