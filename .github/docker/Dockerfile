@@ -1,5 +1,5 @@
 # CI runner image for solx — replaces the third-party Matter Labs image.
-# Provides system toolchain (compiler, cmake, ninja, LLVM tools, Rust) needed
+# Provides system toolchain (compiler, cmake, ninja, LLVM tools, rustup) needed
 # to build the custom LLVM EVM backend and solx itself inside CI jobs.
 #
 # The custom LLVM 21.1 backend is NOT baked into this image — it is built from
@@ -11,8 +11,8 @@
 #   dev  — devcontainer additions on base (non-root user, shared rustup).
 #          Built locally by .devcontainer/devcontainer.json (`target: dev`),
 #          so it needs no access to the private published image.
-#   ci   — CI-only tooling on base (root-homed Rust, valgrind for solx-llvm
-#          regression tests, cargo coverage/report tools). Must stay the final
+#   ci   — CI-only tooling on base (rustup, valgrind for solx-llvm regression
+#          tests, cargo coverage/report tools). Must stay the final
 #          stage: docker-ci-image.yaml publishes the default target.
 
 FROM ubuntu:26.04@sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b1115fb944 AS base
@@ -36,6 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-psutil \
         python3-venv \
         jq \
+        hyperfine \
         ca-certificates \
         gnupg \
         lsb-release \
@@ -49,31 +50,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libc6-dbg \
     && rm -rf /var/lib/apt/lists/*
 
-# ── LLVM 21 (system toolchain for coverage, sanitizers, lipo) ────────────────
+# ── LLVM 23 (system toolchain for coverage, sanitizers, lipo) ────────────────
 # llvm-cov / llvm-profdata must read the profraw format emitted by
-# instrumented Rust binaries. rustc 1.97.1 embeds LLVM 22 — one major ahead
-# of these tools — but still emits format versions LLVM 21 reads. Re-check on
-# every toolchain bump: a format bump breaks the coverage job with an opaque
-# profdata error.
+# instrumented Rust binaries, and the coverage LLVM built with this clang
+# links its profile runtime into the same binary. Keep the major equal to
+# rustc's embedded LLVM.
 # clang-format/clang-tidy (and python3-venv/psutil above) are not used by solx
 # itself; they serve solx-llvm's regression CI, which runs in this image.
 RUN curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
         | gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] \
-        https://apt.llvm.org/resolute/ llvm-toolchain-resolute-21 main" \
-        > /etc/apt/sources.list.d/llvm-21.list \
+        https://apt.llvm.org/resolute/ llvm-toolchain-resolute-23 main" \
+        > /etc/apt/sources.list.d/llvm-23.list \
     && apt-get update && apt-get install -y --no-install-recommends \
-        clang-21 \
-        clang-format-21 \
-        clang-tidy-21 \
-        lld-21 \
-        llvm-21 \
-        libclang-rt-21-dev \
+        clang-23 \
+        clang-format-23 \
+        clang-tidy-23 \
+        lld-23 \
+        llvm-23 \
+        libclang-rt-23-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Symlink versioned LLVM binaries to unversioned names so workflows can call
-# e.g. `clang`, `lld`, `llvm-cov` without the `-21` suffix.
-RUN for bin in /usr/lib/llvm-21/bin/*; do \
+# e.g. `clang`, `lld`, `llvm-cov` without the `-23` suffix.
+RUN for bin in /usr/lib/llvm-23/bin/*; do \
         name=$(basename "${bin}"); \
         update-alternatives --install "/usr/bin/${name}" "${name}" "${bin}" 100; \
     done
@@ -110,8 +110,8 @@ RUN set -eux; \
     GCC_VER=$(ls /usr/lib/gcc/${TRIPLE}/ | sort -V | tail -1); \
     ln -sf "/usr/lib/gcc/${TRIPLE}/${GCC_VER}/libstdc++.a" "/usr/lib/${TRIPLE}/libstdc++.a"
 
-ENV PATH="/usr/lib/llvm-21/bin:${PATH}" \
-    LD_LIBRARY_PATH="/usr/lib/llvm-21/lib"
+ENV PATH="/usr/lib/llvm-23/bin:${PATH}" \
+    LD_LIBRARY_PATH="/usr/lib/llvm-23/lib"
 
 # ── Node.js (for SFW, npm-based CI tools, and Hardhat project tests) ──────
 ARG NODE_MAJOR=24
@@ -166,7 +166,7 @@ ARG TARGETPLATFORM
 
 # ── Valgrind (for LLVM regression tests under valgrind) ───────────────────
 # Kept above the Rust layer: VALGRIND_VERSION effectively never changes,
-# while RUST_VERSION bumps every few weeks and would rebuild everything below.
+# while a cargo tool bump would rebuild everything below.
 ENV VALGRIND_VERSION=3.23.0
 RUN curl -fsSL -o valgrind-${VALGRIND_VERSION}.tar.bz2 \
         https://sourceware.org/pub/valgrind/valgrind-${VALGRIND_VERSION}.tar.bz2 \
@@ -174,37 +174,37 @@ RUN curl -fsSL -o valgrind-${VALGRIND_VERSION}.tar.bz2 \
     && cd valgrind-${VALGRIND_VERSION} && ./configure && make -j"$(nproc)" && make install \
     && cd .. && rm -rf valgrind-${VALGRIND_VERSION}.tar.bz2 valgrind-${VALGRIND_VERSION}
 
-# ── Rust ─────────────────────────────────────────────────────────────────────
-# Version must match rust-toolchain.toml (Renovate bumps both in one PR);
-# jobs resolve that pin via rustup anyway, so a matching default
-# only saves the download. Lives in ci, not base: CI jobs run as root, while
-# the dev stage ships its own shared rustup — a /root-homed toolchain is dead
-# weight in the dev image. rust-src serves the -Zbuild-std actions
-# (build-rust, rust-unit-tests). On a bump, re-check the LLVM section
-# comment in base (rustc's embedded LLVM major moves).
-# renovate: datasource=rust-version depName=rust
+# ── Rust: rustup and cargo tools ────────────────────────────────────────────
+# Container jobs run with HOME=/github/home, where rustup installs the
+# toolchain rust-toolchain.toml pins.
+# RUST_VERSION only builds the tools below; raise it when one needs a newer
+# rustc. Lives in ci, not base: the dev stage ships its own shared rustup.
+# When updating tool versions here, also update the matching pins in:
+#   .github/actions/cargo-check/action.yml
+#   .github/actions/rust-unit-tests/action.yml
 ARG RUST_VERSION=1.99.1
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-        | sh -s -- -y --default-toolchain "${RUST_VERSION}" --profile default \
+        | sh -s -- -y --default-toolchain "${RUST_VERSION}" --profile minimal \
     && . "$HOME/.cargo/env" \
-    && rustup component add rust-src
+    && cargo install \
+        cargo2junit@0.1.15 \
+        cargo-llvm-cov@0.8.4 \
+        cargo-udeps@0.1.60 \
+        --locked \
+    && rustup default none \
+    && rustup toolchain uninstall "${RUST_VERSION}" \
+    && rm -rf "$HOME/.cargo/registry"
 
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# ── Cargo tools ────────────────────────────────────────────────────────────
-# When updating versions here, also update the matching pins in:
-#   .github/actions/cargo-check/action.yml
-#   .github/actions/rust-unit-tests/action.yml
-RUN cargo install \
-    cargo2junit@0.1.15 \
-    cargo-llvm-cov@0.8.4 \
-    cargo-udeps@0.1.60 \
-    --locked
-
 # Smoke-test: ensure key tools are on PATH
 RUN set -eux \
-    && rustc --version \
-    && cargo --version \
+    && rustup --version \
+    && command -v cargo2junit \
+    && command -v cargo-llvm-cov \
+    && command -v cargo-udeps \
+    && test -f /root/.cargo/.crates2.json \
+    && hyperfine --version \
     && cmake --version \
     && ninja --version \
     && clang --version \

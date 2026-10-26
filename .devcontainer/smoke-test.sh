@@ -18,7 +18,7 @@ for dir in . target target-llvm "${CCACHE_DIR:?CCACHE_DIR not set}"; do
 done
 
 echo "==> System toolchain on PATH"
-for tool in cmake ninja ccache clang lld git curl; do
+for tool in cmake ninja ccache clang lld git curl hyperfine; do
     command -v "${tool}"
 done
 

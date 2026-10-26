@@ -2,8 +2,7 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended",
-    "customManagers:githubActionsVersions",
-    "customManagers:dockerfileVersions"
+    "customManagers:githubActionsVersions"
   ],
   "timezone": "UTC",
   "schedule": ["before 9am on Monday"],
@@ -109,16 +108,21 @@
       "allowedVersions": "<3"
     },
     {
-      "description": "These pins feed the integration harness, or the Rust toolchain it builds solx with; label so the gated suite runs.",
+      "description": "These pins feed the integration harness; label so the gated suite runs.",
       "matchManagers": ["custom.regex", "nodenv"],
       "matchFileNames": [
         ".node-version",
         "solx-dev/hardhat-tests.toml",
         "solx-dev/foundry-tests.toml",
         "solx-compiler-downloader/dev-compilers.json",
-        ".github/workflows/integration-tests.yaml",
-        ".github/docker/Dockerfile"
+        ".github/workflows/integration-tests.yaml"
       ],
+      "addLabels": ["ci:integration"]
+    },
+    {
+      "description": "The integration harness builds solx with this toolchain; label so the gated suite runs.",
+      "matchManagers": ["rust-toolchain"],
+      "matchFileNames": ["rust-toolchain.toml"],
       "addLabels": ["ci:integration"]
     },
     {
