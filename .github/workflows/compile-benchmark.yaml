@@ -157,13 +157,6 @@ jobs:
           chmod +x slang-prerelease
           ./slang-prerelease --version
 
-      # The image's system interpreter is Debian-managed and steps run as
-      # root, so install straight from apt (no sudo in the container).
-      - name: Install hyperfine
-        run: |
-          apt-get update -qq
-          apt-get install -y hyperfine
-
       # A sweep is ~5 s per binary. ENS compiles in ~0.5 s and single runs
       # spike by up to 8%, so it takes 10 runs to keep one spike from showing.
       - name: Run benchmark

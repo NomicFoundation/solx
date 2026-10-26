@@ -36,6 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-psutil \
         python3-venv \
         jq \
+        hyperfine \
         ca-certificates \
         gnupg \
         lsb-release \
