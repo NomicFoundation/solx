@@ -195,7 +195,7 @@ runs:
         append-timestamp: true
         max-size: "10G"
         verbose: 2
-        save: ${{ github.event_name != 'pull_request' }}
+        save: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Build LLVM
       if: steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
@@ -254,7 +254,7 @@ runs:
       run: ccache --show-stats
 
     - name: Save LLVM artifact cache
-      if: inputs.enable-artifact-cache == 'true' && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request' && steps.llvm-mirror.outputs.mirrored != 'true'
+      if: inputs.enable-artifact-cache == 'true' && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' && steps.llvm-mirror.outputs.mirrored != 'true'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ inputs.working-dir != '.' && format('{0}/target-llvm/target-final', inputs.working-dir) || 'target-llvm/target-final' }}
