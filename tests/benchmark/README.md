@@ -35,11 +35,6 @@ directory vendors the legacy-DWARF subset:
 | `openzeppelin-contracts-0.34/solx-legacy-dwarf.json` | 422 | the heavy cell (~50 s/compile on the CI runner) |
 | `uniswap-v4-core-solx/solx-legacy-dwarf.json` | 157 | |
 
-`run.sh` benchmarks a copy of each fixture with every `/// @solidity memory-safe-assembly`
-tag rewritten to the equivalent `assembly ("memory-safe")` flag, because Slang does not read
-the NatSpec tag yet (slang#2170). Without it, Slang treats forge-std's and solmate's tagged
-blocks as memory-unsafe, and the Uniswap fixture fails on stack-too-deep.
-
 These compile with production settings — optimizer enabled and DWARF debug
 info — unlike hand-packed inputs, so timings here are comparable to what the
 Hardhat solx benchmark measures (minus Hardhat's own overhead).
@@ -56,6 +51,10 @@ Long-term, the corpus is published by the hardhat workflow to
 `nomic-foundation-automation/hardhat-benchmark-results` under `solx-corpus/`
 (main runs only); once populated, refresh by copying from a pinned commit of
 that repo instead of a CI artifact.
+
+Env vars a fixture compiles with (standard JSON has no field for them) come
+from its scenario's `compilerEnv` in `manifest.json`. Fixtures over 2 MB are
+timed `--large-runs` times (default 3) instead of `--runs`.
 
 ## Extending
 
