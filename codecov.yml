@@ -8,4 +8,45 @@ coverage:
     patch:
       default: false  # disable the patch status that measures patch changes
 
-comment: false
+# The Codecov app's PR comment, with a per-crate table.
+comment:
+  layout: "header, diff, components, files"
+
+component_management:
+  individual_components:
+    - component_id: solx
+      paths:
+        - solx/**
+    - component_id: solx-core
+      paths:
+        - solx-core/**
+    - component_id: solx-slang
+      paths:
+        - solx-slang/**
+    - component_id: solx-mlir
+      paths:
+        - solx-mlir/**
+    - component_id: solx-codegen-evm
+      paths:
+        - solx-codegen-evm/**
+    - component_id: solx-standard-json
+      paths:
+        - solx-standard-json/**
+    - component_id: solx-utils
+      paths:
+        - solx-utils/**
+    - component_id: solx-dev
+      paths:
+        - solx-dev/**
+    - component_id: solx-tester
+      paths:
+        - solx-tester/**
+    - component_id: solx-solc-test-adapter
+      paths:
+        - solx-solc-test-adapter/**
+    - component_id: solx-benchmark-converter
+      paths:
+        - solx-benchmark-converter/**
+    - component_id: solx-compiler-downloader
+      paths:
+        - solx-compiler-downloader/**
