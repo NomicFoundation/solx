@@ -64,7 +64,7 @@ pub fn test(
         );
     }
 
-    for (project_name, project) in config
+    let projects: Vec<_> = config
         .projects
         .into_iter()
         .filter(|(project_name, project)| {
@@ -74,28 +74,50 @@ pub fn test(
                         .iter()
                         .any(|element| project_name.contains(element)))
         })
+        .collect();
+
+    for build_system in projects
+        .iter()
+        .map(|(_, project)| &project.build_system)
+        .collect::<std::collections::BTreeSet<_>>()
     {
+        let Some(version) = config.build_systems.get(build_system) else {
+            if *build_system != BuildSystem::Npm {
+                anyhow::bail!("Hardhat test configuration missing `build_systems.{build_system}`");
+            }
+            continue;
+        };
+        let npm_spec = format!("{build_system}@{version}");
+        let mut npm_install_build_system = Command::new("npm");
+        npm_install_build_system.args(["--loglevel", "error"]);
+        npm_install_build_system.arg("--force");
+        npm_install_build_system.arg("--yes");
+        npm_install_build_system.arg("install");
+        npm_install_build_system.arg("--global");
+        npm_install_build_system.arg(&npm_spec);
+        crate::utils::command_with_retries(
+            &mut npm_install_build_system,
+            format!(
+                "{} build system {} for Hardhat projects",
+                solx_utils::cargo_status_ok("Installing"),
+                build_system.to_string().bright_yellow().bold()
+            )
+            .as_str(),
+            16,
+        )?;
+    }
+
+    for (project_name, project) in projects {
         attempted_projects.push(project_name.clone());
         let mut project_directory = crate::utils::absolute_path(projects_directory.as_path())?;
         project_directory.push(project_name.as_str());
+        let project_directory_str = project_directory.to_string_lossy();
 
-        for ((identifier, compiler), codegen) in config
-            .compilers
-            .iter()
-            .filter(|(_identifier, compiler)| !compiler.disabled)
-            .cartesian_product(crate::test::CODEGENS)
-        {
-            crate::utils::remove(project_directory.as_path(), project_name.as_str())?;
-
-            let solidity_version = compiler
-                .solidity_version
-                .as_deref()
-                .unwrap_or(solidity_version.as_str());
-
-            let project_directory_str = project_directory.to_string_lossy();
+        let build_system = project.build_system.to_string();
+        let set_up = |checkout: &std::path::Path| -> anyhow::Result<()> {
             crate::utils::clone_repository(
                 project.url.as_str(),
-                &project_directory_str,
+                &checkout.to_string_lossy(),
                 project.commit.as_deref(),
                 &format!(
                     "{} Hardhat project {}",
@@ -104,51 +126,8 @@ pub fn test(
                 ),
             )?;
 
-            eprintln!(
-                "{} pragmas in Hardhat project {}",
-                solx_utils::cargo_status_ok("Fixing"),
-                project_name.bright_white().bold()
-            );
-            for solidity_file in
-                glob::glob(format!("{}/**/*.sol", project_directory.to_string_lossy()).as_str())
-                    .expect("Always valid")
-                    .filter_map(Result::ok)
-            {
-                if !solidity_file.is_file() {
-                    continue;
-                }
-                crate::utils::rewrite_version_pragmas_in_file(
-                    solidity_file.as_path(),
-                    format!("pragma solidity >={solidity_version};").as_str(),
-                )?;
-            }
-
-            let build_system = project.build_system.to_string();
-            if let Some(version) = config.build_systems.get(&project.build_system) {
-                let npm_spec = format!("{build_system}@{version}");
-                let mut npm_install_build_system = Command::new("npm");
-                npm_install_build_system.current_dir(project_directory.as_path());
-                npm_install_build_system.args(["--loglevel", "error"]);
-                npm_install_build_system.arg("--force");
-                npm_install_build_system.arg("--yes");
-                npm_install_build_system.arg("install");
-                npm_install_build_system.arg("--global");
-                npm_install_build_system.arg(&npm_spec);
-                crate::utils::command_with_retries(
-                    &mut npm_install_build_system,
-                    format!(
-                        "{} build system {} for Hardhat project {project_name}",
-                        solx_utils::cargo_status_ok("Installing"),
-                        build_system.bright_yellow().bold()
-                    )
-                    .as_str(),
-                    16,
-                )?;
-            } else if project.build_system != BuildSystem::Npm {
-                anyhow::bail!("Hardhat test configuration missing `build_systems.{build_system}`");
-            }
             let mut build_system_install_command = Command::new(build_system.as_str());
-            build_system_install_command.current_dir(project_directory.as_path());
+            build_system_install_command.current_dir(checkout);
             match project.build_system {
                 BuildSystem::Npm => {
                     build_system_install_command.args(["--loglevel", "error"]);
@@ -172,7 +151,7 @@ pub fn test(
             )?;
 
             let mut dependency_override_command = Command::new(build_system.as_str());
-            dependency_override_command.current_dir(project_directory.as_path());
+            dependency_override_command.current_dir(checkout);
             match project.build_system {
                 BuildSystem::Npm => {
                     dependency_override_command.args(["--loglevel", "error"]);
@@ -203,6 +182,31 @@ pub fn test(
                 )
                 .as_str(),
                 16,
+            )
+        };
+        let set_up_directory = crate::utils::absolute_path(
+            projects_directory
+                .join(".setup")
+                .join(project_name.as_str()),
+        )?;
+        crate::utils::remove(set_up_directory.as_path(), project_name.as_str())?;
+        set_up(set_up_directory.as_path())?;
+
+        for ((identifier, compiler), codegen) in config
+            .compilers
+            .iter()
+            .filter(|(_identifier, compiler)| !compiler.disabled)
+            .cartesian_product(crate::test::CODEGENS)
+        {
+            let solidity_version = compiler
+                .solidity_version
+                .as_deref()
+                .unwrap_or(solidity_version.as_str());
+            crate::utils::copy_project(
+                set_up_directory.as_path(),
+                project_directory.as_path(),
+                project_name.as_str(),
+                solidity_version,
             )?;
 
             let config_file_name = if project_directory.join("hardhat.config.ts").exists() {
@@ -376,6 +380,7 @@ pub fn test(
                 toolchain_name.clone(),
             ));
         }
+        crate::utils::remove(set_up_directory.as_path(), project_name.as_str())?;
     }
 
     let enabled_compilers: Vec<&str> = config
