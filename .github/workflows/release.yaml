@@ -191,11 +191,14 @@ jobs:
       - name: Setup SFW
         uses: ./.github/actions/setup-sfw
 
+      # Tag releases build LLVM from source so their provenance attestation covers it.
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
           build-type: Release
           enable-assertions: 'false'
+          enable-artifact-cache: ${{ github.ref_type != 'tag' }}
+          enable-ccache: ${{ github.ref_type != 'tag' }}
 
       - name: Free disk space (remove LLVM build artifacts)
         shell: bash
