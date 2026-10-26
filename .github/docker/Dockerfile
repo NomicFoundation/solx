@@ -49,31 +49,32 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libc6-dbg \
     && rm -rf /var/lib/apt/lists/*
 
-# ── LLVM 21 (system toolchain for coverage, sanitizers, lipo) ────────────────
+# ── LLVM 23 (system toolchain for coverage, sanitizers, lipo) ────────────────
 # llvm-cov / llvm-profdata must read the profraw format emitted by
-# instrumented Rust binaries. rustc 1.97.1 embeds LLVM 22 — one major ahead
-# of these tools — but still emits format versions LLVM 21 reads. Re-check on
-# every toolchain bump: a format bump breaks the coverage job with an opaque
-# profdata error.
+# instrumented Rust binaries, and the coverage LLVM built with this clang
+# links its profile runtime into the same binary. Keep the major equal to
+# rustc's embedded LLVM (rustc 1.99.1: LLVM 23). Re-check on every toolchain
+# bump: a format bump crashes the instrumented binary and breaks the coverage
+# job with an opaque profdata error.
 # clang-format/clang-tidy (and python3-venv/psutil above) are not used by solx
 # itself; they serve solx-llvm's regression CI, which runs in this image.
 RUN curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
         | gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] \
-        https://apt.llvm.org/resolute/ llvm-toolchain-resolute-21 main" \
-        > /etc/apt/sources.list.d/llvm-21.list \
+        https://apt.llvm.org/resolute/ llvm-toolchain-resolute-23 main" \
+        > /etc/apt/sources.list.d/llvm-23.list \
     && apt-get update && apt-get install -y --no-install-recommends \
-        clang-21 \
-        clang-format-21 \
-        clang-tidy-21 \
-        lld-21 \
-        llvm-21 \
-        libclang-rt-21-dev \
+        clang-23 \
+        clang-format-23 \
+        clang-tidy-23 \
+        lld-23 \
+        llvm-23 \
+        libclang-rt-23-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Symlink versioned LLVM binaries to unversioned names so workflows can call
-# e.g. `clang`, `lld`, `llvm-cov` without the `-21` suffix.
-RUN for bin in /usr/lib/llvm-21/bin/*; do \
+# e.g. `clang`, `lld`, `llvm-cov` without the `-23` suffix.
+RUN for bin in /usr/lib/llvm-23/bin/*; do \
         name=$(basename "${bin}"); \
         update-alternatives --install "/usr/bin/${name}" "${name}" "${bin}" 100; \
     done
@@ -110,8 +111,8 @@ RUN set -eux; \
     GCC_VER=$(ls /usr/lib/gcc/${TRIPLE}/ | sort -V | tail -1); \
     ln -sf "/usr/lib/gcc/${TRIPLE}/${GCC_VER}/libstdc++.a" "/usr/lib/${TRIPLE}/libstdc++.a"
 
-ENV PATH="/usr/lib/llvm-21/bin:${PATH}" \
-    LD_LIBRARY_PATH="/usr/lib/llvm-21/lib"
+ENV PATH="/usr/lib/llvm-23/bin:${PATH}" \
+    LD_LIBRARY_PATH="/usr/lib/llvm-23/lib"
 
 # ── Node.js (for SFW, npm-based CI tools, and Hardhat project tests) ──────
 ARG NODE_MAJOR=24
