@@ -104,29 +104,30 @@ __entry:                                ; @__entry
 
 Emits the contract metadata. The metadata is a JSON object that contains information about the contract, such as its name, source code hash, the list of dependencies, compiler versions, and so on.
 
-The **Slang** metadata format is compatible with the [Solidity metadata format](https://docs.soliditylang.org/en/latest/metadata.html#contract-metadata). This means that the metadata output can be used with other tools that support Solidity metadata. The metadata that is hashed into [the CBOR trailer of the bytecode](#--metadata-hash) additionally carries extra **Slang** data inserted into the metadata with this JSON object:
+The **Slang** metadata format is compatible with the [Solidity metadata format](https://docs.soliditylang.org/en/latest/metadata.html#contract-metadata). This means that the metadata output can be used with other tools that support Solidity metadata. The `compiler` entry names **Slang**, and the settings additionally carry the LLVM code generation settings:
 
 ```javascript
 {
-  "slang": {
-    "llvm_options": [],
-    "optimizer_settings": {
-      "is_debug_logging_enabled": false,
-      "is_fallback_to_size_enabled": false,
-      "is_verify_each_enabled": false,
-      "level_back_end": "Aggressive",
-      "level_middle_end": "Aggressive",
-      "level_middle_end_size": "Zero"
-    },
-    // Optional: the Solidity language version, only set for Solidity and Yul contracts.
-    "solc_version": "0.8.37",
+  "compiler": {
+    "name": "slang",
     // Mandatory: current version of Slang.
     "version": "0.2.0"
+  },
+  "settings": {
+    // Optional: only set if `--llvm-options` is passed.
+    "llvmOptions": ["-key=value"],
+    "optimizer": {
+      "mode": "3",
+      "sizeFallback": false
+    },
+    // The language version the sources are compiled as.
+    "solidityVersion": "0.8.37"
+    // ...the other Solidity metadata settings
   }
 }
 ```
 
-Currently not supported. Usage:
+Usage:
 
 ```bash
 slang 'Simple.sol' --metadata
@@ -587,15 +588,15 @@ Binary:
 
 ```
 
-The byte array starting with `a1` at the end of the bytecode is a CBOR-encoded compiler version data and, when the contract metadata is emitted, its hash.
+The byte array starting with `a2` at the end of the bytecode is a CBOR-encoded compiler version data and the hash of the contract metadata.
 
-The last two bytes of the metadata (`0x001e`) are not a part of the CBOR payload, but the length of it, which must be known to correctly decode the payload.
+The last two bytes of the metadata (`0x0048`) are not a part of the CBOR payload, but the length of it, which must be known to correctly decode the payload.
 
 JSON representation of the CBOR payload:
 
 ```javascript
 {
-    // Optional: included if `--metadata-hash` is set to `ipfs` and the contract metadata is emitted.
+    // Optional: included if `--metadata-hash` is set to `ipfs`.
     "ipfs": "1220bec8fa0149a786c5810200ef5a436a154cff832af68ace5beeabcbb82166cb92",
 
     // Required: consists of semicolon-separated pairs of colon-separated compiler names and versions.
