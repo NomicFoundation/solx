@@ -29,7 +29,7 @@ runs:
 
     - name: Cargo clippy
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: cargo clippy --frozen
+      run: cargo clippy --frozen -- -D warnings
 
     # Version pinned to match .github/docker/Dockerfile — on container
     # jobs this is already installed and `cargo install` is a no-op.
