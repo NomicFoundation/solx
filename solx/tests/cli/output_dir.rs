@@ -80,7 +80,6 @@ fn yul(extension: String) -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "solx does not emit this output yet"]
 fn unusual_path_characters() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -125,7 +124,6 @@ fn standard_json() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "solx does not emit this output yet"]
 fn multiple_outputs() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -150,7 +148,6 @@ fn multiple_outputs() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "solx does not emit this output yet"]
 fn multiple_outputs_simple_contract() -> anyhow::Result<()> {
     crate::common::setup()?;
 

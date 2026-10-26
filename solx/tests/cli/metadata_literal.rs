@@ -39,3 +39,20 @@ fn standard_json() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn content() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let contract = crate::common::TEST_SOLIDITY_CONTRACT;
+    let metadata = crate::cli::metadata(&[contract, "--metadata", "--metadata-literal"])?;
+    let source = &metadata["SlangTest"]["sources"][contract];
+
+    assert_eq!(
+        source["content"].as_str(),
+        Some(std::fs::read_to_string(contract)?.as_str())
+    );
+    assert!(source.get("urls").is_none());
+
+    Ok(())
+}

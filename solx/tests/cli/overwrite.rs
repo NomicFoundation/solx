@@ -9,7 +9,7 @@ use test_case::test_case;
 #[test_case("--bin")]
 #[test_case("--bin-runtime")]
 #[test_case("--asm")]
-#[test_case("--metadata" => ignore["solx does not emit this output yet"])]
+#[test_case("--metadata")]
 #[test_case("--ast-json")]
 #[test_case("--abi")]
 #[test_case("--hashes")]
@@ -46,7 +46,7 @@ fn default(flag: &str) -> anyhow::Result<()> {
 #[test_case("--bin")]
 #[test_case("--bin-runtime")]
 #[test_case("--asm")]
-#[test_case("--metadata" => ignore["solx does not emit this output yet"])]
+#[test_case("--metadata")]
 #[test_case("--ast-json")]
 #[test_case("--abi")]
 #[test_case("--hashes")]
@@ -80,7 +80,6 @@ fn missing(flag: &str) -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "solx does not emit this output yet"]
 fn all() -> anyhow::Result<()> {
     crate::common::setup()?;
 

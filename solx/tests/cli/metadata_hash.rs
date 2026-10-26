@@ -30,26 +30,6 @@ fn none() -> anyhow::Result<()> {
 }
 
 #[test]
-fn ipfs() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let hash_type = MetadataHashType::IPFS.to_string();
-    let args = &[
-        "--metadata-hash",
-        hash_type.as_str(),
-        "--bin",
-        crate::common::TEST_SOLIDITY_CONTRACT,
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains(CBOR_IPFS_HASH_PREFIX));
-
-    Ok(())
-}
-
-#[test]
 fn ipfs_distinguishes_identical_code() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -75,14 +55,12 @@ fn ipfs_distinguishes_identical_code() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "solx does not lower Yul yet"]
 fn none_prints_compiler_section() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let hash_type = MetadataHashType::None.to_string();
     let args = &[
-        crate::common::TEST_YUL_CONTRACT,
-        "--yul",
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--metadata",
         "--metadata-hash",
         hash_type.as_str(),

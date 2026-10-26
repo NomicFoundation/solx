@@ -121,7 +121,6 @@ fn size_fallback_true_produces_bytecode() -> anyhow::Result<()> {
 #[test_case('3')]
 #[test_case('s')]
 #[test_case('z')]
-#[ignore = "solx does not emit this output yet"]
 fn cli_optimization_with_metadata(level: char) -> anyhow::Result<()> {
     crate::common::setup()?;
 

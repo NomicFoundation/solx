@@ -59,7 +59,7 @@ fn sources_import_closure() -> anyhow::Result<()> {
     let main = crate::common::contract!("solidity/caller/Main.sol");
     let callable = crate::common::contract!("solidity/caller/Callable.sol");
     let unrelated = crate::common::TEST_SOLIDITY_CONTRACT;
-    let metadata = metadata(&[main, callable, unrelated, "--metadata"])?;
+    let metadata = crate::cli::metadata(&[main, callable, unrelated, "--metadata"])?;
 
     assert_eq!(source_names(&metadata["Main"]), [callable, main]);
     assert_eq!(source_names(&metadata["Callable"]), [callable]);
@@ -68,49 +68,65 @@ fn sources_import_closure() -> anyhow::Result<()> {
 }
 
 #[test]
-fn literal_content() -> anyhow::Result<()> {
+fn settings() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let contract = crate::common::TEST_SOLIDITY_CONTRACT;
-    let metadata = metadata(&[contract, "--metadata", "--metadata-literal"])?;
-    let source = &metadata["SlangTest"]["sources"][contract];
+    let library = "tests/data/contracts/solidity/MiniMath.sol:MiniMath";
+    let address = "0xF9702469Dfb84A9aC171E284F71615bd3D3f1EdC";
+    let metadata = crate::cli::metadata(&[
+        contract,
+        "b/=c/",
+        "a/=b/",
+        "--metadata",
+        "--metadata-hash",
+        "none",
+        "--no-cbor-metadata",
+        "-Oz",
+        "--optimization-size-fallback",
+        "--llvm-options=-evm-metadata-size 10",
+        "--evm-version",
+        "cancun",
+        "--solidity-version",
+        "0.8.30",
+        "--libraries",
+        format!("{library}={address}").as_str(),
+    ])?;
+    let metadata = &metadata["SlangTest"];
+    let content = std::fs::read(contract)?;
 
     assert_eq!(
-        source["content"].as_str(),
-        Some(std::fs::read_to_string(contract)?.as_str())
+        metadata["compiler"],
+        serde_json::json!({ "name": "slang", "version": solx_core::Compiler::version() })
     );
-    assert!(source.get("urls").is_none());
+    assert_eq!(metadata["language"], "Solidity");
+    assert_eq!(metadata["version"], 1);
+    assert_eq!(
+        metadata["settings"],
+        serde_json::json!({
+            "compilationTarget": { contract: "SlangTest" },
+            "evmVersion": "cancun",
+            "libraries": { library: address },
+            "llvmOptions": ["-evm-metadata-size", "10"],
+            "metadata": { "appendCBOR": false, "bytecodeHash": "none" },
+            "optimizer": { "mode": "z", "sizeFallback": true },
+            "remappings": [":a/=b/", ":b/=c/"],
+            "solidityVersion": "0.8.30",
+        })
+    );
+    assert_eq!(
+        metadata["sources"][contract]["keccak256"],
+        solx_utils::Keccak256Hash::from_slice(content.as_slice()).as_str()
+    );
+    assert_eq!(
+        metadata["sources"][contract]["urls"],
+        serde_json::json!([format!(
+            "dweb:/ipfs/{}",
+            solx_utils::IPFSHash::from_slice(content.as_slice()).as_base58()
+        )])
+    );
 
     Ok(())
-}
-
-/// The printed metadata of every contract compiled with `args`, keyed by contract name.
-fn metadata(
-    args: &[&str],
-) -> anyhow::Result<std::collections::BTreeMap<String, serde_json::Value>> {
-    let result = crate::cli::execute_solx(args)?;
-    let stdout = String::from_utf8(result.success().get_output().stdout.clone())?;
-
-    let mut metadata = std::collections::BTreeMap::new();
-    let mut lines = stdout.lines();
-    while let Some(line) = lines.next() {
-        let Some(header) = line
-            .strip_prefix("======= ")
-            .and_then(|line| line.strip_suffix(" ======="))
-        else {
-            continue;
-        };
-        let (_, name) = header
-            .rsplit_once(':')
-            .ok_or_else(|| anyhow::anyhow!("no contract name in `{header}`"))?;
-        let value = lines
-            .by_ref()
-            .skip_while(|line| *line != "Metadata:")
-            .nth(1)
-            .ok_or_else(|| anyhow::anyhow!("no metadata of `{name}` in:\n{stdout}"))?;
-        metadata.insert(name.to_owned(), serde_json::from_str(value)?);
-    }
-    Ok(metadata)
 }
 
 /// The names in `metadata`'s `sources`, in their sorted order.
