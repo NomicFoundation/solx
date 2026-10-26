@@ -271,9 +271,11 @@ jobs:
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN_SOLX_LLVM }}
-          files: 'llvm/${{ env.LCOV_FILE_LLVM }}'
+          # The CLI opens the files it lists relative to the working
+          # directory, not root_dir, so it has to run inside solx-llvm.
+          working-directory: solx-llvm
+          files: '../llvm/${{ env.LCOV_FILE_LLVM }}'
           override_commit: ${{ steps.fork-coverage.outputs.solx-llvm-sha }}
-          root_dir: solx-llvm
           disable_search: true
           plugins: noop
           slug: NomicFoundation/solx-llvm
