@@ -71,6 +71,17 @@ jobs:
       - name: Checkout submodules
         uses: ./.github/actions/checkout-submodules
 
+      # Instrumented Rust and the instrumented LLVM link their profile
+      # runtimes into one binary, and llvm-profdata reads one raw format.
+      - name: Check rustc and the image share an LLVM major
+        run: |
+          RUSTC_LLVM=$(rustc -vV | sed -n 's/^LLVM version: \([0-9]*\).*/\1/p')
+          IMAGE_LLVM=$(clang -dumpversion | cut -d. -f1)
+          if [ "${RUSTC_LLVM}" != "${IMAGE_LLVM}" ]; then
+            echo "::error::rustc embeds LLVM ${RUSTC_LLVM} but the runner image ships LLVM ${IMAGE_LLVM}; move the LLVM packages in .github/docker/Dockerfile to ${RUSTC_LLVM}"
+            exit 1
+          fi
+
       - name: Setup SFW (optional)
         uses: ./.github/actions/setup-sfw
         with:
