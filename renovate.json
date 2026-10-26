@@ -91,6 +91,12 @@
       "enabled": false
     },
     {
+      "description": "Node majors change the runtime every integration project installs and runs under; they are bumped by hand.",
+      "matchManagers": ["nodenv"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
       "description": "Pin yarn to 1.x (Classic). Yarn 2+ (Berry) is a different product and the Hardhat/Foundry fixtures we run use Yarn 1 semantics; never auto-bump across that line.",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["yarn"],
@@ -104,8 +110,9 @@
     },
     {
       "description": "These pins feed the integration harness, or the Rust toolchain it builds solx with; label so the gated suite runs.",
-      "matchManagers": ["custom.regex"],
+      "matchManagers": ["custom.regex", "nodenv"],
       "matchFileNames": [
+        ".node-version",
         "solx-dev/hardhat-tests.toml",
         "solx-dev/foundry-tests.toml",
         "solx-compiler-downloader/dev-compilers.json",
