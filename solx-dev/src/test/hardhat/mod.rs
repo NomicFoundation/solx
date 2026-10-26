@@ -198,31 +198,16 @@ pub fn test(
             .filter(|(_identifier, compiler)| !compiler.disabled)
             .cartesian_product(crate::test::CODEGENS)
         {
-            crate::utils::copy_project(
-                set_up_directory.as_path(),
-                project_directory.as_path(),
-                project_name.as_str(),
-            )?;
-
             let solidity_version = compiler
                 .solidity_version
                 .as_deref()
                 .unwrap_or(solidity_version.as_str());
-
-            eprintln!(
-                "{} pragmas in Hardhat project {}",
-                solx_utils::cargo_status_ok("Fixing"),
-                project_name.bright_white().bold()
-            );
-            // Package-manager installs keep their own pragmas.
-            for solidity_file in
-                crate::utils::git_tracked_files(project_directory.as_path(), "*.sol")?
-            {
-                crate::utils::rewrite_version_pragmas_in_file(
-                    solidity_file.as_path(),
-                    format!("pragma solidity >={solidity_version};").as_str(),
-                )?;
-            }
+            crate::utils::copy_project(
+                set_up_directory.as_path(),
+                project_directory.as_path(),
+                project_name.as_str(),
+                solidity_version,
+            )?;
 
             let config_file_name = if project_directory.join("hardhat.config.ts").exists() {
                 Some("hardhat.config.ts")

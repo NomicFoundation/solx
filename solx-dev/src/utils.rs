@@ -250,12 +250,15 @@ pub fn git_tracked_files(directory: &Path, pathspec: &str) -> anyhow::Result<Vec
 }
 
 ///
-/// Replaces `destination` with a copy of `source`.
+/// Replaces `destination` with a copy of `source` and rewrites the copy's version pragmas
+/// to `>=solidity_version`.
 ///
-/// `cp -a` keeps the relative symlinks under `node_modules/.bin`, which Node resolves
-/// against the link target.
-///
-pub fn copy_project(source: &Path, destination: &Path, project_name: &str) -> anyhow::Result<()> {
+pub fn copy_project(
+    source: &Path,
+    destination: &Path,
+    project_name: &str,
+    solidity_version: &str,
+) -> anyhow::Result<()> {
     remove(destination, project_name)?;
     let mut copy_command = Command::new("cp");
     copy_command.arg("-a");
@@ -269,7 +272,21 @@ pub fn copy_project(source: &Path, destination: &Path, project_name: &str) -> an
             project_name.bright_white().bold()
         )
         .as_str(),
-    )
+    )?;
+
+    eprintln!(
+        "{} pragmas in project {}",
+        solx_utils::cargo_status_ok("Fixing"),
+        project_name.bright_white().bold()
+    );
+    // Package-manager installs keep their own pragmas.
+    for solidity_file in git_tracked_files(destination, "*.sol")? {
+        rewrite_version_pragmas_in_file(
+            solidity_file.as_path(),
+            format!("pragma solidity >={solidity_version};").as_str(),
+        )?;
+    }
+    Ok(())
 }
 
 ///
@@ -498,7 +515,6 @@ mod tests {
         commit_file(dependency.as_path(), "src/Dependency.sol");
         git(directory.as_path(), &["init", "--quiet", "project"]);
         commit_file(project.as_path(), "src/Project.sol");
-        commit_file(project.as_path(), "README.md");
         git(
             project.as_path(),
             &[
@@ -533,30 +549,29 @@ mod tests {
     }
 
     #[test]
-    fn copy_is_isolated_and_keeps_symlinks() {
+    fn copy_rewrites_pragmas_in_the_copy_only_and_keeps_symlinks() {
         let directory = test_directory("copy");
         let source = directory.join("source");
-        std::fs::create_dir_all(source.as_path()).expect("Always valid");
-        std::fs::write(source.join("file"), "content").expect("Always valid");
-        std::os::unix::fs::symlink("file", source.join("link")).expect("Always valid");
+        git(directory.as_path(), &["init", "--quiet", "source"]);
+        commit_file(source.as_path(), "src/Project.sol");
+        std::os::unix::fs::symlink("src/Project.sol", source.join("link")).expect("Always valid");
 
         let destination = directory.join("work");
-        super::copy_project(source.as_path(), destination.as_path(), "project")
+        super::copy_project(source.as_path(), destination.as_path(), "project", "0.8.34")
             .expect("Always valid");
-        std::fs::write(destination.join("file"), "edited").expect("Always valid");
-        std::fs::write(destination.join("output"), "new").expect("Always valid");
         assert_eq!(
-            std::fs::read_to_string(source.join("file")).expect("Always valid"),
-            "content",
-            "edits to a copy must not reach the source"
+            std::fs::read_to_string(destination.join("src/Project.sol")).expect("Always valid"),
+            "pragma solidity >=0.8.34;"
+        );
+        assert_eq!(
+            std::fs::read_to_string(source.join("src/Project.sol")).expect("Always valid"),
+            "pragma solidity 0.8.0;",
+            "the rewrite must not reach the source"
         );
 
-        super::copy_project(source.as_path(), destination.as_path(), "project")
+        std::fs::write(destination.join("output"), "new").expect("Always valid");
+        super::copy_project(source.as_path(), destination.as_path(), "project", "0.8.34")
             .expect("Always valid");
-        assert_eq!(
-            std::fs::read_to_string(destination.join("file")).expect("Always valid"),
-            "content"
-        );
         assert!(
             !destination.join("output").exists(),
             "a copy must not keep the previous toolchain's outputs"

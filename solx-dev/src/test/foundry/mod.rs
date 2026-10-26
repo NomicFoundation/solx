@@ -77,10 +77,10 @@ pub fn test(
         })
         .collect();
 
+    let build_system = "yarn";
     if projects.iter().any(|(_, project)| project.requires_yarn) {
         crate::utils::exists("npm")?;
 
-        let build_system = "yarn";
         let yarn_version = config.build_systems.get(build_system).ok_or_else(|| {
             anyhow::anyhow!("Foundry test configuration missing `build_systems.{build_system}`")
         })?;
@@ -123,7 +123,7 @@ pub fn test(
                 ),
             )?;
             if project.requires_yarn {
-                let mut yarn_install_command = Command::new("yarn");
+                let mut yarn_install_command = Command::new(build_system);
                 yarn_install_command.args(["--cwd", &*checkout_str]);
                 yarn_install_command.arg("install");
                 yarn_install_command.arg("--silent");
@@ -153,31 +153,16 @@ pub fn test(
             .filter(|(_identifier, compiler)| !compiler.disabled)
             .cartesian_product(crate::test::CODEGENS)
         {
-            crate::utils::copy_project(
-                set_up_directory.as_path(),
-                project_directory.as_path(),
-                project_name.as_str(),
-            )?;
-
             let solidity_version = compiler
                 .solidity_version
                 .as_deref()
                 .unwrap_or(solidity_version.as_str());
-
-            eprintln!(
-                "{} pragmas in Foundry project {}",
-                solx_utils::cargo_status_ok("Fixing"),
-                project_name.bright_white().bold()
-            );
-            // Package-manager installs keep their own pragmas.
-            for solidity_file in
-                crate::utils::git_tracked_files(project_directory.as_path(), "*.sol")?
-            {
-                crate::utils::rewrite_version_pragmas_in_file(
-                    solidity_file.as_path(),
-                    format!("pragma solidity >={solidity_version};").as_str(),
-                )?;
-            }
+            crate::utils::copy_project(
+                set_up_directory.as_path(),
+                project_directory.as_path(),
+                project_name.as_str(),
+                solidity_version,
+            )?;
 
             let config_file_name = "foundry.toml";
             let mut forge_config_fix_command = Command::new("forge");
