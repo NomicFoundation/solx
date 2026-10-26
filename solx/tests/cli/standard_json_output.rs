@@ -170,9 +170,13 @@ fn metadata_hash_variants(
     let result = crate::cli::execute_solx(args)?;
     let mut assertion = result.success();
     if expect_ipfs_marker {
-        assertion = assertion.stdout(predicate::str::contains("a264"));
+        assertion = assertion.stdout(predicate::str::contains(
+            crate::common::CBOR_IPFS_HASH_PREFIX,
+        ));
     } else {
-        assertion = assertion.stdout(predicate::str::contains("a164"));
+        assertion = assertion.stdout(predicate::str::contains(
+            crate::common::CBOR_WITHOUT_HASH_PREFIX,
+        ));
     }
     if expect_metadata {
         assertion.stdout(predicate::str::contains("\"metadata\""));

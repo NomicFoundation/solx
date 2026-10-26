@@ -5,26 +5,34 @@
 use predicates::prelude::*;
 use test_case::test_case;
 
-/// The hex-encoded `solc:<version>` entry of the CBOR metadata appended to the bytecode.
-fn cbor_solc_version_hex(version: &str) -> String {
-    hex::encode(format!("solc:{version}"))
+/// The `settings.solidityVersion` of contract `C` in source `A` of the standard JSON output.
+fn standard_json_solidity_version(input: &str) -> anyhow::Result<serde_json::Value> {
+    let result = crate::cli::execute_solx(&["--standard-json", input])?;
+    let output = solx_utils::deserialize_from_slice::<solx_standard_json::Output>(
+        result.success().get_output().stdout.as_slice(),
+    )?;
+    let metadata = output.contracts["A"]["C"]
+        .metadata
+        .as_deref()
+        .expect("the metadata is selected");
+    let metadata: serde_json::Value = serde_json::from_str(metadata)?;
+    Ok(metadata["settings"]["solidityVersion"].clone())
 }
 
 #[test]
 fn pinned_pragma() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
+    let contract = crate::common::contract!("solidity/PinnedPragma.sol");
+    let output = crate::cli::execute_solx_to_directory(&[
         "--solidity-version",
         "0.8.20",
-        "--bin",
-        crate::common::contract!("solidity/PinnedPragma.sol"),
-    ];
+        "--metadata",
+        contract,
+    ])?;
+    let metadata = crate::cli::output_metadata(&output, contract, "PinnedPragma")?;
 
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains(cbor_solc_version_hex("0.8.20")));
+    assert_eq!(metadata["settings"]["solidityVersion"], "0.8.20");
 
     Ok(())
 }
@@ -33,15 +41,11 @@ fn pinned_pragma() -> anyhow::Result<()> {
 fn inferred_from_pragma() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        "--bin",
-        crate::common::contract!("solidity/PinnedPragma.sol"),
-    ];
+    let contract = crate::common::contract!("solidity/PinnedPragma.sol");
+    let output = crate::cli::execute_solx_to_directory(&["--metadata", contract])?;
+    let metadata = crate::cli::output_metadata(&output, contract, "PinnedPragma")?;
 
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains(cbor_solc_version_hex("0.8.20")));
+    assert_eq!(metadata["settings"]["solidityVersion"], "0.8.20");
 
     Ok(())
 }
@@ -50,16 +54,14 @@ fn inferred_from_pragma() -> anyhow::Result<()> {
 fn inferred_across_sources() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        "--bin",
-        crate::common::contract!("solidity/PragmaCaret.sol"),
-        crate::common::contract!("solidity/PragmaRange.sol"),
-    ];
+    let caret = crate::common::contract!("solidity/PragmaCaret.sol");
+    let range = crate::common::contract!("solidity/PragmaRange.sol");
+    let output = crate::cli::execute_solx_to_directory(&["--metadata", caret, range])?;
 
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains(cbor_solc_version_hex("0.8.24")));
+    for (contract, name) in [(caret, "PragmaCaret"), (range, "PragmaRange")] {
+        let metadata = crate::cli::output_metadata(&output, contract, name)?;
+        assert_eq!(metadata["settings"]["solidityVersion"], "0.8.24");
+    }
 
     Ok(())
 }
@@ -88,20 +90,23 @@ fn inferred_no_common_version() -> anyhow::Result<()> {
 fn suffix(version: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
+    let contract = crate::common::contract!("solidity/PinnedPragma.sol");
+    let output = tempfile::TempDir::with_prefix("solx_output")?;
     let args = &[
         "--solidity-version",
         version,
-        "--bin",
-        crate::common::contract!("solidity/PinnedPragma.sol"),
+        "--metadata",
+        contract,
+        "--output-dir",
+        output.path().to_str().expect("Always valid"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains(cbor_solc_version_hex("0.8.20")))
-        .stderr(predicate::str::contains(format!(
-            "Solidity version {version} is compiled as 0.8.20"
-        )));
+    result.success().stderr(predicate::str::contains(format!(
+        "Solidity version {version} is compiled as 0.8.20"
+    )));
+    let metadata = crate::cli::output_metadata(&output, contract, "PinnedPragma")?;
+    assert_eq!(metadata["settings"]["solidityVersion"], "0.8.20");
 
     Ok(())
 }
@@ -210,15 +215,10 @@ fn yul() -> anyhow::Result<()> {
 fn standard_json() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        "--standard-json",
-        crate::common::standard_json!("solidity_version.json"),
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains(cbor_solc_version_hex("0.8.20")));
+    assert_eq!(
+        standard_json_solidity_version(crate::common::standard_json!("solidity_version.json"))?,
+        "0.8.20"
+    );
 
     Ok(())
 }
@@ -227,15 +227,12 @@ fn standard_json() -> anyhow::Result<()> {
 fn standard_json_inferred() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        "--standard-json",
-        crate::common::standard_json!("solidity_version_inferred.json"),
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains(cbor_solc_version_hex("0.8.20")));
+    assert_eq!(
+        standard_json_solidity_version(crate::common::standard_json!(
+            "solidity_version_inferred.json"
+        ))?,
+        "0.8.20"
+    );
 
     Ok(())
 }
