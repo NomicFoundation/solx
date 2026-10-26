@@ -197,8 +197,8 @@ jobs:
         with:
           build-type: Release
           enable-assertions: 'false'
-          enable-artifact-cache: ${{ github.ref_type != 'tag' }}
-          enable-ccache: ${{ github.ref_type != 'tag' }}
+          enable-artifact-cache: 'false'
+          enable-ccache: 'false'
 
       - name: Free disk space (remove LLVM build artifacts)
         shell: bash
