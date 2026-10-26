@@ -110,8 +110,9 @@
     },
     {
       "description": "These pins feed the integration harness, or the Rust toolchain it builds solx with; label so the gated suite runs.",
-      "matchManagers": ["custom.regex"],
+      "matchManagers": ["custom.regex", "nodenv"],
       "matchFileNames": [
+        ".node-version",
         "solx-dev/hardhat-tests.toml",
         "solx-dev/foundry-tests.toml",
         "solx-compiler-downloader/dev-compilers.json",
