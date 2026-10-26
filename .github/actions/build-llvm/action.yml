@@ -111,6 +111,7 @@ runs:
         # Linux builds with the runner image's clang, whose profile runtime
         # must match rustc's for coverage.
         [ '${{ runner.os }}' = 'Linux' ] && KEY="${KEY}-clang$(clang -dumpversion | cut -d. -f1)"
+        KEY="${KEY}-artifacttest"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
     - name: Mirror LLVM from sibling checkout
@@ -148,7 +149,7 @@ runs:
         api() { curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/$1"; }
         for RUN_ID in $(api "actions/artifacts?name=${KEY}&per_page=20" | jq -r '.artifacts[] | select(.expired | not) | .workflow_run.id'); do
           RUN=$(api "actions/runs/${RUN_ID}")
-          if jq -e --argjson repo "${GITHUB_REPOSITORY_ID}" '.head_repository.id == $repo and (.event == "merge_group" or (.head_branch == "main" and (.event | IN("push", "schedule", "workflow_dispatch"))))' <<<"${RUN}" >/dev/null; then
+          if jq -e --argjson repo "${GITHUB_REPOSITORY_ID}" '.head_repository.id == $repo and (.event == "merge_group" or .event == "pull_request" or (.head_branch == "main" and (.event | IN("push", "schedule", "workflow_dispatch"))))' <<<"${RUN}" >/dev/null; then
             echo "run-id=${RUN_ID}" | tee -a "${GITHUB_OUTPUT}"
             exit 0
           fi
@@ -344,7 +345,7 @@ runs:
 
     # upload-artifact zips without file modes, so the tree travels as a tar.
     - name: Pack LLVM artifact
-      if: inputs.enable-artifact-cache == 'true' && steps.llvm-plan.outputs.reused != 'true' && (github.event_name == 'merge_group' || github.ref == 'refs/heads/main')
+      if: inputs.enable-artifact-cache == 'true' && steps.llvm-plan.outputs.reused != 'true' && (github.event_name == 'merge_group' || github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
       id: llvm-artifact-pack
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       working-directory: ${{ inputs.working-dir }}
