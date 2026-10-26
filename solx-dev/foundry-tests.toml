@@ -2,7 +2,7 @@
 #
 # Build systems:
 #   [build_systems]
-#   yarn = "<x.y.z>"                # Pinned version installed globally before each project run.
+#   yarn = "<x.y.z>"                # Pinned version installed globally once per run.
 #
 # Compilers:
 #   [compilers.<id>]
