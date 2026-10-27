@@ -59,10 +59,16 @@ fn sources_import_closure() -> anyhow::Result<()> {
     let main = crate::common::contract!("solidity/caller/Main.sol");
     let callable = crate::common::contract!("solidity/caller/Callable.sol");
     let unrelated = crate::common::TEST_SOLIDITY_CONTRACT;
-    let metadata = crate::cli::metadata(&[main, callable, unrelated, "--metadata"])?;
+    let output = crate::cli::execute_solx_to_directory(&[main, callable, unrelated, "--metadata"])?;
 
-    assert_eq!(source_names(&metadata["Main"]), [callable, main]);
-    assert_eq!(source_names(&metadata["Callable"]), [callable]);
+    assert_eq!(
+        source_names(&crate::cli::output_metadata(&output, main, "Main")?),
+        [callable, main]
+    );
+    assert_eq!(
+        source_names(&crate::cli::output_metadata(&output, callable, "Callable")?),
+        [callable]
+    );
 
     Ok(())
 }
@@ -72,8 +78,8 @@ fn defaults() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let contract = crate::common::TEST_SOLIDITY_CONTRACT;
-    let metadata = crate::cli::metadata(&[contract, "--metadata"])?;
-    let metadata = &metadata["SlangTest"];
+    let output = crate::cli::execute_solx_to_directory(&[contract, "--metadata"])?;
+    let metadata = crate::cli::output_metadata(&output, contract, "SlangTest")?;
     let solc_abi: serde_json::Value = serde_json::from_str(
         std::fs::read_to_string(crate::common::abi!("SlangTest.json"))?.as_str(),
     )?;
@@ -102,7 +108,7 @@ fn settings() -> anyhow::Result<()> {
     let contract = crate::common::TEST_SOLIDITY_CONTRACT;
     let library = "tests/data/contracts/solidity/MiniMath.sol:MiniMath";
     let address = "0xF9702469Dfb84A9aC171E284F71615bd3D3f1EdC";
-    let metadata = crate::cli::metadata(&[
+    let output = crate::cli::execute_solx_to_directory(&[
         contract,
         "b/=c/",
         "a/=b/",
@@ -121,7 +127,7 @@ fn settings() -> anyhow::Result<()> {
         "--libraries",
         format!("{library}={address}").as_str(),
     ])?;
-    let metadata = &metadata["SlangTest"];
+    let metadata = crate::cli::output_metadata(&output, contract, "SlangTest")?;
     let content = std::fs::read(contract)?;
 
     assert_eq!(
@@ -187,9 +193,9 @@ fn revert_strings() -> anyhow::Result<()> {
 }
 
 /// The names in `metadata`'s `sources`, in their sorted order.
-fn source_names(metadata: &serde_json::Value) -> Vec<&str> {
+fn source_names(metadata: &serde_json::Value) -> Vec<String> {
     metadata["sources"]
         .as_object()
-        .map(|sources| sources.keys().map(String::as_str).collect())
+        .map(|sources| sources.keys().cloned().collect())
         .unwrap_or_default()
 }

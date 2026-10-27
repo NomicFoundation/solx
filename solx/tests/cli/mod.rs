@@ -114,46 +114,51 @@ pub fn execute_solx_with_stdin(
 }
 
 ///
-/// The line after `header` in the printed output of every contract compiled with `args`, keyed by
-/// contract name.
+/// Execute `solx` with the given arguments into a fresh `--output-dir`, and return the directory.
 ///
-pub fn sections(
-    args: &[&str],
-    header: &str,
-) -> anyhow::Result<std::collections::BTreeMap<String, String>> {
-    let result = execute_solx(args)?;
-    let stdout = String::from_utf8(result.success().get_output().stdout.clone())?;
-
-    let mut sections = std::collections::BTreeMap::new();
-    let mut lines = stdout.lines();
-    while let Some(line) = lines.next() {
-        let Some(contract) = line
-            .strip_prefix("======= ")
-            .and_then(|line| line.strip_suffix(" ======="))
-        else {
-            continue;
-        };
-        let (_, name) = contract
-            .rsplit_once(':')
-            .ok_or_else(|| anyhow::anyhow!("no contract name in `{contract}`"))?;
-        let value = lines
-            .by_ref()
-            .skip_while(|line| *line != header)
-            .nth(1)
-            .ok_or_else(|| anyhow::anyhow!("no `{header}` of `{name}` in:\n{stdout}"))?;
-        sections.insert(name.to_owned(), value.to_owned());
-    }
-    Ok(sections)
+pub fn execute_solx_to_directory(args: &[&str]) -> anyhow::Result<tempfile::TempDir> {
+    let directory = tempfile::TempDir::with_prefix("solx_output")?;
+    let mut args = args.to_vec();
+    args.extend([
+        "--output-dir",
+        directory.path().to_str().expect("Always valid"),
+    ]);
+    execute_solx(args.as_slice())?.success();
+    Ok(directory)
 }
 
 ///
-/// The printed metadata of every contract compiled with `args`, keyed by contract name.
+/// The file with `suffix` that `--output-dir` wrote to `directory` for contract `name` in `path`.
 ///
-pub fn metadata(
-    args: &[&str],
-) -> anyhow::Result<std::collections::BTreeMap<String, serde_json::Value>> {
-    sections(args, "Metadata:")?
-        .into_iter()
-        .map(|(name, metadata)| Ok((name, serde_json::from_str(metadata.as_str())?)))
-        .collect()
+pub fn output_file(
+    directory: &tempfile::TempDir,
+    path: &str,
+    name: &str,
+    suffix: &str,
+) -> anyhow::Result<String> {
+    let file_name = format!(
+        "{}_{name}{suffix}",
+        solx_utils::ContractName::sanitize_path(path)
+    );
+    std::fs::read_to_string(directory.path().join(file_name.as_str())).map_err(|error| {
+        let written = std::fs::read_dir(directory.path())
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+            .collect::<Vec<_>>();
+        anyhow::anyhow!("reading `{file_name}`: {error}; written: {written:?}")
+    })
+}
+
+///
+/// The metadata that `--output-dir` wrote to `directory` for contract `name` in `path`.
+///
+pub fn output_metadata(
+    directory: &tempfile::TempDir,
+    path: &str,
+    name: &str,
+) -> anyhow::Result<serde_json::Value> {
+    Ok(serde_json::from_str(
+        output_file(directory, path, name, "_meta.json")?.as_str(),
+    )?)
 }

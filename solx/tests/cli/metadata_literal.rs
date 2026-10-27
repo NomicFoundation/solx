@@ -45,8 +45,9 @@ fn content() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let contract = crate::common::TEST_SOLIDITY_CONTRACT;
-    let metadata = crate::cli::metadata(&[contract, "--metadata", "--metadata-literal"])?;
-    let metadata = &metadata["SlangTest"];
+    let output =
+        crate::cli::execute_solx_to_directory(&[contract, "--metadata", "--metadata-literal"])?;
+    let metadata = crate::cli::output_metadata(&output, contract, "SlangTest")?;
     let source = &metadata["sources"][contract];
     let content = std::fs::read_to_string(contract)?;
 
