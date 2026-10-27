@@ -98,6 +98,17 @@ impl CompilationUnitScope<'_> {
         settings.insert("libraries".to_owned(), libraries.into());
         settings.insert("metadata".to_owned(), metadata.into());
         settings.insert("remappings".to_owned(), remappings.into_iter().collect());
+        if let Some(revert_strings) = input_settings
+            .debug
+            .as_ref()
+            .and_then(|debug| debug.revert_strings)
+            .filter(|revert_strings| *revert_strings != RevertStrings::Default)
+        {
+            settings.insert(
+                "debug".to_owned(),
+                serde_json::json!({ "revertStrings": revert_strings }),
+            );
+        }
         settings
     }
 

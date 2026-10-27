@@ -158,6 +158,34 @@ fn settings() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test]
+fn revert_strings() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("revert_strings_strip.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    let output = solx_utils::deserialize_from_slice::<solx_standard_json::Output>(
+        result.success().get_output().stdout.as_slice(),
+    )?;
+    let metadata: serde_json::Value = serde_json::from_str(
+        output.contracts["A"]["C"]
+            .metadata
+            .as_deref()
+            .expect("the metadata is selected"),
+    )?;
+
+    assert_eq!(
+        metadata["settings"]["debug"],
+        serde_json::json!({ "revertStrings": "strip" })
+    );
+
+    Ok(())
+}
+
 /// The names in `metadata`'s `sources`, in their sorted order.
 fn source_names(metadata: &serde_json::Value) -> Vec<&str> {
     metadata["sources"]
