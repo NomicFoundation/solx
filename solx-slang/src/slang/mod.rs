@@ -24,7 +24,6 @@ use solx_utils::Profiler;
 use solx_utils::Remapping;
 use solx_utils::RevertStrings;
 
-use crate::metadata::Metadata;
 use crate::scope::compilation_unit::CompilationUnitScope;
 
 use self::import_resolver::SourceImportResolver;
@@ -212,6 +211,7 @@ impl Slang {
             output.benchmarks = profiler.to_vec();
         }
         let scope = CompilationUnitScope {
+            unit: &unit,
             output_selection: &input_json.settings.output_selection,
             evm_version,
             revert_strings,
@@ -221,14 +221,10 @@ impl Slang {
                 .settings
                 .output_selection
                 .is_codegen_set_for_any(),
-            metadata: Metadata::new(
-                &unit,
-                &input_json.sources,
-                &input_json.settings,
-                evm_version,
-            ),
+            metadata_literal_content: input_json.settings.metadata.use_literal_content,
+            metadata_settings: CompilationUnitScope::metadata_settings(&unit, &input_json.settings),
         };
-        scope.compilation_unit(&unit, &mut output)?;
+        scope.compilation_unit(&mut output)?;
 
         Ok(output)
     }
