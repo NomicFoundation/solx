@@ -2,14 +2,14 @@
 //! Bytecode object.
 //!
 
-pub mod stage;
+pub mod state;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use solx_standard_json::OutputError;
 
-use self::stage::Stage;
+use self::state::State;
 
 ///
 /// Bytecode object.
@@ -48,8 +48,8 @@ pub struct Object {
     /// Linker symbols that were not provided at compile time.
     /// Such symbols must be resolved by tooling before deployment.
     pub unlinked_symbols: BTreeMap<String, Vec<u64>>,
-    /// The stage the object has reached, which the worker advances for the objects it links itself.
-    pub stage: Stage,
+    /// The state the object has reached, which the worker advances for the objects it links itself.
+    pub state: State,
     /// The assembled object before linking, which the objects embedding this one read.
     #[serde(with = "serde_bytes")]
     pub assembled_bytecode: Option<Vec<u8>>,
@@ -99,7 +99,7 @@ impl Object {
             metadata_bytes,
             dependencies,
             unlinked_symbols: BTreeMap::new(),
-            stage: Stage::Compiled,
+            state: State::Compiled,
             assembled_bytecode: None,
             is_size_fallback,
             warnings,
@@ -203,7 +203,7 @@ impl Object {
                 .insert(undefined_reference, symbol_offsets);
         }
         self.assembled_bytecode = Some(assembled.as_slice().to_owned());
-        self.stage = Stage::Assembled;
+        self.state = State::Assembled;
 
         Ok(())
     }
@@ -261,7 +261,7 @@ impl Object {
         }
         self.bytecode = Some(linked_object_with_placeholders.as_slice().to_owned());
         self.bytecode_hex = Some(bytecode_hex);
-        self.stage = Stage::Linked;
+        self.state = State::Linked;
 
         Ok(())
     }
