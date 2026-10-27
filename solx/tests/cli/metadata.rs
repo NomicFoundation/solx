@@ -68,6 +68,34 @@ fn sources_import_closure() -> anyhow::Result<()> {
 }
 
 #[test]
+fn defaults() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let contract = crate::common::TEST_SOLIDITY_CONTRACT;
+    let metadata = crate::cli::metadata(&[contract, "--metadata"])?;
+    let metadata = &metadata["SlangTest"];
+    let solc_abi: serde_json::Value = serde_json::from_str(
+        std::fs::read_to_string(crate::common::abi!("SlangTest.json"))?.as_str(),
+    )?;
+
+    assert_eq!(
+        metadata["settings"],
+        serde_json::json!({
+            "compilationTarget": { contract: "SlangTest" },
+            "evmVersion": "osaka",
+            "libraries": {},
+            "metadata": { "bytecodeHash": "ipfs" },
+            "optimizer": { "mode": "3", "sizeFallback": false },
+            "remappings": [],
+            "solidityVersion": metadata["settings"]["solidityVersion"],
+        })
+    );
+    assert_eq!(metadata["output"]["abi"], solc_abi["SlangTest"]);
+
+    Ok(())
+}
+
+#[test]
 fn settings() -> anyhow::Result<()> {
     crate::common::setup()?;
 

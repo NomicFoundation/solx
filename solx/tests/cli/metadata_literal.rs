@@ -46,11 +46,18 @@ fn content() -> anyhow::Result<()> {
 
     let contract = crate::common::TEST_SOLIDITY_CONTRACT;
     let metadata = crate::cli::metadata(&[contract, "--metadata", "--metadata-literal"])?;
-    let source = &metadata["SlangTest"]["sources"][contract];
+    let metadata = &metadata["SlangTest"];
+    let source = &metadata["sources"][contract];
+    let content = std::fs::read_to_string(contract)?;
 
     assert_eq!(
-        source["content"].as_str(),
-        Some(std::fs::read_to_string(contract)?.as_str())
+        metadata["settings"]["metadata"],
+        serde_json::json!({ "bytecodeHash": "ipfs", "useLiteralContent": true })
+    );
+    assert_eq!(source["content"].as_str(), Some(content.as_str()));
+    assert_eq!(
+        source["keccak256"],
+        solx_utils::Keccak256Hash::from_slice(content.as_bytes()).as_str()
     );
     assert!(source.get("urls").is_none());
 
