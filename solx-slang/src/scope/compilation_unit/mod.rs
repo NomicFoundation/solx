@@ -8,6 +8,7 @@ pub mod definition_output;
 use std::cell::OnceCell;
 use std::cmp::Reverse;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use rayon::iter::ParallelBridge;
 use rayon::iter::ParallelIterator;
@@ -71,24 +72,17 @@ impl CompilationUnitScope<'_> {
 
         let libraries = input_settings
             .libraries
-            .as_inner()
-            .iter()
-            .flat_map(|(path, libraries)| {
-                libraries.iter().map(move |(name, address)| {
-                    (
-                        solx_utils::ContractName::full_path(path, name),
-                        address.as_str().into(),
-                    )
-                })
-            })
+            .as_linker_symbols()
+            .expect("the compiler validates the library addresses before the frontend runs")
+            .into_iter()
+            .map(|(path, address)| (path, format!("0x{}", hex::encode(address)).into()))
             .collect::<serde_json::Map<_, _>>();
 
-        let mut remappings = input_settings
+        let remappings = input_settings
             .remappings
             .iter()
             .map(ToString::to_string)
-            .collect::<Vec<_>>();
-        remappings.sort();
+            .collect::<BTreeSet<_>>();
 
         let evm_version = EVMVersion::try_from(unit.evm_target())
             .expect("the unit is built for the EVM version the input resolves to");
@@ -103,7 +97,7 @@ impl CompilationUnitScope<'_> {
         );
         settings.insert("libraries".to_owned(), libraries.into());
         settings.insert("metadata".to_owned(), metadata.into());
-        settings.insert("remappings".to_owned(), remappings.into());
+        settings.insert("remappings".to_owned(), remappings.into_iter().collect());
         settings
     }
 

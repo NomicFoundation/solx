@@ -78,6 +78,7 @@ fn settings() -> anyhow::Result<()> {
         contract,
         "b/=c/",
         "a/=b/",
+        "b/=c/",
         "--metadata",
         "--metadata-hash",
         "none",
@@ -106,7 +107,7 @@ fn settings() -> anyhow::Result<()> {
         serde_json::json!({
             "compilationTarget": { contract: "SlangTest" },
             "evmVersion": "cancun",
-            "libraries": { library: address },
+            "libraries": { library: address.to_lowercase() },
             "llvmOptions": ["-evm-metadata-size", "10"],
             "metadata": { "appendCBOR": false, "bytecodeHash": "none" },
             "optimizer": { "mode": "z", "sizeFallback": true },

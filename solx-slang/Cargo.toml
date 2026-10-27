@@ -11,6 +11,7 @@ doctest = false
 
 [dependencies]
 anyhow.workspace = true
+hex.workspace = true
 inkwell = { workspace = true, features = ["llvm21-1-no-llvm-linking"] }
 melior.workspace = true
 num.workspace = true

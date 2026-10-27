@@ -4950,6 +4950,7 @@ name = "solx-slang"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "hex",
  "inkwell",
  "melior",
  "num",
