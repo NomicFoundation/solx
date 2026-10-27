@@ -102,35 +102,15 @@ __entry:                                ; @__entry
 
 ### `--metadata`
 
-Emits the contract metadata. The metadata is a JSON object that contains information about the contract, such as its name, source code hash, the list of dependencies, compiler versions, and so on.
+Emits the contract metadata in the [Solidity metadata format](https://docs.soliditylang.org/en/latest/metadata.html#contract-metadata), which is hashed into [the CBOR trailer of the bytecode](#--metadata-hash). The `compiler` entry names **Slang**, and the settings carry the code generation settings: the optimizer `mode` and `sizeFallback`, and `llvmOptions` when `--llvm-options` is passed.
 
-The **Slang** metadata format is compatible with the [Solidity metadata format](https://docs.soliditylang.org/en/latest/metadata.html#contract-metadata). This means that the metadata output can be used with other tools that support Solidity metadata. The `compiler` entry names **Slang**, and the settings additionally carry the LLVM code generation settings:
+```console
+$ slang 'Simple.sol' --metadata
 
-```javascript
-{
-  "compiler": {
-    "name": "slang",
-    // Mandatory: current version of Slang.
-    "version": "0.2.0"
-  },
-  "settings": {
-    // Optional: only set if `--llvm-options` is passed.
-    "llvmOptions": ["-key=value"],
-    "optimizer": {
-      "mode": "3",
-      "sizeFallback": false
-    },
-    // The language version the sources are compiled as.
-    "solidityVersion": "0.8.37"
-    // ...the other Solidity metadata settings
-  }
-}
-```
+======= Simple.sol:Simple =======
+Metadata:
+{"compiler":{"name":"slang","version":"[..]"},"language":"Solidity","output":{"abi":[{"inputs":[],"name":"first","outputs":[{"internalType":"uint64","name":"","type":"uint64"}],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"second","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"pure","type":"function"}]},"settings":{"compilationTarget":{"Simple.sol":"Simple"},"evmVersion":"osaka","libraries":{},"metadata":{"bytecodeHash":"ipfs"},"optimizer":{"mode":"3","sizeFallback":false},"remappings":[],"solidityVersion":"[..]"},"sources":{"Simple.sol":{"keccak256":"0x402fe0b38cc9d81e8c9f6d07854cca27fbb307f06d8a129998026907a10c7ca1","urls":["dweb:/ipfs/QmehmUFKCtytG8WcWQ676KvqwURfkVYK89VHZEvSzyLc2Z"]}},"version":1}
 
-Usage:
-
-```bash
-slang 'Simple.sol' --metadata
 ```
 
 
