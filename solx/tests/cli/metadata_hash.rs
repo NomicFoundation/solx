@@ -38,24 +38,15 @@ fn ipfs_distinguishes_identical_code() -> anyhow::Result<()> {
         "--bin-runtime",
     ];
 
-    let result = crate::cli::execute_solx(args)?;
-    let stdout = String::from_utf8(result.success().get_output().stdout.clone())?;
-    let runtime = |name: &str| {
-        stdout
-            .lines()
-            .skip_while(|line| !line.ends_with(format!(":{name} =======").as_str()))
-            .skip_while(|line| *line != "Binary of the runtime part:")
-            .nth(1)
-            .unwrap_or_else(|| panic!("`{name}` has a runtime binary"))
-    };
+    let runtime = crate::cli::sections(args, "Binary of the runtime part:")?;
 
-    assert_ne!(runtime("Base"), runtime("Derived"));
+    assert_ne!(runtime["Base"], runtime["Derived"]);
 
     Ok(())
 }
 
 #[test]
-fn none_prints_compiler_section() -> anyhow::Result<()> {
+fn none_prints_compiler() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let hash_type = MetadataHashType::None.to_string();

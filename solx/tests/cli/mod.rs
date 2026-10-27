@@ -66,35 +66,6 @@ pub fn execute_solx(args: &[&str]) -> anyhow::Result<assert_cmd::assert::Assert>
     Ok(command.args(args).assert())
 }
 
-/// The printed metadata of every contract compiled with `args`, keyed by contract name.
-pub fn metadata(
-    args: &[&str],
-) -> anyhow::Result<std::collections::BTreeMap<String, serde_json::Value>> {
-    let result = execute_solx(args)?;
-    let stdout = String::from_utf8(result.success().get_output().stdout.clone())?;
-
-    let mut metadata = std::collections::BTreeMap::new();
-    let mut lines = stdout.lines();
-    while let Some(line) = lines.next() {
-        let Some(header) = line
-            .strip_prefix("======= ")
-            .and_then(|line| line.strip_suffix(" ======="))
-        else {
-            continue;
-        };
-        let (_, name) = header
-            .rsplit_once(':')
-            .ok_or_else(|| anyhow::anyhow!("no contract name in `{header}`"))?;
-        let value = lines
-            .by_ref()
-            .skip_while(|line| *line != "Metadata:")
-            .nth(1)
-            .ok_or_else(|| anyhow::anyhow!("no metadata of `{name}` in:\n{stdout}"))?;
-        metadata.insert(name.to_owned(), serde_json::from_str(value)?);
-    }
-    Ok(metadata)
-}
-
 ///
 /// Execute `solx` with the given arguments and environment variables, and assert the result.
 ///
@@ -140,4 +111,49 @@ pub fn execute_solx_with_stdin(
         .wait_with_output()
         .map_err(|error| anyhow::anyhow!("Subprocess output reading: {error:?}"))?;
     Ok(Assert::new(output).append_context("command", format!("{command:?}")))
+}
+
+///
+/// The line after `header` in the printed output of every contract compiled with `args`, keyed by
+/// contract name.
+///
+pub fn sections(
+    args: &[&str],
+    header: &str,
+) -> anyhow::Result<std::collections::BTreeMap<String, String>> {
+    let result = execute_solx(args)?;
+    let stdout = String::from_utf8(result.success().get_output().stdout.clone())?;
+
+    let mut sections = std::collections::BTreeMap::new();
+    let mut lines = stdout.lines();
+    while let Some(line) = lines.next() {
+        let Some(contract) = line
+            .strip_prefix("======= ")
+            .and_then(|line| line.strip_suffix(" ======="))
+        else {
+            continue;
+        };
+        let (_, name) = contract
+            .rsplit_once(':')
+            .ok_or_else(|| anyhow::anyhow!("no contract name in `{contract}`"))?;
+        let value = lines
+            .by_ref()
+            .skip_while(|line| *line != header)
+            .nth(1)
+            .ok_or_else(|| anyhow::anyhow!("no `{header}` of `{name}` in:\n{stdout}"))?;
+        sections.insert(name.to_owned(), value.to_owned());
+    }
+    Ok(sections)
+}
+
+///
+/// The printed metadata of every contract compiled with `args`, keyed by contract name.
+///
+pub fn metadata(
+    args: &[&str],
+) -> anyhow::Result<std::collections::BTreeMap<String, serde_json::Value>> {
+    sections(args, "Metadata:")?
+        .into_iter()
+        .map(|(name, metadata)| Ok((name, serde_json::from_str(metadata.as_str())?)))
+        .collect()
 }
