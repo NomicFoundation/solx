@@ -18,7 +18,7 @@ use solx_utils::SyncLock;
 use solx_standard_json::CollectableError;
 
 use self::contract::Contract;
-use self::contract::object::stage::Stage as ObjectStage;
+use self::contract::object::state::State as ObjectState;
 
 ///
 /// The Solidity project build.
@@ -79,7 +79,7 @@ impl Build {
                 .values()
                 .flat_map(|contract| contract.objects_ref())
                 .filter(|object| {
-                    object.stage == ObjectStage::Compiled
+                    object.state == ObjectState::Compiled
                         && object
                             .dependencies
                             .into_iter()
@@ -117,7 +117,7 @@ impl Build {
 
         for contract in self.contracts.values_mut() {
             for object in contract.objects_mut().into_iter() {
-                if object.stage != ObjectStage::Linked
+                if object.state != ObjectState::Linked
                     && let Err(error) = object.link(&linker_symbols)
                 {
                     self.messages.lock_sync().push(
