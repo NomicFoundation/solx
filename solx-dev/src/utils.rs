@@ -258,6 +258,7 @@ pub fn copy_project(
     destination: &Path,
     project_name: &str,
     solidity_version: &str,
+    rewrite_pragmas_in: &[String],
 ) -> anyhow::Result<()> {
     remove(destination, project_name)?;
     let mut copy_command = Command::new("cp");
@@ -279,12 +280,19 @@ pub fn copy_project(
         solx_utils::cargo_status_ok("Fixing"),
         project_name.bright_white().bold()
     );
-    // Package-manager installs keep their own pragmas.
+    // Package-manager installs keep their own pragmas unless the project lists them.
     for solidity_file in git_tracked_files(destination, "*.sol")? {
         rewrite_version_pragmas_in_file(
             solidity_file.as_path(),
             format!("pragma solidity >={solidity_version};").as_str(),
         )?;
+    }
+    for directory in rewrite_pragmas_in {
+        let directory = destination.join(directory);
+        if !directory.is_dir() {
+            anyhow::bail!("Project {project_name}: {directory:?} not found");
+        }
+        rewrite_version_pragmas_under(directory.as_path(), solidity_version)?;
     }
     Ok(())
 }
@@ -440,6 +448,29 @@ pub fn rewrite_version_pragmas_in_file(path: &Path, pragma: &str) -> anyhow::Res
 }
 
 ///
+/// Replaces every version pragma under `directory` with `pragma solidity >=<version>;`.
+///
+/// A dependency can pin an exact version pragma, so a project lists the installed
+/// directories whose pragmas are rewritten along with the git-tracked sources.
+///
+pub fn rewrite_version_pragmas_under(
+    directory: &Path,
+    solidity_version: &str,
+) -> anyhow::Result<()> {
+    let pragma = format!("pragma solidity >={solidity_version};");
+    for solidity_file in glob::glob(format!("{}/**/*.sol", directory.to_string_lossy()).as_str())
+        .expect("Always valid")
+        .filter_map(Result::ok)
+    {
+        if !solidity_file.is_file() {
+            continue;
+        }
+        rewrite_version_pragmas_in_file(solidity_file.as_path(), pragma.as_str())?;
+    }
+    Ok(())
+}
+
+///
 /// Identify XCode version using `pkgutil`.
 ///
 pub fn get_xcode_version() -> anyhow::Result<u32> {
@@ -556,9 +587,28 @@ mod tests {
         commit_file(source.as_path(), "src/Project.sol");
         std::os::unix::fs::symlink("src/Project.sol", source.join("link")).expect("Always valid");
 
+        std::fs::create_dir_all(source.join("node_modules/listed")).expect("Always valid");
+        std::fs::write(
+            source.join("node_modules/listed/Listed.sol"),
+            "pragma solidity 0.8.0;",
+        )
+        .expect("Always valid");
+        std::fs::create_dir_all(source.join("node_modules/unlisted")).expect("Always valid");
+        std::fs::write(
+            source.join("node_modules/unlisted/Unlisted.sol"),
+            "pragma solidity 0.8.0;",
+        )
+        .expect("Always valid");
+
         let destination = directory.join("work");
-        super::copy_project(source.as_path(), destination.as_path(), "project", "0.8.34")
-            .expect("Always valid");
+        super::copy_project(
+            source.as_path(),
+            destination.as_path(),
+            "project",
+            "0.8.34",
+            &["node_modules/listed".to_owned()],
+        )
+        .expect("Always valid");
         assert_eq!(
             std::fs::read_to_string(destination.join("src/Project.sol")).expect("Always valid"),
             "pragma solidity >=0.8.34;"
@@ -568,10 +618,39 @@ mod tests {
             "pragma solidity 0.8.0;",
             "the rewrite must not reach the source"
         );
+        assert_eq!(
+            std::fs::read_to_string(destination.join("node_modules/listed/Listed.sol"))
+                .expect("Always valid"),
+            "pragma solidity >=0.8.34;",
+            "a listed install directory is rewritten"
+        );
+        assert_eq!(
+            std::fs::read_to_string(destination.join("node_modules/unlisted/Unlisted.sol"))
+                .expect("Always valid"),
+            "pragma solidity 0.8.0;",
+            "an unlisted install directory keeps its pragmas"
+        );
+        assert!(
+            super::copy_project(
+                source.as_path(),
+                destination.as_path(),
+                "project",
+                "0.8.34",
+                &["node_modules/absent".to_owned()],
+            )
+            .is_err(),
+            "a listed directory that does not exist is an error"
+        );
 
         std::fs::write(destination.join("output"), "new").expect("Always valid");
-        super::copy_project(source.as_path(), destination.as_path(), "project", "0.8.34")
-            .expect("Always valid");
+        super::copy_project(
+            source.as_path(),
+            destination.as_path(),
+            "project",
+            "0.8.34",
+            &[],
+        )
+        .expect("Always valid");
         assert!(
             !destination.join("output").exists(),
             "a copy must not keep the previous toolchain's outputs"

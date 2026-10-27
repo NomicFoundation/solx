@@ -207,6 +207,7 @@ pub fn test(
                 project_directory.as_path(),
                 project_name.as_str(),
                 solidity_version,
+                &[],
             )?;
 
             let config_file_name = if project_directory.join("hardhat.config.ts").exists() {

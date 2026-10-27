@@ -24,6 +24,9 @@ pub struct Project {
     /// Whether the project requires `yarn`.
     #[serde(default)]
     pub requires_yarn: bool,
+    /// Installed package directories whose version pragmas are rewritten too.
+    #[serde(default)]
+    pub rewrite_pragmas_in: Vec<String>,
     /// Environment variables required for every command.
     #[serde(default)]
     pub env: HashMap<String, String>,
