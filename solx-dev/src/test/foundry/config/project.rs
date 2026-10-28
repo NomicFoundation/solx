@@ -3,6 +3,7 @@
 //!
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 ///
 /// `solx` Foundry project.
@@ -17,6 +18,9 @@ pub struct Project {
     /// Git commit SHA to pin the repository to.
     #[serde(default)]
     pub commit: Option<String>,
+    /// Patch applied to the checkout, for test fixes the pinned commit lacks.
+    #[serde(default)]
+    pub patch: Option<PathBuf>,
     /// Whether the project requires `yarn`.
     #[serde(default)]
     pub requires_yarn: bool,

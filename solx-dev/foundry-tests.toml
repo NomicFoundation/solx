@@ -22,6 +22,7 @@
 #   [projects.<name>]
 #   url = "https://github.com/..."  # Git repository URL
 #   commit = "abc123..."            # Git commit SHA to pin (optional, HEAD if omitted)
+#   patch = "./path.patch"          # Applied with `git apply` right after checkout
 #   description = "..."             # Project description
 #   requires_yarn = true/false      # Run yarn install before building
 #   disabled = true/false           # Whether to skip this project
@@ -147,7 +148,8 @@ requires_yarn = true
 
 [projects.solady]
 url = "https://github.com/Vectorized/solady"
-commit = "90db92ce173856605d24a554969f2c67cadbc7e9"
+commit = "258f67cc71e39cff307b726939ade17e9d8bcf5c"
+patch = "./solx-dev/foundry-patches/solady.patch"
 description = "Gas optimized Solidity snippets."
 
 [projects.unix]
