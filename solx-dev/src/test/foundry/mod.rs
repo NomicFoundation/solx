@@ -176,6 +176,7 @@ pub fn test(
                 project_directory.as_path(),
                 project_name.as_str(),
                 solidity_version,
+                project.rewrite_pragmas_in.as_slice(),
             )?;
 
             let config_file_name = "foundry.toml";

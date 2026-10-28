@@ -25,6 +25,7 @@
 #   patch = "./path.patch"          # Applied with `git apply` right after checkout
 #   description = "..."             # Project description
 #   requires_yarn = true/false      # Run yarn install before building
+#   rewrite_pragmas_in = ["..."]    # Installed package directories whose pragmas are rewritten too
 #   disabled = true/false           # Whether to skip this project
 #   [projects.<name>.env]
 #   VAR = "value"                   # Environment variables for build/test
@@ -267,3 +268,10 @@ EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 url = "https://github.com/hedgar2017/WTF-gas-optimization"
 commit = "1a2b0ca46d0ae04ffbd57cdbfe9f603ecdd61c25"
 description = "WTF Solidity gas optimization techniques"
+
+[projects.swap-vm]
+url = "https://github.com/1inch/swap-vm"
+commit = "585f0541cfbf9a043b4a7b25b6b4c7d752915469"
+description = "1inch SwapVM: opcode dispatch loop that re-enters itself through instruction handlers"
+requires_yarn = true
+rewrite_pragmas_in = ["node_modules/@1inch/aqua"]
