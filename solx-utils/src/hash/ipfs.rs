@@ -52,6 +52,13 @@ impl IPFS {
     }
 
     ///
+    /// Returns the base58 CIDv0, the form `dweb:/ipfs/` URLs use.
+    ///
+    pub fn as_base58(&self) -> &str {
+        self.string_base58.as_str()
+    }
+
+    ///
     /// Extracts the binary representation.
     ///
     pub fn to_vec(&self) -> Vec<u8> {
@@ -79,7 +86,7 @@ mod tests {
     #[test]
     fn hashes_one_partial_chunk() {
         assert_eq!(
-            IPFS::from_slice(&source(100)).string_base58,
+            IPFS::from_slice(&source(100)).as_base58(),
             "QmXrKgSxFj667mufDfVHrNHXhNFEx2yueBh7Qd7myZEhVi"
         );
     }
@@ -87,7 +94,7 @@ mod tests {
     #[test]
     fn hashes_exactly_one_chunk() {
         assert_eq!(
-            IPFS::from_slice(&source(262144)).string_base58,
+            IPFS::from_slice(&source(262144)).as_base58(),
             "QmSdGxUBTtR1iuis2kB2czNrWhxJjLcHx6zCboLa3duNHB"
         );
     }
@@ -95,7 +102,7 @@ mod tests {
     #[test]
     fn hashes_one_byte_past_a_chunk() {
         assert_eq!(
-            IPFS::from_slice(&source(262145)).string_base58,
+            IPFS::from_slice(&source(262145)).as_base58(),
             "QmTdEtYCeHcYoPA8L2w9i5KjLgtou3KqZRvci4EfW4DWRY"
         );
     }
@@ -103,7 +110,7 @@ mod tests {
     #[test]
     fn hashes_exactly_two_chunks() {
         assert_eq!(
-            IPFS::from_slice(&source(524288)).string_base58,
+            IPFS::from_slice(&source(524288)).as_base58(),
             "QmRyuSFwU9RqvZC4LmcpVRnX5Zfv3chSuSgdShY5Szeq4d"
         );
     }

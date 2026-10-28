@@ -112,3 +112,53 @@ pub fn execute_solx_with_stdin(
         .map_err(|error| anyhow::anyhow!("Subprocess output reading: {error:?}"))?;
     Ok(Assert::new(output).append_context("command", format!("{command:?}")))
 }
+
+///
+/// Execute `solx` with the given arguments into a fresh `--output-dir`, and return the directory.
+///
+pub fn execute_solx_to_directory(args: &[&str]) -> anyhow::Result<tempfile::TempDir> {
+    let directory = tempfile::TempDir::with_prefix("solx_output")?;
+    let mut args = args.to_vec();
+    args.extend([
+        "--output-dir",
+        directory.path().to_str().expect("Always valid"),
+    ]);
+    execute_solx(args.as_slice())?.success();
+    Ok(directory)
+}
+
+///
+/// The file with `suffix` that `--output-dir` wrote to `directory` for contract `name` in `path`.
+///
+pub fn output_file(
+    directory: &tempfile::TempDir,
+    path: &str,
+    name: &str,
+    suffix: &str,
+) -> anyhow::Result<String> {
+    let file_name = format!(
+        "{}_{name}{suffix}",
+        solx_utils::ContractName::sanitize_path(path)
+    );
+    std::fs::read_to_string(directory.path().join(file_name.as_str())).map_err(|error| {
+        let written = std::fs::read_dir(directory.path())
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+            .collect::<Vec<_>>();
+        anyhow::anyhow!("reading `{file_name}`: {error}; written: {written:?}")
+    })
+}
+
+///
+/// The metadata that `--output-dir` wrote to `directory` for contract `name` in `path`.
+///
+pub fn output_metadata(
+    directory: &tempfile::TempDir,
+    path: &str,
+    name: &str,
+) -> anyhow::Result<serde_json::Value> {
+    Ok(serde_json::from_str(
+        output_file(directory, path, name, "_meta.json")?.as_str(),
+    )?)
+}

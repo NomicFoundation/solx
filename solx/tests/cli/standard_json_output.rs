@@ -158,7 +158,6 @@ fn yul_bytecode_umbrella_selection_is_not_rejected() -> anyhow::Result<()> {
 #[test_case(crate::common::standard_json!("metadata_hash_ipfs_no_metadata.json"), true, false)]
 #[test_case(crate::common::standard_json!("metadata_hash_none_and_metadata.json"), false, true)]
 #[test_case(crate::common::standard_json!("metadata_hash_none_no_metadata.json"), false, false)]
-#[ignore = "solx does not emit this output yet"]
 fn metadata_hash_variants(
     path: &str,
     expect_ipfs_marker: bool,
@@ -404,7 +403,6 @@ fn select_specific_debug_info(path: &str, expected_key: &str) -> anyhow::Result<
 }
 
 #[test]
-#[ignore = "solx does not emit this output yet"]
 fn via_ir_output_structure() -> anyhow::Result<()> {
     crate::common::setup()?;
 

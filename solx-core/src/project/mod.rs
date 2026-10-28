@@ -303,12 +303,8 @@ impl Project {
                 let contract_name = contract.name.clone();
 
                 let metadata = contract.metadata.take().map(|metadata| {
-                    ContractMetadata::new(
-                        solc_version.as_ref(),
-                        optimizer_settings.clone(),
-                        llvm_options.as_slice(),
-                    )
-                    .insert_into(metadata.as_str())
+                    ContractMetadata::new(optimizer_settings.clone(), llvm_options.as_slice())
+                        .insert_into(metadata.as_str())
                 });
                 let abi = contract.abi.take();
                 let method_identifiers = contract.method_identifiers.take();

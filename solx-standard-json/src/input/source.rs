@@ -6,6 +6,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+use solx_utils::IPFSHash;
+use solx_utils::Keccak256Hash;
 use solx_utils::LineIndex;
 
 ///
@@ -24,6 +26,12 @@ pub struct Source {
     /// The content's line index.
     #[serde(skip)]
     line_index: OnceLock<LineIndex>,
+    /// The content's `keccak256` hash.
+    #[serde(skip)]
+    keccak256: OnceLock<Keccak256Hash>,
+    /// The content's IPFS hash.
+    #[serde(skip)]
+    ipfs: OnceLock<IPFSHash>,
 }
 
 impl Source {
@@ -41,6 +49,8 @@ impl Source {
             content: Some(content),
             urls: None,
             line_index: OnceLock::new(),
+            keccak256: OnceLock::new(),
+            ipfs: OnceLock::new(),
         }
     }
 
@@ -118,6 +128,28 @@ impl Source {
         let content = self.content.as_deref()?;
         Some(self.line_index.get_or_init(|| LineIndex::new(content)))
     }
+
+    ///
+    /// The `keccak256` hash of the content, computed on first use.
+    ///
+    pub fn keccak256(&self) -> Option<&Keccak256Hash> {
+        let content = self.content.as_deref()?;
+        Some(
+            self.keccak256
+                .get_or_init(|| Keccak256Hash::from_slice(content.as_bytes())),
+        )
+    }
+
+    ///
+    /// The IPFS hash of the content, computed on first use.
+    ///
+    pub fn ipfs(&self) -> Option<&IPFSHash> {
+        let content = self.content.as_deref()?;
+        Some(
+            self.ipfs
+                .get_or_init(|| IPFSHash::from_slice(content.as_bytes())),
+        )
+    }
 }
 
 impl From<&Path> for Source {
@@ -126,6 +158,8 @@ impl From<&Path> for Source {
             content: None,
             urls: Some(vec![path.to_string_lossy().to_string()]),
             line_index: OnceLock::new(),
+            keccak256: OnceLock::new(),
+            ipfs: OnceLock::new(),
         }
     }
 }

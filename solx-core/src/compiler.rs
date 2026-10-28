@@ -250,6 +250,7 @@ impl<'arguments> Compiler<'arguments> {
             llvm_options.clone(),
         )?;
         run_solx_read_input.borrow_mut().finish();
+        let linker_symbols = input.settings.libraries.as_linker_symbols()?;
 
         let run_frontend_standard_json =
             profiler.start_pipeline_element(format!("{}_RunStandardJSON", Slang::NAME).as_str());
@@ -257,8 +258,6 @@ impl<'arguments> Compiler<'arguments> {
         run_frontend_standard_json.borrow_mut().finish();
         output.take_and_write_warnings();
         output.check_errors()?;
-
-        let linker_symbols = input.settings.libraries.as_linker_symbols()?;
 
         let run_solx_project = profiler.start_pipeline_element("Compiler_BuildProject");
         let project = Project::try_from_solidity_output(

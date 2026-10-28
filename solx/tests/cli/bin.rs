@@ -237,33 +237,24 @@ fn internal_function_pointers_ignore_other_sources() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let contract = crate::common::contract!("solidity/InternalFunctionPointer.sol");
-    let alone = internal_function_pointer_binary(&[contract])?;
+    let alone = internal_function_pointer_binary(contract, &[])?;
     // `FuzzedLinkerError.sol` sorts before the contract's file, which shifts every Slang node id
     // in it, and defines functions of its own.
-    let with_preceding_source = internal_function_pointer_binary(&[
-        crate::common::contract!("solidity/FuzzedLinkerError.sol"),
+    let with_preceding_source = internal_function_pointer_binary(
         contract,
-    ])?;
+        &[crate::common::contract!("solidity/FuzzedLinkerError.sol")],
+    )?;
 
     assert_eq!(alone, with_preceding_source);
 
     Ok(())
 }
 
-/// The binary of `InternalFunctionPointer` compiled together with `sources`.
-fn internal_function_pointer_binary(sources: &[&str]) -> anyhow::Result<String> {
+/// The binary of `InternalFunctionPointer` in `contract` compiled together with `sources`.
+fn internal_function_pointer_binary(contract: &str, sources: &[&str]) -> anyhow::Result<String> {
     let mut args = sources.to_vec();
-    args.extend(["--bin", "--metadata-hash", "none"]);
+    args.extend([contract, "--bin", "--metadata-hash", "none"]);
 
-    let result = crate::cli::execute_solx(&args)?;
-    let stdout = String::from_utf8(result.success().get_output().stdout.clone())?;
-
-    stdout
-        .lines()
-        .skip_while(|line| !line.ends_with(":InternalFunctionPointer ======="))
-        .skip_while(|line| *line != "Binary:")
-        .nth(1)
-        .filter(|binary| !binary.is_empty() && binary.bytes().all(|byte| byte.is_ascii_hexdigit()))
-        .map(str::to_owned)
-        .ok_or_else(|| anyhow::anyhow!("no binary of InternalFunctionPointer in:\n{stdout}"))
+    let output = crate::cli::execute_solx_to_directory(&args)?;
+    crate::cli::output_file(&output, contract, "InternalFunctionPointer", ".bin")
 }

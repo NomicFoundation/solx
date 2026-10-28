@@ -48,7 +48,7 @@ $ slang 'Simple.sol' --bin
 
 ======= Simple.sol:Simple =======
 Binary:
-34156008575f5ffd5b630000005b80630000001b6080396080f3fe60043610603557346035575f3560e01c635a8ac02d8114602e57633df4ddf40360355760015b60805260206080f35b5060026025565b5f5ffdfea164736f6c637817736c616e673a302e322e303b736f6c633a302e382e3337001f
+34156008575f5ffd5b630000008480630000001b6080396080f3fe60043610603557346035575f3560e01c635a8ac02d8114602e57633df4ddf40360355760015b60805260206080f35b5060026025565b5f5ffdfea2646970667358221220[..]64736f6c637817736c616e673a302e322e303b736f6c633a302e382e33370048
 
 ```
 
@@ -63,7 +63,7 @@ $ slang 'Simple.sol' --bin-runtime
 
 ======= Simple.sol:Simple =======
 Binary of the runtime part:
-60043610603557346035575f3560e01c635a8ac02d8114602e57633df4ddf40360355760015b60805260206080f35b5060026025565b5f5ffdfea164736f6c637817736c616e673a302e322e303b736f6c633a302e382e3337001f
+60043610603557346035575f3560e01c635a8ac02d8114602e57633df4ddf40360355760015b60805260206080f35b5060026025565b5f5ffdfea2646970667358221220[..]64736f6c637817736c616e673a302e322e303b736f6c633a302e382e33370048
 
 ```
 
@@ -102,34 +102,15 @@ __entry:                                ; @__entry
 
 ### `--metadata`
 
-Emits the contract metadata. The metadata is a JSON object that contains information about the contract, such as its name, source code hash, the list of dependencies, compiler versions, and so on.
+Emits the contract metadata in the [Solidity metadata format](https://docs.soliditylang.org/en/latest/metadata.html#contract-metadata), which is hashed into [the CBOR trailer of the bytecode](#--metadata-hash). The `compiler` entry names **Slang**, and the settings carry the code generation settings: the optimizer `mode` and `sizeFallback`, and `llvmOptions` when `--llvm-options` is passed.
 
-The **Slang** metadata format is compatible with the [Solidity metadata format](https://docs.soliditylang.org/en/latest/metadata.html#contract-metadata). This means that the metadata output can be used with other tools that support Solidity metadata. The metadata that is hashed into [the CBOR trailer of the bytecode](#--metadata-hash) additionally carries extra **Slang** data inserted into the metadata with this JSON object:
+```console
+$ slang 'Simple.sol' --metadata
 
-```javascript
-{
-  "slang": {
-    "llvm_options": [],
-    "optimizer_settings": {
-      "is_debug_logging_enabled": false,
-      "is_fallback_to_size_enabled": false,
-      "is_verify_each_enabled": false,
-      "level_back_end": "Aggressive",
-      "level_middle_end": "Aggressive",
-      "level_middle_end_size": "Zero"
-    },
-    // Optional: the Solidity language version, only set for Solidity and Yul contracts.
-    "solc_version": "0.8.37",
-    // Mandatory: current version of Slang.
-    "version": "0.2.0"
-  }
-}
-```
+======= Simple.sol:Simple =======
+Metadata:
+{"compiler":{"name":"slang","version":"[..]"},"language":"Solidity","output":{"abi":[{"inputs":[],"name":"first","outputs":[{"internalType":"uint64","name":"","type":"uint64"}],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"second","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"pure","type":"function"}]},"settings":{"compilationTarget":{"Simple.sol":"Simple"},"evmVersion":"osaka","libraries":{},"metadata":{"bytecodeHash":"ipfs"},"optimizer":{"mode":"3","sizeFallback":false},"remappings":[],"solidityVersion":"[..]"},"sources":{"Simple.sol":{"keccak256":"0x402fe0b38cc9d81e8c9f6d07854cca27fbb307f06d8a129998026907a10c7ca1","urls":["dweb:/ipfs/QmehmUFKCtytG8WcWQ676KvqwURfkVYK89VHZEvSzyLc2Z"]}},"version":1}
 
-Currently not supported. Usage:
-
-```bash
-slang 'Simple.sol' --metadata
 ```
 
 
@@ -583,19 +564,19 @@ $ slang 'Simple.sol' --bin --metadata-hash 'ipfs'
 
 ======= Simple.sol:Simple =======
 Binary:
-34156008575f5ffd5b630000005b80630000001b6080396080f3fe60043610603557346035575f3560e01c635a8ac02d8114602e57633df4ddf40360355760015b60805260206080f35b5060026025565b5f5ffdfea164736f6c637817736c616e673a302e322e303b736f6c633a302e382e3337001f
+34156008575f5ffd5b630000008480630000001b6080396080f3fe60043610603557346035575f3560e01c635a8ac02d8114602e57633df4ddf40360355760015b60805260206080f35b5060026025565b5f5ffdfea2646970667358221220[..]64736f6c637817736c616e673a302e322e303b736f6c633a302e382e33370048
 
 ```
 
-The byte array starting with `a1` at the end of the bytecode is a CBOR-encoded compiler version data and, when the contract metadata is emitted, its hash.
+The byte array starting with `a2` at the end of the bytecode is a CBOR-encoded compiler version data and the hash of the contract metadata.
 
-The last two bytes of the metadata (`0x001e`) are not a part of the CBOR payload, but the length of it, which must be known to correctly decode the payload.
+The last two bytes of the metadata (`0x0048`) are not a part of the CBOR payload, but the length of it, which must be known to correctly decode the payload.
 
 JSON representation of the CBOR payload:
 
 ```javascript
 {
-    // Optional: included if `--metadata-hash` is set to `ipfs` and the contract metadata is emitted.
+    // Optional: included if `--metadata-hash` is set to `ipfs`.
     "ipfs": "1220bec8fa0149a786c5810200ef5a436a154cff832af68ace5beeabcbb82166cb92",
 
     // Required: consists of semicolon-separated pairs of colon-separated compiler names and versions.
@@ -656,7 +637,7 @@ Warning: viaIR is ignored: Slang has a single compilation pipeline.
 
 ======= Simple.sol:Simple =======
 Binary:
-34156008575f5ffd5b630000005b80630000001b6080396080f3fe60043610603557346035575f3560e01c635a8ac02d8114602e57633df4ddf40360355760015b60805260206080f35b5060026025565b5f5ffdfea164736f6c637817736c616e673a302e322e303b736f6c633a302e382e3337001f
+34156008575f5ffd5b630000008480630000001b6080396080f3fe60043610603557346035575f3560e01c635a8ac02d8114602e57633df4ddf40360355760015b60805260206080f35b5060026025565b5f5ffdfea2646970667358221220[..]64736f6c637817736c616e673a302e322e303b736f6c633a302e382e33370048
 
 ```
 

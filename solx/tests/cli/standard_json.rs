@@ -248,7 +248,6 @@ fn missing_sources() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "solx does not emit this output yet"]
 fn metadata_hash_ipfs_and_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -267,7 +266,6 @@ fn metadata_hash_ipfs_and_metadata() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "solx does not emit this output yet"]
 fn metadata_hash_ipfs_no_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -286,7 +284,6 @@ fn metadata_hash_ipfs_no_metadata() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "solx does not emit this output yet"]
 fn metadata_hash_none_and_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 

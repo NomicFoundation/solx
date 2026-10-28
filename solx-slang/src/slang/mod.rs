@@ -211,6 +211,7 @@ impl Slang {
             output.benchmarks = profiler.to_vec();
         }
         let scope = CompilationUnitScope {
+            unit: &unit,
             output_selection: &input_json.settings.output_selection,
             evm_version,
             revert_strings,
@@ -220,8 +221,10 @@ impl Slang {
                 .settings
                 .output_selection
                 .is_codegen_set_for_any(),
+            metadata_literal_content: input_json.settings.metadata.use_literal_content,
+            metadata_settings: CompilationUnitScope::metadata_settings(&unit, &input_json.settings),
         };
-        scope.compilation_unit(&unit, &mut output)?;
+        scope.compilation_unit(&mut output)?;
 
         Ok(output)
     }

@@ -41,18 +41,20 @@ pub struct Contract {
 
 impl Contract {
     ///
-    /// Wraps an MLIR pipeline output together with its JSON ABI, ABI method identifiers and the
-    /// storage layouts the output selection requests.
+    /// Wraps an MLIR pipeline output together with its JSON ABI, metadata, ABI method identifiers
+    /// and the storage layouts the output selection requests.
     ///
     pub fn new_mlir(
         mlir: solx_mlir::MlirOutput,
         abi: serde_json::Value,
+        metadata: String,
         method_identifiers: std::collections::BTreeMap<String, String>,
         storage_layout: Option<serde_json::Value>,
         transient_storage_layout: Option<serde_json::Value>,
     ) -> Self {
         Self {
             abi: Some(abi),
+            metadata: Some(metadata),
             storage_layout,
             transient_storage_layout,
             mlir: Some(mlir),
@@ -65,18 +67,20 @@ impl Contract {
     }
 
     ///
-    /// Wraps the JSON ABI, ABI method identifiers and the storage layouts the output selection
-    /// requests of a definition with no code to output: an interface, an abstract contract, or
-    /// any definition when no selected output needs codegen.
+    /// Wraps the JSON ABI, metadata, ABI method identifiers and the storage layouts the output
+    /// selection requests of a definition with no code to output: an interface, an abstract
+    /// contract, or any definition when no selected output needs codegen.
     ///
     pub fn new_abi(
         abi: serde_json::Value,
+        metadata: String,
         method_identifiers: std::collections::BTreeMap<String, String>,
         storage_layout: Option<serde_json::Value>,
         transient_storage_layout: Option<serde_json::Value>,
     ) -> Self {
         Self {
             abi: Some(abi),
+            metadata: Some(metadata),
             storage_layout,
             transient_storage_layout,
             evm: Some(EVM {
