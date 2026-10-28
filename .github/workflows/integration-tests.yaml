@@ -2,14 +2,18 @@ name: Integration Tests
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    # `closed` only cancels a run still in progress.
+    types: [opened, synchronize, reopened, closed]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
 
 permissions:
   contents: read
 
-# Cancel the workflow if any new changes pushed to a feature branch or the trunk
+# A new push or a close cancels the run in progress.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 defaults:
@@ -18,12 +22,10 @@ defaults:
 
 jobs:
 
-  label-check:
+  trigger-check:
     if: >-
-      contains(github.event.pull_request.labels.*.name, 'ci:integration')
-      && (github.event.action != 'labeled'
-        || contains(fromJSON('["ci:integration", "ci:integration-benchmark-full"]'), github.event.label.name))
-      && !github.event.pull_request.head.repo.fork
+      !github.event.pull_request.head.repo.fork
+      && github.event.action != 'closed'
     runs-on: ubuntu-26.04
     steps:
       - run: 'true'
@@ -31,7 +33,7 @@ jobs:
   cooldown-check:
     name: Cargo cooldown check
     runs-on: ubuntu-26.04
-    needs: label-check
+    needs: trigger-check
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -40,7 +42,7 @@ jobs:
       - uses: ./.github/actions/cooldown-check
 
   integration:
-    needs: [label-check, cooldown-check]
+    needs: [trigger-check, cooldown-check]
     # Well above a cold full-matrix run (~4h with LLVM builds), well below the
     # 6h default that a single hung compile would otherwise squat the runner for.
     timeout-minutes: 300
@@ -135,19 +137,29 @@ jobs:
 
       - name: Run solx-tester tests (PR)
         id: solx_tester_tests
+        timeout-minutes: 30
         continue-on-error: true
         run: ./target/release/solx-dev test solx-tester --solidity-compiler ./target/release/slang
 
-      # When `ci:integration-benchmark-full` is present, enable every
+      # When the PR carries `ci:integration-benchmark-full`, enable every
       # otherwise-disabled compiler (solc, solx-latest) and its comparison
       # columns in the Foundry and Hardhat benchmark configs, so the reports
       # cover the full matrix instead of just solx (PR) vs solx-main. Scoped to
       # `[compilers.*]` and `[[comparisons]]`; disabled `[projects.*]` (hangs /
       # unsupported Solidity) are deliberately left off. Edits only this
-      # throwaway CI checkout.
+      # throwaway CI checkout. The labels are read live, so re-running the job
+      # picks up a label added after the push.
       - name: Enable full benchmark (all compilers + comparisons)
-        if: contains(github.event.pull_request.labels.*.name, 'ci:integration-benchmark-full')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
+          labels=$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" | jq -r '.[].name')
+          if ! grep -qx 'ci:integration-benchmark-full' <<< "${labels}"; then
+            exit 0
+          fi
           for cfg in solx-dev/foundry-tests.toml solx-dev/hardhat-tests.toml; do
             awk '
               /^\[/ { in_section = ($0 ~ /^\[compilers\./ || $0 ~ /^\[\[comparisons\]\]/) }
@@ -158,6 +170,7 @@ jobs:
 
       - name: Run solx-tester benchmarks (main)
         id: solx_tester_bench_main
+        timeout-minutes: 30
         continue-on-error: true
         working-directory: temp-solx-main
         run: |
@@ -168,6 +181,7 @@ jobs:
 
       - name: Run solx-tester benchmarks (PR)
         id: solx_tester_bench_pr
+        timeout-minutes: 30
         continue-on-error: true
         run: |
           ./target/release/solx-dev test solx-tester \
@@ -249,6 +263,7 @@ jobs:
       # Beside the checkout, so it survives actions/checkout's clean and persists on the runner.
       - name: Run Hardhat tests
         id: hardhat_tests
+        timeout-minutes: 60
         continue-on-error: true
         run: ./target/release/solx-dev test hardhat --projects-cache-dir "${GITHUB_WORKSPACE}/../projects-cache"
 
@@ -262,6 +277,7 @@ jobs:
 
       - name: Run Foundry tests
         id: foundry_tests
+        timeout-minutes: 120
         continue-on-error: true
         run: ./target/release/solx-dev test foundry --projects-cache-dir "${GITHUB_WORKSPACE}/../projects-cache"
 
