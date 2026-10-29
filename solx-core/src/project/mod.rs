@@ -37,8 +37,6 @@ pub struct Project {
     pub contracts: BTreeMap<String, Contract>,
     /// The Solidity AST JSONs of the source files.
     pub ast_jsons: Option<BTreeMap<String, Option<Box<RawValue>>>>,
-    /// The library addresses.
-    pub libraries: solx_utils::Libraries,
 }
 
 impl Project {
@@ -51,12 +49,10 @@ impl Project {
     pub fn new(
         contracts: BTreeMap<String, Contract>,
         ast_jsons: Option<BTreeMap<String, Option<Box<RawValue>>>>,
-        libraries: solx_utils::Libraries,
     ) -> Self {
         Self {
             contracts,
             ast_jsons,
-            libraries,
         }
     }
 
@@ -64,7 +60,6 @@ impl Project {
     /// Parses the Solidity `sources` and returns a Solidity project.
     ///
     pub fn try_from_solidity_output(
-        libraries: solx_utils::Libraries,
         output: &mut solx_standard_json::Output,
     ) -> anyhow::Result<Self> {
         let ast_jsons = output
@@ -142,7 +137,7 @@ impl Project {
                 Err(error) => output.push_error(contract_name.path.as_str(), error),
             }
         }
-        Ok(Project::new(contracts, Some(ast_jsons), libraries))
+        Ok(Project::new(contracts, Some(ast_jsons)))
     }
 
     ///
@@ -150,7 +145,6 @@ impl Project {
     ///
     pub fn try_from_llvm_ir_paths(
         paths: &[PathBuf],
-        libraries: solx_utils::Libraries,
         output_selection: &solx_standard_json::InputSelection,
         output: Option<&mut solx_standard_json::Output>,
     ) -> anyhow::Result<Self> {
@@ -169,7 +163,7 @@ impl Project {
             })
             .collect::<anyhow::Result<BTreeMap<String, solx_standard_json::InputSource>>>()?;
 
-        Self::try_from_llvm_ir_sources(sources, libraries, output_selection, output)
+        Self::try_from_llvm_ir_sources(sources, output_selection, output)
     }
 
     ///
@@ -177,7 +171,6 @@ impl Project {
     ///
     pub fn try_from_llvm_ir_sources(
         sources: BTreeMap<String, solx_standard_json::InputSource>,
-        libraries: solx_utils::Libraries,
         output_selection: &solx_standard_json::InputSelection,
         mut output: Option<&mut solx_standard_json::Output>,
     ) -> anyhow::Result<Self> {
@@ -250,7 +243,7 @@ impl Project {
                 },
             }
         }
-        Ok(Self::new(contracts, None, libraries))
+        Ok(Self::new(contracts, None))
     }
 
     ///
@@ -266,18 +259,18 @@ impl Project {
         optimizer_settings: solx_codegen_evm::OptimizerSettings,
         llvm_options: Vec<String>,
         output_config: Option<solx_codegen_evm::OutputConfig>,
+        linker_symbols: &BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
     ) -> anyhow::Result<EVMBuild> {
         let Self {
             contracts,
             ast_jsons,
-            libraries,
         } = self;
         let pool = EVMProcessPool::new(EVMProcessSession::new(
             evm_version,
             output_selection.clone(),
             llvm_options.clone(),
             output_config,
-            libraries.as_linker_symbols()?,
+            linker_symbols.clone(),
         ))?;
 
         let mut contracts: Vec<(String, Contract)> = contracts.into_iter().collect();

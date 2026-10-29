@@ -2,14 +2,10 @@
 //! Bytecode object.
 //!
 
-pub mod state;
-
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use solx_standard_json::OutputError;
-
-use self::state::State;
 
 ///
 /// Bytecode object.
@@ -48,9 +44,8 @@ pub struct Object {
     /// Linker symbols that were not provided at compile time.
     /// Such symbols must be resolved by tooling before deployment.
     pub unlinked_symbols: BTreeMap<String, Vec<u64>>,
-    /// The state the object has reached, which the worker advances for the objects it links itself.
-    pub state: State,
-    /// The assembled object before linking, which the objects embedding this one read.
+    /// The assembled ELF retained after worker linking for objects that embed this one.
+    /// `Build::link` takes it and drops it once every object is linked.
     #[serde(with = "serde_bytes")]
     pub assembled_bytecode: Option<Vec<u8>>,
     /// Whether the size fallback was activated during the compilation.
@@ -82,7 +77,6 @@ impl Object {
         dependencies: solx_utils::Dependencies,
         is_size_fallback: bool,
         warnings: Vec<solx_utils::Warning>,
-        benchmarks: Vec<(String, u64)>,
     ) -> Self {
         let bytecode_hex = bytecode.as_ref().map(hex::encode);
         Self {
@@ -99,11 +93,10 @@ impl Object {
             metadata_bytes,
             dependencies,
             unlinked_symbols: BTreeMap::new(),
-            state: State::Compiled,
             assembled_bytecode: None,
             is_size_fallback,
             warnings,
-            benchmarks,
+            benchmarks: Vec::new(),
         }
     }
 
@@ -133,34 +126,40 @@ impl Object {
     }
 
     ///
-    /// The objects this one embeds, when a worker holds them all: nothing for a runtime object,
-    /// the assembled runtime object `runtime` for a deploy object. `None` for an object that
-    /// embeds another contract's object, which only the parent holds.
+    /// Returns the available embedded objects, or `None` when the parent must finish assembly.
     ///
-    pub fn embedded_objects(&self, runtime: Option<Vec<u8>>) -> Option<BTreeMap<String, Vec<u8>>> {
+    pub fn embedded_objects(
+        &self,
+        runtime_assembled_bytecode: Option<Vec<u8>>,
+    ) -> Option<BTreeMap<String, Vec<u8>>> {
         if !self.dependencies.objects.is_empty() {
             return None;
         }
-        match (self.dependencies.runtime.as_ref(), runtime) {
-            (None, _) => Some(BTreeMap::new()),
-            (Some(identifier), Some(runtime)) => {
-                Some(BTreeMap::from([(identifier.to_owned(), runtime)]))
+        match (
+            self.dependencies.runtime.as_ref(),
+            runtime_assembled_bytecode,
+        ) {
+            (None, None) => Some(BTreeMap::new()),
+            (None, Some(_)) => {
+                unreachable!("Runtime bytes are supplied only to deploy objects")
             }
+            (Some(identifier), Some(runtime_assembled_bytecode)) => Some(BTreeMap::from([(
+                identifier.to_owned(),
+                runtime_assembled_bytecode,
+            )])),
             (Some(_), None) => None,
         }
     }
 
     ///
-    /// Assembles the object with the objects it embeds, taken from `assembled_by_id`, and records
-    /// the library references `linker_symbols` leaves unresolved.
+    /// Assembles the object with the objects it embeds.
     ///
     /// # Panics
-    /// If bytecode is `None`.
+    /// If bytecode is `None` or an embedded object is missing.
     ///
     pub fn assemble(
         &mut self,
-        assembled_by_id: &BTreeMap<String, Vec<u8>>,
-        linker_symbols: &BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
+        assembled_by_identifier: &BTreeMap<String, Vec<u8>>,
     ) -> anyhow::Result<()> {
         let mut memory_buffers = Vec::with_capacity(
             1 + usize::from(self.dependencies.runtime.is_some()) + self.dependencies.objects.len(),
@@ -168,7 +167,7 @@ impl Object {
         memory_buffers.push((self.identifier.to_owned(), self.to_memory_buffer()?));
 
         for dependency in self.dependencies.into_iter() {
-            let bytecode = assembled_by_id
+            let bytecode = assembled_by_identifier
                 .get(dependency)
                 .expect("Every dependency is assembled before the objects embedding it");
             let memory_buffer = inkwell::memory_buffer::MemoryBuffer::create_from_memory_range(
@@ -193,17 +192,7 @@ impl Object {
             self.code_segment,
         )?;
 
-        for undefined_reference in assembled
-            .get_undefined_references_evm()
-            .into_iter()
-            .filter(|reference| !linker_symbols.contains_key(reference))
-        {
-            let symbol_offsets = assembled.get_symbol_offsets_evm(undefined_reference.as_str());
-            self.unlinked_symbols
-                .insert(undefined_reference, symbol_offsets);
-        }
         self.assembled_bytecode = Some(assembled.as_slice().to_owned());
-        self.state = State::Assembled;
 
         Ok(())
     }
@@ -226,6 +215,15 @@ impl Object {
             false,
         );
 
+        self.unlinked_symbols = memory_buffer
+            .get_undefined_references_evm()
+            .into_iter()
+            .filter(|reference| !linker_symbols.contains_key(reference))
+            .map(|reference| {
+                let offsets = memory_buffer.get_symbol_offsets_evm(reference.as_str());
+                (reference, offsets)
+            })
+            .collect();
         let linked_object = solx_codegen_evm::link(memory_buffer, linker_symbols)?;
         let linked_object_with_placeholders = if !self.unlinked_symbols.is_empty() {
             let linker_placeholders = self
@@ -261,7 +259,6 @@ impl Object {
         }
         self.bytecode = Some(linked_object_with_placeholders.as_slice().to_owned());
         self.bytecode_hex = Some(bytecode_hex);
-        self.state = State::Linked;
 
         Ok(())
     }
