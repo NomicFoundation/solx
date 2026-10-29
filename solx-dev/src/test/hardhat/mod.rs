@@ -13,6 +13,7 @@ use colored::Colorize;
 use itertools::Itertools;
 
 use crate::test::config::compiler::Compiler;
+use crate::test::project_cache::ProjectCache;
 
 use self::config::Config;
 use self::config::project::build_system::BuildSystem;
@@ -24,12 +25,14 @@ use self::output::test::Test as TestOutput;
 pub fn test(
     config: Config,
     projects_directory: std::path::PathBuf,
+    projects_cache_directory: std::path::PathBuf,
     output_directory: std::path::PathBuf,
     solidity_version: String,
     project_filter: Vec<String>,
 ) -> anyhow::Result<()> {
     crate::utils::exists("git")?;
     crate::utils::exists("npm")?;
+    crate::utils::exists("node")?;
 
     std::fs::create_dir_all(projects_directory.as_path()).map_err(|error| {
         anyhow::anyhow!(
@@ -106,6 +109,8 @@ pub fn test(
             16,
         )?;
     }
+    let node_version = crate::utils::tool_version("node")?;
+    let projects_cache = ProjectCache::new(projects_cache_directory.as_path())?;
 
     for (project_name, project) in projects {
         attempted_projects.push(project_name.clone());
@@ -114,6 +119,7 @@ pub fn test(
         let project_directory_str = project_directory.to_string_lossy();
 
         let build_system = project.build_system.to_string();
+        let key_material = project.cache_key_material(&config.build_systems, node_version.as_str());
         let set_up = |checkout: &std::path::Path| -> anyhow::Result<()> {
             crate::utils::clone_repository(
                 project.url.as_str(),
@@ -184,13 +190,8 @@ pub fn test(
                 16,
             )
         };
-        let set_up_directory = crate::utils::absolute_path(
-            projects_directory
-                .join(".setup")
-                .join(project_name.as_str()),
-        )?;
-        crate::utils::remove(set_up_directory.as_path(), project_name.as_str())?;
-        set_up(set_up_directory.as_path())?;
+        let set_up_directory =
+            projects_cache.checkout(project_name.as_str(), key_material.as_str(), set_up)?;
 
         for ((identifier, compiler), codegen) in config
             .compilers
@@ -381,7 +382,6 @@ pub fn test(
                 toolchain_name.clone(),
             ));
         }
-        crate::utils::remove(set_up_directory.as_path(), project_name.as_str())?;
     }
 
     let enabled_compilers: Vec<&str> = config
