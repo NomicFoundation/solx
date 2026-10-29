@@ -18,7 +18,6 @@ use solx_utils::SyncLock;
 use solx_standard_json::CollectableError;
 
 use self::contract::Contract;
-use self::contract::object::state::State as ObjectState;
 
 ///
 /// The Solidity project build.
@@ -61,64 +60,40 @@ impl Build {
     ) -> Self {
         let ast_jsons = self.ast_jsons.take();
 
+        let mut assembled_by_identifier: BTreeMap<String, Vec<u8>> = self
+            .contracts
+            .values_mut()
+            .flat_map(|contract| contract.objects_mut())
+            .filter_map(|object| {
+                object
+                    .assembled_bytecode
+                    .take()
+                    .map(|bytecode| (object.identifier.clone(), bytecode))
+            })
+            .collect();
+
         loop {
-            let assembled_by_id: BTreeMap<String, Vec<u8>> = self
+            let completed = assembled_by_identifier.len();
+            let mut pending = false;
+            for object in self
                 .contracts
-                .values()
-                .flat_map(|contract| contract.objects_ref())
-                .filter_map(|object| {
-                    object
-                        .assembled_bytecode
-                        .clone()
-                        .map(|bytecode| (object.identifier.clone(), bytecode))
-                })
-                .collect();
-
-            let assembleable_objects = self
-                .contracts
-                .values()
-                .flat_map(|contract| contract.objects_ref())
-                .filter(|object| {
-                    object.state == ObjectState::Compiled
-                        && object
-                            .dependencies
-                            .into_iter()
-                            .all(|dependency| assembled_by_id.contains_key(dependency))
-                })
-                .map(|object| {
-                    (
-                        object.contract_name.full_path.to_owned(),
-                        object.code_segment,
-                    )
-                })
-                .collect::<Vec<_>>();
-            if assembleable_objects.is_empty() {
-                break;
-            }
-
-            for (full_path, code_segment) in assembleable_objects.into_iter() {
-                let object = self
-                    .contracts
-                    .get_mut(full_path.as_str())
-                    .expect("An assembleable object's contract exists in this build")
-                    .object_mut_by_code_segment(code_segment)
-                    .expect("An assembleable object exists in its contract");
-                if let Err(error) = object.assemble(&assembled_by_id, &linker_symbols) {
-                    self.messages.lock_sync().push(
-                        solx_standard_json::OutputError::new_error_contract(
-                            Some(object.contract_name.path.as_str()),
-                            &error,
-                        ),
-                    );
-                    return Self::new(BTreeMap::new(), ast_jsons, self.messages);
+                .values_mut()
+                .flat_map(|contract| contract.objects_mut())
+            {
+                if assembled_by_identifier.contains_key(&object.identifier) {
+                    continue;
                 }
-            }
-        }
-
-        for contract in self.contracts.values_mut() {
-            for object in contract.objects_mut().into_iter() {
-                if object.state != ObjectState::Linked
-                    && let Err(error) = object.link(&linker_symbols)
+                if !object
+                    .dependencies
+                    .into_iter()
+                    .all(|dependency| assembled_by_identifier.contains_key(dependency))
+                {
+                    pending = true;
+                    continue;
+                }
+                if let Err(error) = object
+                    .assemble(&assembled_by_identifier)
+                    .and_then(|()| object.link(&linker_symbols))
                 {
                     self.messages.lock_sync().push(
                         solx_standard_json::OutputError::new_error_contract(
@@ -128,8 +103,21 @@ impl Build {
                     );
                     return Self::new(BTreeMap::new(), ast_jsons, self.messages);
                 }
-                object.assembled_bytecode = None;
+                assembled_by_identifier.insert(
+                    object.identifier.clone(),
+                    object
+                        .assembled_bytecode
+                        .take()
+                        .expect("Every completed object retains its assembled ELF"),
+                );
             }
+            if !pending {
+                break;
+            }
+            assert!(
+                assembled_by_identifier.len() > completed,
+                "Compiled object dependencies permit assembly in dependency order"
+            );
         }
 
         Self::new(self.contracts, ast_jsons, self.messages)
