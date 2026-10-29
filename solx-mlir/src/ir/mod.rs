@@ -135,6 +135,9 @@ dialect_ops! {
     Value::keccak256(data: value) -> value {
         Keccak256Operation.addr(data).result(fixed_bytes(solx_utils::BYTE_LENGTH_FIELD))
     }
+    Value::erc7201(namespace: value) -> value {
+        Erc7201Operation.id(namespace).slot(word())
+    }
     Value::ecrecover(hash: value, v: value, r: value, s: value) -> value {
         EcrecoverOperation.hash(hash).v(v).r(r).s(s).result(address())
     }
