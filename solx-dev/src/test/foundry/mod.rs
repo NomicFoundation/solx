@@ -139,7 +139,7 @@ pub fn test(
                 ),
             )?;
             if let Some(patch) = project.patch.as_deref() {
-                let mut git_apply_command = Command::new("git");
+                let mut git_apply_command = crate::utils::git_command();
                 git_apply_command.args(["-C", &*checkout_str, "apply"]);
                 git_apply_command.arg(crate::utils::absolute_path(patch)?);
                 crate::utils::command(
