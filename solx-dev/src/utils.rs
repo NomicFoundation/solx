@@ -187,25 +187,25 @@ pub fn clone_repository(
             anyhow::bail!("commit must be a 40-character hex SHA, got: {sha}");
         }
 
-        let mut init_command = Command::new("git");
+        let mut init_command = git_command();
         init_command.args(["init", directory]);
         command(&mut init_command, description)?;
 
-        let mut remote_command = Command::new("git");
+        let mut remote_command = git_command();
         remote_command.args(["-C", directory, "remote", "add", "origin", url]);
         command(&mut remote_command, description)?;
 
-        let mut fetch_command = Command::new("git");
+        let mut fetch_command = git_command();
         fetch_command.args(["-C", directory, "fetch", "--depth", "1", "origin", sha]);
         command_with_retries(&mut fetch_command, description, 16)?;
 
-        let mut checkout_command = Command::new("git");
+        let mut checkout_command = git_command();
         checkout_command.args(["-C", directory, "checkout", "FETCH_HEAD"]);
         command(&mut checkout_command, description)?;
 
         let gitmodules_path = std::path::Path::new(directory).join(".gitmodules");
         if gitmodules_path.exists() {
-            let mut submodule_command = Command::new("git");
+            let mut submodule_command = git_command();
             submodule_command.args([
                 "-C",
                 directory,
@@ -219,7 +219,7 @@ pub fn clone_repository(
             command_with_retries(&mut submodule_command, description, 16)?;
         }
     } else {
-        let mut clone_command = Command::new("git");
+        let mut clone_command = git_command();
         clone_command.arg("clone");
         clone_command.args(["--depth", "1"]);
         clone_command.arg("--recurse-submodules");
@@ -233,10 +233,21 @@ pub fn clone_repository(
 }
 
 ///
+/// Returns a `git` command that ignores the repository `git rebase --exec` and hooks point to.
+///
+pub fn git_command() -> Command {
+    let mut command = Command::new("git");
+    command.env_remove("GIT_DIR");
+    command.env_remove("GIT_WORK_TREE");
+    command.env_remove("GIT_INDEX_FILE");
+    command
+}
+
+///
 /// Lists the tracked files of the repository at `directory` matching `pathspec`, submodules included.
 ///
 pub fn git_tracked_files(directory: &Path, pathspec: &str) -> anyhow::Result<Vec<PathBuf>> {
-    let mut command = Command::new("git");
+    let mut command = git_command();
     command.arg("-C");
     command.arg(directory);
     command.args(["ls-files", "-z", "--recurse-submodules", "--", pathspec]);
@@ -526,7 +537,6 @@ pub fn get_xcode_version() -> anyhow::Result<u32> {
 #[cfg(all(test, unix))]
 mod tests {
     use std::path::Path;
-    use std::process::Command;
 
     fn test_directory(name: &str) -> std::path::PathBuf {
         let directory =
@@ -537,7 +547,7 @@ mod tests {
     }
 
     fn git(directory: &Path, arguments: &[&str]) {
-        let status = Command::new("git")
+        let status = super::git_command()
             .arg("-C")
             .arg(directory)
             .args(["-c", "protocol.file.allow=always"])
