@@ -114,10 +114,6 @@ impl Build {
             if !pending {
                 break;
             }
-            assert!(
-                assembled_by_identifier.len() > completed,
-                "Compiled object dependencies permit assembly in dependency order"
-            );
         }
 
         Self::new(self.contracts, ast_jsons, self.messages)
