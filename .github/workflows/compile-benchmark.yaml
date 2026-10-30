@@ -55,6 +55,7 @@ jobs:
   compile-benchmark:
     needs: cooldown-check
     permissions:
+      actions: read
       contents: read
       pull-requests: write
       packages: read
