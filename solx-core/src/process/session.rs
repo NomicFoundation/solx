@@ -2,6 +2,8 @@
 //! The project-wide data shared by all translation units.
 //!
 
+use std::collections::BTreeMap;
+
 ///
 /// The project-wide data shared by all translation units.
 ///
@@ -17,6 +19,8 @@ pub struct Session {
     pub llvm_options: Vec<String>,
     /// The output config for IR artifacts.
     pub output_config: Option<solx_codegen_evm::OutputConfig>,
+    /// The library addresses the objects are linked with.
+    pub linker_symbols: BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
 }
 
 impl Session {
@@ -28,12 +32,14 @@ impl Session {
         output_selection: solx_standard_json::InputSelection,
         llvm_options: Vec<String>,
         output_config: Option<solx_codegen_evm::OutputConfig>,
+        linker_symbols: BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
     ) -> Self {
         Self {
             evm_version,
             output_selection,
             llvm_options,
             output_config,
+            linker_symbols,
         }
     }
 }

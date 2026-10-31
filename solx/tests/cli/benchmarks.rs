@@ -56,12 +56,81 @@ fn records_every_pipeline_stage() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("/InitVerify/").count(2))
         .stdout(predicate::str::contains("/OptimizeVerify/").count(2))
         .stdout(predicate::str::contains("/EmitBytecode/").count(2))
+        .stdout(predicate::str::contains("/AssembleLink/").count(2))
         .stdout(predicate::str::contains(":deploy/ParseBitcode/").count(1))
         .stdout(predicate::str::contains(":runtime/ParseBitcode/").count(1))
         .stdout(predicate::str::contains(":deploy/WorkerRoundtrip(0)/").count(1))
         .stdout(predicate::str::contains(":runtime/WorkerRoundtrip(0)/").count(1))
         .stdout(predicate::str::contains("us\n"))
         .stdout(predicate::str::contains("ms").not());
+
+    Ok(())
+}
+
+#[test]
+fn records_assemble_link_only_for_self_contained_objects() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/LinkedMixedDeps.sol"),
+        "--benchmarks",
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    result
+        .success()
+        .stdout(predicate::str::contains("InnerContract:deploy/AssembleLink/").count(1))
+        .stdout(predicate::str::contains("InnerContract:runtime/AssembleLink/").count(1))
+        .stdout(predicate::str::contains("UpperContract:deploy/AssembleLink/").count(1))
+        .stdout(predicate::str::contains("UpperContract:runtime/AssembleLink/").count(1))
+        .stdout(predicate::str::contains("UpperLibrary:deploy/AssembleLink/").not())
+        .stdout(predicate::str::contains("UpperLibrary:runtime/AssembleLink/").not());
+
+    Ok(())
+}
+
+#[test]
+fn records_runtime_assemble_link_when_constructor_creates_contract() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/ConstructorCreation.sol"),
+        "--benchmarks",
+        "--bin",
+        "--bin-runtime",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    let assert = result
+        .success()
+        .stdout(predicate::str::contains("Parent:deploy/AssembleLink/").not())
+        .stdout(predicate::str::contains("Parent:runtime/AssembleLink/").count(1));
+    let stdout = String::from_utf8(assert.get_output().stdout.clone())?;
+    let values = |header: &str| {
+        stdout
+            .lines()
+            .zip(stdout.lines().skip(1))
+            .filter(|(line, _)| *line == header)
+            .map(|(_, value)| value)
+            .collect::<Vec<_>>()
+    };
+    let [child_deploy, parent_deploy] = values("Binary:")[..] else {
+        panic!("both contracts print their deploy code");
+    };
+    let [_, parent_runtime] = values("Binary of the runtime part:")[..] else {
+        panic!("both contracts print their runtime code");
+    };
+
+    assert!(
+        parent_deploy.contains(parent_runtime),
+        "the deploy code embeds its runtime code"
+    );
+    assert!(
+        parent_deploy.contains(child_deploy),
+        "the deploy code embeds the contract its constructor creates"
+    );
 
     Ok(())
 }

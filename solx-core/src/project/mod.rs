@@ -39,8 +39,6 @@ pub struct Project {
     pub contracts: BTreeMap<String, Contract>,
     /// The Solidity AST JSONs of the source files.
     pub ast_jsons: Option<BTreeMap<String, Option<Box<RawValue>>>>,
-    /// The library addresses.
-    pub libraries: solx_utils::Libraries,
 }
 
 impl Project {
@@ -54,13 +52,11 @@ impl Project {
         solc_version: Option<semver::Version>,
         contracts: BTreeMap<String, Contract>,
         ast_jsons: Option<BTreeMap<String, Option<Box<RawValue>>>>,
-        libraries: solx_utils::Libraries,
     ) -> Self {
         Self {
             solc_version,
             contracts,
             ast_jsons,
-            libraries,
         }
     }
 
@@ -69,7 +65,6 @@ impl Project {
     ///
     pub fn try_from_solidity_output(
         solc_version: semver::Version,
-        libraries: solx_utils::Libraries,
         output: &mut solx_standard_json::Output,
     ) -> anyhow::Result<Self> {
         let ast_jsons = output
@@ -147,12 +142,7 @@ impl Project {
                 Err(error) => output.push_error(contract_name.path.as_str(), error),
             }
         }
-        Ok(Project::new(
-            Some(solc_version),
-            contracts,
-            Some(ast_jsons),
-            libraries,
-        ))
+        Ok(Project::new(Some(solc_version), contracts, Some(ast_jsons)))
     }
 
     ///
@@ -160,7 +150,6 @@ impl Project {
     ///
     pub fn try_from_llvm_ir_paths(
         paths: &[PathBuf],
-        libraries: solx_utils::Libraries,
         output_selection: &solx_standard_json::InputSelection,
         output: Option<&mut solx_standard_json::Output>,
     ) -> anyhow::Result<Self> {
@@ -179,7 +168,7 @@ impl Project {
             })
             .collect::<anyhow::Result<BTreeMap<String, solx_standard_json::InputSource>>>()?;
 
-        Self::try_from_llvm_ir_sources(sources, libraries, output_selection, output)
+        Self::try_from_llvm_ir_sources(sources, output_selection, output)
     }
 
     ///
@@ -187,7 +176,6 @@ impl Project {
     ///
     pub fn try_from_llvm_ir_sources(
         sources: BTreeMap<String, solx_standard_json::InputSource>,
-        libraries: solx_utils::Libraries,
         output_selection: &solx_standard_json::InputSelection,
         mut output: Option<&mut solx_standard_json::Output>,
     ) -> anyhow::Result<Self> {
@@ -260,7 +248,7 @@ impl Project {
                 },
             }
         }
-        Ok(Self::new(None, contracts, None, libraries))
+        Ok(Self::new(None, contracts, None))
     }
 
     ///
@@ -276,18 +264,19 @@ impl Project {
         optimizer_settings: solx_codegen_evm::OptimizerSettings,
         llvm_options: Vec<String>,
         output_config: Option<solx_codegen_evm::OutputConfig>,
+        linker_symbols: &BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
     ) -> anyhow::Result<EVMBuild> {
         let Self {
             solc_version,
             contracts,
             ast_jsons,
-            libraries: _,
         } = self;
         let pool = EVMProcessPool::new(EVMProcessSession::new(
             evm_version,
             output_selection.clone(),
             llvm_options.clone(),
             output_config,
+            linker_symbols.clone(),
         ))?;
 
         let mut contracts: Vec<(String, Contract)> = contracts.into_iter().collect();
@@ -314,6 +303,7 @@ impl Project {
                 let transient_storage_layout = contract.transient_storage_layout.take();
                 let mlir = contract.mlir.take();
 
+                let mut deploy_embeds_runtime_only = false;
                 let (deploy_code_ir, runtime_code_ir): (ContractIR, ContractIR) = match contract.ir
                 {
                     Some(ContractIR::LLVMIR(runtime_code)) => {
@@ -336,6 +326,7 @@ impl Project {
                     Some(ContractIR::MLIR(mut deploy_code)) => {
                         let runtime_code: ContractMLIR =
                             *deploy_code.runtime_code.take().expect("Always exists");
+                        deploy_embeds_runtime_only = deploy_code.dependencies.objects.is_empty();
                         (deploy_code.into(), runtime_code.into())
                     }
                     None => {
@@ -371,6 +362,7 @@ impl Project {
                         None,
                         metadata_bytes,
                         optimizer_settings.clone(),
+                        None,
                     );
 
                     let result = Self::run_multi_pass_pipeline(&pool, &mut job);
@@ -381,6 +373,11 @@ impl Project {
                     .as_ref()
                     .ok()
                     .and_then(|output| output.object.immutables.to_owned());
+                let runtime_assembled_bytecode = runtime_object_result
+                    .as_ref()
+                    .ok()
+                    .filter(|_| deploy_embeds_runtime_only)
+                    .and_then(|output| output.object.assembled_bytecode.clone());
                 let deploy_object_result: crate::Result<EVMProcessOutput> = {
                     let mut job = EVMProcessJob::new(
                         contract_name.clone(),
@@ -389,6 +386,7 @@ impl Project {
                         immutables,
                         None,
                         optimizer_settings.clone(),
+                        runtime_assembled_bytecode,
                     );
 
                     Self::run_multi_pass_pipeline(&pool, &mut job)

@@ -71,6 +71,38 @@ fn none_prints_compiler() -> anyhow::Result<()> {
 }
 
 #[test]
+fn appends_the_metadata_to_each_binary_once() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT,
+        "--bin",
+        "--bin-runtime",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    let stdout = String::from_utf8(result.success().get_output().stdout.clone())?;
+    let line_after = |header: &str| {
+        stdout
+            .lines()
+            .skip_while(|line| *line != header)
+            .nth(1)
+            .unwrap_or_else(|| panic!("`{header}` is followed by its value"))
+    };
+    let deploy = line_after("Binary:");
+    let runtime = line_after("Binary of the runtime part:");
+
+    assert_eq!(runtime.matches(CBOR_IPFS_HASH_PREFIX).count(), 1);
+    assert_eq!(deploy.matches(CBOR_IPFS_HASH_PREFIX).count(), 1);
+    assert!(
+        deploy.contains(runtime),
+        "the deploy code embeds the runtime code with its metadata"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn ipfs_hashes_cli_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 

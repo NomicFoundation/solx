@@ -316,11 +316,13 @@ Benchmarks:
     Simple.sol:Simple_deployed:runtime/InitVerify/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple_deployed:runtime/OptimizeVerify/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple_deployed:runtime/EmitBytecode/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple:runtime/AssembleLink/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:runtime/WorkerRoundtrip(0)/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/ParseBitcode/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/InitVerify/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/OptimizeVerify/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/EmitBytecode/M3B3/SpillArea(0): [..]us
+    Simple.sol:Simple:deploy/AssembleLink/M3B3/SpillArea(0): [..]us
     Simple.sol:Simple:deploy/WorkerRoundtrip(0)/M3B3/SpillArea(0): [..]us
 
 ```
