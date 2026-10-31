@@ -73,7 +73,6 @@ impl Build {
             .collect();
 
         loop {
-            let completed = assembled_by_identifier.len();
             let mut pending = false;
             for object in self
                 .contracts
