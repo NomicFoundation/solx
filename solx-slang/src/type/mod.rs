@@ -57,7 +57,8 @@ impl<'context> SourceUnitScope<'context> {
                     MlirType::integer(self.melior, bits, value.is_negative())
                 }
                 LiteralKind::HexInteger { bytes, .. } => {
-                    let bits = *bytes as usize * solx_utils::BIT_LENGTH_BYTE;
+                    let bits = (*bytes as usize).min(solx_utils::BYTE_LENGTH_FIELD)
+                        * solx_utils::BIT_LENGTH_BYTE;
                     MlirType::unsigned(self.melior, bits)
                 }
                 LiteralKind::String { .. } => {
