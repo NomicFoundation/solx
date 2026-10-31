@@ -155,3 +155,39 @@ fn standard_json_cli_excess_arg() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn bzzr1() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--metadata-hash",
+        "bzzr1",
+        "--bin",
+        crate::common::TEST_SOLIDITY_CONTRACT,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.failure().stderr(predicate::str::contains(
+        "unknown bytecode hash mode: `bzzr1`",
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn standard_json_bzzr1() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("metadata_hash_bzzr1.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains(
+        "unknown variant `bzzr1`, expected `none` or `ipfs`",
+    ));
+
+    Ok(())
+}
