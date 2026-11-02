@@ -567,6 +567,22 @@ mod tests {
     }
 
     #[test]
+    fn git_command_drops_the_callers_repository() {
+        let command = super::git_command();
+        let removed: Vec<_> = command
+            .get_envs()
+            .filter(|(_, value)| value.is_none())
+            .map(|(key, _)| key)
+            .collect();
+        for variable in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"] {
+            assert!(
+                removed.contains(&std::ffi::OsStr::new(variable)),
+                "{variable} must be removed"
+            );
+        }
+    }
+
+    #[test]
     fn git_tracked_files_follows_submodules_and_skips_untracked() {
         let directory = test_directory("tracked");
         let dependency = directory.join("dependency");
