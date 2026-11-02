@@ -118,14 +118,9 @@ pub fn test(
         project_directory.push(project_name.as_str());
         let project_directory_str = project_directory.to_string_lossy();
 
-        let patch = match project.patch.as_deref() {
-            Some(path) => std::fs::read_to_string(path).map_err(|error| {
-                anyhow::anyhow!("Foundry project {project_name} patch {path:?} reading: {error}")
-            })?,
-            None => String::new(),
-        };
-        let key_material =
-            project.cache_key_material(patch.as_str(), yarn_version, node_version.as_str());
+        let key_material = project
+            .cache_key_material(yarn_version, node_version.as_str())
+            .map_err(|error| anyhow::anyhow!("Foundry project {project_name}: {error}"))?;
         let set_up = |checkout: &std::path::Path| -> anyhow::Result<()> {
             let checkout_str = checkout.to_string_lossy();
             crate::utils::clone_repository(
