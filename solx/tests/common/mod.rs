@@ -48,6 +48,15 @@ macro_rules! debug_symbols {
 }
 pub(crate) use debug_symbols;
 
+/// A two-entry CBOR map whose first entry is `ipfs` with a 34-byte value.
+pub const CBOR_IPFS_HASH_PREFIX: &str = "a264697066735822";
+
+/// The `slang` key and the header of its 3-byte version, which every trailer holds.
+pub const CBOR_COMPILER_ENTRY: &str = "65736c616e6743";
+
+/// A one-entry CBOR map whose entry is `slang`: the trailer without a metadata hash.
+pub const CBOR_WITHOUT_HASH_PREFIX: &str = "a165736c616e67";
+
 pub const TEST_SOLIDITY_CONTRACT: &str = contract!("solidity/SlangTest.sol");
 pub const TEST_YUL_CONTRACT: &str = contract!("yul/Test.yul");
 pub const TEST_LLVM_IR_CONTRACT: &str = contract!("llvm_ir/Test.ll");
