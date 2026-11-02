@@ -132,11 +132,15 @@ description = "A set of cross chain governance solutions."
 url = "https://github.com/ZeframLou/playpen"
 commit = "77d4fd2dd5399c97bb40eccc7cedd296376acf6a"
 description = "A set of modern, gas optimized staking pool contracts."
+[projects.playpen.env]
+FOUNDRY_NO_MATCH_TEST = "testFail" # forge 1.x fails every `testFail*` test and skips the rest of its contract
 
 [projects.solmate]
 url = "https://github.com/transmissions11/solmate"
 commit = "89365b880c4f3c786bdd453d4b8e8fe410344a69"
 description = "Modern, opinionated, and gas optimized building blocks for smart contract development."
+[projects.solmate.env]
+FOUNDRY_NO_MATCH_TEST = "testFail" # forge 1.x fails every `testFail*` test and skips the rest of its contract
 
 [projects.prb-math]
 url = "https://github.com/paulrberg/prb-math"
@@ -205,6 +209,7 @@ commit = "ada28eb58dc50cde59f87fcb97165a0a5c6655cd"
 description = "A decentralized exchange and payment settlement protocol."
 [projects.tokenlon.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
+FOUNDRY_NO_MATCH_PATH = "test/forkMainnet/**" # needs a mainnet RPC
 
 [projects.uniswap-v4]
 url = "https://github.com/Uniswap/v4-core"
@@ -218,11 +223,14 @@ description = "Official url for strategies and vaults from Beefy."
 build_system = "yarn"
 [projects.beefy.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
+FOUNDRY_MATCH_PATH = "forge/test/swapper/**" # every other suite needs a fork RPC or production env
 
 [projects.gov-of-venice]
 url = "https://github.com/pentagonxyz/gov-of-venice"
 commit = "46ea4138d2296ac9433dc2ba6eb884f0c31e25ef"
 description = "A new paradigm in DAO governance."
+[projects.gov-of-venice.env]
+FOUNDRY_NO_MATCH_TEST = "testFail" # forge 1.x fails every `testFail*` test and skips the rest of its contract
 
 [projects.cicada]
 url = "https://github.com/a16z/cicada"
@@ -230,6 +238,7 @@ commit = "dec37d732f8ef8a91119650c416ae9bfb531a64a"
 description = "A private on-chain voting protocol based on homomorphic time-lock puzzles."
 [projects.cicada.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
+FOUNDRY_NO_MATCH_TEST = "testReference" # compares through vm.ffi against a Python script that needs eth_abi
 
 [projects.seaport]
 url = "https://github.com/ProjectOpenSea/seaport"
@@ -265,6 +274,8 @@ EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 url = "https://github.com/hedgar2017/WTF-gas-optimization"
 commit = "1a2b0ca46d0ae04ffbd57cdbfe9f603ecdd61c25"
 description = "WTF Solidity gas optimization techniques"
+[projects.wtf-gas.env]
+FOUNDRY_NO_MATCH_PATH = "15_RequireString/*" # both tests revert by design, to compare revert-string gas
 
 [projects.swap-vm]
 url = "https://github.com/1inch/swap-vm"
