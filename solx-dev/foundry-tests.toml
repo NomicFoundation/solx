@@ -106,6 +106,8 @@ disabled = false
 url = "https://github.com/OpenZeppelin/openzeppelin-contracts"
 commit = "97430aa29ac10a70ee0c18f2a905c4925363b58f"
 description = "A library for secure smart contract development."
+build_system = "npm"
+patch = "./solx-dev/foundry-patches/openzeppelin.patch"
 
 [projects.lil-web3]
 url = "https://github.com/m1guelpf/lil-web3"
@@ -158,6 +160,7 @@ description = "Gas optimized Solidity snippets."
 url = "https://github.com/refcell/unix"
 commit = "ebd26fea4e86544606bc0be58aaab0215c729382"
 description = "A lightweight, extensible foundry library for shell scripting."
+patch = "./solx-dev/foundry-patches/unix.patch"
 [projects.unix.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
@@ -167,9 +170,12 @@ commit = "e736e4f5d707c9d1227bb71a6f337d0bed2964bf"
 description = "Helper smart contracts to deploy and manage upgradeable contracts."
 
 [projects.art-gobblers]
-url = "https://github.com/antonbaliasnikov/art-gobblers"
-commit = "95d30903a33f0b359e39d7791891adfb458689d1"
-description = "A decentralized art factory and marketplace. Fork with fixed tests."
+url = "https://github.com/artgobblers/art-gobblers"
+commit = "a18ea7fec3b766444a3277392c405e2a107a2d75"
+patch = "./solx-dev/foundry-patches/art-gobblers.patch"
+description = "A decentralized art factory and marketplace."
+[projects.art-gobblers.env]
+FOUNDRY_ISOLATE = "false" # setUp predicts deployment addresses from nonces that isolation bumps on every call
 
 [projects.lens-core]
 url = "https://github.com/lens-protocol/core"
@@ -188,6 +194,7 @@ description = "A Solidity library to improve balance change check in Foundry tes
 url = "https://github.com/FydeTreasury/Diamond-Foundry"
 commit = "bdba406856b7e099038b6a696a4fd5b9ac69c500"
 description = "a reference implementation for EIP-2535 Diamonds."
+patch = "./solx-dev/foundry-patches/diamond-foundry.patch"
 [projects.diamond-foundry.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
