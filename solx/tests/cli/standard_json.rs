@@ -259,7 +259,9 @@ fn metadata_hash_ipfs_and_metadata() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
-        .stdout(predicate::str::contains("a264"))
+        .stdout(predicate::str::contains(
+            crate::common::CBOR_IPFS_HASH_PREFIX,
+        ))
         .stdout(predicate::str::contains("\"metadata\""));
 
     Ok(())
@@ -277,7 +279,9 @@ fn metadata_hash_ipfs_no_metadata() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
-        .stdout(predicate::str::contains("a264"))
+        .stdout(predicate::str::contains(
+            crate::common::CBOR_IPFS_HASH_PREFIX,
+        ))
         .stdout(predicate::str::contains("\"metadata\"").not());
 
     Ok(())
@@ -295,7 +299,9 @@ fn metadata_hash_none_and_metadata() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
-        .stdout(predicate::str::contains("a164"))
+        .stdout(predicate::str::contains(
+            crate::common::CBOR_WITHOUT_HASH_PREFIX,
+        ))
         .stdout(predicate::str::contains("\"metadata\""));
 
     Ok(())
@@ -313,7 +319,9 @@ fn metadata_hash_none_no_metadata() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
-        .stdout(predicate::str::contains("a164"))
+        .stdout(predicate::str::contains(
+            crate::common::CBOR_WITHOUT_HASH_PREFIX,
+        ))
         .stdout(predicate::str::contains("\"metadata\"").not());
 
     Ok(())

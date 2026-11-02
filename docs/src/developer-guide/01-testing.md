@@ -43,9 +43,9 @@ output.
 
 For version bumps, do not use `TRYCMD=overwrite`: the CBOR trailer lines that
 carry the version also carry a `[..]` metadata-digest wildcard, and a blessed
-literal digest only breaks on the next Slang re-pin. Update the hex-encoded
-version strings in the trailer lines directly instead — the new bytes are
-deterministic (hex of `slang:X.Y.Z;solc:A.B.C`).
+literal digest only breaks on the next Slang re-pin. Update the version in the
+trailer lines directly instead: the three bytes after `65736c616e6743` (the
+`slang` key and its byte-string header) are the major, minor and patch numbers.
 
 ## Integration Tests
 
