@@ -109,6 +109,7 @@ pub fn test(
             16,
         )?;
     }
+    let npm_version = crate::utils::tool_version("npm")?;
     let node_version = crate::utils::tool_version("node")?;
     let projects_cache = ProjectCache::new(projects_cache_directory.as_path())?;
 
@@ -119,7 +120,11 @@ pub fn test(
         let project_directory_str = project_directory.to_string_lossy();
 
         let build_system = project.build_system.to_string();
-        let key_material = project.cache_key_material(&config.build_systems, node_version.as_str());
+        let key_material = project.cache_key_material(
+            &config.build_systems,
+            npm_version.as_str(),
+            node_version.as_str(),
+        );
         let set_up = |checkout: &std::path::Path| -> anyhow::Result<()> {
             crate::utils::clone_repository(
                 project.url.as_str(),
