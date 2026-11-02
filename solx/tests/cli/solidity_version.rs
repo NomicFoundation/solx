@@ -5,20 +5,6 @@
 use predicates::prelude::*;
 use test_case::test_case;
 
-/// The `settings.solidityVersion` of contract `C` in source `A` of the standard JSON output.
-fn standard_json_solidity_version(input: &str) -> anyhow::Result<serde_json::Value> {
-    let result = crate::cli::execute_solx(&["--standard-json", input])?;
-    let output = solx_utils::deserialize_from_slice::<solx_standard_json::Output>(
-        result.success().get_output().stdout.as_slice(),
-    )?;
-    let metadata = output.contracts["A"]["C"]
-        .metadata
-        .as_deref()
-        .expect("the metadata is selected");
-    let metadata: serde_json::Value = serde_json::from_str(metadata)?;
-    Ok(metadata["settings"]["solidityVersion"].clone())
-}
-
 #[test]
 fn pinned_pragma() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -271,4 +257,20 @@ fn standard_json_with_flag() -> anyhow::Result<()> {
     ));
 
     Ok(())
+}
+
+/// The `settings.solidityVersion` of contract `C` in source `A` of the standard JSON output.
+fn standard_json_solidity_version(input: &str) -> anyhow::Result<serde_json::Value> {
+    let result = crate::cli::execute_solx(&["--standard-json", input])?;
+    let output = solx_utils::deserialize_from_slice::<solx_standard_json::Output>(
+        result.success().get_output().stdout.as_slice(),
+    )?;
+
+    let metadata = output.contracts["A"]["C"]
+        .metadata
+        .as_deref()
+        .expect("the metadata is selected");
+    let metadata: serde_json::Value = serde_json::from_str(metadata)?;
+
+    Ok(metadata["settings"]["solidityVersion"].clone())
 }
