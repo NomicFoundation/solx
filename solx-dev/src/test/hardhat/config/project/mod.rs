@@ -52,12 +52,16 @@ impl Project {
     pub fn cache_key_material(
         &self,
         build_systems: &BTreeMap<BuildSystem, String>,
+        npm_version: &str,
         node_version: &str,
     ) -> String {
-        let build_system_version = build_systems
-            .get(&self.build_system)
-            .map(String::as_str)
-            .unwrap_or_default();
+        let build_system_version = match self.build_system {
+            BuildSystem::Npm => npm_version,
+            _ => build_systems
+                .get(&self.build_system)
+                .map(String::as_str)
+                .unwrap_or_default(),
+        };
         [
             include_str!("../../mod.rs"),
             include_str!("../../../../utils.rs"),
@@ -84,7 +88,7 @@ mod tests {
             description: String::new(),
             url: "https://github.com/owner/repository".to_owned(),
             commit: Some("0".repeat(40)),
-            build_system: BuildSystem::Npm,
+            build_system: BuildSystem::Pnpm,
             dependencies: vec!["hardhat@3.0.0".to_owned()],
             env: Default::default(),
             build_profile: None,
@@ -95,48 +99,92 @@ mod tests {
 
     #[test]
     fn cache_key_material_covers_setup_inputs() {
-        let build_systems = |npm_version: &str| {
+        let build_systems = |pnpm_version: &str, yarn_version: &str| {
             BTreeMap::from([
-                (BuildSystem::Npm, npm_version.to_owned()),
-                (BuildSystem::Pnpm, "10.0.0".to_owned()),
+                (BuildSystem::Yarn, yarn_version.to_owned()),
+                (BuildSystem::Pnpm, pnpm_version.to_owned()),
+                (BuildSystem::Bun, "1.0.0".to_owned()),
             ])
         };
-        let key = project().cache_key_material(&build_systems("10.0.0"), "v24.0.0");
+        let key =
+            project().cache_key_material(&build_systems("10.0.0", "1.22.0"), "11.0.0", "v24.0.0");
         let mut other_url = project();
         other_url.url.push_str("-fork");
         let mut other_commit = project();
         other_commit.commit = Some("1".repeat(40));
         let mut other_build_system = project();
-        other_build_system.build_system = BuildSystem::Pnpm;
+        other_build_system.build_system = BuildSystem::Bun;
+        let mut npm_project = project();
+        npm_project.build_system = BuildSystem::Npm;
         let mut other_dependencies = project();
         other_dependencies.dependencies = vec!["hardhat@3.0.1".to_owned()];
         for (input, other) in [
             (
                 "url",
-                other_url.cache_key_material(&build_systems("10.0.0"), "v24.0.0"),
+                other_url.cache_key_material(
+                    &build_systems("10.0.0", "1.22.0"),
+                    "11.0.0",
+                    "v24.0.0",
+                ),
             ),
             (
                 "commit",
-                other_commit.cache_key_material(&build_systems("10.0.0"), "v24.0.0"),
+                other_commit.cache_key_material(
+                    &build_systems("10.0.0", "1.22.0"),
+                    "11.0.0",
+                    "v24.0.0",
+                ),
             ),
             (
                 "build system",
-                other_build_system.cache_key_material(&build_systems("10.0.0"), "v24.0.0"),
+                other_build_system.cache_key_material(
+                    &build_systems("10.0.0", "1.22.0"),
+                    "11.0.0",
+                    "v24.0.0",
+                ),
             ),
             (
                 "build system version",
-                project().cache_key_material(&build_systems("10.0.1"), "v24.0.0"),
+                project().cache_key_material(
+                    &build_systems("10.0.1", "1.22.0"),
+                    "11.0.0",
+                    "v24.0.0",
+                ),
             ),
             (
                 "dependencies",
-                other_dependencies.cache_key_material(&build_systems("10.0.0"), "v24.0.0"),
+                other_dependencies.cache_key_material(
+                    &build_systems("10.0.0", "1.22.0"),
+                    "11.0.0",
+                    "v24.0.0",
+                ),
             ),
             (
                 "node",
-                project().cache_key_material(&build_systems("10.0.0"), "v24.0.1"),
+                project().cache_key_material(
+                    &build_systems("10.0.0", "1.22.0"),
+                    "11.0.0",
+                    "v24.0.1",
+                ),
             ),
         ] {
             assert_ne!(key, other, "the {input} must change the key");
         }
+        assert_ne!(
+            npm_project.cache_key_material(&build_systems("10.0.0", "1.22.0"), "11.0.0", "v24.0.0"),
+            npm_project.cache_key_material(&build_systems("10.0.0", "1.22.0"), "11.0.1", "v24.0.0"),
+            "the npm version must change the key of an npm project"
+        );
+
+        assert_eq!(
+            key,
+            project().cache_key_material(&build_systems("10.0.0", "1.22.1"), "11.0.0", "v24.0.0"),
+            "another build system's version must not change the key"
+        );
+        assert_eq!(
+            key,
+            project().cache_key_material(&build_systems("10.0.0", "1.22.0"), "11.0.1", "v24.0.0"),
+            "the npm version must not change the key of a pnpm project"
+        );
     }
 }
