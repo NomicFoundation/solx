@@ -147,9 +147,9 @@ jobs:
       # A fixed reference point across PRs; bump all three values to move it.
       - name: Download prerelease binary
         env:
-          TAG: 5e6ec5e1
-          ASSET: slang-linux-amd64-gnu-debug-fast
-          SHA256: 0b47a9cc237a52dd1eb53bfb4dcfcc5cde755a48661a9df964d91f94c1a42b3f
+          TAG: d95c1150
+          ASSET: slang-linux-amd64-gnu-2026-10-29
+          SHA256: 48f8b3d7b0d3db184d789d8ca1ebc8a87092154c230a99cff2aa12728cb0e145
         run: |
           curl -fsSL --retry 3 -o slang-prerelease \
             "https://github.com/NomicFoundation/solx/releases/download/${TAG}/${ASSET}"
