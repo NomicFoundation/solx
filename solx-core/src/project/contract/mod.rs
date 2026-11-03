@@ -191,7 +191,6 @@ impl Contract {
                     build.debug_info,
                     build.llvm_ir_unoptimized,
                     build.llvm_ir,
-                    code_segment,
                     immutables_out,
                     metadata_out,
                     llvm_ir.dependencies,
@@ -305,7 +304,6 @@ impl Contract {
                     build.debug_info,
                     build.llvm_ir_unoptimized,
                     build.llvm_ir,
-                    code_segment,
                     immutables_out,
                     metadata_out,
                     mlir.dependencies,
@@ -324,8 +322,7 @@ impl Contract {
                         optimizer_mode.as_str(),
                         spill_area_size,
                     );
-                    object.assemble(&embedded_objects)?;
-                    object.link(linker_symbols)?;
+                    object.assemble_and_link(&embedded_objects, linker_symbols);
                     run_assemble_link.borrow_mut().finish();
                 }
                 object

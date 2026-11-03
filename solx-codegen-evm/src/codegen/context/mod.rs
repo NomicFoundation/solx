@@ -39,6 +39,8 @@ pub struct Context<'ctx> {
 impl<'ctx> Context<'ctx> {
     /// The module flag holding the size of the spill region.
     const STACK_REGION_SIZE_FLAG: &'static str = "evm-stack-region-size";
+    /// The module flag marking a runtime-code module.
+    const RUNTIME_SEGMENT_FLAG: &'static str = "evm.runtime";
     /// The named metadata holding each immutable's identifier followed by its offsets in the runtime
     /// code.
     const IMMUTABLES_METADATA: &'static str = "evm.immutables";
@@ -79,6 +81,14 @@ impl<'ctx> Context<'ctx> {
         let contract_path = self.module.get_name().to_str().expect("Always valid");
         let optimizer_mode = self.optimizer.settings().to_string();
         let spill_area_size = self.optimizer.settings().spill_area_size();
+
+        if self.code_segment == solx_utils::CodeSegment::Runtime {
+            self.module.set_basic_value_flag(
+                Self::RUNTIME_SEGMENT_FLAG,
+                inkwell::module::FlagBehavior::Error,
+                self.llvm.i32_type().const_int(1, false),
+            );
+        }
 
         let run_init_verify = profiler.start_evm_translation_unit(
             contract_path,

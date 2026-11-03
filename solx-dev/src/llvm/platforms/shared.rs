@@ -46,7 +46,7 @@ const REQUIRED_LLVM_BINARIES: &[&str] = &["llvm-config"];
 /// The CMake argument for LLVM_ENABLE_PROJECTS.
 ///
 pub fn shared_build_opts_projects() -> Vec<String> {
-    vec!["-DLLVM_ENABLE_PROJECTS='lld;mlir'".to_owned()]
+    vec!["-DLLVM_ENABLE_PROJECTS='mlir'".to_owned()]
 }
 
 ///
@@ -198,7 +198,7 @@ pub fn shared_build_opts_coverage(enabled: bool) -> Vec<String> {
 /// library via inkwell — so linking those tools is pure wall-clock waste in
 /// CI. `LLVM_BUILD_TOOLS=Off` marks every tool `EXCLUDE_FROM_ALL`;
 /// `LLVM_INCLUDE_TOOLS=On` keeps `tools/` in the configure pass so the
-/// umbrella targets (`llvm-libraries`, `lld-libraries`, etc.) stay defined.
+/// umbrella targets (`llvm-libraries`, `mlir-libraries`, etc.) stay defined.
 /// `LLVM_DISTRIBUTION_COMPONENTS` whitelists what `install-distribution`
 /// actually copies into the install prefix — see #364.
 ///
@@ -229,9 +229,6 @@ pub fn build_opts_distribution(enable_utils: bool) -> Vec<String> {
         "llvm-libraries",
         "llvm-headers",
         "cmake-exports",
-        "lld-libraries",
-        "lld-headers",
-        "lld-cmake-exports",
         "mlir-libraries",
         "mlir-headers",
         "mlir-cmake-exports",
