@@ -23,8 +23,6 @@ pub struct Object {
     /// Bytecode.
     #[serde(with = "serde_bytes")]
     pub bytecode: Option<Vec<u8>>,
-    /// Hexadecimal bytecode.
-    pub bytecode_hex: Option<String>,
     /// ELF-wrapped DWARF debug info.
     #[serde(with = "serde_bytes")]
     pub debug_info: Option<Vec<u8>>,
@@ -78,13 +76,11 @@ impl Object {
         is_size_fallback: bool,
         warnings: Vec<solx_utils::Warning>,
     ) -> Self {
-        let bytecode_hex = bytecode.as_ref().map(hex::encode);
         Self {
             identifier,
             contract_name,
             assembly,
             bytecode,
-            bytecode_hex,
             debug_info,
             llvm_ir_unoptimized,
             llvm_ir,
@@ -98,31 +94,6 @@ impl Object {
             warnings,
             benchmarks: Vec::new(),
         }
-    }
-
-    ///
-    /// Appends metadata to the object.
-    ///
-    /// # Panics
-    /// If bytecode is `None`.
-    ///
-    pub fn to_memory_buffer(&self) -> anyhow::Result<inkwell::memory_buffer::MemoryBuffer> {
-        let bytecode = self.bytecode.as_deref().expect("Bytecode is not set");
-
-        let mut memory_buffer = inkwell::memory_buffer::MemoryBuffer::create_from_memory_range(
-            bytecode,
-            self.identifier.as_str(),
-            false,
-        );
-
-        if let (solx_utils::CodeSegment::Runtime, Some(metadata_bytes)) =
-            (self.code_segment, &self.metadata_bytes)
-        {
-            memory_buffer =
-                solx_codegen_evm::append_metadata(memory_buffer, metadata_bytes.as_slice())?;
-        }
-
-        Ok(memory_buffer)
     }
 
     ///
@@ -164,7 +135,14 @@ impl Object {
         let mut memory_buffers = Vec::with_capacity(
             1 + usize::from(self.dependencies.runtime.is_some()) + self.dependencies.objects.len(),
         );
-        memory_buffers.push((self.identifier.to_owned(), self.to_memory_buffer()?));
+        memory_buffers.push((
+            self.identifier.to_owned(),
+            inkwell::memory_buffer::MemoryBuffer::create_from_memory_range(
+                self.bytecode.as_deref().expect("Bytecode is not set"),
+                self.identifier.as_str(),
+                false,
+            ),
+        ));
 
         for dependency in self.dependencies.into_iter() {
             let bytecode = assembled_by_identifier
@@ -190,6 +168,7 @@ impl Object {
             bytecode_buffers.as_slice(),
             bytecode_ids.as_slice(),
             self.code_segment,
+            self.metadata_bytes.as_deref().unwrap_or_default(),
         )?;
 
         self.assembled_bytecode = Some(assembled.as_slice().to_owned());
@@ -241,7 +220,20 @@ impl Object {
             linked_object
         };
 
-        let mut bytecode_hex = hex::encode(linked_object_with_placeholders.as_slice());
+        self.bytecode = Some(linked_object_with_placeholders.as_slice().to_owned());
+
+        Ok(())
+    }
+
+    ///
+    /// Encodes the linked bytecode as hex, with the placeholder solc emits in
+    /// place of every library address still unknown.
+    ///
+    /// # Panics
+    /// If bytecode is `None`.
+    ///
+    pub fn bytecode_hex(&self) -> String {
+        let mut bytecode_hex = hex::encode(self.bytecode.as_deref().expect("Bytecode is not set"));
         for (symbol, offsets) in self.unlinked_symbols.iter() {
             let hash = solx_utils::Keccak256Hash::from_slice(symbol.as_bytes()).to_vec();
             let placeholder = format!(
@@ -257,10 +249,7 @@ impl Object {
                 }
             }
         }
-        self.bytecode = Some(linked_object_with_placeholders.as_slice().to_owned());
-        self.bytecode_hex = Some(bytecode_hex);
-
-        Ok(())
+        bytecode_hex
     }
 
     ///

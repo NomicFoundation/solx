@@ -70,7 +70,7 @@ rev = "f68f5ba4f4862cccb560f24b536528f2f7b6221c"
 # LLVM
 [workspace.dependencies.inkwell]
 git = "https://github.com/NomicFoundation/inkwell"
-rev = "64084abd7d09d3869b9403dc29d68a558c88d3e0"
+rev = "42906120537a09ab8a2753e54cbc7fca4748d3fd"
 default-features = false
 features = [
     "llvm21-1",

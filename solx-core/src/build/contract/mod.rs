@@ -134,9 +134,7 @@ impl Contract {
             let bytecode_hex = deploy_object_result
                 .as_mut()
                 .expect("Always exists")
-                .bytecode_hex
-                .take()
-                .expect("Always exists");
+                .bytecode_hex();
             writeln!(std::io::stdout(), "Binary:\n{bytecode_hex}")?;
         }
         if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
@@ -149,9 +147,7 @@ impl Contract {
             let bytecode_hex = runtime_object_result
                 .as_mut()
                 .expect("Always exists")
-                .bytecode_hex
-                .take()
-                .expect("Always exists");
+                .bytecode_hex();
             writeln!(
                 std::io::stdout(),
                 "Binary of the runtime part:\n{bytecode_hex}"
@@ -446,9 +442,7 @@ impl Contract {
             let bytecode_hex = deploy_object_result
                 .as_mut()
                 .expect("Always exists")
-                .bytecode_hex
-                .take()
-                .expect("Always exists");
+                .bytecode_hex();
             Self::write_to_file(output_path.as_path(), bytecode_hex, overwrite)?;
         }
         if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
@@ -470,9 +464,7 @@ impl Contract {
             let bytecode_hex = runtime_object_result
                 .as_mut()
                 .expect("Always exists")
-                .bytecode_hex
-                .take()
-                .expect("Always exists");
+                .bytecode_hex();
             Self::write_to_file(output_path.as_path(), bytecode_hex, overwrite)?;
         }
 
@@ -981,9 +973,9 @@ impl Contract {
                     .as_mut()
                     .and_then(|result| result.as_mut().ok())
                     .map(|object| {
-                        object.bytecode_hex.take().filter(|_| {
-                            output_selection.check_selection(path, name, selector_object)
-                        })
+                        output_selection
+                            .check_selection(path, name, selector_object)
+                            .then(|| object.bytecode_hex())
                     })
                     .unwrap_or(Some(String::new()))
             } else {
