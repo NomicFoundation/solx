@@ -15,44 +15,20 @@ pub fn initialize_target() {
     inkwell::targets::Target::initialize_evm(&inkwell::targets::InitializationConfig::default());
 }
 
-///
-/// Appends metadata to runtime code.
-///
-pub fn append_metadata(
-    bytecode_buffer: inkwell::memory_buffer::MemoryBuffer,
-    metadata: &[u8],
-) -> anyhow::Result<inkwell::memory_buffer::MemoryBuffer> {
-    if metadata.is_empty() {
-        return Ok(bytecode_buffer);
-    }
-
-    bytecode_buffer
-        .append_metadata_evm(metadata)
-        .map_err(|error| anyhow::anyhow!("bytecode metadata appending error: {error}"))
-}
-
 /// Whether the size fallback is activated during the compilation.
 /// Only set once, as we're only compiling one traslation unit in a process.
 pub static IS_SIZE_FALLBACK: AtomicBool = AtomicBool::new(false);
 
 ///
-/// Assembles the main buffer and its dependencies from `bytecode_buffers`.
+/// Assembles the main buffer and its dependencies from `bytecode_buffers`,
+/// with `metadata` ending the code.
 ///
 pub fn assemble(
     bytecode_buffers: &[&inkwell::memory_buffer::MemoryBuffer],
     bytecode_buffer_ids: &[&str],
-    code_segment: solx_utils::CodeSegment,
-) -> anyhow::Result<inkwell::memory_buffer::MemoryBuffer> {
-    let code_segment = match code_segment {
-        solx_utils::CodeSegment::Deploy => inkwell::memory_buffer::CodeSegment::Deploy,
-        solx_utils::CodeSegment::Runtime => inkwell::memory_buffer::CodeSegment::Runtime,
-    };
-    inkwell::memory_buffer::MemoryBuffer::assemble_evm(
-        bytecode_buffers,
-        bytecode_buffer_ids,
-        code_segment,
-    )
-    .map_err(|error| anyhow::anyhow!("linking: {error}"))
+    metadata: &[u8],
+) -> inkwell::memory_buffer::MemoryBuffer {
+    inkwell::memory_buffer::MemoryBuffer::assemble_evm(bytecode_buffers, bytecode_buffer_ids, metadata)
 }
 
 ///
@@ -61,12 +37,8 @@ pub fn assemble(
 pub fn link(
     bytecode_buffer: inkwell::memory_buffer::MemoryBuffer,
     linker_symbols: &BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
-) -> anyhow::Result<inkwell::memory_buffer::MemoryBuffer> {
-    let bytecode_buffer_linked = bytecode_buffer
-        .link_evm(linker_symbols)
-        .map_err(|error| anyhow::anyhow!("linking: {error}"))?;
-
-    Ok(bytecode_buffer_linked)
+) -> inkwell::memory_buffer::MemoryBuffer {
+    bytecode_buffer.link_evm(linker_symbols)
 }
 
 ///

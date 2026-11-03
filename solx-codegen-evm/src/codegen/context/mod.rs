@@ -80,6 +80,16 @@ impl<'ctx> Context<'ctx> {
         let optimizer_mode = self.optimizer.settings().to_string();
         let spill_area_size = self.optimizer.settings().spill_area_size();
 
+        // The backend lowers this flag into the ELF header, where the linker
+        // reads the code segment kind from.
+        if let solx_utils::CodeSegment::Runtime = self.code_segment {
+            self.module.set_basic_value_flag(
+                "evm.runtime",
+                inkwell::module::FlagBehavior::Error,
+                self.llvm.i32_type().const_int(1, false),
+            );
+        }
+
         let run_init_verify = profiler.start_evm_translation_unit(
             contract_path,
             self.code_segment,
