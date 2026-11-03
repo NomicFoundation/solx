@@ -1050,9 +1050,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.8.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6651c9ed80effdc7db0ff72512157f901af5e3549e341e24b1dd4887d836d838"
+checksum = "86e055fa6e3e40ad6187ba25b6855eeb635d5271f8e0f0e1e9a5826b8d75bea0"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -1498,7 +1498,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ab67060fc6b8ef687992d439ca0fa36e7ed17e9a0b16b25b601e8757df720de"
 dependencies = [
  "data-encoding",
- "syn 2.0.117",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -1783,9 +1783,9 @@ dependencies = [
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.14"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
+checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
 
 [[package]]
 name = "finl_unicode"
@@ -2385,7 +2385,7 @@ dependencies = [
 [[package]]
 name = "inkwell"
 version = "0.7.1"
-source = "git+https://github.com/NomicFoundation/inkwell?rev=64084abd7d09d3869b9403dc29d68a558c88d3e0#64084abd7d09d3869b9403dc29d68a558c88d3e0"
+source = "git+https://github.com/NomicFoundation/inkwell?rev=42906120537a09ab8a2753e54cbc7fca4748d3fd#42906120537a09ab8a2753e54cbc7fca4748d3fd"
 dependencies = [
  "inkwell_internals",
  "libc",
@@ -2398,7 +2398,7 @@ dependencies = [
 [[package]]
 name = "inkwell_internals"
 version = "0.12.0"
-source = "git+https://github.com/NomicFoundation/inkwell?rev=64084abd7d09d3869b9403dc29d68a558c88d3e0#64084abd7d09d3869b9403dc29d68a558c88d3e0"
+source = "git+https://github.com/NomicFoundation/inkwell?rev=42906120537a09ab8a2753e54cbc7fca4748d3fd#42906120537a09ab8a2753e54cbc7fca4748d3fd"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2690,7 +2690,7 @@ checksum = "6373607a59f0be73a39b6fe456b8192fcc3585f602af20751600e974dd455e77"
 [[package]]
 name = "llvm-sys"
 version = "211.0.0"
-source = "git+https://github.com/NomicFoundation/llvm-sys.rs?rev=1aef1b289d307fdd9561e159fcc3953a34f77840#1aef1b289d307fdd9561e159fcc3953a34f77840"
+source = "git+https://github.com/NomicFoundation/llvm-sys.rs?rev=4e7b81f37e5e5d5010a932ea7cd12bf6cf8c3217#4e7b81f37e5e5d5010a932ea7cd12bf6cf8c3217"
 dependencies = [
  "anyhow",
  "cc",
@@ -4042,9 +4042,9 @@ dependencies = [
 
 [[package]]
 name = "ruint"
-version = "1.20.1"
+version = "1.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2973657b5127d510e230f5c63d2d106af9c8f79393d8b9f4647323e8196bdde5"
+checksum = "a0de3fa9b4dac39cc2bd65679bacf9f531899d933605e2963b40c2129cdb55f2"
 dependencies = [
  "alloy-rlp",
  "ark-ff 0.3.0",
@@ -4060,6 +4060,7 @@ dependencies = [
  "parity-scale-codec",
  "primitive-types",
  "proptest",
+ "rand 0.10.2",
  "rand 0.8.7",
  "rand 0.9.3",
  "rlp 0.5.2",
@@ -4077,9 +4078,9 @@ checksum = "48fd7bd8a6377e15ad9d42a8ec25371b94ddc67abe7c8b9127bec79bebaaae18"
 
 [[package]]
 name = "rust_xlsxwriter"
-version = "0.100.0"
+version = "0.101.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c44904ffb6c57b148ffcc8ce3011c28bc49b97e1a8343b2d632283cd566e1393"
+checksum = "49aa1d1558e9465f5053bf9fb5361fe75db827c6a4423d5e5fe72096622f8908"
 dependencies = [
  "zip",
 ]
@@ -5227,7 +5228,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
@@ -6359,9 +6360,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "9.0.2"
+version = "9.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e2fc56a6707efb066c40aead2409ebb1224e6dde24a074e9fbc78ced500507b"
+checksum = "6e04976da629d3b04204ba8105b396a193af8ad2583b2c79bfb3ab8af580a11e"
 dependencies = [
  "crc32fast",
  "flate2",

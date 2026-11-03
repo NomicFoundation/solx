@@ -33,8 +33,6 @@ use self::contract::metadata::Metadata as ContractMetadata;
 ///
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Project {
-    /// The `solc` compiler version, absent for LLVM IR projects.
-    pub solc_version: Option<semver::Version>,
     /// The project build results.
     pub contracts: BTreeMap<String, Contract>,
     /// The Solidity AST JSONs of the source files.
@@ -49,12 +47,10 @@ impl Project {
     /// A shortcut constructor.
     ///
     pub fn new(
-        solc_version: Option<semver::Version>,
         contracts: BTreeMap<String, Contract>,
         ast_jsons: Option<BTreeMap<String, Option<Box<RawValue>>>>,
     ) -> Self {
         Self {
-            solc_version,
             contracts,
             ast_jsons,
         }
@@ -64,7 +60,6 @@ impl Project {
     /// Parses the Solidity `sources` and returns a Solidity project.
     ///
     pub fn try_from_solidity_output(
-        solc_version: semver::Version,
         output: &mut solx_standard_json::Output,
     ) -> anyhow::Result<Self> {
         let ast_jsons = output
@@ -142,7 +137,7 @@ impl Project {
                 Err(error) => output.push_error(contract_name.path.as_str(), error),
             }
         }
-        Ok(Project::new(Some(solc_version), contracts, Some(ast_jsons)))
+        Ok(Project::new(contracts, Some(ast_jsons)))
     }
 
     ///
@@ -248,7 +243,7 @@ impl Project {
                 },
             }
         }
-        Ok(Self::new(None, contracts, None))
+        Ok(Self::new(contracts, None))
     }
 
     ///
@@ -267,7 +262,6 @@ impl Project {
         linker_symbols: &BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
     ) -> anyhow::Result<EVMBuild> {
         let Self {
-            solc_version,
             contracts,
             ast_jsons,
         } = self;
@@ -348,12 +342,8 @@ impl Project {
                 };
 
                 let (runtime_object_result, metadata) = {
-                    let metadata_bytes = Self::cbor_metadata(
-                        metadata.as_deref(),
-                        solc_version.as_ref(),
-                        metadata_hash_type,
-                        append_cbor,
-                    );
+                    let metadata_bytes =
+                        Self::cbor_metadata(metadata.as_deref(), metadata_hash_type, append_cbor);
 
                     let mut job = EVMProcessJob::new(
                         contract_name.clone(),
@@ -419,7 +409,6 @@ impl Project {
     ///
     fn cbor_metadata(
         metadata: Option<&str>,
-        solc_version: Option<&semver::Version>,
         metadata_hash_type: solx_utils::MetadataHashType,
         append_cbor: bool,
     ) -> Option<Vec<u8>> {
@@ -433,39 +422,18 @@ impl Project {
                 Some(solx_utils::IPFSHash::from_slice(metadata.as_bytes()).to_vec())
             }
         });
+        let compiler_version = crate::Compiler::version()
+            .parse()
+            .expect("version string is valid semver");
 
-        let mut cbor_version_parts = Vec::with_capacity(2);
-        cbor_version_parts.push((
-            crate::r#const::DEFAULT_EXECUTABLE_NAME.to_owned(),
-            crate::Compiler::version()
-                .parse()
-                .expect("version string is valid semver"),
-        ));
-        if let Some(solc_version) = solc_version {
-            cbor_version_parts.push((
-                crate::r#const::SOLC_METADATA_TAG.to_owned(),
-                solc_version.to_owned(),
-            ));
-        }
-        let cbor_data = (
-            crate::r#const::SOLC_METADATA_TAG.to_owned(),
-            cbor_version_parts,
+        let cbor = solx_utils::CBOR::new(
+            metadata_hash
+                .as_deref()
+                .map(|hash| (solx_utils::MetadataHashType::IPFS, hash)),
+            crate::r#const::DEFAULT_EXECUTABLE_NAME,
+            compiler_version,
         );
-
-        match metadata_hash {
-            Some(hash) => {
-                let cbor = solx_utils::CBOR::new(
-                    Some((solx_utils::MetadataHashType::IPFS, hash.as_slice())),
-                    cbor_data.0,
-                    cbor_data.1,
-                );
-                Some(cbor.to_vec())
-            }
-            None => {
-                let cbor = solx_utils::CBOR::<'_, String>::new(None, cbor_data.0, cbor_data.1);
-                Some(cbor.to_vec())
-            }
-        }
+        Some(cbor.to_vec())
     }
 
     ///

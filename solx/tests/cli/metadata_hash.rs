@@ -5,9 +5,6 @@
 use predicates::prelude::*;
 use solx_utils::MetadataHashType;
 
-/// A two-entry CBOR map whose first entry is `ipfs` with a 34-byte value.
-const CBOR_IPFS_HASH_PREFIX: &str = "a264697066735822";
-
 /// The suffix of the runtime code's file in `--output-dir`.
 const RUNTIME_SUFFIX: &str = ".bin-runtime";
 
@@ -30,7 +27,9 @@ fn none() -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    result.success().stdout(predicate::str::contains("a164"));
+    result.success().stdout(predicate::str::contains(
+        crate::common::CBOR_WITHOUT_HASH_PREFIX,
+    ));
 
     Ok(())
 }
@@ -65,7 +64,7 @@ fn none_prints_compiler() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains(COMPILER_KEY))
-        .stdout(predicate::str::contains(CBOR_IPFS_HASH_PREFIX).not());
+        .stdout(predicate::str::contains(crate::common::CBOR_IPFS_HASH_PREFIX).not());
 
     Ok(())
 }
@@ -92,8 +91,16 @@ fn appends_the_metadata_to_each_binary_once() -> anyhow::Result<()> {
     let deploy = line_after("Binary:");
     let runtime = line_after("Binary of the runtime part:");
 
-    assert_eq!(runtime.matches(CBOR_IPFS_HASH_PREFIX).count(), 1);
-    assert_eq!(deploy.matches(CBOR_IPFS_HASH_PREFIX).count(), 1);
+    assert_eq!(
+        runtime
+            .matches(crate::common::CBOR_IPFS_HASH_PREFIX)
+            .count(),
+        1
+    );
+    assert_eq!(
+        deploy.matches(crate::common::CBOR_IPFS_HASH_PREFIX).count(),
+        1
+    );
     assert!(
         deploy.contains(runtime),
         "the deploy code embeds the runtime code with its metadata"
@@ -119,7 +126,7 @@ fn ipfs_hashes_cli_metadata() -> anyhow::Result<()> {
     let metadata = crate::cli::output_file(&output, contract, "SlangTest", METADATA_SUFFIX)?;
 
     let (_, hash) = runtime
-        .rsplit_once(CBOR_IPFS_HASH_PREFIX)
+        .rsplit_once(crate::common::CBOR_IPFS_HASH_PREFIX)
         .expect("the runtime code ends with an IPFS metadata hash");
     assert_eq!(
         &hash[..68],
@@ -159,7 +166,7 @@ fn ipfs_hashes_standard_json_metadata() -> anyhow::Result<()> {
         "the metadata names the compiler"
     );
     let (_, hash) = runtime
-        .rsplit_once(CBOR_IPFS_HASH_PREFIX)
+        .rsplit_once(crate::common::CBOR_IPFS_HASH_PREFIX)
         .expect("the runtime code ends with an IPFS metadata hash");
     assert_eq!(
         &hash[..68],
@@ -183,6 +190,42 @@ fn standard_json_cli_excess_arg() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result.success().stdout(predicate::str::contains(
         "Metadata hash mode must be specified in standard JSON input settings.",
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn bzzr1() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--metadata-hash",
+        "bzzr1",
+        "--bin",
+        crate::common::TEST_SOLIDITY_CONTRACT,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.failure().stderr(predicate::str::contains(
+        "unknown bytecode hash mode: `bzzr1`",
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn standard_json_bzzr1() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("metadata_hash_bzzr1.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains(
+        "unknown variant `bzzr1`, expected `none` or `ipfs`",
     ));
 
     Ok(())

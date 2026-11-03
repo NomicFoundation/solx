@@ -261,14 +261,7 @@ impl<'arguments> Compiler<'arguments> {
         output.check_errors()?;
 
         let run_solx_project = profiler.start_pipeline_element("Compiler_BuildProject");
-        let project = Project::try_from_solidity_output(
-            input
-                .settings
-                .solidity_version
-                .clone()
-                .expect("the frontend sets the version it compiled as"),
-            &mut output,
-        )?;
+        let project = Project::try_from_solidity_output(&mut output)?;
         run_solx_project.borrow_mut().finish();
         output.take_and_write_warnings();
         output.check_errors()?;
@@ -348,14 +341,7 @@ impl<'arguments> Compiler<'arguments> {
                     .extend(output.errors.drain(..));
 
                 let run_solx_project = profiler.start_pipeline_element("Compiler_BuildProject");
-                let project = Project::try_from_solidity_output(
-                    input
-                        .settings
-                        .solidity_version
-                        .clone()
-                        .expect("the frontend sets the version it compiled as"),
-                    &mut output,
-                )?;
+                let project = Project::try_from_solidity_output(&mut output)?;
                 run_solx_project.borrow_mut().finish();
                 if output.has_errors() {
                     output.write_and_exit(&input.settings.output_selection);
