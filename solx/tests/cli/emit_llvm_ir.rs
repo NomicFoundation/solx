@@ -26,6 +26,34 @@ fn default() -> anyhow::Result<()> {
 }
 
 #[test]
+fn marks_only_the_runtime_module_with_the_segment_flag() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT,
+        "--emit-llvm-ir",
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    let stdout = String::from_utf8(result.success().get_output().stdout.clone())?;
+
+    assert_eq!(stdout.matches("!evm.runtime = !{}").count(), 2);
+    for (position, _) in stdout.match_indices("!evm.runtime = !{}") {
+        let deploy_header = stdout[..position].rfind("Deploy LLVM IR").unwrap_or(0);
+        let runtime_header = stdout[..position]
+            .rfind("Runtime LLVM IR")
+            .expect("the flag appears under a runtime section");
+        assert!(
+            runtime_header > deploy_header,
+            "the flag lies in a runtime section"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
 fn llvm_ir_input() -> anyhow::Result<()> {
     crate::common::setup()?;
 

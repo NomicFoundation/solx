@@ -125,7 +125,7 @@ We ship **Slang** binaries on the [releases page of this repository](https://git
    ./target/release/solx-dev llvm build
    ```
 
-   This builds LLVM with the EVM target, MLIR, and LLD projects enabled. The build artifacts will be placed in `target-llvm/`.
+   This builds LLVM with the EVM target and MLIR enabled. The build artifacts will be placed in `target-llvm/`.
 
    For more information and available build options, run `./target/release/solx-dev llvm build --help`.
 
@@ -154,7 +154,7 @@ If you prefer building [the LLVM framework](https://github.com/NomicFoundation/s
 # We recommend using the latest version of CMake.
 
 -DLLVM_TARGETS_TO_BUILD='EVM'
--DLLVM_ENABLE_PROJECTS='lld;mlir'
+-DLLVM_ENABLE_PROJECTS='mlir'
 -DLLVM_ENABLE_RTTI='On'
 -DBUILD_SHARED_LIBS='Off'
 ```

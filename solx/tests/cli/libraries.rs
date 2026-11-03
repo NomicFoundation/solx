@@ -74,6 +74,36 @@ fn links_the_address_into_embedded_bytecode() -> anyhow::Result<()> {
 }
 
 #[test]
+fn stamps_the_placeholder_at_the_address_offset() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let contract = crate::common::contract!("solidity/SimpleContract.sol");
+    let runtime_hex = |args: &[&str]| -> anyhow::Result<String> {
+        let result = crate::cli::execute_solx(args)?;
+        let stdout = String::from_utf8(result.success().get_output().stdout.clone())?;
+        Ok(stdout
+            .lines()
+            .skip_while(|line| *line != "Binary of the runtime part:")
+            .nth(1)
+            .expect("`Binary of the runtime part:` is followed by its value")
+            .to_owned())
+    };
+
+    let unlinked = runtime_hex(&[contract, "--bin-runtime"])?;
+    let linked = runtime_hex(&[contract, "--libraries", LIBRARY_SIMPLE, "--bin-runtime"])?;
+
+    let placeholder_offset = unlinked
+        .find("__$733ff2b5a7b9002c636c19ae8206a21f88$__")
+        .expect("the unlinked runtime carries the placeholder");
+    let address_offset = linked
+        .find("f9702469dfb84a9ac171e284f71615bd3d3f1edc")
+        .expect("the linked runtime carries the address");
+    assert_eq!(placeholder_offset, address_offset);
+
+    Ok(())
+}
+
+#[test]
 fn standard_json() -> anyhow::Result<()> {
     crate::common::setup()?;
 

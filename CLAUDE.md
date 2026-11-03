@@ -32,7 +32,7 @@ Solidity → Slang (parse, bind) → Sol-dialect MLIR → Sol→Yul→Standard p
 | [`solx-core`](./solx-core/) | Pipeline orchestration |
 | [`solx-slang`](./solx-slang/) | Lowers the Slang AST to Sol-dialect MLIR |
 | [`solx-mlir`](./solx-mlir/) | The Sol and Yul dialect binding over melior: values, places, types, blocks |
-| [`solx-codegen-evm`](./solx-codegen-evm/) | LLVM IR to EVM bytecode: optimization, assembly, linking |
+| [`solx-codegen-evm`](./solx-codegen-evm/) | LLVM IR to EVM bytecode: optimization and emission |
 | [`solx-standard-json`](./solx-standard-json/) | solc-compatible JSON I/O protocol |
 | [`solx-utils`](./solx-utils/) | Shared types: contract names, EVM versions, hashing, CBOR metadata |
 | [`solx-dev`](./solx-dev/) | Developer tool: builds LLVM, runs project tests |

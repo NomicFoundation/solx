@@ -124,7 +124,7 @@ impl Contract {
             )?;
         }
 
-        if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
+        if let Some(deploy_object_result) = self.deploy_object_result.as_ref()
             && output_selection.check_selection(
                 self.name.path.as_str(),
                 self.name.name.as_deref(),
@@ -132,14 +132,12 @@ impl Contract {
             )
         {
             let bytecode_hex = deploy_object_result
-                .as_mut()
+                .as_ref()
                 .expect("Always exists")
-                .bytecode_hex
-                .take()
-                .expect("Always exists");
+                .to_bytecode_hex();
             writeln!(std::io::stdout(), "Binary:\n{bytecode_hex}")?;
         }
-        if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
+        if let Some(runtime_object_result) = self.runtime_object_result.as_ref()
             && output_selection.check_selection(
                 self.name.path.as_str(),
                 self.name.name.as_deref(),
@@ -147,11 +145,9 @@ impl Contract {
             )
         {
             let bytecode_hex = runtime_object_result
-                .as_mut()
+                .as_ref()
                 .expect("Always exists")
-                .bytecode_hex
-                .take()
-                .expect("Always exists");
+                .to_bytecode_hex();
             writeln!(
                 std::io::stdout(),
                 "Binary of the runtime part:\n{bytecode_hex}"
@@ -428,7 +424,7 @@ impl Contract {
         .to_string_lossy();
         let contract_path = solx_utils::ContractName::sanitize_path(contract_path.as_ref());
 
-        if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
+        if let Some(deploy_object_result) = self.deploy_object_result.as_ref()
             && output_selection.check_selection(
                 self.name.path.as_str(),
                 self.name.name.as_deref(),
@@ -444,14 +440,12 @@ impl Contract {
             output_path.push(output_name.as_str());
 
             let bytecode_hex = deploy_object_result
-                .as_mut()
+                .as_ref()
                 .expect("Always exists")
-                .bytecode_hex
-                .take()
-                .expect("Always exists");
+                .to_bytecode_hex();
             Self::write_to_file(output_path.as_path(), bytecode_hex, overwrite)?;
         }
-        if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
+        if let Some(runtime_object_result) = self.runtime_object_result.as_ref()
             && output_selection.check_selection(
                 self.name.path.as_str(),
                 self.name.name.as_deref(),
@@ -468,11 +462,9 @@ impl Contract {
             output_path.push(output_name.as_str());
 
             let bytecode_hex = runtime_object_result
-                .as_mut()
+                .as_ref()
                 .expect("Always exists")
-                .bytecode_hex
-                .take()
-                .expect("Always exists");
+                .to_bytecode_hex();
             Self::write_to_file(output_path.as_path(), bytecode_hex, overwrite)?;
         }
 
@@ -978,12 +970,12 @@ impl Contract {
             // object
             if is_bytecode_linked {
                 object_result
-                    .as_mut()
-                    .and_then(|result| result.as_mut().ok())
+                    .as_ref()
+                    .and_then(|result| result.as_ref().ok())
                     .map(|object| {
-                        object.bytecode_hex.take().filter(|_| {
-                            output_selection.check_selection(path, name, selector_object)
-                        })
+                        output_selection
+                            .check_selection(path, name, selector_object)
+                            .then(|| object.to_bytecode_hex())
                     })
                     .unwrap_or(Some(String::new()))
             } else {
