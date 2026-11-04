@@ -62,6 +62,8 @@ A type has one inherent `impl` block, with public items before private ones.
 
 3. Dispatch is decided up front. The handler for a construct is resolved and called. There is no try-this-then-that and no "not applicable" return value.
 
+4. A file-level output such as `ast` is built from Slang alone, before the error check and codegen, so it is present even when compilation fails.
+
 ### Slang as the source of truth
 
 1. Slang is the single source of semantic truth. Types, selectors, signatures, layout, linearisation and name resolution come from its API and are never recomputed or approximated here, by the compiler or by the tester.
@@ -121,6 +123,14 @@ A type has one inherent `impl` block, with public items before private ones.
 6. A base the fixture does not observe is `abstract`.
 
 7. A file that only a fixture imports lives in `Inputs/`, which lit skips, and joins the RUN line after `%s` as `%S/Inputs/<file>`.
+
+### CLI tests
+
+1. A test input selects only the outputs the test asserts on.
+
+2. An expected-output JSON fixture is compared as JSON, never after deserializing into the type it pins.
+
+3. A test that can only fail together with another one is deleted.
 
 ### Naming and docs
 
