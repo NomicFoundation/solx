@@ -60,6 +60,10 @@ impl<'context> Context<'context> {
     const SOL_CONTRACT: &'static str = "sol.contract";
     /// The op a function is before the Sol lowering.
     const SOL_FUNC: &'static str = "sol.func";
+    /// The op a contract is after the Sol lowering.
+    const YUL_OBJECT: &'static str = "yul.object";
+    /// The op a function is after the Sol lowering.
+    const YUL_FUNC: &'static str = "yul.func";
     /// The op a function is after the Yul lowering.
     const FUNC_FUNC: &'static str = "func.func";
     /// The DWARF version a module with debug info declares, where LLVM would default to 4.
@@ -218,6 +222,12 @@ impl<'context> Context<'context> {
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionConvertSolToYulPass(),
             ));
+            pass_manager
+                .nested_under(Self::YUL_OBJECT)
+                .nested_under(Self::YUL_FUNC)
+                .add_pass(melior::pass::Pass::from_raw(
+                    crate::ffi::mlirCreateTransformsCanonicalizer(),
+                ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionConvertYulToStandardPass(),
             ));
