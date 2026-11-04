@@ -2,8 +2,7 @@
 //! FFI bindings for Sol and Yul dialect C API functions.
 //!
 //! These functions are provided by the `libMLIRCAPISol`, `libMLIRSolTransforms`,
-//! `libMLIRSolToYul`, `libMLIRYulToStandard`, and `libMLIRCAPIYul` static
-//! libraries built from solx-llvm.
+//! `libMLIRSolToYul`, and `libMLIRCAPIYul` static libraries built from solx-llvm.
 //!
 
 use mlir_sys::MlirContext;
@@ -59,26 +58,6 @@ unsafe extern "C" {
 
     /// Creates the `convert-sol-to-yul` pass.
     pub fn mlirCreateConversionConvertSolToYulPass() -> MlirPass;
-
-    /// Creates the `convert-yul-to-std` pass.
-    pub fn mlirCreateConversionConvertYulToStandardPass() -> MlirPass;
-
-    // ---- Standard-to-LLVM conversion passes ----
-
-    /// Creates the `convert-func-to-llvm` pass.
-    pub fn mlirCreateConversionConvertFuncToLLVMPass() -> MlirPass;
-
-    /// Creates the `convert-scf-to-cf` pass.
-    pub fn mlirCreateConversionSCFToControlFlowPass() -> MlirPass;
-
-    /// Creates the `convert-cf-to-llvm` pass.
-    pub fn mlirCreateConversionConvertControlFlowToLLVMPass() -> MlirPass;
-
-    /// Creates the `convert-arith-to-llvm` pass.
-    pub fn mlirCreateConversionArithToLLVMConversionPass() -> MlirPass;
-
-    /// Creates the `reconcile-unrealized-casts` pass.
-    pub fn mlirCreateConversionReconcileUnrealizedCastsPass() -> MlirPass;
 
     // ---- Dialect loading ----
 
