@@ -92,7 +92,7 @@ impl<'context> Context<'context> {
         let melior = melior::Context::new();
         melior.enable_multi_threading(false);
         melior.append_dialect_registry(&registry);
-        unsafe { crate::ffi::solxRegisterLLVMTranslations(melior.to_raw()) };
+        unsafe { crate::ffi::mlirRegisterYulToLLVMIRTranslations(melior.to_raw()) };
 
         static REGISTER_PASSES: Once = Once::new();
         REGISTER_PASSES.call_once(|| unsafe {

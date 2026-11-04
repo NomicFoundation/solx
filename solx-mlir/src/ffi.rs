@@ -29,10 +29,10 @@ unsafe extern "C" {
     /// to `pass_manager`.
     pub fn mlirSolBuildSolToYulPipeline(pass_manager: mlir_sys::MlirOpPassManager);
 
-    // ---- LLVM translation (from dialect_stubs.cpp) ----
+    // ---- LLVM translation ----
 
-    /// Registers the MLIR-to-LLVM-IR translation.
-    pub fn solxRegisterLLVMTranslations(context: MlirContext);
+    /// Registers the LLVM IR translations a Yul module needs.
+    pub fn mlirRegisterYulToLLVMIRTranslations(context: MlirContext);
 
     // ---- Pass manager instrumentation (from dialect_stubs.cpp) ----
 
