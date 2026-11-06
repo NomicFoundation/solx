@@ -8,7 +8,6 @@
 use mlir_sys::MlirContext;
 use mlir_sys::MlirDialectHandle;
 use mlir_sys::MlirDialectRegistry;
-use mlir_sys::MlirPass;
 
 unsafe extern "C" {
     // ---- Sol dialect registration ----
@@ -26,10 +25,14 @@ unsafe extern "C" {
     /// Registers all Sol dialect passes.
     pub fn mlirRegisterSolPasses();
 
-    // ---- LLVM translation (from dialect_stubs.cpp) ----
+    /// Adds the pipeline that lowers a Sol module to the Yul module the LLVM IR translation reads
+    /// to `pass_manager`.
+    pub fn mlirSolBuildSolToYulPipeline(pass_manager: mlir_sys::MlirOpPassManager);
 
-    /// Registers the MLIR-to-LLVM-IR translation.
-    pub fn solxRegisterLLVMTranslations(context: MlirContext);
+    // ---- LLVM translation ----
+
+    /// Registers the LLVM IR translations a Yul module needs.
+    pub fn mlirRegisterYulToLLVMIRTranslations(context: MlirContext);
 
     // ---- Pass manager instrumentation (from dialect_stubs.cpp) ----
 
@@ -45,19 +48,6 @@ unsafe extern "C" {
         ),
         user_data: *mut std::ffi::c_void,
     );
-
-    // ---- Canonicalization ----
-
-    /// Creates the `canonicalize` pass.
-    pub fn mlirCreateTransformsCanonicalizer() -> MlirPass;
-
-    /// Creates the `sol-inline-modifiers` pass.
-    pub fn mlirCreateSolModifierInliningPass() -> MlirPass;
-
-    // ---- Sol-to-Yul conversion ----
-
-    /// Creates the `convert-sol-to-yul` pass.
-    pub fn mlirCreateConversionConvertSolToYulPass() -> MlirPass;
 
     // ---- Dialect loading ----
 
