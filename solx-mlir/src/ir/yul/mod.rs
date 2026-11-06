@@ -184,8 +184,8 @@ dialect_ops! {
     YulBlock::function_return(self, operands: words) {
         FuncReturnOperation.operands(many(operands))
     }
-    YulBlock::r#break(self) { BreakOperation }
-    YulBlock::r#continue(self) { ContinueOperation }
+    YulBlock::r#break(self) { BreakOperation.values(empty()) }
+    YulBlock::r#continue(self) { ContinueOperation.values(empty()) }
     YulBlock::stop(self) { StopOperation }
     YulBlock::invalid(self) { InvalidOperation }
     YulBlock::r#yield(self) { YieldOperation.operands(empty()) }
