@@ -89,8 +89,13 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         self.current_block().r#continue(self);
     }
 
-    /// The `return` statement, its values converted to the declared return types; in a void
-    /// function, such as `return (ok, ) = a.call("");`, the expression runs only for its effect.
+    /// The `return` statement.
+    ///
+    /// Its values are converted to the declared return types and assigned to the return
+    /// variables, so a modifier's code after its placeholder reads them.
+    ///
+    /// In a void function, such as `return (ok, ) = a.call("");`, the expression runs only for
+    /// its effect.
     pub fn return_statement(&mut self, node: &ReturnStatement) {
         let values = match node.expression() {
             Some(expression) if !self.return_types.is_empty() => {
@@ -103,6 +108,9 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             }
             None => Vec::new(),
         };
+        for (value, pointer) in values.iter().zip(self.return_pointers.clone()) {
+            pointer.store(*value, self);
+        }
         self.current_block().r#return(&values, self);
     }
 }
