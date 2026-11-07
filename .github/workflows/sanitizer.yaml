@@ -60,6 +60,7 @@ jobs:
     runs-on: solx-f4-staging
     # checks: write for the rust-unit-tests action's test-results check run.
     permissions:
+      actions: read
       contents: read
       checks: write
       packages: read

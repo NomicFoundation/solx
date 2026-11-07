@@ -36,6 +36,7 @@ jobs:
     if: ${{ github.event_name == 'push' || !github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-26.04
     permissions:
+      actions: read
       contents: read
       pull-requests: write
       packages: read
