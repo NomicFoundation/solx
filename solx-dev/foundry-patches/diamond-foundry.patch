@@ -1,0 +1,31 @@
+The tests read facet selectors from `forge inspect` through vm.ffi, which forge enables only in foundry.toml.
+Forge 1.x prints a table unless asked for the JSON the selector parser reads.
+
+diff --git a/foundry.toml b/foundry.toml
+index 2d09010..9772f34 100644
+--- a/foundry.toml
++++ b/foundry.toml
+@@ -1,4 +1,5 @@
+ [profile.default]
++ffi = true
+ src = 'src'
+ out = 'out'
+ libs = ['lib']
+diff --git a/test/HelperContract.sol b/test/HelperContract.sol
+index fc05abc..b7baef3 100644
+--- a/test/HelperContract.sol
++++ b/test/HelperContract.sol
+@@ -23,11 +23,12 @@ abstract contract HelperContract is IDiamond, IDiamondLoupe, Test{
+     returns (bytes4[] memory selectors)
+     {
+         //get string of contract methods
+-        string[] memory cmd = new string[](4);
++        string[] memory cmd = new string[](5);
+         cmd[0] = "forge";
+         cmd[1] = "inspect";
+         cmd[2] = _facetName;
+         cmd[3] = "methods";
++        cmd[4] = "--json";
+         bytes memory res = vm.ffi(cmd);
+         string memory st = string(res);
+ 

@@ -1,0 +1,38 @@
+Forge 1.x fails every `testFail*` test, so the VRGDA overflow test expects the revert explicitly.
+`vm.envUint` needs the `0x` prefix that GOO_PRIVATE_KEY lacked.
+
+diff --git a/test/VRGDAs.t.sol b/test/VRGDAs.t.sol
+index 3aa2b5a7..f6d26338 100644
+--- a/test/VRGDAs.t.sol
++++ b/test/VRGDAs.t.sol
+@@ -97,11 +97,12 @@ contract VRGDAsTest is DSTestPlus {
+         );
+     }
+ 
+-    function testFailOverflowForBeyondLimitGobblers(uint256 timeSinceStart, uint256 sold) public {
+-        gobblers.getVRGDAPrice(
+-            toDaysWadUnsafe(bound(timeSinceStart, 0 days, ONE_THOUSAND_YEARS)),
+-            bound(sold, 6392, type(uint128).max)
+-        );
++    function test_RevertWhen_GobblersSoldBeyondLimit(uint256 timeSinceStart, uint256 sold) public {
++        timeSinceStart = bound(timeSinceStart, 0 days, ONE_THOUSAND_YEARS);
++        sold = bound(sold, 6392, type(uint128).max);
++
++        vm.expectRevert();
++        gobblers.getVRGDAPrice(toDaysWadUnsafe(timeSinceStart), sold);
+     }
+ 
+     function testGobblerPriceStrictlyIncreasesForMostGobblers() public {
+diff --git a/test/deploy/DeployRinkeby.t.sol b/test/deploy/DeployRinkeby.t.sol
+index de685b07..3d280a25 100644
+--- a/test/deploy/DeployRinkeby.t.sol
++++ b/test/deploy/DeployRinkeby.t.sol
+@@ -18,7 +18,7 @@ contract DeployRinkebyTest is DSTestPlus {
+         vm.setEnv("DEPLOYER_PRIVATE_KEY", "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+         vm.setEnv("GOBBLER_PRIVATE_KEY", "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+         vm.setEnv("PAGES_PRIVATE_KEY", "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
+-        vm.setEnv("GOO_PRIVATE_KEY", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
++        vm.setEnv("GOO_PRIVATE_KEY", "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
+ 
+         vm.deal(vm.addr(vm.envUint("DEPLOYER_PRIVATE_KEY")), type(uint64).max);
+ 
