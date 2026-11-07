@@ -3,6 +3,8 @@
 # Build systems:
 #   [build_systems]
 #   yarn = "<x.y.z>"                # Pinned version installed globally once per run.
+#   pnpm = "<x.y.z>"
+#   bun  = "<x.y.z>"
 #
 # Compilers:
 #   [compilers.<id>]
@@ -24,7 +26,7 @@
 #   commit = "abc123..."            # Git commit SHA to pin (optional, HEAD if omitted)
 #   patch = "./path.patch"          # Applied with `git apply` right after checkout
 #   description = "..."             # Project description
-#   requires_yarn = true/false      # Run yarn install before building
+#   build_system = "yarn"           # npm, yarn, pnpm, or bun that installs packages, from the lockfile if present (optional)
 #   rewrite_pragmas_in = ["..."]    # Installed package directories whose pragmas are rewritten too
 #   disabled = true/false           # Whether to skip this project
 #   [projects.<name>.env]
@@ -38,6 +40,7 @@
 
 [build_systems]
 yarn = "1.22.22"
+bun = "1.4.4"
 
 [compilers.solc]
 name = "00.solc-0.8.34"
@@ -101,7 +104,7 @@ disabled = false
 
 [projects.openzeppelin]
 url = "https://github.com/OpenZeppelin/openzeppelin-contracts"
-commit = "6b55a93ee9bf4c412de1a03536701de33dfccb87"
+commit = "97430aa29ac10a70ee0c18f2a905c4925363b58f"
 description = "A library for secure smart contract development."
 
 [projects.lil-web3]
@@ -118,13 +121,7 @@ description = "Basic ERC-20 contract designed to be inherited and extended."
 url = "https://github.com/Timidan/Foundry-Hardhat-Diamonds"
 commit = "e9fdadc94d35c77611fd5788b99d0840cab7d3f8"
 description = "A minimal template for Diamonds EIP-2535."
-requires_yarn = true
-
-[projects.lido-core]
-url = "https://github.com/lidofinance/core"
-commit = "96738395ca3bffd6513700a45d4c9389662c5835"
-description = "Lido DAO smart contracts"
-disabled = true # written in Solidity v0.4
+build_system = "yarn"
 
 [projects.rollcall]
 url = "https://github.com/withtally/rollcall"
@@ -143,13 +140,13 @@ description = "Modern, opinionated, and gas optimized building blocks for smart 
 
 [projects.prb-math]
 url = "https://github.com/paulrberg/prb-math"
-commit = "b21433de7519fe021b176fa0b99dd3b360f28f70"
+commit = "dd349aaa5c75087f08125ef321c1df6c6cf41e78"
 description = "Solidity library for advanced fixed-point math operations."
-requires_yarn = true
+build_system = "bun"
 
 [projects.solady]
 url = "https://github.com/Vectorized/solady"
-commit = "258f67cc71e39cff307b726939ade17e9d8bcf5c"
+commit = "2afba69bf67b78dd4abeadcc696052b3a6f71499"
 patch = "./solx-dev/foundry-patches/solady.patch"
 description = "Gas optimized Solidity snippets."
 
@@ -174,7 +171,7 @@ description = "A decentralized art factory and marketplace. Fork with fixed test
 url = "https://github.com/lens-protocol/core"
 commit = "d4c662aac780e669cd23769730cdc4f0189ee5be"
 description = "Lens protocol, non-custodial social graph."
-requires_yarn = true
+build_system = "npm"
 [projects.lens-core.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
@@ -194,11 +191,10 @@ EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 url = "https://github.com/maple-labs/fixed-term-loan"
 commit = "8fb3675288897cb0b5748a5bbe90a12055bf9fa1"
 description = "A set of contracts to facilitate on-chain loans."
-disabled = true
 
 [projects.forge-std]
 url = "https://github.com/foundry-rs/forge-std"
-commit = "0844d7e1fc5e60d77b68e469bff60265f236c398"
+commit = "b013eff2ac4fce26f34d789e6f5c49021c5ee817"
 description = "Forge Standard Library is a collection of helpful contracts and libraries for use with Forge and Foundry."
 [projects.forge-std.env]
 FOUNDRY_NO_MATCH_TEST = "test_RevertIf_ModError" # unused `%` by zero does not panic until NomicFoundation/solx#825
@@ -212,14 +208,14 @@ EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
 [projects.uniswap-v4]
 url = "https://github.com/Uniswap/v4-core"
-commit = "d153b048868a60c2403a3ef5b2301bb247884d46"
+commit = "46c6834698c48bc4a463a86d8420f4eb1d7f3b75"
 description = "A new automated market maker protocol."
 
 [projects.beefy]
 url = "https://github.com/beefyfinance/beefy-contracts"
-commit = "a6d9a475e8af7947cd2ca5bec77016bfd92193c2"
+commit = "e33f868e2d995c2db9219029c26d31cd8e7d5cb2"
 description = "Official url for strategies and vaults from Beefy."
-requires_yarn = true
+build_system = "yarn"
 [projects.beefy.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
@@ -237,30 +233,31 @@ EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
 [projects.seaport]
 url = "https://github.com/ProjectOpenSea/seaport"
-commit = "080133906585660f6a76b82984f3fb690ff4b2a9"
+commit = "7f966fe7bd75932beb0366f6485aa720512b1259"
 description = "A marketplace protocol for safely and efficiently buying and selling NFTs."
 category = "huge"
-disabled = true # compilation hangs, required to disable fuzzing tests
+disabled = true # a recursive internal dispatch is stack too deep until NomicFoundation/solx#715
+[projects.seaport.env]
+EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
 [projects.lens-v3]
 url = "https://github.com/lens-protocol/lens-v3"
-commit = "8a71192c9479091f8fc6fff5e17a0a11530ac50d"
+commit = "4ad9ab574efc589ac0b90ea103d3aa465bb6368c"
 description = "Lens Protocol V3"
-requires_yarn = true
+build_system = "yarn"
 [projects.lens-v3.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
 [projects.morpho-blue]
 url = "https://github.com/morpho-org/morpho-blue"
-commit = "57d444d9e243be21a80e8d4bf8794ebce4a089d9"
+commit = "9cf6d5b844625ba108e36d1cf911f5d2faf7c136"
 description = "Morpho Blue Protocol"
-requires_yarn = true
 
 [projects.aave-v3]
 url = "https://github.com/aave-dao/aave-v3-origin"
-commit = "1e3d70c4151a94166ebc59e2eaa4aff6e6ba6978"
+commit = "8305565ae342f1773c42cd2e4593f175fe5968a0"
 description = "A non-custodial liquidity protocol on Ethereum."
-requires_yarn = true
+build_system = "npm"
 [projects.aave-v3.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
@@ -273,5 +270,5 @@ description = "WTF Solidity gas optimization techniques"
 url = "https://github.com/1inch/swap-vm"
 commit = "585f0541cfbf9a043b4a7b25b6b4c7d752915469"
 description = "1inch SwapVM: opcode dispatch loop that re-enters itself through instruction handlers"
-requires_yarn = true
+build_system = "yarn"
 rewrite_pragmas_in = ["node_modules/@1inch/aqua"]
