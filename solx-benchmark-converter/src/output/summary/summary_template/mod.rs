@@ -153,7 +153,7 @@ impl SummaryTemplate {
         let mut warn_lines = Vec::new();
         if !unbaselined.is_empty() {
             warn_lines.push(format!(
-                "⚠️ **No baseline** — {} {} no `main` counterpart; {} {} not compared.",
+                "⚠️ **No baseline** — {} {} no `main` baseline; {} {} not compared.",
                 unbaselined.join("; "),
                 crate::utils::agreeing(unbaselined_runs as u64, "has", "have"),
                 crate::utils::agreeing(unbaselined_runs as u64, "its", "their"),

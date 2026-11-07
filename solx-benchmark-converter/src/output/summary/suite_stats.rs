@@ -52,7 +52,8 @@ pub struct SuiteStats {
     /// PR runs that found a `main` counterpart. The failure verdict only
     /// means something when at least one suite compared something.
     pub paired_runs: usize,
-    /// PR runs with no main counterpart, and the failures recorded on them.
+    /// PR runs with no main counterpart, or with failing tests whose main
+    /// counterpart never reached its tests, and the failures recorded on them.
     /// They have nothing to compare against, so they are surfaced as
     /// unbaselined rather than counted as regressions against zero.
     pub unbaselined_runs: usize,
@@ -235,6 +236,12 @@ impl SuiteStats {
                     continue;
                 };
                 stats.paired_runs += 1;
+                if let (None, Some(pr_test_failures @ 1..)) =
+                    (main.test_failures_count(), pr.test_failures_count())
+                {
+                    stats.unbaselined_runs += 1;
+                    stats.unbaselined_failures += pr_test_failures;
+                }
                 stats.baseline_build_failures += main.build_failures_count().unwrap_or_default();
                 stats.baseline_test_failures += main.test_failures_count().unwrap_or_default();
                 let mode = ToolchainMatrix::humanize_mode(key);
