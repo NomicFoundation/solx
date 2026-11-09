@@ -33,7 +33,6 @@ impl From<SlangFunctionKind> for FunctionKind {
             SlangFunctionKind::Constructor => Self::Constructor,
             SlangFunctionKind::Fallback => Self::Fallback,
             SlangFunctionKind::Receive => Self::Receive,
-            SlangFunctionKind::Modifier => Self::Modifier,
         }
     }
 }

@@ -60,7 +60,7 @@ alloy-primitives = "1.6"
 [workspace.dependencies.slang_solidity_v2]
 git = "https://github.com/NomicFoundation/slang.git"
 # TODO: pin to a release tag instead of a revision.
-rev = "7d1c3ae1e7242f61d05ea36ea936943bc711aa46"
+rev = "cc5bdd47bd1aa0e9774c1b8a17475134b4c1bfc0"
 
 # MLIR
 [workspace.dependencies.melior]

@@ -12,6 +12,7 @@ use std::ops::Deref;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::ModifierDefinition;
 use slang_solidity_v2::ast::ModifierInvocation;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::NodeLocation;
@@ -135,7 +136,7 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
     /// the most-derived override for a bare name, the declaration for a qualified one. A
     /// library's modifier, which that dispatch does not cover and nothing overrides, is the
     /// declaration.
-    pub fn invoked_modifier(&self, invocation: &ModifierInvocation) -> Option<FunctionDefinition> {
+    pub fn invoked_modifier(&self, invocation: &ModifierInvocation) -> Option<ModifierDefinition> {
         let declaration = match invocation.name().resolve_to_definition() {
             Some(Definition::Modifier(declaration)) => declaration,
             Some(Definition::Contract(_) | Definition::Interface(_)) => return None,
