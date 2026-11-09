@@ -18,8 +18,10 @@ permissions:
 
 concurrency:
   # Pushes group by SHA: GitHub keeps one pending run per group, so a
-  # shared main group would drop queued pushes.
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  # shared main group would drop queued pushes. A label event that label-check
+  # rejects gets a group of its own; otherwise its skipped run cancels the real
+  # one when several labels land at once.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}${{ (github.event.action == 'labeled' && github.event.label.name != 'ci:sourcify-sweep') && format('-{0}', github.run_id) || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:

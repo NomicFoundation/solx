@@ -8,8 +8,10 @@ permissions:
   contents: read
 
 # Cancel the workflow if any new changes pushed to a feature branch or the trunk
+# A label event that label-check rejects gets a group of its own; otherwise its
+# skipped run cancels the real one when several labels land at once.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ (github.event.action == 'labeled' && !contains(fromJSON('["ci:integration", "ci:integration-benchmark-full"]'), github.event.label.name)) && format('-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 defaults:
