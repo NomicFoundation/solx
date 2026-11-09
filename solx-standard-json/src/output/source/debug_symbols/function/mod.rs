@@ -7,6 +7,7 @@ pub mod visibility;
 
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind as SlangFunctionKind;
+use slang_solidity_v2::ast::ModifierDefinition;
 use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type;
 
@@ -63,6 +64,22 @@ impl From<&FunctionDefinition> for Function {
     }
 }
 
+impl From<&ModifierDefinition> for Function {
+    /// A modifier is internal and never dispatched by selector.
+    fn from(modifier: &ModifierDefinition) -> Self {
+        let range = modifier.get_text_range();
+        Self {
+            name: modifier.name().name().to_owned(),
+            kind: FunctionKind::Modifier,
+            visibility: Visibility::Internal,
+            state_mutability: solx_mlir::StateMutability::NonPayable,
+            selector: None,
+            range: [range.start, range.len()],
+            implemented: modifier.body().is_some(),
+        }
+    }
+}
+
 impl From<&StateVariableDefinition> for Function {
     /// The getter uses the public variable's definition range.
     fn from(state_variable: &StateVariableDefinition) -> Self {
@@ -91,9 +108,9 @@ impl Function {
             SlangFunctionKind::Constructor => "constructor".to_owned(),
             SlangFunctionKind::Fallback => "fallback".to_owned(),
             SlangFunctionKind::Receive => "receive".to_owned(),
-            SlangFunctionKind::Regular | SlangFunctionKind::Modifier => function
+            SlangFunctionKind::Regular => function
                 .name()
-                .expect("slang names every regular function and modifier")
+                .expect("slang names every regular function")
                 .name()
                 .to_owned(),
         }
