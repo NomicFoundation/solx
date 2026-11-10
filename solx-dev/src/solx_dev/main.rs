@@ -77,6 +77,7 @@ fn main_inner() -> anyhow::Result<()> {
             solx_dev::test_hardhat(
                 test_config,
                 arguments.projects_dir,
+                arguments.projects_cache_dir,
                 arguments.output_dir,
                 arguments.solidity_version,
                 arguments.project_filter,
@@ -93,6 +94,7 @@ fn main_inner() -> anyhow::Result<()> {
             solx_dev::test_foundry(
                 test_config,
                 arguments.projects_dir,
+                arguments.projects_cache_dir,
                 arguments.output_dir,
                 arguments.solidity_version,
                 arguments.project_filter,

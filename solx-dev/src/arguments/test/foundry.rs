@@ -45,6 +45,14 @@ pub struct Foundry {
     )]
     pub projects_dir: PathBuf,
 
+    /// Set-up Foundry project checkouts reused across runs.
+    #[arg(
+        long,
+        default_value = "./temp-foundry-projects-cache",
+        help_heading = "Directories"
+    )]
+    pub projects_cache_dir: PathBuf,
+
     /// Foundry compilers temporary directory path.
     #[arg(
         long,
