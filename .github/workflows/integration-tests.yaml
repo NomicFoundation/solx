@@ -45,6 +45,7 @@ jobs:
     # 6h default that a single hung compile would otherwise squat the runner for.
     timeout-minutes: 300
     permissions:
+      actions: read
       contents: read
       pull-requests: write
       packages: read

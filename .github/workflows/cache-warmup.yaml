@@ -16,6 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   packages: read
 
@@ -70,6 +71,8 @@ jobs:
 
       - name: Build toolchain
         uses: ./.github/actions/build-toolchain
+        with:
+          refresh-ccache: ${{ github.event_name == 'schedule' }}
 
       # When the artifact cache is warm, build-llvm skips ccache entirely,
       # so the ccache entry's LRU timer isn't refreshed. Touch it explicitly
@@ -121,6 +124,7 @@ jobs:
           build-type: RelWithDebInfo
           enable-assertions: 'true'
           sanitizer: 'Address'
+          refresh-ccache: ${{ github.event_name == 'schedule' }}
 
       - name: Touch LLVM ccache
         if: always()
@@ -165,6 +169,7 @@ jobs:
           build-type: RelWithDebInfo
           enable-assertions: 'false'
           enable-coverage: 'true'
+          refresh-ccache: ${{ github.event_name == 'schedule' }}
 
       - name: Touch LLVM ccache
         if: always()
@@ -208,6 +213,7 @@ jobs:
         with:
           build-type: Release
           enable-assertions: 'false'
+          refresh-ccache: ${{ github.event_name == 'schedule' }}
 
       - name: Touch LLVM ccache
         if: always()

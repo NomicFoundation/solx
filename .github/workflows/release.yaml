@@ -159,6 +159,7 @@ jobs:
 
   build:
     permissions:
+      actions: read
       contents: read
       packages: read
     needs: prepare-matrix
