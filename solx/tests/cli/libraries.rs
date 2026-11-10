@@ -8,6 +8,12 @@ use predicates::prelude::*;
 /// Format: `<source-path>:<contract-name>=<address>`
 const LIBRARY_MINIMATH: &str = "tests/data/contracts/solidity/MiniMath.sol:MiniMath=0xF9702469Dfb84A9aC171E284F71615bd3D3f1EdC";
 
+/// Library linking argument for the SimpleLibrary that SimpleContract calls, at a fixed address.
+const LIBRARY_SIMPLE: &str = "tests/data/contracts/solidity/SimpleContract.sol:SimpleLibrary=0xF9702469Dfb84A9aC171E284F71615bd3D3f1EdC";
+
+/// Library called by standalone and embedded InnerContract code.
+const LIBRARY_LOWER: &str = "tests/data/contracts/solidity/LinkedMixedDepsMultiLevel.sol:LowerLibrary=0xF9702469Dfb84A9aC171E284F71615bd3D3f1EdC";
+
 #[test]
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -20,6 +26,49 @@ fn default() -> anyhow::Result<()> {
 
     let result = crate::cli::execute_solx(args)?;
     result.success().stdout(predicate::str::contains("Binary"));
+
+    Ok(())
+}
+
+#[test]
+fn links_the_address_into_the_bytecode() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/SimpleContract.sol"),
+        "--libraries",
+        LIBRARY_SIMPLE,
+        "--bin",
+        "--bin-runtime",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains(
+            "f9702469dfb84a9ac171e284f71615bd3d3f1edc",
+        ))
+        .stdout(predicate::str::contains("__$733ff2b5a7b9002c636c19ae8206a21f88$__").not());
+
+    Ok(())
+}
+
+#[test]
+fn links_the_address_into_embedded_bytecode() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/LinkedMixedDepsMultiLevel.sol"),
+        "--libraries",
+        LIBRARY_LOWER,
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("f9702469dfb84a9ac171e284f71615bd3d3f1edc").count(2))
+        .stdout(predicate::str::contains("__$c1091a910937160002c95b60eab1fc9a86$__").not());
 
     Ok(())
 }

@@ -182,7 +182,7 @@ impl<'arguments> Compiler<'arguments> {
         let libraries = solx_utils::Libraries::try_from(libraries)?;
         let linker_symbols = libraries.as_linker_symbols()?;
 
-        let project = Project::try_from_llvm_ir_paths(paths, libraries, output_selection, None)?;
+        let project = Project::try_from_llvm_ir_paths(paths, output_selection, None)?;
 
         let mut build = project.compile_to_evm(
             messages,
@@ -193,6 +193,7 @@ impl<'arguments> Compiler<'arguments> {
             optimizer_settings,
             llvm_options,
             output_config,
+            &linker_symbols,
         )?;
         build.take_and_write_warnings();
         build.check_errors()?;
@@ -260,8 +261,7 @@ impl<'arguments> Compiler<'arguments> {
         output.check_errors()?;
 
         let run_solx_project = profiler.start_pipeline_element("Compiler_BuildProject");
-        let project =
-            Project::try_from_solidity_output(input.settings.libraries.clone(), &mut output)?;
+        let project = Project::try_from_solidity_output(&mut output)?;
         run_solx_project.borrow_mut().finish();
         output.take_and_write_warnings();
         output.check_errors()?;
@@ -276,6 +276,7 @@ impl<'arguments> Compiler<'arguments> {
             optimizer_settings.clone(),
             llvm_options,
             output_config.clone(),
+            &linker_symbols,
         )?;
         run_solx_compile.borrow_mut().finish();
         build.take_and_write_warnings();
@@ -340,10 +341,7 @@ impl<'arguments> Compiler<'arguments> {
                     .extend(output.errors.drain(..));
 
                 let run_solx_project = profiler.start_pipeline_element("Compiler_BuildProject");
-                let project = Project::try_from_solidity_output(
-                    input.settings.libraries.clone(),
-                    &mut output,
-                )?;
+                let project = Project::try_from_solidity_output(&mut output)?;
                 run_solx_project.borrow_mut().finish();
                 if output.has_errors() {
                     output.write_and_exit(&input.settings.output_selection);
@@ -364,7 +362,6 @@ impl<'arguments> Compiler<'arguments> {
                     profiler.start_pipeline_element("Compiler_BuildProject");
                 let project = Project::try_from_llvm_ir_sources(
                     input.sources,
-                    input.settings.libraries.clone(),
                     &input.settings.output_selection,
                     Some(&mut output),
                 )?;
@@ -387,6 +384,7 @@ impl<'arguments> Compiler<'arguments> {
             optimizer_settings.clone(),
             llvm_options,
             output_config.clone(),
+            &linker_symbols,
         )?;
         run_solx_compile.borrow_mut().finish();
         let output_selection = input.settings.output_selection.clone();
