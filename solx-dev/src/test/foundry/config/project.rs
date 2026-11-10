@@ -2,8 +2,11 @@
 //! `solx` Foundry project.
 //!
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::path::PathBuf;
+
+use crate::test::config::build_system::BuildSystem;
 
 ///
 /// `solx` Foundry project.
@@ -21,9 +24,9 @@ pub struct Project {
     /// Patch applied to the checkout, for test fixes the pinned commit lacks.
     #[serde(default)]
     pub patch: Option<PathBuf>,
-    /// Whether the project requires `yarn`.
+    /// Build system that installs the project's packages, if it needs any.
     #[serde(default)]
-    pub requires_yarn: bool,
+    pub build_system: Option<BuildSystem>,
     /// Installed package directories whose version pragmas are rewritten too.
     #[serde(default)]
     pub rewrite_pragmas_in: Vec<String>,
@@ -43,7 +46,8 @@ impl Project {
     ///
     pub fn cache_key_material(
         &self,
-        yarn_version: &str,
+        build_systems: &BTreeMap<BuildSystem, String>,
+        npm_version: &str,
         node_version: &str,
     ) -> anyhow::Result<String> {
         let patch = match self.patch.as_deref() {
@@ -51,18 +55,23 @@ impl Project {
                 .map_err(|error| anyhow::anyhow!("Patch {path:?} reading: {error}"))?,
             None => String::new(),
         };
-        let (yarn_version, node_version) = if self.requires_yarn {
-            (yarn_version, node_version)
-        } else {
-            ("", "")
+        let (build_system, build_system_version, node_version) = match self.build_system {
+            Some(build_system) => (
+                build_system.to_string(),
+                build_system.version(build_systems, npm_version),
+                node_version,
+            ),
+            None => (String::new(), "", ""),
         };
         Ok([
             include_str!("../mod.rs"),
+            include_str!("../../config/build_system.rs"),
             include_str!("../../../utils.rs"),
             self.url.as_str(),
             self.commit.as_deref().unwrap_or_default(),
             patch.as_str(),
-            yarn_version,
+            build_system.as_str(),
+            build_system_version,
             node_version,
         ]
         .join("\0"))
@@ -71,19 +80,32 @@ impl Project {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
+    use super::BuildSystem;
     use super::Project;
 
-    fn project(requires_yarn: bool) -> Project {
+    fn project(build_system: Option<BuildSystem>) -> Project {
         Project {
             description: String::new(),
             url: "https://github.com/owner/repository".to_owned(),
             commit: Some("0".repeat(40)),
             patch: None,
-            requires_yarn,
+            build_system,
             rewrite_pragmas_in: Vec::new(),
             env: Default::default(),
             disabled: false,
         }
+    }
+
+    fn key(project: &Project, yarn_version: &str, npm_version: &str, node_version: &str) -> String {
+        let build_systems = BTreeMap::from([
+            (BuildSystem::Yarn, yarn_version.to_owned()),
+            (BuildSystem::Bun, "1.0.0".to_owned()),
+        ]);
+        project
+            .cache_key_material(&build_systems, npm_version, node_version)
+            .expect("Always valid")
     }
 
     #[test]
@@ -93,24 +115,18 @@ mod tests {
             std::process::id()
         ));
         std::fs::write(patch_path.as_path(), "diff").expect("Always valid");
-        let mut patched = project(true);
+        let mut patched = project(Some(BuildSystem::Yarn));
         patched.patch = Some(patch_path.clone());
 
-        let base = project(true);
-        let key = base
-            .cache_key_material("1.22.0", "v24.0.0")
-            .expect("Always valid");
-        let mut other_url = project(true);
+        let base = project(Some(BuildSystem::Yarn));
+        let base_key = key(&base, "1.22.0", "11.0.0", "v24.0.0");
+        let mut other_url = project(Some(BuildSystem::Yarn));
         other_url.url.push_str("-fork");
-        let mut other_commit = project(true);
+        let mut other_commit = project(Some(BuildSystem::Yarn));
         other_commit.commit = Some("1".repeat(40));
-        let patched_key = patched
-            .cache_key_material("1.22.0", "v24.0.0")
-            .expect("Always valid");
+        let patched_key = key(&patched, "1.22.0", "11.0.0", "v24.0.0");
         std::fs::write(patch_path.as_path(), "other diff").expect("Always valid");
-        let other_patch_key = patched
-            .cache_key_material("1.22.0", "v24.0.0")
-            .expect("Always valid");
+        let other_patch_key = key(&patched, "1.22.0", "11.0.0", "v24.0.0");
         std::fs::remove_file(patch_path.as_path()).expect("Always valid");
         assert_ne!(
             patched_key, other_patch_key,
@@ -118,31 +134,44 @@ mod tests {
         );
 
         for (input, other) in [
-            ("url", other_url.cache_key_material("1.22.0", "v24.0.0")),
+            ("url", key(&other_url, "1.22.0", "11.0.0", "v24.0.0")),
+            ("commit", key(&other_commit, "1.22.0", "11.0.0", "v24.0.0")),
+            ("patch", patched_key),
             (
-                "commit",
-                other_commit.cache_key_material("1.22.0", "v24.0.0"),
+                "build system",
+                key(
+                    &project(Some(BuildSystem::Bun)),
+                    "1.22.0",
+                    "11.0.0",
+                    "v24.0.0",
+                ),
             ),
-            ("yarn", base.cache_key_material("1.22.1", "v24.0.0")),
-            ("node", base.cache_key_material("1.22.0", "v24.0.1")),
+            (
+                "build system version",
+                key(&base, "1.22.1", "11.0.0", "v24.0.0"),
+            ),
+            ("node", key(&base, "1.22.0", "11.0.0", "v24.0.1")),
         ] {
-            assert_ne!(
-                key,
-                other.expect("Always valid"),
-                "the {input} must change the key"
-            );
+            assert_ne!(base_key, other, "the {input} must change the key");
         }
-        assert_ne!(key, patched_key, "the patch must change the key");
 
-        let without_yarn = project(false);
+        let npm_project = project(Some(BuildSystem::Npm));
+        assert_ne!(
+            key(&npm_project, "1.22.0", "11.0.0", "v24.0.0"),
+            key(&npm_project, "1.22.0", "11.0.1", "v24.0.0"),
+            "the npm version must change the key of an npm project"
+        );
         assert_eq!(
-            without_yarn
-                .cache_key_material("1.22.0", "v24.0.0")
-                .expect("Always valid"),
-            without_yarn
-                .cache_key_material("1.22.1", "v24.0.1")
-                .expect("Always valid"),
-            "a project without yarn must not depend on the yarn and Node versions"
+            base_key,
+            key(&base, "1.22.0", "11.0.1", "v24.0.0"),
+            "the npm version must not change the key of a yarn project"
+        );
+
+        let without_packages = project(None);
+        assert_eq!(
+            key(&without_packages, "1.22.0", "11.0.0", "v24.0.0"),
+            key(&without_packages, "1.22.1", "11.0.1", "v24.0.1"),
+            "a project without packages must not depend on the build system and Node versions"
         );
     }
 }

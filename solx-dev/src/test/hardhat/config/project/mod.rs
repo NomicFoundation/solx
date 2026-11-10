@@ -2,13 +2,11 @@
 //! `solx` Hardhat project.
 //!
 
-pub mod build_system;
-
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use self::build_system::BuildSystem;
+use crate::test::config::build_system::BuildSystem;
 
 ///
 /// `solx` Hardhat project.
@@ -55,15 +53,10 @@ impl Project {
         npm_version: &str,
         node_version: &str,
     ) -> String {
-        let build_system_version = match self.build_system {
-            BuildSystem::Npm => npm_version,
-            _ => build_systems
-                .get(&self.build_system)
-                .map(String::as_str)
-                .unwrap_or_default(),
-        };
+        let build_system_version = self.build_system.version(build_systems, npm_version);
         [
             include_str!("../../mod.rs"),
+            include_str!("../../../config/build_system.rs"),
             include_str!("../../../../utils.rs"),
             self.url.as_str(),
             self.commit.as_deref().unwrap_or_default(),
