@@ -4,6 +4,7 @@
 
 use num::BigInt;
 use slang_solidity_v2::ast::BuiltIn;
+use slang_solidity_v2::ast::CallMode;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
@@ -15,7 +16,6 @@ use slang_solidity_v2::ast::TypeName;
 use solx_mlir::Place;
 use solx_mlir::Type as MlirType;
 use solx_mlir::Value;
-use solx_utils::FunctionReferenceKind;
 
 use crate::contract::function::expression::call::external_callee::ExternalCallee;
 use crate::contract::object::Object;
@@ -67,8 +67,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
         }
 
         if let Some(Type::Function(function_type)) = node.get_type()
-            && FunctionReferenceKind::from(function_type.visibility())
-                == FunctionReferenceKind::External
+            && function_type.call_mode() == CallMode::External
         {
             let Some(callee) = function_type
                 .associated_definition()
