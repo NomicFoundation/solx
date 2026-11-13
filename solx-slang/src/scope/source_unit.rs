@@ -8,12 +8,14 @@ use std::num::NonZeroU64;
 use std::ops::Deref;
 
 use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::ModifierDefinition;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type;
 
 use solx_mlir::Context;
 use solx_mlir::Contract;
 use solx_mlir::Function;
+use solx_mlir::FunctionType;
 use solx_mlir::Type as MlirType;
 
 use crate::contract::object::Object;
@@ -101,6 +103,28 @@ impl<'context> SourceUnitScope<'context> {
         );
         self.function_signatures
             .insert(function.node_id(), signature.clone());
+        signature
+    }
+
+    /// The modifier's mangled symbol and MLIR signature, computed at its first naming. A modifier
+    /// has no type in Slang, so its signature takes its parameter types and returns nothing.
+    pub fn modifier_signature(&mut self, modifier: &ModifierDefinition) -> Function<'context> {
+        if let Some(signature) = self.function_signatures.get(&modifier.node_id()) {
+            return signature.clone();
+        }
+        let parameter_types = modifier
+            .parameter_types()
+            .expect("slang types every modifier parameter");
+        let function_type = self.at_position(Position::Breaking, |scope| FunctionType {
+            parameters: parameter_types
+                .iter()
+                .map(|parameter_type| scope.resolve(parameter_type, None))
+                .collect(),
+            results: Vec::new(),
+        });
+        let signature = Function::new(Self::modifier_symbol(modifier), function_type);
+        self.function_signatures
+            .insert(modifier.node_id(), signature.clone());
         signature
     }
 }

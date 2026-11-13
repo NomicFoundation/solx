@@ -10,6 +10,7 @@ use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
+use slang_solidity_v2::ast::ModifierDefinition;
 use slang_solidity_v2::ast::ModifierInvocations;
 use slang_solidity_v2::ast::VirtualTarget;
 
@@ -29,8 +30,8 @@ use crate::scope::function::FunctionScope;
 use crate::scope::source_unit::SourceUnitScope;
 
 impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
-    /// Defines `function`'s `sol.func`, or a modifier's `sol.modifier`, in the contract body at
-    /// its first naming, binding parameters and named-return pointers into a fresh function frame.
+    /// Defines `function`'s `sol.func` in the contract body at its first naming, binding parameters
+    /// and named-return pointers into a fresh function frame.
     ///
     /// The `sol.func` carries the definition's location, and the implicit return of a body that
     /// falls through carries the closing brace's.
@@ -85,7 +86,6 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
             FunctionKind::Regular => {
                 FunctionDispatch::Identifier(self.function_identifier(function))
             }
-            FunctionKind::Modifier => FunctionDispatch::Modifier,
         };
 
         let name = DebugSymbolsFunction::source_name(function);
@@ -166,6 +166,55 @@ impl<'source_unit, 'context> ContractScope<'source_unit, 'context> {
         });
         signature
     }
+
+    /// Defines a modifier's `sol.modifier` in the contract body at its first naming, binding its
+    /// parameters into a fresh frame. `sol-inline-modifiers` later expands its `sol.placeholder`.
+    pub fn modifier_definition(&mut self, modifier: &ModifierDefinition) -> Function<'context> {
+        if !self.defined_functions.insert(modifier.node_id()) {
+            return self.source_unit.modifier_signature(modifier);
+        }
+
+        let body = modifier
+            .body()
+            .expect("slang admits an invocation of a modifier nothing implements");
+        let signature = self.source_unit.modifier_signature(modifier);
+        let name = modifier.name().name().to_owned();
+        self.at_node(modifier, |scope| {
+            let entry = signature.define(
+                name.as_str(),
+                None,
+                FunctionDispatch::Modifier,
+                FunctionOrigin::Declared,
+                StateMutability::NonPayable,
+                scope,
+                scope.contract.body,
+            );
+
+            scope.function(entry, &signature, |scope| {
+                for (index, parameter) in modifier.parameters().iter().enumerate() {
+                    let Some(identifier) = parameter.name() else {
+                        continue;
+                    };
+                    scope.at_node(&parameter, |scope| {
+                        scope.define_local(
+                            identifier.name(),
+                            signature.function_type.parameters[index],
+                            |_scope| entry.argument(index),
+                        );
+                    });
+                }
+
+                scope.statements(&body.statements());
+
+                if !scope.current_block().is_terminated() {
+                    scope.at_node_end(&body, |scope| {
+                        scope.current_block().r#return(&[], scope);
+                    });
+                }
+            });
+        });
+        signature
+    }
 }
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
@@ -179,7 +228,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             let Some(definition) = self.contract.invoked_modifier(&invocation) else {
                 continue;
             };
-            let modifier = self.contract.function_definition(&definition);
+            let modifier = self.contract.modifier_definition(&definition);
             self.at_node(&invocation, |scope| {
                 let arguments_block = scope.current_block().modifier_invocation(&modifier, scope);
                 scope.region(arguments_block, |scope| {
@@ -214,6 +263,18 @@ impl<'context> SourceUnitScope<'context> {
                 .compute_internal_signature()
                 .expect("every emitted function has an internal signature"),
             function.node_id(),
+        )
+    }
+
+    /// The modifier's symbol: its internal signature qualified by the node id, as bases may declare
+    /// modifiers of the same name.
+    pub fn modifier_symbol(modifier: &ModifierDefinition) -> String {
+        format!(
+            "{}_{}",
+            modifier
+                .compute_internal_signature()
+                .expect("every emitted modifier has an internal signature"),
+            modifier.node_id(),
         )
     }
 }
