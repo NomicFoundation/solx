@@ -134,9 +134,7 @@ impl Contract {
             let bytecode_hex = deploy_object_result
                 .as_mut()
                 .expect("Always exists")
-                .bytecode_hex
-                .take()
-                .expect("Always exists");
+                .bytecode_hex();
             writeln!(std::io::stdout(), "Binary:\n{bytecode_hex}")?;
         }
         if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
@@ -149,9 +147,7 @@ impl Contract {
             let bytecode_hex = runtime_object_result
                 .as_mut()
                 .expect("Always exists")
-                .bytecode_hex
-                .take()
-                .expect("Always exists");
+                .bytecode_hex();
             writeln!(
                 std::io::stdout(),
                 "Binary of the runtime part:\n{bytecode_hex}"
@@ -446,9 +442,7 @@ impl Contract {
             let bytecode_hex = deploy_object_result
                 .as_mut()
                 .expect("Always exists")
-                .bytecode_hex
-                .take()
-                .expect("Always exists");
+                .bytecode_hex();
             Self::write_to_file(output_path.as_path(), bytecode_hex, overwrite)?;
         }
         if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
@@ -470,9 +464,7 @@ impl Contract {
             let bytecode_hex = runtime_object_result
                 .as_mut()
                 .expect("Always exists")
-                .bytecode_hex
-                .take()
-                .expect("Always exists");
+                .bytecode_hex();
             Self::write_to_file(output_path.as_path(), bytecode_hex, overwrite)?;
         }
 
@@ -926,29 +918,6 @@ impl Contract {
     }
 
     ///
-    /// Returns a mutable reference to the specified object.
-    ///
-    pub fn object_mut_by_code_segment(
-        &mut self,
-        code_segment: solx_utils::CodeSegment,
-    ) -> Option<&mut Object> {
-        match code_segment {
-            solx_utils::CodeSegment::Deploy => Some(
-                self.deploy_object_result
-                    .as_mut()?
-                    .as_mut()
-                    .expect("Always exists"),
-            ),
-            solx_utils::CodeSegment::Runtime => Some(
-                self.runtime_object_result
-                    .as_mut()?
-                    .as_mut()
-                    .expect("Always exists"),
-            ),
-        }
-    }
-
-    ///
     /// Builds the bytecode output for a single code segment.
     ///
     fn build_bytecode_output(
@@ -1004,9 +973,9 @@ impl Contract {
                     .as_mut()
                     .and_then(|result| result.as_mut().ok())
                     .map(|object| {
-                        object.bytecode_hex.take().filter(|_| {
-                            output_selection.check_selection(path, name, selector_object)
-                        })
+                        output_selection
+                            .check_selection(path, name, selector_object)
+                            .then(|| object.bytecode_hex())
                     })
                     .unwrap_or(Some(String::new()))
             } else {

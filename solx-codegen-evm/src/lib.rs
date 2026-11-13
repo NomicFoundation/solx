@@ -13,7 +13,6 @@ pub(crate) mod optimizer;
 pub(crate) mod target_machine;
 
 pub use self::codegen::IS_SIZE_FALLBACK;
-pub use self::codegen::append_metadata;
 pub use self::codegen::assemble;
 pub use self::codegen::build::Build;
 pub use self::codegen::context::Context;
