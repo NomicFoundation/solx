@@ -9,6 +9,7 @@ pub mod options;
 
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::BuiltIn;
+use slang_solidity_v2::ast::CallMode;
 use slang_solidity_v2::ast::CallOptions;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
@@ -323,33 +324,30 @@ impl Call {
                     {
                         return Self::Super(function_definition, enclosing_contract);
                     }
-                    match (
-                        FunctionScope::resolved_definition(&access.operand()),
-                        function_definition.enclosing_definition(),
-                    ) {
-                        (Some(Definition::Contract(_) | Definition::Import(_)), _) => {
-                            return Self::Qualified(function_definition);
+                    if let Some(Type::Function(function_type)) = access.get_type() {
+                        match function_type.call_mode() {
+                            CallMode::Internal { bound: false } => {
+                                return Self::Qualified(function_definition);
+                            }
+                            CallMode::Internal { bound: true } => {
+                                return Self::Attached(access.operand(), function_definition);
+                            }
+                            CallMode::Delegate { bound } => {
+                                let selector = function_definition.compute_selector().expect(
+                                    "slang delegate-calls only an externally visible function",
+                                );
+                                return if bound {
+                                    Self::AttachedLibrary(
+                                        access.operand(),
+                                        function_definition,
+                                        selector,
+                                    )
+                                } else {
+                                    Self::Library(function_definition, selector)
+                                };
+                            }
+                            CallMode::External | CallMode::ExternalWithCallOptions => {}
                         }
-                        (Some(Definition::Library(_)), _) => {
-                            return match function_definition.compute_selector() {
-                                Some(selector) => Self::Library(function_definition, selector),
-                                None => Self::Qualified(function_definition),
-                            };
-                        }
-                        (_, Some(Definition::Library(_))) => {
-                            return match function_definition.compute_selector() {
-                                Some(selector) => Self::AttachedLibrary(
-                                    access.operand(),
-                                    function_definition,
-                                    selector,
-                                ),
-                                None => Self::Attached(access.operand(), function_definition),
-                            };
-                        }
-                        (_, None) => {
-                            return Self::Attached(access.operand(), function_definition);
-                        }
-                        _ => {}
                     }
                 }
                 if let Some(Type::Function(function_type)) = access.get_type()
@@ -1102,7 +1100,7 @@ impl Call {
         options: Option<&CallOptions>,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> Vec<Value<'context>> {
-        match FunctionReferenceKind::from(function_type.visibility()) {
+        match FunctionReferenceKind::from(function_type.call_mode()) {
             FunctionReferenceKind::Internal => {
                 let MlirFunctionType {
                     parameters,

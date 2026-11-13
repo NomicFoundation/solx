@@ -81,7 +81,7 @@ impl From<&ModifierDefinition> for Function {
 }
 
 impl From<&StateVariableDefinition> for Function {
-    /// The getter uses the public variable's definition range.
+    /// The getter uses the public variable's definition range, and is external.
     fn from(state_variable: &StateVariableDefinition) -> Self {
         let Some(Type::Function(getter)) = state_variable.getter_type() else {
             unreachable!("slang types a public state variable's getter as a function");
@@ -90,7 +90,7 @@ impl From<&StateVariableDefinition> for Function {
         Self {
             name: state_variable.name().name().to_owned(),
             kind: FunctionKind::Getter,
-            visibility: getter.visibility().into(),
+            visibility: Visibility::External,
             state_mutability: getter.mutability().into(),
             selector: state_variable
                 .compute_selector()
