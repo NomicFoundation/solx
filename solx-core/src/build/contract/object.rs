@@ -167,6 +167,7 @@ impl Object {
         memory_buffers.push((self.identifier.to_owned(), self.to_memory_buffer()?));
 
         for dependency in self.dependencies.into_iter() {
+            // TODO: unreachable once Slang rejects `new` on an abstract contract (NomicFoundation/slang-diagnostics-research#1124).
             let bytecode = assembled_by_identifier
                 .get(dependency)
                 .expect("Every dependency is assembled before the objects embedding it");
