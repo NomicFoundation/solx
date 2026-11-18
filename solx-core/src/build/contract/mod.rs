@@ -926,29 +926,6 @@ impl Contract {
     }
 
     ///
-    /// Returns a mutable reference to the specified object.
-    ///
-    pub fn object_mut_by_code_segment(
-        &mut self,
-        code_segment: solx_utils::CodeSegment,
-    ) -> Option<&mut Object> {
-        match code_segment {
-            solx_utils::CodeSegment::Deploy => Some(
-                self.deploy_object_result
-                    .as_mut()?
-                    .as_mut()
-                    .expect("Always exists"),
-            ),
-            solx_utils::CodeSegment::Runtime => Some(
-                self.runtime_object_result
-                    .as_mut()?
-                    .as_mut()
-                    .expect("Always exists"),
-            ),
-        }
-    }
-
-    ///
     /// Builds the bytecode output for a single code segment.
     ///
     fn build_bytecode_output(
