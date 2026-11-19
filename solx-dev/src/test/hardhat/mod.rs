@@ -32,7 +32,6 @@ pub fn test(
 ) -> anyhow::Result<()> {
     crate::utils::exists("git")?;
     crate::utils::exists("npm")?;
-    crate::utils::exists("node")?;
 
     std::fs::create_dir_all(projects_directory.as_path()).map_err(|error| {
         anyhow::anyhow!(
@@ -109,8 +108,16 @@ pub fn test(
             16,
         )?;
     }
-    let npm_version = crate::utils::tool_version("npm")?;
-    let node_version = crate::utils::tool_version("node")?;
+    let mut node_version_command = Command::new("node");
+    node_version_command.arg("--version");
+    let node_version = crate::utils::command_with_output(
+        &mut node_version_command,
+        format!(
+            "{} Node.js version",
+            solx_utils::cargo_status_ok("Checking")
+        )
+        .as_str(),
+    )?;
     let projects_cache = ProjectCache::new(projects_cache_directory.as_path())?;
 
     for (project_name, project) in projects {
@@ -120,11 +127,6 @@ pub fn test(
         let project_directory_str = project_directory.to_string_lossy();
 
         let build_system = project.build_system.to_string();
-        let key_material = project.cache_key_material(
-            &config.build_systems,
-            npm_version.as_str(),
-            node_version.as_str(),
-        );
         let set_up = |checkout: &std::path::Path| -> anyhow::Result<()> {
             crate::utils::clone_repository(
                 project.url.as_str(),
@@ -195,8 +197,19 @@ pub fn test(
                 16,
             )
         };
+        let key = format!(
+            "{:?}",
+            (
+                &node_version,
+                &config.build_systems,
+                &project.url,
+                &project.commit,
+                &project.build_system,
+                &project.dependencies
+            )
+        );
         let set_up_directory =
-            projects_cache.checkout(project_name.as_str(), key_material.as_str(), set_up)?;
+            projects_cache.checkout(project_name.as_str(), key.as_str(), set_up)?;
 
         for ((identifier, compiler), codegen) in config
             .compilers

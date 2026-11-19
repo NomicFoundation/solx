@@ -3,7 +3,6 @@
 //!
 
 use std::borrow::Cow;
-use std::ffi::OsStr;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::path::Path;
@@ -187,25 +186,25 @@ pub fn clone_repository(
             anyhow::bail!("commit must be a 40-character hex SHA, got: {sha}");
         }
 
-        let mut init_command = git_command();
+        let mut init_command = Command::new("git");
         init_command.args(["init", directory]);
         command(&mut init_command, description)?;
 
-        let mut remote_command = git_command();
+        let mut remote_command = Command::new("git");
         remote_command.args(["-C", directory, "remote", "add", "origin", url]);
         command(&mut remote_command, description)?;
 
-        let mut fetch_command = git_command();
+        let mut fetch_command = Command::new("git");
         fetch_command.args(["-C", directory, "fetch", "--depth", "1", "origin", sha]);
         command_with_retries(&mut fetch_command, description, 16)?;
 
-        let mut checkout_command = git_command();
+        let mut checkout_command = Command::new("git");
         checkout_command.args(["-C", directory, "checkout", "FETCH_HEAD"]);
         command(&mut checkout_command, description)?;
 
         let gitmodules_path = std::path::Path::new(directory).join(".gitmodules");
         if gitmodules_path.exists() {
-            let mut submodule_command = git_command();
+            let mut submodule_command = Command::new("git");
             submodule_command.args([
                 "-C",
                 directory,
@@ -219,7 +218,7 @@ pub fn clone_repository(
             command_with_retries(&mut submodule_command, description, 16)?;
         }
     } else {
-        let mut clone_command = git_command();
+        let mut clone_command = Command::new("git");
         clone_command.arg("clone");
         clone_command.args(["--depth", "1"]);
         clone_command.arg("--recurse-submodules");
@@ -233,21 +232,10 @@ pub fn clone_repository(
 }
 
 ///
-/// Returns a `git` command that ignores the repository `git rebase --exec` and hooks point to.
-///
-pub fn git_command() -> Command {
-    let mut command = Command::new("git");
-    command.env_remove("GIT_DIR");
-    command.env_remove("GIT_WORK_TREE");
-    command.env_remove("GIT_INDEX_FILE");
-    command
-}
-
-///
 /// Lists the tracked files of the repository at `directory` matching `pathspec`, submodules included.
 ///
 pub fn git_tracked_files(directory: &Path, pathspec: &str) -> anyhow::Result<Vec<PathBuf>> {
-    let mut command = git_command();
+    let mut command = Command::new("git");
     command.arg("-C");
     command.arg(directory);
     command.args(["ls-files", "-z", "--recurse-submodules", "--", pathspec]);
@@ -387,24 +375,6 @@ pub fn path_windows_to_unix<P: AsRef<Path> + PathBufExt>(path: P) -> anyhow::Res
 }
 
 ///
-/// Returns what `program --version` prints, which identifies the tool in cache keys and reports.
-///
-pub fn tool_version(program: impl AsRef<OsStr>) -> anyhow::Result<String> {
-    let program = program.as_ref();
-    let mut command = Command::new(program);
-    command.arg("--version");
-    command_with_output(
-        &mut command,
-        format!(
-            "{} version of {}",
-            solx_utils::cargo_status_ok("Checking"),
-            program.to_string_lossy()
-        )
-        .as_str(),
-    )
-}
-
-///
 /// Checks if the tool exists in the system.
 ///
 pub fn exists(name: &str) -> anyhow::Result<()> {
@@ -537,6 +507,7 @@ pub fn get_xcode_version() -> anyhow::Result<u32> {
 #[cfg(all(test, unix))]
 mod tests {
     use std::path::Path;
+    use std::process::Command;
 
     fn test_directory(name: &str) -> std::path::PathBuf {
         let directory =
@@ -547,7 +518,7 @@ mod tests {
     }
 
     fn git(directory: &Path, arguments: &[&str]) {
-        let status = super::git_command()
+        let status = Command::new("git")
             .arg("-C")
             .arg(directory)
             .args(["-c", "protocol.file.allow=always"])
@@ -564,22 +535,6 @@ mod tests {
         std::fs::write(repository.join(path), "pragma solidity 0.8.0;").expect("Always valid");
         git(repository, &["add", path]);
         git(repository, &["commit", "--quiet", "-m", path]);
-    }
-
-    #[test]
-    fn git_command_drops_the_callers_repository() {
-        let command = super::git_command();
-        let removed: Vec<_> = command
-            .get_envs()
-            .filter(|(_, value)| value.is_none())
-            .map(|(key, _)| key)
-            .collect();
-        for variable in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"] {
-            assert!(
-                removed.contains(&std::ffi::OsStr::new(variable)),
-                "{variable} must be removed"
-            );
-        }
     }
 
     #[test]
@@ -622,16 +577,6 @@ mod tests {
         );
 
         std::fs::remove_dir_all(directory).expect("Always valid");
-    }
-
-    #[test]
-    fn tool_version_fails_for_missing_tool() {
-        assert!(
-            super::tool_version("git")
-                .expect("Always valid")
-                .starts_with("git version")
-        );
-        assert!(super::tool_version("solx-dev-missing-tool").is_err());
     }
 
     #[test]

@@ -246,7 +246,7 @@ jobs:
           git config --global url."https://github.com/".insteadOf git@github.com:
           git config --global url."https://".insteadOf git://
 
-      # The projects cache sits beside the checkout, so it survives actions/checkout's clean and persists on the runner.
+      # The projects caches sit outside the workspace, so actions/checkout's clean keeps them.
       - name: Run Hardhat tests
         id: hardhat_tests
         continue-on-error: true

@@ -80,10 +80,8 @@ pub fn test(
         .collect();
 
     let build_system = "yarn";
-    let (yarn_version, node_version) = if projects.iter().any(|(_, project)| project.requires_yarn)
-    {
+    let node_version = if projects.iter().any(|(_, project)| project.requires_yarn) {
         crate::utils::exists("npm")?;
-        crate::utils::exists("node")?;
 
         let yarn_version = config.build_systems.get(build_system).ok_or_else(|| {
             anyhow::anyhow!("Foundry test configuration missing `build_systems.{build_system}`")
@@ -106,9 +104,18 @@ pub fn test(
             .as_str(),
             16,
         )?;
-        (yarn_version.as_str(), crate::utils::tool_version("node")?)
+        let mut node_version_command = Command::new("node");
+        node_version_command.arg("--version");
+        Some(crate::utils::command_with_output(
+            &mut node_version_command,
+            format!(
+                "{} Node.js version",
+                solx_utils::cargo_status_ok("Checking")
+            )
+            .as_str(),
+        )?)
     } else {
-        ("", String::new())
+        None
     };
     let projects_cache = ProjectCache::new(projects_cache_directory.as_path())?;
 
@@ -118,9 +125,6 @@ pub fn test(
         project_directory.push(project_name.as_str());
         let project_directory_str = project_directory.to_string_lossy();
 
-        let key_material = project
-            .cache_key_material(yarn_version, node_version.as_str())
-            .map_err(|error| anyhow::anyhow!("Foundry project {project_name}: {error}"))?;
         let set_up = |checkout: &std::path::Path| -> anyhow::Result<()> {
             let checkout_str = checkout.to_string_lossy();
             crate::utils::clone_repository(
@@ -134,7 +138,7 @@ pub fn test(
                 ),
             )?;
             if let Some(patch) = project.patch.as_deref() {
-                let mut git_apply_command = crate::utils::git_command();
+                let mut git_apply_command = Command::new("git");
                 git_apply_command.args(["-C", &*checkout_str, "apply"]);
                 git_apply_command.arg(crate::utils::absolute_path(patch)?);
                 crate::utils::command(
@@ -164,8 +168,27 @@ pub fn test(
             }
             Ok(())
         };
+        let patch = project
+            .patch
+            .as_deref()
+            .map(std::fs::read_to_string)
+            .transpose()
+            .map_err(|error| {
+                anyhow::anyhow!("Foundry project {project_name} patch reading: {error}")
+            })?;
+        let key = format!(
+            "{:?}",
+            (
+                &node_version,
+                &config.build_systems,
+                &project.url,
+                &project.commit,
+                project.requires_yarn,
+                patch
+            )
+        );
         let set_up_directory =
-            projects_cache.checkout(project_name.as_str(), key_material.as_str(), set_up)?;
+            projects_cache.checkout(project_name.as_str(), key.as_str(), set_up)?;
 
         for ((identifier, compiler), codegen) in config
             .compilers

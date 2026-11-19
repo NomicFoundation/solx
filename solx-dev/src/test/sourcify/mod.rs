@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Command;
 use std::time::Instant;
 
 use rayon::iter::IntoParallelRefIterator;
@@ -212,7 +213,17 @@ fn sweep_one(
 /// The compiler's display name with the first line of its `--version`.
 ///
 fn version(compiler: &Compiler, path: &Path) -> anyhow::Result<String> {
-    let output = crate::utils::tool_version(path)?;
+    let mut command = Command::new(path);
+    command.arg("--version");
+    let output = crate::utils::command_with_output(
+        &mut command,
+        format!(
+            "{} compiler {}",
+            solx_utils::cargo_status_ok("Identifying"),
+            compiler.name
+        )
+        .as_str(),
+    )?;
     Ok(format!(
         "{} ({})",
         compiler.name,
