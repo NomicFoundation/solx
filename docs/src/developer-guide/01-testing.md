@@ -90,6 +90,8 @@ cargo build --release --bin solx-dev
 
 The test configurations list projects that are cloned and tested automatically. See [foundry-tests.toml](https://github.com/NomicFoundation/solx/blob/main/solx-dev/foundry-tests.toml) and [hardhat-tests.toml](https://github.com/NomicFoundation/solx/blob/main/solx-dev/hardhat-tests.toml) for the full list of tested projects.
 
+Projects are set up once in `temp-foundry-projects-cache/` and `temp-hardhat-projects-cache/` (`--projects-cache-dir`) and reused until their configuration entry, the Node.js version or `solx-dev` changes. Projects removed from the configuration are removed from the cache.
+
 ## Sourcify Corpus
 
 The Sourcify sweep compiles each contract of a pinned Sourcify corpus with `slang --standard-json`.

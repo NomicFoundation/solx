@@ -13,6 +13,7 @@ use colored::Colorize;
 use itertools::Itertools;
 
 use crate::test::config::compiler::Compiler;
+use crate::test::project_cache::ProjectCache;
 
 use self::config::Config;
 use self::output::build::Build as BuildOutput;
@@ -24,6 +25,7 @@ use self::output::test::Test as TestOutput;
 pub fn test(
     config: Config,
     projects_directory: std::path::PathBuf,
+    projects_cache_directory: std::path::PathBuf,
     output_directory: std::path::PathBuf,
     solidity_version: String,
     project_filter: Vec<String>,
@@ -65,6 +67,7 @@ pub fn test(
         );
     }
 
+    let projects_cache = ProjectCache::new(projects_cache_directory.as_path(), &config.projects)?;
     let projects: Vec<_> = config
         .projects
         .into_iter()
@@ -78,7 +81,7 @@ pub fn test(
         .collect();
 
     let build_system = "yarn";
-    if projects.iter().any(|(_, project)| project.requires_yarn) {
+    let node_version = if projects.iter().any(|(_, project)| project.requires_yarn) {
         crate::utils::exists("npm")?;
 
         let yarn_version = config.build_systems.get(build_system).ok_or_else(|| {
@@ -102,7 +105,19 @@ pub fn test(
             .as_str(),
             16,
         )?;
-    }
+        let mut node_version_command = Command::new("node");
+        node_version_command.arg("--version");
+        Some(crate::utils::command_with_output(
+            &mut node_version_command,
+            format!(
+                "{} Node.js version",
+                solx_utils::cargo_status_ok("Checking")
+            )
+            .as_str(),
+        )?)
+    } else {
+        None
+    };
 
     for (project_name, project) in projects {
         attempted_projects.push(project_name.clone());
@@ -153,13 +168,27 @@ pub fn test(
             }
             Ok(())
         };
-        let set_up_directory = crate::utils::absolute_path(
-            projects_directory
-                .join(".setup")
-                .join(project_name.as_str()),
-        )?;
-        crate::utils::remove(set_up_directory.as_path(), project_name.as_str())?;
-        set_up(set_up_directory.as_path())?;
+        let patch = project
+            .patch
+            .as_deref()
+            .map(std::fs::read_to_string)
+            .transpose()
+            .map_err(|error| {
+                anyhow::anyhow!("Foundry project {project_name} patch reading: {error}")
+            })?;
+        let key = format!(
+            "{:?}",
+            (
+                &node_version,
+                &config.build_systems,
+                &project.url,
+                &project.commit,
+                project.requires_yarn,
+                patch
+            )
+        );
+        let set_up_directory =
+            projects_cache.checkout(project_name.as_str(), key.as_str(), set_up)?;
 
         for ((identifier, compiler), codegen) in config
             .compilers
@@ -472,7 +501,6 @@ pub fn test(
                 toolchain_name.clone(),
             ));
         }
-        crate::utils::remove(set_up_directory.as_path(), project_name.as_str())?;
     }
 
     let enabled_compilers: Vec<&str> = config

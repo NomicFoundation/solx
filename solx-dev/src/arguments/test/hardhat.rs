@@ -45,6 +45,14 @@ pub struct Hardhat {
     )]
     pub projects_dir: PathBuf,
 
+    /// Hardhat projects cache directory path, kept across runs.
+    #[arg(
+        long,
+        default_value = "./temp-hardhat-projects-cache",
+        help_heading = "Directories"
+    )]
+    pub projects_cache_dir: PathBuf,
+
     /// Hardhat compilers temporary directory path.
     #[arg(
         long,

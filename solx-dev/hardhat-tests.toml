@@ -115,7 +115,7 @@ dependencies = [ "hardhat@2.29.1" ]
 url = "https://github.com/antonbaliasnikov/solx-hh3"
 commit = "bfe0366f7f5936ec9e5e76fa37fe21d284a53c88"
 description = "An example Hardhat v3 project with solx support."
-dependencies = [ "ts-node", "hardhat@3.18.0", "@nomicfoundation/hardhat-mocha@3.0.2", "@nomicfoundation/hardhat-slang-solx@3.0.2" ]
+dependencies = [ "ts-node@10.9.2", "hardhat@3.18.0", "@nomicfoundation/hardhat-mocha@3.0.2", "@nomicfoundation/hardhat-slang-solx@3.0.2" ]
 build_profile = "slang-solx"
 config_overlay = "./solx-dev/hardhat-overlays/hardhat-v3.config.ts"
 

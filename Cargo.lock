@@ -4923,6 +4923,7 @@ dependencies = [
  "solx-compiler-downloader",
  "solx-utils",
  "sysinfo",
+ "tempfile",
  "toml",
 ]
 

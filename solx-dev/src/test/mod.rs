@@ -7,6 +7,7 @@ use itertools::Itertools;
 pub mod config;
 pub mod foundry;
 pub mod hardhat;
+pub mod project_cache;
 pub mod solx_tester;
 pub mod sourcify;
 
