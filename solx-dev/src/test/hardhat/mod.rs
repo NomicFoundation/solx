@@ -66,6 +66,7 @@ pub fn test(
         );
     }
 
+    let projects_cache = ProjectCache::new(projects_cache_directory.as_path(), &config.projects)?;
     let projects: Vec<_> = config
         .projects
         .into_iter()
@@ -118,7 +119,6 @@ pub fn test(
         )
         .as_str(),
     )?;
-    let projects_cache = ProjectCache::new(projects_cache_directory.as_path())?;
 
     for (project_name, project) in projects {
         attempted_projects.push(project_name.clone());
