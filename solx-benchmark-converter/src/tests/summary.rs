@@ -317,6 +317,24 @@ fn tests_that_never_ran_are_not_a_measured_zero() {
     assert!(!out.contains("test failures 0 → 3"), "{out}");
     assert!(!out.contains("+3 test"), "{out}");
     assert!(out.contains("✅ **No new failures**"), "{out}");
+    assert!(
+        out.contains("⚠️ **No baseline** — Foundry: 1 run (3 failures) has no `main` baseline"),
+        "{out}"
+    );
+}
+
+#[test]
+fn a_repaired_build_with_passing_tests_leaves_nothing_unbaselined() {
+    let tests = vec![Test::failure(
+        "p",
+        &[
+            ("02.solx-main-legacy", RunFailures::Build(2)),
+            ("03.solx-legacy", RunFailures::Test(0)),
+        ],
+    )];
+    let out = Summary::new(vec![SummarySuite::merged(SuiteKind::Foundry, tests)]).render();
+    assert!(!out.contains("No baseline"), "{out}");
+    assert!(!out.contains("unbaselined"), "{out}");
 }
 
 #[test]
