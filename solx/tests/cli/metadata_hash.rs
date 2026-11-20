@@ -101,9 +101,15 @@ fn appends_the_metadata_to_each_binary_once() -> anyhow::Result<()> {
         deploy.matches(crate::common::CBOR_IPFS_HASH_PREFIX).count(),
         1
     );
+    let trailer_length = usize::from_str_radix(&runtime[runtime.len() - 4..], 16)? * 2;
+    assert_eq!(
+        runtime.rfind(crate::common::CBOR_IPFS_HASH_PREFIX),
+        Some(runtime.len() - 4 - trailer_length),
+        "the CBOR metadata ends the runtime code"
+    );
     assert!(
-        deploy.contains(runtime),
-        "the deploy code embeds the runtime code with its metadata"
+        deploy.ends_with(runtime),
+        "the deploy code ends with the runtime code and its metadata"
     );
 
     Ok(())
