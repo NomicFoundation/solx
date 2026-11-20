@@ -66,6 +66,10 @@ inputs:
       When disabled, `cache-hit` reports a mirror hit or nothing at all.
     required: false
     default: 'true'
+  enable-ccache:
+    description: 'Restore, use and save ccache when LLVM is built. Disable it to build every object from source.'
+    required: false
+    default: 'true'
 
 runs:
   using: "composite"
@@ -148,7 +152,7 @@ runs:
     # artifact-cache miss (i.e. submodule bump) and provides object-level reuse
     # across neighbouring solx-llvm commits.
     - name: Define ccache key
-      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
+      if: inputs.enable-ccache == 'true' && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       id: ccache-key
       run: |
@@ -172,7 +176,7 @@ runs:
     # The solx-ci-runner container doesn't ship sudo (steps run as root), so
     # we invoke apt-get directly. `-qq` silences routine output.
     - name: Prepare ccache installation
-      if: runner.os == 'Linux' && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
+      if: runner.os == 'Linux' && inputs.enable-ccache == 'true' && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
       shell: 'bash'
       run: apt-get update -qq
 
@@ -182,7 +186,7 @@ runs:
     # KEEP-IN-SYNC with CCACHE_* env on Build LLVM and Show ccache stats steps
     # (GHA composite actions don't support YAML anchors).
     - name: Set up compiler cache
-      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
+      if: inputs.enable-ccache == 'true' && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
       uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
       env:
         CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
@@ -215,6 +219,7 @@ runs:
         [ "${{ inputs.enable-assertions }}" = "true" ] && ENABLE_ASSERTIONS="--enable-assertions"
         [ "${{ inputs.enable-coverage }}" = "true" ] && ENABLE_COVERAGE="--enable-coverage"
         [ "${{ inputs.sanitizer }}" != "" ] && SANITIZER="--sanitizer ${{ inputs.sanitizer }}"
+        [ "${{ inputs.enable-ccache }}" = "true" ] && CCACHE_VARIANT="--ccache-variant=ccache"
         if [ "${{ inputs.enable-valgrind }}" = "true" ]; then
           ENABLE_VALGRIND="--enable-valgrind"
           if [ "${{ inputs.valgrind-options }}" != "" ]; then
@@ -237,13 +242,13 @@ runs:
         fi
 
         ./target/release/solx-dev llvm build --build-type ${{ inputs.build-type }} --install-distribution \
-          --ccache-variant=ccache ${ENABLE_UTILS} ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${SANITIZER} \
+          ${CCACHE_VARIANT} ${ENABLE_UTILS} ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${SANITIZER} \
           --extra-args "-DCMAKE_EXPORT_COMPILE_COMMANDS='Off'" "-DLLVM_PARALLEL_LINK_JOBS='${LINK_JOBS}'" "-DLLVM_OPTIMIZED_TABLEGEN='On'"
 
     # `continue-on-error` keeps a failing ccache install (→ ccache not on PATH)
     # from masking the real Build LLVM failure in the step summary.
     - name: Show ccache stats
-      if: always() && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
+      if: always() && inputs.enable-ccache == 'true' && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && steps.llvm-mirror.outputs.mirrored != 'true'
       continue-on-error: true
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       env:
