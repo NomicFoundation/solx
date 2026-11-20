@@ -81,6 +81,7 @@ impl<'context> Block<'context> {
             fallback.map(|fallback| entry(fallback.binding(context).as_slice()));
         let operation = self.inner.append_operation(
             TryOperation::builder(context.melior, location)
+                .results(&[])
                 .status(status.into_mlir())
                 .success_region(entry(&[]))
                 .panic_region(if panic {

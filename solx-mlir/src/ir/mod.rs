@@ -312,31 +312,31 @@ dialect_ops! {
         ReturnOperation.operands(many(operands))
     }
     Block::r#break(self) {
-        BreakOperation
+        BreakOperation.values(empty())
     }
     Block::r#continue(self) {
-        ContinueOperation
+        ContinueOperation.values(empty())
     }
     Block::r#yield(self, results: values) {
         YieldOperation.ins(many(results))
     }
     Block::condition(self, condition: value) {
-        ConditionOperation.condition(condition)
+        ConditionOperation.condition(condition).args(empty())
     }
     Block::branch(self, condition: value) {
-        IfOperation.cond(condition); then_region ; empty else_region
+        IfOperation.results(empty()).cond(condition); then_region ; empty else_region
     }
     Block::branch_with_else(self, condition: value) {
-        IfOperation.cond(condition); then_region, else_region
+        IfOperation.results(empty()).cond(condition); then_region, else_region
     }
     Block::for_loop(self) {
-        ForOperation; cond, body, step
+        ForOperation.results(empty()).init_args(empty()); cond, body, step
     }
     Block::while_loop(self) {
-        WhileOperation; cond, body
+        WhileOperation.results(empty()).init_args(empty()); cond, body
     }
     Block::do_while(self) {
-        DoWhileOperation; body, cond
+        DoWhileOperation.results(empty()).init_args(empty()); body, cond
     }
 
     Block::modifier_invocation(self, callee: function) {
@@ -347,11 +347,11 @@ dialect_ops! {
     }
 
     Block::inline_asm(self, memory_safe: flag) {
-        InlineAsmOperation.memory_safe(memory_safe); body
+        InlineAsmOperation.results(empty()).memory_safe(memory_safe); body
     }
 
     Value::yul_word(self) -> word {
-        YulValCastOperation.src(self).out(yul_word())
+        YulValCastOperation.src(single(self)).out(single(yul_word()))
     }
     Word::state_variable_slot(symbol: str) -> word {
         YulStateVarSlotOperation.sym(symbol_attr(symbol)).out(yul_word())
