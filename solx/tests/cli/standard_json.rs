@@ -26,6 +26,42 @@ fn default() -> anyhow::Result<()> {
 }
 
 #[test]
+fn source_url_fallback() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("solidity_urls_fallback.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("\"name\":\"add\""))
+        .stdout(predicate::str::contains("\"severity\":\"error\"").not());
+
+    Ok(())
+}
+
+#[test]
+fn empty_source_urls() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("solidity_empty_urls.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("At least one URL must be set."))
+        .stdout(predicate::str::contains("\"severity\":\"error\""));
+
+    Ok(())
+}
+
+#[test]
 fn stdin() -> anyhow::Result<()> {
     crate::common::setup()?;
 
