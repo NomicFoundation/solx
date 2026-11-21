@@ -159,7 +159,7 @@ impl<'context> SourceUnitScope<'context> {
             }
             Type::Function(function_type) => self
                 .function_type(function_type)
-                .reference(self.melior, function_type.visibility().into()),
+                .reference(self.melior, function_type.call_mode().into()),
             Type::UserDefinedValue(udvt) => {
                 let target_type = udvt
                     .target_type()
