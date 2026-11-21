@@ -73,34 +73,35 @@ impl Source {
     ///
     /// Tries to resolve the source code.
     ///
-    /// At the moment only one URL pointing to the file system is supported.
+    /// Only URLs pointing to the file system are supported.
     ///
     pub fn try_resolve(&mut self) -> anyhow::Result<()> {
         match (self.content.as_ref(), self.urls.as_ref()) {
             (Some(_), None) => Ok(()),
             (None, Some(urls)) => {
+                if urls.is_empty() {
+                    anyhow::bail!("At least one URL must be set.");
+                }
+
                 let mut errors = Vec::with_capacity(urls.len());
                 for url in urls.iter() {
                     let url_path = PathBuf::from(url);
                     match Source::try_from_path(url_path.as_path()) {
                         Ok(resolved) => {
                             *self = resolved;
-                            break;
+                            return Ok(());
                         }
                         Err(error) => errors.push(error),
                     }
                 }
-                if !errors.is_empty() {
-                    anyhow::bail!(
-                        "{}",
-                        errors
-                            .into_iter()
-                            .map(|error| error.to_string())
-                            .collect::<Vec<String>>()
-                            .join("\n")
-                    );
-                }
-                Ok(())
+                anyhow::bail!(
+                    "{}",
+                    errors
+                        .into_iter()
+                        .map(|error| error.to_string())
+                        .collect::<Vec<String>>()
+                        .join("\n")
+                );
             }
             (Some(_), Some(_)) => anyhow::bail!("Both `content` and `urls` cannot be set."),
             (None, None) => anyhow::bail!("Either `content` or `urls` must be set."),
@@ -161,5 +162,59 @@ impl From<&Path> for Source {
             keccak256: OnceLock::new(),
             ipfs: OnceLock::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::Source;
+
+    #[test]
+    fn resolves_first_readable_url() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let missing = root.join("missing-source-does-not-exist.sol");
+        let existing = root.join("Cargo.toml");
+        let mut source = Source::from(existing.as_path());
+        source.urls = Some(vec![
+            missing.to_string_lossy().into_owned(),
+            existing.to_string_lossy().into_owned(),
+        ]);
+
+        source.try_resolve().unwrap();
+
+        let expected = std::fs::read_to_string(existing).unwrap();
+        assert_eq!(source.content(), Some(expected.as_str()));
+        assert!(source.urls.is_none());
+    }
+
+    #[test]
+    fn reports_all_failed_urls() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let first = root.join("missing-source-one.sol");
+        let second = root.join("missing-source-two.sol");
+        let mut source = Source::from(first.as_path());
+        source.urls = Some(vec![
+            first.to_string_lossy().into_owned(),
+            second.to_string_lossy().into_owned(),
+        ]);
+
+        let error = source.try_resolve().unwrap_err().to_string();
+
+        assert!(error.contains(first.to_string_lossy().as_ref()));
+        assert!(error.contains(second.to_string_lossy().as_ref()));
+        assert!(source.content().is_none());
+    }
+
+    #[test]
+    fn rejects_empty_urls() {
+        let mut source = Source::from(Path::new("unused.sol"));
+        source.urls = Some(Vec::new());
+
+        let error = source.try_resolve().unwrap_err().to_string();
+
+        assert_eq!(error, "At least one URL must be set.");
+        assert!(source.content().is_none());
     }
 }
