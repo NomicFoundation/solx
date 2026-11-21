@@ -92,6 +92,7 @@ impl Contract {
         members
             .filter_map(|member| match member {
                 ContractMember::FunctionDefinition(function) => Some(Function::from(&function)),
+                ContractMember::ModifierDefinition(modifier) => Some(Function::from(&modifier)),
                 ContractMember::StateVariableDefinition(state_variable)
                     if state_variable.is_externally_visible() =>
                 {
