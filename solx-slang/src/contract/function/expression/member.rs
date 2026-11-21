@@ -106,15 +106,18 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
                         self.converted(&code.operand(), MlirType::address(self.melior, false));
                     return Value::code_size(address, self);
                 }
-                if let Some(Type::ByteArray(byte_array_type)) = operand.get_type() {
-                    self.expression_effect(&operand);
-                    return Value::constant_from_bigint(
-                        &BigInt::from(byte_array_type.width()),
-                        self.typing(node.get_type()),
-                        self,
-                    );
-                }
                 self.expression(&operand).length(self)
+            }
+            Some(BuiltIn::ByteArrayLength) => {
+                let Some(Type::ByteArray(byte_array_type)) = operand.get_type() else {
+                    unreachable!("slang resolves `ByteArrayLength` on a fixed bytes operand alone");
+                };
+                self.expression_effect(&operand);
+                Value::constant_from_bigint(
+                    &BigInt::from(byte_array_type.width()),
+                    self.typing(node.get_type()),
+                    self,
+                )
             }
             Some(BuiltIn::FunctionSelector) => self.external_selector(&operand),
             Some(BuiltIn::FunctionAddress) => {
