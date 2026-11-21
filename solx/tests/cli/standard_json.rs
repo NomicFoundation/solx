@@ -26,6 +26,34 @@ fn default() -> anyhow::Result<()> {
 }
 
 #[test]
+fn source_url_fallback() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("solidity_urls_fallback.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    let output: serde_json::Value =
+        serde_json::from_slice(result.success().get_output().stdout.as_slice())?;
+    let source = "tests/data/contracts/solidity/SlangTest.sol";
+    let contracts = &output["contracts"][source];
+    let abi = contracts["SlangTest"]["abi"].as_array().unwrap();
+    assert!(abi.iter().any(|entry| entry["name"] == "add"));
+    assert!(contracts["MiniMath"].is_null());
+    let errors = output["errors"].as_array().unwrap();
+    assert!(errors.iter().all(|error| error["severity"] != "error"));
+    assert!(errors.iter().any(|error| {
+        error["severity"] == "warning"
+            && error["message"]
+                == "Cannot import url (\"tests/data/contracts/solidity/missing-source-does-not-exist.sol\"): File not found."
+    }));
+
+    Ok(())
+}
+
+#[test]
 fn stdin() -> anyhow::Result<()> {
     crate::common::setup()?;
 

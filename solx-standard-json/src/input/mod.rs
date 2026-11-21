@@ -152,9 +152,9 @@ impl Input {
     ///
     /// Loads the sources given by URL from the file system.
     ///
-    pub fn resolve_sources(&mut self) -> anyhow::Result<()> {
+    pub fn resolve_sources(&mut self, warnings: &mut Vec<String>) -> anyhow::Result<()> {
         for source in self.sources.values_mut() {
-            source.try_resolve()?
+            warnings.extend(source.try_resolve()?);
         }
         Ok(())
     }

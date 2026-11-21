@@ -179,9 +179,9 @@ impl Project {
             .map(|(path, mut source)| {
                 let contract_name = solx_utils::ContractName::new(path.clone(), None);
 
-                let source_code = match source.try_resolve() {
-                    Ok(()) => match source.take_content() {
-                        Some(content) => content,
+                let (source_code, warnings) = match source.try_resolve() {
+                    Ok(warnings) => match source.take_content() {
+                        Some(content) => (content, warnings),
                         None => {
                             return (
                                 contract_name,
@@ -227,14 +227,24 @@ impl Project {
                     None,
                 );
 
-                (contract_name, Ok(contract))
+                (contract_name, Ok((contract, warnings)))
             })
-            .collect::<Vec<(solx_utils::ContractName, anyhow::Result<Contract>)>>();
+            .collect::<Vec<(
+                solx_utils::ContractName,
+                anyhow::Result<(Contract, Vec<String>)>,
+            )>>();
 
         let mut contracts = BTreeMap::new();
         for (contract_name, result) in results.into_iter() {
             match result {
-                Ok(contract) => {
+                Ok((contract, warnings)) => {
+                    if let Some(output) = output.as_mut() {
+                        output.errors.extend(
+                            warnings
+                                .into_iter()
+                                .map(solx_standard_json::OutputError::new_warning),
+                        );
+                    }
                     contracts.insert(contract_name.full_path, contract);
                 }
                 Err(error) => match output.as_mut() {
