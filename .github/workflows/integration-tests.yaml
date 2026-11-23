@@ -9,7 +9,6 @@ on:
       - 'docs/**'
       - '*.md'
       - '.github/**/*.md'
-      - '.claude/**'
 
 permissions:
   contents: read

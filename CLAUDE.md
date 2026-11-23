@@ -1,4 +1,4 @@
-Human documentation starts at the [README](./README.md) and continues under [docs/src](./docs/src/). The [review skill](./.claude/skills/review/SKILL.md) reviews a change against this file.
+Human documentation starts at the [README](./README.md) and continues under [docs/src](./docs/src/).
 
 ## Writing
 
@@ -46,7 +46,7 @@ A type has one inherent `impl` block, with public items before private ones.
 
 ## Slang Frontend
 
-`solx-slang` lowers the Slang AST to Sol-dialect MLIR through `solx-mlir`. The rules below are the design law of that frontend and the conventions a reviewer would otherwise repeat by hand.
+`solx-slang` lowers the Slang AST to Sol-dialect MLIR through `solx-mlir`. The rules below are the design law of that frontend.
 
 ### Ground truth
 
