@@ -20,3 +20,13 @@ version = "0.103.16"
 [[allow.exact]]
 crate = "webpki-root-certs"
 version = "1.0.10"
+
+# RUSTSEC-2026-0592: url 2.5.9 is the fix, published 2026-11-20.
+[[allow.exact]]
+crate = "url"
+version = "2.5.9"
+
+# RUSTSEC-2026-0592: form_urlencoded 1.2.3 comes with url 2.5.9, published 2026-11-20.
+[[allow.exact]]
+crate = "form_urlencoded"
+version = "1.2.3"
