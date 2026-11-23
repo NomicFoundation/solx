@@ -43,9 +43,9 @@ output.
 
 For version bumps, do not use `TRYCMD=overwrite`: the CBOR trailer lines that
 carry the version also carry a `[..]` metadata-digest wildcard, and a blessed
-literal digest only breaks on the next Slang re-pin. Update the hex-encoded
-version strings in the trailer lines directly instead — the new bytes are
-deterministic (hex of `slang:X.Y.Z;solc:A.B.C`).
+literal digest only breaks on the next Slang re-pin. Update the version in the
+trailer lines directly instead: the three bytes after `65736c616e6743` (the
+`slang` key and its byte-string header) are the major, minor and patch numbers.
 
 ## Integration Tests
 
@@ -89,6 +89,8 @@ cargo build --release --bin solx-dev
 ```
 
 The test configurations list projects that are cloned and tested automatically. See [foundry-tests.toml](https://github.com/NomicFoundation/solx/blob/main/solx-dev/foundry-tests.toml) and [hardhat-tests.toml](https://github.com/NomicFoundation/solx/blob/main/solx-dev/hardhat-tests.toml) for the full list of tested projects.
+
+Projects are set up once in `temp-foundry-projects-cache/` and `temp-hardhat-projects-cache/` (`--projects-cache-dir`) and reused until their configuration entry, the Node.js version or `solx-dev` changes. Projects removed from the configuration are removed from the cache.
 
 ## Sourcify Corpus
 

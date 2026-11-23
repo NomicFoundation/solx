@@ -1050,9 +1050,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.8.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6651c9ed80effdc7db0ff72512157f901af5e3549e341e24b1dd4887d836d838"
+checksum = "86e055fa6e3e40ad6187ba25b6855eeb635d5271f8e0f0e1e9a5826b8d75bea0"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -1498,7 +1498,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ab67060fc6b8ef687992d439ca0fa36e7ed17e9a0b16b25b601e8757df720de"
 dependencies = [
  "data-encoding",
- "syn 2.0.117",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -1783,9 +1783,9 @@ dependencies = [
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.14"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
+checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
 
 [[package]]
 name = "finl_unicode"
@@ -1861,9 +1861,9 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "form_urlencoded"
-version = "1.2.2"
+version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
+checksum = "afa489199eaffb1211795df1c6236ce1ad0d41a6fa45250add73e3b02420f06e"
 dependencies = [
  "percent-encoding",
 ]
@@ -2656,15 +2656,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
-name = "libmimalloc-sys"
-version = "0.1.49"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a45a52f43e1c16f667ccfe4dd8c85b7f7c204fd5e3bf46c5b0db9a5c3c0b8e9"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "libredox"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2791,11 +2782,18 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
 name = "mimalloc"
-version = "0.1.52"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d4139bb28d14ad1facf21d5eb8825051b326e172d216b39f6d31df53cc97862"
+version = "3.6.0"
+source = "git+https://github.com/microsoft/mimalloc?tag=v3.6.0#b18ab4eef383f655e760881b02eff8af02800879"
 dependencies = [
- "libmimalloc-sys",
+ "mimalloc-sys",
+]
+
+[[package]]
+name = "mimalloc-sys"
+version = "3.6.0"
+source = "git+https://github.com/microsoft/mimalloc?tag=v3.6.0#b18ab4eef383f655e760881b02eff8af02800879"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -4042,9 +4040,9 @@ dependencies = [
 
 [[package]]
 name = "ruint"
-version = "1.20.1"
+version = "1.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2973657b5127d510e230f5c63d2d106af9c8f79393d8b9f4647323e8196bdde5"
+checksum = "a0de3fa9b4dac39cc2bd65679bacf9f531899d933605e2963b40c2129cdb55f2"
 dependencies = [
  "alloy-rlp",
  "ark-ff 0.3.0",
@@ -4060,6 +4058,7 @@ dependencies = [
  "parity-scale-codec",
  "primitive-types",
  "proptest",
+ "rand 0.10.2",
  "rand 0.8.7",
  "rand 0.9.3",
  "rlp 0.5.2",
@@ -4077,9 +4076,9 @@ checksum = "48fd7bd8a6377e15ad9d42a8ec25371b94ddc67abe7c8b9127bec79bebaaae18"
 
 [[package]]
 name = "rust_xlsxwriter"
-version = "0.100.0"
+version = "0.101.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c44904ffb6c57b148ffcc8ce3011c28bc49b97e1a8343b2d632283cd566e1393"
+checksum = "49aa1d1558e9465f5053bf9fb5361fe75db827c6a4423d5e5fe72096622f8908"
 dependencies = [
  "zip",
 ]
@@ -4681,8 +4680,8 @@ dependencies = [
  "hex",
  "inkwell",
  "libc",
- "libmimalloc-sys",
  "mimalloc",
+ "mimalloc-sys",
  "object 0.40.0",
  "predicates",
  "regex",
@@ -4701,8 +4700,8 @@ dependencies = [
 
 [[package]]
 name = "slang_solidity_v2"
-version = "1.3.9"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=3916dceaafe4f5e20c5f7b6230619567662a0fc6#3916dceaafe4f5e20c5f7b6230619567662a0fc6"
+version = "1.3.10"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=cc5bdd47bd1aa0e9774c1b8a17475134b4c1bfc0#cc5bdd47bd1aa0e9774c1b8a17475134b4c1bfc0"
 dependencies = [
  "rayon",
  "semver 1.0.28",
@@ -4716,8 +4715,8 @@ dependencies = [
 
 [[package]]
 name = "slang_solidity_v2_ast"
-version = "1.3.9"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=3916dceaafe4f5e20c5f7b6230619567662a0fc6#3916dceaafe4f5e20c5f7b6230619567662a0fc6"
+version = "1.3.10"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=cc5bdd47bd1aa0e9774c1b8a17475134b4c1bfc0#cc5bdd47bd1aa0e9774c1b8a17475134b4c1bfc0"
 dependencies = [
  "itertools 0.15.0",
  "num-bigint",
@@ -4733,8 +4732,8 @@ dependencies = [
 
 [[package]]
 name = "slang_solidity_v2_common"
-version = "1.3.9"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=3916dceaafe4f5e20c5f7b6230619567662a0fc6#3916dceaafe4f5e20c5f7b6230619567662a0fc6"
+version = "1.3.10"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=cc5bdd47bd1aa0e9774c1b8a17475134b4c1bfc0#cc5bdd47bd1aa0e9774c1b8a17475134b4c1bfc0"
 dependencies = [
  "indexmap 2.14.2",
  "itertools 0.15.0",
@@ -4747,13 +4746,13 @@ dependencies = [
 
 [[package]]
 name = "slang_solidity_v2_cst"
-version = "1.3.9"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=3916dceaafe4f5e20c5f7b6230619567662a0fc6#3916dceaafe4f5e20c5f7b6230619567662a0fc6"
+version = "1.3.10"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=cc5bdd47bd1aa0e9774c1b8a17475134b4c1bfc0#cc5bdd47bd1aa0e9774c1b8a17475134b4c1bfc0"
 
 [[package]]
 name = "slang_solidity_v2_ir"
-version = "1.3.9"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=3916dceaafe4f5e20c5f7b6230619567662a0fc6#3916dceaafe4f5e20c5f7b6230619567662a0fc6"
+version = "1.3.10"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=cc5bdd47bd1aa0e9774c1b8a17475134b4c1bfc0#cc5bdd47bd1aa0e9774c1b8a17475134b4c1bfc0"
 dependencies = [
  "semver 1.0.28",
  "slang_solidity_v2_common",
@@ -4762,8 +4761,8 @@ dependencies = [
 
 [[package]]
 name = "slang_solidity_v2_parser"
-version = "1.3.9"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=3916dceaafe4f5e20c5f7b6230619567662a0fc6#3916dceaafe4f5e20c5f7b6230619567662a0fc6"
+version = "1.3.10"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=cc5bdd47bd1aa0e9774c1b8a17475134b4c1bfc0#cc5bdd47bd1aa0e9774c1b8a17475134b4c1bfc0"
 dependencies = [
  "lalrpop",
  "lalrpop-util",
@@ -4775,8 +4774,8 @@ dependencies = [
 
 [[package]]
 name = "slang_solidity_v2_semantic"
-version = "1.3.9"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=3916dceaafe4f5e20c5f7b6230619567662a0fc6#3916dceaafe4f5e20c5f7b6230619567662a0fc6"
+version = "1.3.10"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=cc5bdd47bd1aa0e9774c1b8a17475134b4c1bfc0#cc5bdd47bd1aa0e9774c1b8a17475134b4c1bfc0"
 dependencies = [
  "num-bigint",
  "num-integer",
@@ -4924,6 +4923,7 @@ dependencies = [
  "solx-compiler-downloader",
  "solx-utils",
  "sysinfo",
+ "tempfile",
  "toml",
 ]
 
@@ -5227,7 +5227,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
@@ -5721,9 +5721,9 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "url"
-version = "2.5.8"
+version = "2.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff67a8a4397373c3ef660812acab3268222035010ab8680ec4215f38ba3d0eed"
+checksum = "f00cd2407bb42c0ef17be88d4cf020f5cceffd121665bac9b8b9493a369b3b1a"
 dependencies = [
  "form_urlencoded",
  "idna",
@@ -6359,9 +6359,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "9.0.2"
+version = "9.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e2fc56a6707efb066c40aead2409ebb1224e6dde24a074e9fbc78ced500507b"
+checksum = "6e04976da629d3b04204ba8105b396a193af8ad2583b2c79bfb3ab8af580a11e"
 dependencies = [
  "crc32fast",
  "flate2",

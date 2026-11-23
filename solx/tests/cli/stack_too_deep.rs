@@ -105,6 +105,99 @@ fn stack_too_deep_recursive_standard_json() -> anyhow::Result<()> {
     Ok(())
 }
 
+// Chain 97 0xe8426cf4a7fb9f73eba08edc6dd7f20bb2f8aff5. Rejected at modes 1 to 3 before the
+// callee-saved spills of recursive functions, compiling since.
+#[test]
+fn recursive_stack_too_deep_slot_placement() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("recursive_stack_too_deep_slot_placement.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    result
+        .success()
+        .stdout(predicate::str::contains("xqore/XQoreBTC.sol"))
+        .stdout(predicate::str::contains("\"object\""))
+        .stdout(predicate::str::contains("Stackification failed").not())
+        .stdout(predicate::str::contains("stack too deep").not());
+
+    Ok(())
+}
+
+// Chain 97 0x5ff2c60b164c928038cbeb51464c2f36a009b586. Rejected at mode 1 before the callee-saved
+// spills of recursive functions, compiling since. The named wrapper has its callee inlined.
+// The cycle is _autoFlushQueue -> _closeIfNeeded -> _autoFlushQueue.
+#[test]
+fn recursive_stack_too_deep_queue_flush() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("recursive_stack_too_deep_queue_flush.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    result
+        .success()
+        .stdout(predicate::str::contains("contracts/VaultExCore.sol"))
+        .stdout(predicate::str::contains("\"object\""))
+        .stdout(predicate::str::contains("Stackification failed").not())
+        .stdout(predicate::str::contains("stack too deep").not());
+
+    Ok(())
+}
+
+// Chain 97 0x1a9ea54ad1cf25ee0489c0c9996d5d8db166f524. Rejected from mode 2 up before the
+// callee-saved spills of recursive functions, compiling since.
+#[test]
+fn recursive_stack_too_deep_level_matrix() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("recursive_stack_too_deep_level_matrix.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    result
+        .success()
+        .stdout(predicate::str::contains("contracts/DualMatrixSystem.sol"))
+        .stdout(predicate::str::contains("\"object\""))
+        .stdout(predicate::str::contains("Stackification failed").not())
+        .stdout(predicate::str::contains("stack too deep").not());
+
+    Ok(())
+}
+
+// Chain 56 0x699a152689c193ac9c6297afdd66785fff9f7aef. Rejected at mode 1 before the callee-saved
+// spills of recursive functions, compiling since.
+#[test]
+fn recursive_stack_too_deep_pair_tax() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("recursive_stack_too_deep_pair_tax.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+
+    result
+        .success()
+        .stdout(predicate::str::contains("2026/BscLpHoldingTaxToken.sol"))
+        .stdout(predicate::str::contains("\"object\""))
+        .stdout(predicate::str::contains("Stackification failed").not())
+        .stdout(predicate::str::contains("stack too deep").not());
+
+    Ok(())
+}
+
 // The reported spill area is underestimated under the pinned LLVM backend, so the
 // fixture compiles only through stack-too-deep retries in both the initial settings
 // and the size fallback.

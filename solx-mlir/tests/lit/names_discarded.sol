@@ -34,6 +34,7 @@
 // CHECK-NEXT:   %[[THIS:.*]] = sol.this
 // CHECK-NEXT:   %[[SELF:.*]] = sol.address_cast %[[THIS]]
 // CHECK-NEXT:   %[[PAYABLE:.*]] = sol.address_cast %[[SELF]]
+// CHECK-NEXT:   sol.store %[[PAYABLE]], %{{.*}}
 // CHECK-NEXT:   sol.return %[[PAYABLE]]
 
 // CHECK: sol.func @{{.*options.*}}()

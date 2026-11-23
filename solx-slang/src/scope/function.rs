@@ -29,6 +29,8 @@ pub struct FunctionScope<'contract, 'source_unit, 'context> {
     pub environment: Environment<'context>,
     /// The declared return types a `return` converts to.
     pub return_types: Vec<MlirType<'context>>,
+    /// The return variables a `return` assigns.
+    pub return_pointers: Vec<Place<'context>>,
     /// Whether arithmetic reverts on overflow at the current position.
     pub checked: bool,
 }
@@ -43,6 +45,7 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             contract,
             environment: Environment::new(),
             return_types: return_types.to_vec(),
+            return_pointers: Vec::new(),
             checked: true,
         }
     }

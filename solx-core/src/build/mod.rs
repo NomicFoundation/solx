@@ -61,93 +61,34 @@ impl Build {
     ) -> Self {
         let ast_jsons = self.ast_jsons.take();
 
-        loop {
-            let assembled_objects_data = {
-                let all_objects = self
-                    .contracts
-                    .values()
-                    .flat_map(|contract| contract.objects_ref())
-                    .collect::<Vec<&ContractObject>>();
-                let objects_by_id: BTreeMap<&str, &ContractObject> = all_objects
-                    .iter()
-                    .map(|object| (object.identifier.as_str(), *object))
-                    .collect();
+        let mut assembled_by_identifier: BTreeMap<String, Vec<u8>> = self
+            .contracts
+            .values_mut()
+            .flat_map(|contract| contract.objects_mut())
+            .filter_map(|object| {
+                object
+                    .assembled_bytecode
+                    .take()
+                    .map(|bytecode| (object.identifier.clone(), bytecode))
+            })
+            .collect();
+        let mut unassembled_by_identifier: BTreeMap<String, &mut ContractObject> = self
+            .contracts
+            .values_mut()
+            .flat_map(|contract| contract.objects_mut())
+            .filter(|object| !assembled_by_identifier.contains_key(&object.identifier))
+            .map(|object| (object.identifier.clone(), object))
+            .collect();
 
-                let assembleable_objects = all_objects
-                    .iter()
-                    .filter(|object| {
-                        !object.is_assembled
-                            && object.dependencies.into_iter().all(|dependency| {
-                                objects_by_id
-                                    .get(dependency.as_str())
-                                    .expect("Every bytecode dependency has a compiled object")
-                                    .is_assembled
-                            })
-                    })
-                    .copied()
-                    .collect::<Vec<_>>();
-                if assembleable_objects.is_empty() {
-                    break;
-                }
-
-                let mut assembled_objects_data = Vec::with_capacity(assembleable_objects.len());
-                for object in assembleable_objects.into_iter() {
-                    let assembled_object = match object.assemble(&objects_by_id) {
-                        Ok(assembled_object) => assembled_object,
-                        Err(error) => {
-                            self.messages.lock_sync().push(
-                                solx_standard_json::OutputError::new_error_contract(
-                                    Some(object.contract_name.path.as_str()),
-                                    &error,
-                                ),
-                            );
-                            return Self::new(BTreeMap::new(), ast_jsons, self.messages);
-                        }
-                    };
-                    assembled_objects_data.push((
-                        object.contract_name.full_path.to_owned(),
-                        object.code_segment,
-                        assembled_object,
-                    ));
-                }
-                assembled_objects_data
-            };
-
-            for (full_path, code_segment, assembled_object) in assembled_objects_data.into_iter() {
-                let contract = self
-                    .contracts
-                    .get_mut(full_path.as_str())
-                    .expect("An assembled object's contract exists in this build");
-                let object = contract
-                    .object_mut_by_code_segment(code_segment)
-                    .expect("An assembled object exists in its contract");
-                object.bytecode = Some(assembled_object.as_slice().to_owned());
-                for undefined_reference in assembled_object
-                    .get_undefined_references_evm()
-                    .into_iter()
-                    .filter(|reference| !linker_symbols.contains_key(reference))
-                {
-                    let symbol_offsets =
-                        assembled_object.get_symbol_offsets_evm(undefined_reference.as_str());
-                    object
-                        .unlinked_symbols
-                        .insert(undefined_reference, symbol_offsets);
-                }
-                object.is_assembled = true;
-            }
-        }
-
-        for contract in self.contracts.values_mut() {
-            for object in contract.objects_mut().into_iter() {
-                if let Err(error) = object.link(&linker_symbols) {
-                    self.messages.lock_sync().push(
-                        solx_standard_json::OutputError::new_error_contract(
-                            Some(object.contract_name.path.as_str()),
-                            &error,
-                        ),
-                    );
-                    return Self::new(BTreeMap::new(), ast_jsons, self.messages);
-                }
+        while let Some((_, object)) = unassembled_by_identifier.pop_first() {
+            if let Err(error) = Self::assemble_and_link(
+                object,
+                &mut unassembled_by_identifier,
+                &mut assembled_by_identifier,
+                &linker_symbols,
+            ) {
+                self.messages.lock_sync().push(error);
+                return Self::new(BTreeMap::new(), ast_jsons, self.messages);
             }
         }
 
@@ -166,7 +107,7 @@ impl Build {
                         output.deploy_source.clear();
                         output.runtime_source.clear();
                     }
-                    solx_mlir::Dialect::Llvm => {
+                    solx_mlir::Dialect::Yul => {
                         output.deploy_sol_source = None;
                         output.runtime_sol_source = None;
                     }
@@ -391,6 +332,44 @@ impl Build {
         ) {
             standard_json.benchmarks.extend(profiler.to_vec());
         }
+        Ok(())
+    }
+
+    ///
+    /// The embedded objects still unassembled are assembled first.
+    ///
+    fn assemble_and_link(
+        object: &mut ContractObject,
+        unassembled_by_identifier: &mut BTreeMap<String, &mut ContractObject>,
+        assembled_by_identifier: &mut BTreeMap<String, Vec<u8>>,
+        linker_symbols: &BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
+    ) -> Result<(), solx_standard_json::OutputError> {
+        for dependency in object.dependencies.into_iter() {
+            if let Some(dependency) = unassembled_by_identifier.remove(dependency) {
+                Self::assemble_and_link(
+                    dependency,
+                    unassembled_by_identifier,
+                    assembled_by_identifier,
+                    linker_symbols,
+                )?;
+            }
+        }
+        object
+            .assemble(assembled_by_identifier)
+            .and_then(|()| object.link(linker_symbols))
+            .map_err(|error| {
+                solx_standard_json::OutputError::new_error_contract(
+                    Some(object.contract_name.path.as_str()),
+                    &error,
+                )
+            })?;
+        assembled_by_identifier.insert(
+            object.identifier.clone(),
+            object
+                .assembled_bytecode
+                .take()
+                .expect("Every completed object retains its assembled ELF"),
+        );
         Ok(())
     }
 }

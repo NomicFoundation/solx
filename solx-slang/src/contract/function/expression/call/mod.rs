@@ -674,6 +674,13 @@ impl Call {
                 );
                 Some(hash(data, scope))
             }
+            BuiltIn::Erc7201 => {
+                let namespace = scope.converted(
+                    &arguments[0],
+                    MlirType::string(scope.melior, solx_utils::DataLocation::Memory),
+                );
+                Some(Value::erc7201(namespace, scope))
+            }
             BuiltIn::Ecrecover => {
                 let word = MlirType::fixed_bytes(scope.melior, solx_utils::BYTE_LENGTH_FIELD);
                 let hash = scope.converted(&arguments[0], word);

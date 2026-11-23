@@ -27,10 +27,10 @@ fn main() {
     println!("cargo:rustc-link-lib=static=MLIRSolToYul");
     println!("cargo:rustc-link-lib=static=MLIRSolTransforms");
 
-    // Yul dialect — dependency of the Sol-to-Yul conversion pass.
+    // Yul dialect and its LLVM IR translation.
     println!("cargo:rustc-link-lib=static=MLIRYulDialect");
     println!("cargo:rustc-link-lib=static=MLIRCAPIYul");
-    println!("cargo:rustc-link-lib=static=MLIRYulToStandard");
+    println!("cargo:rustc-link-lib=static=MLIRYulToLLVMIRTranslation");
 
     let include_path = std::path::PathBuf::from(&prefix).join("include");
 

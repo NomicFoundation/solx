@@ -39,12 +39,12 @@ fn matches_solc(input: &str, source: &str, expected: &str) -> anyhow::Result<()>
     Ok(())
 }
 
-/// Only the outputs that need the storage slots fail.
-#[test_case("--storage-layout", true)]
-#[test_case("--bin", true)]
-#[test_case("--abi", false)]
-#[test_case("--hashes", false)]
-fn too_much_storage(flag: &str, fails: bool) -> anyhow::Result<()> {
+/// Slang diagnoses the overflow, so every output fails.
+#[test_case("--storage-layout")]
+#[test_case("--bin")]
+#[test_case("--abi")]
+#[test_case("--hashes")]
+fn too_much_storage(flag: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
@@ -53,16 +53,12 @@ fn too_much_storage(flag: &str, fails: bool) -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    if fails {
-        result
-            .failure()
-            .stderr(predicate::str::contains(
-                "Error: Slang cannot compute the storage layout of `Big`.",
-            ))
-            .stderr(predicate::str::contains("StorageOverflow.sol:5:1"));
-    } else {
-        result.success();
-    }
+    result
+        .failure()
+        .stderr(predicate::str::contains(
+            "Error: Contract requires too much storage.",
+        ))
+        .stderr(predicate::str::contains("StorageOverflow.sol:5:1"));
 
     Ok(())
 }

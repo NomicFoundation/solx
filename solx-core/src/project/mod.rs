@@ -33,14 +33,10 @@ use self::contract::metadata::Metadata as ContractMetadata;
 ///
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Project {
-    /// The `solc` compiler version, absent for LLVM IR projects.
-    pub solc_version: Option<semver::Version>,
     /// The project build results.
     pub contracts: BTreeMap<String, Contract>,
     /// The Solidity AST JSONs of the source files.
     pub ast_jsons: Option<BTreeMap<String, Option<Box<RawValue>>>>,
-    /// The library addresses.
-    pub libraries: solx_utils::Libraries,
 }
 
 impl Project {
@@ -51,16 +47,12 @@ impl Project {
     /// A shortcut constructor.
     ///
     pub fn new(
-        solc_version: Option<semver::Version>,
         contracts: BTreeMap<String, Contract>,
         ast_jsons: Option<BTreeMap<String, Option<Box<RawValue>>>>,
-        libraries: solx_utils::Libraries,
     ) -> Self {
         Self {
-            solc_version,
             contracts,
             ast_jsons,
-            libraries,
         }
     }
 
@@ -68,8 +60,6 @@ impl Project {
     /// Parses the Solidity `sources` and returns a Solidity project.
     ///
     pub fn try_from_solidity_output(
-        solc_version: semver::Version,
-        libraries: solx_utils::Libraries,
         output: &mut solx_standard_json::Output,
     ) -> anyhow::Result<Self> {
         let ast_jsons = output
@@ -147,12 +137,7 @@ impl Project {
                 Err(error) => output.push_error(contract_name.path.as_str(), error),
             }
         }
-        Ok(Project::new(
-            Some(solc_version),
-            contracts,
-            Some(ast_jsons),
-            libraries,
-        ))
+        Ok(Project::new(contracts, Some(ast_jsons)))
     }
 
     ///
@@ -160,7 +145,6 @@ impl Project {
     ///
     pub fn try_from_llvm_ir_paths(
         paths: &[PathBuf],
-        libraries: solx_utils::Libraries,
         output_selection: &solx_standard_json::InputSelection,
         output: Option<&mut solx_standard_json::Output>,
     ) -> anyhow::Result<Self> {
@@ -179,7 +163,7 @@ impl Project {
             })
             .collect::<anyhow::Result<BTreeMap<String, solx_standard_json::InputSource>>>()?;
 
-        Self::try_from_llvm_ir_sources(sources, libraries, output_selection, output)
+        Self::try_from_llvm_ir_sources(sources, output_selection, output)
     }
 
     ///
@@ -187,7 +171,6 @@ impl Project {
     ///
     pub fn try_from_llvm_ir_sources(
         sources: BTreeMap<String, solx_standard_json::InputSource>,
-        libraries: solx_utils::Libraries,
         output_selection: &solx_standard_json::InputSelection,
         mut output: Option<&mut solx_standard_json::Output>,
     ) -> anyhow::Result<Self> {
@@ -260,7 +243,7 @@ impl Project {
                 },
             }
         }
-        Ok(Self::new(None, contracts, None, libraries))
+        Ok(Self::new(contracts, None))
     }
 
     ///
@@ -276,18 +259,18 @@ impl Project {
         optimizer_settings: solx_codegen_evm::OptimizerSettings,
         llvm_options: Vec<String>,
         output_config: Option<solx_codegen_evm::OutputConfig>,
+        linker_symbols: &BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
     ) -> anyhow::Result<EVMBuild> {
         let Self {
-            solc_version,
             contracts,
             ast_jsons,
-            libraries: _,
         } = self;
         let pool = EVMProcessPool::new(EVMProcessSession::new(
             evm_version,
             output_selection.clone(),
             llvm_options.clone(),
             output_config,
+            linker_symbols.clone(),
         ))?;
 
         let mut contracts: Vec<(String, Contract)> = contracts.into_iter().collect();
@@ -314,6 +297,7 @@ impl Project {
                 let transient_storage_layout = contract.transient_storage_layout.take();
                 let mlir = contract.mlir.take();
 
+                let mut deploy_embeds_runtime_only = false;
                 let (deploy_code_ir, runtime_code_ir): (ContractIR, ContractIR) = match contract.ir
                 {
                     Some(ContractIR::LLVMIR(runtime_code)) => {
@@ -336,6 +320,7 @@ impl Project {
                     Some(ContractIR::MLIR(mut deploy_code)) => {
                         let runtime_code: ContractMLIR =
                             *deploy_code.runtime_code.take().expect("Always exists");
+                        deploy_embeds_runtime_only = deploy_code.dependencies.objects.is_empty();
                         (deploy_code.into(), runtime_code.into())
                     }
                     None => {
@@ -357,12 +342,8 @@ impl Project {
                 };
 
                 let (runtime_object_result, metadata) = {
-                    let metadata_bytes = Self::cbor_metadata(
-                        metadata.as_deref(),
-                        solc_version.as_ref(),
-                        metadata_hash_type,
-                        append_cbor,
-                    );
+                    let metadata_bytes =
+                        Self::cbor_metadata(metadata.as_deref(), metadata_hash_type, append_cbor);
 
                     let mut job = EVMProcessJob::new(
                         contract_name.clone(),
@@ -371,6 +352,7 @@ impl Project {
                         None,
                         metadata_bytes,
                         optimizer_settings.clone(),
+                        None,
                     );
 
                     let result = Self::run_multi_pass_pipeline(&pool, &mut job);
@@ -381,6 +363,11 @@ impl Project {
                     .as_ref()
                     .ok()
                     .and_then(|output| output.object.immutables.to_owned());
+                let runtime_assembled_bytecode = runtime_object_result
+                    .as_ref()
+                    .ok()
+                    .filter(|_| deploy_embeds_runtime_only)
+                    .and_then(|output| output.object.assembled_bytecode.clone());
                 let deploy_object_result: crate::Result<EVMProcessOutput> = {
                     let mut job = EVMProcessJob::new(
                         contract_name.clone(),
@@ -389,6 +376,7 @@ impl Project {
                         immutables,
                         None,
                         optimizer_settings.clone(),
+                        runtime_assembled_bytecode,
                     );
 
                     Self::run_multi_pass_pipeline(&pool, &mut job)
@@ -421,7 +409,6 @@ impl Project {
     ///
     fn cbor_metadata(
         metadata: Option<&str>,
-        solc_version: Option<&semver::Version>,
         metadata_hash_type: solx_utils::MetadataHashType,
         append_cbor: bool,
     ) -> Option<Vec<u8>> {
@@ -435,39 +422,18 @@ impl Project {
                 Some(solx_utils::IPFSHash::from_slice(metadata.as_bytes()).to_vec())
             }
         });
+        let compiler_version = crate::Compiler::version()
+            .parse()
+            .expect("version string is valid semver");
 
-        let mut cbor_version_parts = Vec::with_capacity(2);
-        cbor_version_parts.push((
-            crate::r#const::DEFAULT_EXECUTABLE_NAME.to_owned(),
-            crate::Compiler::version()
-                .parse()
-                .expect("version string is valid semver"),
-        ));
-        if let Some(solc_version) = solc_version {
-            cbor_version_parts.push((
-                crate::r#const::SOLC_METADATA_TAG.to_owned(),
-                solc_version.to_owned(),
-            ));
-        }
-        let cbor_data = (
-            crate::r#const::SOLC_METADATA_TAG.to_owned(),
-            cbor_version_parts,
+        let cbor = solx_utils::CBOR::new(
+            metadata_hash
+                .as_deref()
+                .map(|hash| (solx_utils::MetadataHashType::IPFS, hash)),
+            crate::r#const::DEFAULT_EXECUTABLE_NAME,
+            compiler_version,
         );
-
-        match metadata_hash {
-            Some(hash) => {
-                let cbor = solx_utils::CBOR::new(
-                    Some((solx_utils::MetadataHashType::IPFS, hash.as_slice())),
-                    cbor_data.0,
-                    cbor_data.1,
-                );
-                Some(cbor.to_vec())
-            }
-            None => {
-                let cbor = solx_utils::CBOR::<'_, String>::new(None, cbor_data.0, cbor_data.1);
-                Some(cbor.to_vec())
-            }
-        }
+        Some(cbor.to_vec())
     }
 
     ///

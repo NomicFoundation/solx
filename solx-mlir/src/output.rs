@@ -10,7 +10,7 @@ pub struct MlirOutput {
     /// Pre-pass Sol dialect text of the deploy module.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deploy_sol_source: Option<String>,
-    /// LLVM dialect text of the deploy module.
+    /// Yul dialect text of the deploy module.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub deploy_source: String,
     /// LLVM bitcode of the deploy module.
@@ -21,7 +21,7 @@ pub struct MlirOutput {
     /// Pre-pass Sol dialect text of the runtime module.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runtime_sol_source: Option<String>,
-    /// LLVM dialect text of the runtime module.
+    /// Yul dialect text of the runtime module.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub runtime_source: String,
     /// LLVM bitcode of the runtime module.
@@ -53,7 +53,7 @@ impl MlirOutput {
 pub struct SegmentOutput {
     /// Pre-pass Sol dialect text.
     pub sol_source: Option<String>,
-    /// LLVM dialect text.
+    /// Yul dialect text.
     pub source: Option<String>,
     /// LLVM bitcode.
     pub bitcode: Vec<u8>,

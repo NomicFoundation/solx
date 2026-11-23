@@ -20,6 +20,7 @@
 // CHECK-NEXT:   %[[ZERO:.*]] = sol.constant 0 : ui256
 // CHECK-NEXT:   sol.store %[[ZERO]], %[[RETURN]]
 // CHECK:   %[[SUM:.*]] = sol.cadd
+// CHECK-NEXT:   sol.store %[[SUM]], %[[RETURN]]
 // CHECK-NEXT:   sol.return %[[SUM]]
 
 // CHECK: sol.func @{{.*unnamed_memory.*}}
@@ -28,6 +29,7 @@
 // CHECK:   sol.store %[[RETURN_ZERO]], %[[RETURN]]
 // CHECK:   %[[X:.*]] = sol.alloca : !sol.ptr<!sol.array<2 x ui256, Memory>, Stack>
 // CHECK:   %[[X_VALUE:.*]] = sol.load %[[X]]
+// CHECK-NEXT:   sol.store %[[X_VALUE]], %[[RETURN]]
 // CHECK-NEXT:   sol.return %[[X_VALUE]]
 
 contract C {

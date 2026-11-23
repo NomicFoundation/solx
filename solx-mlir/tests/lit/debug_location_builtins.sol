@@ -23,33 +23,36 @@
 // CHECK:   sol.gasleft {{.*}} loc(#[[GASLEFT:loc[0-9]*]])
 // CHECK: sol.func @{{.*pops.*}}(
 // CHECK:   sol.pop %{{.*}} loc(#[[POP:loc[0-9]*]])
+// CHECK: sol.func @{{.*slots.*}}(
+// CHECK:   "sol.erc7201"(%{{.*}}) {{.*}} loc(#[[ERC7201:loc[0-9]*]])
 // CHECK: sol.func @{{.*transfers.*}}(
 // CHECK:   sol.bare_call %{{.*}} loc(#[[CALL:loc[0-9]*]])
 // CHECK:   sol.send %{{.*}} loc(#[[SEND:loc[0-9]*]])
 // CHECK:   sol.transfer %{{.*}} loc(#[[TRANSFER:loc[0-9]*]])
 // CHECK:   sol.selfdestruct %{{.*}} loc(#[[SELFDESTRUCT:loc[0-9]*]])
 
-// CHECK-DAG: #[[DECODE]] = loc("{{.*}}debug_location_builtins.sol":87:16)
-// CHECK-DAG: #[[ENCODE]] = loc("{{.*}}debug_location_builtins.sol":79:13)
-// CHECK-DAG: #[[ENCODE_PACKED]] = loc("{{.*}}debug_location_builtins.sol":80:13)
-// CHECK-DAG: #[[ENCODE_WITH_SELECTOR]] = loc("{{.*}}debug_location_builtins.sol":81:13)
-// CHECK-DAG: #[[ENCODE_WITH_SIGNATURE]] = loc("{{.*}}debug_location_builtins.sol":82:13)
-// CHECK-DAG: #[[ENCODE_CALL]] = loc("{{.*}}debug_location_builtins.sol":83:13)
-// CHECK-DAG: #[[KECCAK256]] = loc("{{.*}}debug_location_builtins.sol":65:13)
-// CHECK-DAG: #[[ECRECOVER]] = loc("{{.*}}debug_location_builtins.sol":66:18)
-// CHECK-DAG: #[[BLOCK_NUMBER]] = loc("{{.*}}debug_location_builtins.sol":67:23)
-// CHECK-DAG: #[[BLOCKHASH]] = loc("{{.*}}debug_location_builtins.sol":67:13)
-// CHECK-DAG: #[[BLOBHASH]] = loc("{{.*}}debug_location_builtins.sol":68:13)
-// CHECK-DAG: #[[CONCAT]] = loc("{{.*}}debug_location_builtins.sol":95:16)
-// CHECK-DAG: #[[ASSERT]] = loc("{{.*}}debug_location_builtins.sol":58:9)
-// CHECK-DAG: #[[ADDMOD]] = loc("{{.*}}debug_location_builtins.sol":59:13)
-// CHECK-DAG: #[[MULMOD]] = loc("{{.*}}debug_location_builtins.sol":60:13)
-// CHECK-DAG: #[[GASLEFT]] = loc("{{.*}}debug_location_builtins.sol":61:13)
-// CHECK-DAG: #[[POP]] = loc("{{.*}}debug_location_builtins.sol":91:9)
-// CHECK-DAG: #[[CALL]] = loc("{{.*}}debug_location_builtins.sol":72:20)
-// CHECK-DAG: #[[SEND]] = loc("{{.*}}debug_location_builtins.sol":73:16)
-// CHECK-DAG: #[[TRANSFER]] = loc("{{.*}}debug_location_builtins.sol":74:9)
-// CHECK-DAG: #[[SELFDESTRUCT]] = loc("{{.*}}debug_location_builtins.sol":75:9)
+// CHECK-DAG: #[[DECODE]] = loc("{{.*}}debug_location_builtins.sol":90:16)
+// CHECK-DAG: #[[ENCODE]] = loc("{{.*}}debug_location_builtins.sol":82:13)
+// CHECK-DAG: #[[ENCODE_PACKED]] = loc("{{.*}}debug_location_builtins.sol":83:13)
+// CHECK-DAG: #[[ENCODE_WITH_SELECTOR]] = loc("{{.*}}debug_location_builtins.sol":84:13)
+// CHECK-DAG: #[[ENCODE_WITH_SIGNATURE]] = loc("{{.*}}debug_location_builtins.sol":85:13)
+// CHECK-DAG: #[[ENCODE_CALL]] = loc("{{.*}}debug_location_builtins.sol":86:13)
+// CHECK-DAG: #[[KECCAK256]] = loc("{{.*}}debug_location_builtins.sol":68:13)
+// CHECK-DAG: #[[ECRECOVER]] = loc("{{.*}}debug_location_builtins.sol":69:18)
+// CHECK-DAG: #[[BLOCK_NUMBER]] = loc("{{.*}}debug_location_builtins.sol":70:23)
+// CHECK-DAG: #[[BLOCKHASH]] = loc("{{.*}}debug_location_builtins.sol":70:13)
+// CHECK-DAG: #[[BLOBHASH]] = loc("{{.*}}debug_location_builtins.sol":71:13)
+// CHECK-DAG: #[[CONCAT]] = loc("{{.*}}debug_location_builtins.sol":98:16)
+// CHECK-DAG: #[[ASSERT]] = loc("{{.*}}debug_location_builtins.sol":61:9)
+// CHECK-DAG: #[[ADDMOD]] = loc("{{.*}}debug_location_builtins.sol":62:13)
+// CHECK-DAG: #[[MULMOD]] = loc("{{.*}}debug_location_builtins.sol":63:13)
+// CHECK-DAG: #[[GASLEFT]] = loc("{{.*}}debug_location_builtins.sol":64:13)
+// CHECK-DAG: #[[POP]] = loc("{{.*}}debug_location_builtins.sol":94:9)
+// CHECK-DAG: #[[CALL]] = loc("{{.*}}debug_location_builtins.sol":75:20)
+// CHECK-DAG: #[[SEND]] = loc("{{.*}}debug_location_builtins.sol":76:16)
+// CHECK-DAG: #[[TRANSFER]] = loc("{{.*}}debug_location_builtins.sol":77:9)
+// CHECK-DAG: #[[SELFDESTRUCT]] = loc("{{.*}}debug_location_builtins.sol":78:9)
+// CHECK-DAG: #[[ERC7201]] = loc("{{.*}}debug_location_builtins.sol":102:16)
 
 contract C {
     uint256[] values;
@@ -93,5 +96,9 @@ contract C {
 
     function joins(string memory a, string memory b) public pure returns (string memory) {
         return string.concat(a, b);
+    }
+
+    function slots(string memory namespace) public pure returns (uint256) {
+        return erc7201(namespace);
     }
 }

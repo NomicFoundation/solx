@@ -215,14 +215,14 @@ impl Contract {
             if !output.deploy_source.is_empty() {
                 writeln!(
                     std::io::stdout(),
-                    "MLIR Dialect llvm (deploy):\n{}",
+                    "MLIR Dialect yul (deploy):\n{}",
                     output.deploy_source
                 )?;
             }
             if !output.runtime_source.is_empty() {
                 writeln!(
                     std::io::stdout(),
-                    "MLIR Dialect llvm (runtime):\n{}",
+                    "MLIR Dialect yul (runtime):\n{}",
                     output.runtime_source
                 )?;
             }
@@ -719,13 +719,13 @@ impl Contract {
             }
             if !output.deploy_source.is_empty() {
                 write(
-                    &format!("llvm.{}", solx_utils::CodeSegment::Deploy),
+                    &format!("yul.{}", solx_utils::CodeSegment::Deploy),
                     &output.deploy_source,
                 )?;
             }
             if !output.runtime_source.is_empty() {
                 write(
-                    &format!("llvm.{}", solx_utils::CodeSegment::Runtime),
+                    &format!("yul.{}", solx_utils::CodeSegment::Runtime),
                     &output.runtime_source,
                 )?;
             }
@@ -923,29 +923,6 @@ impl Contract {
             objects.push(runtime_object.as_mut().expect("Always exists"));
         }
         objects
-    }
-
-    ///
-    /// Returns a mutable reference to the specified object.
-    ///
-    pub fn object_mut_by_code_segment(
-        &mut self,
-        code_segment: solx_utils::CodeSegment,
-    ) -> Option<&mut Object> {
-        match code_segment {
-            solx_utils::CodeSegment::Deploy => Some(
-                self.deploy_object_result
-                    .as_mut()?
-                    .as_mut()
-                    .expect("Always exists"),
-            ),
-            solx_utils::CodeSegment::Runtime => Some(
-                self.runtime_object_result
-                    .as_mut()?
-                    .as_mut()
-                    .expect("Always exists"),
-            ),
-        }
     }
 
     ///

@@ -56,12 +56,6 @@ pub struct Context<'context> {
 impl<'context> Context<'context> {
     /// The dialects emission builds in, which op, type and attribute construction does not load.
     const EMITTED_DIALECTS: [&'static str; 2] = ["sol", "yul"];
-    /// The op a contract is before the Sol lowering.
-    const SOL_CONTRACT: &'static str = "sol.contract";
-    /// The op a function is before the Sol lowering.
-    const SOL_FUNC: &'static str = "sol.func";
-    /// The op a function is after the Yul lowering.
-    const FUNC_FUNC: &'static str = "func.func";
     /// The DWARF version a module with debug info declares, where LLVM would default to 4.
     const DWARF_VERSION: u32 = 5;
     /// The data layout the LLVM translation reads off the module.
@@ -98,7 +92,7 @@ impl<'context> Context<'context> {
         let melior = melior::Context::new();
         melior.enable_multi_threading(false);
         melior.append_dialect_registry(&registry);
-        unsafe { crate::ffi::solxRegisterLLVMTranslations(melior.to_raw()) };
+        unsafe { crate::ffi::mlirRegisterYulToLLVMIRTranslations(melior.to_raw()) };
 
         static REGISTER_PASSES: Once = Once::new();
         REGISTER_PASSES.call_once(|| unsafe {
@@ -179,9 +173,8 @@ impl<'context> Context<'context> {
             .expect("the function body positions the insertion cursor")
     }
 
-    /// Run the Sol-to-LLVM conversion pass pipeline on a module in-place.
-    ///
-    /// The canonicalizers run per function; there is little to canonicalize outside one.
+    /// Run the Sol-to-Yul pass pipeline on a module in-place, leaving the Yul module the LLVM IR
+    /// translation reads.
     ///
     /// # Errors
     ///
@@ -204,44 +197,11 @@ impl<'context> Context<'context> {
                 )
             };
         }
-
         unsafe {
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateSolModifierInliningPass(),
-            ));
-            pass_manager
-                .nested_under(Self::SOL_CONTRACT)
-                .nested_under(Self::SOL_FUNC)
-                .add_pass(melior::pass::Pass::from_raw(
-                    crate::ffi::mlirCreateTransformsCanonicalizer(),
-                ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionConvertSolToYulPass(),
-            ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionConvertYulToStandardPass(),
-            ));
-            pass_manager
-                .nested_under(Self::FUNC_FUNC)
-                .add_pass(melior::pass::Pass::from_raw(
-                    crate::ffi::mlirCreateTransformsCanonicalizer(),
-                ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionSCFToControlFlowPass(),
-            ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionConvertFuncToLLVMPass(),
-            ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionArithToLLVMConversionPass(),
-            ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionConvertControlFlowToLLVMPass(),
-            ));
-            pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionReconcileUnrealizedCastsPass(),
-            ));
-        }
+            crate::ffi::mlirSolBuildSolToYulPipeline(mlir_sys::mlirPassManagerGetAsOpPassManager(
+                pass_manager.to_raw(),
+            ))
+        };
 
         pass_manager
             .run(module)
@@ -259,7 +219,7 @@ impl<'context> Context<'context> {
     /// returned with `dependencies`, the objects the code may embed, whose identifier must match
     /// the segment's object.
     ///
-    /// With `capture_mlir`, the Sol text and the LLVM dialect text are printed too, with locations
+    /// With `capture_mlir`, the Sol text and the Yul text are printed too, with locations
     /// ([`Self::printing_flags`]) when debug info is requested for the segment.
     ///
     /// `pass_timing` records the time of every pass in `profiler`, under
@@ -304,7 +264,7 @@ impl<'context> Context<'context> {
                     ))
             })
             .transpose()
-            .map_err(|error| anyhow::anyhow!("LLVM dialect module printing: {error}"))?;
+            .map_err(|error| anyhow::anyhow!("Yul dialect module printing: {error}"))?;
 
         let run_translation = profiler
             .start_pipeline_element(format!("Compiler_MLIRToLLVMIR:{code_identifier}").as_str());
@@ -319,7 +279,7 @@ impl<'context> Context<'context> {
         })
     }
 
-    /// Translates an LLVM dialect module to LLVM IR and returns its bitcode, which codegen parses
+    /// Translates a Yul module to LLVM IR and returns its bitcode, which codegen parses
     /// into the LLVM context it compiles in.
     ///
     /// # Errors

@@ -10,7 +10,7 @@
     "outputSelection": {
       "*": {
         "*": [
-          "evm.bytecode.object"
+          "metadata"
         ]
       }
     }

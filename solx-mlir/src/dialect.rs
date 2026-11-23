@@ -5,11 +5,11 @@
 use std::fmt;
 use std::str::FromStr;
 
-/// MLIR dialects produced by the Sol → LLVM pass pipeline and selectable
+/// MLIR dialects produced by the Sol → Yul pass pipeline and selectable
 /// via `--emit-mlir`.
 ///
 /// Variants are listed in pipeline order: [`Dialect::Sol`] is captured
-/// before lowering, [`Dialect::Llvm`] after the pass pipeline.
+/// before lowering, [`Dialect::Yul`] after the pass pipeline.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, clap::ValueEnum,
 )]
@@ -17,8 +17,8 @@ use std::str::FromStr;
 pub enum Dialect {
     /// Sol dialect, captured before lowering passes run.
     Sol,
-    /// LLVM dialect, captured after the pass pipeline.
-    Llvm,
+    /// Yul dialect, captured after the pass pipeline.
+    Yul,
 }
 
 impl Dialect {
@@ -26,7 +26,7 @@ impl Dialect {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Sol => "sol",
-            Self::Llvm => "llvm",
+            Self::Yul => "yul",
         }
     }
 }
@@ -37,7 +37,7 @@ impl FromStr for Dialect {
     fn from_str(value: &str) -> anyhow::Result<Self> {
         match value {
             "sol" => Ok(Self::Sol),
-            "llvm" => Ok(Self::Llvm),
+            "yul" => Ok(Self::Yul),
             other => anyhow::bail!("unknown MLIR dialect: {other}"),
         }
     }

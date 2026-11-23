@@ -584,7 +584,7 @@ jobs:
       - name: Build changelog
         if: github.ref_type == 'tag' || github.event_name == 'pull_request'
         id: build_changelog
-        uses: mikepenz/release-changelog-builder-action@aa013739bbc8e7067dbbecd4525ff11aeb51a84b # v6.4.0
+        uses: mikepenz/release-changelog-builder-action@b0db9d18b53447ef9f940a46c8f31653c4d9f621 # v6.5.0
         with:
           fromTag: ${{ needs.get-previous-release.outputs.tag || '' }}
           toTag: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
@@ -628,7 +628,7 @@ jobs:
       - name: Publish release
         if: github.event_name != 'pull_request'
         # zizmor: ignore[superfluous-actions] deliberate: gh-release handles release creation, asset globbing, changelog body, and prerelease flag in one step
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           name: ${{ needs.prepare.outputs.release_title }}
           generate_release_notes: false

@@ -95,7 +95,7 @@ When the compiler uses a memory spill region to mitigate stack-too-deep errors, 
    ```bash
    SLANG_OUTPUT_DIR=./debug slang contract.sol
    ```
-3. **Inspect stage by stage**: Sol-dialect MLIR → LLVM-dialect MLIR → LLVM IR (unoptimized) → LLVM IR (optimized) → assembly.
+3. **Inspect stage by stage**: Sol-dialect MLIR → Yul-dialect MLIR → LLVM IR (unoptimized) → LLVM IR (optimized) → assembly.
 4. **Narrow down** which stage introduces the problem.
 5. **Use LLVM verification** if the issue is in the optimizer:
    ```bash
