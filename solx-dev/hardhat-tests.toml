@@ -109,7 +109,7 @@ url = "https://github.com/antonbaliasnikov/hardhat-template"
 commit = "05f2ce84c7da0ce4ce986107c15cb7a197e04daf"
 description = "An example Hardhat v2 project with solx support."
 build_system = "bun"
-dependencies = [ "hardhat@2.29.1" ]
+dependencies = [ "hardhat@2.29.2" ]
 
 [projects.hardhat-v3]
 url = "https://github.com/antonbaliasnikov/solx-hh3"
