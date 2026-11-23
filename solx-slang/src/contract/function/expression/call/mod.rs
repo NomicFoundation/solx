@@ -750,7 +750,7 @@ impl Call {
         is_guarded: bool,
         scope: &mut FunctionScope<'_, '_, 'context>,
     ) -> (Value<'context>, Vec<Value<'context>>) {
-        let address = Self::library_address(definition, scope);
+        let address = scope.library_address(definition);
         let options = Options::new(options, scope);
         let Some(Type::Function(externalized_type)) = definition.externalized_type() else {
             unreachable!("slang externalizes every selector-bearing function's type");
@@ -795,7 +795,7 @@ impl Call {
         );
         converted
             .extend(scope.external_arguments(arguments, &function.function_type.parameters[1..]));
-        let address = Self::library_address(definition, scope);
+        let address = scope.library_address(definition);
         let Some(Type::Function(externalized_type)) = definition.externalized_type() else {
             unreachable!("slang externalizes every selector-bearing function's type");
         };
@@ -817,17 +817,6 @@ impl Call {
             is_guarded,
             scope,
         )
-    }
-
-    /// The linked address of the library enclosing `definition` (`sol.lib_addr`).
-    fn library_address<'context>(
-        definition: &FunctionDefinition,
-        scope: &mut FunctionScope<'_, '_, 'context>,
-    ) -> Value<'context> {
-        let Some(Definition::Library(library)) = definition.enclosing_definition() else {
-            unreachable!("a library callee is enclosed by its library");
-        };
-        Value::library_address(Object::Library(library).identifier().as_str(), scope)
     }
 
     /// Emits the `sol.ext_call` an external dispatch selects: a library callee carries
@@ -1121,7 +1110,7 @@ impl Call {
 
     /// A call through an external function pointer: the callee, then its options, then the
     /// arguments. The signature comes from the callee's binder type, since a pointer names no
-    /// definition to look a registered one up by.
+    /// definition to look a registered one up by, and a pointer to a library function delegates.
     fn external_pointer<'context>(
         callee: &Expression,
         function_type: &FunctionType,
@@ -1139,14 +1128,23 @@ impl Call {
         let converted = scope.external_arguments(arguments, &parameters);
         let gas = options.gas();
         let amount = options.amount(scope);
+        let is_library = matches!(function_type.call_mode(), CallMode::Delegate { .. });
         let is_static = StateMutability::from(function_type.mutability()).is_static();
         Value::external_call(
-            pointer, &converted, &results, gas, amount, is_static, is_guarded, scope,
+            pointer, &converted, &results, gas, amount, is_library, is_static, is_guarded, scope,
         )
     }
 }
 
 impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, 'context> {
+    /// The linked address of the library enclosing `definition` (`sol.lib_addr`).
+    pub fn library_address(&mut self, definition: &FunctionDefinition) -> Value<'context> {
+        let Some(Definition::Library(library)) = definition.enclosing_definition() else {
+            unreachable!("a library function is enclosed by its library");
+        };
+        Value::library_address(Object::Library(library).identifier().as_str(), self)
+    }
+
     /// `arr.push()` is the sole call assignable in place position; the slot it grows is the value the
     /// push emits, whose type is the element's own place unless it points to one.
     pub fn function_call_place(

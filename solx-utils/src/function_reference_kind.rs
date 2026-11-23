@@ -14,16 +14,14 @@ pub enum FunctionReferenceKind {
 }
 
 impl From<slang_solidity_v2::ast::CallMode> for FunctionReferenceKind {
-    /// A partially applied function is only ever a callee, which Slang enforces, but a
-    /// delegate-called library function is a value through a conditional.
+    /// A delegate-called library function is a value only within the expression calling it, so
+    /// its reference is external and the call site delegates. A partially applied function is
+    /// only ever a callee, which Slang enforces.
     fn from(call_mode: slang_solidity_v2::ast::CallMode) -> Self {
         use slang_solidity_v2::ast::CallMode as Slang;
         match call_mode {
             Slang::Internal { bound: false } => Self::Internal,
-            Slang::External => Self::External,
-            Slang::Delegate { bound: false } => {
-                unimplemented!("a delegate-called library function as a value")
-            }
+            Slang::External | Slang::Delegate { bound: false } => Self::External,
             Slang::Internal { bound: true }
             | Slang::ExternalWithCallOptions
             | Slang::Delegate { bound: true } => {

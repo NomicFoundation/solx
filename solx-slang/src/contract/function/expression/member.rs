@@ -26,7 +26,8 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
     /// internal pointer of the override the object runs after the enclosing contract; a qualified
     /// member resolves as the name it qualifies, a function among them by its declaration; an
     /// externally visible function reached through a contract instance or `this` is the pointer
-    /// dispatching it; every other member access is an environment or EVM intrinsic.
+    /// dispatching it, and one reached through its library the pointer at the library's linked
+    /// address; every other member access is an environment or EVM intrinsic.
     pub fn member_access(&mut self, node: &MemberAccessExpression) -> Value<'context> {
         let operand = node.operand();
 
@@ -66,22 +67,42 @@ impl<'contract, 'source_unit, 'context> FunctionScope<'contract, 'source_unit, '
             return self.contract.pointer_constant(&function);
         }
 
-        if let Some(Type::Function(function_type)) = node.get_type()
-            && function_type.call_mode() == CallMode::External
-        {
-            let Some(callee) = function_type
-                .associated_definition()
-                .and_then(ExternalCallee::from_definition)
-            else {
-                unreachable!("an external function type names the callee it dispatches");
-            };
-            let address = self.converted(&operand, MlirType::address(self.melior, false));
-            return Value::external_function_constant(
-                address,
-                callee.selector(),
-                self.typing(node.get_type()),
-                self,
-            );
+        if let Some(Type::Function(function_type)) = node.get_type() {
+            match function_type.call_mode() {
+                CallMode::External => {
+                    let Some(callee) = function_type
+                        .associated_definition()
+                        .and_then(ExternalCallee::from_definition)
+                    else {
+                        unreachable!("an external function type names the callee it dispatches");
+                    };
+                    let address = self.converted(&operand, MlirType::address(self.melior, false));
+                    return Value::external_function_constant(
+                        address,
+                        callee.selector(),
+                        self.typing(node.get_type()),
+                        self,
+                    );
+                }
+                CallMode::Delegate { bound: false } => {
+                    let Some(Definition::Function(function)) =
+                        function_type.associated_definition()
+                    else {
+                        unreachable!("a library member names the function it delegates to");
+                    };
+                    let selector = function
+                        .compute_selector()
+                        .expect("slang delegate-calls only an externally visible function");
+                    let address = self.library_address(&function);
+                    return Value::external_function_constant(
+                        address,
+                        selector,
+                        self.typing(node.get_type()),
+                        self,
+                    );
+                }
+                _ => {}
+            }
         }
 
         match node.member().resolve_to_built_in() {

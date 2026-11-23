@@ -1,7 +1,7 @@
 // RUN: slang --emit-mlir=sol --debug-info --debug-info-runtime %s | FileCheck %s --implicit-check-not='loc(unknown)'
 
-// CHECK: #[[CALLER:loc[0-9]*]] = loc("{{.*}}debug_location_calls.sol":95:5)
-// CHECK: #[[TWICE:loc[0-9]*]] = loc("{{.*}}debug_location_calls.sol":74:1)
+// CHECK: #[[CALLER:loc[0-9]*]] = loc("{{.*}}debug_location_calls.sol":104:5)
+// CHECK: #[[TWICE:loc[0-9]*]] = loc("{{.*}}debug_location_calls.sol":83:1)
 
 // CHECK: sol.func @{{.*base.*}}()
 // CHECK:   sol.call @{{.*base.*}}() {{.*}} loc(#[[SUPER_CALL:loc[0-9]*]])
@@ -14,7 +14,7 @@
 // CHECK:   sol.call @{{.*halve.*}}(%{{.*}}) {{.*}} loc(#[[LIBRARY_CALL:loc[0-9]*]])
 // CHECK: sol.func @{{.*halve.*}}(
 // CHECK:   sol.cdiv %{{.*}}, %{{.*}} : ui256 loc(#[[QUOTIENT:loc[0-9]*]])
-// CHECK: sol.func @{{.*emits.*}}(%arg0: ui256 loc("{{.*}}debug_location_calls.sol":103:5))
+// CHECK: sol.func @{{.*emits.*}}(%arg0: ui256 loc("{{.*}}debug_location_calls.sol":112:5))
 // CHECK:   sol.store %arg0, %{{.*}} loc(#[[AMOUNT:loc[0-9]*]])
 // CHECK:   sol.load %{{.*}} loc(#[[READ_AMOUNT:loc[0-9]*]])
 // CHECK:   sol.emit "Moved(uint256)" {{.*}} loc(#[[EMIT:loc[0-9]*]])
@@ -28,7 +28,7 @@
 // CHECK:   sol.ext_call "{{.*run.*}}"({{.*}} loc(#[[EXTERNAL_CALL]])
 // CHECK: sol.func @{{.*reverts.*}}()
 // CHECK:   sol.revert loc(#[[REVERT:loc[0-9]*]])
-// CHECK: sol.func @{{.*run.*}}(%arg0: ui256 loc("{{.*}}debug_location_calls.sol":95:5))
+// CHECK: sol.func @{{.*run.*}}(%arg0: ui256 loc("{{.*}}debug_location_calls.sol":104:5))
 // CHECK:   sol.store %arg0, %{{.*}} loc(#[[A:loc[0-9]*]])
 // CHECK:   sol.constant 1 : ui8 loc(#[[ONE:loc[0-9]*]])
 // CHECK:   sol.load %{{.*}} loc(#[[READ_A:loc[0-9]*]])
@@ -36,35 +36,44 @@
 // CHECK:   sol.cadd %{{.*}}, %{{.*}} : ui256 loc(#[[CALL]])
 // CHECK:   sol.return %{{.*}} : ui256 loc(#[[RETURN:loc[0-9]*]])
 // CHECK: } loc(#[[CALLER_FN:loc[0-9]*]])
-// CHECK: sol.func @{{.*twice.*}}(%arg0: ui256 loc("{{.*}}debug_location_calls.sol":74:1))
+// CHECK: sol.func @{{.*twice.*}}(%arg0: ui256 loc("{{.*}}debug_location_calls.sol":83:1))
 // CHECK:   sol.store %arg0, %{{.*}} loc(#[[X:loc[0-9]*]])
 // CHECK:   sol.load %{{.*}} loc(#[[PRODUCT:loc[0-9]*]])
 // CHECK:   sol.cmul %{{.*}}, %{{.*}} : ui256 loc(#[[PRODUCT]])
 // CHECK:   sol.return %{{.*}} : ui256 loc(#[[BODY_RETURN:loc[0-9]*]])
 // CHECK: } loc(#[[TWICE_FN:loc[0-9]*]])
+// CHECK: sol.func @{{.*selects.*}}(
+// CHECK:   sol.lib_addr {{.*}} loc(#[[UP:loc[0-9]*]])
+// CHECK:   sol.ext_func_constant %{{.*}} {selector = -1540192800 : i32} {{.*}} loc(#[[UP]])
+// CHECK:   sol.lib_addr {{.*}} loc(#[[DOWN:loc[0-9]*]])
+// CHECK:   sol.ext_func_constant %{{.*}} {selector = 9271380 : i32} {{.*}} loc(#[[DOWN]])
+// CHECK:   sol.ext_icall %{{.*}} {delegate_call, library_call} {{.*}} loc(#[[DELEGATE_CALL:loc[0-9]*]])
 
-// CHECK-DAG: #[[A]] = loc("{{.*}}debug_location_calls.sol":95:18)
-// CHECK-DAG: #[[CALL]] = loc("{{.*}}debug_location_calls.sol":96:16)
-// CHECK-DAG: #[[READ_A]] = loc("{{.*}}debug_location_calls.sol":96:22)
-// CHECK-DAG: #[[ONE]] = loc("{{.*}}debug_location_calls.sol":96:27)
-// CHECK-DAG: #[[RETURN]] = loc("{{.*}}debug_location_calls.sol":96:9)
-// CHECK-DAG: #[[X]] = loc("{{.*}}debug_location_calls.sol":74:16)
-// CHECK-DAG: #[[PRODUCT]] = loc("{{.*}}debug_location_calls.sol":75:12)
-// CHECK-DAG: #[[BODY_RETURN]] = loc("{{.*}}debug_location_calls.sol":75:5)
-// CHECK-DAG: #[[AMOUNT]] = loc("{{.*}}debug_location_calls.sol":103:20)
-// CHECK-DAG: #[[READ_AMOUNT]] = loc("{{.*}}debug_location_calls.sol":104:20)
-// CHECK-DAG: #[[EMIT]] = loc("{{.*}}debug_location_calls.sol":104:9)
-// CHECK-DAG: #[[REVERT]] = loc("{{.*}}debug_location_calls.sol":100:9)
-// CHECK-DAG: #[[SUPER_CALL]] = loc("{{.*}}debug_location_calls.sol":120:16)
-// CHECK-DAG: #[[BASE_RETURN]] = loc("{{.*}}debug_location_calls.sol":86:9)
-// CHECK-DAG: #[[NEW]] = loc("{{.*}}debug_location_calls.sol":112:16)
-// CHECK-DAG: #[[ATTACHED_CALL]] = loc("{{.*}}debug_location_calls.sol":116:29)
-// CHECK-DAG: #[[LIBRARY_CALL]] = loc("{{.*}}debug_location_calls.sol":116:16)
-// CHECK-DAG: #[[QUOTIENT]] = loc("{{.*}}debug_location_calls.sol":80:16)
-// CHECK-DAG: #[[POINTER]] = loc("{{.*}}debug_location_calls.sol":124:60)
-// CHECK-DAG: #[[POINTER_CALL]] = loc("{{.*}}debug_location_calls.sol":125:16)
-// CHECK-DAG: #[[EXTERNAL_CALL]] = loc("{{.*}}debug_location_calls.sol":108:16)
-// CHECK-DAG: #[[OPTION]] = loc("{{.*}}debug_location_calls.sol":129:9)
+// CHECK-DAG: #[[A]] = loc("{{.*}}debug_location_calls.sol":104:18)
+// CHECK-DAG: #[[CALL]] = loc("{{.*}}debug_location_calls.sol":105:16)
+// CHECK-DAG: #[[READ_A]] = loc("{{.*}}debug_location_calls.sol":105:22)
+// CHECK-DAG: #[[ONE]] = loc("{{.*}}debug_location_calls.sol":105:27)
+// CHECK-DAG: #[[RETURN]] = loc("{{.*}}debug_location_calls.sol":105:9)
+// CHECK-DAG: #[[X]] = loc("{{.*}}debug_location_calls.sol":83:16)
+// CHECK-DAG: #[[PRODUCT]] = loc("{{.*}}debug_location_calls.sol":84:12)
+// CHECK-DAG: #[[BODY_RETURN]] = loc("{{.*}}debug_location_calls.sol":84:5)
+// CHECK-DAG: #[[AMOUNT]] = loc("{{.*}}debug_location_calls.sol":112:20)
+// CHECK-DAG: #[[READ_AMOUNT]] = loc("{{.*}}debug_location_calls.sol":113:20)
+// CHECK-DAG: #[[EMIT]] = loc("{{.*}}debug_location_calls.sol":113:9)
+// CHECK-DAG: #[[REVERT]] = loc("{{.*}}debug_location_calls.sol":109:9)
+// CHECK-DAG: #[[SUPER_CALL]] = loc("{{.*}}debug_location_calls.sol":129:16)
+// CHECK-DAG: #[[BASE_RETURN]] = loc("{{.*}}debug_location_calls.sol":95:9)
+// CHECK-DAG: #[[NEW]] = loc("{{.*}}debug_location_calls.sol":121:16)
+// CHECK-DAG: #[[ATTACHED_CALL]] = loc("{{.*}}debug_location_calls.sol":125:29)
+// CHECK-DAG: #[[LIBRARY_CALL]] = loc("{{.*}}debug_location_calls.sol":125:16)
+// CHECK-DAG: #[[QUOTIENT]] = loc("{{.*}}debug_location_calls.sol":89:16)
+// CHECK-DAG: #[[POINTER]] = loc("{{.*}}debug_location_calls.sol":133:60)
+// CHECK-DAG: #[[POINTER_CALL]] = loc("{{.*}}debug_location_calls.sol":134:16)
+// CHECK-DAG: #[[EXTERNAL_CALL]] = loc("{{.*}}debug_location_calls.sol":117:16)
+// CHECK-DAG: #[[OPTION]] = loc("{{.*}}debug_location_calls.sol":138:9)
+// CHECK-DAG: #[[UP]] = loc("{{.*}}debug_location_calls.sol":144:21)
+// CHECK-DAG: #[[DOWN]] = loc("{{.*}}debug_location_calls.sol":144:28)
+// CHECK-DAG: #[[DELEGATE_CALL]] = loc("{{.*}}debug_location_calls.sol":144:16)
 
 // CHECK-DAG: #[[CALLER_FN]] = loc(fused<#[[CALLER_SP:di_subprogram[0-9]*]]>[#[[CALLER]]])
 // CHECK-DAG: #[[CALLER_SP]] = #llvm.di_subprogram<{{.*}}name = "run", linkageName = "run", {{.*}}type = #di_subroutine_type>
@@ -130,4 +139,13 @@ contract C is B {
     }
 
     event Moved(uint256 amount);
+
+    function selects(bool b, uint256 a) public returns (uint256) {
+        return (b ? M.up : M.down)(a);
+    }
+}
+
+library M {
+    function up(uint256) external returns (uint256) {}
+    function down(uint256) external returns (uint256) {}
 }

@@ -237,10 +237,11 @@ dialect_ops! {
     }
     Value::external_call(
         self, operands: values, result_types: types, gas: optional_value, amount: value,
-        static_call: flag, try_call: flag,
+        library: flag, static_call: flag, try_call: flag,
     ) -> status_and_values {
         ExtICallOperation.callee(self).outs(status_and(result_types))
             .callee_operands(many(operands)).gas(optional_value(gas)).value(amount)
+            .delegate_call(library).library_call(library)
             .static_call(static_call).try_call(try_call)
     }
     Value::create_contract | create_contract_try (
