@@ -29,4 +29,3 @@
 .mcp.json
 opencode.json
 .claude/*
-!.claude/skills/
