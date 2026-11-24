@@ -18,7 +18,8 @@ jobs:
   label-check:
     # Checks the PR's current label set, not the triggering action: keying on
     # github.event.label.name would skip this run (and cancel a real one in
-    # flight) when an unrelated label is added to a PR carrying ci:sanitizer.
+    # flight) when an unrelated label is added to a PR carrying ci:sanitizer,
+    # and that skipped run's pr-checks would pass the required check.
     if: >-
       contains(github.event.pull_request.labels.*.name, 'ci:sanitizer')
       && !github.event.pull_request.head.repo.fork
