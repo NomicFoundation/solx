@@ -73,7 +73,7 @@ impl<'context> Context<'context> {
     /// of them would link every dialect library into the binary.
     ///
     /// The LLVM translations MUST be registered before any MLIR-to-LLVM translation. Without
-    /// them, `mlirTranslateModuleToLLVMIR` returns null. This function enforces that invariant.
+    /// them, `solxTranslateModuleToLLVMIR` returns null. This function enforces that invariant.
     pub fn create_melior_context() -> melior::Context {
         let registry = DialectRegistry::new();
         unsafe {
@@ -288,13 +288,13 @@ impl<'context> Context<'context> {
     fn translate_to_bitcode(module: &Module) -> anyhow::Result<Vec<u8>> {
         let llvm = inkwell::context::Context::create();
         let raw_module = unsafe {
-            mlir_sys::mlirTranslateModuleToLLVMIR(
+            crate::ffi::solxTranslateModuleToLLVMIR(
                 module.as_operation().to_raw(),
                 llvm.raw() as *mut _,
             )
         };
         if raw_module.is_null() {
-            anyhow::bail!("mlirTranslateModuleToLLVMIR returned null");
+            anyhow::bail!("solxTranslateModuleToLLVMIR returned null");
         }
         let llvm_module = unsafe { inkwell::module::Module::new(raw_module as *mut _) };
         Ok(llvm_module.write_bitcode_to_memory().as_slice().to_vec())

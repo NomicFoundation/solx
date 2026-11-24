@@ -34,6 +34,12 @@ unsafe extern "C" {
     /// Registers the LLVM IR translations a Yul module needs.
     pub fn mlirRegisterYulToLLVMIRTranslations(context: MlirContext);
 
+    /// Translates `module` to an LLVM IR module in `context`, or returns null on failure.
+    pub fn solxTranslateModuleToLLVMIR(
+        module: mlir_sys::MlirOperation,
+        context: mlir_sys::LLVMContextRef,
+    ) -> mlir_sys::LLVMModuleRef;
+
     // ---- Pass manager instrumentation (from dialect_stubs.cpp) ----
 
     /// Times every pass `pass_manager` runs; `callback` receives each report entry when
