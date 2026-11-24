@@ -328,8 +328,8 @@ macro_rules! dialect_ops {
         let $builder = $builder.$setter(dialect_ops!(@operands $head.iter().chain($tail.iter())));
         dialect_ops!(@chain $builder [$context] [$receiver] $($rest)*)
     }};
-    (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (single($operand:ident)) $($rest:tt)*) => {{
-        let $builder = $builder.$setter(&[$crate::IntoOds::into_ods($operand)]);
+    (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident (single($($argument:tt)*)) $($rest:tt)*) => {{
+        let $builder = $builder.$setter(&[$crate::IntoOds::into_ods(dialect_ops!(@arg [$context] [$receiver] $($argument)*))]);
         dialect_ops!(@chain $builder [$context] [$receiver] $($rest)*)
     }};
     (@chain $builder:ident [$context:ident] [$receiver:tt] .$setter:ident ($($argument:tt)*) $($rest:tt)*) => {{
