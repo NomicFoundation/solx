@@ -78,7 +78,7 @@ jobs:
       # so the ccache entry's LRU timer isn't refreshed. Touch it explicitly
       # so the nightly cron keeps ccache alive past GHA's 7-day eviction
       # window. Primary key is unique → falls through to the restore-keys
-      # prefix match against the ccache-action's timestamped key.
+      # prefix match against the timestamped `ccache-<key>-` entries.
       # lookup-only: true skips the download; the cache service lookup alone
       # resets the access timer.
       - name: Touch LLVM ccache
@@ -87,7 +87,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-utils-end
+          restore-keys: ccache-llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-utils-end
           fail-on-cache-miss: false
           lookup-only: true
 
@@ -132,7 +132,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-Address-end
+          restore-keys: ccache-llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-Address-end
           fail-on-cache-miss: false
           lookup-only: true
 
@@ -177,7 +177,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-coverage-no-assertions-end
+          restore-keys: ccache-llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-coverage-no-assertions-end
           fail-on-cache-miss: false
           lookup-only: true
 
@@ -221,6 +221,6 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-no-assertions-end
+          restore-keys: ccache-llvm-${{ runner.os }}-${{ runner.arch }}-no-assertions-end
           fail-on-cache-miss: false
           lookup-only: true
