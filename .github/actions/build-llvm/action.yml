@@ -271,6 +271,8 @@ runs:
         # via ccache-action's restore-keys (e.g. `...-utils` matching `...-utils-tests`).
         KEY="${KEY}-end"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
+        # ccache-action's own entry format, so its restore-keys find the entry Save ccache writes.
+        echo "save-key=ccache-${KEY}-$(date -u +%Y-%m-%dT%H:%M:%SZ)-${{ github.run_id }}-${{ github.run_attempt }}" | tee -a "${GITHUB_OUTPUT}"
         if [ -n '${{ steps.llvm-local.outputs.store }}' ]; then
           echo "dir=${{ steps.llvm-local.outputs.store }}/ccache/${KEY}" | tee -a "${GITHUB_OUTPUT}"
         else
@@ -304,7 +306,8 @@ runs:
         append-timestamp: true
         max-size: "10G"
         verbose: 2
-        save: ${{ github.ref == 'refs/heads/main' }}
+        # Save ccache saves it before the ccache stamp, which its post-job hook would run after.
+        save: false
 
     - name: Build LLVM
       if: steps.llvm-plan.outputs.build == 'true'
@@ -363,6 +366,13 @@ runs:
         CCACHE_COMPILERCHECK: "content"
       run: ccache --show-stats
 
+    - name: Save ccache
+      if: ${{ !cancelled() && inputs.enable-ccache == 'true' && steps.llvm-plan.outputs.build == 'true' && github.ref == 'refs/heads/main' }}
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.ccache-key.outputs.dir }}
+        key: ${{ steps.ccache-key.outputs.save-key }}
+
     - name: Save LLVM artifact cache
       if: inputs.enable-artifact-cache == 'true' && steps.llvm-artifact-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' && steps.llvm-mirror.outputs.mirrored != 'true' && steps.llvm-local.outputs.hit != 'true'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -381,16 +391,26 @@ runs:
         mv "${ENTRY}.tmp" "${ENTRY}"
         touch "${ENTRY}.ready"
 
+    # actions/cache/save only warns when it fails, so the entry is looked up before the stamp vouches for it.
+    - name: Look up saved ccache
+      if: inputs.enable-ccache == 'true' && steps.llvm-plan.outputs.build == 'true' && github.ref == 'refs/heads/main' && steps.llvm-cache.outputs.key != ''
+      id: ccache-saved
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.ccache-key.outputs.dir }}
+        key: ${{ steps.ccache-key.outputs.save-key }}
+        lookup-only: true
+
     # Cache Warmup's `refresh-ccache` looks this up to tell whether main's ccache covers the key.
     - name: Write ccache stamp
-      if: inputs.enable-ccache == 'true' && steps.llvm-plan.outputs.build == 'true' && github.ref == 'refs/heads/main' && steps.llvm-cache.outputs.key != ''
+      if: steps.ccache-saved.outputs.cache-hit == 'true'
       shell: bash
       run: |
         mkdir -p '${{ runner.temp }}/llvm-ccache-stamp'
         touch '${{ runner.temp }}/llvm-ccache-stamp/stamp'
 
     - name: Save ccache stamp
-      if: inputs.enable-ccache == 'true' && steps.llvm-plan.outputs.build == 'true' && github.ref == 'refs/heads/main' && steps.llvm-cache.outputs.key != ''
+      if: steps.ccache-saved.outputs.cache-hit == 'true'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ runner.temp }}/llvm-ccache-stamp
