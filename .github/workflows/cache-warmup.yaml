@@ -16,6 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   packages: read
 
@@ -70,12 +71,14 @@ jobs:
 
       - name: Build toolchain
         uses: ./.github/actions/build-toolchain
+        with:
+          refresh-ccache: ${{ github.event_name == 'schedule' }}
 
       # When the artifact cache is warm, build-llvm skips ccache entirely,
       # so the ccache entry's LRU timer isn't refreshed. Touch it explicitly
       # so the nightly cron keeps ccache alive past GHA's 7-day eviction
       # window. Primary key is unique → falls through to the restore-keys
-      # prefix match against the ccache-action's timestamped key.
+      # prefix match against the timestamped `ccache-<key>-` entries.
       # lookup-only: true skips the download; the cache service lookup alone
       # resets the access timer.
       - name: Touch LLVM ccache
@@ -84,7 +87,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-utils-end
+          restore-keys: ccache-llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-utils-end
           fail-on-cache-miss: false
           lookup-only: true
 
@@ -121,6 +124,7 @@ jobs:
           build-type: RelWithDebInfo
           enable-assertions: 'true'
           sanitizer: 'Address'
+          refresh-ccache: ${{ github.event_name == 'schedule' }}
 
       - name: Touch LLVM ccache
         if: always()
@@ -128,7 +132,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-Address-end
+          restore-keys: ccache-llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-Address-end
           fail-on-cache-miss: false
           lookup-only: true
 
@@ -165,6 +169,7 @@ jobs:
           build-type: RelWithDebInfo
           enable-assertions: 'false'
           enable-coverage: 'true'
+          refresh-ccache: ${{ github.event_name == 'schedule' }}
 
       - name: Touch LLVM ccache
         if: always()
@@ -172,7 +177,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-coverage-no-assertions-end
+          restore-keys: ccache-llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-coverage-no-assertions-end
           fail-on-cache-miss: false
           lookup-only: true
 
@@ -208,6 +213,7 @@ jobs:
         with:
           build-type: Release
           enable-assertions: 'false'
+          refresh-ccache: ${{ github.event_name == 'schedule' }}
 
       - name: Touch LLVM ccache
         if: always()
@@ -215,6 +221,6 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-no-assertions-end
+          restore-keys: ccache-llvm-${{ runner.os }}-${{ runner.arch }}-no-assertions-end
           fail-on-cache-miss: false
           lookup-only: true
