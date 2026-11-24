@@ -10,6 +10,9 @@
  * ContractType) or the Yul dialect's PtrType, nor kind predicates and
  * accessors over them. These thin wrappers call the generated C++
  * methods via extern "C" linkage so Rust can reach them through FFI.
+ *
+ * The LLVM IR translation is wrapped too: the C API library that exports
+ * it links the translation of every upstream dialect.
  */
 
 #include "mlir/Dialect/Sol/DebugInfo.h"
@@ -20,9 +23,13 @@
 #include "mlir-c/BuiltinAttributes.h"
 #include "mlir-c/IR.h"
 #include "mlir/CAPI/IR.h"
+#include "mlir/Target/LLVMIR/Export.h"
+#include "llvm-c/Core.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -261,6 +268,13 @@ MlirAttribute solxCreateDwarfVersionFlagAttr(MlirContext ctx,
         context, mlir::LLVM::ModFlagBehavior::Warning,
         mlir::StringAttr::get(context, "Dwarf Version"),
         mlir::IntegerAttr::get(mlir::IntegerType::get(context, 32), version)));
+}
+
+LLVMModuleRef solxTranslateModuleToLLVMIR(MlirOperation module,
+                                          LLVMContextRef context) {
+    return llvm::wrap(
+        mlir::translateModuleToLLVMIR(unwrap(module), *llvm::unwrap(context))
+            .release());
 }
 
 } /* extern "C" */
