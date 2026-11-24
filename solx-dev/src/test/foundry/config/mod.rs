@@ -12,6 +12,7 @@ use crate::test::config::compiler::Compiler;
 
 use self::comparison::Comparison;
 use self::project::Project;
+use crate::test::config::build_system::BuildSystem;
 
 ///
 /// `solx` Foundry config.
@@ -27,7 +28,7 @@ pub struct Config {
     pub comparisons: Vec<Comparison>,
     /// Pinned versions of build systems installed globally before per-project tests.
     #[serde(default)]
-    pub build_systems: BTreeMap<String, String>,
+    pub build_systems: BTreeMap<BuildSystem, String>,
 }
 
 impl TryFrom<PathBuf> for Config {

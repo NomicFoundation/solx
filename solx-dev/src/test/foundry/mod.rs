@@ -12,6 +12,7 @@ use std::time::Instant;
 use colored::Colorize;
 use itertools::Itertools;
 
+use crate::test::config::build_system::BuildSystem;
 use crate::test::config::compiler::Compiler;
 use crate::test::project_cache::ProjectCache;
 
@@ -80,31 +81,15 @@ pub fn test(
         })
         .collect();
 
-    let build_system = "yarn";
-    let node_version = if projects.iter().any(|(_, project)| project.requires_yarn) {
+    let build_systems: std::collections::BTreeSet<_> = projects
+        .iter()
+        .filter_map(|(_, project)| project.build_system)
+        .collect();
+    let node_version = if build_systems.is_empty() {
+        None
+    } else {
         crate::utils::exists("npm")?;
-
-        let yarn_version = config.build_systems.get(build_system).ok_or_else(|| {
-            anyhow::anyhow!("Foundry test configuration missing `build_systems.{build_system}`")
-        })?;
-        let npm_spec = format!("{build_system}@{yarn_version}");
-        let mut npm_install_yarn = Command::new("npm");
-        npm_install_yarn.arg("install");
-        npm_install_yarn.args(["--loglevel", "error"]);
-        npm_install_yarn.arg("--force");
-        npm_install_yarn.arg("--yes");
-        npm_install_yarn.arg("--global");
-        npm_install_yarn.arg(&npm_spec);
-        crate::utils::command_with_retries(
-            &mut npm_install_yarn,
-            format!(
-                "{} build system {} for Foundry projects",
-                solx_utils::cargo_status_ok("Installing"),
-                build_system.bright_yellow().bold()
-            )
-            .as_str(),
-            16,
-        )?;
+        BuildSystem::install_globally(build_systems, &config.build_systems, "Foundry")?;
         let mut node_version_command = Command::new("node");
         node_version_command.arg("--version");
         Some(crate::utils::command_with_output(
@@ -115,8 +100,6 @@ pub fn test(
             )
             .as_str(),
         )?)
-    } else {
-        None
     };
 
     for (project_name, project) in projects {
@@ -151,20 +134,8 @@ pub fn test(
                     .as_str(),
                 )?;
             }
-            if project.requires_yarn {
-                let mut yarn_install_command = Command::new(build_system);
-                yarn_install_command.args(["--cwd", &*checkout_str]);
-                yarn_install_command.arg("install");
-                yarn_install_command.arg("--silent");
-                crate::utils::command_with_retries(
-                    &mut yarn_install_command,
-                    format!(
-                        "{} dependencies for Foundry project {project_name}",
-                        solx_utils::cargo_status_ok("Installing")
-                    )
-                    .as_str(),
-                    16,
-                )?;
+            if let Some(build_system) = project.build_system {
+                build_system.install_dependencies(checkout, project_name.as_str(), "Foundry")?;
             }
             Ok(())
         };
@@ -183,7 +154,7 @@ pub fn test(
                 &config.build_systems,
                 &project.url,
                 &project.commit,
-                project.requires_yarn,
+                &project.build_system,
                 patch
             )
         );

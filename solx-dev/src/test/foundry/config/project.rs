@@ -5,6 +5,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::test::config::build_system::BuildSystem;
+
 ///
 /// `solx` Foundry project.
 ///
@@ -21,9 +23,9 @@ pub struct Project {
     /// Patch applied to the checkout, for test fixes the pinned commit lacks.
     #[serde(default)]
     pub patch: Option<PathBuf>,
-    /// Whether the project requires `yarn`.
+    /// Build system that installs the project's packages, if it needs any.
     #[serde(default)]
-    pub requires_yarn: bool,
+    pub build_system: Option<BuildSystem>,
     /// Installed package directories whose version pragmas are rewritten too.
     #[serde(default)]
     pub rewrite_pragmas_in: Vec<String>,

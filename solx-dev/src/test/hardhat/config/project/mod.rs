@@ -2,12 +2,10 @@
 //! `solx` Hardhat project.
 //!
 
-pub mod build_system;
-
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use self::build_system::BuildSystem;
+use crate::test::config::build_system::BuildSystem;
 
 ///
 /// `solx` Hardhat project.
