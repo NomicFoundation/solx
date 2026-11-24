@@ -21,14 +21,10 @@ relative columns in the report.
 
 ## Fixtures
 
-The fixtures are the exact standard-JSON inputs slang receives from Hardhat in the
-scenarios of the hardhat repo's slang regression benchmark, one file per compilation
-job, captured by `bench:dump-standard-json --compiler slang`. A full dispatch of the
-"Slang Regression Benchmark" workflow uploads them as the `slang-standard-json`
-artifact; refresh by copying that artifact over `fixtures/`. `fixtures/manifest.json`
-is the dump's provenance record: hardhat commit, run URL, scenario repo and commit
-pins, per-file sha256, and the env vars each scenario compiles with, which `run.sh`
-sets because standard JSON has no field for them.
+The fixtures are a fixed snapshot of the standard-JSON inputs Hardhat sent slang for
+these projects, one file per compilation job. `fixtures/manifest.json` records each
+scenario's repository and commit, each file's sha256, and the env vars each scenario
+compiles with, which `run.sh` sets because standard JSON has no field for them.
 
 | scenario | jobs | contracts | notes |
 |---|---|---|---|
@@ -43,8 +39,7 @@ sets because standard JSON has no field for them.
 | `uniswap-v4-core-solx` | 1 | 174 | |
 
 These compile with the settings Hardhat ships (optimizer enabled, DWARF debug info,
-debug symbols), so timings here are comparable to what the Hardhat slang benchmark
-measures, minus Hardhat's own overhead.
+debug symbols), so timings here are what a Hardhat build spends in slang.
 
 Each scenario is one measurement: a timed run compiles all of its jobs in sequence,
 so the report has one row per repository. Scenarios over 2 MB in total are timed
