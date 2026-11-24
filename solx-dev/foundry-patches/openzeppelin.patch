@@ -1,0 +1,14 @@
+ERC7579UtilsTest etches the EntryPoint bytecode it reads from hardhat-predeploy, a path the Hardhat 3 migration dropped from fs_permissions.
+
+diff --git a/foundry.toml b/foundry.toml
+index dbf16fa..4aebb4c 100644
+--- a/foundry.toml
++++ b/foundry.toml
+@@ -7,6 +7,7 @@ src = 'contracts'
+ out = 'out'
+ libs = ['node_modules', 'lib']
+ cache_path  = 'cache_forge'
++fs_permissions = [{ access = "read", path = "./node_modules/hardhat-predeploy/bin" }]
+ 
+ [lint]
+ lint_on_build = false
