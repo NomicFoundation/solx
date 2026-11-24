@@ -25,7 +25,7 @@
 #   url = "https://github.com/..."  # Git repository URL
 #   commit = "abc123..."            # Git commit SHA to pin (optional, HEAD if omitted)
 #   description = "..."             # Project description
-#   build_system = "npm"            # npm, yarn, pnpm, or bun (default: npm)
+#   build_system = "npm"            # npm, yarn, pnpm, or bun, installing from the lockfile if present (default: npm)
 #   dependencies = ["pkg@version"]  # Additional npm dependencies to install
 #   build_profile = "..."           # Build profile solx toolchains compile and test with
 #   config_overlay = "./path.ts"    # Installed as hardhat.config.ts; imports the project's config as hardhat.config.base.<ext>
