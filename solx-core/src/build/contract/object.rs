@@ -23,8 +23,6 @@ pub struct Object {
     /// Bytecode.
     #[serde(with = "serde_bytes")]
     pub bytecode: Option<Vec<u8>>,
-    /// Hexadecimal bytecode.
-    pub bytecode_hex: Option<String>,
     /// ELF-wrapped DWARF debug info.
     #[serde(with = "serde_bytes")]
     pub debug_info: Option<Vec<u8>>,
@@ -32,8 +30,6 @@ pub struct Object {
     pub llvm_ir_unoptimized: Option<String>,
     /// Optimized LLVM IR (solx internal representation).
     pub llvm_ir: Option<String>,
-    /// Code segment.
-    pub code_segment: solx_utils::CodeSegment,
     /// The metadata bytes. Only appended to runtime code.
     #[serde(with = "serde_bytes")]
     pub metadata_bytes: Option<Vec<u8>>,
@@ -71,24 +67,20 @@ impl Object {
         debug_info: Option<Vec<u8>>,
         llvm_ir_unoptimized: Option<String>,
         llvm_ir: Option<String>,
-        code_segment: solx_utils::CodeSegment,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
         metadata_bytes: Option<Vec<u8>>,
         dependencies: solx_utils::Dependencies,
         is_size_fallback: bool,
         warnings: Vec<solx_utils::Warning>,
     ) -> Self {
-        let bytecode_hex = bytecode.as_ref().map(hex::encode);
         Self {
             identifier,
             contract_name,
             assembly,
             bytecode,
-            bytecode_hex,
             debug_info,
             llvm_ir_unoptimized,
             llvm_ir,
-            code_segment,
             immutables,
             metadata_bytes,
             dependencies,
@@ -98,31 +90,6 @@ impl Object {
             warnings,
             benchmarks: Vec::new(),
         }
-    }
-
-    ///
-    /// Appends metadata to the object.
-    ///
-    /// # Panics
-    /// If bytecode is `None`.
-    ///
-    pub fn to_memory_buffer(&self) -> anyhow::Result<inkwell::memory_buffer::MemoryBuffer> {
-        let bytecode = self.bytecode.as_deref().expect("Bytecode is not set");
-
-        let mut memory_buffer = inkwell::memory_buffer::MemoryBuffer::create_from_memory_range(
-            bytecode,
-            self.identifier.as_str(),
-            false,
-        );
-
-        if let (solx_utils::CodeSegment::Runtime, Some(metadata_bytes)) =
-            (self.code_segment, &self.metadata_bytes)
-        {
-            memory_buffer =
-                solx_codegen_evm::append_metadata(memory_buffer, metadata_bytes.as_slice())?;
-        }
-
-        Ok(memory_buffer)
     }
 
     ///
@@ -152,19 +119,28 @@ impl Object {
     }
 
     ///
-    /// Assembles the object with the objects it embeds.
+    /// Assembles the object with the objects it embeds, links it with `linker_symbols`, and
+    /// records the library references they leave unresolved.
     ///
     /// # Panics
     /// If bytecode is `None` or an embedded object is missing.
     ///
-    pub fn assemble(
+    pub fn assemble_and_link(
         &mut self,
         assembled_by_identifier: &BTreeMap<String, Vec<u8>>,
-    ) -> anyhow::Result<()> {
+        linker_symbols: &BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
+    ) {
         let mut memory_buffers = Vec::with_capacity(
             1 + usize::from(self.dependencies.runtime.is_some()) + self.dependencies.objects.len(),
         );
-        memory_buffers.push((self.identifier.to_owned(), self.to_memory_buffer()?));
+        memory_buffers.push((
+            self.identifier.to_owned(),
+            inkwell::memory_buffer::MemoryBuffer::create_from_memory_range(
+                self.bytecode.as_deref().expect("Bytecode is not set"),
+                self.identifier.as_str(),
+                false,
+            ),
+        ));
 
         for dependency in self.dependencies.into_iter() {
             // TODO: unreachable once Slang rejects `new` on an abstract contract (NomicFoundation/slang-diagnostics-research#1124).
@@ -187,62 +163,42 @@ impl Object {
             .iter()
             .map(|(identifier, _memory_buffer)| identifier.as_str())
             .collect::<Vec<&str>>();
-        let assembled = solx_codegen_evm::assemble(
+        let result = inkwell::memory_buffer::MemoryBuffer::assemble_evm(
             bytecode_buffers.as_slice(),
             bytecode_ids.as_slice(),
-            self.code_segment,
-        )?;
-
-        self.assembled_bytecode = Some(assembled.as_slice().to_owned());
-
-        Ok(())
+            self.metadata_bytes.as_deref().unwrap_or_default(),
+            linker_symbols,
+            true,
+        );
+        self.assembled_bytecode = Some(
+            result
+                .elf_object
+                .expect("Always requested")
+                .as_slice()
+                .to_owned(),
+        );
+        for (reference, offset) in result.unresolved_references.into_iter() {
+            self.unlinked_symbols
+                .entry(reference)
+                .or_default()
+                .push(offset);
+        }
+        self.bytecode = Some(result.bytecode.as_slice().to_owned());
     }
 
     ///
-    /// Links the object with its linker symbols.
+    /// Encodes the linked bytecode as hex, with the placeholder solc emits in
+    /// place of every library address still unknown.
     ///
     /// # Panics
-    /// If the object is not assembled.
+    /// If bytecode is `None`.
     ///
-    pub fn link(
-        &mut self,
-        linker_symbols: &BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
-    ) -> anyhow::Result<()> {
-        let memory_buffer = inkwell::memory_buffer::MemoryBuffer::create_from_memory_range(
-            self.assembled_bytecode
+    pub fn to_bytecode_hex(&self) -> String {
+        let mut bytecode_hex = hex::encode(
+            self.bytecode
                 .as_deref()
-                .expect("Every object is assembled before it is linked"),
-            self.identifier.as_str(),
-            false,
+                .expect("Bytecode is emitted whenever its output is selected"),
         );
-
-        self.unlinked_symbols = memory_buffer
-            .get_undefined_references_evm()
-            .into_iter()
-            .filter(|reference| !linker_symbols.contains_key(reference))
-            .map(|reference| {
-                let offsets = memory_buffer.get_symbol_offsets_evm(reference.as_str());
-                (reference, offsets)
-            })
-            .collect();
-        let linked_object = solx_codegen_evm::link(memory_buffer, linker_symbols)?;
-        let linked_object_with_placeholders = if !self.unlinked_symbols.is_empty() {
-            let linker_placeholders = self
-                .unlinked_symbols
-                .keys()
-                .map(|symbol| {
-                    (
-                        symbol.to_owned(),
-                        [0u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS],
-                    )
-                })
-                .collect::<BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>>();
-            solx_codegen_evm::link(linked_object, &linker_placeholders)?
-        } else {
-            linked_object
-        };
-
-        let mut bytecode_hex = hex::encode(linked_object_with_placeholders.as_slice());
         for (symbol, offsets) in self.unlinked_symbols.iter() {
             let hash = solx_utils::Keccak256Hash::from_slice(symbol.as_bytes()).to_vec();
             let placeholder = format!(
@@ -258,10 +214,7 @@ impl Object {
                 }
             }
         }
-        self.bytecode = Some(linked_object_with_placeholders.as_slice().to_owned());
-        self.bytecode_hex = Some(bytecode_hex);
-
-        Ok(())
+        bytecode_hex
     }
 
     ///

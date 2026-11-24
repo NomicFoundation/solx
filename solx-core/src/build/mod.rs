@@ -59,8 +59,6 @@ impl Build {
         mut self,
         linker_symbols: BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
     ) -> Self {
-        let ast_jsons = self.ast_jsons.take();
-
         let mut assembled_by_identifier: BTreeMap<String, Vec<u8>> = self
             .contracts
             .values_mut()
@@ -81,18 +79,15 @@ impl Build {
             .collect();
 
         while let Some((_, object)) = unassembled_by_identifier.pop_first() {
-            if let Err(error) = Self::assemble_and_link(
+            Self::assemble_and_link(
                 object,
                 &mut unassembled_by_identifier,
                 &mut assembled_by_identifier,
                 &linker_symbols,
-            ) {
-                self.messages.lock_sync().push(error);
-                return Self::new(BTreeMap::new(), ast_jsons, self.messages);
-            }
+            );
         }
 
-        Self::new(self.contracts, ast_jsons, self.messages)
+        self
     }
 
     ///
@@ -343,7 +338,7 @@ impl Build {
         unassembled_by_identifier: &mut BTreeMap<String, &mut ContractObject>,
         assembled_by_identifier: &mut BTreeMap<String, Vec<u8>>,
         linker_symbols: &BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
-    ) -> Result<(), solx_standard_json::OutputError> {
+    ) {
         for dependency in object.dependencies.into_iter() {
             if let Some(dependency) = unassembled_by_identifier.remove(dependency) {
                 Self::assemble_and_link(
@@ -351,18 +346,10 @@ impl Build {
                     unassembled_by_identifier,
                     assembled_by_identifier,
                     linker_symbols,
-                )?;
+                );
             }
         }
-        object
-            .assemble(assembled_by_identifier)
-            .and_then(|()| object.link(linker_symbols))
-            .map_err(|error| {
-                solx_standard_json::OutputError::new_error_contract(
-                    Some(object.contract_name.path.as_str()),
-                    &error,
-                )
-            })?;
+        object.assemble_and_link(assembled_by_identifier, linker_symbols);
         assembled_by_identifier.insert(
             object.identifier.clone(),
             object
@@ -370,7 +357,6 @@ impl Build {
                 .take()
                 .expect("Every completed object retains its assembled ELF"),
         );
-        Ok(())
     }
 }
 
