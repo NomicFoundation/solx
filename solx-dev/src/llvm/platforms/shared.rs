@@ -43,6 +43,104 @@ pub const SHARED_BUILD_OPTS: [&str; 23] = [
 const REQUIRED_LLVM_BINARIES: &[&str] = &["llvm-config"];
 
 ///
+/// The MLIR libraries solx links, closed under their CMake link dependencies. A missing
+/// dependency fails configure with `... requires target "<name>" that is not in any export set`.
+///
+const MLIR_LIBRARIES: &[&str] = &[
+    "MLIRAffineDialect",
+    "MLIRAnalysis",
+    "MLIRArithDialect",
+    "MLIRArithUtils",
+    "MLIRAsmParser",
+    "MLIRBuiltinToLLVMIRTranslation",
+    "MLIRBytecodeOpInterface",
+    "MLIRBytecodeReader",
+    "MLIRBytecodeWriter",
+    "MLIRCAPIArith",
+    "MLIRCAPIControlFlow",
+    "MLIRCAPIFunc",
+    "MLIRCAPIIR",
+    "MLIRCAPILLVM",
+    "MLIRCAPISol",
+    "MLIRCAPITransforms",
+    "MLIRCAPIYul",
+    "MLIRCallInterfaces",
+    "MLIRCastInterfaces",
+    "MLIRComplexDialect",
+    "MLIRControlFlowDialect",
+    "MLIRControlFlowInterfaces",
+    "MLIRDLTIDialect",
+    "MLIRDataLayoutInterfaces",
+    "MLIRDestinationStyleOpInterface",
+    "MLIRDialect",
+    "MLIRDialectUtils",
+    "MLIRFuncDialect",
+    "MLIRFunctionInterfaces",
+    "MLIRGPUDialect",
+    "MLIRIR",
+    "MLIRInferIntRangeCommon",
+    "MLIRInferIntRangeInterface",
+    "MLIRInferTypeOpInterface",
+    "MLIRLLVMDialect",
+    "MLIRLLVMIRTransforms",
+    "MLIRLLVMToLLVMIRTranslation",
+    "MLIRLoopLikeInterface",
+    "MLIRMathDialect",
+    "MLIRMemRefDialect",
+    "MLIRMemorySlotInterfaces",
+    "MLIRNVVMDialect",
+    "MLIRPDLDialect",
+    "MLIRPDLInterpDialect",
+    "MLIRPDLToPDLInterp",
+    "MLIRParallelCombiningOpInterface",
+    "MLIRParser",
+    "MLIRPass",
+    "MLIRPresburger",
+    "MLIRRewrite",
+    "MLIRRewritePDL",
+    "MLIRRuntimeVerifiableOpInterface",
+    "MLIRSCFDialect",
+    "MLIRShapedOpInterfaces",
+    "MLIRSideEffectInterfaces",
+    "MLIRSolDialect",
+    "MLIRSolPipelines",
+    "MLIRSolToYul",
+    "MLIRSolTransforms",
+    "MLIRSubsetOpInterface",
+    "MLIRSupport",
+    "MLIRTargetLLVMIRExport",
+    "MLIRTensorDialect",
+    "MLIRTransformUtils",
+    "MLIRTransforms",
+    "MLIRTranslateLib",
+    "MLIRUBDialect",
+    "MLIRValueBoundsOpInterface",
+    "MLIRViewLikeInterface",
+    "MLIRYulDialect",
+    "MLIRYulToLLVMIRTranslation",
+];
+
+///
+/// The generated C API headers that mlir-sys's bindgen includes and no library in
+/// `MLIR_LIBRARIES` generates. A missing one fails the `mlir-sys` build script with
+/// `fatal error: 'mlir/Dialect/<name>/...capi.h.inc' file not found`.
+///
+const MLIR_HEADER_TARGETS: &[&str] = &[
+    "MLIRAsyncPassIncGen",
+    "MLIRGPUPassIncGen",
+    "MLIRLinalgPassIncGen",
+    "MLIRSparseTensorPassIncGen",
+];
+
+///
+/// Whether the distribution installs `MLIR_LIBRARIES` in place of `mlir-libraries`, which builds
+/// every upstream dialect. melior references MLIR C API symbols outside `MLIR_LIBRARIES`, and on
+/// Windows `ld.lld` pulls in the archive members that reference them, so Windows installs every
+/// MLIR library.
+///
+const TRIM_MLIR_LIBRARIES: bool = !cfg!(target_os = "windows");
+
+///
 /// The CMake argument for LLVM_ENABLE_PROJECTS.
 ///
 pub fn shared_build_opts_projects() -> Vec<String> {
@@ -232,10 +330,14 @@ pub fn build_opts_distribution(enable_utils: bool) -> Vec<String> {
         "lld-libraries",
         "lld-headers",
         "lld-cmake-exports",
-        "mlir-libraries",
         "mlir-headers",
         "mlir-cmake-exports",
     ];
+    if TRIM_MLIR_LIBRARIES {
+        components.extend(MLIR_LIBRARIES);
+    } else {
+        components.push("mlir-libraries");
+    }
     if enable_utils {
         components.push("FileCheck");
     }
@@ -250,7 +352,8 @@ pub fn build_opts_distribution(enable_utils: bool) -> Vec<String> {
 /// Install LLVM. `install_distribution = false` runs the unfiltered
 /// `ninja install` (full toolset); `true` runs `ninja install-distribution`
 /// and then builds and copies `REQUIRED_LLVM_BINARIES`, whose install rules
-/// are suppressed by `LLVM_BUILD_TOOLS=Off`.
+/// are suppressed by `LLVM_BUILD_TOOLS=Off`. With `TRIM_MLIR_LIBRARIES`, it
+/// first generates `MLIR_HEADER_TARGETS` so `mlir-headers` installs them.
 ///
 /// Both ninja args and the destination path use forward-slash form on
 /// Windows; callers are expected to pass already-normalized paths (existing
@@ -269,6 +372,16 @@ pub fn build_and_install_llvm_binaries(
         crate::utils::ninja(build_dir, "install")?;
         return Ok(());
     }
+    let build_dir_str = build_dir.to_string_lossy();
+    if TRIM_MLIR_LIBRARIES {
+        crate::utils::command(
+            Command::new("ninja")
+                .arg("-C")
+                .arg(&*build_dir_str)
+                .args(MLIR_HEADER_TARGETS.iter()),
+            "Generating MLIR C API headers",
+        )?;
+    }
     crate::utils::ninja(build_dir, "install-distribution")?;
 
     let exe_suffix = if cfg!(target_os = "windows") {
@@ -276,7 +389,6 @@ pub fn build_and_install_llvm_binaries(
     } else {
         ""
     };
-    let build_dir_str = build_dir.to_string_lossy();
     let dest_dir = target_dir.join("bin");
     std::fs::create_dir_all(&dest_dir)?;
 
