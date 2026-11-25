@@ -60,31 +60,17 @@ runs:
 
     - name: Run unit tests (release)
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash -ex {0}' }}
-      env:
-        RUSTC_BOOTSTRAP: 1
       if: inputs.sanitizer == ''
       run: |
         if [ '${{ inputs.enable-coverage }}' = 'true' ]; then
           export LLVM_COV=$(which llvm-cov)
           export LLVM_PROFDATA=$(which llvm-profdata)
         fi
-        # Use LLD on Windows to properly link with libstdc++.
-        if [[ ${RUNNER_OS} = Windows ]] || [[ ${RUNNER_OS} = Linux ]]; then
-          export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
-        fi
         set -o pipefail
         ${SFW_PREFIX:-} cargo test --frozen --release ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
           --format json | tee -a release-results.json || CARGO_EXIT=$?
         cargo2junit < release-results.json > "release-${{ inputs.results-xml }}" || true
         if [ -n "${CARGO_EXIT}" ]; then exit "${CARGO_EXIT}"; fi
-
-    - name: Clean release artifacts before debug build
-      if: inputs.sanitizer == ''
-      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: |
-        echo "Before release cleanup:" && df -h .
-        rm -rf target/release
-        echo "After release cleanup:" && df -h .
 
     - name: Install sanitizer components
       if: inputs.sanitizer != '' && runner.os != 'Windows'
@@ -94,21 +80,15 @@ runs:
 
     - name: Run unit tests (debug)
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash -ex {0}' }}
-      env:
-        RUSTC_BOOTSTRAP: 1
       run: |
         if [ '${{ inputs.sanitizer }}' != '' ]; then
           export ASAN_SYMBOLIZER_PATH=$(which llvm-symbolizer)
         fi
-        # Use LLD on Windows and Linux to properly link with libstdc++.
-        # On Windows, also strip debuginfo: PE/COFF has a 2 GB SizeOfImage limit
-        # and debug binaries statically linking LLVM+MLIR can exceed it,
-        # producing "%1 is not a valid Win32 application" (os error 193).
-        # Skip when using sanitizers — clang needs its native linker for ASan runtime.
+        # PE/COFF has a 2 GB SizeOfImage limit, which debug binaries statically
+        # linking LLVM+MLIR can exceed, producing "%1 is not a valid Win32
+        # application" (os error 193).
         if [[ ${RUNNER_OS} = Windows ]]; then
-          export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld -C strip=debuginfo"
-        elif [[ ${RUNNER_OS} = Linux && '${{ inputs.sanitizer }}' = '' ]]; then
-          export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
+          export RUSTFLAGS="${RUSTFLAGS} -C strip=debuginfo"
         fi
         # Set sanitizer flags per-target to avoid breaking proc-macro builds.
         # -Z sanitizer=address instruments Rust code AND links Rust's bundled
