@@ -220,8 +220,8 @@ jobs:
             tester: true
           - name: "Windows"
             runner: windows-2025
-            target: "x86_64-pc-windows-gnu"
-            rustflags: -C link-arg=-fuse-ld=lld
+            # Linked like the release build; with no target, proc-macros get the flags too.
+            rustflags: -C target-feature=+crt-static -C link-arg=-fuse-ld=lld
             shell: msys2 {0}
             tester: true
     runs-on: ${{ matrix.runner }}
@@ -285,7 +285,7 @@ jobs:
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          prefix-key: slang-tests-v3
+          prefix-key: slang-tests-v4
           # Outside Windows, restoring target/ takes longer than the dependency build it saves.
           cache-targets: ${{ runner.os == 'Windows' }}
           cache-on-failure: true
