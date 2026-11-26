@@ -43,8 +43,8 @@ yarn = "1.22.22"
 bun = "1.4.4"
 
 [compilers.solc]
-name = "00.solc-0.8.34"
-path = "./temp-compilers/solc-0.8.34"
+name = "00.solc-0.8.39"
+path = "./temp-compilers/solc-0.8.39"
 description = "solc the latest downloaded from the official repo"
 disabled = true
 
@@ -94,12 +94,12 @@ disabled = false
 
 [[comparisons]]
 left = "03.solx-legacy"
-right = "00.solc-0.8.34-legacy"
+right = "00.solc-0.8.39-legacy"
 disabled = false
 
 [[comparisons]]
 left = "03.solx-viaIR"
-right = "00.solc-0.8.34-viaIR"
+right = "00.solc-0.8.39-viaIR"
 disabled = false
 
 [projects.openzeppelin]

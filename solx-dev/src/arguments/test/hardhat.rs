@@ -73,7 +73,7 @@ pub struct Hardhat {
     // Test Filtering
     //
     /// Solidity version to use for pragmas and other anchors.
-    #[arg(long, default_value = "0.8.34", help_heading = "Test Filtering")]
+    #[arg(long, default_value = "0.8.39", help_heading = "Test Filtering")]
     pub solidity_version: String,
 
     /// Filter to run only projects matching the specified substring.

@@ -43,8 +43,8 @@
 bun = "1.4.4"
 
 [compilers.solc]
-name = "00.solc-0.8.34"
-path = "./temp-compilers/solc-0.8.34"
+name = "00.solc-0.8.39"
+path = "./temp-compilers/solc-0.8.39"
 description = "solc the latest downloaded from the official repo"
 disabled = true
 
@@ -94,12 +94,12 @@ disabled = false
 
 [[comparisons]]
 left = "03.solx-legacy"
-right = "00.solc-0.8.34-legacy"
+right = "00.solc-0.8.39-legacy"
 disabled = false
 
 [[comparisons]]
 left = "03.solx-viaIR"
-right = "00.solc-0.8.34-viaIR"
+right = "00.solc-0.8.39-viaIR"
 disabled = false
 
 [projects.hardhat-v3]
@@ -118,7 +118,7 @@ dependencies = [ "@nomicfoundation/hardhat-slang-solx@3.0.2" ]
 build_profile = "slang-solx"
 config_overlay = "./solx-dev/hardhat-overlays/openzeppelin.config.ts"
 [projects.openzeppelin.env]
-COMPILER = "0.8.34"
+COMPILER = "0.8.39"
 
 [projects.ens-contracts]
 url = "https://github.com/antonbaliasnikov/ens-contracts"
@@ -126,6 +126,6 @@ commit = "85ddeb9ff8def53e580a1fa70b156fe1c88775da"
 description = "The core contracts of the ENS protocol."
 build_system = "bun"
 # The fork lacks solx wiring (no USE_SOLX/SOLX in its Hardhat config) and only enables
-# solc 0.8.17/0.8.26, so the >=0.8.34 pragma pin fails HHE909. The pinned lockfile also
+# solc 0.8.17/0.8.26, so the >=0.8.39 pragma pin fails HHE909. The pinned lockfile also
 # references @ensdomains/buffer@0.1.1, which has been unpublished from npm.
 disabled = true

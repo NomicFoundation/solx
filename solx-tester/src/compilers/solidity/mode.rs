@@ -86,7 +86,7 @@ impl Mode {
 
         // Strip pre-release for pragma matching since semver pre-release versions
         // have special matching rules that don't work well with Solidity pragmas.
-        // E.g., ">=0.8.0" should match "0.8.34-develop" but semver doesn't agree.
+        // E.g., ">=0.8.0" should match "0.8.39-develop" but semver doesn't agree.
         let version_for_pragma = semver::Version::new(
             self.solc_version.major,
             self.solc_version.minor,
