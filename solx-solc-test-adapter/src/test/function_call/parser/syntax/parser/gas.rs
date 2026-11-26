@@ -85,7 +85,9 @@ impl Parser {
                                 keyword @ Keyword::LegacyOptimized
                                 | keyword @ Keyword::Legacy
                                 | keyword @ Keyword::IrOptimized
-                                | keyword @ Keyword::Ir,
+                                | keyword @ Keyword::Ir
+                                | keyword @ Keyword::SsaCfg
+                                | keyword @ Keyword::SsaCfgOptimized,
                             ),
                         ..
                     } => {
@@ -95,7 +97,14 @@ impl Parser {
                     Token { lexeme, location } => {
                         return Err(SyntaxError::new(
                             location,
-                            vec!["legacyOptimized", "legacy", "irOptimized", "ir"],
+                            vec![
+                                "legacyOptimized",
+                                "legacy",
+                                "irOptimized",
+                                "ir",
+                                "ssaCFG",
+                                "ssaCFGOptimized",
+                            ],
                             lexeme,
                         )
                         .into());
@@ -193,7 +202,14 @@ mod tests {
 
         let expected = Err(ParsingError::from(SyntaxError::new(
             Location::test(1, 5),
-            vec!["legacyOptimized", "legacy", "irOptimized", "ir"],
+            vec![
+                "legacyOptimized",
+                "legacy",
+                "irOptimized",
+                "ir",
+                "ssaCFG",
+                "ssaCFGOptimized",
+            ],
             Lexeme::Keyword(Keyword::Gas),
         )));
 

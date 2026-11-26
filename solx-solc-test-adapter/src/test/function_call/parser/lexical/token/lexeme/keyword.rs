@@ -41,6 +41,10 @@ pub enum Keyword {
     Legacy,
     /// The `legacyOptimized` keyword.
     LegacyOptimized,
+    /// The `ssaCFG` keyword.
+    SsaCfg,
+    /// The `ssaCFGOptimized` keyword.
+    SsaCfgOptimized,
     /// The `code` keyword.
     Code,
 
@@ -155,6 +159,8 @@ impl TryFrom<&str> for Keyword {
             "irOptimized" => return Ok(Self::IrOptimized),
             "legacy" => return Ok(Self::Legacy),
             "legacyOptimized" => return Ok(Self::LegacyOptimized),
+            "ssaCFG" => return Ok(Self::SsaCfg),
+            "ssaCFGOptimized" => return Ok(Self::SsaCfgOptimized),
             "code" => return Ok(Self::Code),
 
             "bool" => return Ok(Self::Bool),
@@ -252,6 +258,8 @@ impl fmt::Display for Keyword {
             Self::IrOptimized => write!(f, "irOptimized"),
             Self::Legacy => write!(f, "legacy"),
             Self::LegacyOptimized => write!(f, "legacyOptimized"),
+            Self::SsaCfg => write!(f, "ssaCFG"),
+            Self::SsaCfgOptimized => write!(f, "ssaCFGOptimized"),
             Self::Code => write!(f, "code"),
 
             Self::Bool => write!(f, "bool"),

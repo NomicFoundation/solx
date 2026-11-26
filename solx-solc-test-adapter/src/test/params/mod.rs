@@ -70,7 +70,7 @@ impl TryFrom<&str> for Params {
                         .try_into()
                         .map_err(|error| anyhow::anyhow!("{} on line {}", error, index + 1))?;
                 }
-                "compileToEwasm" => {}
+                "compileToEwasm" | "compileViaSSACFG" | "experimental" => {}
                 "ABIEncoderV1Only" => {
                     abi_encoder_v1_only = value
                         .try_into()
@@ -95,7 +95,7 @@ impl TryFrom<&str> for Params {
                     bytecode_format = value.to_owned();
                 }
                 word => anyhow::bail!(
-                    r#"Expected "compileViaYul", "compileToEwasm", "ABIEncoderV1Only", "EVMVersion", "revertStrings", "allowNonExistingFunctions", "bytecodeFormat" on line {}, found: {}"#,
+                    r#"Expected "compileViaYul", "compileToEwasm", "compileViaSSACFG", "experimental", "ABIEncoderV1Only", "EVMVersion", "revertStrings", "allowNonExistingFunctions", "bytecodeFormat" on line {}, found: {}"#,
                     index + 1,
                     word
                 ),
