@@ -44,9 +44,14 @@
 // CHECK:   sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
 // CHECK-NOT: sol.store
 
+// CHECK: sol.func {{.*}}pushLength
+// CHECK:   %[[LENGTH:.*]] = sol.length %{{.*}} : !sol.array<? x ui256, Storage>
+// CHECK:   %[[LENGTH_SLOT:.*]] = sol.push %{{.*}} : !sol.array<? x ui256, Storage> -> !sol.ptr<ui256, Storage>
+// CHECK:   sol.store %[[LENGTH]], %[[LENGTH_SLOT]] : ui256, !sol.ptr<ui256, Storage>
+
 // CHECK: sol.func {{.*}}pushLiteralParenthesized
-// CHECK:   %[[WORD_SLOT:.*]] = sol.push %{{.*}} : !sol.array<? x !sol.fixedbytes<32>, Storage> -> !sol.ptr<!sol.fixedbytes<32>, Storage>
 // CHECK:   %[[WORD:.*]] = sol.bytes_cast %{{.*}} : ui256 to !sol.fixedbytes<32>
+// CHECK:   %[[WORD_SLOT:.*]] = sol.push %{{.*}} : !sol.array<? x !sol.fixedbytes<32>, Storage> -> !sol.ptr<!sol.fixedbytes<32>, Storage>
 // CHECK:   sol.store %[[WORD]], %[[WORD_SLOT]] : !sol.fixedbytes<32>, !sol.ptr<!sol.fixedbytes<32>, Storage>
 
 // CHECK: sol.func {{.*}}pushNested
@@ -121,6 +126,10 @@ contract C {
 
     function pushStructValue() public {
         records.push(Y(1, 2));
+    }
+
+    function pushLength() public {
+        arr.push(arr.length);
     }
 
     function pushNested() public {

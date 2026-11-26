@@ -195,6 +195,8 @@ jobs:
       packages: read
     env:
       CARGO_INCREMENTAL: "0"
+      RUSTC_BOOTSTRAP: 1
+      RUSTFLAGS: ${{ matrix.rustflags }}
     strategy:
       fail-fast: false
       matrix:
@@ -203,18 +205,29 @@ jobs:
             runner: macos-15-intel
           - name: "MacOS arm64"
             runner: macos-15
+            tester: true
           - name: "Linux x86 gnu"
             runner: ubuntu-24.04
             image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:7cc8aba2983f6feb71f046876611b48e9649e72acdfcdbcad756e2030c3a356a
             target: "x86_64-unknown-linux-gnu"
+            # LLD links libstdc++ properly.
+            rustflags: -C link-arg=-fuse-ld=lld
           - name: "Linux ARM64 gnu"
             runner: ubuntu-24.04-arm
             image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:7cc8aba2983f6feb71f046876611b48e9649e72acdfcdbcad756e2030c3a356a
             target: "aarch64-unknown-linux-gnu"
+            rustflags: -C link-arg=-fuse-ld=lld
+            tester: true
           - name: "Windows"
             runner: windows-2025
-            target: "x86_64-pc-windows-gnu"
+            # Linked like the release build; with no target, proc-macros get the flags too.
+            rustflags: -C target-feature=+crt-static -C link-arg=-fuse-ld=lld
+            shell: msys2 {0}
+            tester: true
     runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: ${{ matrix.shell || 'bash' }}
     container:
       image: ${{ matrix.image || '' }} # Special workaround to allow matrix builds with optional container
       # Host tooling bind-mounts for the free-disk-space-linux action. These apply
@@ -272,7 +285,7 @@ jobs:
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          prefix-key: slang-tests-v3
+          prefix-key: slang-tests-v4
           # Outside Windows, restoring target/ takes longer than the dependency build it saves.
           cache-targets: ${{ runner.os == 'Windows' }}
           cache-on-failure: true
@@ -299,6 +312,17 @@ jobs:
           # CMake bakes the configuring python's absolute path into the lit
           # shebang; runner image updates move it, so pick python3 from PATH.
           python3 "${RUNNER_TEMP}/lit-tools/${LIT}" -v solx-mlir/tests/lit/
+
+      # One architecture per operating system; the integration tests cover Linux x86.
+      - name: Run solx-tester
+        if: matrix.tester
+        env:
+          TARGET: ${{ matrix.target || '' }}
+          EXE: ${{ runner.os == 'Windows' && '.exe' || '' }}
+        run: |
+          ${SFW_PREFIX:-} cargo build --frozen --release ${TARGET:+--target "${TARGET}"} --bin slang --bin solx-tester
+          dir="target/${TARGET:+${TARGET}/}release"
+          "${dir}/solx-tester${EXE}" --solidity-compiler "${dir}/slang${EXE}"
 
   actionlint:
     name: Lint GitHub Actions workflows

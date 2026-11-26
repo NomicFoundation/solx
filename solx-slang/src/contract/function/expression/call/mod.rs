@@ -1052,21 +1052,18 @@ impl Call {
                         std::mem::discriminant(other)
                     ),
                 };
-                let new_slot = place.push(slot_type, scope);
-
                 let Some(value_argument) = value_argument else {
-                    return vec![new_slot];
+                    return vec![place.push(slot_type, scope)];
                 };
-                let place = Place::from(new_slot);
-                if let Expression::StringExpression(_) = value_argument.unwrap_singleton_tuple()
+                let value = if let Expression::StringExpression(_) =
+                    value_argument.unwrap_singleton_tuple()
                     && element_type.is_bytes_like()
                 {
-                    let value = scope.converted(value_argument, element_type);
-                    place.assign(value, element_type, scope);
-                    return Vec::new();
-                }
-                let value = scope.expression(value_argument);
-                place.assign(value, element_type, scope);
+                    scope.converted(value_argument, element_type)
+                } else {
+                    scope.expression(value_argument)
+                };
+                Place::from(place.push(slot_type, scope)).assign(value, element_type, scope);
                 Vec::new()
             }
             Some(BuiltIn::BytesConcat | BuiltIn::StringConcat) => {
