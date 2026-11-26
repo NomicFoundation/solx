@@ -39,6 +39,17 @@
 // CHECK:   %[[ARG:.*]] = sol.load
 // CHECK:   sol.ext_call "{{.*mutate.*}}"(%[[ARG]]) at %[[ADDR]] value %{{c0_ui256.*}} selector %c1899731083_ui256 {callee_type = (ui256) -> ui256, delegate_call, library_call} : !sol.address, (ui256) -> (i1, ui256)
 
+// CHECK: sol.func @{{.*qualified_pointer.*}}
+// CHECK:   sol.if
+// CHECK:     %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
+// CHECK:     sol.ext_func_constant %[[ADDR]] {selector = 1899731083 : i32} : !sol.address -> !sol.ext_func_ref<(ui256) -> ui256>
+// CHECK:   } else {
+// CHECK:     %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
+// CHECK:     sol.ext_func_constant %[[ADDR]] {selector = 822859595 : i32} : !sol.address -> !sol.ext_func_ref<(ui256) -> ui256>
+// CHECK:   %[[POINTER:.*]] = sol.load
+// CHECK:   %[[ARG:.*]] = sol.load
+// CHECK:   sol.ext_icall %[[POINTER]](%[[ARG]]) value %{{c0_ui256.*}} {delegate_call, library_call} : <(ui256) -> ui256>, (ui256) -> (i1, ui256)
+
 // CHECK: sol.func @{{.*qualified_static.*}}
 // CHECK:   %[[ADDR:.*]] = sol.lib_addr "{{[^"]*}}Lib" : !sol.address
 // CHECK:   %[[ARG:.*]] = sol.load
@@ -68,6 +79,10 @@ library Lib {
     function observe(uint256 a) external view returns (uint256) {
         return a + 2;
     }
+
+    function reset(uint256) external returns (uint256) {
+        return 0;
+    }
 }
 
 contract User {
@@ -75,6 +90,10 @@ contract User {
 
     function qualified_plain(uint256 x) public returns (uint256) {
         return Lib.mutate(x);
+    }
+
+    function qualified_pointer(bool b, uint256 x) public returns (uint256) {
+        return (b ? Lib.mutate : Lib.reset)(x);
     }
 
     function qualified_static(uint256 x) public view returns (uint256) {

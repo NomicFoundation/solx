@@ -13,14 +13,20 @@ pub enum FunctionReferenceKind {
     External = 1,
 }
 
-impl From<slang_solidity_v2::ast::FunctionTypeVisibility> for FunctionReferenceKind {
-    /// Only `external` dispatches through an address and selector; a bare reference to a `public`
-    /// function is a legal internal pointer, as are `internal` and `private` ones.
-    fn from(visibility: slang_solidity_v2::ast::FunctionTypeVisibility) -> Self {
-        use slang_solidity_v2::ast::FunctionTypeVisibility as Slang;
-        match visibility {
-            Slang::External => Self::External,
-            Slang::Public | Slang::Internal | Slang::Private => Self::Internal,
+impl From<slang_solidity_v2::ast::CallMode> for FunctionReferenceKind {
+    /// A delegate-called library function is a value only within the expression calling it, so
+    /// its reference is external and the call site delegates. A partially applied function is
+    /// only ever a callee, which Slang enforces.
+    fn from(call_mode: slang_solidity_v2::ast::CallMode) -> Self {
+        use slang_solidity_v2::ast::CallMode as Slang;
+        match call_mode {
+            Slang::Internal { bound: false } => Self::Internal,
+            Slang::External | Slang::Delegate { bound: false } => Self::External,
+            Slang::Internal { bound: true }
+            | Slang::ExternalWithCallOptions
+            | Slang::Delegate { bound: true } => {
+                unreachable!("slang admits a partially applied function only as a callee")
+            }
         }
     }
 }
