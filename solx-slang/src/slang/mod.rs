@@ -77,7 +77,12 @@ impl Slang {
             ));
         }
 
-        if let Err(error) = input_json.resolve_sources() {
+        let mut url_warnings = Vec::new();
+        let resolution = input_json.resolve_sources(&mut url_warnings);
+        output
+            .errors
+            .extend(url_warnings.into_iter().map(OutputError::new_warning));
+        if let Err(error) = resolution {
             output.errors.push(OutputError::new_error(error));
             return Ok(output);
         }
