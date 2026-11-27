@@ -43,7 +43,7 @@ pub fn run() -> anyhow::Result<()> {
                     job.optimizer_settings,
                     session.llvm_options.clone(),
                     session.output_config.clone(),
-                    job.runtime_assembled_bytecode,
+                    job.runtime_assembled_object,
                     &session.linker_symbols,
                 )
                 .map(EVMOutput::new)

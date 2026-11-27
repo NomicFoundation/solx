@@ -2,12 +2,14 @@
 //! The `solc --standard-json` output contract EVM bytecode.
 //!
 
+pub mod cbor_auxdata;
 pub mod immutable_reference;
 pub mod link_reference;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use self::cbor_auxdata::CborAuxdata;
 use self::immutable_reference::ImmutableReference;
 use self::link_reference::LinkReference;
 
@@ -54,6 +56,9 @@ pub struct Bytecode {
     /// Immutable references.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub immutable_references: Option<BTreeMap<String, Vec<ImmutableReference>>>,
+    /// CBOR metadata trailers by the full name of the contract owning them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cbor_auxdata: Option<BTreeMap<String, Vec<CborAuxdata>>>,
 }
 
 impl Bytecode {
@@ -74,6 +79,7 @@ impl Bytecode {
         function_debug_data: Option<BTreeMap<String, serde_json::Value>>,
         generated_sources: Option<Vec<serde_json::Value>>,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
+        cbor_auxdata: Option<BTreeMap<String, Vec<CborAuxdata>>>,
     ) -> Self {
         let link_references = unlinked_symbols.map(|unlinked_symbols| {
             let mut link_references = BTreeMap::new();
@@ -124,6 +130,7 @@ impl Bytecode {
             function_debug_data,
             generated_sources,
             immutable_references,
+            cbor_auxdata,
         }
     }
 
@@ -148,5 +155,6 @@ impl Bytecode {
             && self.function_debug_data.is_none()
             && self.generated_sources.is_none()
             && self.immutable_references.is_none()
+            && self.cbor_auxdata.is_none()
     }
 }

@@ -5,6 +5,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use crate::build::contract::object::AssembledObject;
 use crate::project::contract::ir::IR as ContractIR;
 
 ///
@@ -27,8 +28,7 @@ pub struct Job {
     /// The optimizer settings.
     pub optimizer_settings: solx_codegen_evm::OptimizerSettings,
     /// The assembled runtime object, sent to a deploy job that embeds nothing else.
-    #[serde(with = "serde_bytes")]
-    pub runtime_assembled_bytecode: Option<Vec<u8>>,
+    pub runtime_assembled_object: Option<AssembledObject>,
 }
 
 impl Job {
@@ -42,7 +42,7 @@ impl Job {
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
         metadata_bytes: Option<Vec<u8>>,
         optimizer_settings: solx_codegen_evm::OptimizerSettings,
-        runtime_assembled_bytecode: Option<Vec<u8>>,
+        runtime_assembled_object: Option<AssembledObject>,
     ) -> Self {
         Self {
             contract_name,
@@ -51,7 +51,7 @@ impl Job {
             immutables,
             metadata_bytes,
             optimizer_settings,
-            runtime_assembled_bytecode,
+            runtime_assembled_object,
         }
     }
 }

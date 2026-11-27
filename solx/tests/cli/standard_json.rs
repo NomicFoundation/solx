@@ -343,7 +343,8 @@ fn select_evm() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("deployedBytecode"))
         .stdout(predicate::str::contains("llvmAssembly"))
         .stdout(predicate::str::contains("opcodes"))
-        .stdout(predicate::str::contains("linkReferences"));
+        .stdout(predicate::str::contains("linkReferences"))
+        .stdout(predicate::str::contains("cborAuxdata"));
 
     Ok(())
 }

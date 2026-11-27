@@ -26,6 +26,7 @@ pub use self::output::Output;
 pub use self::output::contract::Contract as OutputContract;
 pub use self::output::contract::evm::EVM as OutputContractEVM;
 pub use self::output::contract::evm::bytecode::Bytecode as OutputContractEVMBytecode;
+pub use self::output::contract::evm::bytecode::cbor_auxdata::CborAuxdata as OutputContractEVMBytecodeCborAuxdata;
 pub use self::output::error::Error as OutputError;
 pub use self::output::error::collectable::Collectable as CollectableError;
 pub use self::version::Version;

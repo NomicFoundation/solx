@@ -2385,7 +2385,7 @@ dependencies = [
 [[package]]
 name = "inkwell"
 version = "0.7.1"
-source = "git+https://github.com/NomicFoundation/inkwell?rev=f5de87a9f4dff627ea67b369e595e222b14e4e33#f5de87a9f4dff627ea67b369e595e222b14e4e33"
+source = "git+https://github.com/NomicFoundation/inkwell?rev=37ff110b57d3bf7510c9219f440f92cf654eb1ba#37ff110b57d3bf7510c9219f440f92cf654eb1ba"
 dependencies = [
  "inkwell_internals",
  "libc",
@@ -2398,7 +2398,7 @@ dependencies = [
 [[package]]
 name = "inkwell_internals"
 version = "0.12.0"
-source = "git+https://github.com/NomicFoundation/inkwell?rev=f5de87a9f4dff627ea67b369e595e222b14e4e33#f5de87a9f4dff627ea67b369e595e222b14e4e33"
+source = "git+https://github.com/NomicFoundation/inkwell?rev=37ff110b57d3bf7510c9219f440f92cf654eb1ba#37ff110b57d3bf7510c9219f440f92cf654eb1ba"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2681,7 +2681,7 @@ checksum = "6373607a59f0be73a39b6fe456b8192fcc3585f602af20751600e974dd455e77"
 [[package]]
 name = "llvm-sys"
 version = "211.0.0"
-source = "git+https://github.com/NomicFoundation/llvm-sys.rs?rev=cd0a9929dec012bf19361e6a23c2a1214cfbea4d#cd0a9929dec012bf19361e6a23c2a1214cfbea4d"
+source = "git+https://github.com/NomicFoundation/llvm-sys.rs?rev=6439c9a8f4771df1ba6103d0df8ab22a820a9cca#6439c9a8f4771df1ba6103d0df8ab22a820a9cca"
 dependencies = [
  "anyhow",
  "cc",

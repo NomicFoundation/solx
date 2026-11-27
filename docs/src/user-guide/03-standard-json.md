@@ -171,6 +171,8 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
           "evm.bytecode.functionDebugData",
           // Unsupported, but emitted as an empty array to preserve compatibility with some toolkits.
           "evm.bytecode.generatedSources",
+          // CBOR metadata trailers in the deploy bytecode, keyed by the full name of the contract owning them.
+          "evm.bytecode.cborAuxdata",
           // Everything that starts with "evm.deployedBytecode".
           "evm.deployedBytecode",
           // Runtime bytecode produced by Slang/LLVM.
@@ -195,7 +197,9 @@ Optimizer modes follow the behavior described in [Optimizer and Assembly Semanti
           // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
           "evm.deployedBytecode.functionDebugData",
           // Unsupported, but emitted as an empty array to preserve compatibility with some toolkits.
-          "evm.deployedBytecode.generatedSources"
+          "evm.deployedBytecode.generatedSources",
+          // CBOR metadata trailers in the runtime bytecode, keyed by the full name of the contract owning them.
+          "evm.deployedBytecode.cborAuxdata"
         ]
       }
     },
@@ -326,7 +330,11 @@ The output JSON contains all artifacts produced by **Slang**. The example below 
             "functionDebugData": {},
             // Optional: Always empty array, included only to preserve compatibility with some toolkits (array).
             // Corresponds to "evm.bytecode.generatedSources" in the outputSelection settings.
-            "generatedSources": []
+            "generatedSources": [],
+            // Optional: CBOR metadata trailers, keyed by the full name of the contract owning them.
+            // Each entry gives the byte offset of the trailer and its bytes with the two trailing length bytes.
+            // Corresponds to "evm.bytecode.cborAuxdata" in the outputSelection settings.
+            "cborAuxdata": {"A:Child": [{"offset": 304, "value": "0x..."}]}
           },
           // Optional: Runtime EVM bytecode.
           // Corresponds to "evm.deployedBytecode" in the outputSelection settings.
@@ -366,7 +374,11 @@ The output JSON contains all artifacts produced by **Slang**. The example below 
             "functionDebugData": {},
             // Optional: Always empty array, included only to preserve compatibility with some toolkits (array).
             // Corresponds to "evm.deployedBytecode.generatedSources" in the outputSelection settings.
-            "generatedSources": []
+            "generatedSources": [],
+            // Optional: CBOR metadata trailers, keyed by the full name of the contract owning them.
+            // Each entry gives the byte offset of the trailer and its bytes with the two trailing length bytes.
+            // Corresponds to "evm.deployedBytecode.cborAuxdata" in the outputSelection settings.
+            "cborAuxdata": {"A:Child": [{"offset": 277, "value": "0x..."}]}
           }
         }
       }

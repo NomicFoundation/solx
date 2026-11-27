@@ -16,6 +16,7 @@ use serde_json::value::RawValue;
 
 use crate::build::Build as EVMBuild;
 use crate::build::contract::Contract as EVMContractBuild;
+use crate::build::contract::object::AssembledObject;
 use crate::error::Error;
 use crate::process::job::Job as EVMProcessJob;
 use crate::process::output::Output as EVMProcessOutput;
@@ -363,11 +364,17 @@ impl Project {
                     .as_ref()
                     .ok()
                     .and_then(|output| output.object.immutables.to_owned());
-                let runtime_assembled_bytecode = runtime_object_result
+                let runtime_assembled_object = runtime_object_result
                     .as_ref()
                     .ok()
                     .filter(|_| deploy_embeds_runtime_only)
-                    .and_then(|output| output.object.assembled_bytecode.clone());
+                    .and_then(|output| {
+                        let bytecode = output.object.assembled_bytecode.clone()?;
+                        Some(AssembledObject {
+                            bytecode,
+                            cbor_auxdata: output.object.cbor_auxdata.clone(),
+                        })
+                    });
                 let deploy_object_result: crate::Result<EVMProcessOutput> = {
                     let mut job = EVMProcessJob::new(
                         contract_name.clone(),
@@ -376,7 +383,7 @@ impl Project {
                         immutables,
                         None,
                         optimizer_settings.clone(),
-                        runtime_assembled_bytecode,
+                        runtime_assembled_object,
                     );
 
                     Self::run_multi_pass_pipeline(&pool, &mut job)

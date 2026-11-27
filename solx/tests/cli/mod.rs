@@ -46,6 +46,7 @@ mod remappings;
 mod solidity_version;
 mod stack_too_deep;
 mod standard_json;
+mod standard_json_cbor_auxdata;
 mod standard_json_immutable_references;
 mod standard_json_optimizer;
 mod standard_json_output;

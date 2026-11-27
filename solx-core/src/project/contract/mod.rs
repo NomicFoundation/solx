@@ -8,6 +8,7 @@ pub mod metadata;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use crate::build::contract::object::AssembledObject;
 use crate::build::contract::object::Object as EVMContractObject;
 use crate::error::Error;
 
@@ -103,7 +104,7 @@ impl Contract {
         mut optimizer_settings: solx_codegen_evm::OptimizerSettings,
         llvm_options: Vec<String>,
         output_config: Option<solx_codegen_evm::OutputConfig>,
-        runtime_assembled_bytecode: Option<Vec<u8>>,
+        runtime_assembled_object: Option<AssembledObject>,
         linker_symbols: &BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
     ) -> Result<EVMContractObject, Error> {
         let mut profiler = solx_utils::Profiler::default();
@@ -313,7 +314,7 @@ impl Contract {
 
                 if output_bytecode
                     && let Some(embedded_objects) =
-                        object.embedded_objects(runtime_assembled_bytecode)
+                        object.embedded_objects(runtime_assembled_object)
                 {
                     let run_assemble_link = profiler.start_evm_translation_unit(
                         contract_name.full_path.as_str(),
