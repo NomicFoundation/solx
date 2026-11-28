@@ -15,6 +15,10 @@ pub enum Variant {
     LegacyOptimized,
     /// `ir` in the source code.
     Ir,
+    /// `ssaCFG` in the source code.
+    SsaCfg,
+    /// `ssaCFGOptimized` in the source code.
+    SsaCfgOptimized,
 }
 
 impl Variant {
@@ -44,5 +48,19 @@ impl Variant {
     ///
     pub fn ir() -> Self {
         Self::Ir
+    }
+
+    ///
+    /// A shortcut constructor.
+    ///
+    pub fn ssa_cfg() -> Self {
+        Self::SsaCfg
+    }
+
+    ///
+    /// A shortcut constructor.
+    ///
+    pub fn ssa_cfg_optimized() -> Self {
+        Self::SsaCfgOptimized
     }
 }

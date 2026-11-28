@@ -28,7 +28,7 @@ The design rules of the Slang frontend and the conventions for working on this r
 
 See also:
 
-- [Solidity Documentation](https://docs.soliditylang.org/en/v0.8.36/)
+- [Solidity Documentation](https://docs.soliditylang.org/en/v0.8.39/)
 - [LLVM Documentation](https://llvm.org/docs/)
 
 ## Installation

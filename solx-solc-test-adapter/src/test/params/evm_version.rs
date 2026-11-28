@@ -11,8 +11,8 @@ use regex::Regex;
 ///
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum EVMVersion {
-    /// Every supported version: not specified, or bounded from below by an unsupported one,
-    /// which predates Cancun.
+    /// Every supported version: not specified, bounded from below by an unsupported one that
+    /// predates Cancun, or bounded from above by one after Osaka.
     #[default]
     Any,
     /// Equals specified.
@@ -25,8 +25,8 @@ pub enum EVMVersion {
     Lesser(solx_utils::EVMVersion),
     /// Lesser or equals than specified.
     LesserEquals(solx_utils::EVMVersion),
-    /// No supported version: equal to or bounded from above by an unsupported one, which
-    /// predates Cancun.
+    /// No supported version: equal to an unsupported one, bounded from above by one that
+    /// predates Cancun, or bounded from below by one after Osaka.
     Unsatisfiable,
 }
 
@@ -60,13 +60,16 @@ impl EVMVersion {
         .rev()
         .find(|version| self.matches(version))
     }
+
+    /// The upstream EVM versions after Osaka, the newest supported one.
+    const AFTER_OSAKA: [&'static str; 2] = ["amsterdam", "@future"];
 }
 
 impl TryFrom<&str> for EVMVersion {
     type Error = anyhow::Error;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let regex = Regex::new(r"^(=|>|<|>=|<=)(\w+)$").expect("regex is compile-time constant");
+        let regex = Regex::new(r"^(=|>|<|>=|<=)(@?\w+)$").expect("regex is compile-time constant");
 
         let captures = regex
             .captures(value)
@@ -81,7 +84,10 @@ impl TryFrom<&str> for EVMVersion {
             .expect("capture group 2 always present in matched pattern")
             .as_str();
 
+        let is_after_osaka = Self::AFTER_OSAKA.contains(&version);
         Ok(match (symbol, solx_utils::EVMVersion::from_str(version)) {
+            ("=" | ">" | ">=", Err(_)) if is_after_osaka => EVMVersion::Unsatisfiable,
+            ("<" | "<=", Err(_)) if is_after_osaka => EVMVersion::Any,
             (">" | ">=", Err(_)) => EVMVersion::Any,
             ("=", Ok(version)) => EVMVersion::Equals(version),
             (">", Ok(version)) => EVMVersion::Greater(version),
@@ -128,6 +134,24 @@ mod tests {
     #[test]
     fn equality_to_unsupported_version_matches_nothing() {
         assert_eq!(newest_matching("=shanghai"), None);
+    }
+
+    #[test]
+    fn lower_bound_after_osaka_matches_nothing() {
+        assert_eq!(newest_matching(">=amsterdam"), None);
+    }
+
+    #[test]
+    fn equality_to_future_version_matches_nothing() {
+        assert_eq!(newest_matching("=@future"), None);
+    }
+
+    #[test]
+    fn upper_bound_after_osaka_resolves_to_osaka() {
+        assert_eq!(
+            newest_matching("<amsterdam"),
+            Some(solx_utils::EVMVersion::Osaka)
+        );
     }
 
     #[test]

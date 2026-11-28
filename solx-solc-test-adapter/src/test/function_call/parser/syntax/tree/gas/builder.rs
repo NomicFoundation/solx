@@ -63,6 +63,8 @@ impl Builder {
             Some(Keyword::Legacy) => GasVariant::legacy(),
             Some(Keyword::LegacyOptimized) => GasVariant::legacy_optimized(),
             Some(Keyword::Ir) => GasVariant::ir(),
+            Some(Keyword::SsaCfg) => GasVariant::ssa_cfg(),
+            Some(Keyword::SsaCfgOptimized) => GasVariant::ssa_cfg_optimized(),
             Some(keyword) => panic!("{}{}", self::BUILDER_GAS_INVALID_KEYWORD, keyword),
             None => panic!("{}{}", "Mandatory value missing: ", "keyword"),
         };
