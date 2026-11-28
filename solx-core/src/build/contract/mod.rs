@@ -11,6 +11,8 @@ use std::path::PathBuf;
 
 use normpath::PathExt;
 
+use solx_standard_json::OutputContractEVMBytecodeCborAuxdata as CborAuxdata;
+
 use self::object::Object;
 
 ///
@@ -939,6 +941,7 @@ impl Contract {
             selector_function_debug_data,
             selector_generated_sources,
             selector_immutable_references,
+            selector_cbor_auxdata,
         ) = match code_segment {
             solx_utils::CodeSegment::Deploy => (
                 solx_standard_json::InputSelector::BytecodeObject,
@@ -951,6 +954,7 @@ impl Contract {
                 solx_standard_json::InputSelector::BytecodeFunctionDebugData,
                 solx_standard_json::InputSelector::BytecodeGeneratedSources,
                 None,
+                solx_standard_json::InputSelector::BytecodeCborAuxdata,
             ),
             solx_utils::CodeSegment::Runtime => (
                 solx_standard_json::InputSelector::RuntimeBytecodeObject,
@@ -963,6 +967,7 @@ impl Contract {
                 solx_standard_json::InputSelector::RuntimeBytecodeFunctionDebugData,
                 solx_standard_json::InputSelector::RuntimeBytecodeGeneratedSources,
                 Some(solx_standard_json::InputSelector::RuntimeBytecodeImmutableReferences),
+                solx_standard_json::InputSelector::RuntimeBytecodeCborAuxdata,
             ),
         };
 
@@ -1078,6 +1083,36 @@ impl Contract {
                         .and_then(|object| object.immutables.clone())
                         .unwrap_or_default()
                 }),
+            // cbor_auxdata
+            if is_bytecode_linked
+                && output_selection.check_selection(path, name, selector_cbor_auxdata)
+            {
+                Some(
+                    object_result
+                        .as_ref()
+                        .and_then(|result| result.as_ref().ok())
+                        .map(|object| {
+                            let mut cbor_auxdata: BTreeMap<String, Vec<CborAuxdata>> =
+                                BTreeMap::new();
+                            for entry in object.cbor_auxdata.iter() {
+                                let bytecode = object
+                                    .bytecode
+                                    .as_deref()
+                                    .expect("Every object with CBOR trailers is linked");
+                                let bytes = &bytecode
+                                    [entry.offset as usize..(entry.offset + entry.length) as usize];
+                                cbor_auxdata
+                                    .entry(entry.contract_name.clone())
+                                    .or_default()
+                                    .push(CborAuxdata::new(entry.offset, bytes));
+                            }
+                            cbor_auxdata
+                        })
+                        .unwrap_or_default(),
+                )
+            } else {
+                None
+            },
         )
     }
 }

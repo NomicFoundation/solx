@@ -93,6 +93,7 @@ impl Selection {
                         | Selector::BytecodeDebugInfo
                         | Selector::BytecodeFunctionDebugData
                         | Selector::BytecodeGeneratedSources
+                        | Selector::BytecodeCborAuxdata
                             if contract.contains(&Selector::Bytecode)
                                 || contract.contains(&Selector::EVM) =>
                         {
@@ -107,6 +108,7 @@ impl Selection {
                         | Selector::RuntimeBytecodeDebugInfo
                         | Selector::RuntimeBytecodeFunctionDebugData
                         | Selector::RuntimeBytecodeGeneratedSources
+                        | Selector::RuntimeBytecodeCborAuxdata
                             if contract.contains(&Selector::RuntimeBytecode)
                                 || contract.contains(&Selector::EVM) =>
                         {
@@ -136,10 +138,12 @@ impl Selection {
                     || contract.contains(&Selector::Bytecode)
                     || contract.contains(&Selector::BytecodeObject)
                     || contract.contains(&Selector::BytecodeLinkReferences)
+                    || contract.contains(&Selector::BytecodeCborAuxdata)
                     || contract.contains(&Selector::RuntimeBytecode)
                     || contract.contains(&Selector::RuntimeBytecodeObject)
                     || contract.contains(&Selector::RuntimeBytecodeLinkReferences)
                     || contract.contains(&Selector::RuntimeBytecodeImmutableReferences)
+                    || contract.contains(&Selector::RuntimeBytecodeCborAuxdata)
                 {
                     return true;
                 }

@@ -18,6 +18,7 @@ use solx_utils::SyncLock;
 use solx_standard_json::CollectableError;
 
 use self::contract::Contract;
+use self::contract::object::AssembledObject;
 use self::contract::object::Object as ContractObject;
 
 ///
@@ -59,17 +60,22 @@ impl Build {
         mut self,
         linker_symbols: BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
     ) -> Self {
-        let mut assembled_by_identifier: BTreeMap<String, Vec<u8>> = self
+        let mut assembled_by_identifier: BTreeMap<String, AssembledObject> = BTreeMap::new();
+        for object in self
             .contracts
             .values_mut()
             .flat_map(|contract| contract.objects_mut())
-            .filter_map(|object| {
-                object
-                    .assembled_bytecode
-                    .take()
-                    .map(|bytecode| (object.identifier.clone(), bytecode))
-            })
-            .collect();
+        {
+            if let Some(bytecode) = object.assembled_bytecode.take() {
+                assembled_by_identifier.insert(
+                    object.identifier.clone(),
+                    AssembledObject {
+                        bytecode,
+                        cbor_auxdata: object.cbor_auxdata.clone(),
+                    },
+                );
+            }
+        }
         let mut unassembled_by_identifier: BTreeMap<String, &mut ContractObject> = self
             .contracts
             .values_mut()
@@ -336,7 +342,7 @@ impl Build {
     fn assemble_and_link(
         object: &mut ContractObject,
         unassembled_by_identifier: &mut BTreeMap<String, &mut ContractObject>,
-        assembled_by_identifier: &mut BTreeMap<String, Vec<u8>>,
+        assembled_by_identifier: &mut BTreeMap<String, AssembledObject>,
         linker_symbols: &BTreeMap<String, [u8; solx_utils::BYTE_LENGTH_ETH_ADDRESS]>,
     ) {
         for dependency in object.dependencies.into_iter() {
@@ -352,10 +358,13 @@ impl Build {
         object.assemble_and_link(assembled_by_identifier, linker_symbols);
         assembled_by_identifier.insert(
             object.identifier.clone(),
-            object
-                .assembled_bytecode
-                .take()
-                .expect("Every completed object retains its assembled ELF"),
+            AssembledObject {
+                bytecode: object
+                    .assembled_bytecode
+                    .take()
+                    .expect("Every completed object retains its assembled ELF"),
+                cbor_auxdata: object.cbor_auxdata.clone(),
+            },
         );
     }
 }

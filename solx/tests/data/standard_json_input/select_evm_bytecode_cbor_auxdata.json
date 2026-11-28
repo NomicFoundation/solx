@@ -1,0 +1,20 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A": {
+      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.8.0;\ncontract Child {\n    uint256 public x;\n    constructor(uint256 _x) { x = _x; }\n}\ncontract Other {\n    uint256 public y;\n    constructor() { y = 1; }\n}\ncontract Factory {\n    Child public first;\n    constructor(uint256 v) { first = new Child(v); }\n    function create(uint256 v) external returns (address) {\n        return address(new Child(v));\n    }\n    function spawn() external returns (address) {\n        return address(new Other());\n    }\n}\n"
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.bytecode.object",
+          "evm.bytecode.cborAuxdata",
+          "evm.deployedBytecode.object",
+          "evm.deployedBytecode.cborAuxdata"
+        ]
+      }
+    }
+  }
+}

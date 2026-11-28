@@ -82,6 +82,9 @@ pub enum Selector {
     /// The deploy bytecode generated sources.
     #[serde(rename = "evm.bytecode.generatedSources")]
     BytecodeGeneratedSources,
+    /// The deploy bytecode CBOR metadata trailers.
+    #[serde(rename = "evm.bytecode.cborAuxdata")]
+    BytecodeCborAuxdata,
     /// The runtime bytecode.
     #[serde(rename = "evm.deployedBytecode")]
     RuntimeBytecode,
@@ -118,6 +121,9 @@ pub enum Selector {
     /// The runtime bytecode generated sources.
     #[serde(rename = "evm.deployedBytecode.generatedSources")]
     RuntimeBytecodeGeneratedSources,
+    /// The runtime bytecode CBOR metadata trailers.
+    #[serde(rename = "evm.deployedBytecode.cborAuxdata")]
+    RuntimeBytecodeCborAuxdata,
     /// The gas estimates.
     #[serde(rename = "evm.gasEstimates")]
     GasEstimates,
